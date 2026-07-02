@@ -1121,6 +1121,68 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["recommendations"][0]["skill"], skill)
                 self.assertEqual(decision["confidence"], "high")
 
+    def test_external_wiki_destination_phrases_route_to_wiki_capture(self) -> None:
+        cases = (
+            (
+                "옵시디언 볼트에 위키로 쌓을 수 있게 정리해줘",
+                "trigger:옵시디언",
+            ),
+            (
+                "Notion knowledge base에 프로젝트 위키로 남길 구조 잡아줘",
+                "category:knowledge",
+            ),
+            (
+                "Google Drive wiki에 외부 지식 저장소 형태로 정리해줘",
+                "trigger:google drive wiki",
+            ),
+            (
+                "external knowledge store for this project wiki, include staleness notes",
+                "trigger:external knowledge store",
+            ),
+        )
+
+        for message, marker in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord", limit=5)
+                matched = decision["recommendations"][0]["matched"]
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "wiki")
+                self.assertEqual(decision["selected_harness"], "docs-specialist")
+                self.assertEqual(decision["confidence"], "high")
+                self.assertIn(marker, matched)
+                self.assertNotIn("guard:research_department", json.dumps(decision["recommendations"]))
+
+    def test_research_and_memory_precedence_stays_separate_from_wiki_capture(self) -> None:
+        research = route_chat_message(
+            "research brief comparing Obsidian and Notion for our wiki, include evidence gaps",
+            source="discord",
+            limit=5,
+        )
+        research_matched = research["recommendations"][0]["matched"]
+
+        self.assertEqual(research["selected_skill"], "research-brief")
+        self.assertEqual(research["selected_harness"], "business-research")
+        self.assertIn("guard:research_brief", research_matched)
+        self.assertNotIn("guard:research_department", research_matched)
+
+        research_department = route_chat_message(
+            "Obsidian 말고 markdown folder에 리서치 결과 저장하고 싶어",
+            source="discord",
+            limit=5,
+        )
+        self.assertEqual(research_department["selected_skill"], "research-department")
+        self.assertIn("guard:research_department", research_department["recommendations"][0]["matched"])
+
+        memory = route_chat_message(
+            "Hermes memory and wiki candidates need curation before anything is written",
+            source="discord",
+            limit=5,
+        )
+        self.assertEqual(memory["selected_skill"], "memory-curation-review")
+        self.assertEqual(memory["selected_harness"], "memory-curation-review")
+        self.assertIn("guard:memory_curation", memory["recommendations"][0]["matched"])
+
     def test_route_quality_pass_handles_real_chat_misroutes(self) -> None:
         cases = (
             (

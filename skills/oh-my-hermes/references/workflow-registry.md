@@ -52,7 +52,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `best-practice-research`: `best-practice-research`, `best practice`, `official docs`, `upstream guidance`
 - `autoresearch-goal`: `autoresearch-goal`, `research goal`, `durable research`, `critic research`
 - `performance-goal`: `performance-goal`, `performance goal`, `latency`, `throughput`, `benchmark`
-- `wiki`: `wiki`, `project wiki`, `memory`, `notes`
+- `wiki`: `wiki`, `project wiki`, `memory`, `notes`, `external knowledge store`, `knowledge base`, `Obsidian`
 - `ask`: `ask`, `$ask`, `external advisor`, `claude`, `gemini`
 - `cancel`: `cancel`, `$cancel`, `stop`, `abort`
 - `skill`: `skill`, `$skill`, `skills`, `manage skills`

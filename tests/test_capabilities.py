@@ -74,6 +74,7 @@ class CapabilityManifestTests(unittest.TestCase):
             [
                 "Plan and decide",
                 "Learn and gather",
+                "Retain knowledge",
                 "Create materials and visuals",
                 "Delegate coding and ship",
                 "Operate and observe",
@@ -81,12 +82,16 @@ class CapabilityManifestTests(unittest.TestCase):
         )
         self.assertIn("deep-interview", families["plan_and_decide"]["primary_workflows"])
         self.assertIn("paper-learning", families["learn_and_gather"]["primary_workflows"])
+        self.assertIn("wiki", families["retain_knowledge"]["primary_workflows"])
         self.assertIn("img-summary", families["create_materials_and_visuals"]["primary_workflows"])
+        self.assertNotIn("wiki", families["create_materials_and_visuals"]["primary_workflows"])
         self.assertIn("ultraprocess", families["delegate_coding_and_ship"]["primary_workflows"])
         self.assertIn("doctor", families["operate_and_observe"]["primary_workflows"])
         self.assertEqual(projection["workflow_to_family"]["img-summary"], "create_materials_and_visuals")
+        self.assertEqual(projection["workflow_to_family"]["wiki"], "retain_knowledge")
         self.assertEqual(projection["workflow_to_family"]["paper-learning"], "learn_and_gather")
         self.assertEqual(projection["workflow_to_family"]["ultraprocess"], "delegate_coding_and_ship")
+        self.assertEqual(family_for_workflow("wiki")["id"], "retain_knowledge")
         self.assertEqual(family_for_workflow("code-review")["id"], "delegate_coding_and_ship")
         self.assertEqual(family_for_workflow("workflow-learning")["id"], "operate_and_observe")
         self.assertIn("Codex", families["delegate_coding_and_ship"]["executor_choices"])
@@ -137,12 +142,18 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("Prepared OMH capability", summary["evidence_boundary"])
         self.assertEqual(families["plan_and_decide"]["label"], "Plan and decide")
         self.assertIn("paper-learning", families["learn_and_gather"]["primary_workflows"])
+        self.assertIn("wiki", families["retain_knowledge"]["primary_workflows"])
         self.assertIn("img-summary", families["create_materials_and_visuals"]["primary_workflows"])
+        self.assertNotIn("wiki", families["create_materials_and_visuals"]["primary_workflows"])
         self.assertIn("Claude Code", families["delegate_coding_and_ship"]["executor_choices"])
         self.assertEqual(summary["workflow_to_family"]["code-review"], "delegate_coding_and_ship")
+        self.assertEqual(summary["workflow_to_family"]["wiki"], "retain_knowledge")
         self.assertEqual(lanes["intent_to_plan"]["owner_role"], "planner")
+        self.assertEqual(lanes["retained_knowledge"]["owner_role"], "memory-keeper")
         self.assertIn("loop", lanes["intent_to_plan"]["primary_skills"])
+        self.assertIn("wiki", lanes["retained_knowledge"]["primary_skills"])
         self.assertIn("img-summary", lanes["materials_and_visuals"]["primary_skills"])
+        self.assertNotIn("wiki", lanes["materials_and_visuals"]["primary_skills"])
         self.assertIn("research-department", lanes["research_and_ops"]["primary_skills"])
         self.assertIn("request-to-handoff", {item["id"] for item in lanes["intent_to_plan"]["representative_playbooks"]})
         self.assertIn("materials-processing", {item["id"] for item in lanes["materials_and_visuals"]["representative_playbooks"]})
@@ -150,12 +161,15 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("feedback-triage", context_cards["research_and_ops"]["representative_workflows"])
         self.assertEqual(context_cards["research_and_ops"]["label"], "Research and ops")
         self.assertIn("Payment failures keep coming up", context_cards["research_and_ops"]["user_examples"])
+        self.assertIn("wiki", context_cards["retained_knowledge"]["representative_workflows"])
+        self.assertIn("write/query proof", context_cards["retained_knowledge"]["first_response_shape"])
         self.assertIn("img-summary", context_cards["materials_and_visuals"]["representative_workflows"])
         self.assertIn("revise/copy/generate/record", context_cards["materials_and_visuals"]["first_response_shape"])
         self.assertIn("implementation", context_cards["coding_handoff"]["not_evidence_until_observed"])
 
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:
         skill = inspect_capability("ultragoal", section="skills")["capability"]
+        wiki_skill = inspect_capability("wiki", section="skills")["capability"]
         hidden_surface = inspect_capability("ops-observability-card", section="skills")["capability"]
         awareness = inspect_capability("omh_awareness", section="omh_awareness")["capability"]
         role = inspect_capability("handoff-guide", section="agent_roles")["capability"]
@@ -167,6 +181,8 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("prepared_not_observed", skill["evidence_boundary"])
         self.assertEqual(skill["awareness_lane"], "intent_to_plan")
         self.assertIn("Use `ultragoal`", skill["workflow_routing_hint"])
+        self.assertEqual(wiki_skill["awareness_lane"], "retained_knowledge")
+        self.assertIn("Retained knowledge", wiki_skill["workflow_routing_hint"])
         self.assertIn("every OMH skill", skill["workflow_context_rule"])
         self.assertIn("generic tool can render or execute", skill["workflow_context_rule"])
         self.assertIn("Normal users talk to Hermes", skill["chat_rule"])

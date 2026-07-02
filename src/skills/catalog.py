@@ -460,9 +460,9 @@ _DEFAULT_GOOD_EXAMPLES = {
         why="The request is performance optimization and needs measured before/after proof.",
     ),
     "wiki": SkillExample(
-        prompt="wiki: capture the final router architecture decisions and retrieval hints in the project knowledge base.",
-        expected="Write durable project knowledge with source context, staleness notes, and follow-up links.",
-        why="The request is knowledge capture rather than planning or execution.",
+        prompt="wiki: capture the router decisions and prepare Obsidian vault retrieval hints without claiming a write happened.",
+        expected="Prepare retained knowledge guidance with source context, destination-aware structure, staleness notes, and observed-write boundaries.",
+        why="The request is knowledge capture with an external destination preference, not connector execution.",
     ),
     "ask": SkillExample(
         prompt="ask: ask Claude as an external advisor to critique this plugin bridge plan before implementation.",
@@ -2865,22 +2865,60 @@ _DEFINITIONS = [
     ),
     SkillDefinition(
         "wiki",
-        "Hermes adaptation for maintaining a project-local markdown wiki.",
-        ("wiki", "project wiki", "memory", "notes"),
-        "Use to capture durable project knowledge in markdown artifacts.",
+        "Hermes adaptation for retained knowledge capture and destination-aware external knowledge connection guidance.",
+        (
+            "wiki",
+            "project wiki",
+            "memory",
+            "notes",
+            "external knowledge store",
+            "knowledge base",
+            "Obsidian",
+            "markdown vault",
+            "Notion knowledge base",
+            "Google Drive wiki",
+            "옵시디언",
+            "마크다운 볼트",
+            "노션 지식베이스",
+        ),
+        (
+            "Use to capture durable project knowledge and prepare destination-aware wiki guidance for markdown vaults, "
+            "Obsidian, Notion, Google Drive/Docs, databases, local folders, or unknown external knowledge targets."
+        ),
         category="knowledge",
         phase="capture",
         hermes_role="retained-knowledge",
         delegation_boundary="retained",
-        handoff_policy="Run directly in Hermes as knowledge capture unless the note reveals a separate coding task.",
-        required_inputs=("project fact", "source evidence", "target topic"),
-        expected_outputs=("markdown note", "retrieval hint", "staleness warning when needed"),
-        artifact_expectations=("repo-local markdown knowledge artifact",),
+        handoff_policy=(
+            "Run directly in Hermes as retained knowledge capture; prepare connector/runtime handoff only when a "
+            "separate observed external write or coding task is explicitly required."
+        ),
+        required_inputs=("project fact", "source evidence", "target topic", "destination preference when supplied"),
+        expected_outputs=(
+            "retained knowledge note guidance",
+            "destination-aware organization and retrieval hint",
+            "staleness warning when needed",
+            "prepared-versus-observed external write boundary",
+        ),
+        artifact_expectations=("repo-local markdown knowledge artifact or metadata-only destination guidance",),
         quality_tier="knowledge-gated",
         quality_bar=(
-            "Capture durable facts with source evidence and retrieval hints.",
+            "Capture durable facts with source evidence and destination-aware retrieval hints.",
+            "Treat Obsidian as one vendor hint under a broader external knowledge connection model.",
+            "Never present prepared wiki guidance as an observed external write, query, connector, or memory mutation.",
             "Mark stale or uncertain knowledge instead of presenting it as permanent truth.",
             "Extract separate coding tasks instead of burying them in notes.",
+        ),
+        final_checklist=(
+            "The durable fact, source evidence, destination preference, retrieval hint, and staleness risk are recorded.",
+            "Destination-specific guidance is prepared for the named store or the unknown destination gap is explicit.",
+            "No output claims an external write, query, connector invocation, or memory mutation without observed evidence.",
+            "Separate coding or connector tasks are extracted instead of buried in notes.",
+        ),
+        recovery_notes=(
+            "If source evidence conflicts, route to memory or knowledge review before writing durable guidance.",
+            "If the destination is unknown, record the missing destination facts and keep the guidance vendor-neutral.",
+            "If the fact may be stale, record the staleness warning and next refresh action.",
         ),
     ),
     SkillDefinition(

@@ -32,6 +32,13 @@ service, LLM router, or secret coding executor.
 
 One user goal should normally produce one PR.
 
+Plan, explain, and report delivery at the full user-goal completion grain. Do
+not frame a recommendation as "the first PR", "initial PR", "first slice", or a
+similarly partial unit unless the user explicitly asks for phased delivery or an
+independent release/rollback boundary forces a split. When implementation must
+be split, state the complete target capability first, then explain the concrete
+split reason and the remaining capability gap.
+
 Use multiple focused commits inside the same goal PR when useful. Planning docs,
 tests, implementation, code-review fixes, CI fixes, and small follow-up docs
 belong in the same PR when they serve the same user goal.
@@ -96,7 +103,13 @@ PR without the chat history.
 ## Coding Style
 
 - Keep code, docs, commit messages, and PR text in English.
-- Reply to Korean user messages in Korean.
+- Reply to Korean user messages in Korean. Use polite Korean by default; do not
+  use banmal, casual endings, or overly familiar phrasing unless the user
+  explicitly requests that tone.
+- For Korean explanations, prefer concrete, human-readable wording that names
+  what exists, what is missing, and the exact complete target behavior. Avoid
+  vague process labels or "small first PR" framing when the user asked to reason
+  at the whole-capability level.
 - Prefer small, explicit Python functions and data structures over clever
   string parsing.
 - Keep public claims conservative and test-backed.

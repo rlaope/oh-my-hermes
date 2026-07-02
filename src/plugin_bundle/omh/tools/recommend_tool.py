@@ -174,6 +174,7 @@ def _role_for_lane(lane: str) -> str:
     return {
         "intent_to_plan": "planner",
         "research_and_ops": "researcher",
+        "retained_knowledge": "memory-keeper",
         "materials_and_visuals": "operator",
         "automation_and_status": "tracker",
         "coding_handoff": "handoff-guide",

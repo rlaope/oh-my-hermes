@@ -177,7 +177,13 @@ class EfficiencyContractTests(unittest.TestCase):
         installable_skills = {definition.name for definition in builtin_definitions()}
 
         self.assertFalse(installable_skills - lane_skills)
+        retained_lane = next(lane for lane in payload["lanes"] if lane["id"] == "retained_knowledge")
+        materials_lane = next(lane for lane in payload["lanes"] if lane["id"] == "materials_and_visuals")
+        self.assertIn("wiki", retained_lane["skills"])
+        self.assertNotIn("wiki", materials_lane["skills"])
+        self.assertIn("wiki", cards["retained_knowledge"]["representative_workflows"])
         self.assertIn("img-summary", cards["materials_and_visuals"]["representative_workflows"])
+        self.assertNotIn("wiki", cards["materials_and_visuals"]["representative_workflows"])
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
         self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"])
@@ -207,6 +213,7 @@ class EfficiencyContractTests(unittest.TestCase):
         unmapped = sorted(name for name in workflow_skills if not workflow_context_card_for_workflow(name))
 
         self.assertEqual(unmapped, [])
+        self.assertEqual(workflow_context_card_for_workflow("wiki")["id"], "retained_knowledge")
         self.assertEqual(workflow_context_card_for_workflow("img-summary")["id"], "materials_and_visuals")
         self.assertEqual(workflow_context_card_for_workflow("feedback-triage")["id"], "research_and_ops")
         self.assertEqual(workflow_context_card_for_workflow("automation-blueprint")["id"], "automation_and_status")

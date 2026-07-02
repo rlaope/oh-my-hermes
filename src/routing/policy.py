@@ -3727,8 +3727,6 @@ def _persistent_completion_guard_applies(normalized_query: str, query_tokens: se
 
 
 def _research_brief_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _research_department_guard_applies(normalized_query, query_tokens):
-        return False
     compare = bool({"compare", "comparison", "benchmark", "evaluate", "vendors", "vendor"} & query_tokens)
     evidence = bool({"notes", "evidence", "confidence", "gaps", "sources", "customer"} & query_tokens)
     research_subject = bool({"vendor", "vendors", "market", "competitor", "analytics", "customer"} & query_tokens)
@@ -3743,6 +3741,10 @@ def _research_brief_guard_applies(normalized_query: str, query_tokens: set[str])
             "research brief",
         ),
     )
+    if phrase:
+        return True
+    if _research_department_guard_applies(normalized_query, query_tokens):
+        return False
     return phrase or (compare and research_subject and evidence)
 
 
@@ -4110,6 +4112,8 @@ def _explicit_material_export_requested(normalized_query: str, query_tokens: set
 def _research_department_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if is_explicit_one_off_request(normalized_query, query_tokens):
         return False
+    if _wiki_capture_destination_request(normalized_query, query_tokens):
+        return False
     explicit_research_ops = _contains_phrase(normalized_query, _RESEARCH_DEPARTMENT_PHRASES)
     if _omh_capability_question(normalized_query) and explicit_research_ops:
         return True
@@ -4186,6 +4190,49 @@ def _research_department_guard_applies(normalized_query: str, query_tokens: set[
     return recurring and (research or collect_synthesize_brief) and (
         support or specific_research_domain or explicit_research_ops or collect_synthesize_brief
     )
+
+
+def _wiki_capture_destination_request(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(
+        normalized_query,
+        (
+            "research department",
+            "research ops",
+            "research operations",
+            "리서치 부서",
+            "리서치 운영",
+        ),
+    ):
+        return False
+    destination = _contains_phrase(
+        normalized_query,
+        (
+            "external knowledge store",
+            "knowledge store",
+            "knowledge base",
+            "markdown vault",
+            "obsidian",
+            "notion",
+            "google drive",
+            "google docs",
+            "지식 저장소",
+            "지식저장소",
+            "지식 베이스",
+            "마크다운 볼트",
+            "옵시디언",
+            "노션",
+            "구글 드라이브",
+        ),
+    )
+    wiki_target = bool({"wiki", "위키"} & query_tokens) or "wiki" in normalized_query or _contains_phrase(
+        normalized_query,
+        ("project wiki", "wiki note", "wiki notes", "위키로", "위키에", "프로젝트 위키"),
+    )
+    capture = bool({"capture", "record", "notes", "note", "retrieval", "staleness", "structure"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        ("capture", "record", "leave as wiki", "retrieval hint", "staleness", "남길", "쌓", "구조", "정리", "정리"),
+    )
+    return destination and wiki_target and capture
 
 
 def _source_finder_guard_applies(
