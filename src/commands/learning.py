@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from ..ingress import CHAT_SOURCES
+from ..ingress import CHAT_SOURCES, extract_message_text
 from ..installer import OmhError
 from ..routing.chat import CONFIDENCE_LEVELS
 from ..workflow_learning import (
@@ -11,6 +11,7 @@ from ..workflow_learning import (
     attach_learning_trace_ref_to_interaction,
     build_improvement_candidate,
     build_improvement_patch_proposal,
+    build_self_improvement_store_routing,
     build_workflow_learning_review_queue,
     build_workflow_learning_audit,
     build_learning_export_bundle,
@@ -39,6 +40,28 @@ from ..workflow_learning import (
 )
 from ..wrapper.contract import INTERACTION_MODES, build_chat_interaction_payload
 from .common import _chat_input_and_metadata, _explicit_source_metadata, _paths, _print_json
+
+
+def cmd_learning_route_signal(args: argparse.Namespace) -> int:
+    try:
+        event_or_message, source_metadata = _chat_input_and_metadata(args)
+        signal_text = extract_message_text(event_or_message) if isinstance(event_or_message, dict) else str(event_or_message)
+        source_kind = args.source_kind or source_metadata.get("source", "") or args.source or "operator_feedback"
+        routing = build_self_improvement_store_routing(signal_text, source_kind=source_kind)
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "learning_store_route_result/v1",
+            "recorded": False,
+            "routing": routing,
+            "claim_boundary": (
+                "Store routing is a metadata-only preview. It does not write memory, patch skills, update wiki notes, "
+                "create automation, or record retrospectives."
+            ),
+        }
+    )
+    return 0
 
 
 def cmd_learning_record(args: argparse.Namespace) -> int:
@@ -367,6 +390,20 @@ def _add_learning_commands(sub) -> None:
         help="Record workflow learning traces, evals, improvement candidates, and regression cases.",
     )
     learning_sub = learning.add_subparsers(dest="learning_command", required=True)
+
+    route_signal = learning_sub.add_parser(
+        "route-signal",
+        help="Classify a self-improvement signal before any memory, skill, wiki, retrospective, or automation write.",
+    )
+    route_signal.add_argument("message", nargs="*", help="Self-improvement signal to classify.")
+    route_signal.add_argument("--source", choices=CHAT_SOURCES, default="generic")
+    route_signal.add_argument("--stdin", action="store_true")
+    route_signal.add_argument("--event-json", default=None)
+    route_signal.add_argument("--source-kind", default="operator_feedback")
+    route_signal.add_argument("--source-event-id", default="")
+    route_signal.add_argument("--channel-ref", default="")
+    route_signal.add_argument("--user-ref", default="")
+    route_signal.set_defaults(func=cmd_learning_route_signal)
 
     record = learning_sub.add_parser("record", help="Persist a metadata-only learning trace from chat or runtime evidence.")
     record.add_argument("message", nargs="*", help="Chat message to route and record as a learning trace.")

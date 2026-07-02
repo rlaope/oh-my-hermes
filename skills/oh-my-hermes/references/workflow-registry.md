@@ -67,6 +67,6 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `toolbelt-readiness`: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `connector readiness`, `needed mcp`, `api credential`, `missing cli`
 - `ops-observability-card`: `ops-observability-card`, `observability card`, `cost telemetry`, `latency telemetry`, `token telemetry`, `run history`, `loop telemetry`
 - `agent-ops-review`: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`
-- `workflow-learning`: `workflow-learning`, `workflow learning`, `learning trace`, `learning audit`, `audit learning`, `learning review`, `review queue`
+- `workflow-learning`: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `memory skill wiki routing`, `learning trace`, `learning audit`
 
 Routing is conservative: route only on explicit invocation, strong keyword evidence, or a clear workflow-shaped request. A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when it could mean normal conversation.

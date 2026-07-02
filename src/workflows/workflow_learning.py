@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from ..local_store import atomic_write_json, ensure_dir, read_json_object, utc_now
 from ..paths import OmhPaths
@@ -23,6 +23,7 @@ WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
 WORKFLOW_LEARNING_AUDIT_SCHEMA_VERSION = "workflow_learning_audit/v1"
 LEARNING_AUDIT_CARD_SCHEMA_VERSION = "learning_audit_card/v1"
 MISSED_ROUTE_RESULT_SCHEMA_VERSION = "learning_missed_route_result/v1"
+SELF_IMPROVEMENT_STORE_ROUTING_SCHEMA_VERSION = "self_improvement_store_routing/v1"
 TRACE_REF_PREFIX = "omh-learning-trace"
 EXPORT_REF_PREFIX = "omh-learning-export"
 PRIVACY_MODE = "metadata_only"
@@ -61,8 +62,189 @@ EXPORT_FORBIDDEN_PAYLOAD_KEYS = FORBIDDEN_TRACE_KEYS | {
     "stdout",
     "stderr",
 }
+_SELF_IMPROVEMENT_ALLOWED_RAW_TEXT_STORED_PATH = "signal.raw_text_stored"
+_SELF_IMPROVEMENT_FORBIDDEN_NORMALIZED_PAYLOAD_KEYS = {
+    re.sub(r"[^a-z0-9]+", "", key.casefold()) for key in EXPORT_FORBIDDEN_PAYLOAD_KEYS
+} | {"rawtextstored"}
 _OBSERVED_STATES = {"observed", "verified", "complete", "completed", "ready", "merged"}
 _LEARNING_OUTCOMES = {"unknown", "useful", "not_useful", "blocked", "failed"}
+_SELF_IMPROVEMENT_DESTINATION_DETAILS = {
+    "memory_candidate": {
+        "target_workflow": "memory-curation-review",
+        "target_record_type": "project_memory_candidate",
+        "next_action": "prepare_memory_curation_review",
+        "confidence": "high",
+    },
+    "skill_update_candidate": {
+        "target_workflow": "workflow-learning",
+        "target_record_type": "improvement_candidate",
+        "next_action": "review_improvement",
+        "confidence": "high",
+    },
+    "wiki_candidate": {
+        "target_workflow": "wiki",
+        "target_record_type": "retained_knowledge_note",
+        "next_action": "prepare_wiki_guidance",
+        "confidence": "high",
+    },
+    "failure_retrospective_candidate": {
+        "target_workflow": "workflow-learning",
+        "target_record_type": "workflow_learning_trace",
+        "next_action": "record_workflow_learning_trace",
+        "confidence": "high",
+    },
+    "automation_suggestion_candidate": {
+        "target_workflow": "automation-blueprint",
+        "target_record_type": "automation_suggestion",
+        "next_action": "prepare_automation_blueprint",
+        "confidence": "high",
+    },
+    "discard_transient": {
+        "target_workflow": "none",
+        "target_record_type": "none",
+        "next_action": "do_not_store",
+        "confidence": "high",
+    },
+    "manual_review_candidate": {
+        "target_workflow": "memory-curation-review",
+        "target_record_type": "store_review_question",
+        "next_action": "review_self_improvement_store_route",
+        "confidence": "needs_review",
+    },
+}
+_SELF_IMPROVEMENT_DESTINATION_PRIORITY = (
+    "discard_transient",
+    "automation_suggestion_candidate",
+    "failure_retrospective_candidate",
+    "wiki_candidate",
+    "skill_update_candidate",
+    "memory_candidate",
+)
+_PRIVATE_OR_RAW_SIGNAL_TERMS = (
+    "secret-token",
+    "api token",
+    "api key",
+    "password",
+    "credential",
+    "private key",
+    "raw transcript",
+    "raw prompt",
+    "raw log",
+)
+_TRANSIENT_SIGNAL_TERMS = (
+    "temporary",
+    "temp shell",
+    "local session only",
+    "this local session",
+    "this shell",
+    "path was wrong",
+    "missing binary",
+    "not installed locally",
+    "one-off",
+)
+_AUTOMATION_RECURRING_TERMS = (
+    "daily",
+    "weekly",
+    "monthly",
+    "every day",
+    "every week",
+    "cron",
+    "schedule",
+    "recurring",
+    "background self-improvement",
+    "매일",
+    "매주",
+    "주기적",
+)
+_AUTOMATION_ACTION_TERMS = (
+    "suggest",
+    "create",
+    "run",
+    "review",
+    "remind",
+    "notify",
+    "돌려",
+    "알림",
+    "제안",
+)
+_WIKI_SIGNAL_TERMS = (
+    "according to",
+    "docs",
+    "documentation",
+    "source-backed",
+    "citation",
+    "paper",
+    "research",
+    "wiki",
+    "schema.md",
+    "index.md",
+    "api reference",
+    "standard",
+    "출처",
+    "문서",
+    "위키",
+)
+_FAILURE_SIGNAL_TERMS = (
+    "ci failed",
+    "test failed",
+    "failed",
+    "failure",
+    "root cause",
+    "postmortem",
+    "retrospective",
+    "regression",
+    "blocked",
+    "broke",
+    "incident",
+    "실패",
+    "회고",
+    "원인",
+)
+_SKILL_SIGNAL_TERMS = (
+    "workflow",
+    "skill",
+    "agent",
+    "subagent",
+    "handoff",
+    "route",
+    "routing",
+    "clarify",
+    "question",
+    "reviewer",
+    "builder",
+    "interviewer",
+    "codex",
+    "hermes",
+    "omh",
+    "스킬",
+    "워크플로",
+    "에이전트",
+)
+_SKILL_BEHAVIOR_TERMS = (
+    "should",
+    "must",
+    "instead",
+    "always",
+    "never",
+    "when",
+    "ask",
+    "물어",
+    "자주",
+    "애매",
+)
+_MEMORY_SIGNAL_TERMS = (
+    "i prefer",
+    "my preference",
+    "please remember i",
+    "remember i",
+    "call me",
+    "reply to me",
+    "i like",
+    "내가 선호",
+    "나는",
+    "내 취향",
+    "기억해",
+)
 
 
 class WorkflowLearningError(ValueError):
@@ -366,6 +548,61 @@ def build_workflow_eval_result(
     }
     validate_workflow_eval_result(result)
     return result
+
+
+def build_self_improvement_store_routing(
+    signal_text: str,
+    *,
+    source_kind: str = "operator_feedback",
+    observed_refs: list[str] | None = None,
+) -> dict[str, Any]:
+    classification = _classify_self_improvement_store(signal_text)
+    payload = {
+        "schema_version": SELF_IMPROVEMENT_STORE_ROUTING_SCHEMA_VERSION,
+        "status": "prepared",
+        "generated_at": utc_now(),
+        "signal": {
+            "source_kind": _safe_store_route_token(source_kind) or "operator_feedback",
+            "sha256": hashlib.sha256(str(signal_text or "").encode("utf-8")).hexdigest(),
+            "length": len(str(signal_text or "")),
+            "raw_text_stored": False,
+        },
+        "classification": classification,
+        "review_gate": {
+            "required": True,
+            "decision": "pending",
+            "allowed_decisions": ["approve_destination", "change_destination", "discard"],
+            "reason": "Prepared routing separates self-improvement stores before any durable write.",
+        },
+        "observed_ref_hashes": _export_ref_values(observed_refs or []),
+        "writes_observed": False,
+        "next_action": str(classification["next_action"]),
+        "wrapper_actions": [
+            "review_self_improvement_store_route",
+            "prepare_memory_curation_review",
+            "review_improvement",
+            "prepare_wiki_guidance",
+            "record_workflow_learning_trace",
+            "prepare_automation_blueprint",
+            "do_not_store",
+            "show_status",
+        ],
+        "not_evidence_yet": [
+            "memory write",
+            "skill patch",
+            "wiki write",
+            "failure retrospective accepted",
+            "automation created",
+            "external connector write",
+            "model training",
+        ],
+        "claim_boundary": (
+            "Self-improvement store routing is prepared classification only. It does not write Hermes memory, "
+            "patch skills, update a wiki, create automation, accept a retrospective, or prove future behavior changed."
+        ),
+    }
+    validate_self_improvement_store_routing(payload)
+    return payload
 
 
 def write_workflow_eval(paths: OmhPaths, result: dict[str, Any]) -> dict[str, Any]:
@@ -1455,6 +1692,55 @@ def validate_workflow_eval_result(result: dict[str, Any]) -> None:
             raise WorkflowLearningError("eval check must be an object")
         if check.get("status") not in {"passed", "warning", "failed", "not_applicable"}:
             raise WorkflowLearningError("eval check status is invalid")
+
+
+def validate_self_improvement_store_routing(payload: dict[str, Any]) -> None:
+    _require_schema(payload, SELF_IMPROVEMENT_STORE_ROUTING_SCHEMA_VERSION)
+    if payload.get("status") != "prepared":
+        raise WorkflowLearningError("self-improvement store routing status must be prepared")
+    for key in ("generated_at", "next_action", "claim_boundary"):
+        _require_string(payload, key)
+    signal = _object(payload.get("signal"))
+    if signal.get("raw_text_stored") is not False:
+        raise WorkflowLearningError("self-improvement store routing must not store raw signal text")
+    for key in ("source_kind", "sha256"):
+        _require_string(signal, key)
+    if not isinstance(signal.get("length"), int) or signal.get("length") < 0:
+        raise WorkflowLearningError("self-improvement store routing signal.length must be a non-negative integer")
+    classification = _object(payload.get("classification"))
+    destination = str(classification.get("destination", ""))
+    if destination not in _SELF_IMPROVEMENT_DESTINATION_DETAILS:
+        raise WorkflowLearningError("self-improvement store routing destination is invalid")
+    expected = _SELF_IMPROVEMENT_DESTINATION_DETAILS[destination]
+    for key in ("confidence", "target_workflow", "target_record_type", "next_action"):
+        _require_string(classification, key)
+    for key in ("target_workflow", "target_record_type", "next_action"):
+        if classification.get(key) != expected[key]:
+            raise WorkflowLearningError(f"self-improvement store routing classification.{key} is inconsistent")
+    reasons = _strings(classification.get("routing_reasons"))
+    if not reasons:
+        raise WorkflowLearningError("self-improvement store routing requires routing reasons")
+    alternatives = _strings(classification.get("alternative_destinations"))
+    if any(destination == item or item not in _SELF_IMPROVEMENT_DESTINATION_DETAILS for item in alternatives):
+        raise WorkflowLearningError("self-improvement store routing alternatives are invalid")
+    gate = _object(payload.get("review_gate"))
+    if gate.get("required") is not True or gate.get("decision") != "pending":
+        raise WorkflowLearningError("self-improvement store routing requires a pending review gate")
+    if not _strings(gate.get("allowed_decisions")):
+        raise WorkflowLearningError("self-improvement store routing review gate decisions must be non-empty")
+    wrapper_actions = _strings(payload.get("wrapper_actions"))
+    if not wrapper_actions:
+        raise WorkflowLearningError("self-improvement store routing wrapper_actions must be non-empty")
+    if payload.get("next_action") not in set(wrapper_actions):
+        raise WorkflowLearningError("self-improvement store routing next_action must be listed in wrapper_actions")
+    if payload.get("writes_observed") is not False:
+        raise WorkflowLearningError("self-improvement store routing cannot claim observed writes")
+    if not _strings(payload.get("not_evidence_yet")):
+        raise WorkflowLearningError("self-improvement store routing not_evidence_yet must be non-empty")
+    if any(not isinstance(item, str) or not item for item in _list(payload.get("observed_ref_hashes"))):
+        raise WorkflowLearningError("self-improvement store routing observed_ref_hashes must be strings")
+    _reject_forbidden_payload_keys(payload)
+    _reject_self_improvement_raw_payload_keys(payload)
 
 
 def _validate_improvement_candidate_core(candidate: dict[str, Any]) -> None:
@@ -3360,6 +3646,103 @@ def _learning_index_check_payload(
     }
 
 
+def _classify_self_improvement_store(signal_text: str) -> dict[str, Any]:
+    text = _normalize_store_signal(signal_text)
+    matches: list[tuple[str, str]] = []
+    if not text:
+        return _self_improvement_classification(
+            "manual_review_candidate",
+            ["ambiguous_or_empty_signal"],
+            [],
+        )
+    if _store_signal_contains_any(text, _PRIVATE_OR_RAW_SIGNAL_TERMS):
+        matches.append(("discard_transient", "private_or_raw_content"))
+    if _store_signal_contains_any(text, _TRANSIENT_SIGNAL_TERMS):
+        matches.append(("discard_transient", "transient_local_state"))
+    if _has_automation_store_signal(text):
+        matches.append(("automation_suggestion_candidate", "recurring_automation"))
+    if _store_signal_contains_any(text, _WIKI_SIGNAL_TERMS):
+        matches.append(("wiki_candidate", "source_backed_knowledge"))
+    if _store_signal_contains_any(text, _FAILURE_SIGNAL_TERMS):
+        matches.append(("failure_retrospective_candidate", "failure_or_regression"))
+    if _has_skill_store_signal(text):
+        matches.append(("skill_update_candidate", "workflow_behavior"))
+    if _store_signal_contains_any(text, _MEMORY_SIGNAL_TERMS):
+        matches.append(("memory_candidate", "user_preference"))
+    if not matches:
+        return _self_improvement_classification(
+            "manual_review_candidate",
+            ["ambiguous_or_empty_signal"],
+            [],
+        )
+    destination = _prioritized_store_destination(matches)
+    reasons = [reason for matched_destination, reason in matches if matched_destination == destination]
+    alternatives = _unique_destinations(
+        matched_destination for matched_destination, _reason in matches if matched_destination != destination
+    )
+    return _self_improvement_classification(destination, reasons, alternatives)
+
+
+def _self_improvement_classification(
+    destination: str,
+    reasons: list[str],
+    alternatives: list[str],
+) -> dict[str, Any]:
+    details = _SELF_IMPROVEMENT_DESTINATION_DETAILS[destination]
+    return {
+        "destination": destination,
+        "confidence": str(details["confidence"]),
+        "target_workflow": str(details["target_workflow"]),
+        "target_record_type": str(details["target_record_type"]),
+        "next_action": str(details["next_action"]),
+        "routing_reasons": reasons,
+        "alternative_destinations": alternatives,
+    }
+
+
+def _prioritized_store_destination(matches: list[tuple[str, str]]) -> str:
+    destinations = {destination for destination, _reason in matches}
+    for destination in _SELF_IMPROVEMENT_DESTINATION_PRIORITY:
+        if destination in destinations:
+            return destination
+    return matches[0][0]
+
+
+def _unique_destinations(destinations: Iterable[str]) -> list[str]:
+    unique: list[str] = []
+    for destination in destinations:
+        text = str(destination)
+        if text and text not in unique:
+            unique.append(text)
+    return unique
+
+
+def _has_automation_store_signal(text: str) -> bool:
+    return _store_signal_contains_any(text, _AUTOMATION_RECURRING_TERMS) and _store_signal_contains_any(
+        text,
+        _AUTOMATION_ACTION_TERMS,
+    )
+
+
+def _has_skill_store_signal(text: str) -> bool:
+    return _store_signal_contains_any(text, _SKILL_SIGNAL_TERMS) and _store_signal_contains_any(
+        text,
+        _SKILL_BEHAVIOR_TERMS,
+    )
+
+
+def _normalize_store_signal(value: str) -> str:
+    return " ".join(str(value or "").casefold().split())
+
+
+def _store_signal_contains_any(text: str, terms: tuple[str, ...]) -> bool:
+    return any(term.casefold() in text for term in terms)
+
+
+def _safe_store_route_token(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.:-]+", "_", str(value or "").strip())[:80]
+
+
 def _record_ref(kind: str, identifier: str) -> str:
     if kind == "trace":
         return learning_trace_ref(identifier)
@@ -3472,6 +3855,25 @@ def _reject_forbidden_payload_keys(value: object, *, path: str = "") -> None:
     elif isinstance(value, list):
         for index, child in enumerate(value):
             _reject_forbidden_payload_keys(child, path=f"{path}{index}.")
+
+
+def _reject_self_improvement_raw_payload_keys(value: object, *, path: str = "") -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            key_text = str(key)
+            current_path = f"{path}{key_text}"
+            normalized = re.sub(r"[^a-z0-9]+", "", key_text.casefold())
+            if current_path == _SELF_IMPROVEMENT_ALLOWED_RAW_TEXT_STORED_PATH:
+                if child is not False:
+                    raise WorkflowLearningError(
+                        f"self-improvement store routing contains invalid raw flag: {current_path}"
+                    )
+            elif normalized.startswith("raw") or normalized in _SELF_IMPROVEMENT_FORBIDDEN_NORMALIZED_PAYLOAD_KEYS:
+                raise WorkflowLearningError(f"self-improvement store routing contains forbidden raw field: {current_path}")
+            _reject_self_improvement_raw_payload_keys(child, path=f"{current_path}.")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _reject_self_improvement_raw_payload_keys(child, path=f"{path}{index}.")
 
 
 def _sanitize_export_record(value: object) -> Any:
