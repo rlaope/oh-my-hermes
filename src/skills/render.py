@@ -551,7 +551,7 @@ Compact lane map:
 - Intent -> plan: `deep-interview`, `ralplan`, `plan`, `loop`, `ultraprocess`.
 - Research and company ops: `web-research`, `source-finder`, `research-department`, `paper-learning`, `feedback-triage`, `strategy-brief`, `meeting-brief`.
 - Retained knowledge: `wiki`.
-- Materials and visual summaries: `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
+- Materials and visual summaries: `design-quality-gate`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
 - Coding handoff and review: `idea-to-deploy`, `agent-ops-review`, `code-review`, `ops-observability-card`.
 
 ## Priority Rules

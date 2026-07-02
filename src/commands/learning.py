@@ -12,6 +12,7 @@ from ..workflow_learning import (
     build_improvement_candidate,
     build_improvement_patch_proposal,
     build_self_improvement_store_routing,
+    build_self_improvement_store_route_record,
     build_workflow_learning_review_queue,
     build_workflow_learning_audit,
     build_learning_export_bundle,
@@ -29,6 +30,9 @@ from ..workflow_learning import (
     record_missed_route,
     replay_regression_cases,
     review_improvement_candidate,
+    review_self_improvement_store_route,
+    self_improvement_store_route_ref,
+    list_self_improvement_store_routes,
     show_improvement_candidate,
     show_learning_trace,
     write_improvement_candidate,
@@ -36,6 +40,7 @@ from ..workflow_learning import (
     write_learning_export,
     write_learning_trace,
     write_regression_case,
+    write_self_improvement_store_route,
     write_workflow_eval,
 )
 from ..wrapper.contract import INTERACTION_MODES, build_chat_interaction_payload
@@ -48,10 +53,7 @@ def cmd_learning_route_signal(args: argparse.Namespace) -> int:
         signal_text = extract_message_text(event_or_message) if isinstance(event_or_message, dict) else str(event_or_message)
         source_kind = args.source_kind or source_metadata.get("source", "") or args.source or "operator_feedback"
         routing = build_self_improvement_store_routing(signal_text, source_kind=source_kind)
-    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
-        raise OmhError(str(exc)) from exc
-    _print_json(
-        {
+        payload: dict[str, object] = {
             "schema_version": "learning_store_route_result/v1",
             "recorded": False,
             "routing": routing,
@@ -60,7 +62,26 @@ def cmd_learning_route_signal(args: argparse.Namespace) -> int:
                 "create automation, or record retrospectives."
             ),
         }
-    )
+        if args.record:
+            source_ref = args.source_ref or args.source_event_id or source_metadata.get("source_event_id", "")
+            record = write_self_improvement_store_route(
+                _paths(args),
+                build_self_improvement_store_route_record(routing, source_ref=source_ref, title=args.title or ""),
+            )
+            payload.update(
+                {
+                    "recorded": True,
+                    "store_route_ref": self_improvement_store_route_ref(str(record["route_id"])),
+                    "store_route": record,
+                    "claim_boundary": (
+                        "Store routing was recorded as metadata-only review state. It still does not write memory, "
+                        "patch skills, update wiki notes, create automation, or record retrospectives."
+                    ),
+                }
+            )
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
     return 0
 
 
@@ -261,6 +282,47 @@ def cmd_learning_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_learning_store_routes(args: argparse.Namespace) -> int:
+    try:
+        payload = list_self_improvement_store_routes(
+            _paths(args),
+            limit=None if args.all else args.limit,
+            include_resolved=args.include_resolved,
+        )
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 1 if payload.get("status") == "blocked" else 0
+
+
+def cmd_learning_review_route(args: argparse.Namespace) -> int:
+    try:
+        route = review_self_improvement_store_route(
+            _paths(args),
+            args.route_id,
+            decision=args.decision,
+            destination=args.destination or "",
+            reviewer_ref=args.reviewer_ref or "operator",
+            review_note=args.review_note or "",
+        )
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "schema_version": "learning_store_route_review_result/v1",
+            "recorded": True,
+            "decision": args.decision,
+            "store_route_ref": self_improvement_store_route_ref(str(route["route_id"])),
+            "store_route": route,
+            "claim_boundary": (
+                "The store route review records a destination decision only. OMH did not write memory, "
+                "patch skills, update wiki notes, create automation, accept a retrospective, run CI, or merge."
+            ),
+        }
+    )
+    return 0
+
+
 def cmd_learning_review_candidate(args: argparse.Namespace) -> int:
     try:
         candidate = review_improvement_candidate(
@@ -403,6 +465,9 @@ def _add_learning_commands(sub) -> None:
     route_signal.add_argument("--source-event-id", default="")
     route_signal.add_argument("--channel-ref", default="")
     route_signal.add_argument("--user-ref", default="")
+    route_signal.add_argument("--source-ref", default="")
+    route_signal.add_argument("--title", default="")
+    route_signal.add_argument("--record", action="store_true")
     route_signal.set_defaults(func=cmd_learning_route_signal)
 
     record = learning_sub.add_parser("record", help="Persist a metadata-only learning trace from chat or runtime evidence.")
@@ -492,6 +557,34 @@ def _add_learning_commands(sub) -> None:
     review.add_argument("--limit", type=int, default=20, help="Maximum review queue entries to return.")
     review.add_argument("--all", action="store_true", help="Return the full review queue.")
     review.set_defaults(func=cmd_learning_review)
+
+    store_routes = learning_sub.add_parser(
+        "store-routes",
+        help="List metadata-only self-improvement store-route records awaiting review.",
+    )
+    store_routes.add_argument("--limit", type=int, default=20, help="Maximum store routes to return.")
+    store_routes.add_argument("--all", action="store_true", help="Return all matching store routes.")
+    store_routes.add_argument("--include-resolved", action="store_true", help="Include approved, changed, and discarded routes.")
+    store_routes.set_defaults(func=cmd_learning_store_routes)
+
+    review_route = learning_sub.add_parser(
+        "review-route",
+        help="Record a metadata-only destination review decision for a store-route record.",
+    )
+    review_route.add_argument("route_id")
+    review_route.add_argument(
+        "--decision",
+        choices=("approve_destination", "change_destination", "discard"),
+        required=True,
+    )
+    review_route.add_argument("--destination", default="")
+    review_route.add_argument("--reviewer-ref", default="operator")
+    review_route.add_argument(
+        "--review-note",
+        default="",
+        help="Optional operator note; OMH stores only its hash and length, not the note text.",
+    )
+    review_route.set_defaults(func=cmd_learning_review_route)
 
     review_candidate = learning_sub.add_parser(
         "review-candidate",

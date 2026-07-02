@@ -397,7 +397,7 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
         "tool_family": "image_tools",
         "applies_before": ("image generation", "local rendering", "visual design tools"),
         "primary_workflow": "img-summary",
-        "preferred_workflows": ("img-summary", "materials-package", "report-package"),
+        "preferred_workflows": ("img-summary", "design-quality-gate", "materials-package", "report-package"),
         "primary_next_action": "prepare_visual_prompt_card",
         "fallback_action": "choose_image_generator_or_setup",
         "not_evidence_yet": ("image generation", "visual QA", "attachment", "delivery"),
@@ -406,7 +406,7 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
         "tool_family": "file_tools",
         "applies_before": ("PPT/PDF/XLSX/DOC/HWP generation", "file conversion", "attachment packaging"),
         "primary_workflow": "materials-package",
-        "preferred_workflows": ("materials-package", "paper-learning", "deliverable-package", "report-package"),
+        "preferred_workflows": ("materials-package", "design-quality-gate", "paper-learning", "deliverable-package", "report-package"),
         "primary_next_action": "prepare_material_package",
         "fallback_action": "confirm_target_format_and_generator",
         "not_evidence_yet": ("file export", "render QA", "attachment", "delivery"),
@@ -443,6 +443,7 @@ ROUTER_KEYWORD_SKILLS = (
     "feedback-triage",
     "materials-package",
     "img-summary",
+    "design-quality-gate",
     "automation-blueprint",
     "workflow-learning",
     "code-review",
@@ -519,9 +520,9 @@ WORKFLOW_CONTEXT_CARDS = (
     {
         "id": "materials_and_visuals",
         "label": "Materials and visuals",
-        "user_signal": "deck, PDF, spreadsheet, document, HWP, report, image card, or shareable summary",
-        "omh_pattern": "shape the deliverable contract, prepare prompts or package metadata, then record generation and QA only when observed",
-        "representative_workflows": ("materials-package", "report-package", "deliverable-package", "img-summary"),
+        "user_signal": "deck, PDF, spreadsheet, document, HWP, report, website, poster, image card, or shareable summary",
+        "omh_pattern": "shape the deliverable contract, prepare prompts/package/design-quality metadata, then record generation and QA only when observed",
+        "representative_workflows": ("design-quality-gate", "materials-package", "report-package", "deliverable-package", "img-summary"),
         "user_examples": ("Turn this PR into a reviewer image card", "Make this spreadsheet a PDF report package"),
         "first_response_shape": "Separate copy/layout/package prep from generated file or image evidence, then offer revise/copy/generate/record actions.",
         "not_evidence_until_observed": ("file export", "image generation", "visual QA", "attachment"),
@@ -581,6 +582,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "report-package": "materials_and_visuals",
     "deliverable-package": "materials_and_visuals",
     "img-summary": "materials_and_visuals",
+    "design-quality-gate": "materials_and_visuals",
     "automation-blueprint": "automation_and_status",
     "agent-board": "automation_and_status",
     "agent-ops-review": "automation_and_status",
@@ -2750,8 +2752,8 @@ def awareness_primer_payload() -> dict[str, object]:
         {
             "id": "materials_and_visuals",
             "label": "Materials and visual summaries",
-            "skills": ["materials-package", "img-summary", "report-package", "deliverable-package"],
-            "use_for": "decks, PDFs, spreadsheets, documents, image summary cards, and shareable packages",
+            "skills": ["design-quality-gate", "materials-package", "img-summary", "report-package", "deliverable-package"],
+            "use_for": "premium websites, decks, PDFs, spreadsheets, documents, posters, image summary cards, and shareable packages",
         },
         {
             "id": "automation_and_status",
@@ -3009,7 +3011,7 @@ def _compact_workflow_cue_line() -> str:
     return (
         "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
         "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
-        "decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; "
+        "premium design/web/poster/PPT/PDF quality -> design-quality-gate; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; "
         "coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; "
         "trace/improve/regression -> workflow-learning"
     )
@@ -3019,7 +3021,7 @@ def _compact_workflow_context_cards_line() -> str:
     return (
         "intent -> deep-interview/ralplan/loop/ultraprocess; "
         "signals -> web-research/research-department/feedback-triage/meeting-brief; "
-        "materials -> materials-package/report-package/img-summary; "
+        "materials -> design-quality-gate/materials-package/report-package/img-summary; "
         "automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; "
         "code -> ultraprocess/code-review/team/ultrawork/ultraqa"
     )

@@ -7,7 +7,7 @@ from ..skills.catalog import (
     skill_exposure_payload,
 )
 from ..plugin_bundle.omh.awareness import awareness_lane_examples, awareness_primer_payload
-from .schema import PREPARED_NOT_OBSERVED, SKILL_CAPABILITY_SCHEMA_VERSION
+from .schema import SKILL_CAPABILITY_SCHEMA_VERSION
 
 
 def skill_capabilities() -> list[dict[str, object]]:
@@ -68,11 +68,9 @@ def _skill_capability(
         "tool_requirements": {
             "derivation_status": "partial",
             "required_tools": [],
-            "fallback": "No concrete tool or MCP requirement is declared by the existing skill catalog.",
+            "fallback": "No concrete tool requirement declared.",
         },
         "evidence_boundary": _skill_evidence_boundary(definition),
-        "prepared_is_not": PREPARED_NOT_OBSERVED,
-        "source_refs": ["src/skills/catalog.py"],
     }
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 import unittest
 
@@ -220,6 +221,23 @@ class ArchitectureLayoutTests(unittest.TestCase):
                     if line.strip()
                 ]
                 self.assertEqual(lines, expected_lines)
+
+    def test_workflow_learning_store_route_helpers_do_not_import_facade_module(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        helper_paths = (
+            repo_root / "src" / "workflows" / "self_improvement_route_records.py",
+            repo_root / "src" / "workflows" / "self_improvement_routes.py",
+        )
+
+        for path in helper_paths:
+            with self.subTest(path=path.name):
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+                imported_modules = {
+                    node.module
+                    for node in ast.walk(tree)
+                    if isinstance(node, ast.ImportFrom) and node.module
+                }
+                self.assertNotIn("workflow_learning", imported_modules)
 
     def test_ingress_owns_message_and_metadata_extraction(self) -> None:
         event = {"event": {"text": "risky refactor", "id": "m1", "channel": "c1", "user": "u1", "ts": "123.4"}}

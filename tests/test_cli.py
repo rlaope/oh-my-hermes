@@ -705,6 +705,83 @@ class CliTests(unittest.TestCase):
             self.assertFalse(routing["writes_observed"])
             self.assertNotIn(message, stdout)
 
+    def test_learning_route_signal_cli_can_record_and_review_store_routes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            message = "When the workflow is ambiguous, the skill should ask only when the route is unclear."
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "learning",
+                    "route-signal",
+                    message,
+                    "--record",
+                    "--source-ref",
+                    "chat:msg-2",
+                    "--title",
+                    "Route skill learning",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            payload = json.loads(stdout)
+            route = payload["store_route"]
+            route_id = route["route_id"]
+            self.assertTrue(payload["recorded"])
+            self.assertEqual(route["schema_version"], "self_improvement_store_route_record/v1")
+            self.assertEqual(route["status"], "pending_review")
+            self.assertEqual(route["destination_review"]["current_destination"], "skill_update_candidate")
+            self.assertFalse(route["writes_observed"])
+            self.assertNotIn(message, stdout)
+
+            status, stdout, stderr = run_cli(base + ["learning", "store-routes"])
+
+            self.assertEqual(status, 0, stderr)
+            store_routes = json.loads(stdout)
+            self.assertEqual(store_routes["schema_version"], "self_improvement_store_route_list/v1")
+            self.assertEqual(store_routes["summary"]["pending_store_routes"], 1)
+            self.assertEqual(store_routes["store_routes"][0]["route_id"], route_id)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "learning",
+                    "review-route",
+                    route_id,
+                    "--decision",
+                    "change_destination",
+                    "--destination",
+                    "memory_candidate",
+                    "--reviewer-ref",
+                    "operator:test",
+                    "--review-note",
+                    "private note should not be stored",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            reviewed = json.loads(stdout)
+            reviewed_route = reviewed["store_route"]
+            self.assertTrue(reviewed["recorded"])
+            self.assertEqual(reviewed_route["status"], "changed")
+            self.assertEqual(reviewed_route["destination_review"]["current_destination"], "memory_candidate")
+            self.assertEqual(reviewed_route["destination_review"]["next_action"], "prepare_memory_curation_review")
+            self.assertIn("review_note_sha256", reviewed_route["review_gate"])
+            self.assertFalse(reviewed_route["review_gate"]["review_note_stored"])
+            self.assertFalse(reviewed_route["writes_observed"])
+            self.assertNotIn("private note", stdout)
+
+            status, stdout, stderr = run_cli(base + ["learning", "store-routes", "--include-resolved"])
+
+            self.assertEqual(status, 0, stderr)
+            resolved = json.loads(stdout)
+            self.assertEqual(resolved["summary"]["returned_items"], 1)
+            self.assertEqual(resolved["store_routes"][0]["status"], "changed")
+
     def test_learning_missed_route_records_review_bundle_without_echoing_prompt(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
