@@ -6,9 +6,14 @@ import re
 from typing import Any
 
 from ..coding_contracts import (
+    CLAUDE_CODE_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
     CODING_EXECUTOR_TARGETS,
     CODEX_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
     EXECUTOR_HANDOFF_SCHEMA_VERSION,
+    LOCAL_CAPABILITY_REPORT_ALLOWED_KINDS,
+    LOCAL_CAPABILITY_REPORT_CAPABILITY_FIELDS,
+    LOCAL_CAPABILITY_REPORT_CONTRACT_SCHEMA_VERSION,
+    LOCAL_CAPABILITY_REPORT_REQUIRED_FIELDS,
     PROMPT_HANDOFF_SCHEMA_VERSION,
     RUNTIME_HANDOFF_SCHEMA_VERSION,
     TASK_PROMPT_CONTRACT_SCHEMA_VERSION,
@@ -634,6 +639,7 @@ def _executor_handoff(
         "executor_readiness": executor_readiness_contract("codex"),
         "task_prompt_contract": _task_prompt_contract("codex"),
         "session_observation_contract": _codex_session_observation_contract(),
+        "local_capability_report_contract": _local_capability_report_contract("codex"),
         "prompt_template": _codex_prompt_template(delegation, codex_skill=codex_skill),
         "execution_brief": {
             "task_source": "original_message_at_dispatch_time",
@@ -708,7 +714,7 @@ def _prompt_handoff(
 ) -> dict[str, object]:
     invocation = prompt_invocation_for_profile(profile)
     label = executor_label(profile)
-    return {
+    handoff: dict[str, object] = {
         "schema_version": PROMPT_HANDOFF_SCHEMA_VERSION,
         "work_owner_mode": "prompt_only_handoff",
         "selected_executor_profile": profile,
@@ -720,6 +726,7 @@ def _prompt_handoff(
         "executor_readiness": executor_readiness_contract(profile),
         "executor_local_capability_strategy": _executor_local_capability_strategy(profile),
         "task_prompt_contract": _task_prompt_contract(profile),
+        "local_capability_report_contract": _local_capability_report_contract(profile),
         "prompt_template": _prompt_only_template(delegation, profile=profile, label=label),
         "isolation_plan": isolation_plan,
         "scope": [
@@ -756,6 +763,9 @@ def _prompt_handoff(
             ("show_prompt_handoff", "copy_prompt_handoff", "choose_executor", "show_status"),
         ),
     }
+    if profile == "claude-code":
+        handoff["session_observation_contract"] = _claude_code_session_observation_contract()
+    return handoff
 
 
 def _runtime_handoff(
@@ -780,6 +790,7 @@ def _runtime_handoff(
         "executor_readiness": executor_readiness_contract(profile),
         "executor_local_capability_strategy": _executor_local_capability_strategy(profile),
         "task_prompt_contract": _task_prompt_contract(profile),
+        "local_capability_report_contract": _local_capability_report_contract(profile),
         "prompt_template": _runtime_prompt_template(delegation, profile=profile, label=label),
         "runtime_brief": {
             "task_source": "original_message_at_runtime_start",
@@ -1086,6 +1097,75 @@ def _codex_session_observation_contract() -> dict[str, object]:
     }
 
 
+def _claude_code_session_observation_contract() -> dict[str, object]:
+    return {
+        "schema_version": CLAUDE_CODE_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
+        "profile": "claude-code",
+        "status": "prepared_not_observed",
+        "identity_fields": ["session_id", "turn_id", "cwd", "git_sha", "executor_profile", "project_path"],
+        "status_fields": [
+            "session_status",
+            "turn_status",
+            "tool_use_status",
+            "approval_requests",
+            "user_input_requests",
+            "subagent_status",
+            "slash_command_invocations",
+        ],
+        "completion_statuses": ["completed"],
+        "blocker_statuses": ["interrupted", "failed", "inProgress", "waitingOnApproval", "waitingOnUserInput"],
+        "final_answer_rule": (
+            "Use the full final Claude Code message or executor result when observed; do not use truncated "
+            "list/read previews as the completion answer."
+        ),
+        "approval_rule": (
+            "Approval or user-input waits are blockers until an explicit observed approval, rejection, or input "
+            "is recorded; never auto-approve from a prepared handoff."
+        ),
+        "event_filter_rule": "Observe only events for the matching Claude Code session and turn identifiers.",
+        "observed_state_owner": [
+            "executor_session/v1",
+            "wrapper_session",
+            "coding_lifecycle",
+            "coding_briefing/v1",
+        ],
+        "not_implemented": [
+            "claude_code_log_reader",
+            "session_log_connector",
+            "mcp_host_polling",
+            "prompt_dispatch",
+            "auto_approval",
+        ],
+        "claim_boundary": (
+            "This is a prepared Claude Code session observation requirement, not live telemetry or completion evidence. "
+            "Observed execution state must be recorded through OMH runtime, executor-session, lifecycle, or briefing evidence."
+        ),
+    }
+
+
+def _local_capability_report_contract(profile: str) -> dict[str, object]:
+    return {
+        "schema_version": LOCAL_CAPABILITY_REPORT_CONTRACT_SCHEMA_VERSION,
+        "profile": profile,
+        "status": "prepared_not_observed",
+        "required_fields": list(LOCAL_CAPABILITY_REPORT_REQUIRED_FIELDS),
+        "capability_item_fields": list(LOCAL_CAPABILITY_REPORT_CAPABILITY_FIELDS),
+        "allowed_capability_kinds": list(LOCAL_CAPABILITY_REPORT_ALLOWED_KINDS),
+        "empty_report_policy": (
+            "If no relevant local capability was used, report local_capabilities_used=[] and set "
+            "local_capability_fallback_reason to the plain-executor fallback reason."
+        ),
+        "evidence_rule": (
+            "Each local_capabilities_used item must include an evidence_ref that points to actual executor output, "
+            "a command, a log, or a generated artifact; do not report guessed or merely available capabilities as used."
+        ),
+        "claim_boundary": (
+            "This is a prepared report-shape contract, not evidence that OMH observed local capability availability, "
+            "dispatch, execution, review, CI, merge readiness, or merge."
+        ),
+    }
+
+
 def _task_prompt_shape_block() -> str:
     return (
         "Task prompt shape:\\n"
@@ -1140,6 +1220,25 @@ def _local_capability_prompt_block(profile: str, label: str) -> str:
     )
 
 
+def _runtime_local_capability_prompt_block(profile: str, label: str) -> str:
+    runtime_examples = "OMX/OMO/OMC templates"
+    if profile == "hermes":
+        runtime_examples = "Hermes/OMH runtime skills and coding-team paths"
+    return (
+        "Runtime capability discovery:\n"
+        "- Before acting, inspect runtime-local capabilities: runtime-native workflow templates, skills, "
+        "worker lanes, subagents, MCP tools, repo scripts, tests, CI metadata, and project instructions.\n"
+        f"- For {label}, examples include {runtime_examples} when actually available. "
+        "These are examples, not proof of availability.\n"
+        "- If a relevant runtime-local skill, workflow template, worker lane, subagent, or MCP tool materially "
+        "improves planning, implementation, verification, review, or coordination, use that runtime-native "
+        "capability before falling back to solo runtime execution.\n"
+        f"- If no relevant local capability is available, continue with solo runtime execution as a plain {label} "
+        "task using this task, harness, and evidence contract.\n"
+        "- Do not claim OMH observed runtime capability availability, dispatch, implementation, review, CI, or merge.\n\n"
+    )
+
+
 def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) -> str:
     return (
         "You are Codex, acting as the coding executor for a Hermes-orchestrated request.\n\n"
@@ -1157,7 +1256,8 @@ def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) ->
         "- Preserve unrelated behavior and user changes.\n"
         "- Run targeted verification and report exact evidence.\n"
         "- Do not say Hermes performed the implementation; Hermes prepared this handoff.\n\n"
-        "Report back with: status, changed_files, commits, tests_run, blockers, and evidence_refs.\n\n"
+        "Report back with: status, changed_files, commits, tests_run, blockers, evidence_refs, "
+        "local_capabilities_used, local_capability_evidence_refs, and local_capability_fallback_reason.\n\n"
         "Task:\n{message}"
     ).format(
         codex_skill=codex_skill,
@@ -1183,7 +1283,8 @@ def _prompt_only_template(delegation: CodingDelegation, *, profile: str, label: 
         "Rules:\n"
         "- Treat this as a prompt prepared by Hermes/OMH, not as observed execution.\n"
         "- Inspect the repository or local context before claiming a code change.\n"
-        "- Report exact files changed, verification commands, blockers, and evidence refs.\n"
+        "- Report exact files changed, verification commands, blockers, evidence refs, local_capabilities_used, "
+        "local_capability_evidence_refs, and local_capability_fallback_reason.\n"
         "- Do not claim Hermes performed implementation, review, CI, or merge work.\n\n"
         "Task:\n{message}"
     ).format(
@@ -1206,12 +1307,7 @@ def _runtime_prompt_template(delegation: CodingDelegation, *, profile: str, labe
         "Recommended harness: `{harness}`\n"
         "Intent: `{intent}`\n"
         "Prepared status: `prepared_not_observed`\n\n"
-        "Runtime capability discovery:\n"
-        "- Use runtime-native workflow templates, skills, worker lanes, subagents, MCP tools, repo scripts, and test harnesses "
-        "when available and helpful.\n"
-        "- For Hermes runtime, installed Hermes/OMH skills may be relevant.\n"
-        "- For oh-my runtimes, OMX/OMO/OMC templates are examples, not proof of availability.\n"
-        "- If unavailable, continue with solo runtime execution and the evidence contract.\n\n"
+        "{local_capability_prompt}"
         "{task_prompt_shape}"
         "Runtime rules:\n"
         "- Treat this as a runtime contract prepared by Hermes/OMH, not as observed execution.\n"
@@ -1219,7 +1315,8 @@ def _runtime_prompt_template(delegation: CodingDelegation, *, profile: str, labe
         "- Use tmux-style workers, panes, or equivalent runtime lanes when parallel coding is selected.\n"
         "- Use a worktree or equivalent isolation before risky or parallel coding.\n"
         "- Workers must ACK, claim scope/files, report results, and escalate blockers to the leader.\n"
-        "- Report exact files changed, worktrees used, verification commands, blockers, and evidence refs.\n"
+        "- Report exact files changed, worktrees used, verification commands, blockers, evidence refs, "
+        "local_capabilities_used, local_capability_evidence_refs, and local_capability_fallback_reason.\n"
         "- Do not claim Hermes, OMH, or this runtime completed implementation, review, CI, or merge work without observed evidence.\n\n"
         "Task:\n{message}"
     ).format(
@@ -1229,6 +1326,7 @@ def _runtime_prompt_template(delegation: CodingDelegation, *, profile: str, labe
         harness=delegation.recommended_harness,
         intent=delegation.intent,
         message="{message}",
+        local_capability_prompt=_runtime_local_capability_prompt_block(profile, label),
         task_prompt_shape=_task_prompt_shape_block(),
     )
 

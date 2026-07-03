@@ -313,6 +313,8 @@ class RuntimeArtifactTests(unittest.TestCase):
             legacy = deepcopy(handoff)
             del legacy["executor_local_capability_strategy"]
             del legacy["task_prompt_contract"]
+            if "local_capability_report_contract" in legacy:
+                del legacy["local_capability_report_contract"]
             if "session_observation_contract" in legacy:
                 del legacy["session_observation_contract"]
 
@@ -364,32 +366,77 @@ class RuntimeArtifactTests(unittest.TestCase):
                 json.dumps(validator(invalid_boundary)),
             )
 
-    def test_coding_handoff_contract_validators_accept_prompt_and_codex_observation_contracts(self) -> None:
+    def test_v1_handoff_validators_reject_invalid_local_capability_report_contract_when_present(self) -> None:
         executor = build_coding_delegation_payload("risky refactor", executor_target="codex")["executor_handoff"]
         prompt = build_coding_delegation_payload("risky refactor", executor_target="claude-code")["prompt_handoff"]
         runtime = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
 
+        for handoff, validator in (
+            (executor, validate_coding_executor_handoff),
+            (prompt, validate_coding_prompt_handoff),
+            (runtime, validate_coding_runtime_handoff),
+        ):
+            non_object = deepcopy(handoff)
+            non_object["local_capability_report_contract"] = None
+            self.assertIn("local_capability_report_contract must be an object", json.dumps(validator(non_object)))
+
+            invalid_schema = deepcopy(handoff)
+            invalid_schema["local_capability_report_contract"]["schema_version"] = "executor_local_capability_report_contract/v0"
+            self.assertIn("local_capability_report_contract schema_version is invalid", json.dumps(validator(invalid_schema)))
+
+            missing_usage = deepcopy(handoff)
+            missing_usage["local_capability_report_contract"]["required_fields"].remove("local_capabilities_used")
+            self.assertIn("required_fields must include required values", json.dumps(validator(missing_usage)))
+
+            invalid_boundary = deepcopy(handoff)
+            invalid_boundary["local_capability_report_contract"]["claim_boundary"] = "Use reported capabilities as proof."
+            self.assertIn(
+                "local_capability_report_contract claim_boundary must preserve prepared-only evidence boundary",
+                json.dumps(validator(invalid_boundary)),
+            )
+
+    def test_coding_handoff_contract_validators_accept_prompt_and_codex_observation_contracts(self) -> None:
+        executor = build_coding_delegation_payload("risky refactor", executor_target="codex")["executor_handoff"]
+        prompt = build_coding_delegation_payload("risky refactor", executor_target="claude-code")["prompt_handoff"]
+        generic_prompt = build_coding_delegation_payload("risky refactor", executor_target="generic")["prompt_handoff"]
+        runtime = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
+
         self.assertEqual(validate_coding_executor_handoff(executor), [])
         self.assertEqual(validate_coding_prompt_handoff(prompt), [])
+        self.assertEqual(validate_coding_prompt_handoff(generic_prompt), [])
         self.assertEqual(validate_coding_runtime_handoff(runtime), [])
         self.assertEqual(executor["task_prompt_contract"]["required_sections"], ["Goal", "Do", "Don't", "Expected result", "Test"])
         self.assertEqual(prompt["task_prompt_contract"]["profile"], "claude-code")
         self.assertEqual(runtime["task_prompt_contract"]["profile"], "omx-runtime")
+        self.assertEqual(executor["local_capability_report_contract"]["profile"], "codex")
+        self.assertEqual(prompt["local_capability_report_contract"]["profile"], "claude-code")
+        self.assertEqual(generic_prompt["local_capability_report_contract"]["profile"], "generic")
+        self.assertEqual(runtime["local_capability_report_contract"]["profile"], "omx-runtime")
+        self.assertIn("local_capabilities_used", runtime["local_capability_report_contract"]["required_fields"])
         self.assertEqual(executor["session_observation_contract"]["completion_statuses"], ["completed"])
         self.assertIn("waitingOnApproval", executor["session_observation_contract"]["blocker_statuses"])
         self.assertIn("waitingOnUserInput", executor["session_observation_contract"]["blocker_statuses"])
-        self.assertNotIn("session_observation_contract", prompt)
+        self.assertEqual(prompt["session_observation_contract"]["schema_version"], "claude_code_session_observation_contract/v1")
+        self.assertEqual(prompt["session_observation_contract"]["profile"], "claude-code")
+        self.assertIn("session_id", prompt["session_observation_contract"]["identity_fields"])
+        self.assertIn("tool_use_status", prompt["session_observation_contract"]["status_fields"])
+        self.assertNotIn("session_observation_contract", generic_prompt)
         self.assertNotIn("session_observation_contract", runtime)
 
         missing_section = deepcopy(executor)
         missing_section["task_prompt_contract"]["required_sections"].remove("Test")
         self.assertIn("required_sections must include required sections", json.dumps(validate_coding_executor_handoff(missing_section)))
 
-        leaked_prompt = deepcopy(prompt)
-        leaked_prompt["session_observation_contract"] = deepcopy(executor["session_observation_contract"])
+        leaked_prompt = deepcopy(generic_prompt)
+        leaked_prompt["session_observation_contract"] = deepcopy(prompt["session_observation_contract"])
         leaked_prompt_errors = json.dumps(validate_coding_prompt_handoff(leaked_prompt))
-        self.assertIn("unsupported keys", leaked_prompt_errors)
-        self.assertIn("must not contain session_observation_contract", leaked_prompt_errors)
+        self.assertIn("session_observation_contract is only valid for claude-code", leaked_prompt_errors)
+
+        wrong_claude_contract = deepcopy(prompt)
+        wrong_claude_contract["session_observation_contract"] = deepcopy(executor["session_observation_contract"])
+        wrong_claude_errors = json.dumps(validate_coding_prompt_handoff(wrong_claude_contract))
+        self.assertIn("session_observation_contract schema_version is invalid", wrong_claude_errors)
+        self.assertIn("session_observation_contract profile must be claude-code", wrong_claude_errors)
 
         leaked_runtime = deepcopy(runtime)
         leaked_runtime["session_observation_contract"] = deepcopy(executor["session_observation_contract"])

@@ -4,10 +4,15 @@ import hashlib
 from typing import Any
 
 from ..coding_contracts import (
+    CLAUDE_CODE_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
     CODING_EXECUTOR_HANDOFF_TARGETS,
     CODING_RUNTIME_HANDOFF_TARGETS,
     CODEX_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
     EXECUTOR_HANDOFF_SCHEMA_VERSION,
+    LOCAL_CAPABILITY_REPORT_ALLOWED_KINDS,
+    LOCAL_CAPABILITY_REPORT_CAPABILITY_FIELDS,
+    LOCAL_CAPABILITY_REPORT_CONTRACT_SCHEMA_VERSION,
+    LOCAL_CAPABILITY_REPORT_REQUIRED_FIELDS,
     PROMPT_HANDOFF_SCHEMA_VERSION,
     RUNTIME_HANDOFF_SCHEMA_VERSION,
     TASK_PROMPT_CONTRACT_SCHEMA_VERSION,
@@ -196,6 +201,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "dispatch_contract",
     "task_prompt_contract",
     "session_observation_contract",
+    "local_capability_report_contract",
     "prompt_template",
     "execution_brief",
     "isolation_plan",
@@ -223,6 +229,8 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "recording_contract",
     "dispatch_contract",
     "task_prompt_contract",
+    "session_observation_contract",
+    "local_capability_report_contract",
     "prompt_template",
     "isolation_plan",
     "scope",
@@ -249,6 +257,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "recording_contract",
     "dispatch_contract",
     "task_prompt_contract",
+    "local_capability_report_contract",
     "prompt_template",
     "runtime_brief",
     "isolation_plan",
@@ -319,6 +328,17 @@ CODEX_SESSION_OBSERVATION_CONTRACT_KEYS = (
     "event_filter_rule",
     "observed_state_owner",
     "not_implemented",
+    "claim_boundary",
+)
+LOCAL_CAPABILITY_REPORT_CONTRACT_KEYS = (
+    "schema_version",
+    "profile",
+    "status",
+    "required_fields",
+    "capability_item_fields",
+    "allowed_capability_kinds",
+    "empty_report_policy",
+    "evidence_rule",
     "claim_boundary",
 )
 EXECUTOR_LOCAL_CAPABILITY_STRATEGY_SCHEMA_VERSION = "executor_local_capability_strategy/v1"
@@ -951,6 +971,9 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
     strategy = _compact_optional_executor_local_capability_strategy(value)
     if strategy:
         compact["executor_local_capability_strategy"] = strategy
+    capability_report = _compact_local_capability_report_contract(value.get("local_capability_report_contract", {}))
+    if capability_report:
+        compact["local_capability_report_contract"] = capability_report
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -1000,6 +1023,12 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
     strategy = _compact_optional_executor_local_capability_strategy(value)
     if strategy:
         compact["executor_local_capability_strategy"] = strategy
+    capability_report = _compact_local_capability_report_contract(value.get("local_capability_report_contract", {}))
+    if capability_report:
+        compact["local_capability_report_contract"] = capability_report
+    session_observation = _compact_session_observation_contract(value.get("session_observation_contract", {}))
+    if session_observation:
+        compact["session_observation_contract"] = session_observation
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -1055,6 +1084,9 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     strategy = _compact_optional_executor_local_capability_strategy(value)
     if strategy:
         compact["executor_local_capability_strategy"] = strategy
+    capability_report = _compact_local_capability_report_contract(value.get("local_capability_report_contract", {}))
+    if capability_report:
+        compact["local_capability_report_contract"] = capability_report
     harness_quality = _compact_harness_quality(value.get("harness_quality", {}))
     if harness_quality:
         compact["harness_quality"] = harness_quality
@@ -1299,7 +1331,7 @@ def _compact_task_prompt_contract(value: Any) -> dict[str, Any]:
 
 
 def _compact_session_observation_contract(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict):
+    if not isinstance(value, dict) or not value:
         return {}
     return {
         "schema_version": str(value.get("schema_version", "")),
@@ -1314,6 +1346,22 @@ def _compact_session_observation_contract(value: Any) -> dict[str, Any]:
         "event_filter_rule": str(value.get("event_filter_rule", "")),
         "observed_state_owner": _compact_string_list(value.get("observed_state_owner", [])),
         "not_implemented": _compact_string_list(value.get("not_implemented", [])),
+        "claim_boundary": str(value.get("claim_boundary", "")),
+    }
+
+
+def _compact_local_capability_report_contract(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or not value:
+        return {}
+    return {
+        "schema_version": str(value.get("schema_version", "")),
+        "profile": str(value.get("profile", "")),
+        "status": str(value.get("status", "")),
+        "required_fields": _compact_string_list(value.get("required_fields", [])),
+        "capability_item_fields": _compact_string_list(value.get("capability_item_fields", [])),
+        "allowed_capability_kinds": _compact_string_list(value.get("allowed_capability_kinds", [])),
+        "empty_report_policy": str(value.get("empty_report_policy", "")),
+        "evidence_rule": str(value.get("evidence_rule", "")),
         "claim_boundary": str(value.get("claim_boundary", "")),
     }
 
@@ -2063,7 +2111,7 @@ def validate_task_prompt_contract(contract: Any, label: str, *, expected_profile
     return errors
 
 
-def validate_codex_session_observation_contract(contract: Any, label: str) -> list[str]:
+def validate_session_observation_contract(contract: Any, label: str, *, expected_profile: str) -> list[str]:
     errors: list[str] = []
     _require(isinstance(contract, dict), errors, f"{label} must be an object")
     if not isinstance(contract, dict):
@@ -2072,17 +2120,41 @@ def validate_codex_session_observation_contract(contract: Any, label: str) -> li
     missing_keys = sorted(set(CODEX_SESSION_OBSERVATION_CONTRACT_KEYS) - set(contract))
     _require(not extra_keys, errors, f"{label} has unsupported keys: {extra_keys}")
     _require(not missing_keys, errors, f"{label} is missing keys: {missing_keys}")
-    _require(contract.get("schema_version") == CODEX_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION, errors, f"{label} schema_version is invalid")
-    _require(contract.get("profile") == "codex", errors, f"{label} profile must be codex")
-    _require(contract.get("status") == "prepared_not_observed", errors, f"{label} status must be prepared_not_observed")
-    expected_values = {
-        "identity_fields": ("thread_id", "turn_id", "cwd", "git_sha", "executor_profile"),
-        "status_fields": ("thread_status.type", "thread_status.active_flags", "turn_status", "approval_requests", "user_input_requests"),
-        "completion_statuses": ("completed",),
-        "blocker_statuses": ("interrupted", "failed", "inProgress", "waitingOnApproval", "waitingOnUserInput"),
-        "observed_state_owner": ("runtime_observation/v1", "executor_session/v1", "coding_lifecycle", "coding_briefing/v1"),
-        "not_implemented": ("websocket_client", "host_token_lookup", "polling_connector", "appserver_dispatch", "auto_approval"),
+    schema_by_profile = {
+        "codex": CODEX_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
+        "claude-code": CLAUDE_CODE_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
     }
+    _require(expected_profile in schema_by_profile, errors, f"{label} profile is unsupported: {expected_profile!r}")
+    _require(contract.get("schema_version") == schema_by_profile.get(expected_profile), errors, f"{label} schema_version is invalid")
+    _require(contract.get("profile") == expected_profile, errors, f"{label} profile must be {expected_profile}")
+    _require(contract.get("status") == "prepared_not_observed", errors, f"{label} status must be prepared_not_observed")
+    expected_values_by_profile = {
+        "codex": {
+            "identity_fields": ("thread_id", "turn_id", "cwd", "git_sha", "executor_profile"),
+            "status_fields": ("thread_status.type", "thread_status.active_flags", "turn_status", "approval_requests", "user_input_requests"),
+            "completion_statuses": ("completed",),
+            "blocker_statuses": ("interrupted", "failed", "inProgress", "waitingOnApproval", "waitingOnUserInput"),
+            "observed_state_owner": ("runtime_observation/v1", "executor_session/v1", "coding_lifecycle", "coding_briefing/v1"),
+            "not_implemented": ("websocket_client", "host_token_lookup", "polling_connector", "appserver_dispatch", "auto_approval"),
+        },
+        "claude-code": {
+            "identity_fields": ("session_id", "turn_id", "cwd", "git_sha", "executor_profile", "project_path"),
+            "status_fields": (
+                "session_status",
+                "turn_status",
+                "tool_use_status",
+                "approval_requests",
+                "user_input_requests",
+                "subagent_status",
+                "slash_command_invocations",
+            ),
+            "completion_statuses": ("completed",),
+            "blocker_statuses": ("interrupted", "failed", "inProgress", "waitingOnApproval", "waitingOnUserInput"),
+            "observed_state_owner": ("executor_session/v1", "wrapper_session", "coding_lifecycle", "coding_briefing/v1"),
+            "not_implemented": ("claude_code_log_reader", "session_log_connector", "mcp_host_polling", "prompt_dispatch", "auto_approval"),
+        },
+    }
+    expected_values = expected_values_by_profile.get(expected_profile, {})
     for key, required_values in expected_values.items():
         values = contract.get(key)
         _require(isinstance(values, list), errors, f"{label} {key} must be a list")
@@ -2103,6 +2175,10 @@ def validate_codex_session_observation_contract(contract: Any, label: str) -> li
     return errors
 
 
+def validate_codex_session_observation_contract(contract: Any, label: str) -> list[str]:
+    return validate_session_observation_contract(contract, label, expected_profile="codex")
+
+
 def validate_optional_task_prompt_contract(
     handoff: dict[str, Any],
     label: str,
@@ -2118,16 +2194,29 @@ def validate_optional_task_prompt_contract(
     )
 
 
+def validate_optional_session_observation_contract(
+    handoff: dict[str, Any],
+    label: str,
+    *,
+    expected_profile: str,
+) -> list[str]:
+    if "session_observation_contract" not in handoff:
+        return []
+    contract = handoff["session_observation_contract"]
+    if isinstance(contract, dict) and not contract:
+        return []
+    return validate_session_observation_contract(
+        handoff["session_observation_contract"],
+        label,
+        expected_profile=expected_profile,
+    )
+
+
 def validate_optional_codex_session_observation_contract(
     handoff: dict[str, Any],
     label: str,
 ) -> list[str]:
-    if "session_observation_contract" not in handoff:
-        return []
-    return validate_codex_session_observation_contract(
-        handoff["session_observation_contract"],
-        label,
-    )
+    return validate_optional_session_observation_contract(handoff, label, expected_profile="codex")
 
 
 def validate_coding_executor_handoff(handoff: Any) -> list[str]:
@@ -2195,6 +2284,13 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
         validate_optional_codex_session_observation_contract(
             handoff,
             "coding_delegation executor_handoff session_observation_contract",
+        )
+    )
+    errors.extend(
+        validate_optional_local_capability_report_contract(
+            handoff,
+            "coding_delegation executor_handoff local_capability_report_contract",
+            expected_profile="codex",
         )
     )
     brief = handoff.get("execution_brief")
@@ -2324,6 +2420,63 @@ def validate_executor_local_capability_strategy(strategy: Any, label: str, *, ex
     return errors
 
 
+def validate_local_capability_report_contract(contract: Any, label: str, *, expected_profile: str) -> list[str]:
+    errors: list[str] = []
+    _require(isinstance(contract, dict), errors, f"{label} must be an object")
+    if not isinstance(contract, dict):
+        return errors
+    extra_keys = sorted(set(contract) - set(LOCAL_CAPABILITY_REPORT_CONTRACT_KEYS))
+    missing_keys = sorted(set(LOCAL_CAPABILITY_REPORT_CONTRACT_KEYS) - set(contract))
+    _require(not extra_keys, errors, f"{label} has unsupported keys: {extra_keys}")
+    _require(not missing_keys, errors, f"{label} is missing keys: {missing_keys}")
+    _require(contract.get("schema_version") == LOCAL_CAPABILITY_REPORT_CONTRACT_SCHEMA_VERSION, errors, f"{label} schema_version is invalid")
+    _require(contract.get("profile") == expected_profile, errors, f"{label} profile must match selected executor")
+    _require(contract.get("status") == "prepared_not_observed", errors, f"{label} status must be prepared_not_observed")
+
+    list_requirements = {
+        "required_fields": LOCAL_CAPABILITY_REPORT_REQUIRED_FIELDS,
+        "capability_item_fields": LOCAL_CAPABILITY_REPORT_CAPABILITY_FIELDS,
+        "allowed_capability_kinds": LOCAL_CAPABILITY_REPORT_ALLOWED_KINDS,
+    }
+    for key, required_values in list_requirements.items():
+        values = contract.get(key)
+        _require(isinstance(values, list), errors, f"{label} {key} must be a list")
+        if not isinstance(values, list):
+            continue
+        for index, value in enumerate(values):
+            _require(isinstance(value, str), errors, f"{label} {key}[{index}] must be a string")
+        missing_values = sorted(set(required_values) - {str(value) for value in values})
+        _require(not missing_values, errors, f"{label} {key} must include required values: {missing_values}")
+
+    for key in ("empty_report_policy", "evidence_rule", "claim_boundary"):
+        _require(isinstance(contract.get(key), str), errors, f"{label} {key} must be a string")
+    empty_policy = str(contract.get("empty_report_policy", "")).lower()
+    _require("local_capabilities_used=[]" in empty_policy and "fallback" in empty_policy, errors, f"{label} empty_report_policy must define empty usage fallback reporting")
+    evidence_rule = str(contract.get("evidence_rule", "")).lower()
+    _require("evidence_ref" in evidence_rule and "do not report guessed" in evidence_rule, errors, f"{label} evidence_rule must require actual capability evidence")
+    boundary = str(contract.get("claim_boundary", "")).lower()
+    _require("not evidence" in boundary and "omh observed" in boundary, errors, f"{label} claim_boundary must preserve prepared-only evidence boundary")
+    return errors
+
+
+def validate_optional_local_capability_report_contract(
+    handoff: dict[str, Any],
+    label: str,
+    *,
+    expected_profile: str,
+) -> list[str]:
+    if "local_capability_report_contract" not in handoff:
+        return []
+    contract = handoff["local_capability_report_contract"]
+    if isinstance(contract, dict) and not contract:
+        return []
+    return validate_local_capability_report_contract(
+        contract,
+        label,
+        expected_profile=expected_profile,
+    )
+
+
 def validate_optional_executor_local_capability_strategy(
     handoff: dict[str, Any],
     label: str,
@@ -2410,6 +2563,13 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
         validate_optional_task_prompt_contract(
             handoff,
             "coding_delegation runtime_handoff task_prompt_contract",
+            expected_profile=str(handoff.get("selected_executor_profile", "")),
+        )
+    )
+    errors.extend(
+        validate_optional_local_capability_report_contract(
+            handoff,
+            "coding_delegation runtime_handoff local_capability_report_contract",
             expected_profile=str(handoff.get("selected_executor_profile", "")),
         )
     )
@@ -2666,9 +2826,11 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
     _require(handoff.get("recording_contract") == "prompt_prepared_not_dispatched", errors, "coding_delegation prompt_handoff recording_contract is invalid")
     _require(handoff.get("dispatch_contract") == "prompt_only_no_dispatch", errors, "coding_delegation prompt_handoff dispatch_contract is invalid")
     _require("{message}" in str(handoff.get("prompt_template", "")), errors, "coding_delegation prompt_handoff prompt_template must keep {message} placeholder")
-    forbidden = ("codex_skill", "codex_invocation", "executor_handoff", "session_observation_contract", "run_id")
+    forbidden = ("codex_skill", "codex_invocation", "executor_handoff", "run_id")
     for key in forbidden:
         _require(key not in handoff, errors, f"coding_delegation prompt_handoff must not contain {key}")
+    if "session_observation_contract" in handoff and handoff.get("selected_executor_profile") != "claude-code":
+        errors.append("coding_delegation prompt_handoff session_observation_contract is only valid for claude-code")
     invocation = handoff.get("invocation")
     _require(isinstance(invocation, dict), errors, "coding_delegation prompt_handoff invocation must be an object")
     if isinstance(invocation, dict):
@@ -2689,6 +2851,21 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
         validate_optional_task_prompt_contract(
             handoff,
             "coding_delegation prompt_handoff task_prompt_contract",
+            expected_profile=str(handoff.get("selected_executor_profile", "")),
+        )
+    )
+    if handoff.get("selected_executor_profile") == "claude-code":
+        errors.extend(
+            validate_optional_session_observation_contract(
+                handoff,
+                "coding_delegation prompt_handoff session_observation_contract",
+                expected_profile="claude-code",
+            )
+        )
+    errors.extend(
+        validate_optional_local_capability_report_contract(
+            handoff,
+            "coding_delegation prompt_handoff local_capability_report_contract",
             expected_profile=str(handoff.get("selected_executor_profile", "")),
         )
     )
