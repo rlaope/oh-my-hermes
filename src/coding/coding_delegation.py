@@ -57,6 +57,7 @@ _LOCAL_CAPABILITY_STRATEGY_SCHEMA_VERSION = "executor_local_capability_strategy/
 _LOCAL_CAPABILITY_PREFERRED_SOURCES = (
     "project instructions such as AGENTS.md, CLAUDE.md, or executor-specific rules",
     "executor-native skills, slash commands, workflow commands, or prompt libraries",
+    "executor-local installed skill catalogs, slash-command registries, and custom agent definitions",
     "user-installed open-source workflow packs",
     "available subagents, worker lanes, or task planners",
     "MCP tools exposed to the selected executor",
@@ -108,6 +109,9 @@ _LOCAL_CAPABILITY_EXAMPLES = {
     "codex": [
         "Codex-native skills",
         "OMX or other oh-my workflow packs",
+        "custom Codex skills",
+        "Codex subagents",
+        "$ralph",
         "$ralplan",
         "$ultragoal",
         "$ultrawork",
@@ -118,6 +122,10 @@ _LOCAL_CAPABILITY_EXAMPLES = {
         "CLAUDE.md",
         "Claude Code slash commands",
         "Claude skills",
+        "Everything Claude Code skill packs",
+        "user-defined Claude Code skills",
+        "custom Claude Code slash commands",
+        "Claude Code agents/subagents",
         "subagents",
         "MCP tools",
     ],
@@ -1087,6 +1095,51 @@ def _task_prompt_shape_block() -> str:
     )
 
 
+def _local_capability_prompt_block(profile: str, label: str) -> str:
+    if profile == "codex":
+        return (
+            "Local capability discovery:\n"
+            "- Before implementing, inspect the executor environment for relevant local capabilities: project instructions, "
+            "AGENTS.md, Codex-native skills/workflows, user-installed workflow packs including installed OMX/oh-my workflow "
+            "packs, custom Codex skills, Codex subagents, MCP tools, repo scripts, tests, and CI metadata.\n"
+            "- Examples, if actually available: OMX or other oh-my triggers such as $ralplan, $ultragoal, $ultrawork, "
+            "$ultraqa, or $code-review; $ralph for persistent completion loops; custom Codex skills; or Codex subagents. "
+            "These are examples, not requirements.\n"
+            "- If a relevant local skill, workflow pack, or subagent exists and materially improves planning, "
+            "implementation, verification, review, or coordination, use that executor-native capability before falling "
+            "back to the generic prompt.\n"
+            "- If no relevant local capability is available, proceed as plain Codex using this task, harness, and evidence "
+            "contract.\n"
+            "- Do not claim OMH observed local capability availability, dispatch, implementation, review, CI, or merge.\n\n"
+        )
+    if profile == "claude-code":
+        return (
+            "Local capability discovery:\n"
+            "- Before acting, inspect project instructions and executor-local capabilities such as AGENTS.md, CLAUDE.md, "
+            "slash commands, skills, subagents, MCP tools, repo scripts, tests, and CI metadata, plus installed skill packs.\n"
+            "- For Claude Code, examples include Everything Claude Code skill packs, user-defined Claude Code skills, "
+            "custom Claude Code slash commands, Claude Code agents/subagents, and MCP tools when actually available. "
+            "These are examples, not requirements.\n"
+            "- If a relevant Claude Code skill, slash command, custom agent, or skill pack exists and materially improves "
+            "planning, implementation, verification, review, or coordination, use that executor-native capability before "
+            "falling back to the generic prompt.\n"
+            f"- If no relevant local capability is available, proceed as a plain {label} task using this task, harness, "
+            "and evidence contract.\n"
+            "- Do not claim OMH observed capability availability or execution.\n\n"
+        )
+    return (
+        "Local capability discovery:\n"
+        "- Before acting, inspect project instructions and executor-local capabilities such as AGENTS.md, CLAUDE.md, "
+        "slash commands, skills, subagents, MCP tools, repo scripts, tests, and CI metadata, plus installed skill packs.\n"
+        "- If a relevant local skill, command, workflow pack, or custom agent exists and materially improves planning, "
+        "implementation, verification, review, or coordination, use that executor-native capability before falling back "
+        "to the generic prompt.\n"
+        f"- If no relevant local capability is available, proceed as a plain {label} task using this task, harness, and "
+        "evidence contract.\n"
+        "- Do not claim OMH observed capability availability or execution.\n\n"
+    )
+
+
 def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) -> str:
     return (
         "You are Codex, acting as the coding executor for a Hermes-orchestrated request.\n\n"
@@ -1097,14 +1150,7 @@ def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) ->
         "Recommended harness: `{harness}`\n"
         "Intent: `{intent}`\n"
         "Prepared status: `prepared_not_observed`\n\n"
-        "Local capability discovery:\n"
-        "- Before implementing, inspect the executor environment for relevant local capabilities: project instructions, "
-        "Codex-native skills/workflows, user-installed workflow packs, subagents, MCP tools, repo scripts, tests, and CI metadata.\n"
-        "- Examples, if available: OMX or other oh-my triggers such as $ralplan, $ultragoal, $ultrawork, $ultraqa, or $code-review. "
-        "These are examples, not requirements.\n"
-        "- Use a local capability only when it materially improves planning, implementation, verification, review, or coordination.\n"
-        "- If no relevant local capability is available, proceed as plain Codex using this task, harness, and evidence contract.\n"
-        "- Do not claim OMH observed local capability availability, dispatch, implementation, review, CI, or merge.\n\n"
+        "{local_capability_prompt}"
         "{task_prompt_shape}"
         "Rules:\n"
         "- Implement only after inspecting the repository and confirming the scope.\n"
@@ -1119,6 +1165,7 @@ def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) ->
         harness=delegation.recommended_harness,
         intent=delegation.intent,
         message="{message}",
+        local_capability_prompt=_local_capability_prompt_block("codex", "Codex"),
         task_prompt_shape=_task_prompt_shape_block(),
     )
 
@@ -1131,11 +1178,7 @@ def _prompt_only_template(delegation: CodingDelegation, *, profile: str, label: 
         "Recommended harness: `{harness}`\n"
         "Intent: `{intent}`\n"
         "Prepared status: `prepared_not_observed`\n\n"
-        "Local capability discovery:\n"
-        "- Before acting, inspect project instructions and executor-local capabilities such as AGENTS.md, CLAUDE.md, "
-        "slash commands, skills, subagents, MCP tools, repo scripts, tests, and CI metadata.\n"
-        "- Use them only when they materially improve the handoff; otherwise proceed as a plain {label} task.\n"
-        "- Do not claim OMH observed capability availability or execution.\n\n"
+        "{local_capability_prompt}"
         "{task_prompt_shape}"
         "Rules:\n"
         "- Treat this as a prompt prepared by Hermes/OMH, not as observed execution.\n"
@@ -1150,6 +1193,7 @@ def _prompt_only_template(delegation: CodingDelegation, *, profile: str, label: 
         harness=delegation.recommended_harness,
         intent=delegation.intent,
         message="{message}",
+        local_capability_prompt=_local_capability_prompt_block(profile, label),
         task_prompt_shape=_task_prompt_shape_block(),
     )
 

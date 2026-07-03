@@ -124,6 +124,15 @@ Expected behavior:
   executors to shape dispatched task text as `Goal / Do / Don't / Expected
   result / Test`, keep executor-facing prompts in English unless preserving
   literals, and steer active turns with delta-only corrections.
+- All executor, prompt-only, and runtime coding handoffs include
+  `executor_local_capability_strategy/v1`, which asks the selected coding
+  owner to inspect executor-local skills, workflow packs, slash commands,
+  subagents, MCP tools, repo scripts, tests, and CI metadata before falling
+  back to a plain prompt. Codex handoffs explicitly name OMX/oh-my and custom
+  Codex skills as examples; Claude Code handoffs explicitly name Everything
+  Claude Code, user-defined Claude Code skills, slash commands, and
+  agents/subagents as examples. These are prepared prompting examples, not
+  OMH-observed installation or execution evidence.
 - Codex lifecycle handoffs include `codex_session_observation_contract/v1`.
   This is a prepared-only requirement for a future Codex session adapter: it
   names identity fields, status fields, full-final-answer extraction,
