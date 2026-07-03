@@ -2247,6 +2247,19 @@ _RELEASE_CLAIM_REVIEW_TOKENS = _normalized_token_set(
 _OPS_OBSERVABILITY_PHRASES = (
     "ops observability",
     "runtime observability",
+    "external metric provider",
+    "metric provider",
+    "metric source",
+    "prometheus metrics",
+    "prometheus metric",
+    "grafana metrics",
+    "grafana panel export",
+    "grafana panel",
+    "service quality board",
+    "service quality",
+    "ops command board",
+    "operations command board",
+    "slo dashboard",
     "token cost latency run history",
     "cost latency run history",
     "loop cost",
@@ -2285,11 +2298,21 @@ _OPS_OBSERVABILITY_PHRASES = (
     "비용이 많이",
     "비용 많이",
     "비용 확인",
+    "운영 지휘판",
+    "서비스 품질",
+    "메트릭 제공자",
+    "프로메테우스 메트릭",
+    "그라파나 패널",
 )
 _OPS_OBSERVABILITY_TOKENS = _normalized_token_set(
     {
         "observability",
         "telemetry",
+        "metric",
+        "metrics",
+        "prometheus",
+        "grafana",
+        "slo",
         "token",
         "tokens",
         "cost",
@@ -2306,8 +2329,19 @@ _OPS_OBSERVABILITY_TOKENS = _normalized_token_set(
         "토큰",
         "기록",
         "관측성",
+        "메트릭",
+        "프로메테우스",
+        "그라파나",
+        "지휘판",
         "느려",
         "느림",
+    }
+)
+_OPS_OBSERVABILITY_GENERIC_METRIC_TOKENS = _normalized_token_set(
+    {
+        "metric",
+        "metrics",
+        "메트릭",
     }
 )
 _OPS_OBSERVABILITY_EXTERNAL_BLOCKERS = (
@@ -2319,6 +2353,10 @@ _OPS_OBSERVABILITY_EXTERNAL_BLOCKERS = (
     "azure bill",
     "cloud bill",
     "cloud cost",
+    "provider cost",
+    "provider pricing",
+    "external provider cost",
+    "external provider pricing",
     "hosting cost",
     "server cost",
     "network routing",
@@ -2366,6 +2404,14 @@ _OPS_OBSERVABILITY_BLOCKER_OVERRIDE_CONTEXT = (
     "loop",
     "automation",
     "latency",
+    "metric provider",
+    "external metric provider",
+    "metric source",
+    "prometheus",
+    "grafana",
+    "slo",
+    "service quality",
+    "run history",
     "런타임",
     "실행",
     "게이트웨이",
@@ -3843,8 +3889,7 @@ def _adversarial_qa_guard_applies(normalized_query: str, query_tokens: set[str])
 
 def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     operator_context = _contains_phrase(normalized_query, _OPS_OBSERVABILITY_OPERATOR_CONTEXT)
-    blocker_override_context = _contains_phrase(normalized_query, _OPS_OBSERVABILITY_BLOCKER_OVERRIDE_CONTEXT)
-    if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_EXTERNAL_BLOCKERS) and not blocker_override_context:
+    if ops_observability_external_blocked(normalized_query):
         return False
     if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_PHRASES):
         return True
@@ -3854,7 +3899,27 @@ def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[st
         normalized_query,
         ("status", "show", "report", "summary", "보여줘", "알려줘", "상태", "요약"),
     )
+    if ops_observability_generic_metrics_blocked(normalized_query, query_tokens):
+        return False
     return telemetry and (runtime_context or status_intent)
+
+
+def ops_observability_external_blocked(normalized_query: str) -> bool:
+    blocker_override_context = _contains_phrase(normalized_query, _OPS_OBSERVABILITY_BLOCKER_OVERRIDE_CONTEXT)
+    return _contains_phrase(normalized_query, _OPS_OBSERVABILITY_EXTERNAL_BLOCKERS) and not blocker_override_context
+
+
+def ops_observability_generic_metrics_blocked(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_OPERATOR_CONTEXT):
+        return False
+    generic_metrics_only = bool(_OPS_OBSERVABILITY_GENERIC_METRIC_TOKENS & query_tokens) and not bool(
+        (_OPS_OBSERVABILITY_TOKENS - _OPS_OBSERVABILITY_GENERIC_METRIC_TOKENS) & query_tokens
+    )
+    status_intent = _contains_phrase(
+        normalized_query,
+        ("status", "show", "report", "summary", "보여줘", "알려줘", "상태", "요약"),
+    )
+    return generic_metrics_only and status_intent
 
 
 def _cleanup_refactor_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

@@ -1132,7 +1132,10 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(response["kind"], kind)
                 self.assertEqual(response["plain_headline"], headline)
                 self.assertEqual(response["state"]["selected_workflow"], workflow)
-                self.assertEqual(response["state"]["artifact_schema"], f"{kind}_card/v1")
+                expected_schema = (
+                    "ops_service_quality_board/v1" if workflow == "ops-observability-card" else f"{kind}_card/v1"
+                )
+                self.assertEqual(response["state"]["artifact_schema"], expected_schema)
                 self.assertEqual(response["actions"][0]["id"], primary_action)
                 self.assertIn(not_evidence, explanation["not_evidence_yet"])
                 self.assertIn("verification", response["claim_boundary"].lower())
@@ -1190,7 +1193,10 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(response["kind"], kind)
                 self.assertEqual(response["plain_headline"], headline)
                 self.assertEqual(response["state"]["selected_workflow"], workflow)
-                self.assertEqual(response["state"]["artifact_schema"], f"{kind}_card/v1")
+                expected_schema = (
+                    "ops_service_quality_board/v1" if workflow == "ops-observability-card" else f"{kind}_card/v1"
+                )
+                self.assertEqual(response["state"]["artifact_schema"], expected_schema)
                 self.assertEqual(response["actions"][0]["id"], primary_action)
                 self.assertIn(not_evidence, explanation["not_evidence_yet"])
                 self.assertIn("execution", response["claim_boundary"].lower())
@@ -1312,7 +1318,10 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(response["kind"], kind)
                 self.assertEqual(response["plain_headline"], headline)
                 self.assertEqual(response["state"]["selected_workflow"], workflow)
-                self.assertEqual(response["state"]["artifact_schema"], f"{kind}_card/v1")
+                expected_schema = (
+                    "ops_service_quality_board/v1" if workflow == "ops-observability-card" else f"{kind}_card/v1"
+                )
+                self.assertEqual(response["state"]["artifact_schema"], expected_schema)
                 self.assertEqual(response["actions"][0]["id"], primary_action)
                 self.assertIn(not_evidence, explanation["not_evidence_yet"])
                 self.assertIn(not_evidence, response["claim_boundary"])

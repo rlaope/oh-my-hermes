@@ -1,0 +1,155 @@
+---
+name: ops-observability-card
+description: [omh] Hermes ops observability workflow: prepare an operations command-board for wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality evidence boundaries.
+metadata:
+  hermes:
+    tags: [workflow, oh-my-hermes, observability]
+    category: observability
+    phase: telemetry-card
+    role: tracker
+    quality_tier: workflow-surface-gated
+---
+
+# Ops Observability Card
+
+This is a Hermes-native `ops-observability-card` workflow skill.
+
+## Why This Exists
+
+`ops-observability-card` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+
+## Do Not Use When
+
+- The request is already handled by a narrower explicit skill with stronger evidence.
+- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+
+## Examples
+
+Good example:
+
+- Prompt: ops-observability-card show token, cost, latency, supplied Prometheus/Grafana metrics, and missing service-quality evidence for this loop.
+- Expected behavior: Produce `prepare_ops_observability_card` with required context, wrapper actions, and not-evidence boundaries.
+- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+
+Bad example:
+
+- Prompt: ops-observability-card claim exact provider billing, healthy SLO, incident closure, or remediation completion from local estimates.
+- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+
+## Completion Checklist
+
+- The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
+- Local telemetry, provider truth, billing truth, and completion evidence are separate states.
+- Warnings name the next measurement or operator review action.
+
+## Recovery Notes
+
+- If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
+- If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+
+## OMH Context Rail
+
+- This skill is part of OMH's Hermes workflow layer, not a standalone executor.
+- Product context: OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off with observed evidence boundaries.
+- Current lane: **Automation and status** (`automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`, `voice-operator`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `memory-curation-review`, `workflow-learning`, `doctor`, `skill`, `ask`, `cancel`) - scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review.
+- If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
+- Cross-skill context: For every OMH skill: match intent to a lane; name adjacent workflows; generic tool can render or execute is not a dismissal.
+- Generic-tool checkpoint: image->img-summary; supplied paper->paper-learning; file->materials-package; search->web-research; code->ultraprocess/ralplan/review.
+- Coverage: Every generated workflow skill carries this rail.
+- Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.
+- Boundary: Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
+
+## Use When
+
+Use when automation, loops, gateway work, executor handoffs, or service operations need a safe command-board for cost, latency, token, history, failure-mode, supplied metric-provider, and service-quality visibility.
+
+    Strong routing signals: `ops-observability-card`, `observability card`, `operations command board`, `ops command board`, `service quality board`, `service quality`, `external metric provider`, `metric provider`, `prometheus metrics`, `grafana metrics`, `cost telemetry`, `latency telemetry`, `token telemetry`, `run history`, `loop telemetry`, `failure mode`, `monitor tokens`, `service health`, `slo dashboard`, `비용`, `토큰`, `지연시간`, `관측성`, `운영 지휘판`, `서비스 품질`, `메트릭`, `프로메테우스`, `그라파나`
+
+## Catalog Metadata
+
+Category: `observability`
+Phase: `telemetry-card`
+Hermes role: `tracker`
+Quality tier: `workflow-surface-gated`
+
+Quality bar:
+
+- Name the user-facing workflow objective, required context, next action, and stop condition.
+- Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+- Expose missing tools, credentials, targets, or observations as user-visible gaps.
+
+Handoff policy:
+
+Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+
+Required inputs:
+
+- user request
+- target context
+- delivery or status expectation
+- known missing evidence
+
+Expected outputs:
+
+- ops-observability-card/v1 card or guidance
+- external_metric_provider/v1 payload contract
+- external_metric_provider_adapter/v1 adapter contract
+- ops_service_quality_board/v1 service-quality board
+- typed service-quality downgrade gaps
+- next action
+- prepared-vs-observed boundary
+
+Artifact expectations:
+
+- ops-observability-card/v1 metadata-only runtime or wrapper card when recorded
+- external_metric_provider/v1 supplied metric payload when available
+- external_metric_provider_adapter/v1 connector-ready adapter metadata when available
+- ops_service_quality_board/v1 evidence-gated service-quality board
+
+Safety rules:
+
+- An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, root-cause proof, remediation completion, performance proof, or successful workflow completion evidence.
+- Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
+## Harness Discipline
+
+- Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, research, planning, goal execution, architecture, critique, QA, or documentation lanes.
+- Prefer richer evidence and clearer stop conditions over adding more workflow names.
+- Use specialist lanes only when they change the quality of the answer or verification.
+
+## Runtime Evidence
+
+Preferred harness for this skill: `ops-observability-card`.
+
+When local shell access or a bot wrapper is available, record metadata-only evidence:
+
+```sh
+omh runtime record --skill ops-observability-card --harness ops-observability-card --status started
+omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
+```
+
+Record observed delegation results when Hermes or the wrapper exposes them. If delegation is unavailable, keep the result explicit as `not_available` or `not_observed`.
+
+## Hermes Compatibility Contract
+
+- Preserve the workflow intent, stop conditions, and verification discipline.
+- Use Hermes-native tools, file operations, and subagent/delegation features when available.
+- Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
+- Respect `omh_target_topology/v1` when a wrapper reports it: bind state to the current target/thread, adapt only the parts of this workflow that benefit from multiple Hermes agents, and fall back to single-target behavior when `active_agent_count` is one.
+- When target topology changes from one to many or many to one, give a concise setup-change comment or use the wrapper's apply action before treating the new topology as persistent.
+- Treat wrapper-supplied memory/context summaries as advisory local context, not proof that opaque Hermes memory was read or changed.
+- When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
+  - goal tools -> `.omh/goals/` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, `goal_continuation/v1`, or explicit checklists with named next actions,
+  - question renderers -> one concise question in the current Hermes interface,
+  - native subagents -> Hermes delegation when available, otherwise sequential lanes,
+  - shell bridge commands -> optional bridge mode only.
+
+## Execution Rules
+
+1. Load supporting context with `skills_list` / `skill_view` when needed.
+2. State the workflow target, constraints, validation evidence, and stop condition.
+3. Keep progress evidence-backed.
+4. Verify with the smallest relevant test or inspection before claiming completion.
+5. If Hermes cannot provide a required runtime capability, say so and use the fallback above.

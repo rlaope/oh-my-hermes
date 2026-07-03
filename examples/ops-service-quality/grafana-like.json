@@ -1,0 +1,120 @@
+{
+  "schema_version": "ops_service_quality_board/v1",
+  "kind": "ops_service_quality_board",
+  "surface": "ops-observability-card",
+  "title": "API quality board from Grafana-like panel export",
+  "created_at": "2026-07-02T10:03:00Z",
+  "updated_at": "2026-07-02T10:03:00Z",
+  "status": "prepared",
+  "observation_status": "prepared",
+  "service_quality_claim": "evidence_gated_summary",
+  "service_health": "not_assessed",
+  "accepted_input_contracts": [
+    "external_metric_provider/v1",
+    "external_metric_provider_adapter/v1"
+  ],
+  "metric_providers": [
+    {
+      "schema_version": "external_metric_provider/v1",
+      "provider_id": "grafana-panel-export",
+      "provider_kind": "grafana",
+      "display_name": "Grafana panel export",
+      "metric_window": "",
+      "freshness": "",
+      "source_refs": [],
+      "metrics": [
+        {
+          "name": "error_rate",
+          "value": "0.2",
+          "unit": "%",
+          "source_ref": "panel:error-rate"
+        }
+      ],
+      "slo_targets": [],
+      "incident_refs": [],
+      "remediation_refs": [],
+      "provider_truth_observed": false,
+      "observed_evidence_refs": [],
+      "claim_boundary": "Supplied provider payloads are evidence inputs only, not live provider truth."
+    }
+  ],
+  "provider_adapters": [
+    {
+      "schema_version": "external_metric_provider_adapter/v1",
+      "adapter_id": "grafana-panel-json-export",
+      "provider_kind": "grafana",
+      "input_contract": "grafana_panel_json_export",
+      "connector_status": "prepared",
+      "observed_evidence_refs": [],
+      "claim_boundary": "Adapter metadata is connector-ready shape only unless observed evidence refs prove invocation."
+    }
+  ],
+  "downgrade_gaps": [
+    {
+      "code": "missing_metric_window",
+      "message": "No metric window was supplied.",
+      "status": "missing_or_not_observed"
+    },
+    {
+      "code": "missing_source_refs",
+      "message": "No source refs were supplied.",
+      "status": "missing_or_not_observed"
+    },
+    {
+      "code": "missing_freshness",
+      "message": "No freshness marker was supplied.",
+      "status": "missing_or_not_observed"
+    },
+    {
+      "code": "missing_slo_target",
+      "message": "No SLO target was supplied.",
+      "status": "missing_or_not_observed"
+    },
+    {
+      "code": "missing_incident_reference",
+      "message": "No incident reference was supplied.",
+      "status": "missing_or_not_observed"
+    },
+    {
+      "code": "missing_remediation_evidence",
+      "message": "No remediation evidence was supplied.",
+      "status": "missing_or_not_observed"
+    },
+    {
+      "code": "provider_truth_not_observed",
+      "message": "Provider truth was not observed by OMH.",
+      "status": "missing_or_not_observed"
+    },
+    {
+      "code": "connector_not_observed",
+      "message": "No live provider connector invocation was observed.",
+      "status": "missing_or_not_observed"
+    }
+  ],
+  "specialist_lanes": [
+    {
+      "workflow": "reliability-review",
+      "purpose": "Review SLOs, incidents, error budgets, and remediation evidence with stricter SRE gates."
+    },
+    {
+      "workflow": "workflow-learning",
+      "purpose": "Route recurring gaps or missed workflow behavior into reviewed learning artifacts."
+    }
+  ],
+  "analysis_methods": [
+    "compare metric window, freshness, source refs, SLO targets, incident refs, and remediation evidence",
+    "downgrade any unsupported service-health, outage, root-cause, or remediation claim to typed missing evidence",
+    "separate supplied metric evidence from live provider, billing, quota, account, or connector truth"
+  ],
+  "not_evidence_until_observed": [
+    "provider billing truth",
+    "provider quota truth",
+    "live provider account state",
+    "live connector invocation",
+    "SLO pass",
+    "incident closure",
+    "root cause confirmation",
+    "remediation complete",
+    "service health verdict"
+  ]
+}

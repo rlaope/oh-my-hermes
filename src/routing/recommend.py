@@ -12,6 +12,8 @@ from .policy import (
     active_routing_guard_rules,
     explicit_skill_invocation,
     is_explicit_one_off_request,
+    ops_observability_external_blocked,
+    ops_observability_generic_metrics_blocked,
 )
 
 
@@ -305,8 +307,14 @@ _SKILL_POLICIES.update(
         ),
         "ops-observability-card": RecommendationPolicy(
             next_action="prepare_ops_observability_card",
-            evidence_boundary="An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
-            wrapper_guidance="Report token/cost/latency/run-history telemetry as wrapper-safe status with clear local-estimate vs provider-observed boundaries.",
+            evidence_boundary=(
+                "An ops observability card is not billing truth, provider quota truth, live metric-provider access, "
+                "complete tracing, performance proof, SLO pass, incident closure, remediation completion, or workflow completion evidence."
+            ),
+            wrapper_guidance=(
+                "Report token/cost/latency/run-history telemetry and supplied external_metric_provider/v1 payloads "
+                "as a command-board with clear local-estimate, provider-truth, connector, SLO, incident, and remediation boundaries."
+            ),
         ),
         "agent-ops-review": RecommendationPolicy(
             next_action="prepare_agent_ops_review",
@@ -598,7 +606,14 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
         explicit_skill = None
     scored = []
     for prepared in prepared_definitions:
-        recommendation = _score_definition(prepared, normalized_query, query_tokens, query, routing_text.locale_matches)
+        recommendation = _score_definition(
+            prepared,
+            normalized_query,
+            query_tokens,
+            query,
+            routing_text.locale_matches,
+            explicit_skill=explicit_skill,
+        )
         if recommendation is not None:
             scored.append(recommendation)
     if explicit_skill != "automation-blueprint" and is_explicit_one_off_request(normalized_query, query_tokens):
@@ -654,11 +669,23 @@ def _score_definition(
     query_tokens: set[str],
     original_query: str,
     locale_matches: tuple[str, ...],
+    *,
+    explicit_skill: str | None,
 ) -> Recommendation | None:
     definition = prepared.definition
     policy = prepared.policy
     score = 0
     matched: set[str] = set()
+
+    if (
+        definition.name == "ops-observability-card"
+        and explicit_skill != "ops-observability-card"
+        and (
+            ops_observability_external_blocked(normalized_query)
+            or ops_observability_generic_metrics_blocked(normalized_query, query_tokens)
+        )
+    ):
+        return None
 
     for trigger_phrase in prepared.plain_trigger_phrases:
         if _phrase_match(normalized_query, trigger_phrase):
@@ -687,7 +714,10 @@ def _score_definition(
             score += 2
             matched.add(f"{field_name}:{normalized_value}")
 
-    for token in query_tokens & prepared.trigger_tokens:
+    trigger_token_matches = query_tokens & prepared.trigger_tokens
+    if definition.name == "ops-observability-card" and "dashboard" in trigger_token_matches and "slo" not in query_tokens:
+        trigger_token_matches.remove("dashboard")
+    for token in trigger_token_matches:
         score += 3
         matched.add(f"trigger:{token}")
 

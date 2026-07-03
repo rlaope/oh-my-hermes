@@ -64,7 +64,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "design-quality-gate": ("workflow_skill", True),
     "voice-operator": ("agent_context", False),
     "toolbelt-readiness": ("harness_only", False),
-    "ops-observability-card": ("harness_only", False),
+    "ops-observability-card": ("workflow_skill", True),
     "agent-ops-review": ("workflow_skill", True),
     "workflow-learning": ("workflow_skill", True),
 }
