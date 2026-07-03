@@ -300,7 +300,7 @@ class RuntimeArtifactTests(unittest.TestCase):
 
             self.assertTrue(any("unsupported keys" in error and "message" in error for error in errors))
 
-    def test_v1_handoff_validators_accept_legacy_records_without_local_capability_strategy(self) -> None:
+    def test_v1_handoff_validators_accept_legacy_records_without_new_optional_contracts(self) -> None:
         executor = build_coding_delegation_payload("risky refactor", executor_target="codex")["executor_handoff"]
         prompt = build_coding_delegation_payload("risky refactor", executor_target="claude-code")["prompt_handoff"]
         runtime = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
@@ -312,6 +312,9 @@ class RuntimeArtifactTests(unittest.TestCase):
         ):
             legacy = deepcopy(handoff)
             del legacy["executor_local_capability_strategy"]
+            del legacy["task_prompt_contract"]
+            if "session_observation_contract" in legacy:
+                del legacy["session_observation_contract"]
 
             self.assertEqual(validator(legacy), [])
 
@@ -360,6 +363,47 @@ class RuntimeArtifactTests(unittest.TestCase):
                 "executor_local_capability_strategy claim_boundary must preserve evidence boundary",
                 json.dumps(validator(invalid_boundary)),
             )
+
+    def test_coding_handoff_contract_validators_accept_prompt_and_codex_observation_contracts(self) -> None:
+        executor = build_coding_delegation_payload("risky refactor", executor_target="codex")["executor_handoff"]
+        prompt = build_coding_delegation_payload("risky refactor", executor_target="claude-code")["prompt_handoff"]
+        runtime = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
+
+        self.assertEqual(validate_coding_executor_handoff(executor), [])
+        self.assertEqual(validate_coding_prompt_handoff(prompt), [])
+        self.assertEqual(validate_coding_runtime_handoff(runtime), [])
+        self.assertEqual(executor["task_prompt_contract"]["required_sections"], ["Goal", "Do", "Don't", "Expected result", "Test"])
+        self.assertEqual(prompt["task_prompt_contract"]["profile"], "claude-code")
+        self.assertEqual(runtime["task_prompt_contract"]["profile"], "omx-runtime")
+        self.assertEqual(executor["session_observation_contract"]["completion_statuses"], ["completed"])
+        self.assertIn("waitingOnApproval", executor["session_observation_contract"]["blocker_statuses"])
+        self.assertIn("waitingOnUserInput", executor["session_observation_contract"]["blocker_statuses"])
+        self.assertNotIn("session_observation_contract", prompt)
+        self.assertNotIn("session_observation_contract", runtime)
+
+        missing_section = deepcopy(executor)
+        missing_section["task_prompt_contract"]["required_sections"].remove("Test")
+        self.assertIn("required_sections must include required sections", json.dumps(validate_coding_executor_handoff(missing_section)))
+
+        leaked_prompt = deepcopy(prompt)
+        leaked_prompt["session_observation_contract"] = deepcopy(executor["session_observation_contract"])
+        leaked_prompt_errors = json.dumps(validate_coding_prompt_handoff(leaked_prompt))
+        self.assertIn("unsupported keys", leaked_prompt_errors)
+        self.assertIn("must not contain session_observation_contract", leaked_prompt_errors)
+
+        leaked_runtime = deepcopy(runtime)
+        leaked_runtime["session_observation_contract"] = deepcopy(executor["session_observation_contract"])
+        leaked_runtime_errors = json.dumps(validate_coding_runtime_handoff(leaked_runtime))
+        self.assertIn("unsupported keys", leaked_runtime_errors)
+        self.assertIn("must not contain session_observation_contract", leaked_runtime_errors)
+
+        missing_approval_blocker = deepcopy(executor)
+        missing_approval_blocker["session_observation_contract"]["blocker_statuses"].remove("waitingOnApproval")
+        self.assertIn("blocker_statuses must include required values", json.dumps(validate_coding_executor_handoff(missing_approval_blocker)))
+
+        truncated_final = deepcopy(executor)
+        truncated_final["session_observation_contract"]["final_answer_rule"] = "Use any preview text."
+        self.assertIn("final_answer_rule must reject truncated previews", json.dumps(validate_coding_executor_handoff(truncated_final)))
 
     def test_validate_runtime_accepts_legacy_executor_handoff_without_local_capability_strategy(self) -> None:
         with TemporaryDirectory() as tmp:

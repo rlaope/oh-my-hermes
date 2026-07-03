@@ -34,7 +34,7 @@ evidence exists.
 | `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`, with accept/revise/cancel lifecycle events. | `src/workflows/hermes_planning.py`, `docs/ARCHITECTURE.md` |
 | `omh hermes readiness` | Inspects local Hermes Agent home/config/skills/plugins/sessions/state/source-checkout markers and maps them to OMH memory, learning, loop, wiki/external-knowledge, runtime-observation, and subagent/handoff reinforcement. | `src/workflows/hermes_readiness.py`, `src/commands/hermes.py` |
 | `omh hermes retained-context` | Inspects metadata-only Hermes sessions/state/memory-provider markers alongside OMH memory, workflow-learning, runtime journal, loop, and external knowledge-store markers so wrappers can show what durable context can actually be reinforced without reading raw retained artifacts or claiming opaque Hermes memory contents. | `src/workflows/hermes_retained_context.py`, `src/workflows/hermes_retained_context_probes.py`, `tests/test_hermes_retained_context.py` |
-| `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, runtime contracts, and accepted-plan `--from-plan` Codex handoffs without overclaiming execution. Hermes selection also exposes an optional coding team path with solo, durable-goal, team, and swarm start choices. | `src/coding/coding_delegation.py`, `src/runtime/artifacts.py` |
+| `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, runtime contracts, and accepted-plan `--from-plan` Codex handoffs without overclaiming execution. Hermes selection also exposes an optional coding team path with solo, durable-goal, team, and swarm start choices. Handoffs include an executor-neutral task prompt contract; Codex lifecycle handoffs also include a prepared-only session observation contract for future executor-session adapters. | `src/coding/coding_delegation.py`, `src/runtime/artifacts.py` |
 | `worktree_session_isolation/v1` | Adds deterministic workspace-isolation guidance to coding handoffs and executor-session status: same workspace ok, worktree recommended, or worktree required. | `src/coding/isolation.py`, `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py` |
 | `omh coding lifecycle` | Tracks Codex-selected handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/wrapper/lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
 | `omh memory status/capture/review/approve/reject/recall` plus `inspect/pack/apply` | Captures typed OMH project-memory candidates, keeps reviewed records separate, recalls `memory_recall_pack/v1` into prepared coding handoffs, and reviews OMH-local or wrapper-supplied context before attaching conflict-free `handoff_context_pack/v1` summaries. | `src/workflows/memory.py`, `tests/test_memory.py` |
@@ -119,6 +119,26 @@ Expected behavior:
   worktree creator. It can add `prepare_worktree` as the next visible action
   before `open_executor_session` when the request is risky, parallel,
   multi-agent, or runtime-owned.
+- All executor, prompt-only, and runtime coding handoffs include
+  `executor_task_prompt_contract/v1`, which asks wrappers and selected
+  executors to shape dispatched task text as `Goal / Do / Don't / Expected
+  result / Test`, keep executor-facing prompts in English unless preserving
+  literals, and steer active turns with delta-only corrections.
+- All executor, prompt-only, and runtime coding handoffs include
+  `executor_local_capability_strategy/v1`, which asks the selected coding
+  owner to inspect executor-local skills, workflow packs, slash commands,
+  subagents, MCP tools, repo scripts, tests, and CI metadata before falling
+  back to a plain prompt. Codex handoffs explicitly name OMX/oh-my and custom
+  Codex skills as examples; Claude Code handoffs explicitly name Everything
+  Claude Code, user-defined Claude Code skills, slash commands, and
+  agents/subagents as examples. These are prepared prompting examples, not
+  OMH-observed installation or execution evidence.
+- Codex lifecycle handoffs include `codex_session_observation_contract/v1`.
+  This is a prepared-only requirement for a future Codex session adapter: it
+  names identity fields, status fields, full-final-answer extraction,
+  approval/user-input blockers, and the OMH evidence surfaces that must own
+  observed state. It is not a WebSocket client, host token lookup, polling
+  loop, dispatch action, auto-approval rule, or live telemetry.
 - Runtime handoff contracts include safe invocation templates such as
   `$ultragoal {message}`, `$team {message}`, `$ultrawork {message}`, or
   Hermes retained coding-skill prompts, plus an observation contract explaining

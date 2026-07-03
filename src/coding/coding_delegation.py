@@ -7,9 +7,12 @@ from typing import Any
 
 from ..coding_contracts import (
     CODING_EXECUTOR_TARGETS,
+    CODEX_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
     EXECUTOR_HANDOFF_SCHEMA_VERSION,
     PROMPT_HANDOFF_SCHEMA_VERSION,
     RUNTIME_HANDOFF_SCHEMA_VERSION,
+    TASK_PROMPT_CONTRACT_SCHEMA_VERSION,
+    TASK_PROMPT_REQUIRED_SECTIONS,
 )
 from ..executors import (
     HERMES_CODING_TEAM_WRAPPER_ACTIONS,
@@ -54,6 +57,7 @@ _LOCAL_CAPABILITY_STRATEGY_SCHEMA_VERSION = "executor_local_capability_strategy/
 _LOCAL_CAPABILITY_PREFERRED_SOURCES = (
     "project instructions such as AGENTS.md, CLAUDE.md, or executor-specific rules",
     "executor-native skills, slash commands, workflow commands, or prompt libraries",
+    "executor-local installed skill catalogs, slash-command registries, and custom agent definitions",
     "user-installed open-source workflow packs",
     "available subagents, worker lanes, or task planners",
     "MCP tools exposed to the selected executor",
@@ -105,6 +109,9 @@ _LOCAL_CAPABILITY_EXAMPLES = {
     "codex": [
         "Codex-native skills",
         "OMX or other oh-my workflow packs",
+        "custom Codex skills",
+        "Codex subagents",
+        "$ralph",
         "$ralplan",
         "$ultragoal",
         "$ultrawork",
@@ -115,6 +122,10 @@ _LOCAL_CAPABILITY_EXAMPLES = {
         "CLAUDE.md",
         "Claude Code slash commands",
         "Claude skills",
+        "Everything Claude Code skill packs",
+        "user-defined Claude Code skills",
+        "custom Claude Code slash commands",
+        "Claude Code agents/subagents",
         "subagents",
         "MCP tools",
     ],
@@ -621,6 +632,8 @@ def _executor_handoff(
         "recording_contract": "prepared_not_observed",
         "dispatch_contract": "wrapper_dispatches_to_codex; omh_does_not_execute_codex",
         "executor_readiness": executor_readiness_contract("codex"),
+        "task_prompt_contract": _task_prompt_contract("codex"),
+        "session_observation_contract": _codex_session_observation_contract(),
         "prompt_template": _codex_prompt_template(delegation, codex_skill=codex_skill),
         "execution_brief": {
             "task_source": "original_message_at_dispatch_time",
@@ -706,6 +719,7 @@ def _prompt_handoff(
         "dispatch_contract": "prompt_only_no_dispatch",
         "executor_readiness": executor_readiness_contract(profile),
         "executor_local_capability_strategy": _executor_local_capability_strategy(profile),
+        "task_prompt_contract": _task_prompt_contract(profile),
         "prompt_template": _prompt_only_template(delegation, profile=profile, label=label),
         "isolation_plan": isolation_plan,
         "scope": [
@@ -765,6 +779,7 @@ def _runtime_handoff(
         "dispatch_contract": "wrapper_or_user_starts_runtime; omh_does_not_execute_runtime",
         "executor_readiness": executor_readiness_contract(profile),
         "executor_local_capability_strategy": _executor_local_capability_strategy(profile),
+        "task_prompt_contract": _task_prompt_contract(profile),
         "prompt_template": _runtime_prompt_template(delegation, profile=profile, label=label),
         "runtime_brief": {
             "task_source": "original_message_at_runtime_start",
@@ -1005,6 +1020,126 @@ def _local_capability_fallback(profile: str) -> str:
     )
 
 
+def _task_prompt_contract(profile: str) -> dict[str, object]:
+    return {
+        "schema_version": TASK_PROMPT_CONTRACT_SCHEMA_VERSION,
+        "profile": profile,
+        "status": "prepared_not_observed",
+        "required_sections": list(TASK_PROMPT_REQUIRED_SECTIONS),
+        "language_policy": (
+            "Use English for executor-facing dispatch prompts unless preserving identifiers, paths, "
+            "error text, quoted user-facing copy, or target-language output."
+        ),
+        "steering_policy": (
+            "When steering an active executor turn, send only the changed constraint, result, or blocker; "
+            "do not replay the full prepared prompt unless the executor explicitly needs a restart."
+        ),
+        "claim_boundary": (
+            "This contract describes prepared prompt shape only; it is not dispatch, execution, "
+            "verification, review, CI, or merge evidence."
+        ),
+    }
+
+
+def _codex_session_observation_contract() -> dict[str, object]:
+    return {
+        "schema_version": CODEX_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
+        "profile": "codex",
+        "status": "prepared_not_observed",
+        "identity_fields": ["thread_id", "turn_id", "cwd", "git_sha", "executor_profile"],
+        "status_fields": [
+            "thread_status.type",
+            "thread_status.active_flags",
+            "turn_status",
+            "turn_error.message",
+            "approval_requests",
+            "user_input_requests",
+        ],
+        "completion_statuses": ["completed"],
+        "blocker_statuses": ["interrupted", "failed", "inProgress", "waitingOnApproval", "waitingOnUserInput"],
+        "final_answer_rule": (
+            "Use the full final agent message or executor result when observed; do not use truncated "
+            "list/read previews as the completion answer."
+        ),
+        "approval_rule": (
+            "Approval or user-input waits are blockers until an explicit observed approval, rejection, or input "
+            "is recorded; never auto-approve from a prepared handoff."
+        ),
+        "event_filter_rule": "Observe only events for the matching thread and turn identifiers.",
+        "observed_state_owner": [
+            "runtime_observation/v1",
+            "executor_session/v1",
+            "coding_lifecycle",
+            "coding_briefing/v1",
+        ],
+        "not_implemented": [
+            "websocket_client",
+            "host_token_lookup",
+            "polling_connector",
+            "appserver_dispatch",
+            "auto_approval",
+        ],
+        "claim_boundary": (
+            "This is a prepared Codex session observation requirement, not live telemetry or completion evidence. "
+            "Observed execution state must be recorded through OMH runtime, executor-session, lifecycle, or briefing evidence."
+        ),
+    }
+
+
+def _task_prompt_shape_block() -> str:
+    return (
+        "Task prompt shape:\\n"
+        "- Shape executor-facing work as: Goal / Do / Don't / Expected result / Test.\\n"
+        "- Keep dispatch prompts in English unless preserving identifiers, paths, errors, quotes, or target-language output.\\n"
+        "- If steering an active turn, send only the corrective delta instead of replaying the full prompt.\\n\\n"
+    )
+
+
+def _local_capability_prompt_block(profile: str, label: str) -> str:
+    if profile == "codex":
+        return (
+            "Local capability discovery:\n"
+            "- Before implementing, inspect the executor environment for relevant local capabilities: project instructions, "
+            "AGENTS.md, Codex-native skills/workflows, user-installed workflow packs including installed OMX/oh-my workflow "
+            "packs, custom Codex skills, Codex subagents, MCP tools, repo scripts, tests, and CI metadata.\n"
+            "- Examples, if actually available: OMX or other oh-my triggers such as $ralplan, $ultragoal, $ultrawork, "
+            "$ultraqa, or $code-review; $ralph for persistent completion loops; custom Codex skills; or Codex subagents. "
+            "These are examples, not requirements.\n"
+            "- If a relevant local skill, workflow pack, or subagent exists and materially improves planning, "
+            "implementation, verification, review, or coordination, use that executor-native capability before falling "
+            "back to the generic prompt.\n"
+            "- If no relevant local capability is available, proceed as plain Codex using this task, harness, and evidence "
+            "contract.\n"
+            "- Do not claim OMH observed local capability availability, dispatch, implementation, review, CI, or merge.\n\n"
+        )
+    if profile == "claude-code":
+        return (
+            "Local capability discovery:\n"
+            "- Before acting, inspect project instructions and executor-local capabilities such as AGENTS.md, CLAUDE.md, "
+            "slash commands, skills, subagents, MCP tools, repo scripts, tests, and CI metadata, plus installed skill packs.\n"
+            "- For Claude Code, examples include Everything Claude Code skill packs, user-defined Claude Code skills, "
+            "custom Claude Code slash commands, Claude Code agents/subagents, and MCP tools when actually available. "
+            "These are examples, not requirements.\n"
+            "- If a relevant Claude Code skill, slash command, custom agent, or skill pack exists and materially improves "
+            "planning, implementation, verification, review, or coordination, use that executor-native capability before "
+            "falling back to the generic prompt.\n"
+            f"- If no relevant local capability is available, proceed as a plain {label} task using this task, harness, "
+            "and evidence contract.\n"
+            "- Do not claim OMH observed capability availability or execution.\n\n"
+        )
+    return (
+        "Local capability discovery:\n"
+        "- Before acting, inspect project instructions and executor-local capabilities such as AGENTS.md, CLAUDE.md, "
+        "slash commands, skills, subagents, MCP tools, repo scripts, tests, and CI metadata, plus installed skill packs.\n"
+        "- If a relevant local skill, command, workflow pack, or custom agent exists and materially improves planning, "
+        "implementation, verification, review, or coordination, use that executor-native capability before falling back "
+        "to the generic prompt.\n"
+        f"- If no relevant local capability is available, proceed as a plain {label} task using this task, harness, and "
+        "evidence contract.\n"
+        "- Do not claim OMH observed capability availability or execution.\n\n"
+    )
+
+
 def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) -> str:
     return (
         "You are Codex, acting as the coding executor for a Hermes-orchestrated request.\n\n"
@@ -1015,14 +1150,8 @@ def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) ->
         "Recommended harness: `{harness}`\n"
         "Intent: `{intent}`\n"
         "Prepared status: `prepared_not_observed`\n\n"
-        "Local capability discovery:\n"
-        "- Before implementing, inspect the executor environment for relevant local capabilities: project instructions, "
-        "Codex-native skills/workflows, user-installed workflow packs, subagents, MCP tools, repo scripts, tests, and CI metadata.\n"
-        "- Examples, if available: OMX or other oh-my triggers such as $ralplan, $ultragoal, $ultrawork, $ultraqa, or $code-review. "
-        "These are examples, not requirements.\n"
-        "- Use a local capability only when it materially improves planning, implementation, verification, review, or coordination.\n"
-        "- If no relevant local capability is available, proceed as plain Codex using this task, harness, and evidence contract.\n"
-        "- Do not claim OMH observed local capability availability, dispatch, implementation, review, CI, or merge.\n\n"
+        "{local_capability_prompt}"
+        "{task_prompt_shape}"
         "Rules:\n"
         "- Implement only after inspecting the repository and confirming the scope.\n"
         "- Preserve unrelated behavior and user changes.\n"
@@ -1036,6 +1165,8 @@ def _codex_prompt_template(delegation: CodingDelegation, *, codex_skill: str) ->
         harness=delegation.recommended_harness,
         intent=delegation.intent,
         message="{message}",
+        local_capability_prompt=_local_capability_prompt_block("codex", "Codex"),
+        task_prompt_shape=_task_prompt_shape_block(),
     )
 
 
@@ -1047,11 +1178,8 @@ def _prompt_only_template(delegation: CodingDelegation, *, profile: str, label: 
         "Recommended harness: `{harness}`\n"
         "Intent: `{intent}`\n"
         "Prepared status: `prepared_not_observed`\n\n"
-        "Local capability discovery:\n"
-        "- Before acting, inspect project instructions and executor-local capabilities such as AGENTS.md, CLAUDE.md, "
-        "slash commands, skills, subagents, MCP tools, repo scripts, tests, and CI metadata.\n"
-        "- Use them only when they materially improve the handoff; otherwise proceed as a plain {label} task.\n"
-        "- Do not claim OMH observed capability availability or execution.\n\n"
+        "{local_capability_prompt}"
+        "{task_prompt_shape}"
         "Rules:\n"
         "- Treat this as a prompt prepared by Hermes/OMH, not as observed execution.\n"
         "- Inspect the repository or local context before claiming a code change.\n"
@@ -1065,6 +1193,8 @@ def _prompt_only_template(delegation: CodingDelegation, *, profile: str, label: 
         harness=delegation.recommended_harness,
         intent=delegation.intent,
         message="{message}",
+        local_capability_prompt=_local_capability_prompt_block(profile, label),
+        task_prompt_shape=_task_prompt_shape_block(),
     )
 
 
@@ -1082,6 +1212,7 @@ def _runtime_prompt_template(delegation: CodingDelegation, *, profile: str, labe
         "- For Hermes runtime, installed Hermes/OMH skills may be relevant.\n"
         "- For oh-my runtimes, OMX/OMO/OMC templates are examples, not proof of availability.\n"
         "- If unavailable, continue with solo runtime execution and the evidence contract.\n\n"
+        "{task_prompt_shape}"
         "Runtime rules:\n"
         "- Treat this as a runtime contract prepared by Hermes/OMH, not as observed execution.\n"
         "- Use solo execution unless lanes are independent; use team/swarm only with explicit lane ownership.\n"
@@ -1098,6 +1229,7 @@ def _runtime_prompt_template(delegation: CodingDelegation, *, profile: str, labe
         harness=delegation.recommended_harness,
         intent=delegation.intent,
         message="{message}",
+        task_prompt_shape=_task_prompt_shape_block(),
     )
 
 
