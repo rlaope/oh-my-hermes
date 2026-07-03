@@ -417,7 +417,7 @@ omh setup --language ko
 Installer localization is separate from routing localization. Backend routing
 surfaces such as `omh recommend`, `omh playbook recommend`, and
 `omh chat interact` use a deterministic local phrase layer for tested Japanese,
-Chinese, Spanish, French, and German operator requests. The layer expands known
+Chinese, Korean, Spanish, French, German, and Hindi operator-routing requests. The layer expands known
 phrases into canonical routing signals, includes `locale:<code>:<label>` in the
 matched evidence for scored recommendations, and never calls external
 translation services. Renderable chat cards also use a small local copy catalog
@@ -869,8 +869,8 @@ Before calling the bot integration ready, verify these points:
 - Common non-English requests should preserve the user's original text while
   routing through deterministic locale hints when a tested phrase matches. For
   example, Japanese or Chinese payment-failure reports route to
-  `feedback-triage`, French safe-feature requests route to a plan surface, and
-  Spanish, French, or German issue-to-PR requests route to `github-event-ops`
+  `feedback-triage`, French or Hindi safe-feature requests route to a plan
+  surface, and Spanish, French, German, or Hindi issue-to-PR requests route to `github-event-ops`
   without claiming machine translation happened.
 - Common non-English card frames should use the local wrapper copy catalog when
   available, while keeping contract terms such as `Route for me`,

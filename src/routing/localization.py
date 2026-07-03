@@ -234,6 +234,16 @@ _ALIASES: tuple[LocaleAlias, ...] = (
         _CANONICAL_SAFE_FEATURE,
     ),
     LocaleAlias(
+        "hi",
+        "safe_feature",
+        (
+            "सुरक्षित तरीके से नई सुविधा जोड़",
+            "नई सुविधा सुरक्षित तरीके से जोड़",
+            "सुरक्षित रूप से सुविधा जोड़",
+        ),
+        _CANONICAL_SAFE_FEATURE,
+    ),
+    LocaleAlias(
         "ja",
         "issue_to_pr",
         ("issueをpr", "issueからpr", "イシューをpr", "prにできるよう", "プルリクにできるよう"),
@@ -284,6 +294,17 @@ _ALIASES: tuple[LocaleAlias, ...] = (
         "de",
         "issue_to_pr",
         ("issue in einen pr", "dieses issue für einen pr vorbereiten", "dieses issue fuer einen pr vorbereiten"),
+        _CANONICAL_ISSUE_TO_PR,
+    ),
+    LocaleAlias(
+        "hi",
+        "issue_to_pr",
+        (
+            "issue को pr के लिए तैयार",
+            "इस issue को pr के लिए तैयार",
+            "मुद्दे को pull request के लिए तैयार",
+            "मुद्दे को pr के लिए तैयार",
+        ),
         _CANONICAL_ISSUE_TO_PR,
     ),
     LocaleAlias(
@@ -353,6 +374,18 @@ _ALIASES: tuple[LocaleAlias, ...] = (
             "internetrecherche",
             "aktuelle quellen",
             "neueste quellen",
+        ),
+        _CANONICAL_WEB_RESEARCH,
+    ),
+    LocaleAlias(
+        "hi",
+        "web_research",
+        (
+            "वेब पर खोज",
+            "वेब खोज",
+            "ताज़ा स्रोतों",
+            "ताजा स्रोतों",
+            "मौजूदा स्रोतों",
         ),
         _CANONICAL_WEB_RESEARCH,
     ),
@@ -500,6 +533,17 @@ _ALIASES: tuple[LocaleAlias, ...] = (
         _CANONICAL_PAPER_LEARNING,
     ),
     LocaleAlias(
+        "hi",
+        "paper_learning",
+        (
+            "शोध पत्र pdf को आसान स्तर पर समझाओ",
+            "इस शोध पत्र pdf को आसान स्तर पर समझाओ",
+            "शोध पत्र को आसान स्तर पर समझाओ",
+            "इस paper को आसान स्तर पर समझाओ",
+        ),
+        _CANONICAL_PAPER_LEARNING,
+    ),
+    LocaleAlias(
         "ja",
         "source_finder",
         (
@@ -567,6 +611,18 @@ _ALIASES: tuple[LocaleAlias, ...] = (
             "finde das github repository",
             "finde öffentliche pdfs",
             "finde offentliche pdfs",
+        ),
+        _CANONICAL_SOURCE_FINDER,
+    ),
+    LocaleAlias(
+        "hi",
+        "source_finder",
+        (
+            "शोध पत्र pdf और डेटा सेट ढूंढो",
+            "शोध पत्र pdf और डेटासेट ढूंढो",
+            "पेपर और डेटा सेट ढूंढो",
+            "github रिपॉजिटरी ढूंढो",
+            "सार्वजनिक pdf लिंक ढूंढो",
         ),
         _CANONICAL_SOURCE_FINDER,
     ),
