@@ -1426,7 +1426,7 @@
           "kind": "hermes_prompt",
           "label": "Prepare an ops observability card",
           "style": "primary",
-          "value": "Use OMH ops-observability-card for: Show token, cost, latency, and last run status for this loop."
+          "value": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop."
         },
         {
           "id": "inspect_playbook",
@@ -1447,25 +1447,29 @@
           "kind": "static_boundary",
           "label": "Show evidence boundary",
           "style": "secondary",
-          "value": "An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence."
+          "value": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence."
         }
       ],
       "case": {
-        "compatibility_alias": true,
-        "current_gap": "OMH evidence boundaries were strong, but runtime cost/latency telemetry contract was weak.",
-        "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, and last run status for this loop.",
-        "docs_visibility": "harness_reference",
-        "evidence_boundary": "An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
-        "exposure": "harness_only",
-        "feature_surface": "ops-observability-card harness surface: wrapper-safe token, cost, latency, run history, queue, and failure-mode status card.",
+        "compatibility_alias": false,
+        "current_gap": "OMH evidence boundaries were strong, but runtime cost/latency telemetry and provider-neutral service-quality contracts were weak.",
+        "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "ops-observability-card workflow surface: wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality command-board.",
         "goal": "G10",
         "harness": "ops-observability-card",
-        "hermes_chat_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, and last run status for this loop.",
-        "hermes_use_case": "Keep automation and loop work from failing silently by showing token/cost/latency/run-history/failure-mode telemetry boundaries.",
+        "hermes_chat_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
+        "hermes_use_case": "Keep automation, loop, and service operations from failing silently by showing token/cost/latency/run-history/failure-mode telemetry, supplied metric-provider payloads, and service-quality downgrade gaps.",
         "id": "ops-observability-card",
-        "install_visibility": false,
+        "install_visibility": true,
         "keywords": [
           "observability",
+          "service quality",
+          "metric provider",
+          "prometheus",
+          "grafana",
           "cost",
           "latency",
           "token",
@@ -1474,16 +1478,19 @@
           "failure mode",
           "\ube44\uc6a9",
           "\ud1a0\ud070",
-          "\uad00\uce21\uc131"
+          "\uad00\uce21\uc131",
+          "\uc11c\ube44\uc2a4 \ud488\uc9c8",
+          "\uc6b4\uc601 \uc9c0\ud718\ud310"
         ],
         "next_action": "prepare_ops_observability_card",
         "next_action_label": "preparing an ops observability card",
         "playbook": "ops-observability-card",
-        "preferred_usage": "Use as a telemetry/status harness for token, cost, latency, run history, and failure-mode boundaries.",
+        "preferred_usage": "Use as an installed Hermes workflow skill when operators need an evidence-bounded command-board for telemetry, supplied metric-provider payloads, and service-quality gaps.",
         "primary_skill": "ops-observability-card",
         "priority": 10,
         "projections": [
           "routable",
+          "installable",
           "playbook",
           "harness",
           "workflow_reference",
@@ -1494,23 +1501,23 @@
           "omh playbook inspect ops-observability-card",
           "omh harness inspect ops-observability-card"
         ],
-        "title": "Ops observability and cost card",
-        "user_value": "Operators can see health/cost signals without confusing estimates with provider truth or completion evidence."
+        "title": "Ops command-board and service quality card",
+        "user_value": "Operators can see health/cost/service-quality signals without confusing supplied exports with live provider truth or completion evidence."
       },
       "chat_surface": {
         "body_lines": [
-          "Keep automation and loop work from failing silently by showing token/cost/latency/run-history/failure-mode telemetry boundaries.",
+          "Keep automation, loop, and service operations from failing silently by showing token/cost/latency/run-history/failure-mode telemetry, supplied metric-provider payloads, and service-quality downgrade gaps.",
           "Route: ops-observability-card -> preparing an ops observability card.",
-          "Operators can see health/cost signals without confusing estimates with provider truth or completion evidence."
+          "Operators can see health/cost/service-quality signals without confusing supplied exports with live provider truth or completion evidence."
         ],
-        "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, and last run status for this loop.",
-        "headline": "[omh] Ops observability and cost card",
+        "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
+        "headline": "[omh] Ops command-board and service quality card",
         "source": "hermes_agent_chat",
         "status_line": "prepared_not_observed | ops-observability-card | preparing an ops observability card",
-        "suggested_user_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, and last run status for this loop."
+        "suggested_user_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop."
       },
       "evidence": {
-        "claim_boundary": "An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
+        "claim_boundary": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
           "connector_invocation",
@@ -1534,46 +1541,46 @@
         "omh harness inspect ops-observability-card --json"
       ],
       "route": {
-        "compatibility_alias": true,
-        "exposure": "harness_only",
+        "compatibility_alias": false,
+        "exposure": "workflow_skill",
         "harness": "ops-observability-card",
-        "install_visibility": false,
+        "install_visibility": true,
         "next_action": "prepare_ops_observability_card",
         "next_action_label": "preparing an ops observability card",
         "playbook": "ops-observability-card",
         "primary_skill": "ops-observability-card"
       },
       "schema_version": "omh_use_case_demo_card/v1",
-      "title": "Ops observability and cost card",
+      "title": "Ops command-board and service quality card",
       "wrapper_card": {
         "chips": [
           "G10",
           "ops-observability-card",
-          "harness_only",
+          "workflow_skill",
           "prepare_ops_observability_card"
         ],
         "component": "omh_use_case_card",
-        "headline": "[omh] Ops observability and cost card",
+        "headline": "[omh] Ops command-board and service quality card",
         "render_profile": "chat_first",
         "sections": [
           {
-            "body": "Keep automation and loop work from failing silently by showing token/cost/latency/run-history/failure-mode telemetry boundaries.",
+            "body": "Keep automation, loop, and service operations from failing silently by showing token/cost/latency/run-history/failure-mode telemetry, supplied metric-provider payloads, and service-quality downgrade gaps.",
             "id": "why_this_route",
             "title": "Why this workflow"
           },
           {
-            "body": "ops-observability-card harness surface: wrapper-safe token, cost, latency, run history, queue, and failure-mode status card.",
+            "body": "ops-observability-card workflow surface: wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality command-board.",
             "id": "what_omh_prepares",
             "title": "What OMH prepares"
           },
           {
-            "body": "An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
+            "body": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.",
             "id": "evidence_boundary",
             "title": "What is not evidence yet"
           }
         ],
         "status": "prepared_not_observed",
-        "summary": "Operators can see health/cost signals without confusing estimates with provider truth or completion evidence."
+        "summary": "Operators can see health/cost/service-quality signals without confusing supplied exports with live provider truth or completion evidence."
       }
     }
   ],

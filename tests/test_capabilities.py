@@ -170,7 +170,7 @@ class CapabilityManifestTests(unittest.TestCase):
     def test_capability_inspect_finds_skill_and_role_without_runtime_claim(self) -> None:
         skill = inspect_capability("ultragoal", section="skills")["capability"]
         wiki_skill = inspect_capability("wiki", section="skills")["capability"]
-        hidden_surface = inspect_capability("ops-observability-card", section="skills")["capability"]
+        ops_surface = inspect_capability("ops-observability-card", section="skills")["capability"]
         awareness = inspect_capability("omh_awareness", section="omh_awareness")["capability"]
         role = inspect_capability("handoff-guide", section="agent_roles")["capability"]
         playbook = inspect_capability("request-to-handoff", section="playbooks")["capability"]
@@ -190,15 +190,15 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("omh_context", awareness["tool_hints"][0])
         self.assertIn("omh_capabilities", " ".join(awareness["tool_hints"]))
         self.assertIn("ambitious goal -> loopability check", " ".join(skill["cross_lane_examples"]))
-        self.assertEqual(hidden_surface["exposure"], "harness_only")
+        self.assertEqual(ops_surface["exposure"], "workflow_skill")
         self.assertEqual(awareness["schema_version"], "omh_awareness/v1")
         self.assertIn("materials", awareness["first_turn_rule"])
         self.assertIn("generic tools", awareness["first_turn_rule"])
         self.assertIn("meeting-brief", json.dumps(awareness, sort_keys=True))
         self.assertIn("capability manifest", awareness["context_surfaces"])
-        self.assertFalse(hidden_surface["install_visibility"])
-        self.assertTrue(hidden_surface["compatibility_alias"])
-        self.assertIn("preferred_usage", hidden_surface)
+        self.assertTrue(ops_surface["install_visibility"])
+        self.assertFalse(ops_surface["compatibility_alias"])
+        self.assertIn("preferred_usage", ops_surface)
         self.assertEqual(role["runtime_claim"], "descriptor_not_runtime_agent")
         self.assertIn("OMH workflow-layer responsibility context", role["workflow_context_rule"])
         self.assertIn("Normal users talk to Hermes", role["chat_rule"])

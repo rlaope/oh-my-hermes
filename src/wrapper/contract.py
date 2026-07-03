@@ -1191,13 +1191,14 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         "headline": "I can prepare observability without inventing provider truth.",
         "body": (
             "I will prepare a wrapper-safe observability card: token, cost, latency, run history, queue, failure modes, "
-            "and evidence gaps. Local estimates stay separate from provider billing, quota truth, full tracing, "
-            "performance proof, and workflow completion."
+            "external metric-provider payloads, service-quality gaps, and evidence boundaries. Local estimates and supplied "
+            "metric exports stay separate from provider billing, quota truth, live metric-provider access, full tracing, "
+            "SLO pass, incident closure, remediation completion, performance proof, and workflow completion."
         ),
         "phase": "ops_observability_prepared",
         "next_action": "prepare_ops_observability_card",
-        "artifact_schema": "ops_observability_card/v1",
-        "claim_boundary_suffix": "It is not provider billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.",
+        "artifact_schema": "ops_service_quality_board/v1",
+        "claim_boundary_suffix": "It is not provider billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.",
         "actions": [
             {"id": "prepare_ops_observability_card", "label": "Open observability", "style": "primary"},
             {"id": "refresh_status", "label": "Refresh status", "style": "secondary"},
@@ -1205,14 +1206,20 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         ],
         "recommended_flow": [
             "collect_local_runtime_records",
+            "accept_external_metric_provider_payloads",
             "separate_estimates_from_provider_truth",
+            "type_service_quality_downgrade_gaps",
             "summarize_failure_modes",
             "mark_missing_trace_or_billing_evidence",
         ],
         "evidence_not_observed": [
             "provider billing truth",
             "provider quota truth",
+            "live metric-provider access",
             "complete tracing",
+            "SLO pass",
+            "incident closure",
+            "remediation completion",
             "performance proof",
             "workflow completion",
             "external telemetry fetch",

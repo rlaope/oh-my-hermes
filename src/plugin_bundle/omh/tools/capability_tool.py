@@ -156,6 +156,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "agent-ops-review",
             "workflow-learning",
             "memory-curation-review",
+            "ops-observability-card",
             "skill",
             "ask",
             "cancel",

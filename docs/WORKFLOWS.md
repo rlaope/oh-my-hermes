@@ -2832,31 +2832,31 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### ops-observability-card
 
-[omh] Hermes ops observability workflow: report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries.
+[omh] Hermes ops observability workflow: prepare an operations command-board for wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality evidence boundaries.
 
 - Category: `observability`
 - Phase: `telemetry-card`
 - Hermes role: `tracker`
 - Quality tier: `workflow-surface-gated`
-- Exposure: `harness_only`
-- Install visibility: `false`
-- Docs visibility: `harness_reference`
-- Compatibility alias: `true`
-- Preferred usage: Use as a telemetry/status harness for token, cost, latency, run history, and failure-mode boundaries.
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when operators need an evidence-bounded command-board for telemetry, supplied metric-provider payloads, and service-quality gaps.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `ops-observability-card` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use when automation, loops, gateway work, or executor handoffs need a safe status card for cost, latency, token, history, and failure-mode visibility.
+- Use when: Use when automation, loops, gateway work, executor handoffs, or service operations need a safe command-board for cost, latency, token, history, failure-mode, supplied metric-provider, and service-quality visibility.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `ops-observability-card`, `observability card`, `cost telemetry`, `latency telemetry`, `token telemetry`, `run history`, `loop telemetry`, `failure mode`, `monitor tokens`, `비용`, `토큰`, `지연시간`, `관측성`
+- Strong routing signals: `ops-observability-card`, `observability card`, `operations command board`, `ops command board`, `service quality board`, `service quality`, `external metric provider`, `metric provider`, `prometheus metrics`, `grafana metrics`, `cost telemetry`, `latency telemetry`, `token telemetry`, `run history`, `loop telemetry`, `failure mode`, `monitor tokens`, `service health`, `slo dashboard`, `비용`, `토큰`, `지연시간`, `관측성`, `운영 지휘판`, `서비스 품질`, `메트릭`, `프로메테우스`, `그라파나`
 - Good example:
-  - Prompt: ops-observability-card show token, cost, latency, and last run status for this loop.
+  - Prompt: ops-observability-card show token, cost, latency, supplied Prometheus/Grafana metrics, and missing service-quality evidence for this loop.
   - Expected behavior: Produce `prepare_ops_observability_card` with required context, wrapper actions, and not-evidence boundaries.
   - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 - Bad example:
-  - Prompt: ops-observability-card claim exact provider billing from local estimates.
+  - Prompt: ops-observability-card claim exact provider billing, healthy SLO, incident closure, or remediation completion from local estimates.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
   - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 - Quality bar:
@@ -2877,12 +2877,19 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - known missing evidence
 - Expected outputs:
   - ops-observability-card/v1 card or guidance
+  - external_metric_provider/v1 payload contract
+  - external_metric_provider_adapter/v1 adapter contract
+  - ops_service_quality_board/v1 service-quality board
+  - typed service-quality downgrade gaps
   - next action
   - prepared-vs-observed boundary
 - Artifact expectations:
   - ops-observability-card/v1 metadata-only runtime or wrapper card when recorded
+  - external_metric_provider/v1 supplied metric payload when available
+  - external_metric_provider_adapter/v1 connector-ready adapter metadata when available
+  - ops_service_quality_board/v1 evidence-gated service-quality board
 - Safety rules:
-  - An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or successful workflow completion evidence.
+  - An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, root-cause proof, remediation completion, performance proof, or successful workflow completion evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ### agent-ops-review
@@ -4870,9 +4877,9 @@ Check required MCP servers, CLIs, APIs, credentials, connectors, and local tools
 
 ### ops-observability-card
 
-Report wrapper-safe token, cost, latency, run history, queue, and failure-mode telemetry boundaries.
+Report wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality evidence boundaries.
 
-- Use when: Use when automation, loops, gateway work, or executor sessions need safe observability and cost/status narration.
+- Use when: Use when automation, loops, gateway work, executor sessions, or service operations need safe observability, cost/status narration, and provider-neutral metric analysis.
 - Quality tier: `observability-gated`
 - Quality bar:
   - Name the workflow objective, owner, input boundary, next action, and stop condition.
@@ -4883,10 +4890,15 @@ Report wrapper-safe token, cost, latency, run history, queue, and failure-mode t
   - available telemetry
   - cost/token policy
   - history window
+  - external_metric_provider/v1 payloads when available
 - Outputs:
   - ops_observability_card/v1
+  - external_metric_provider/v1
+  - external_metric_provider_adapter/v1
+  - ops_service_quality_board/v1
   - telemetry summary
   - cost/latency boundary
+  - service-quality downgrade gaps
   - failure-mode warnings
 - Stop conditions:
   - card is prepared or a missing decision is surfaced
@@ -4897,12 +4909,15 @@ Report wrapper-safe token, cost, latency, run history, queue, and failure-mode t
   - record only observed external actions
 - Evidence ladder:
   - `telemetry_scope_recorded`
+  - `external_metric_provider_payload_recorded_when_available`
   - `local_metrics_summarized`
+  - `service_quality_gaps_typed`
   - `failure_modes_checked`
   - `provider_truth_observed_when_available`
 - Wrapper actions:
   - `show_observability`
   - `record_metric`
+  - `record_metric_provider`
   - `record_failure_mode`
   - `show_status`
 - Artifact events:
@@ -4912,7 +4927,7 @@ Report wrapper-safe token, cost, latency, run history, queue, and failure-mode t
 - Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
 - Privacy default: `metadata_only`
 - Overclaim guards:
-  - An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.
+  - An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### agent-ops-review

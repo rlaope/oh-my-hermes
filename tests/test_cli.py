@@ -1250,12 +1250,13 @@ class CliTests(unittest.TestCase):
         inspected = json.loads(stdout)["use_case"]
         self.assertEqual(inspected["id"], "ops-observability-card")
         self.assertEqual(inspected["primary_skill"], "ops-observability-card")
-        self.assertEqual(inspected["exposure"], "harness_only")
-        self.assertFalse(inspected["install_visibility"])
-        self.assertTrue(inspected["compatibility_alias"])
+        self.assertEqual(inspected["exposure"], "workflow_skill")
+        self.assertTrue(inspected["install_visibility"])
+        self.assertFalse(inspected["compatibility_alias"])
         self.assertIn("$ops-observability-card", inspected["direct_skill_invocation"])
         self.assertIn("Use OMH ops-observability-card", inspected["hermes_chat_prompt"])
         self.assertIn("not billing truth", inspected["evidence_boundary"])
+        self.assertIn("SLO pass", inspected["evidence_boundary"])
 
         status, stdout, stderr = run_cli(["cases", "validate", "--json"], output_json=False)
 
@@ -5262,6 +5263,8 @@ class CliTests(unittest.TestCase):
             ("릴리즈 준비 상태 점검해줘", "code-review", "review_check", "prepare_review_or_followup_handoff"),
             ("실제 사용자처럼 QA 시나리오 돌려줘", "ultraqa", "qa_review", "dispatch_to_workflow"),
             ("루프 비용이랑 지연시간 상태 보여줘", "ops-observability-card", "ops_observability", "prepare_ops_observability_card"),
+            ("Prometheus 메트릭으로 서비스 품질 지휘판 만들어줘", "ops-observability-card", "ops_observability", "prepare_ops_observability_card"),
+            ("Grafana panel export로 SLO gap 분석해줘", "ops-observability-card", "ops_observability", "prepare_ops_observability_card"),
             ("설치 잘 됐어?", "doctor", "doctor_health", "run_local_operator_check"),
             ("우리 팀 Hermes agent 여러 명이 같이 일할 때 역할과 보드를 잡아줘", "agent-board", "agent_board", "prepare_agent_board_card"),
             ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board", "agent_board", "prepare_agent_board_card"),

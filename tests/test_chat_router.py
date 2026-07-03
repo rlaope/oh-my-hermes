@@ -17,6 +17,7 @@ from omh.chat_router import (
 from omh.routing.intent import classify_workflow_intent
 from omh.routing import chat as chat_router_impl
 from omh.routing.localization import normalized_phrase
+from omh.routing.recommend import recommend_skills
 from omh.plugin_bundle.omh.awareness import awareness_route_hint
 from omh.skills.catalog import primary_harness_for_skill, routable_definitions
 
@@ -1783,18 +1784,53 @@ class ChatRouterTests(unittest.TestCase):
             self.assertNotIn("workflow_route_plan", public)
 
     def test_external_cost_and_network_routing_questions_do_not_open_ops_observability(self) -> None:
-        cases = (
+        clarify_cases = (
             "AWS 비용이 많이 나오는지 확인해줘",
+            "how much does the provider cost?",
+            "compare external provider pricing",
             "네트워크 라우팅이 느려",
+            "show dashboard for sales KPIs",
+            "show metrics for sales KPIs",
         )
 
-        for message in cases:
+        for message in clarify_cases:
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")
 
             self.assertNotEqual(decision["selected_skill"], "ops-observability-card")
             self.assertNotIn("guard:ops_observability", decision["recommendations"][0]["matched"])
             self.assertNotEqual(decision["action"], "dispatch")
+
+        design_review = route_chat_message("show dashboard for design review", source="discord")
+
+        self.assertNotEqual(design_review["selected_skill"], "ops-observability-card")
+        self.assertNotIn("guard:ops_observability", design_review["recommendations"][0]["matched"])
+
+        generic_dashboard_skills = {
+            recommendation["skill"] for recommendation in recommend_skills("show dashboard for sales KPIs", limit=10)
+        }
+        generic_metrics_skills = {
+            recommendation["skill"] for recommendation in recommend_skills("show metrics for sales KPIs", limit=10)
+        }
+        external_cost_skills = {
+            recommendation["skill"] for recommendation in recommend_skills("AWS 비용이 많이 나오는지 확인해줘", limit=10)
+        }
+        provider_cost_skills = {
+            recommendation["skill"] for recommendation in recommend_skills("how much does the provider cost?", limit=10)
+        }
+        network_routing_skills = {
+            recommendation["skill"] for recommendation in recommend_skills("네트워크 라우팅이 느려", limit=10)
+        }
+        metric_provider_cost = recommend_skills("show metric provider cost latency run history", limit=3)
+        slo_dashboard = recommend_skills("show SLO dashboard for API service quality", limit=3)
+
+        self.assertNotIn("ops-observability-card", generic_dashboard_skills)
+        self.assertNotIn("ops-observability-card", generic_metrics_skills)
+        self.assertNotIn("ops-observability-card", external_cost_skills)
+        self.assertNotIn("ops-observability-card", provider_cost_skills)
+        self.assertNotIn("ops-observability-card", network_routing_skills)
+        self.assertEqual(metric_provider_cost[0]["skill"], "ops-observability-card")
+        self.assertEqual(slo_dashboard[0]["skill"], "ops-observability-card")
 
     def test_natural_single_workflow_requests_use_fast_path_without_full_scoring(self) -> None:
         chat_router_impl._route_chat_message_cached.cache_clear()

@@ -882,19 +882,20 @@ Claim boundary: An agent board card is not proof that another Hermes target acce
 # toolbelt-and-observability
 
 operator
-show token cost latency run history for this automation loop
+show token cost latency run history and supplied Grafana service-quality gaps for this automation loop
 
 Hermes Agent  BOT
 [omh] ops-observability-card - I can prepare observability without inventing provider truth.
 
-I will prepare a wrapper-safe observability card: token, cost, latency, run
-history, queue, failure modes, and evidence gaps. Local estimates stay separate
-from provider billing, quota truth, full tracing, performance proof, and
-workflow completion.
+I will prepare a wrapper-safe observability card and service-quality board:
+token, cost, latency, run history, queue, failure modes, supplied metric-provider
+payloads, and evidence gaps. Local estimates and supplied exports stay separate
+from provider billing, quota truth, live metric-provider access, SLO pass, incident
+closure, remediation completion, performance proof, and workflow completion.
 
 [ Open observability ] [ Refresh status ] [ Show status ]
 
-Claim boundary: An ops observability card is not billing truth, provider quota truth, complete tracing, performance proof, or workflow completion evidence.
+Claim boundary: An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.
 ```
 
 What gets better for the operator:
