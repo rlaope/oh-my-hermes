@@ -133,12 +133,27 @@ Expected behavior:
   Claude Code, user-defined Claude Code skills, slash commands, and
   agents/subagents as examples. These are prepared prompting examples, not
   OMH-observed installation or execution evidence.
+- All executor, prompt-only, and runtime coding handoffs include
+  `executor_local_capability_report_contract/v1`. This is distinct from the
+  discovery strategy: it tells the selected coding owner how to report actual
+  local capability usage after real work. Reports must include
+  `local_capabilities_used`, `local_capability_evidence_refs`, and
+  `local_capability_fallback_reason`, and any used capability item must carry
+  an `evidence_ref`. The contract is still prepared guidance, not proof that
+  OMH observed the capability, dispatch, implementation, review, CI, merge
+  readiness, or merge.
 - Codex lifecycle handoffs include `codex_session_observation_contract/v1`.
   This is a prepared-only requirement for a future Codex session adapter: it
   names identity fields, status fields, full-final-answer extraction,
   approval/user-input blockers, and the OMH evidence surfaces that must own
   observed state. It is not a WebSocket client, host token lookup, polling
   loop, dispatch action, auto-approval rule, or live telemetry.
+- Claude Code prompt-only handoffs include
+  `claude_code_session_observation_contract/v1`. It mirrors the Codex
+  prepared-observation boundary while naming Claude Code session identity,
+  tool-use status, subagent status, slash-command invocation, approval, and
+  full-final-answer fields. Generic prompt-only handoffs do not receive this
+  Claude-specific contract.
 - Runtime handoff contracts include safe invocation templates such as
   `$ultragoal {message}`, `$team {message}`, `$ultrawork {message}`, or
   Hermes retained coding-skill prompts, plus an observation contract explaining
@@ -160,6 +175,8 @@ Expected behavior:
 - The payload names the selected executor/runtime target and includes:
   - executor target and handoff mode
   - a prompt template, instruction payload, or runtime contract for the selected coding owner
+  - task prompt and local capability report contracts for the selected coding owner
+  - Codex or Claude Code session observation contracts when that selected owner has a profile-specific contract
   - runtime-specific templates when an oh-my or Hermes runtime is selected
   - a runtime observation contract for runtime handoffs
   - a worktree/session isolation plan for wrapper UX

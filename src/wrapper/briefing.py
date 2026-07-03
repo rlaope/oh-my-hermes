@@ -219,6 +219,7 @@ def _work_summary(session: dict[str, Any], runtime_status: dict[str, Any]) -> di
             "isolation_plan": _isolation_plan_summary(_object(handoff.get("isolation_plan"))),
             "task_prompt_contract": _object(handoff.get("task_prompt_contract")),
             "session_observation_contract": _object(handoff.get("session_observation_contract")),
+            "local_capability_report_contract": _object(handoff.get("local_capability_report_contract")),
             "report_contract": _object(handoff.get("report_contract")),
             "evidence_contract": _object(handoff.get("evidence_contract")),
             "coding_team_path": _coding_team_path_summary(_object(handoff.get("hermes_coding_team_path"))),

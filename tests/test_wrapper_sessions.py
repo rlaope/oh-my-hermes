@@ -285,6 +285,7 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertIn("execution_brief", briefing["work_summary"]["handoff_contract"])
             self.assertIn("task_prompt_contract", briefing["work_summary"]["handoff_contract"])
             self.assertIn("session_observation_contract", briefing["work_summary"]["handoff_contract"])
+            self.assertIn("local_capability_report_contract", briefing["work_summary"]["handoff_contract"])
             self.assertIn("evidence_contract", briefing["work_summary"]["handoff_contract"])
             task_contract = briefing["work_summary"]["handoff_contract"]["task_prompt_contract"]
             self.assertEqual(task_contract["schema_version"], "executor_task_prompt_contract/v1")
@@ -295,6 +296,10 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertIn("waitingOnApproval", session_contract["blocker_statuses"])
             self.assertIn("waitingOnUserInput", session_contract["blocker_statuses"])
             self.assertIn("not live telemetry", session_contract["claim_boundary"])
+            capability_report = briefing["work_summary"]["handoff_contract"]["local_capability_report_contract"]
+            self.assertEqual(capability_report["schema_version"], "executor_local_capability_report_contract/v1")
+            self.assertEqual(capability_report["profile"], "codex")
+            self.assertIn("local_capabilities_used", capability_report["required_fields"])
             self.assertEqual(briefing["work_summary"]["handoff_contract"]["context_pack"]["included_context_count"], 1)
             self.assertNotIn("included_context", briefing["work_summary"]["handoff_contract"]["context_pack"])
             self.assertNotIn(message, json.dumps(briefing))
@@ -328,7 +333,14 @@ class WrapperSessionTests(unittest.TestCase):
                 briefing["work_summary"]["handoff_contract"]["task_prompt_contract"]["schema_version"],
                 "executor_task_prompt_contract/v1",
             )
-            self.assertEqual(briefing["work_summary"]["handoff_contract"]["session_observation_contract"], {})
+            session_contract = briefing["work_summary"]["handoff_contract"]["session_observation_contract"]
+            self.assertEqual(session_contract["schema_version"], "claude_code_session_observation_contract/v1")
+            self.assertEqual(session_contract["profile"], "claude-code")
+            self.assertIn("tool_use_status", session_contract["status_fields"])
+            capability_report = briefing["work_summary"]["handoff_contract"]["local_capability_report_contract"]
+            self.assertEqual(capability_report["schema_version"], "executor_local_capability_report_contract/v1")
+            self.assertEqual(capability_report["profile"], "claude-code")
+            self.assertIn("local_capability_fallback_reason", capability_report["required_fields"])
             self.assertEqual(states["handoff"], "complete")
             self.assertEqual(states["dispatch"], "pending")
             self.assertIn("dispatch", briefing["pending_gaps"])
@@ -367,6 +379,8 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(prepared["session"]["selected_executor_profile"], "claude-code")
             self.assertEqual(prepared["handoff"]["runtime"]["run_created"], False)
             self.assertEqual(prepared["handoff"]["prompt_handoff"]["schema_version"], "coding_prompt_handoff/v1")
+            self.assertEqual(prepared["handoff"]["prompt_handoff"]["local_capability_report_contract"]["profile"], "claude-code")
+            self.assertEqual(prepared["handoff"]["prompt_handoff"]["session_observation_contract"]["profile"], "claude-code")
             self.assertEqual(prepared["status"]["next_action"], "show_prompt_handoff")
             self.assertEqual(validate_runtime(paths)["runs"], [])
             self.assertTrue(validate_runtime(paths)["ok"])
@@ -391,6 +405,24 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(validate_wrapper_session_record(rewritten), [])
             self.assertTrue(validate_runtime(paths)["ok"])
 
+    def test_write_wrapper_session_preserves_legacy_prompt_handoff_without_local_capability_report_contract(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "claude-code")
+            prepared = prepare_wrapper_session_handoff(paths, session_id, message)
+            legacy_session = deepcopy(prepared["session"])
+            del legacy_session["prompt_handoff"]["local_capability_report_contract"]
+
+            rewritten = write_wrapper_session(paths, legacy_session)
+
+            self.assertNotIn("local_capability_report_contract", rewritten["prompt_handoff"])
+            self.assertEqual(validate_wrapper_session_record(rewritten), [])
+            self.assertTrue(validate_runtime(paths)["ok"])
+
     def test_hermes_selection_prepares_runtime_handoff_without_executor_run(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -411,6 +443,7 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(prepared["session"]["selected_executor_profile"], "hermes")
             self.assertEqual(prepared["handoff"]["runtime"]["run_created"], False)
             self.assertEqual(prepared["handoff"]["runtime_handoff"]["schema_version"], "coding_runtime_handoff/v1")
+            self.assertEqual(prepared["handoff"]["runtime_handoff"]["local_capability_report_contract"]["profile"], "hermes")
             self.assertEqual(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["runtime_family"], "omh")
             self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_team_swarm"])
             self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_tmux_workers"])
@@ -419,6 +452,10 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(
                 prepared["status"]["coding_briefing"]["work_summary"]["handoff_contract"]["coding_team_path"]["status"],
                 "prepared_not_observed",
+            )
+            self.assertEqual(
+                prepared["status"]["coding_briefing"]["work_summary"]["handoff_contract"]["local_capability_report_contract"]["profile"],
+                "hermes",
             )
             self.assertEqual(prepared["status"]["coding_briefing"]["runtime_milestones"][0]["id"], "runtime_start")
             self.assertEqual(prepared["status"]["coding_briefing"]["runtime_milestones"][0]["state"], "pending")
@@ -444,6 +481,24 @@ class WrapperSessionTests(unittest.TestCase):
             rewritten = write_wrapper_session(paths, legacy_session)
 
             self.assertNotIn("executor_local_capability_strategy", rewritten["runtime_handoff"])
+            self.assertEqual(validate_wrapper_session_record(rewritten), [])
+            self.assertTrue(validate_runtime(paths)["ok"])
+
+    def test_write_wrapper_session_preserves_legacy_runtime_handoff_without_local_capability_report_contract(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            message = "risky refactor"
+            started = create_or_resume_wrapper_session(paths, message, source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "hermes")
+            prepared = prepare_wrapper_session_handoff(paths, session_id, message)
+            legacy_session = deepcopy(prepared["session"])
+            del legacy_session["runtime_handoff"]["local_capability_report_contract"]
+
+            rewritten = write_wrapper_session(paths, legacy_session)
+
+            self.assertNotIn("local_capability_report_contract", rewritten["runtime_handoff"])
             self.assertEqual(validate_wrapper_session_record(rewritten), [])
             self.assertTrue(validate_runtime(paths)["ok"])
 

@@ -1041,6 +1041,7 @@ def _handoff_contract_summary(handoff: dict[str, Any]) -> dict[str, Any]:
         "isolation_plan": _isolation_plan_summary(_object_or_empty(handoff.get("isolation_plan"))),
         "task_prompt_contract": _object_or_empty(handoff.get("task_prompt_contract")),
         "session_observation_contract": _object_or_empty(handoff.get("session_observation_contract")),
+        "local_capability_report_contract": _object_or_empty(handoff.get("local_capability_report_contract")),
         "report_contract": _object_or_empty(handoff.get("report_contract")),
         "evidence_contract": _object_or_empty(handoff.get("evidence_contract")),
         "acceptance_criteria": _string_list(handoff.get("acceptance_criteria")),
