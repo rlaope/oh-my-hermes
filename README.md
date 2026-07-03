@@ -1,6 +1,13 @@
 # oh-my-hermes
 
 <p align="center">
+  <a href="README.md">English</a> |
+  <a href="README.ko.md">한국어</a> |
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.zh.md">中文</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/rlaope/oh-my-hermes"><img alt="GitHub" src="https://img.shields.io/badge/github-rlaope%2Foh--my--hermes-181717?logo=github"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
@@ -21,7 +28,7 @@
 [Hermes](https://github.com/NousResearch/hermes-agent), and let the added
 skills, contracts, and status cards make the next action obvious without
 replacing your existing setup.
-Common Japanese, Chinese, Spanish, French, German, Korean, and English operator
+Common Japanese, Chinese, Spanish, French, German, Korean, Hindi, and English operator
 requests stay local and deterministic: OMH can route them and frame the first
 chat card without calling a translation API.
 

@@ -543,6 +543,9 @@ _DIRECT_ANSWER_MULTILINGUAL_CONCEPT_MARKERS = (
     "とは何",
     "是什么",
     "是什麼",
+    "क्या है",
+    "क्या हैं",
+    "क्या होता है",
 )
 _DIRECT_ANSWER_MULTILINGUAL_EXPLAIN_MARKERS = (
     "説明して",
@@ -719,6 +722,8 @@ _DIRECT_ANSWER_ACKNOWLEDGEMENTS = (
     "ありがとう",
     "谢谢",
     "謝謝",
+    "धन्यवाद",
+    "शुक्रिया",
     "고마워",
     "감사합니다",
     "감사",
@@ -981,6 +986,11 @@ _DIRECT_ANSWER_TEXT_TRANSFORM_STARTERS = (
     "これを要約して",
     "把这句话翻译",
     "总结一下",
+    "इसका सारांश",
+    "इसे सारांश",
+    "इसे अंग्रेज़ी में अनुवाद",
+    "इसे अंग्रेजी में अनुवाद",
+    "इसे हिंदी में अनुवाद",
 )
 _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_SUBJECTS = (
     "이 문장",
@@ -2133,6 +2143,8 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "risky refactoring",
             "안전하게 기능 추가",
             "안전하게 기능을 추가",
+            "सुरक्षित तरीके से नई सुविधा जोड़",
+            "नई सुविधा सुरक्षित तरीके से जोड़",
             "위험한 리팩터링",
             "위험한 리팩토링",
         ),
@@ -2655,10 +2667,12 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:executor_runtime_readiness",)
     if skill != "ralplan":
         return ()
-    if any(marker in normalized for marker in ("safe", "safely", "안전")):
+    if any(marker in normalized for marker in ("safe", "safely", "안전", "सुरक्षित")):
         markers = ["guard:safe_feature_change"]
         if "안전" in normalized:
             markers.append("locale:ko:safe_feature")
+        if "सुरक्षित" in normalized:
+            markers.append("locale:hi:safe_feature")
         return tuple(markers)
     if any(marker in normalized for marker in ("risk", "risky", "위험")):
         return ("guard:risky_refactor_before_cleanup",)

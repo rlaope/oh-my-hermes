@@ -2406,8 +2406,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
-            self.assertIn("43/43 negative-control cases", gates["routing_precision"]["summary"])
-            self.assertIn("92/92 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("47/47 negative-control cases", gates["routing_precision"]["summary"])
+            self.assertIn("97/97 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
             self.assertEqual(gates["localized_chat_copy"]["status"], "passed")
@@ -2456,7 +2456,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Chat card coverage: 25/25 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 43/43 negative controls, 92/92 interventions "
+                "Routing precision: 47/47 negative controls, 97/97 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -2485,11 +2485,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 10)
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 10)
-            self.assertEqual(payload["summary"]["routing_precision_passing"], 43)
-            self.assertEqual(payload["summary"]["routing_precision_total"], 43)
+            self.assertEqual(payload["summary"]["routing_precision_passing"], 47)
+            self.assertEqual(payload["summary"]["routing_precision_total"], 47)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 92)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 92)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 97)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 97)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["localized_chat_copy_passing"], 8)
             self.assertEqual(payload["summary"]["localized_chat_copy_total"], 8)
@@ -3565,9 +3565,11 @@ class CliTests(unittest.TestCase):
             ("Quiero agregar una función de forma segura a este repo", "ralplan", "locale:es:safe_feature"),
             ("Je veux ajouter une fonctionnalité en toute sécurité à ce repo", "ralplan", "locale:fr:safe_feature"),
             ("Ich möchte sicher eine Funktion hinzufügen", "ralplan", "locale:de:safe_feature"),
+            ("मैं इस परियोजना में सुरक्षित तरीके से नई सुविधा जोड़ना चाहता हूँ", "ralplan", "locale:hi:safe_feature"),
             ("Quiero convertir este issue en un PR", "github-event-ops", "locale:es:issue_to_pr"),
             ("Je veux transformer cette issue en PR", "github-event-ops", "locale:fr:issue_to_pr"),
             ("Ich möchte dieses Issue für einen PR vorbereiten", "github-event-ops", "locale:de:issue_to_pr"),
+            ("इस issue को PR के लिए तैयार करो", "github-event-ops", "locale:hi:issue_to_pr"),
             ("haz una imagen que explique la función cron", "img-summary", "locale:es:visual_summary"),
             ("erstelle ein Bild, das die Cron-Funktion erklärt", "img-summary", "locale:de:visual_summary"),
             ("cron機能を説明する画像を作って", "img-summary", "locale:ja:visual_summary"),
@@ -3576,9 +3578,12 @@ class CliTests(unittest.TestCase):
             ("explique ce PDF de recherche simplement", "paper-learning", "locale:fr:paper_learning"),
             ("erkläre dieses Paper einfach", "paper-learning", "locale:de:paper_learning"),
             ("この論文PDFをやさしく説明して", "paper-learning", "locale:ja:paper_learning"),
+            ("इस शोध पत्र PDF को आसान स्तर पर समझाओ", "paper-learning", "locale:hi:paper_learning"),
             ("encuentra el paper y el dataset para este tema", "source-finder", "locale:es:source_finder"),
             ("trouve le dépôt GitHub et le PDF public", "source-finder", "locale:fr:source_finder"),
             ("finde paper und dataset zu diesem thema", "source-finder", "locale:de:source_finder"),
+            ("इस विषय के शोध पत्र PDF और डेटा सेट ढूंढो", "source-finder", "locale:hi:source_finder"),
+            ("वेब पर खोजकर ताज़ा स्रोतों के साथ सारांश दो", "web-research", "locale:hi:web_research"),
         )
 
         for message, expected_skill, locale_match in cases:
@@ -4403,6 +4408,7 @@ class CliTests(unittest.TestCase):
         cases = (
             ("Quiero convertir este issue en un PR", "request-to-handoff", "locale:es:issue_to_pr"),
             ("このissueをPRにできるように整理して", "request-to-handoff", "locale:ja:issue_to_pr"),
+            ("इस issue को PR के लिए तैयार करो", "request-to-handoff", "locale:hi:issue_to_pr"),
             ("支付失败问题经常出现", "feedback-triage", "locale:zh:payment_failure"),
         )
 
