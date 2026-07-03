@@ -6590,6 +6590,29 @@ class CliTests(unittest.TestCase):
         self.assertIn("These are examples, not requirements.", handoff["prompt_template"])
         self.assertIn("proceed as plain Codex", handoff["prompt_template"])
         self.assertIn("Do not claim OMH observed local capability availability", handoff["prompt_template"])
+        self.assertIn("Goal / Do / Don't / Expected result / Test", handoff["prompt_template"])
+        task_contract = handoff["task_prompt_contract"]
+        self.assertEqual(task_contract["schema_version"], "executor_task_prompt_contract/v1")
+        self.assertEqual(task_contract["profile"], "codex")
+        self.assertEqual(task_contract["status"], "prepared_not_observed")
+        self.assertEqual(task_contract["required_sections"], ["Goal", "Do", "Don't", "Expected result", "Test"])
+        self.assertIn("English", task_contract["language_policy"])
+        self.assertIn("changed constraint", task_contract["steering_policy"])
+        self.assertIn("not dispatch", task_contract["claim_boundary"])
+        session_contract = handoff["session_observation_contract"]
+        self.assertEqual(session_contract["schema_version"], "codex_session_observation_contract/v1")
+        self.assertEqual(session_contract["profile"], "codex")
+        self.assertEqual(session_contract["status"], "prepared_not_observed")
+        self.assertIn("thread_id", session_contract["identity_fields"])
+        self.assertIn("thread_status.active_flags", session_contract["status_fields"])
+        self.assertEqual(session_contract["completion_statuses"], ["completed"])
+        self.assertIn("waitingOnApproval", session_contract["blocker_statuses"])
+        self.assertIn("waitingOnUserInput", session_contract["blocker_statuses"])
+        self.assertIn("full final agent message", session_contract["final_answer_rule"])
+        self.assertIn("never auto-approve", session_contract["approval_rule"])
+        self.assertIn("runtime_observation/v1", session_contract["observed_state_owner"])
+        self.assertIn("websocket_client", session_contract["not_implemented"])
+        self.assertIn("not live telemetry", session_contract["claim_boundary"])
         self.assertIn("changed_files", handoff["report_contract"]["required_fields"])
         self.assertIn("executor_result", " ".join(handoff["evidence_contract"]["observed_required_for"]))
         self.assertIn("send_to_executor", payload["harness_quality"]["wrapper_actions"])
@@ -6608,6 +6631,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["message"], "risky refactor")
         self.assertIn("Task:\nrisky refactor", payload["executor_handoff_prompt"])
         self.assertIn("Local capability discovery:", payload["executor_handoff_prompt"])
+        self.assertIn("Goal / Do / Don't / Expected result / Test", payload["executor_handoff_prompt"])
 
     def test_coding_delegate_codex_executor_does_not_handoff_fallback_or_clarify(self) -> None:
         for message, action in (("zzzzunknownphrase", "fallback"), ("fix maybe", "clarify")):

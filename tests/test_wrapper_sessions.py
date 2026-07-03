@@ -283,7 +283,18 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertFalse(briefing["original_context"]["message"]["raw_text_persisted"])
             self.assertFalse(briefing["original_context"]["deep_interview"]["persisted"])
             self.assertIn("execution_brief", briefing["work_summary"]["handoff_contract"])
+            self.assertIn("task_prompt_contract", briefing["work_summary"]["handoff_contract"])
+            self.assertIn("session_observation_contract", briefing["work_summary"]["handoff_contract"])
             self.assertIn("evidence_contract", briefing["work_summary"]["handoff_contract"])
+            task_contract = briefing["work_summary"]["handoff_contract"]["task_prompt_contract"]
+            self.assertEqual(task_contract["schema_version"], "executor_task_prompt_contract/v1")
+            self.assertEqual(task_contract["required_sections"], ["Goal", "Do", "Don't", "Expected result", "Test"])
+            self.assertEqual(task_contract["status"], "prepared_not_observed")
+            session_contract = briefing["work_summary"]["handoff_contract"]["session_observation_contract"]
+            self.assertEqual(session_contract["schema_version"], "codex_session_observation_contract/v1")
+            self.assertIn("waitingOnApproval", session_contract["blocker_statuses"])
+            self.assertIn("waitingOnUserInput", session_contract["blocker_statuses"])
+            self.assertIn("not live telemetry", session_contract["claim_boundary"])
             self.assertEqual(briefing["work_summary"]["handoff_contract"]["context_pack"]["included_context_count"], 1)
             self.assertNotIn("included_context", briefing["work_summary"]["handoff_contract"]["context_pack"])
             self.assertNotIn(message, json.dumps(briefing))
@@ -313,6 +324,11 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(briefing["run_id"], "")
             self.assertEqual(briefing["current_state"]["selected_executor_profile"], "claude-code")
             self.assertEqual(briefing["work_summary"]["handoff_schema_version"], "coding_prompt_handoff/v1")
+            self.assertEqual(
+                briefing["work_summary"]["handoff_contract"]["task_prompt_contract"]["schema_version"],
+                "executor_task_prompt_contract/v1",
+            )
+            self.assertEqual(briefing["work_summary"]["handoff_contract"]["session_observation_contract"], {})
             self.assertEqual(states["handoff"], "complete")
             self.assertEqual(states["dispatch"], "pending")
             self.assertIn("dispatch", briefing["pending_gaps"])
