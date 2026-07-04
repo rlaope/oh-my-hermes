@@ -1,53 +1,53 @@
 ---
-name: agent-ops-review
-description: [omh] Hermes agent ops review workflow: help managers inspect AI-agent progress, blockers, quality gates, and throughput levers.
+name: rules-distill
+description: [omh] Hermes Rules Distill workflow: extract repeated principles from skills, prompts, traces, reviews, and failures into reviewed rule candidates without auto-mutating guidance.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, operator]
-    category: operator
-    phase: manager-review
-    role: tracker
-    quality_tier: workflow-surface-gated
+    tags: [workflow, oh-my-hermes, knowledge]
+    category: knowledge
+    phase: rules-distillation
+    role: memory-keeper
+    quality_tier: rules-distillation-gated
 ---
 
-# Agent Ops Review
+# Rules Distill
 
-This is a Hermes-native `agent-ops-review` workflow skill.
+This is a Hermes-native `rules-distill` workflow skill.
 
 ## Why This Exists
 
-`agent-ops-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`rules-distill` gives OMH a disciplined way to learn from large skill ecosystems like ECC without wholesale copying: extract principles, review them, then patch OMH only through explicit verified work.
 
 ## Do Not Use When
 
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The user wants a single workflow route regression; use `workflow-learning`.
+- The user wants durable factual project memory; use `wiki` or memory curation.
+- The user already approved a concrete code/doc change; use the implementation workflow.
 
 ## Examples
 
 Good example:
 
-- Prompt: agent-ops-review show quality, blockers, and throughput for AI-agent work.
-- Expected behavior: Produce `prepare_agent_ops_review` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Prompt: rules-distill 최근 실패 trace와 스킬들을 보고 OMH AGENTS에 넣을 만한 반복 원칙 후보만 뽑아줘.
+- Expected behavior: Prepare principle_candidate_set/v1, duplication/conflict report, review queue, and approved patch handoff only after approval.
+- Why: The request is meta-guidance learning and needs review before mutating rules.
 
 Bad example:
 
-- Prompt: agent-ops-review claim Codex finished and CI passed because a handoff exists.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Prompt: rules-distill 한 번 본 실패를 바로 모든 스킬 규칙으로 써버려.
+- Expected behavior: Keep it as a low-confidence candidate or regression case until repeated evidence and review approval exist.
+- Why: Rule distillation should not turn one-off anecdotes into global behavior.
 
 ## Completion Checklist
 
-- The local command, managed path, config surface, and state artifact inspected are named.
-- Blocking issues, warnings, and optional surfaces are separated.
-- The next repair action is explicit and does not claim a reload or runtime observation.
+- The durable fact, source evidence, retrieval hint, and staleness risk are recorded.
+- Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.
+- Separate coding or docs tasks are extracted instead of buried in notes.
 
 ## Recovery Notes
 
-- If a managed path or config key is missing, route to setup/update repair instead of editing hidden state.
-- If a reload or plugin load was not observed, keep the diagnostic result as local health evidence only.
+- If source evidence conflicts, route to memory or knowledge review before writing durable guidance.
+- If the fact may be stale, record the staleness warning and next refresh action.
 
 ## OMH Context Rail
 
@@ -63,48 +63,55 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should explain AI-agent work: quality gates, progress, blockers, next actions, and throughput.
+Use when Hermes should turn repeated workflow lessons, skill behavior, review comments, or failure traces into candidate rules that humans can review before docs or catalog changes.
 
-    Strong routing signals: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`, `agent work quality`, `coding progress quality`, `coding progress`, `where is codex`, `what's going on`, `status update please`, `what are you doing`, `what are you working on`, `where are we`, `今何してる`, `现在在做什么`, `qué está pasando`, `qu'est-ce qui se passe`, `was ist los`, `ai agent manager`, `관리자 입장`, `Codex 작업`, `Codex 작업이 어디까지`, `코덱스 작업`, `작업이 어디까지`, `진행됐는지`, `진행되었는지`, `처리량`, `작업 품질`, `진행상황`, `무슨일이노`, `뭔일임`, `무슨 일이야`, `뭐해`, `지금 뭐 하고 있어`, `작업상황 브리핑`, `어디까지 됐어`, `리서치 코딩 리뷰`
+    Strong routing signals: `rules-distill`, `rules distill`, `distill rules`, `rule distillation`, `principle distill`, `skill principles`, `extract agent rules`, `turn traces into rules`, `policy distill`, `guidance distill`, `규칙 증류`, `원칙 추출`, `스킬 원칙`, `프롬프트 규칙`
 
 ## Catalog Metadata
 
-Category: `operator`
-Phase: `manager-review`
-Hermes role: `tracker`
-Quality tier: `workflow-surface-gated`
+Category: `knowledge`
+Phase: `rules-distillation`
+Hermes role: `memory-keeper`
+Quality tier: `rules-distillation-gated`
 
 Quality bar:
 
-- Name the user-facing workflow objective, required context, next action, and stop condition.
-- Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
-- Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Collect repeated evidence before proposing a rule.
+- Deduplicate against existing guidance and name conflicts or narrower scopes.
+- Use imperative, testable wording and include non-goals for each candidate.
+- Require review approval before any patch handoff or generated-skill update.
 
 Handoff policy:
 
-Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+Keep principle extraction and candidate review in Hermes. Editing AGENTS.md, catalog data, prompts, skills, or docs requires explicit approved implementation work and verification.
 
 Required inputs:
 
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
+- source corpus: skills, prompts, traces, reviews, failures, or docs
+- destination boundary: AGENTS, skill catalog, prompt, docs, memory, or no-write review
+- rule granularity and acceptance criteria
+- reviewer or approval requirement
 
 Expected outputs:
 
-- agent-ops-review/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
+- rules_distillation_plan/v1
+- principle_candidate_set/v1
+- duplication_conflict_report/v1
+- review_queue/v1
+- approved_patch_handoff/v1 when approved
+- not-evidence boundary
 
 Artifact expectations:
 
-- agent-ops-review/v1 metadata-only runtime or wrapper card when recorded
+- principle_candidate_set/v1 with source references, repeated pattern, candidate wording, scope, non-goals, and risk
+- duplication_conflict_report/v1 with already-covered rules, conflicts, and stale guidance
+- review_queue/v1 separating proposed, approved, rejected, deferred, and needs-evidence candidates
 
 Safety rules:
 
-- An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence.
-- Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+- Do not silently mutate skills, prompts, AGENTS.md, docs, memory, or catalog data from a distillation result.
+- Do not promote one-off preferences, weak anecdotes, or stale traces into global rules.
+- Keep observed sources, inferred principles, candidate wording, review state, and implementation patches separate.
 
 ## Harness Discipline
 
@@ -114,12 +121,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `agent-ops-review`.
+Preferred harness for this skill: `rules-distill`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill agent-ops-review --harness agent-ops-review --status started
+omh runtime record --skill rules-distill --harness rules-distill --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

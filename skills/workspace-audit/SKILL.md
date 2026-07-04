@@ -1,42 +1,42 @@
 ---
-name: operating-rhythm
-description: [omh] Hermes Operating Rhythm workflow: meeting minutes, scrum/sprint records, retros, decisions, and follow-up history.
+name: workspace-audit
+description: [omh] Hermes Workspace Audit workflow: map repository, skill, prompt, plugin, MCP, hook, config, and runtime surfaces before strengthening or operating OMH.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, operations]
     category: operations
-    phase: rhythm-history
+    phase: workspace-audit
     role: operator
-    quality_tier: operations-gated
+    quality_tier: workspace-audit-gated
 ---
 
-# Operating Rhythm
+# Workspace Audit
 
-This is a Hermes-native `operating-rhythm` workflow skill.
+This is a Hermes-native `workspace-audit` workflow skill.
 
 ## Why This Exists
 
-`operating-rhythm` exists so recurring operating work has durable minutes, decisions, and follow-up history without pretending a meeting outcome was observed.
+`workspace-audit` gives OMH an ECC-inspired but OMH-native front door for understanding a large agent workspace before strengthening it, without turning inventory into hidden mutation or runtime proof.
 
 ## Do Not Use When
 
-- The user only needs a one-off meeting agenda before the meeting; use `meeting-brief`.
-- The request is a weekly status/risk summary rather than cadence history; use `ops-review`.
-- The user asks for report packaging, PPT outline, or reliability evidence review.
+- The user already named a concrete implementation task with files and acceptance criteria; use the coding handoff or delivery workflow.
+- The request is local OMH installation health only; use `doctor`.
+- The request is a source acquisition or current web lookup; use `source-finder` or `web-research`.
 
 ## Examples
 
 Good example:
 
-- Prompt: operating-rhythm 회의록 히스토리 관리하고 스크럼 스프린트 회고를 정리해줘.
-- Expected behavior: Create a prepared operating record with cadence, decisions, action items, and not-evidence markers for missing observed notes.
-- Why: The request is about recurring operating history, not a generic agenda or code handoff.
+- Prompt: workspace-audit OMH에 스킬/프롬프트/플러그인 표면이 어디 비어있는지 먼저 점검해줘.
+- Expected behavior: Prepare workspace_audit_plan/v1, observed surface_inventory/v1, gap matrix, redacted config findings, and downstream workflow recommendation.
+- Why: The user asks for repo/workspace capability strengthening based on observed local surfaces.
 
 Bad example:
 
-- Prompt: operating-rhythm implement the action items from the retro.
-- Expected behavior: Route implementation to a plan or selected executor/runtime handoff after action items are accepted.
-- Why: Operating records can capture follow-ups, but implementation is a separate observed work stream.
+- Prompt: workspace-audit 발견한 config 파일을 바로 고치고 secret 값도 출력해줘.
+- Expected behavior: Refuse secret disclosure, keep the audit read-only, and prepare a separate remediation handoff if needed.
+- Why: Workspace audit is inventory and risk mapping, not unsafe config mutation or secret extraction.
 
 ## Completion Checklist
 
@@ -53,7 +53,7 @@ Bad example:
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.
 - Product context: OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, show status, and hand off with observed evidence boundaries.
-- Current lane: **Research and company ops** (`source-finder`, `web-research`, `best-practice-research`, `autoresearch-goal`, `research-brief`, `strategy-brief`, `feedback-triage`, `research-department`, `+5 more`) - source-backed research, customer signals, product operations, and briefing workflows.
+- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`, `voice-operator`, `+11 more`) - scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review.
 - If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
 - Cross-skill context: For every OMH skill: match intent to a lane; name adjacent workflows; generic tool can render or execute is not a dismissal.
 - Generic-tool checkpoint: image->img-summary; frontend->frontend/visual-qa; paper->paper-learning; file->materials-package; search->web-research; audit->workspace-audit/production-audit; verify->verification-gate; code->ultraprocess.
@@ -63,50 +63,57 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should prepare or maintain recurring operating records such as meetings, scrums, sprint plans, retrospectives, decisions, and follow-ups.
+Use when Hermes should inspect the local repo/workspace/operator surface and produce a safe inventory, risk map, and gap list before planning, routing, or feature strengthening.
 
-    Strong routing signals: `operating-rhythm`, `operating rhythm`, `meeting minutes`, `meeting history`, `scrum record`, `sprint planning`, `sprint review`, `sprint retrospective`, `retro history`, `decision log`, `action item history`, `회의록 관리`, `회의 히스토리`, `운영 리듬`, `스크럼`, `스프린트 회고`, `결정 기록`, `액션 아이템`
+    Strong routing signals: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`, `skill inventory`, `prompt inventory`, `plugin inventory`, `mcp inventory`, `hook inventory`, `config audit`, `what are we missing`, `audit this repo`, `레포 감사`, `워크스페이스 감사`, `설정 감사`, `스킬 인벤토리`
 
 ## Catalog Metadata
 
 Category: `operations`
-Phase: `rhythm-history`
+Phase: `workspace-audit`
 Hermes role: `operator`
-Quality tier: `operations-gated`
+Quality tier: `workspace-audit-gated`
 
 Quality bar:
 
-- Name cadence, audience, time window, known notes, and missing evidence before producing a record.
-- Separate agenda/templates from observed minutes, decisions, and action items.
-- Record follow-up ownership only when supplied or explicitly mark it unknown.
+- Name the audit scope, root, exclusions, and downstream decision before inspecting.
+- Separate discovered surfaces, inferred relationships, missing evidence, risks, and candidate fixes.
+- Rank gaps by user impact, operational risk, and reviewability rather than by file count.
+- Route code changes, setup repair, security fixes, or skill updates into later explicit workflows.
 
 Handoff policy:
 
-Keep cadence records, minutes scaffolds, decisions, and follow-up history in Hermes; delegate implementation only from separately accepted action items.
+Keep the audit as Hermes-retained local evidence gathering. Prepare executor handoff only for later code changes, and record file reads, tool availability, config checks, and runtime observations only when observed.
 
 Required inputs:
 
-- cadence or meeting type
-- audience or participants
-- time window
-- source notes or explicit missing-notes boundary
+- workspace or repo root
+- audit scope: repo, skills, prompts, plugins, MCP/tools, hooks, config, docs, runtime artifacts
+- known constraints such as no secrets, no network, or read-only mode
+- desired downstream decision or strengthening goal
 
 Expected outputs:
 
-- operation artifact
-- decision log
-- action item history
-- observed/prepared boundary
+- workspace_audit_plan/v1
+- surface_inventory/v1
+- capability_gap_matrix/v1
+- config_security_findings/v1
+- downstream_workflow_recommendation/v1
+- not-evidence boundary
 
 Artifact expectations:
 
-- operation_artifact/v1 under .omh/operations when a wrapper or CLI records it
+- workspace_audit_plan/v1 with target root, scopes, exclusions, and read-only boundary
+- surface_inventory/v1 with repo, skill, prompt, plugin, MCP/tool, hook, config, docs, and runtime surfaces when observed
+- capability_gap_matrix/v1 with missing, duplicate, stale, risky, and high-leverage strengthening candidates
+- redacted config_security_findings/v1 when secrets, permissions, or external integrations are mentioned
 
 Safety rules:
 
-- Do not treat a prepared record as proof that the meeting or scrum happened.
-- Do not mark decisions or action items accepted without supplied notes or owner acknowledgement.
-- Keep implementation follow-ups separate from operating history.
+- Do not mutate repo files, installed skills, prompts, configs, plugins, MCP servers, hooks, secrets, or runtime state from the audit lane.
+- Never print secret values; record only redacted key names, file paths, and risk categories.
+- Do not claim a surface exists, is loaded, or is reachable unless file, CLI, wrapper, or supplied evidence was observed.
+- Keep audit findings separate from implementation, setup repair, security remediation, or skill mutation.
 
 ## Harness Discipline
 
@@ -116,12 +123,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `operating-rhythm`.
+Preferred harness for this skill: `workspace-audit`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill operating-rhythm --harness operating-rhythm --status started
+omh runtime record --skill workspace-audit --harness workspace-audit --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

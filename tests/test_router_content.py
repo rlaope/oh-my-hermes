@@ -246,6 +246,11 @@ class RouterContentTests(unittest.TestCase):
             "img-summary",
             "frontend",
             "visual-qa",
+            "workspace-audit",
+            "production-audit",
+            "verification-gate",
+            "agent-evaluation",
+            "rules-distill",
             "automation-blueprint",
             "reliability-review",
             "idea-to-deploy",
@@ -358,6 +363,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["img-summary"].next_action, "prepare_visual_prompt_card")
         self.assertEqual(recommend_module._SKILL_POLICIES["frontend"].next_action, "prepare_frontend_handoff")
         self.assertEqual(recommend_module._SKILL_POLICIES["visual-qa"].next_action, "prepare_visual_qa")
+        self.assertEqual(recommend_module._SKILL_POLICIES["workspace-audit"].next_action, "prepare_workspace_audit")
+        self.assertEqual(recommend_module._SKILL_POLICIES["production-audit"].next_action, "prepare_production_audit")
+        self.assertEqual(recommend_module._SKILL_POLICIES["verification-gate"].next_action, "prepare_verification_gate")
+        self.assertEqual(recommend_module._SKILL_POLICIES["agent-evaluation"].next_action, "prepare_agent_evaluation")
+        self.assertEqual(recommend_module._SKILL_POLICIES["rules-distill"].next_action, "prepare_rules_distillation")
         self.assertEqual(recommend_module._SKILL_POLICIES["paper-learning"].next_action, "prepare_paper_learning")
         self.assertEqual(recommend_module._SKILL_POLICIES["source-finder"].next_action, "prepare_source_finder_plan")
         self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
@@ -483,6 +493,11 @@ class RouterContentTests(unittest.TestCase):
                 "design-quality-gate",
                 "frontend",
                 "visual-qa",
+                "workspace-audit",
+                "production-audit",
+                "verification-gate",
+                "agent-evaluation",
+                "rules-distill",
                 "scheduled-ops-blueprint",
                 "reliability-review",
                 "app-delivery-loop",
@@ -760,6 +775,76 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("dual_oracle_visual_review/v1", templates["visual-qa"].content)
         self.assertIn("fresh rendered evidence", templates["visual-qa"].content)
         self.assertIn("Preferred harness for this skill: `visual-qa`", templates["visual-qa"].content)
+
+    def test_ecc_inspired_operator_skill_contracts_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+        expected = {
+            "workspace-audit": {
+                "category": "operations",
+                "phase": "workspace-audit",
+                "quality_tier": "workspace-audit-gated",
+                "output": "surface_inventory/v1",
+                "ladder": "capability_gap_matrix_prepared",
+                "action": "prepare_workspace_audit",
+                "template": "config_security_findings/v1",
+            },
+            "production-audit": {
+                "category": "review",
+                "phase": "production-readiness",
+                "quality_tier": "production-readiness-gated",
+                "output": "readiness_matrix/v1",
+                "ladder": "release_gate_verdict_recorded",
+                "action": "prepare_production_audit",
+                "template": "rollback_and_monitoring_plan/v1",
+            },
+            "verification-gate": {
+                "category": "verification",
+                "phase": "verification-gate",
+                "quality_tier": "verification-gated",
+                "output": "verification_matrix/v1",
+                "ladder": "claim_verdict_recorded",
+                "action": "prepare_verification_gate",
+                "template": "observed_check_results/v1",
+            },
+            "agent-evaluation": {
+                "category": "operations",
+                "phase": "agent-evaluation",
+                "quality_tier": "agent-eval-gated",
+                "output": "task_benchmark_set/v1",
+                "ladder": "selection_recommendation_recorded",
+                "action": "prepare_agent_evaluation",
+                "template": "run_result_matrix/v1",
+            },
+            "rules-distill": {
+                "category": "knowledge",
+                "phase": "rules-distillation",
+                "quality_tier": "rules-distillation-gated",
+                "output": "principle_candidate_set/v1",
+                "ladder": "review_state_recorded",
+                "action": "prepare_rules_distillation",
+                "template": "duplication_conflict_report/v1",
+            },
+        }
+
+        for name, contract in expected.items():
+            with self.subTest(name=name):
+                self.assertIn(name, definitions)
+                self.assertIn(name, harnesses)
+                self.assertIn(name, templates)
+                self.assertEqual(primary_harness_for_skill(name), name)
+                self.assertEqual(definitions[name].category, contract["category"])
+                self.assertEqual(definitions[name].phase, contract["phase"])
+                self.assertEqual(definitions[name].quality_tier, contract["quality_tier"])
+                self.assertIn(contract["output"], definitions[name].expected_outputs)
+                self.assertIn(contract["output"], harnesses[name].expected_outputs)
+                self.assertIn(contract["ladder"], harnesses[name].evidence_ladder)
+                self.assertIn(contract["action"], harnesses[name].wrapper_actions)
+                self.assertIn(contract["action"], VISIBLE_ACTIONS)
+                self.assertIn(contract["template"], templates[name].content)
+                self.assertIn(f"Preferred harness for this skill: `{name}`", templates[name].content)
+                self.assertIn("not_observed", templates[name].content)
 
     def test_paper_learning_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
@@ -1362,7 +1447,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`web-research`", readme)
         self.assertIn("`idea-to-deploy`", readme)
         self.assertIn("`workflow-learning`", readme)
-        self.assertIn("**+41** more built-in skills", readme)
+        self.assertIn("**+46** more built-in skills", readme)
         self.assertIn("Plan and decide", readme)
         self.assertIn("Learn and gather", readme)
         self.assertIn("Create materials and visuals", readme)

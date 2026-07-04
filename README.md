@@ -127,7 +127,7 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
   workflows into traces, evals, review queues, regression cases, and patch
   proposals.
 
-**+41** more built-in skills are included for operations, research, materials,
+**+46** more built-in skills are included for operations, research, materials,
 review, release, and workflow-support lanes.
 
 The full skill catalog is larger. These 7 are the representative modes to

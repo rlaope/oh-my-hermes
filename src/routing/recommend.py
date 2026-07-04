@@ -195,6 +195,61 @@ _SKILL_POLICIES = {
             "visual_diff_evidence/v1, dual_oracle_visual_review/v1, CJK/text checks, and a PASS/REVISE/BLOCK verdict."
         ),
     ),
+    "workspace-audit": RecommendationPolicy(
+        next_action="prepare_workspace_audit",
+        evidence_boundary=(
+            "A workspace audit is not setup repair, config mutation, secret validation, runtime load, skill mutation, "
+            "executor dispatch, implementation, or verification evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare workspace_audit_plan/v1, observed surface_inventory/v1, capability_gap_matrix/v1, "
+            "redacted config_security_findings/v1, and a downstream workflow recommendation."
+        ),
+    ),
+    "production-audit": RecommendationPolicy(
+        next_action="prepare_production_audit",
+        evidence_boundary=(
+            "A production audit is not deploy, live traffic, security scan, monitoring health, support readiness, "
+            "incident closure, rollback execution, implementation, CI, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare readiness_matrix/v1, release_gate_verdict/v1, rollback_and_monitoring_plan/v1, "
+            "risk_register/v1, and missing production evidence before GO/HOLD/BLOCK."
+        ),
+    ),
+    "verification-gate": RecommendationPolicy(
+        next_action="prepare_verification_gate",
+        evidence_boundary=(
+            "A verification gate plan is not command execution, test pass, review, CI, DCO, merge-readiness, "
+            "or merge evidence; stale or missing checks block PASS."
+        ),
+        wrapper_guidance=(
+            "Prepare verification_matrix/v1, record observed_check_results/v1 only from fresh outputs, "
+            "and issue claim_verdict/v1 as PASS, HOLD, or BLOCK."
+        ),
+    ),
+    "agent-evaluation": RecommendationPolicy(
+        next_action="prepare_agent_evaluation",
+        evidence_boundary=(
+            "An agent evaluation design is not proof that an executor ran, edited code, used tools, incurred cost, "
+            "passed tests, or completed review."
+        ),
+        wrapper_guidance=(
+            "Prepare agent_eval_plan/v1, task_benchmark_set/v1, observed run_result_matrix/v1 when available, "
+            "scorecard/v1, and scenario-specific selection_recommendation/v1."
+        ),
+    ),
+    "rules-distill": RecommendationPolicy(
+        next_action="prepare_rules_distillation",
+        evidence_boundary=(
+            "A rules distillation candidate is not approved guidance, skill mutation, prompt mutation, docs change, "
+            "memory mutation, implementation, verification, review, CI, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare rules_distillation_plan/v1, principle_candidate_set/v1, duplication_conflict_report/v1, "
+            "review_queue/v1, and approved_patch_handoff/v1 only after review approval."
+        ),
+    ),
     "workflow-learning": RecommendationPolicy(
         next_action="audit_learning_readiness",
         evidence_boundary=(

@@ -172,6 +172,36 @@ VISIBLE_ACTIONS = (
     "record_visual_oracle_review",
     "record_cjk_layout_findings",
     "record_visual_qa_verdict",
+    "prepare_workspace_audit",
+    "show_workspace_audit",
+    "record_workspace_inventory",
+    "record_config_security_findings",
+    "record_surface_gap",
+    "prepare_production_audit",
+    "show_production_audit",
+    "record_release_gate",
+    "record_production_signal",
+    "record_rollback_path",
+    "prepare_verification_gate",
+    "show_verification_gate",
+    "record_build_check",
+    "record_lint_check",
+    "record_test_check",
+    "record_security_check",
+    "record_ci_check",
+    "record_verification_verdict",
+    "prepare_agent_evaluation",
+    "show_agent_evaluation",
+    "record_eval_task",
+    "record_eval_run",
+    "record_eval_metric",
+    "record_eval_verdict",
+    "prepare_rules_distillation",
+    "show_rules_distillation",
+    "record_rule_candidate",
+    "approve_rule_candidate",
+    "reject_rule_candidate",
+    "prepare_rule_patch",
     "dispatch_to_workflow",
     "run_hermes_research",
     "prepare_strategy_brief",
@@ -312,7 +342,17 @@ _CONTEXT_PRIMER_GROUPS = (
     {
         "id": "coding_and_runtime",
         "label": "Coding and runtime tracking",
-        "workflows": ("idea-to-deploy", "agent-ops-review", "code-review", "ops-observability-card"),
+        "workflows": (
+            "idea-to-deploy",
+            "workspace-audit",
+            "production-audit",
+            "verification-gate",
+            "agent-evaluation",
+            "rules-distill",
+            "agent-ops-review",
+            "code-review",
+            "ops-observability-card",
+        ),
         "use_when": "The user wants Hermes to prepare coding handoffs, explain executor status, review evidence, CI, or merge readiness.",
     },
 )
@@ -482,6 +522,26 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "or docs/specs. Search, download, extraction, license checks, verification, and downstream processing stay unobserved "
         "until a wrapper or user records evidence."
     ),
+    "workspace-audit": (
+        "I will prepare a read-only workspace audit: repo, skill, prompt, plugin, MCP/tool, hook, config, docs, "
+        "and runtime surfaces, with secrets redacted and mutations routed to a separate follow-up workflow."
+    ),
+    "production-audit": (
+        "I will prepare a production-readiness audit: release scope, build/test/CI/security evidence, observability, "
+        "rollback, support, and a GO/HOLD/BLOCK verdict. Deploy and live-health claims still need observed evidence."
+    ),
+    "verification-gate": (
+        "I will prepare the verification gate: required checks, observed result freshness, generated-output checks, "
+        "CI/DCO boundaries, and a PASS/HOLD/BLOCK claim verdict before completion or merge claims."
+    ),
+    "agent-evaluation": (
+        "I will prepare a fair executor evaluation: tasks, fixtures, rubric, budgets, isolation, observed run matrix, "
+        "and scenario-specific recommendation instead of anecdotal agent ranking."
+    ),
+    "rules-distill": (
+        "I will distill repeated workflow lessons into reviewed rule candidates with source references, duplicates, "
+        "conflicts, and approval state. Nothing mutates skills, prompts, docs, or memory until approved and implemented."
+    ),
     "materials-package": (
         "I will shape this into a material package: target files, source inputs, missing data, outline, "
         "generation owner, and QA checks. I will not claim the files exist until export evidence is observed."
@@ -584,6 +644,11 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_research_department_plan": ("prepare_research_department_plan", "Prepare research flow"),
     "prepare_source_finder_plan": ("prepare_source_finder_plan", "Prepare sources"),
     "prepare_paper_learning": ("prepare_paper_learning", "Prepare paper learning"),
+    "prepare_workspace_audit": ("prepare_workspace_audit", "Prepare audit"),
+    "prepare_production_audit": ("prepare_production_audit", "Audit production"),
+    "prepare_verification_gate": ("prepare_verification_gate", "Prepare gate"),
+    "prepare_agent_evaluation": ("prepare_agent_evaluation", "Prepare eval"),
+    "prepare_rules_distillation": ("prepare_rules_distillation", "Distill rules"),
     "prepare_material_package": ("prepare_material_package", "Prepare package"),
     "prepare_design_quality_gate": ("prepare_design_quality_gate", "Prepare design gate"),
     "prepare_frontend_handoff": ("prepare_frontend_handoff", "Prepare frontend"),
