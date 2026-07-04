@@ -569,10 +569,12 @@ stdio JSON-RPC and exposes only `omh_status`, `omh_recommend`, and `omh_probe`;
 `omh_probe` can include parity and capability-roadmap projections when a host
 requests those advisory views.
 `omh mcp config-recipe --host ...` can print host-shaped config snippets for
-Claude Code, Codex, OpenCode, Cursor, and generic MCP hosts, but it does not
-mutate those host files. The bridge does not expose arbitrary shell commands,
-call external APIs, dispatch coding executors, or prove a specific Hermes host
-loaded the bridge.
+Claude Code, Codex, OpenCode, Cursor, and generic MCP hosts. `omh setup
+--with-mcp --mcp-host ...` can write supported host config files directly when
+the operator explicitly requests MCP host setup. That written config remains
+configuration evidence only. The bridge does not expose arbitrary shell
+commands, call external APIs, dispatch coding executors, or prove a specific
+Hermes host loaded the bridge.
 When a host or wrapper does observe bridge load or use, it can record
 `omh_mcp_host_session/v1` through `omh mcp observe-host`; observed records
 require an evidence reference and remain host-load/session evidence only.

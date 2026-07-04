@@ -6,6 +6,7 @@ from pathlib import Path
 from ..capability_roadmap import build_capability_gap_roadmap
 from ..config_adapter import external_dirs, read_config
 from ..local_store import read_jsonl_objects
+from ..mcp.host_config import mcp_host_config_entry_present
 from ..parity import build_parity_matrix
 from ..paths import OmhPaths
 from ..plugin_observations import (
@@ -218,6 +219,70 @@ def _mcp_bridge_runtime_capability(paths: OmhPaths) -> Capability:
     )
 
 
+def _mcp_host_config_capability(paths: OmhPaths, markers: list[Path]) -> Capability:
+    state, error = read_state_result(paths)
+    evidence_paths = list(markers)
+    if error:
+        return _marker_capability(
+            "mcp_host_config",
+            evidence_paths,
+            "MCP host config exists, but OMH could not read setup state",
+            f"No MCP host config detected by file probe; setup state could not be read: {error}",
+        )
+    host_configs: list[dict] = []
+    last_setup = state.get("last_setup") if isinstance(state, dict) else None
+    mcp_setup = last_setup.get("mcp_setup") if isinstance(last_setup, dict) else None
+    setup_host_config = mcp_setup.get("host_config") if isinstance(mcp_setup, dict) else None
+    durable_host_config = state.get("last_mcp_host_config_install") if isinstance(state, dict) else None
+    for candidate in (setup_host_config, durable_host_config):
+        if isinstance(candidate, dict) and candidate not in host_configs:
+            host_configs.append(candidate)
+    for host_config in host_configs:
+        path_value = str(host_config.get("path", "")).strip()
+        if path_value:
+            evidence_paths.append(Path(path_value).expanduser())
+        status = str(host_config.get("status", ""))
+        host = str(host_config.get("host", "generic"))
+        written = bool(host_config.get("written", False))
+        config_path = Path(path_value).expanduser() if path_value else None
+        exists = bool(config_path and config_path.exists())
+        entry_present = bool(config_path and mcp_host_config_entry_present(host, config_path))
+        if status in {"updated", "unchanged"} and exists:
+            if not entry_present:
+                return Capability(
+                    "mcp_host_config",
+                    "missing",
+                    path_value,
+                    f"OMH setup reported a {host} MCP host config, but the current file no longer contains the OMH entry",
+                )
+            return Capability(
+                "mcp_host_config",
+                "available",
+                path_value,
+                f"OMH setup prepared the {host} MCP host config at {path_value}; host load/session evidence remains separate",
+            )
+        if status.startswith("dry_run"):
+            return Capability(
+                "mcp_host_config",
+                "unverified",
+                path_value,
+                f"OMH setup planned the {host} MCP host config, but dry-run did not write it",
+            )
+        if written and not exists:
+            return Capability(
+                "mcp_host_config",
+                "missing",
+                path_value,
+                f"OMH setup reported a {host} MCP host config write, but the file is no longer present",
+            )
+    return _marker_capability(
+        "mcp_host_config",
+        evidence_paths,
+        "MCP host config exists, but OMH has not verified a Hermes MCP extension contract or host load event",
+        "No Hermes MCP host config detected by setup state or file probe",
+    )
+
+
 def _mcp_host_session_capability(paths: OmhPaths) -> Capability:
     records, errors = read_jsonl_objects(paths.runtime_mcp_host_sessions_path)
     evidence = str(paths.runtime_mcp_host_sessions_path)
@@ -399,14 +464,7 @@ def probe_capabilities(paths: OmhPaths, *, include_parity: bool = False, include
     capabilities.append(_mcp_bridge_runtime_capability(paths))
     mcp_host_session = _mcp_host_session_capability(paths)
     capabilities.append(mcp_host_session)
-    capabilities.append(
-        _marker_capability(
-            "mcp_host_config",
-            mcp_markers,
-            "MCP host config exists, but OMH has not verified a Hermes MCP extension contract or host load event",
-            "No Hermes MCP host config detected by file probe",
-        )
-    )
+    capabilities.append(_mcp_host_config_capability(paths, mcp_markers))
     capabilities.append(
         Capability(
             "native_skill_metadata",
