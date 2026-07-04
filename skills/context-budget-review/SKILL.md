@@ -1,42 +1,42 @@
 ---
-name: achievements
-description: [omh] Hermes achievements observation workflow: summarize hermes-achievements badges, tiers, recent unlocks, and progress from local plugin artifacts.
+name: context-budget-review
+description: [omh] Hermes Context Budget Review workflow: plan compact context, token/cost budgets, summarization checkpoints, and overflow recovery before long agent work.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, observability]
     category: observability
-    phase: telemetry-card
+    phase: context-budget-review
     role: tracker
-    quality_tier: workflow-surface-gated
+    quality_tier: context-budget-gated
 ---
 
-# Achievements
+# Context Budget Review
 
-This is a Hermes-native `achievements` workflow skill.
+This is a Hermes-native `context-budget-review` workflow skill.
 
 ## Why This Exists
 
-`achievements` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`context-budget-review` ports ECC's context-budget and token-budget instincts into OMH as a compactness gate that protects long-running work without redefining success around a smaller task.
 
 ## Do Not Use When
 
-- The request is already handled by a narrower explicit skill with stronger evidence.
-- The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
-- The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- The user asks for live token/cost telemetry; use `ops-observability-card`.
+- The user asks to continue a loopable goal; use `loop` unless budget planning is the explicit blocker.
+- The task is a short one-step answer with no meaningful context risk.
 
 ## Examples
 
 Good example:
 
-- Prompt: achievements show my unlocked badges and what is closest to the next tier.
-- Expected behavior: Produce `show_achievements_summary` with required context, wrapper actions, and not-evidence boundaries.
-- Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Prompt: context-budget-review 이 장기 PR 작업에서 어떤 맥락을 꼭 유지하고 언제 요약해야 하는지 잡아줘.
+- Expected behavior: Prepare context_budget_plan/v1, must_keep_context_pack/v1, checkpoint plan, risk register, and overflow recovery route.
+- Why: The request is about preserving context quality during long-running agent work.
 
 Bad example:
 
-- Prompt: achievements recompute my session history and grant the missing badges.
-- Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
-- Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Prompt: context-budget-review 토큰 아끼려고 원래 목표를 더 작은 목표로 바꿔줘.
+- Expected behavior: Reject goal shrinking and instead compact context while preserving the full objective and evidence gaps.
+- Why: Budget review optimizes context handling, not the user's requested end state.
 
 ## Completion Checklist
 
@@ -63,49 +63,57 @@ Bad example:
 
 ## Use When
 
-Use when the user asks which achievements or badges they unlocked, badge progress or tiers, recent unlocks, or wants an achievements section prepared for a report.
+Use before long-running research, coding, review, or multi-agent work when context, token, cost, or summary drift could break quality.
 
-    Strong routing signals: `achievements`, `achievement`, `badges`, `badge`, `my badges`, `show achievements`, `achievement summary`, `unlocked badges`, `badge progress`, `achievement tier`, `recent unlocks`, `badge share card`, `업적`, `배지`, `뱃지`, `도전과제`, `업적 요약`, `実績`, `バッジ`, `成就`, `徽章`
+    Strong routing signals: `context-budget-review`, `context budget review`, `context budget`, `token budget review`, `token budget`, `prompt budget`, `context compaction`, `compact context`, `too much context`, `summarization checkpoint`, `budget this task`, `컨텍스트 예산`, `토큰 예산`, `컨텍스트 압축`, `요약 체크포인트`
 
 ## Catalog Metadata
 
 Category: `observability`
-Phase: `telemetry-card`
+Phase: `context-budget-review`
 Hermes role: `tracker`
-Quality tier: `workflow-surface-gated`
+Quality tier: `context-budget-gated`
 
 Quality bar:
 
-- Name the user-facing workflow objective, required context, next action, and stop condition.
-- Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
-- Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Name must-keep context before summarizing or delegating long work.
+- Separate durable requirements, volatile status, file refs, verification evidence, and open blockers.
+- Define checkpoint cadence, overflow recovery, and continuity verification.
+- Use bounded copy while preserving the full objective and evidence gaps.
 
 Handoff policy:
 
-Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+Keep budget design and status narration in Hermes. Provider billing, exact token usage, runtime compaction, and executor cost evidence require observed wrapper, runtime, or provider data.
 
 Required inputs:
 
-- user request
-- target context
-- delivery or status expectation
-- known missing evidence
+- task or workflow scope
+- expected duration, artifacts, and handoff surfaces
+- available context sources and must-keep facts
+- token, cost, latency, or message-size constraints when known
 
 Expected outputs:
 
-- hermes_achievements_observation/v1 summary or badge list
-- recent unlocks and progress hints
-- next action
-- prepared-vs-observed boundary
+- context_budget_plan/v1
+- must_keep_context_pack/v1
+- summarization_checkpoint_plan/v1
+- budget_risk_register/v1
+- overflow_recovery_route/v1
+- not-evidence boundary
 
 Artifact expectations:
 
-- hermes_achievements_observation/v1 metadata-only payload from `omh achievements` when recorded
+- context_budget_plan/v1 with scope, max visible context, source priority, discard rules, and checkpoint cadence
+- must_keep_context_pack/v1 with durable facts, file refs, decisions, PR/CI state, and blocked assumptions
+- summarization_checkpoint_plan/v1 with when to compact, what to preserve, and how to verify continuity
+- budget_risk_register/v1 separating estimated cost/token/latency risk from provider-observed truth
 
 Safety rules:
 
-- An achievements card reflects only locally observed hermes-achievements plugin artifacts; it is not a session-history rescan, badge recomputation, unlock proof beyond those artifacts, or productivity evidence.
-- Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+- Do not claim provider billing, exact token counts, or runtime compaction occurred without observed evidence.
+- Do not drop user requirements, file paths, PR state, verification gaps, or explicit constraints during compaction.
+- Keep estimated budget risk, observed usage, checkpoint summaries, and completion evidence separate.
+- Do not use budget pressure as a reason to shrink the user's requested end state.
 
 ## Harness Discipline
 
@@ -115,12 +123,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `coding-handling`.
+Preferred harness for this skill: `context-budget-review`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill achievements --harness coding-handling --status started
+omh runtime record --skill context-budget-review --harness context-budget-review --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

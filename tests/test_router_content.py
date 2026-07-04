@@ -251,6 +251,9 @@ class RouterContentTests(unittest.TestCase):
             "verification-gate",
             "agent-evaluation",
             "rules-distill",
+            "codebase-onboarding",
+            "context-budget-review",
+            "security-safety-review",
             "automation-blueprint",
             "reliability-review",
             "idea-to-deploy",
@@ -368,6 +371,15 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["verification-gate"].next_action, "prepare_verification_gate")
         self.assertEqual(recommend_module._SKILL_POLICIES["agent-evaluation"].next_action, "prepare_agent_evaluation")
         self.assertEqual(recommend_module._SKILL_POLICIES["rules-distill"].next_action, "prepare_rules_distillation")
+        self.assertEqual(recommend_module._SKILL_POLICIES["codebase-onboarding"].next_action, "prepare_codebase_onboarding")
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["context-budget-review"].next_action,
+            "prepare_context_budget_review",
+        )
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["security-safety-review"].next_action,
+            "prepare_security_safety_review",
+        )
         self.assertEqual(recommend_module._SKILL_POLICIES["paper-learning"].next_action, "prepare_paper_learning")
         self.assertEqual(recommend_module._SKILL_POLICIES["source-finder"].next_action, "prepare_source_finder_plan")
         self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
@@ -498,6 +510,9 @@ class RouterContentTests(unittest.TestCase):
                 "verification-gate",
                 "agent-evaluation",
                 "rules-distill",
+                "codebase-onboarding",
+                "context-budget-review",
+                "security-safety-review",
                 "scheduled-ops-blueprint",
                 "reliability-review",
                 "app-delivery-loop",
@@ -535,6 +550,20 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("visual_qa_observed_when_available", design_line)
         self.assertIn("record_visual_qa", design_line)
         self.assertIn("prepare_frontend_handoff", design_line)
+        codebase_line = next(
+            line for line in harness_registry.splitlines() if line.startswith("- `codebase-onboarding`:")
+        )
+        self.assertIn("first_task_runway_prepared", codebase_line)
+        self.assertIn("record_first_task_runway", codebase_line)
+        context_budget_line = next(
+            line for line in harness_registry.splitlines() if line.startswith("- `context-budget-review`:")
+        )
+        self.assertIn("overflow_recovery_route_prepared", context_budget_line)
+        security_safety_line = next(
+            line for line in harness_registry.splitlines() if line.startswith("- `security-safety-review`:")
+        )
+        self.assertIn("safe_action_policy_recorded", security_safety_line)
+        self.assertIn("prepare_remediation_handoff", security_safety_line)
         self.assertNotIn("Inputs:", harness_registry)
         self.assertNotIn("Quality Bar:", harness_registry)
 
@@ -850,6 +879,33 @@ class RouterContentTests(unittest.TestCase):
                 "ladder": "review_state_recorded",
                 "action": "prepare_rules_distillation",
                 "template": "duplication_conflict_report/v1",
+            },
+            "codebase-onboarding": {
+                "category": "planning",
+                "phase": "codebase-onboarding",
+                "quality_tier": "onboarding-gated",
+                "output": "repo_map/v1",
+                "ladder": "first_task_runway_prepared",
+                "action": "prepare_codebase_onboarding",
+                "template": "first_task_runway/v1",
+            },
+            "context-budget-review": {
+                "category": "observability",
+                "phase": "context-budget-review",
+                "quality_tier": "context-budget-gated",
+                "output": "must_keep_context_pack/v1",
+                "ladder": "overflow_recovery_route_prepared",
+                "action": "prepare_context_budget_review",
+                "template": "budget_risk_register/v1",
+            },
+            "security-safety-review": {
+                "category": "review",
+                "phase": "security-safety-review",
+                "quality_tier": "security-safety-gated",
+                "output": "threat_surface_map/v1",
+                "ladder": "safe_action_policy_recorded",
+                "action": "prepare_security_safety_review",
+                "template": "prompt_injection_risk_review/v1",
             },
         }
 

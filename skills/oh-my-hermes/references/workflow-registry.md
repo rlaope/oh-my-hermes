@@ -9,10 +9,10 @@ The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery 
 - `handoff-guide`: `ralph`, `ultragoal`, `ultraprocess`, `team`, `ultrawork`, `ai-slop-cleaner`, `executor-runtime-readiness`
 - `memory-keeper`: `rules-distill`, `wiki`, `memory-curation-review`
 - `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`
-- `planner`: `loop`, `deep-interview`, `plan`, `ralplan`
+- `planner`: `loop`, `deep-interview`, `codebase-onboarding`, `plan`, `ralplan`
 - `researcher`: `web-research`, `source-finder`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
-- `reviewer`: `production-audit`, `verification-gate`, `ultraqa`, `code-review`, `ask`
-- `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `achievements`, `agent-ops-review`, `workflow-learning`
+- `reviewer`: `production-audit`, `verification-gate`, `security-safety-review`, `ultraqa`, `code-review`, `ask`
+- `tracker`: `context-budget-review`, `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `achievements`, `agent-ops-review`, `workflow-learning`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
 
 ## Automatic Routing Registry
@@ -47,6 +47,9 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `verification-gate`: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`
 - `agent-evaluation`: `agent-evaluation`, `agent evaluation`, `agent eval`, `agent benchmark`, `executor evaluation`, `executor benchmark`, `compare agents`
 - `rules-distill`: `rules-distill`, `rules distill`, `distill rules`, `rule distillation`, `principle distill`, `skill principles`, `extract agent rules`
+- `codebase-onboarding`: `codebase-onboarding`, `codebase onboarding`, `repo onboarding`, `repository onboarding`, `codebase tour`, `code tour`, `new repo orientation`
+- `context-budget-review`: `context-budget-review`, `context budget review`, `context budget`, `token budget review`, `token budget`, `prompt budget`, `context compaction`
+- `security-safety-review`: `security-safety-review`, `security safety review`, `ai coding safety`, `agent safety review`, `prompt injection review`, `tool permission review`, `secret exposure review`
 - `automation-blueprint`: `automation-blueprint`, `scheduled ops`, `scheduled operation`, `scheduled operations`, `automation blueprint`, `cron blueprint`, `cron-ready`
 - `reliability-review`: `reliability-review`, `reliability review`, `incident review`, `incident postmortem`, `postmortem`, `post-mortem`, `slo review`
 - `idea-to-deploy`: `idea-to-deploy`, `idea to deploy`, `from idea to deploy`, `plan to deploy`, `idea to launch`, `ship this idea`, `ship this feature`
