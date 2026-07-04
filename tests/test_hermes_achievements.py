@@ -195,6 +195,102 @@ class ObserveAchievementsTests(HermesAchievementsTestCase):
         self.assertIn("Boundary:", first)
 
 
+class AgentProfileTests(HermesAchievementsTestCase):
+    def test_profile_derived_from_observed_badges(self) -> None:
+        self._write_list_shaped_artifacts()
+
+        profile = observe_achievements(self.paths)["agent_profile"]
+
+        self.assertEqual(profile["schema_version"], "hermes_achievements_agent_profile/v1")
+        self.assertTrue(profile["observed"])
+        self.assertEqual(profile["derivation"], "derived_from_observed_badges")
+        self.assertEqual(profile["strengths"], ["debugging", "lifestyle"])
+        self.assertEqual(profile["gaps"], ["toolchain"])
+        self.assertEqual(profile["top_tier"], "gold")
+        self.assertFalse(profile["source"]["agent_summary_observed"])
+
+    def test_upstream_agent_summary_takes_precedence(self) -> None:
+        self._write_list_shaped_artifacts()
+        self._write_plugin_file(
+            "agent_summary.json",
+            {
+                "strengths": ["autonomous toolchains", "error recovery"],
+                "gaps": ["skill usage", "model variety"],
+                "top_tier": "diamond",
+                "unlocked_count": 12,
+                "total_count": 60,
+            },
+        )
+
+        profile = observe_achievements(self.paths)["agent_profile"]
+
+        self.assertEqual(profile["derivation"], "upstream_agent_summary")
+        self.assertEqual(profile["strengths"], ["autonomous toolchains", "error recovery"])
+        self.assertEqual(profile["gaps"], ["skill usage", "model variety"])
+        self.assertEqual(profile["top_tier"], "diamond")
+        self.assertEqual(profile["unlocked_count"], 12)
+        self.assertEqual(profile["total_count"], 60)
+        self.assertTrue(profile["source"]["agent_summary_observed"])
+
+    def test_profile_without_artifacts_is_unobserved(self) -> None:
+        profile = observe_achievements(self.paths)["agent_profile"]
+
+        self.assertFalse(profile["observed"])
+        self.assertEqual(profile["derivation"], "none")
+        self.assertEqual(profile["strengths"], [])
+        self.assertEqual(profile["gaps"], [])
+
+
+class ContextBriefInjectionTests(HermesAchievementsTestCase):
+    def test_context_brief_includes_profile_when_observed(self) -> None:
+        self._write_list_shaped_artifacts()
+
+        status, stdout, stderr = run_cli([*self._base_args(), "context", "brief", "--json"])
+
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(stdout)
+        profile = payload["achievements_profile"]
+        self.assertEqual(profile["derivation"], "derived_from_observed_badges")
+        self.assertEqual(profile["gaps"], ["toolchain"])
+        self.assertIn("advisory", profile["routing_rule"])
+
+    def test_context_brief_omits_profile_without_artifacts(self) -> None:
+        status, stdout, stderr = run_cli([*self._base_args(), "context", "brief", "--json"])
+
+        self.assertEqual(status, 0, stderr)
+        self.assertNotIn("achievements_profile", json.loads(stdout))
+
+
+class AchievementsCapabilityTests(HermesAchievementsTestCase):
+    def test_capability_section_lists_achievement_evidence(self) -> None:
+        status, stdout, stderr = run_cli(["capabilities", "list", "--section", "achievement_evidence", "--json"])
+
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(stdout)
+        sections = {section["section"]: section["ids"] for section in payload["sections"]}
+        self.assertEqual(sections["achievement_evidence"], ["hermes_achievements_observation"])
+
+    def test_capability_inspect_returns_contract(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["capabilities", "inspect", "hermes_achievements_observation", "--section", "achievements", "--json"]
+        )
+
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(stdout)
+        capability = payload["capability"]
+        self.assertEqual(capability["schema_version"], "achievement_evidence_contract/v1")
+        self.assertEqual(capability["claim_kind"], "observed_badge_metadata")
+        self.assertIn("productivity", capability["not_evidence_for"])
+
+
+class AchievementsRoutingTests(HermesAchievementsTestCase):
+    def test_route_hint_matches_badge_questions(self) -> None:
+        status, stdout, stderr = run_cli(["chat", "route-hint", "show my unlocked badges", "--json"])
+
+        self.assertEqual(status, 0, stderr)
+        self.assertIn('"workflow": "achievements"', stdout)
+
+
 class AchievementsCliTests(HermesAchievementsTestCase):
     def test_summary_json_reports_not_observed_without_artifacts(self) -> None:
         status, stdout, stderr = run_cli([*self._base_args(), "achievements", "summary", "--json"])

@@ -12,7 +12,7 @@ The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery 
 - `planner`: `loop`, `deep-interview`, `plan`, `ralplan`
 - `researcher`: `web-research`, `source-finder`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `ultraqa`, `code-review`, `ask`
-- `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `agent-ops-review`, `workflow-learning`
+- `tracker`: `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `ops-observability-card`, `achievements`, `agent-ops-review`, `workflow-learning`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
 
 ## Automatic Routing Registry
@@ -67,6 +67,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `voice-operator`: `voice-operator`, `voice operator`, `voice-first`, `mobile command`, `short command`, `spoken request`, `accessibility`
 - `toolbelt-readiness`: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `connector readiness`, `needed mcp`, `api credential`, `missing cli`
 - `ops-observability-card`: `ops-observability-card`, `observability card`, `operations command board`, `ops command board`, `service quality board`, `service quality`, `external metric provider`
+- `achievements`: `achievements`, `achievement`, `badges`, `badge`, `my badges`, `show achievements`, `achievement summary`
 - `agent-ops-review`: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`
 - `workflow-learning`: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `store route review`, `memory skill wiki routing`, `learning trace`
 

@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 
 from ..context import build_context_brief
-from .common import _action_label, _print_json, _wants_json
+from ..workflows.hermes_achievements import observe_achievements
+from .common import _action_label, _paths, _print_json, _wants_json
 
 
 def cmd_context_brief(args: argparse.Namespace) -> int:
@@ -13,12 +14,24 @@ def cmd_context_brief(args: argparse.Namespace) -> int:
         source=args.source,
         max_hints=args.limit,
         include_prompt_context=args.prompt_context,
+        achievements_profile=_achievements_profile(args),
     )
     if _wants_json(args):
         _print_json(payload)
     else:
         _print_context_brief_summary(payload)
     return 0
+
+
+def _achievements_profile(args: argparse.Namespace) -> dict[str, object] | None:
+    try:
+        observation = observe_achievements(_paths(args))
+    except OSError:
+        return None
+    profile = observation.get("agent_profile")
+    if isinstance(profile, dict) and profile.get("observed"):
+        return profile
+    return None
 
 
 def _print_context_brief_summary(payload: dict[str, object]) -> None:
@@ -42,6 +55,11 @@ def _print_context_brief_summary(payload: dict[str, object]) -> None:
             f"{_action_label(str(catalog_question.get('next_action', '')))} "
             f"via {catalog_question.get('recommended_tool')}"
         )
+    profile = payload.get("achievements_profile")
+    if isinstance(profile, dict):
+        strengths = ", ".join(str(item) for item in list(profile.get("strengths", []))[:3]) or "none observed"
+        gaps = ", ".join(str(item) for item in list(profile.get("gaps", []))[:3]) or "none observed"
+        print(f"  Achievements profile: strengths {strengths}; gaps {gaps} (advisory only)")
     print("Workflow lanes")
     lanes = payload.get("lanes", [])
     if isinstance(lanes, list):

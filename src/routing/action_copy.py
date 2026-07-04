@@ -39,6 +39,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "prepare_operating_record": "preparing an operating record",
     "prepare_operating_workflow": "preparing an operating workflow",
     "prepare_ops_observability_card": "preparing an ops observability card",
+    "show_achievements_summary": "showing the achievements summary",
     "prepare_ops_review": "preparing an ops review",
     "prepare_paper_learning": "preparing a paper-learning explainer",
     "prepare_quality_performance_and_usability_review": "preparing a quality and usability review",

@@ -6,6 +6,7 @@ from ..system.local_store import read_json_object_result, utc_now
 from ..system.paths import OmhPaths
 
 ACHIEVEMENTS_OBSERVATION_SCHEMA_VERSION = "hermes_achievements_observation/v1"
+ACHIEVEMENTS_AGENT_PROFILE_SCHEMA_VERSION = "hermes_achievements_agent_profile/v1"
 ACHIEVEMENTS_EVIDENCE_BOUNDARY = (
     "Achievements are observed from local hermes-achievements plugin artifacts only. "
     "OMH does not rescan Hermes session history and does not claim unlocks it did not read."
@@ -37,6 +38,7 @@ def observe_achievements(paths: OmhPaths, *, recent_limit: int = 5) -> dict[str,
     badge_list = sorted(badges.values(), key=lambda badge: (badge["category"], badge["name"], badge["badge_id"]))
 
     observed = snapshot is not None or state is not None
+    summary = _summary(badge_list, snapshot or {})
     return {
         "schema_version": ACHIEVEMENTS_OBSERVATION_SCHEMA_VERSION,
         "generated_at": utc_now(),
@@ -50,9 +52,10 @@ def observe_achievements(paths: OmhPaths, *, recent_limit: int = 5) -> dict[str,
             "state_observed": state is not None,
         },
         "errors": errors,
-        "summary": _summary(badge_list, snapshot or {}),
+        "summary": summary,
         "badges": badge_list,
         "recent_unlocks": _recent_unlocks(badge_list, limit=recent_limit),
+        "agent_profile": _agent_profile(paths, summary, observed=observed),
         "evidence_boundary": ACHIEVEMENTS_EVIDENCE_BOUNDARY,
         "privacy": "metadata_only",
     }
@@ -299,6 +302,58 @@ def _last_scan_at(snapshot: dict[str, Any]) -> str:
         if value:
             return value
     return ""
+
+
+def _agent_profile(paths: OmhPaths, summary: dict[str, Any], *, observed: bool) -> dict[str, Any]:
+    upstream, upstream_error = read_json_object_result(paths.hermes_achievements_agent_summary_path)
+    profile: dict[str, Any] = {
+        "schema_version": ACHIEVEMENTS_AGENT_PROFILE_SCHEMA_VERSION,
+        "observed": observed or upstream is not None,
+        "derivation": "none",
+        "strengths": [],
+        "gaps": [],
+        "top_tier": summary.get("top_tier", ""),
+        "unlocked_count": summary.get("unlocked_count", 0),
+        "total_count": summary.get("total_count", 0),
+        "source": {
+            "agent_summary_path": str(paths.hermes_achievements_agent_summary_path),
+            "agent_summary_observed": upstream is not None,
+            "agent_summary_error": upstream_error or "",
+        },
+        "routing_rule": (
+            "Use strengths and gaps only as advisory workflow-suggestion context; "
+            "never present them as productivity scores or execution evidence."
+        ),
+    }
+    if upstream is not None:
+        profile["derivation"] = "upstream_agent_summary"
+        profile["strengths"] = _bounded_labels(upstream.get("strengths"))
+        profile["gaps"] = _bounded_labels(upstream.get("gaps"))
+        top_tier = _normalize_tier(upstream.get("top_tier"))
+        if top_tier:
+            profile["top_tier"] = top_tier
+        for key in ("unlocked_count", "total_count"):
+            value = upstream.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                profile[key] = value
+        return profile
+    if observed:
+        categories = summary.get("categories", [])
+        if isinstance(categories, list):
+            unlocked = [entry for entry in categories if isinstance(entry, dict) and entry.get("unlocked", 0) > 0]
+            locked = [entry for entry in categories if isinstance(entry, dict) and entry.get("unlocked", 0) == 0]
+            unlocked.sort(key=lambda entry: (-int(entry.get("unlocked", 0)), str(entry.get("category", ""))))
+            profile["derivation"] = "derived_from_observed_badges"
+            profile["strengths"] = [str(entry.get("category", "")) for entry in unlocked[:5]]
+            profile["gaps"] = [str(entry.get("category", "")) for entry in locked[:5]]
+    return profile
+
+
+def _bounded_labels(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    labels = [str(item).strip() for item in value if isinstance(item, (str, int, float))]
+    return [label for label in labels if label][:5]
 
 
 def _recent_unlocks(badges: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:

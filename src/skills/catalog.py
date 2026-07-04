@@ -651,6 +651,7 @@ _CODING_INTENT_BY_SKILL.update(
         "voice-operator": "planning",
         "toolbelt-readiness": "planning",
         "ops-observability-card": "planning",
+        "achievements": "planning",
         "agent-ops-review": "planning",
         "workflow-learning": "planning",
     }
@@ -1931,7 +1932,12 @@ _DEFINITIONS = [
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Keep report narrative, sectioning, and Markdown/JSON outline packaging in Hermes; do not require reliability evidence unless the user asks for a reliability review.",
         required_inputs=("audience", "reporting period or scope", "supplied facts", "missing data or assumptions"),
-        expected_outputs=("report package", "PPT-ready Markdown or JSON outline", "assumptions and missing-input list"),
+        expected_outputs=(
+            "report package",
+            "PPT-ready Markdown or JSON outline",
+            "assumptions and missing-input list",
+            "optional achievements badge section sourced from `omh achievements export --format md` when requested",
+        ),
         artifact_expectations=("operation_artifact/v1 report-package artifact when a wrapper or CLI records it",),
         safety_rules=(
             "Do not claim source review completion from a prepared report package.",
@@ -3433,6 +3439,52 @@ _FEATURE_SURFACE_SKILLS = (
         ),
     ),
     _feature_surface_skill(
+        "achievements",
+        "Hermes achievements observation workflow: summarize hermes-achievements badges, tiers, recent unlocks, and progress from local plugin artifacts.",
+        (
+            "achievements",
+            "achievement",
+            "badges",
+            "badge",
+            "my badges",
+            "show achievements",
+            "achievement summary",
+            "unlocked badges",
+            "badge progress",
+            "achievement tier",
+            "recent unlocks",
+            "badge share card",
+            "업적",
+            "배지",
+            "뱃지",
+            "도전과제",
+            "업적 요약",
+            "実績",
+            "バッジ",
+            "成就",
+            "徽章",
+        ),
+        "Use when the user asks which achievements or badges they unlocked, badge progress or tiers, recent unlocks, or wants an achievements section prepared for a report.",
+        category="observability",
+        phase="telemetry-card",
+        next_action="show_achievements_summary",
+        boundary=(
+            "An achievements card reflects only locally observed hermes-achievements plugin artifacts; it is not a "
+            "session-history rescan, badge recomputation, unlock proof beyond those artifacts, or productivity evidence."
+        ),
+        good_prompt="achievements show my unlocked badges and what is closest to the next tier.",
+        bad_prompt="achievements recompute my session history and grant the missing badges.",
+        expected_outputs=(
+            "hermes_achievements_observation/v1 summary or badge list",
+            "recent unlocks and progress hints",
+            "next action",
+            "prepared-vs-observed boundary",
+        ),
+        artifact_expectations=(
+            "hermes_achievements_observation/v1 metadata-only payload from `omh achievements` when recorded",
+        ),
+    ),
+    _feature_surface_skill(
         "agent-ops-review",
         "Hermes agent ops review workflow: help managers inspect AI-agent progress, blockers, quality gates, and throughput levers.",
         (
@@ -3660,6 +3712,14 @@ _SURFACE_EXPOSURES = (
         True,
         "primary_workflow_skill",
         "Use as an installed Hermes workflow skill when operators need an evidence-bounded command-board for telemetry, supplied metric-provider payloads, and service-quality gaps.",
+    ),
+    SurfaceExposure(
+        "achievements",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when the user asks about unlocked hermes-achievements badges, tiers, recent unlocks, or badge progress.",
     ),
     SurfaceExposure(
         "agent-ops-review",

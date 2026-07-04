@@ -235,6 +235,10 @@ class OmhPaths:
         return self.hermes_achievements_plugin_dir / "state.json"
 
     @property
+    def hermes_achievements_agent_summary_path(self) -> Path:
+        return self.hermes_achievements_plugin_dir / "agent_summary.json"
+
+    @property
     def hermes_agents_dir(self) -> Path:
         return self.hermes_home / "agents"
 

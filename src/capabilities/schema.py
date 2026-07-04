@@ -18,6 +18,7 @@ CAPABILITY_SECTIONS = (
     "orchestration_patterns",
     "playbooks",
     "tool_requirements",
+    "achievement_evidence",
     "evidence_boundaries",
 )
 
@@ -36,6 +37,10 @@ CAPABILITY_SECTION_ALIASES = {
     "tool": "tool_requirements",
     "tools": "tool_requirements",
     "tooling": "tool_requirements",
+    "achievement": "achievement_evidence",
+    "achievements": "achievement_evidence",
+    "badge": "achievement_evidence",
+    "badges": "achievement_evidence",
     "boundary": "evidence_boundaries",
     "boundaries": "evidence_boundaries",
     "evidence": "evidence_boundaries",
