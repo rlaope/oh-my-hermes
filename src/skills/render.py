@@ -155,10 +155,10 @@ def _harness_summary(harness: HarnessDefinition) -> str:
         "remediation_handoff",
     )
     evidence_ladder = " -> ".join(
-        f"`{step}`" for step in _compact_sequence(harness.evidence_ladder, 5, keep_contains=keep_markers)
+        f"`{step}`" for step in _compact_sequence(harness.evidence_ladder, 4, keep_contains=keep_markers)
     )
     wrapper_actions = ", ".join(
-        f"`{action}`" for action in _compact_sequence(harness.wrapper_actions, 5, keep_contains=keep_markers)
+        f"`{action}`" for action in _compact_sequence(harness.wrapper_actions, 4, keep_contains=keep_markers)
     )
     return (
         f"- `{harness.name}`: {harness.purpose} Tier `{harness.quality_tier}`. "

@@ -540,6 +540,18 @@ _SKILL_POLICIES.update(
                 "record only observed runtime/source/review evidence."
             ),
         ),
+        "agent-debug": RecommendationPolicy(
+            next_action="prepare_agent_debug",
+            evidence_boundary=(
+                "An agent debug report is not executor reset, hidden state mutation, tool repair, "
+                "implementation, review, verification, CI, merge-readiness, merge, or proof that future loops are fixed."
+            ),
+            wrapper_guidance=(
+                "Prepare agent_debug_report/v1: capture the failure pattern, recent tool or command loop, "
+                "goal drift, context pressure, environment assumptions, root-cause hypothesis, smallest safe "
+                "recovery action, and whether evidence improved or the run remains blocked."
+            ),
+        ),
     }
 )
 _CATEGORY_POLICIES = {

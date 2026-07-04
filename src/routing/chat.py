@@ -470,6 +470,23 @@ _SPECIFIC_CAPABILITY_FAST_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "agent-debug",
+        (
+            "agent debug",
+            "agent debugging",
+            "agent introspection",
+            "agent self-debug",
+            "self-debug",
+            "self debugging",
+            "looping agent",
+            "agent loop failure",
+            "agent run stuck",
+            "tool retry loop",
+            "repeated tool calls",
+            "agent context drift",
+        ),
+    ),
+    (
         "skill-scout",
         (
             "skill scout",
@@ -2079,6 +2096,7 @@ def _specific_capability_fast_path_markers(skill: str, matched: tuple[str, ...])
     guard_by_skill = {
         "img-summary": "guard:img_summary",
         "paper-learning": "guard:paper_learning",
+        "agent-debug": "guard:agent_debug",
         "skill-scout": "guard:skill_scout",
         "skill-health": "guard:skill_health",
     }
@@ -2614,6 +2632,58 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear harness/session/MCP inventory request; prepare the drift-aware inventory without scoring every workflow.",
     ),
     (
+        "context-budget-review",
+        (
+            "context-budget-review",
+            "context budget review",
+            "context budget",
+            "token budget review",
+            "token budget",
+            "prompt budget",
+            "context compaction",
+            "compact context",
+            "summarization checkpoint",
+            "budget this task",
+            "컨텍스트 예산",
+            "토큰 예산",
+            "컨텍스트 압축",
+            "요약 체크포인트",
+        ),
+        "operator_surface_fast_path:context_budget",
+        "Clear context or token budget request; prepare the context budget review without treating token burn as agent failure.",
+    ),
+    (
+        "agent-debug",
+        (
+            "agent-debug",
+            "agent debug",
+            "agent debugging",
+            "agent introspection",
+            "agent self-debug",
+            "agent failure capture",
+            "agent run stuck",
+            "agent loop failure",
+            "agent looping",
+            "looping agent",
+            "tool retry loop",
+            "repeated tool calls",
+            "repeating the same command",
+            "agent context drift",
+            "prompt drift",
+            "agent token burn",
+            "agent burning tokens",
+            "에이전트 디버그",
+            "에이전트 실패",
+            "에이전트 반복 실패",
+            "반복 실패",
+            "도구 반복",
+            "컨텍스트 드리프트",
+            "토큰 낭비",
+        ),
+        "operator_surface_fast_path:agent_debug",
+        "Clear stuck, looping, or drifting agent-run request; prepare failure capture and contained recovery guidance without hidden reset.",
+    ),
+    (
         "skill-scout",
         (
             "skill-scout",
@@ -2859,6 +2929,10 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:executor_runtime_readiness",)
     if skill == "harness-session-inventory":
         return ("guard:harness_session_inventory",)
+    if skill == "context-budget-review":
+        return ("guard:context_budget",)
+    if skill == "agent-debug":
+        return ("guard:agent_debug",)
     if skill == "skill-scout":
         return ("guard:skill_scout",)
     if skill == "skill-health":

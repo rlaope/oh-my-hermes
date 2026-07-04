@@ -168,6 +168,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "production-audit",
             "automation-blueprint",
             "agent-ops-review",
+            "agent-debug",
             "agent-evaluation",
             "rules-distill",
             "context-budget-review",

@@ -71,6 +71,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "ops-observability-card": ("workflow_skill", True),
     "achievements": ("workflow_skill", True),
     "agent-ops-review": ("workflow_skill", True),
+    "agent-debug": ("workflow_skill", True),
     "skill-scout": ("workflow_skill", True),
     "skill-health": ("workflow_skill", True),
     "workflow-learning": ("workflow_skill", True),
@@ -388,6 +389,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["skill-health"].next_action, "prepare_skill_health")
         self.assertIn("skill_portfolio_health_dashboard/v1", recommend_module._SKILL_POLICIES["skill-health"].wrapper_guidance)
         self.assertIn("future routing is fixed", recommend_module._SKILL_POLICIES["skill-health"].evidence_boundary)
+        self.assertEqual(recommend_module._SKILL_POLICIES["agent-debug"].next_action, "prepare_agent_debug")
+        self.assertIn("agent_debug_report/v1", recommend_module._SKILL_POLICIES["agent-debug"].wrapper_guidance)
+        self.assertIn("hidden state mutation", recommend_module._SKILL_POLICIES["agent-debug"].evidence_boundary)
         self.assertEqual(
             recommend_module._SKILL_POLICIES["context-budget-review"].next_action,
             "prepare_context_budget_review",
@@ -554,6 +558,7 @@ class RouterContentTests(unittest.TestCase):
                 "harness-session-inventory",
                 "ops-observability-card",
                 "agent-ops-review",
+                "agent-debug",
                 "skill-scout",
                 "skill-health",
                 "workflow-learning",
@@ -595,6 +600,11 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertIn("failure_signals_clustered_when_observed", skill_health_line)
         self.assertIn("record_skill_health_signal", skill_health_line)
+        agent_debug_line = next(
+            line for line in harness_registry.splitlines() if line.startswith("- `agent-debug`:")
+        )
+        self.assertIn("failure_state_captured", agent_debug_line)
+        self.assertIn("record_agent_failure_capture", agent_debug_line)
         context_budget_line = next(
             line for line in harness_registry.splitlines() if line.startswith("- `context-budget-review`:")
         )
@@ -987,6 +997,15 @@ class RouterContentTests(unittest.TestCase):
                 "ladder": "external_candidates_reviewed_when_observed",
                 "action": "prepare_skill_scout",
                 "template": "skill_adoption_decision_matrix/v1",
+            },
+            "agent-debug": {
+                "category": "operations",
+                "phase": "agent-debug",
+                "quality_tier": "workflow-surface-gated",
+                "output": "agent_debug_report/v1",
+                "ladder": "failure_state_captured",
+                "action": "prepare_agent_debug",
+                "template": "contained_recovery_action/v1",
             },
             "context-budget-review": {
                 "category": "observability",
