@@ -1056,6 +1056,8 @@ _CUSTOMER_SYMPTOM_REPORT_PHRASES = (
     "customers report",
     "customer says",
     "customer reports",
+    "customer feedback says",
+    "customer feedback reports",
     "users say",
     "users report",
     "user says",

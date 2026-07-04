@@ -1166,6 +1166,18 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(feedback_hint["primary_workflow"], "feedback-triage")
         self.assertEqual(feedback_hint["hints"][0]["id"], "customer_signal")
 
+        feedback_click_path_decision = route_chat_message(
+            "Customer feedback says the checkout click path is broken.",
+            source="discord",
+            limit=5,
+        )
+        self.assertEqual(feedback_click_path_decision["selected_skill"], "feedback-triage")
+        self.assertEqual(feedback_click_path_decision["recommendations"][0]["skill"], "feedback-triage")
+
+        feedback_click_path_hint = awareness_route_hint("Customer feedback says the checkout click path is broken.")
+        self.assertEqual(feedback_click_path_hint["primary_workflow"], "feedback-triage")
+        self.assertEqual(feedback_click_path_hint["hints"][0]["id"], "customer_signal")
+
         click_path_hint = awareness_route_hint("Click path audit the new dashboard buttons before release.")
         self.assertEqual(click_path_hint["primary_workflow"], "visual-qa")
         self.assertEqual(click_path_hint["hints"][0]["id"], "visual_qa_gate")

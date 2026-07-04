@@ -193,6 +193,8 @@ _CUSTOMER_SYMPTOM_REPORT_FAST_PATH_TERMS = (
     "customers report",
     "customer says",
     "customer reports",
+    "customer feedback says",
+    "customer feedback reports",
     "users say",
     "users report",
     "user says",
