@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -57,13 +57,24 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url || steps.deployment_final_retry.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
         continue-on-error: true
+      - name: Wait before Pages deploy retry
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 60
       - name: Retry deploy after transient Pages failure
         if: steps.deployment.outcome == 'failure'
         id: deployment_retry
+        uses: actions/deploy-pages@v5
+        continue-on-error: true
+      - name: Wait before final Pages deploy retry
+        if: steps.deployment.outcome == 'failure' && steps.deployment_retry.outcome == 'failure'
+        run: sleep 120
+      - name: Final retry deploy after transient Pages failure
+        if: steps.deployment.outcome == 'failure' && steps.deployment_retry.outcome == 'failure'
+        id: deployment_final_retry
         uses: actions/deploy-pages@v5
