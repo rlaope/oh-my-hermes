@@ -46,13 +46,13 @@ def _skill_capability(
         "preferred_usage": exposure["preferred_usage"],
         "compatibility_alias": exposure["compatibility_alias"],
         "projections": exposure["projections"],
-        "triggers": list(definition.triggers),
+        "triggers": _bounded_list(definition.triggers, 12),
         "required_inputs": list(definition.required_inputs),
-        "expected_outputs": list(definition.expected_outputs),
+        "expected_outputs": _bounded_list(definition.expected_outputs, 8),
         "artifact_expectations": list(definition.artifact_expectations),
-        "safety_rules": list(definition.safety_rules),
+        "safety_rules": _bounded_list(definition.safety_rules, 6),
         "quality_tier": definition.quality_tier,
-        "quality_bar": list(definition.quality_bar),
+        "quality_bar": _bounded_list(definition.quality_bar, 6),
         "handoff_policy": definition.handoff_policy,
         "delegation_boundary": definition.delegation_boundary,
         "awareness_lane": lane_id,
@@ -62,13 +62,13 @@ def _skill_capability(
         "workflow_context_rule": str(awareness.get("all_skill_context_rule") or ""),
         "chat_rule": str(awareness.get("chat_rule") or ""),
         "fallback_rule": str(awareness.get("fallback_rule") or ""),
-        "cross_lane_examples": awareness_lane_examples(lane_id),
-        "do_not_use_when": list(definition.do_not_use_when),
+        "cross_lane_examples": _capability_lane_examples(lane_id, definition.name),
+        "do_not_use_when": _bounded_list(definition.do_not_use_when, 4),
         "orchestration_eligibility": _orchestration_eligibility(definition),
         "tool_requirements": {
             "derivation_status": "partial",
             "required_tools": [],
-            "fallback": "No concrete tool requirement declared.",
+            "fallback": "No declared tool requirement.",
         },
         "evidence_boundary": _skill_evidence_boundary(definition),
     }
@@ -97,6 +97,10 @@ def _orchestration_eligibility(definition: SkillDefinition) -> list[str]:
     return sorted(patterns)
 
 
+def _bounded_list(items: tuple[str, ...], limit: int) -> list[str]:
+    return list(items[:limit])
+
+
 def _awareness_lane_by_skill(awareness: dict[str, object]) -> dict[str, dict[str, object]]:
     lane_by_skill: dict[str, dict[str, object]] = {}
     lanes = awareness.get("lanes", [])
@@ -116,13 +120,22 @@ def _awareness_lane_by_skill(awareness: dict[str, object]) -> dict[str, dict[str
 def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_use_for: str) -> str:
     if lane_label and lane_use_for:
         return (
-            f"Use `{definition.name}` when the request fits {lane_label}: {lane_use_for}. "
-            "If the request crosses lanes, name the adjacent OMH workflow first."
+            f"Use `{definition.name}` for {lane_label}: {lane_use_for}. "
+            "Name adjacent workflow for cross-lane requests."
         )
     return (
-        f"Use `{definition.name}` when the request matches its catalog purpose: {definition.use_when}. "
-        "If the request crosses lanes, name the adjacent OMH workflow first."
+        f"Use `{definition.name}` for its catalog purpose: {definition.use_when}. "
+        "Name adjacent workflow for cross-lane requests."
     )
+
+
+def _capability_lane_examples(lane_id: str, skill_id: str) -> list[str]:
+    examples = awareness_lane_examples(lane_id)
+    if skill_id == "loop":
+        return examples[:1]
+    if skill_id == "img-summary":
+        return examples[:1]
+    return examples[:2]
 
 
 def _skill_evidence_boundary(definition: SkillDefinition) -> str:
