@@ -1643,6 +1643,55 @@ _TOOLBELT_READINESS_TOKENS = _normalized_token_set(
         "설정",
     }
 )
+_HARNESS_SESSION_INVENTORY_PHRASES = (
+    "harness-session-inventory",
+    "harness session inventory",
+    "session inventory",
+    "session adapter",
+    "session adapters",
+    "harness sessions",
+    "mcp inventory",
+    "mcp config inventory",
+    "mcp drift",
+    "harness drift",
+    "connector drift",
+    "worktree inventory",
+    "worktree lifecycle",
+    "operator inventory",
+    "control pane inventory",
+    "codex session inventory",
+    "claude code session inventory",
+    "세션 인벤토리",
+    "하네스 세션",
+    "하네스 드리프트",
+    "mcp 인벤토리",
+    "mcp 설정 드리프트",
+    "워크트리 인벤토리",
+    "커넥터 드리프트",
+)
+_HARNESS_SESSION_INVENTORY_TOKENS = _normalized_token_set(
+    {
+        "inventory",
+        "drift",
+        "adapter",
+        "adapters",
+        "session",
+        "sessions",
+        "harness",
+        "harnesses",
+        "mcp",
+        "connector",
+        "connectors",
+        "worktree",
+        "worktrees",
+        "인벤토리",
+        "드리프트",
+        "세션",
+        "하네스",
+        "워크트리",
+        "커넥터",
+    }
+)
 _MATERIALS_PACKAGE_PHRASES = (
     "ppt and pdf",
     "pdf and ppt",
@@ -3026,6 +3075,15 @@ TOOLBELT_READINESS_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; missing tool, connector, credential, or image generator setup should show readiness gaps before claiming workflow execution.",
     activation_status="active",
 )
+HARNESS_SESSION_INVENTORY_GUARD = RoutingGuardRule(
+    id="harness_session_inventory_before_toolbelt_or_observability",
+    rule="Cross-harness session, MCP inventory, connector drift, or worktree inventory requests should route to harness-session-inventory before setup readiness.",
+    matched_label="guard:harness_session_inventory",
+    preferred_skills=("harness-session-inventory",),
+    score_boost=56,
+    why="Matched guard/trigger metadata; cross-harness session, MCP config, connector, or worktree drift should be inventoried before runtime or setup claims.",
+    activation_status="active",
+)
 MATERIALS_PACKAGE_GUARD = RoutingGuardRule(
     id="materials_package_before_report_or_clarify",
     rule="Multi-format document, spreadsheet, deck, or PDF packaging requests should route to materials-package before generic report planning.",
@@ -3432,6 +3490,8 @@ def _active_routing_guard_rules_cached(
         rules.append(DOCTOR_HEALTH_GUARD)
     if _executor_runtime_readiness_guard_applies(normalized_query, query_tokens):
         rules.append(EXECUTOR_RUNTIME_READINESS_GUARD)
+    if _harness_session_inventory_guard_applies(normalized_query, query_tokens):
+        rules.append(HARNESS_SESSION_INVENTORY_GUARD)
     if _toolbelt_readiness_guard_applies(normalized_query, query_tokens):
         rules.append(TOOLBELT_READINESS_GUARD)
     if _voice_operator_guard_applies(normalized_query, query_tokens):
@@ -5300,6 +5360,8 @@ def _executor_readiness_check_requested(normalized_query: str, query_tokens: set
 
 
 def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _harness_session_inventory_guard_applies(normalized_query, query_tokens):
+        return False
     if _executor_readiness_check_requested(normalized_query, query_tokens):
         return False
     if _doctor_health_guard_applies(normalized_query, query_tokens):
@@ -5353,6 +5415,36 @@ def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[s
         ),
     )
     return tool_context and missing_or_setup
+
+
+def _harness_session_inventory_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _HARNESS_SESSION_INVENTORY_PHRASES):
+        return True
+    if not (_HARNESS_SESSION_INVENTORY_TOKENS & query_tokens):
+        return False
+    inventory_or_drift = _contains_phrase(
+        normalized_query,
+        ("inventory", "drift", "adapter", "lifecycle", "인벤토리", "드리프트"),
+    )
+    harness_context = _contains_phrase(
+        normalized_query,
+        (
+            "mcp",
+            "harness",
+            "session",
+            "connector",
+            "worktree",
+            "codex",
+            "claude code",
+            "hermes",
+            "wrapper",
+            "하네스",
+            "세션",
+            "커넥터",
+            "워크트리",
+        ),
+    )
+    return inventory_or_drift and harness_context
 
 
 def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

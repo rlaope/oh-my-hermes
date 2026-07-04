@@ -250,6 +250,7 @@ VISIBLE_ACTIONS = (
     "prepare_gateway_intent_card",
     "prepare_voice_operator_card",
     "prepare_toolbelt_readiness",
+    "prepare_harness_session_inventory",
     "prepare_ops_observability_card",
     "prepare_quality_performance_and_usability_review",
     "refresh_status",
@@ -695,6 +696,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_gateway_intent_card": ("prepare_gateway_intent_card", "Open gateway card"),
     "prepare_voice_operator_card": ("prepare_voice_operator_card", "Open voice card"),
     "prepare_toolbelt_readiness": ("prepare_toolbelt_readiness", "Check toolbelt"),
+    "prepare_harness_session_inventory": ("prepare_harness_session_inventory", "Open inventory"),
     "prepare_ops_observability_card": ("prepare_ops_observability_card", "Open observability"),
     "prepare_quality_performance_and_usability_review": (
         "prepare_quality_performance_and_usability_review",
@@ -1296,6 +1298,41 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "connector invocation",
             "workflow execution",
             "external service success",
+        ],
+    },
+    "harness-session-inventory": {
+        "kind": "harness_session_inventory",
+        "headline": "I can inventory sessions, MCP configs, and worktrees without inventing runtime proof.",
+        "body": (
+            "I will prepare a cross-harness inventory: Codex, Claude Code, Hermes, OpenCode, Cursor, wrapper sessions, "
+            "MCP host configs, connector entries, worktree roots, stale or drifted slots, and the next safe observation "
+            "step. Config files and prepared session records stay separate from host load, MCP tool-call, connector "
+            "availability, executor dispatch, worktree cleanup, merge-conflict resolution, and session progress."
+        ),
+        "phase": "harness_session_inventory_prepared",
+        "next_action": "prepare_harness_session_inventory",
+        "artifact_schema": "harness_session_inventory/v1",
+        "claim_boundary_suffix": "It is not host load, MCP tool-call, connector availability, executor dispatch, worktree cleanup, merge-conflict resolution, or session progress evidence.",
+        "actions": [
+            {"id": "prepare_harness_session_inventory", "label": "Open inventory", "style": "primary"},
+            {"id": "prepare_toolbelt_readiness", "label": "Check toolbelt", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "scope_harnesses_and_wrappers",
+            "redact_mcp_and_connector_configs",
+            "classify_sessions_as_observed_prepared_missing_or_stale",
+            "record_worktree_snapshot_when_available",
+            "report_drift_without_cleanup_or_runtime_claims",
+        ],
+        "evidence_not_observed": [
+            "host load",
+            "MCP tool-call",
+            "connector availability",
+            "executor dispatch",
+            "worktree cleanup",
+            "merge-conflict resolution",
+            "session progress",
         ],
     },
     "ops-observability-card": {

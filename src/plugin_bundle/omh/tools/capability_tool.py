@@ -173,6 +173,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "workflow-learning",
             "memory-curation-review",
             "achievements",
+            "harness-session-inventory",
             "ops-observability-card",
             "skill",
             "ask",
@@ -835,7 +836,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
 
 def _standalone_skill_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    if skill_id in {"loop", "img-summary"}:
+    if skill_id in {"loop", "img-summary", "harness-session-inventory"}:
         return examples[:1]
     return examples[:2]
 

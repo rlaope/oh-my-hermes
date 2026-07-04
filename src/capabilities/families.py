@@ -171,6 +171,7 @@ _WORKFLOW_FAMILY_OVERRIDES = {
     "gateway-intent-card": "operate_and_observe",
     "voice-operator": "operate_and_observe",
     "toolbelt-readiness": "operate_and_observe",
+    "harness-session-inventory": "operate_and_observe",
     "ops-observability-card": "operate_and_observe",
     "agent-ops-review": "operate_and_observe",
     "memory-curation-review": "operate_and_observe",

@@ -952,6 +952,10 @@ class ChatRouterTests(unittest.TestCase):
                 "agent-board",
             ),
             (
+                "inventory Codex Claude Code Hermes MCP configs and worktrees for drift",
+                "harness-session-inventory",
+            ),
+            (
                 "release before lunch, check risky parts from mobile.",
                 "voice-operator",
             ),
@@ -1896,6 +1900,17 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(metric_provider_cost[0]["skill"], "ops-observability-card")
         self.assertEqual(slo_dashboard[0]["skill"], "ops-observability-card")
 
+    def test_low_signal_inventory_words_do_not_open_harness_session_inventory(self) -> None:
+        for message in ("session", "inventory", "drift"):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                recommended_skills = {
+                    recommendation["skill"] for recommendation in recommend_skills(message, limit=10)
+                }
+
+            self.assertNotEqual(decision["selected_skill"], "harness-session-inventory")
+            self.assertNotIn("harness-session-inventory", recommended_skills)
+
     def test_natural_single_workflow_requests_use_fast_path_without_full_scoring(self) -> None:
         chat_router_impl._route_chat_message_cached.cache_clear()
         cases = (
@@ -1947,6 +1962,12 @@ class ChatRouterTests(unittest.TestCase):
                 "prepare_agent_board_card",
                 "operator_surface_fast_path:agent_board",
             ),
+            (
+                "MCP 설정 드리프트랑 세션 인벤토리 보여줘",
+                "harness-session-inventory",
+                "prepare_harness_session_inventory",
+                "operator_surface_fast_path:harness_inventory",
+            ),
         )
 
         with mock.patch.object(
@@ -1993,6 +2014,12 @@ class ChatRouterTests(unittest.TestCase):
                 "work progress",
                 "heartbeat",
                 "completion",
+            ),
+            "harness-session-inventory": (
+                "host load",
+                "MCP tool-call",
+                "connector availability",
+                "session progress",
             ),
             "ops-observability-card": (
                 "billing truth",
