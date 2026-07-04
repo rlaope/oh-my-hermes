@@ -67,6 +67,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "visual-qa": ("workflow_skill", True),
     "voice-operator": ("agent_context", False),
     "toolbelt-readiness": ("harness_only", False),
+    "harness-session-inventory": ("workflow_skill", True),
     "ops-observability-card": ("workflow_skill", True),
     "achievements": ("workflow_skill", True),
     "agent-ops-review": ("workflow_skill", True),
@@ -402,6 +403,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["voice-operator"].next_action, "prepare_voice_operator_card")
         self.assertEqual(recommend_module._SKILL_POLICIES["toolbelt-readiness"].next_action, "prepare_toolbelt_readiness")
         self.assertEqual(
+            recommend_module._SKILL_POLICIES["harness-session-inventory"].next_action,
+            "prepare_harness_session_inventory",
+        )
+        self.assertEqual(
             recommend_module._SKILL_POLICIES["ops-observability-card"].next_action,
             "prepare_ops_observability_card",
         )
@@ -533,6 +538,7 @@ class RouterContentTests(unittest.TestCase):
                 "deliverable-package",
                 "voice-operator",
                 "toolbelt-readiness",
+                "harness-session-inventory",
                 "ops-observability-card",
                 "agent-ops-review",
                 "workflow-learning",

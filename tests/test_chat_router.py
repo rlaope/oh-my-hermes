@@ -952,6 +952,10 @@ class ChatRouterTests(unittest.TestCase):
                 "agent-board",
             ),
             (
+                "inventory Codex Claude Code Hermes MCP configs and worktrees for drift",
+                "harness-session-inventory",
+            ),
+            (
                 "release before lunch, check risky parts from mobile.",
                 "voice-operator",
             ),
@@ -1947,6 +1951,12 @@ class ChatRouterTests(unittest.TestCase):
                 "prepare_agent_board_card",
                 "operator_surface_fast_path:agent_board",
             ),
+            (
+                "MCP 설정 드리프트랑 세션 인벤토리 보여줘",
+                "harness-session-inventory",
+                "prepare_harness_session_inventory",
+                "operator_surface_fast_path:harness_inventory",
+            ),
         )
 
         with mock.patch.object(
@@ -1993,6 +2003,12 @@ class ChatRouterTests(unittest.TestCase):
                 "work progress",
                 "heartbeat",
                 "completion",
+            ),
+            "harness-session-inventory": (
+                "host load",
+                "MCP tool-call",
+                "connector availability",
+                "session progress",
             ),
             "ops-observability-card": (
                 "billing truth",

@@ -131,11 +131,7 @@ def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_us
 
 def _capability_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    if skill_id == "loop":
-        return examples[:1]
-    if skill_id == "img-summary":
-        return examples[:1]
-    return examples[:2]
+    return examples[:1]
 
 
 def _skill_evidence_boundary(definition: SkillDefinition) -> str:

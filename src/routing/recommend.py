@@ -93,6 +93,56 @@ _RISKY_REFACTOR_FOLLOWUP_GUIDANCE_PREFIX = (
     "Treat this as a follow-up only after an accepted reviewed plan; do not present cleanup "
     "as the first action for risk-marked refactoring language. "
 )
+_HARNESS_SESSION_INVENTORY_INTENT_PHRASES = (
+    "harness-session-inventory",
+    "harness session inventory",
+    "session inventory",
+    "session adapter",
+    "session adapters",
+    "mcp inventory",
+    "mcp config inventory",
+    "mcp drift",
+    "harness drift",
+    "connector drift",
+    "worktree inventory",
+    "worktree lifecycle",
+    "operator inventory",
+    "control pane inventory",
+    "codex session inventory",
+    "claude code session inventory",
+    "세션 인벤토리",
+    "하네스 드리프트",
+    "mcp 인벤토리",
+    "mcp 설정 드리프트",
+    "워크트리 인벤토리",
+    "커넥터 드리프트",
+)
+_HARNESS_SESSION_INVENTORY_INTENT_TOKENS = frozenset(
+    {"inventory", "drift", "adapter", "adapters", "lifecycle", "인벤토리", "드리프트"}
+)
+_HARNESS_SESSION_INVENTORY_CONTEXT_TOKENS = frozenset(
+    {
+        "mcp",
+        "harness",
+        "harnesses",
+        "session",
+        "sessions",
+        "connector",
+        "connectors",
+        "worktree",
+        "worktrees",
+        "config",
+        "configs",
+        "codex",
+        "claude",
+        "hermes",
+        "wrapper",
+        "하네스",
+        "세션",
+        "커넥터",
+        "워크트리",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -417,6 +467,18 @@ _SKILL_POLICIES.update(
             next_action="prepare_toolbelt_readiness",
             evidence_boundary="A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
             wrapper_guidance="List required MCP/CLI/API/credential/connectors, observed availability, missing pieces, and setup or handoff next action.",
+        ),
+        "harness-session-inventory": RecommendationPolicy(
+            next_action="prepare_harness_session_inventory",
+            evidence_boundary=(
+                "A harness session inventory is not host load, MCP tool-call, connector availability, executor dispatch, "
+                "worktree cleanup, merge-conflict resolution, or session progress evidence."
+            ),
+            wrapper_guidance=(
+                "Build a redacted inventory across Codex, Claude Code, Hermes, OpenCode, Cursor, wrapper sessions, "
+                "MCP host configs, connector entries, and worktrees; report prepared, observed, stale, missing, "
+                "and drifted slots separately before any runtime or cleanup claim."
+            ),
         ),
         "ops-observability-card": RecommendationPolicy(
             next_action="prepare_ops_observability_card",
@@ -799,6 +861,12 @@ def _score_definition(
         )
     ):
         return None
+    if (
+        definition.name == "harness-session-inventory"
+        and explicit_skill != "harness-session-inventory"
+        and not _harness_session_inventory_recommendation_applies(normalized_query, query_tokens)
+    ):
+        return None
 
     for trigger_phrase in prepared.plain_trigger_phrases:
         if _phrase_match(normalized_query, trigger_phrase):
@@ -1011,6 +1079,14 @@ def _command_trigger_match(query: str, value: str) -> bool:
 
 def _phrase_match(query: str, value: str) -> bool:
     return bool(query and value and (query in value or value in query))
+
+
+def _harness_session_inventory_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if any(_phrase_match(normalized_query, phrase) for phrase in _HARNESS_SESSION_INVENTORY_INTENT_PHRASES):
+        return True
+    has_inventory_intent = bool(query_tokens & _HARNESS_SESSION_INVENTORY_INTENT_TOKENS)
+    has_harness_context = bool(query_tokens & _HARNESS_SESSION_INVENTORY_CONTEXT_TOKENS)
+    return has_inventory_intent and has_harness_context
 
 
 def _confidence(score: int) -> str:

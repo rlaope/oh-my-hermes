@@ -1,22 +1,22 @@
 ---
-name: workflow-learning
-description: [omh] Hermes workflow learning workflow: classify and review self-improvement store routes as an auxiliary review lane before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.
+name: harness-session-inventory
+description: [omh] Hermes harness session inventory workflow: normalize Codex, Claude Code, Hermes, OpenCode, Cursor, MCP host, worktree, and wrapper session metadata into one drift-aware inventory.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, optimization]
-    category: optimization
-    phase: workflow-learning
+    tags: [workflow, oh-my-hermes, observability]
+    category: observability
+    phase: harness-session-inventory
     role: tracker
     quality_tier: workflow-surface-gated
 ---
 
-# Workflow Learning
+# Harness Session Inventory
 
-This is a Hermes-native `workflow-learning` workflow skill.
+This is a Hermes-native `harness-session-inventory` workflow skill.
 
 ## Why This Exists
 
-`workflow-learning` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`harness-session-inventory` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,26 +28,26 @@ This is a Hermes-native `workflow-learning` workflow skill.
 
 Good example:
 
-- Prompt: workflow-learning route this self-improvement note before deciding whether it is memory, skill, wiki, failure-retrospective, or automation material.
-- Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: harness-session-inventory compare Codex, Claude Code, Hermes, MCP configs, and worktrees for drift before we dispatch agents.
+- Expected behavior: Produce `prepare_harness_session_inventory` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: workflow-learning silently patch the skill and claim future behavior is fixed.
+- Prompt: harness-session-inventory claim every MCP host loaded and every agent session is healthy from config files alone.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
+- Local telemetry, provider truth, billing truth, and completion evidence are separate states.
+- Warnings name the next measurement or operator review action.
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
+- If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
 
 ## OMH Context Rail
 
@@ -63,14 +63,14 @@ Bad example:
 
 ## Use When
 
-Use after a Hermes/OMH workflow attempt should become inspectable, evaluable, routed to memory/skill/wiki/failure-retrospective/automation review, persisted as a metadata-only store-route decision, queued for review, audited, replayable as a regression, converted to a patch handoff, exported, repaired after index drift, or captured as a missed-route signal without raw prompts. Store-route records are an auxiliary review lane surfaced by `learning review` and `learning store-routes`; they are not canonical learning index/export records until a reviewed destination produces its own artifact.
+Use when operators need a cross-harness/session/MCP/worktree inventory and drift summary before claiming any host loaded, connector ran, or agent session progressed.
 
-    Strong routing signals: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `store route review`, `memory skill wiki routing`, `learning trace`, `learning audit`, `self improvement store routing`, `store routing`, `where should this learning go`, `audit learning`, `learning review`, `review queue`, `review-route`, `store-routes`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
+    Strong routing signals: `harness-session-inventory`, `harness session inventory`, `session inventory`, `session adapter`, `session adapters`, `harness sessions`, `mcp inventory`, `mcp config inventory`, `mcp drift`, `harness drift`, `connector drift`, `worktree inventory`, `worktree lifecycle`, `operator inventory`, `control pane inventory`, `codex session inventory`, `claude code session inventory`, `세션 인벤토리`, `하네스 세션`, `하네스 드리프트`, `MCP 인벤토리`, `MCP 설정 드리프트`, `워크트리 인벤토리`, `커넥터 드리프트`
 
 ## Catalog Metadata
 
-Category: `optimization`
-Phase: `workflow-learning`
+Category: `observability`
+Phase: `harness-session-inventory`
 Hermes role: `tracker`
 Quality tier: `workflow-surface-gated`
 
@@ -93,17 +93,24 @@ Required inputs:
 
 Expected outputs:
 
-- workflow-learning/v1 card or guidance
+- harness_session_inventory/v1 card or guidance
+- harness_session_adapter_matrix/v1
+- mcp_inventory_drift_report/v1
+- worktree_lifecycle_snapshot/v1
+- session_progress_slots/v1
 - next action
 - prepared-vs-observed boundary
 
 Artifact expectations:
 
-- workflow-learning/v1 metadata-only runtime or wrapper card when recorded
+- harness_session_inventory/v1 metadata-only runtime or wrapper card when recorded
+- harness_session_adapter_matrix/v1 with observed, prepared, missing, and stale adapters
+- mcp_inventory_drift_report/v1 with secret-redacted config/source drift only
+- worktree_lifecycle_snapshot/v1 with merge-conflict and cleanup candidates when observed
 
 Safety rules:
 
-- A workflow learning trace, self-improvement store route, patch proposal, or export is process evidence for review. It is not automatic model training, memory mutation, skill mutation, wiki write, automation creation, execution, verification, CI, or merge evidence.
+- A harness session inventory is not host load, MCP tool-call, connector availability, executor dispatch, worktree cleanup, merge-conflict resolution, or session progress evidence.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -114,12 +121,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `workflow-learning`.
+Preferred harness for this skill: `harness-session-inventory`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill workflow-learning --harness workflow-learning --status started
+omh runtime record --skill harness-session-inventory --harness harness-session-inventory --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

@@ -1138,7 +1138,11 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(response["plain_headline"], headline)
                 self.assertEqual(response["state"]["selected_workflow"], workflow)
                 expected_schema = (
-                    "ops_service_quality_board/v1" if workflow == "ops-observability-card" else f"{kind}_card/v1"
+                    "ops_service_quality_board/v1"
+                    if workflow == "ops-observability-card"
+                    else "harness_session_inventory/v1"
+                    if workflow == "harness-session-inventory"
+                    else f"{kind}_card/v1"
                 )
                 self.assertEqual(response["state"]["artifact_schema"], expected_schema)
                 self.assertEqual(response["actions"][0]["id"], primary_action)
@@ -1199,7 +1203,11 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(response["plain_headline"], headline)
                 self.assertEqual(response["state"]["selected_workflow"], workflow)
                 expected_schema = (
-                    "ops_service_quality_board/v1" if workflow == "ops-observability-card" else f"{kind}_card/v1"
+                    "ops_service_quality_board/v1"
+                    if workflow == "ops-observability-card"
+                    else "harness_session_inventory/v1"
+                    if workflow == "harness-session-inventory"
+                    else f"{kind}_card/v1"
                 )
                 self.assertEqual(response["state"]["artifact_schema"], expected_schema)
                 self.assertEqual(response["actions"][0]["id"], primary_action)
@@ -1269,6 +1277,14 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_toolbelt_readiness",
             ),
             (
+                "inventory Codex Claude Code Hermes MCP configs and worktrees for drift",
+                "harness-session-inventory",
+                "harness_session_inventory",
+                "I can inventory sessions, MCP configs, and worktrees without inventing runtime proof.",
+                "host load",
+                "prepare_harness_session_inventory",
+            ),
+            (
                 "show token cost latency run history for this automation loop",
                 "ops-observability-card",
                 "ops_observability",
@@ -1324,7 +1340,11 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertEqual(response["plain_headline"], headline)
                 self.assertEqual(response["state"]["selected_workflow"], workflow)
                 expected_schema = (
-                    "ops_service_quality_board/v1" if workflow == "ops-observability-card" else f"{kind}_card/v1"
+                    "ops_service_quality_board/v1"
+                    if workflow == "ops-observability-card"
+                    else "harness_session_inventory/v1"
+                    if workflow == "harness-session-inventory"
+                    else f"{kind}_card/v1"
                 )
                 self.assertEqual(response["state"]["artifact_schema"], expected_schema)
                 self.assertEqual(response["actions"][0]["id"], primary_action)

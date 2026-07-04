@@ -112,6 +112,7 @@ _GUARDED_OPERATOR_FAST_PATH_IDS = frozenset(
         "coding_progress_status_before_clarify",
         "doctor_health_before_skill_catalog",
         "executor_runtime_readiness_before_generic_advice",
+        "harness_session_inventory_before_toolbelt_or_observability",
         "img_summary_before_materials_or_delivery",
         "memory_curation_before_generic_clarification",
         "ops_observability_before_generic_loop",
@@ -120,6 +121,7 @@ _GUARDED_OPERATOR_FAST_PATH_IDS = frozenset(
 )
 _GUARDED_OPERATOR_FAST_PATH_PRIORITY = (
     "executor_runtime_readiness_before_generic_advice",
+    "harness_session_inventory_before_toolbelt_or_observability",
     "coding_handoff_status_before_clarify",
     "coding_progress_status_before_clarify",
     "ops_observability_before_generic_loop",
@@ -307,6 +309,14 @@ _BOUNDARY_MARKER_LABELS: tuple[tuple[str, str], ...] = (
     ("complete tracing", "complete tracing"),
     ("workflow completion", "workflow completion"),
     ("successful workflow completion", "workflow completion"),
+    ("host load", "host load"),
+    ("mcp tool-call", "MCP tool-call"),
+    ("mcp tool call", "MCP tool-call"),
+    ("connector availability", "connector availability"),
+    ("worktree cleanup", "worktree cleanup"),
+    ("merge-conflict resolution", "merge-conflict resolution"),
+    ("merge conflict resolution", "merge-conflict resolution"),
+    ("session progress", "session progress"),
     ("runtime, tool, mcp server", "runtime proof"),
     ("tool, mcp server, ci job", "tool invocation"),
     ("mcp server, ci job", "MCP server"),
@@ -2493,6 +2503,35 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear materials or document-package request; prepare the file/package workflow without scoring every workflow.",
     ),
     (
+        "harness-session-inventory",
+        (
+            "harness session inventory",
+            "session inventory",
+            "session adapter",
+            "session adapters",
+            "mcp inventory",
+            "mcp config inventory",
+            "mcp drift",
+            "harness drift",
+            "connector drift",
+            "worktree inventory",
+            "worktree lifecycle",
+            "operator inventory",
+            "control pane inventory",
+            "codex session inventory",
+            "claude code session inventory",
+            "세션 인벤토리",
+            "하네스 세션",
+            "하네스 드리프트",
+            "mcp 인벤토리",
+            "mcp 설정 드리프트",
+            "워크트리 인벤토리",
+            "커넥터 드리프트",
+        ),
+        "operator_surface_fast_path:harness_inventory",
+        "Clear harness/session/MCP inventory request; prepare the drift-aware inventory without scoring every workflow.",
+    ),
+    (
         "automation-blueprint",
         (
             "automate this",
@@ -2680,6 +2719,8 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:memory_curation", "guard_fast_path:memory_curation_before_generic_clarification")
     if skill == "executor-runtime-readiness":
         return ("guard:executor_runtime_readiness",)
+    if skill == "harness-session-inventory":
+        return ("guard:harness_session_inventory",)
     if skill != "ralplan":
         return ()
     if any(marker in normalized for marker in ("safe", "safely", "안전", "सुरक्षित")):
@@ -2747,6 +2788,8 @@ def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
         return "phrase:executor_request"
     if marker == "operator_surface_fast_path:materials":
         return "phrase:materials_request"
+    if marker == "operator_surface_fast_path:harness_inventory":
+        return "phrase:harness_inventory_request"
     if marker == "operator_surface_fast_path:automation":
         return "phrase:automation_request"
     if marker == "operator_surface_fast_path:agent_board":

@@ -3543,6 +3543,68 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### harness-session-inventory
+
+[omh] Hermes harness session inventory workflow: normalize Codex, Claude Code, Hermes, OpenCode, Cursor, MCP host, worktree, and wrapper session metadata into one drift-aware inventory.
+
+- Category: `observability`
+- Phase: `harness-session-inventory`
+- Hermes role: `tracker`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when operators need a cross-harness session, MCP config, connector, wrapper, and worktree inventory with drift boundaries.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `harness-session-inventory` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when operators need a cross-harness/session/MCP/worktree inventory and drift summary before claiming any host loaded, connector ran, or agent session progressed.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `harness-session-inventory`, `harness session inventory`, `session inventory`, `session adapter`, `session adapters`, `harness sessions`, `mcp inventory`, `mcp config inventory`, `mcp drift`, `harness drift`, `connector drift`, `worktree inventory`, `worktree lifecycle`, `operator inventory`, `control pane inventory`, `codex session inventory`, `claude code session inventory`, `세션 인벤토리`, `하네스 세션`, `하네스 드리프트`, `MCP 인벤토리`, `MCP 설정 드리프트`, `워크트리 인벤토리`, `커넥터 드리프트`
+- Good example:
+  - Prompt: harness-session-inventory compare Codex, Claude Code, Hermes, MCP configs, and worktrees for drift before we dispatch agents.
+  - Expected behavior: Produce `prepare_harness_session_inventory` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: harness-session-inventory claim every MCP host loaded and every agent session is healthy from config files alone.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
+  - Local telemetry, provider truth, billing truth, and completion evidence are separate states.
+  - Warnings name the next measurement or operator review action.
+- Recovery notes:
+  - If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
+  - If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - harness_session_inventory/v1 card or guidance
+  - harness_session_adapter_matrix/v1
+  - mcp_inventory_drift_report/v1
+  - worktree_lifecycle_snapshot/v1
+  - session_progress_slots/v1
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - harness_session_inventory/v1 metadata-only runtime or wrapper card when recorded
+  - harness_session_adapter_matrix/v1 with observed, prepared, missing, and stale adapters
+  - mcp_inventory_drift_report/v1 with secret-redacted config/source drift only
+  - worktree_lifecycle_snapshot/v1 with merge-conflict and cleanup candidates when observed
+- Safety rules:
+  - A harness session inventory is not host load, MCP tool-call, connector availability, executor dispatch, worktree cleanup, merge-conflict resolution, or session progress evidence.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### ops-observability-card
 
 [omh] Hermes ops observability workflow: prepare an operations command-board for wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality evidence boundaries.
@@ -6341,6 +6403,59 @@ Check required MCP servers, CLIs, APIs, credentials, connectors, and local tools
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A toolbelt readiness card is not MCP installation, credential validation, API access, connector invocation, or successful workflow execution evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### harness-session-inventory
+
+Normalize cross-harness session, wrapper, MCP, connector, and worktree state into a drift-aware operator inventory.
+
+- Use when: Use when Codex, Claude Code, Hermes, OpenCode, Cursor, MCP hosts, wrapper sessions, or worktrees need one session-adapter-style status view.
+- Quality tier: `session-inventory-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - harness scope
+  - session or wrapper references
+  - MCP config sources
+  - worktree roots
+  - redaction policy
+- Outputs:
+  - harness_session_inventory/v1
+  - harness_session_adapter_matrix/v1
+  - mcp_inventory_drift_report/v1
+  - worktree_lifecycle_snapshot/v1
+  - session_progress_slots/v1
+  - drift and observation gaps
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `inventory_scope_recorded`
+  - `session_adapter_matrix_prepared`
+  - `mcp_inventory_redacted`
+  - `worktree_lifecycle_snapshot_recorded_when_available`
+  - `drift_gaps_recorded`
+  - `host_load_observed_when_available`
+- Wrapper actions:
+  - `prepare_harness_session_inventory`
+  - `record_harness_session`
+  - `record_mcp_inventory`
+  - `record_worktree_snapshot`
+  - `show_status`
+- Artifact events:
+  - `harness-session-inventory_scoped`
+  - `harness-session-inventory_card_prepared`
+  - `harness-session-inventory_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A harness session inventory is not host load, MCP tool-call, connector availability, executor dispatch, worktree cleanup, merge-conflict resolution, or session progress evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### ops-observability-card
