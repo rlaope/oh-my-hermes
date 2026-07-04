@@ -106,6 +106,31 @@ _FAILURE_SIGNAL_AUDIT_EXPLICIT_PHRASES = tuple(
         "실패 신호",
     )
 )
+_ACCESSIBILITY_AUDIT_EXPLICIT_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "accessibility-audit",
+        "accessibility audit",
+        "a11y audit",
+        "a11y architect",
+        "wcag audit",
+        "wcag 2.2",
+        "wcag 2.2 aa",
+        "screen reader",
+        "keyboard navigation",
+        "focus order",
+        "focus trap",
+        "target size",
+        "touch target",
+        "접근성 감사",
+        "접근성 검토",
+        "접근성 검사",
+        "스크린리더",
+        "키보드 내비게이션",
+        "포커스 순서",
+        "터치 타깃",
+    )
+)
 _HARNESS_SESSION_INVENTORY_INTENT_PHRASES = (
     "harness-session-inventory",
     "harness session inventory",
@@ -245,6 +270,18 @@ _SKILL_POLICIES = {
         wrapper_guidance=(
             "Prepare frontend_design_brief/v1 with design_system_contract/v1, route/state/viewport matrix, "
             "accessibility/performance expectations, implementation handoff, and visual_qa_required/v1."
+        ),
+    ),
+    "accessibility-audit": RecommendationPolicy(
+        next_action="prepare_accessibility_audit",
+        evidence_boundary=(
+            "An accessibility audit is not remediation, implementation, WCAG PASS, screen-reader compatibility, "
+            "keyboard proof, browser proof, visual QA, CI, release-readiness, merge-readiness, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare accessibility_audit_plan/v1 with WCAG 2.2 criteria, semantic_structure_review/v1, "
+            "focus_and_keyboard_trace/v1, screen_reader_announcement_map/v1, target_size_and_pointer_review/v1, "
+            "contrast_and_reflow_review/v1, and a remediation or visual-qa route when evidence is missing."
         ),
     ),
     "visual-qa": RecommendationPolicy(
@@ -996,6 +1033,9 @@ def _score_definition(
     if definition.name == "failure-signal-audit" and _failure_signal_audit_explicit_match(normalized_query):
         score += 34
         matched.add("direct:failure_signal_audit")
+    if definition.name == "accessibility-audit" and _accessibility_audit_explicit_match(normalized_query):
+        score += 30
+        matched.add("direct:accessibility_audit")
 
     if score <= 0:
         return None
@@ -1185,6 +1225,10 @@ def _explicit_phrase_match(query: str, value: str) -> bool:
 
 def _failure_signal_audit_explicit_match(normalized_query: str) -> bool:
     return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _FAILURE_SIGNAL_AUDIT_EXPLICIT_PHRASES)
+
+
+def _accessibility_audit_explicit_match(normalized_query: str) -> bool:
+    return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _ACCESSIBILITY_AUDIT_EXPLICIT_PHRASES)
 
 
 def _harness_session_inventory_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:

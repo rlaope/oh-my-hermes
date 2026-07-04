@@ -12,7 +12,7 @@ metadata:
 
 # Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `source-finder`, `paper-learning`, `feedback-triage`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `visual-qa`, `automation-blueprint`, `harness-session-inventory`, `agent-debug`, `failure-signal-audit`, `instinct-ledger`, `skill-scout`, `skill-health`, `workflow-learning`, `codebase-onboarding`, `codegraph-refresh`, `context-budget-review`, `security-safety-review`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `source-finder`, `paper-learning`, `feedback-triage`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`, `automation-blueprint`, `harness-session-inventory`, `agent-debug`, `failure-signal-audit`, `instinct-ledger`, `skill-scout`, `skill-health`, `workflow-learning`, `codebase-onboarding`, `codegraph-refresh`, `context-budget-review`, `security-safety-review`, `code-review`, `team`, `ultrawork`, `ultraqa`, `doctor`.
 
 ## Routing Contract
 
@@ -64,7 +64,7 @@ Compact lane map:
 - Intent -> plan: `deep-interview`, `ralplan`, `plan`, `loop`, `ultraprocess`.
 - Research and company ops: `web-research`, `source-finder`, `research-department`, `paper-learning`, `feedback-triage`, `strategy-brief`, `meeting-brief`.
 - Retained knowledge: `wiki`.
-- Materials and visual summaries: `design-quality-gate`, `frontend`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
+- Materials and visual summaries: `design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
 - Operations and evidence gates: `workspace-audit`, `production-audit`, `verification-gate`, `agent-evaluation`, `rules-distill`, `agent-ops-review`, `harness-session-inventory`, `ops-observability-card`, `instinct-ledger`, `workflow-learning`.
 - Coding handoff and review: `idea-to-deploy`, `code-review`, `ultraprocess`, `team`, `ultrawork`, `ultraqa`.
 

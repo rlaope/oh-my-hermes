@@ -116,6 +116,18 @@ class HookManifestTests(unittest.TestCase):
         self.assertIn("remediation", payload["hints"][0]["not_evidence_yet"])
         self.assertNotEqual(payload["primary_workflow"], "frontend")
 
+    def test_awareness_route_hint_prioritizes_explicit_accessibility_audit(self) -> None:
+        message = "accessibility-audit check this frontend checkout flow for WCAG 2.2, keyboard navigation, focus order, screen reader labels, and target size."
+
+        payload = awareness_route_hint(message)
+
+        self.assertEqual(payload["status"], "hinted")
+        self.assertEqual(payload["primary_workflow"], "accessibility-audit")
+        self.assertEqual(payload["primary_next_action"], "prepare_accessibility_audit")
+        self.assertEqual(payload["hints"][0]["id"], "direct_workflow_invocation")
+        self.assertIn("WCAG PASS", payload["hints"][0]["not_evidence_yet"])
+        self.assertNotEqual(payload["primary_workflow"], "frontend")
+
     def test_awareness_route_hint_uses_missed_route_primary_action(self) -> None:
         message = "missed route: Hermes skipped OMH for my image request with secret-token-123"
 

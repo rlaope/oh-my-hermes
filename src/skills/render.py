@@ -161,9 +161,8 @@ def _harness_summary(harness: HarnessDefinition) -> str:
         f"`{action}`" for action in _compact_sequence(harness.wrapper_actions, 4, keep_contains=keep_markers)
     )
     return (
-        f"- `{harness.name}`: {harness.purpose} Tier `{harness.quality_tier}`. "
-        f"L: {evidence_ladder}. A: {wrapper_actions or '`show_status`'}. "
-        f"P `{harness.privacy_default}`."
+        f"- `{harness.name}`: {harness.purpose} T `{harness.quality_tier}`. "
+        f"L: {evidence_ladder}. A: {wrapper_actions or '`show_status`'}."
     )
 
 
@@ -578,7 +577,7 @@ Compact lane map:
 - Intent -> plan: `deep-interview`, `ralplan`, `plan`, `loop`, `ultraprocess`.
 - Research and company ops: `web-research`, `source-finder`, `research-department`, `paper-learning`, `feedback-triage`, `strategy-brief`, `meeting-brief`.
 - Retained knowledge: `wiki`.
-- Materials and visual summaries: `design-quality-gate`, `frontend`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
+- Materials and visual summaries: `design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`.
 - Operations and evidence gates: `workspace-audit`, `production-audit`, `verification-gate`, `agent-evaluation`, `rules-distill`, `agent-ops-review`, `harness-session-inventory`, `ops-observability-card`, `instinct-ledger`, `workflow-learning`.
 - Coding handoff and review: `idea-to-deploy`, `code-review`, `ultraprocess`, `team`, `ultrawork`, `ultraqa`.
 
