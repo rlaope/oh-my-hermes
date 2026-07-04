@@ -96,6 +96,7 @@ Expected outputs:
 - report package
 - PPT-ready Markdown or JSON outline
 - assumptions and missing-input list
+- optional achievements badge section sourced from `omh achievements export --format md` when requested
 
 Artifact expectations:
 

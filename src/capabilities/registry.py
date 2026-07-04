@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from functools import lru_cache
 
+from .achievements import achievement_evidence_contracts
 from .agents import agent_role_capabilities
 from .families import capability_family_projection
 from .hooks import hook_manifest
@@ -83,6 +84,7 @@ def _capability_snapshot_template() -> dict[str, object]:
     tools = tool_requirements_manifest()
     awareness = awareness_primer_payload()
     families = capability_family_projection()
+    achievements = achievement_evidence_contracts()
     return {
         "schema_version": CAPABILITY_MANIFEST_SCHEMA_VERSION,
         "manifest_id": "omh_capabilities",
@@ -97,6 +99,7 @@ def _capability_snapshot_template() -> dict[str, object]:
             "orchestration_patterns": len(patterns),
             "playbooks": len(playbooks),
             "tool_requirements": len(tools["items"]),
+            "achievement_evidence": len(achievements),
             "capability_families": len(families["families"]),
         },
         "capability_families": families,
@@ -108,6 +111,7 @@ def _capability_snapshot_template() -> dict[str, object]:
         "orchestration_patterns": patterns,
         "playbooks": playbooks,
         "tool_requirements": tools,
+        "achievement_evidence": achievements,
         "evidence_boundaries": evidence_boundaries(),
         "non_goals": [
             "no hidden executor dispatch",

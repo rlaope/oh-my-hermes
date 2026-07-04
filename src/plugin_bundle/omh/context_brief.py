@@ -20,6 +20,7 @@ def build_context_brief(
     max_hints: int = 2,
     include_prompt_context: bool = False,
     route_hint_payload: dict[str, object] | None = None,
+    achievements_profile: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Build bounded Hermes-facing OMH operating context."""
     text = str(message or "")
@@ -87,6 +88,8 @@ def build_context_brief(
         payload["prompt_context_boundary"] = (
             "Prompt context is for Hermes routing guidance only; it is not workflow execution or observed evidence."
         )
+    if isinstance(achievements_profile, dict) and achievements_profile.get("observed"):
+        payload["achievements_profile"] = achievements_profile
     catalog_hint = _catalog_question_hint(text)
     if catalog_hint:
         payload["catalog_question"] = catalog_hint

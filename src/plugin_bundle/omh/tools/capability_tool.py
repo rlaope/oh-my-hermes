@@ -156,6 +156,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "agent-ops-review",
             "workflow-learning",
             "memory-curation-review",
+            "achievements",
             "ops-observability-card",
             "skill",
             "ask",
@@ -665,8 +666,66 @@ def _standalone_sections() -> dict[str, object]:
         ],
         "playbooks": _standalone_playbook_capabilities(),
         "tool_requirements": _standalone_tool_requirements(),
+        "achievement_evidence": _standalone_achievement_evidence(),
         "evidence_boundaries": _standalone_evidence_boundaries(),
     }
+
+
+def _standalone_achievement_evidence() -> list[dict[str, object]]:
+    # Mirrors src/capabilities/achievements.py because the plugin bundle stays standalone.
+    return [
+        {
+            "schema_version": "achievement_evidence_contract/v1",
+            "id": "hermes_achievements_observation",
+            "display_name": "Hermes achievements observation",
+            "source": (
+                "Local hermes-achievements plugin artifacts: scan_snapshot.json, state.json, "
+                "and agent_summary.json when the upstream plugin writes it."
+            ),
+            "claim_kind": "observed_badge_metadata",
+            "claim_fields": [
+                "badge_id",
+                "name",
+                "tier",
+                "category",
+                "state",
+                "progress_percent",
+                "unlocked_at",
+            ],
+            "profile_fields": [
+                "strengths",
+                "gaps",
+                "top_tier",
+                "unlocked_count",
+                "total_count",
+                "derivation",
+            ],
+            "evidence_rule": (
+                "A badge or profile field may be claimed only when it was read from local hermes-achievements "
+                "plugin artifacts; OMH never rescans Hermes session history and never recomputes unlocks."
+            ),
+            "degradation_rule": (
+                "Missing, corrupt, or unknown-shaped artifacts degrade to a not_observed report instead of "
+                "failing or guessing."
+            ),
+            "not_evidence_for": [
+                "productivity",
+                "code_quality",
+                "execution",
+                "review",
+                "ci",
+                "merge_readiness",
+                "merge",
+            ],
+            "surfaces": [
+                "omh achievements",
+                "hud full preset",
+                "context brief achievements_profile",
+                "achievements skill",
+            ],
+            "degraded": True,
+        }
+    ]
 
 
 def _standalone_matches(wanted: str, item: dict[str, object]) -> bool:

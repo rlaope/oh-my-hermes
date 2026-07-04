@@ -65,6 +65,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "voice-operator": ("agent_context", False),
     "toolbelt-readiness": ("harness_only", False),
     "ops-observability-card": ("workflow_skill", True),
+    "achievements": ("workflow_skill", True),
     "agent-ops-review": ("workflow_skill", True),
     "workflow-learning": ("workflow_skill", True),
 }
