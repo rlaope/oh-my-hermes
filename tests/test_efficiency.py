@@ -296,6 +296,17 @@ class EfficiencyContractTests(unittest.TestCase):
             ("verification-gate 머지 전 검증 게이트 준비해줘", "verification-gate", "prepare_verification_gate"),
             ("agent-evaluation Codex랑 Claude Code 에이전트 평가해줘", "agent-evaluation", "prepare_agent_evaluation"),
             ("rules-distill 실패 trace에서 스킬 원칙 규칙 증류해줘", "rules-distill", "prepare_rules_distillation"),
+            ("codebase-onboarding 처음 보는 레포 구조 잡아줘", "codebase-onboarding", "prepare_codebase_onboarding"),
+            (
+                "context-budget-review 장기 작업 컨텍스트 예산 잡아줘",
+                "context-budget-review",
+                "prepare_context_budget_review",
+            ),
+            (
+                "security-safety-review 프롬프트 인젝션과 시크릿 위험 봐줘",
+                "security-safety-review",
+                "prepare_security_safety_review",
+            ),
         )
 
         for message, workflow, next_action in cases:
@@ -310,11 +321,16 @@ class EfficiencyContractTests(unittest.TestCase):
             "workspace-audit",
             "verification-gate",
             "rules-distill",
+            "codebase-onboarding",
+            "context-budget-review",
+            "security-safety-review",
         }
         generic_messages = (
             "verify the source before answering",
             "can you audit my plan for unclear requirements?",
             "show guidance for onboarding improvements",
+            "what is application security?",
+            "how much does this provider cost?",
             "what rules apply to python packaging?",
         )
 
@@ -758,7 +774,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertLessEqual(standalone_section_chars, STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT)
         self.assertLessEqual(max_full_item_chars, FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT)
         self.assertLessEqual(max_standalone_item_chars, STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT)
-        self.assertLessEqual(len(next(item for item in full_items if item["id"] == "img-summary")["triggers"]), 10)
+        self.assertLessEqual(len(next(item for item in full_items if item["id"] == "img-summary")["triggers"]), 8)
         self.assertIn(
             "ambitious goal -> loopability check",
             " ".join(next(item for item in full_items if item["id"] == "loop")["cross_lane_examples"]),
@@ -1265,6 +1281,9 @@ class EfficiencyContractTests(unittest.TestCase):
             ("verification-gate 머지 전 검증 게이트 준비해줘", "verification-gate"),
             ("agent-evaluation Codex랑 Claude Code 에이전트 평가해줘", "agent-evaluation"),
             ("rules-distill 실패 trace에서 스킬 원칙 규칙 증류해줘", "rules-distill"),
+            ("codebase-onboarding 처음 보는 레포 구조 잡아줘", "codebase-onboarding"),
+            ("context-budget-review 장기 작업 컨텍스트 예산 잡아줘", "context-budget-review"),
+            ("security-safety-review 프롬프트 인젝션과 시크릿 위험 봐줘", "security-safety-review"),
             ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board"),
             ("multiple Hermes agents target topology 어떻게 관리해?", "agent-board"),
             ("슬랙에서 /omh 치면 뭐가 떠야해?", "oh-my-hermes"),

@@ -250,6 +250,39 @@ _SKILL_POLICIES = {
             "review_queue/v1, and approved_patch_handoff/v1 only after review approval."
         ),
     ),
+    "codebase-onboarding": RecommendationPolicy(
+        next_action="prepare_codebase_onboarding",
+        evidence_boundary=(
+            "A codebase onboarding pack is not setup, dependency install, architecture proof for unobserved surfaces, "
+            "executor dispatch, implementation, review, verification, CI, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare codebase_onboarding_plan/v1, repo_map/v1, reading_path/v1, domain_glossary/v1, "
+            "risk_and_unknowns_map/v1, and first_task_runway/v1 from observed repo evidence."
+        ),
+    ),
+    "context-budget-review": RecommendationPolicy(
+        next_action="prepare_context_budget_review",
+        evidence_boundary=(
+            "A context budget review is not exact token usage, provider billing, runtime compaction, executor progress, "
+            "or completion evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare context_budget_plan/v1, must_keep_context_pack/v1, summarization_checkpoint_plan/v1, "
+            "budget_risk_register/v1, and overflow_recovery_route/v1 while preserving the full objective."
+        ),
+    ),
+    "security-safety-review": RecommendationPolicy(
+        next_action="prepare_security_safety_review",
+        evidence_boundary=(
+            "A security safety review is not vulnerability absence, scanner execution, dependency update, credential validity, "
+            "sandbox proof, permission change, or remediation evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare security_safety_review_plan/v1, threat_surface_map/v1, permission_and_secret_risk_matrix/v1, "
+            "prompt_injection_risk_review/v1, safe_action_policy/v1, and remediation_handoff/v1 when needed."
+        ),
+    ),
     "workflow-learning": RecommendationPolicy(
         next_action="audit_learning_readiness",
         evidence_boundary=(

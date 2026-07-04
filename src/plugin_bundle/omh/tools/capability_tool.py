@@ -59,6 +59,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
         "primary_workflows": (
             "deep-interview",
             "ralplan",
+            "codebase-onboarding",
             "ultragoal",
             "loop",
             "strategy-brief",
@@ -137,6 +138,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "ultraprocess",
             "code-review",
             "verification-gate",
+            "security-safety-review",
             "team",
             "ultrawork",
             "ultraqa",
@@ -167,6 +169,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "agent-ops-review",
             "agent-evaluation",
             "rules-distill",
+            "context-budget-review",
             "workflow-learning",
             "memory-curation-review",
             "achievements",

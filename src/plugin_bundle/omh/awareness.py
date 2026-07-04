@@ -448,6 +448,9 @@ ROUTER_KEYWORD_SKILLS = (
     "visual-qa",
     "automation-blueprint",
     "workflow-learning",
+    "codebase-onboarding",
+    "context-budget-review",
+    "security-safety-review",
     "code-review",
     "team",
     "ultrawork",
@@ -458,6 +461,7 @@ ROUTER_KEYWORD_SKILLS = (
 LANE_CROSS_LANE_EXAMPLES = {
     "intent_to_plan": [
         "ambitious goal -> loopability check -> loop or ultraprocess -> verification status",
+        "new repo -> codebase-onboarding -> reading path -> first-task runway",
         "fuzzy feature request -> deep-interview -> ralplan -> accepted plan",
     ],
     "research_and_ops": [
@@ -477,11 +481,13 @@ LANE_CROSS_LANE_EXAMPLES = {
     ],
     "automation_and_status": [
         "daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence",
+        "long agent run -> context-budget-review -> must-keep pack -> checkpoint plan",
         "workflow attempt -> workflow-learning -> eval -> improvement candidate or regression case",
         "runtime confusion -> doctor or agent-ops-review -> status card -> next repair action",
     ],
     "coding_handoff": [
         "accepted plan -> ultraprocess -> coding handoff -> review and CI evidence",
+        "agentic action risk -> security-safety-review -> safe action policy -> remediation handoff",
         "risky change -> ralplan -> executor selection -> observed coding-agent status",
     ],
 }
@@ -491,7 +497,7 @@ WORKFLOW_CONTEXT_CARDS = (
         "label": "Intent to plan",
         "user_signal": "fuzzy goal, ambitious target, safe feature, or one-cycle delivery request",
         "omh_pattern": "clarify or plan first, then move to ultragoal, ultraprocess, loop, or handoff only when concrete",
-        "representative_workflows": ("deep-interview", "ralplan", "ultragoal", "loop", "ultraprocess"),
+        "representative_workflows": ("deep-interview", "ralplan", "codebase-onboarding", "ultragoal", "loop", "ultraprocess"),
         "user_examples": ("Make onboarding feel smoother", "Make this repo star-worthy"),
         "first_response_shape": "Name the ambiguity, choose clarify/plan/loop/process, then state the next concrete action and what is not evidence yet.",
         "not_evidence_until_observed": ("plan acceptance", "executor dispatch", "verification"),
@@ -581,6 +587,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "loop": "intent_to_plan",
     "ultraprocess": "intent_to_plan",
     "performance-goal": "intent_to_plan",
+    "codebase-onboarding": "intent_to_plan",
     "web-research": "research_and_ops",
     "research-department": "research_and_ops",
     "source-finder": "research_and_ops",
@@ -617,11 +624,13 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "toolbelt-readiness": "automation_and_status",
     "voice-operator": "automation_and_status",
     "rules-distill": "automation_and_status",
+    "context-budget-review": "automation_and_status",
     "workflow-learning": "automation_and_status",
     "ai-slop-cleaner": "coding_handoff",
     "ask": "coding_handoff",
     "code-review": "coding_handoff",
     "verification-gate": "coding_handoff",
+    "security-safety-review": "coding_handoff",
     "cto-loop": "coding_handoff",
     "deploy-and-monitor": "coding_handoff",
     "executor-runtime-readiness": "coding_handoff",
@@ -670,6 +679,9 @@ _AWARENESS_MESSAGE_MARKERS = (
     "arxiv 링크",
     "source-finder",
     "paper-learning",
+    "codebase-onboarding",
+    "context-budget-review",
+    "security-safety-review",
     "자동화",
     "루프",
     "부드럽게",
@@ -1338,6 +1350,84 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": (),
         "adjacent_workflows": ("workflow-learning", "wiki", "workspace-audit"),
+    },
+    {
+        "id": "codebase_onboarding",
+        "workflow": "codebase-onboarding",
+        "lane": "intent_to_plan",
+        "next_action": "prepare_codebase_onboarding",
+        "reason": "The user is asking for repo/codebase orientation, a reading path, repo map, glossary, or first-task runway before implementation.",
+        "fallback_action": "inspect_repo_evidence_and_prepare_reading_path",
+        "phrases": (
+            "codebase-onboarding",
+            "codebase onboarding",
+            "repo onboarding",
+            "repository onboarding",
+            "codebase tour",
+            "new repo orientation",
+            "understand this repo",
+            "how this repo works",
+            "first task runway",
+            "레포 온보딩",
+            "코드베이스 온보딩",
+            "처음 보는 레포",
+            "레포 구조 설명",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("workspace-audit", "ralplan", "ultraprocess"),
+    },
+    {
+        "id": "context_budget_review",
+        "workflow": "context-budget-review",
+        "lane": "automation_and_status",
+        "next_action": "prepare_context_budget_review",
+        "reason": "The user is asking to preserve context, token budget, checkpoint summaries, or overflow recovery for long agent work.",
+        "fallback_action": "prepare_must_keep_context_and_checkpoint_plan",
+        "phrases": (
+            "context-budget-review",
+            "context budget review",
+            "context budget",
+            "token budget review",
+            "token budget",
+            "prompt budget",
+            "context compaction",
+            "compact context",
+            "summarization checkpoint",
+            "budget this task",
+            "컨텍스트 예산",
+            "토큰 예산",
+            "컨텍스트 압축",
+            "요약 체크포인트",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("ops-observability-card", "loop", "agent-evaluation"),
+    },
+    {
+        "id": "security_safety_review",
+        "workflow": "security-safety-review",
+        "lane": "coding_handoff",
+        "next_action": "prepare_security_safety_review",
+        "reason": "The user is asking for prompt-injection, tool-permission, secret, dependency, sandbox, or destructive-action safety review.",
+        "fallback_action": "prepare_redacted_threat_surface_and_safe_action_policy",
+        "phrases": (
+            "security-safety-review",
+            "security safety review",
+            "ai coding safety",
+            "agent safety review",
+            "prompt injection review",
+            "tool permission review",
+            "secret exposure review",
+            "destructive action review",
+            "supply chain safety",
+            "sandbox safety",
+            "보안 안전 검토",
+            "에이전트 안전",
+            "프롬프트 인젝션",
+            "시크릿 노출",
+            "파괴적 명령",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("verification-gate", "production-audit", "code-review"),
     },
     {
         "id": "reliability_incident_review",
@@ -2938,13 +3028,14 @@ def awareness_primer_payload() -> dict[str, object]:
                 "deep-interview",
                 "plan",
                 "ralplan",
+                "codebase-onboarding",
                 "ultragoal",
                 "ultraprocess",
                 "loop",
                 "ralph",
                 "performance-goal",
             ],
-            "use_for": "ambiguous goals, plans, one-cycle delivery, durable goals, and loopable projects",
+            "use_for": "clarify, plan, ship, or loop scoped goals",
         },
         {
             "id": "research_and_ops",
@@ -2964,13 +3055,13 @@ def awareness_primer_payload() -> dict[str, object]:
                 "ops-review",
                 "reliability-review",
             ],
-            "use_for": "source-backed research, customer signals, product operations, and briefing workflows",
+            "use_for": "research, signals, ops records, and briefings",
         },
         {
             "id": "retained_knowledge",
             "label": "Retained knowledge",
             "skills": ["wiki"],
-            "use_for": "project wiki notes, external connections, retrieval hints, and staleness warnings",
+            "use_for": "wiki notes, retrieval hints, and staleness",
         },
         {
             "id": "materials_and_visuals",
@@ -2984,7 +3075,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "report-package",
                 "deliverable-package",
             ],
-            "use_for": "premium web/frontends, visual QA, docs/decks/PDFs, image cards, and packages",
+            "use_for": "web, visual QA, files, image cards, and packages",
         },
         {
             "id": "automation_and_status",
@@ -3003,6 +3094,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "agent-ops-review",
                 "agent-evaluation",
                 "rules-distill",
+                "context-budget-review",
                 "memory-curation-review",
                 "workflow-learning",
                 "doctor",
@@ -3010,7 +3102,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "ask",
                 "cancel",
             ],
-            "use_for": "scheduled ops, gateway cards, boards, tool readiness, status, health, and release/ops review",
+            "use_for": "schedules, status, health, and release/ops review",
         },
         {
             "id": "coding_handoff",
@@ -3021,6 +3113,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "deploy-and-monitor",
                 "code-review",
                 "verification-gate",
+                "security-safety-review",
                 "ultrawork",
                 "team",
                 "ultraqa",
@@ -3030,7 +3123,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "executor selection",
                 "coding runtime handoff",
             ],
-            "use_for": "Codex, Claude Code, Hermes coding, or oh-my runtime paths with observed evidence tracking",
+            "use_for": "coding owners, handoffs, and review/CI/merge evidence",
         },
     ]
     return {
@@ -3260,19 +3353,20 @@ def _compact_workflow_cue_line() -> str:
 
 def _compact_workflow_context_cards_line() -> str:
     return (
-        "intent -> deep-interview/ralplan/loop; "
+        "intent -> deep-interview/ralplan/codebase-onboarding/loop; "
         "signals -> web-research/research-department/feedback-triage; "
         "materials -> design-quality-gate/frontend/visual-qa/materials-package; "
-        "ops -> automation-blueprint/workspace-audit/production-audit/workflow-learning/doctor; "
+        "ops -> automation-blueprint/workspace-audit/production-audit/context-budget-review/workflow-learning/doctor; "
         "eval/rules -> agent-evaluation/rules-distill; "
-        "code -> ultraprocess/code-review/verification-gate/team/ultraqa"
+        "code -> ultraprocess/code-review/verification-gate/security-safety-review/team/ultraqa"
     )
 
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
         "image->img-summary; frontend->frontend/visual-qa; paper->paper-learning; file->materials-package; "
-        "search->web-research; audit->workspace-audit/production-audit; verify->verification-gate; code->ultraprocess"
+        "search->web-research; audit->workspace-audit/production-audit/security-safety-review; "
+        "verify->verification-gate; code->codebase-onboarding/ultraprocess"
     )
 
 
@@ -3291,6 +3385,9 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "verification-gate": "prepare_verification_gate",
     "agent-evaluation": "prepare_agent_evaluation",
     "rules-distill": "prepare_rules_distillation",
+    "codebase-onboarding": "prepare_codebase_onboarding",
+    "context-budget-review": "prepare_context_budget_review",
+    "security-safety-review": "prepare_security_safety_review",
     "code-review": "prepare_review_or_followup_handoff",
     "team": "show_runtime_handoff",
     "ultrawork": "prepare_parallel_delivery",

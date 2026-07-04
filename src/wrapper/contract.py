@@ -202,6 +202,25 @@ VISIBLE_ACTIONS = (
     "approve_rule_candidate",
     "reject_rule_candidate",
     "prepare_rule_patch",
+    "prepare_codebase_onboarding",
+    "show_codebase_onboarding",
+    "record_repo_map",
+    "record_reading_path",
+    "record_domain_glossary",
+    "record_first_task_runway",
+    "prepare_context_budget_review",
+    "show_context_budget_review",
+    "record_must_keep_context",
+    "record_checkpoint_plan",
+    "record_budget_risk",
+    "record_provider_usage",
+    "prepare_security_safety_review",
+    "show_security_safety_review",
+    "record_threat_surface",
+    "record_permission_secret_risk",
+    "record_prompt_injection_risk",
+    "record_safe_action_policy",
+    "prepare_remediation_handoff",
     "dispatch_to_workflow",
     "run_hermes_research",
     "prepare_strategy_brief",
@@ -542,6 +561,18 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "I will distill repeated workflow lessons into reviewed rule candidates with source references, duplicates, "
         "conflicts, and approval state. Nothing mutates skills, prompts, docs, or memory until approved and implemented."
     ),
+    "codebase-onboarding": (
+        "I will prepare a codebase onboarding pack: observed repo map, reading path, glossary, risks, unknowns, "
+        "and first-task runway. Setup, code edits, executor dispatch, and verification stay separate."
+    ),
+    "context-budget-review": (
+        "I will prepare a context budget review: must-keep context, checkpoint cadence, budget risks, overflow "
+        "recovery, and provider-truth gaps. Exact billing or token usage still needs observed runtime/provider evidence."
+    ),
+    "security-safety-review": (
+        "I will prepare a redacted security safety review: threat surface, prompt-injection risks, tool permissions, "
+        "secret/dependency/destructive-action gates, and safe remediation handoff without exposing secrets."
+    ),
     "materials-package": (
         "I will shape this into a material package: target files, source inputs, missing data, outline, "
         "generation owner, and QA checks. I will not claim the files exist until export evidence is observed."
@@ -649,6 +680,9 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_verification_gate": ("prepare_verification_gate", "Prepare gate"),
     "prepare_agent_evaluation": ("prepare_agent_evaluation", "Prepare eval"),
     "prepare_rules_distillation": ("prepare_rules_distillation", "Distill rules"),
+    "prepare_codebase_onboarding": ("prepare_codebase_onboarding", "Prepare onboarding"),
+    "prepare_context_budget_review": ("prepare_context_budget_review", "Review context"),
+    "prepare_security_safety_review": ("prepare_security_safety_review", "Review safety"),
     "prepare_material_package": ("prepare_material_package", "Prepare package"),
     "prepare_design_quality_gate": ("prepare_design_quality_gate", "Prepare design gate"),
     "prepare_frontend_handoff": ("prepare_frontend_handoff", "Prepare frontend"),

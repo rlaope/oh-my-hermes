@@ -145,13 +145,38 @@ def _trigger_table(definitions: list[SkillDefinition]) -> str:
 
 
 def _harness_summary(harness: HarnessDefinition) -> str:
-    evidence_ladder = " -> ".join(f"`{step}`" for step in harness.evidence_ladder)
-    wrapper_actions = ", ".join(f"`{action}`" for action in harness.wrapper_actions)
+    keep_markers = (
+        "visual_qa",
+        "frontend_handoff",
+        "first_task_runway",
+        "overflow_recovery",
+        "safe_action_policy",
+        "remediation_handoff",
+    )
+    evidence_ladder = " -> ".join(
+        f"`{step}`" for step in _compact_sequence(harness.evidence_ladder, 5, keep_contains=keep_markers)
+    )
+    wrapper_actions = ", ".join(
+        f"`{action}`" for action in _compact_sequence(harness.wrapper_actions, 6, keep_contains=keep_markers)
+    )
     return (
         f"- `{harness.name}`: {harness.purpose} Tier `{harness.quality_tier}`. "
         f"Ladder: {evidence_ladder}. Actions: {wrapper_actions or '`show_status`'}. "
         f"Privacy `{harness.privacy_default}`."
     )
+
+
+def _compact_sequence(items: tuple[str, ...], limit: int, keep_contains: tuple[str, ...] = ()) -> tuple[str, ...]:
+    if len(items) <= limit:
+        return items
+    compact = list(items[:limit])
+    for item in items[limit:]:
+        if any(marker in item for marker in keep_contains):
+            compact.append(item)
+    hidden = len([item for item in items if item not in compact])
+    if hidden:
+        compact.append(f"+{hidden} more")
+    return tuple(compact)
 
 
 def _harness_registry(harnesses: list[HarnessDefinition]) -> str:

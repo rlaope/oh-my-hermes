@@ -1,41 +1,42 @@
 ---
-name: plan
-description: [omh] Hermes Plan workflow: structured planning before execution.
+name: codebase-onboarding
+description: [omh] Hermes Codebase Onboarding workflow: create a repo map, reading path, glossary, risk map, and first-task runway for unfamiliar codebases.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, planning]
     category: planning
-    phase: plan
+    phase: codebase-onboarding
     role: planner
-    quality_tier: acceptance-gated
+    quality_tier: onboarding-gated
 ---
 
-# Plan
+# Codebase Onboarding
 
-This is a Hermes-native `plan` workflow skill.
+This is a Hermes-native `codebase-onboarding` workflow skill.
 
 ## Why This Exists
 
-`plan` exists to keep `planning` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`codebase-onboarding` adapts ECC's code-tour and onboarding surfaces into an OMH-native first-read workflow so unfamiliar repos become navigable before implementation pressure starts.
 
 ## Do Not Use When
 
-- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
-- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+- The user already named a concrete implementation task and acceptance criteria; use `ultraprocess` or `idea-to-deploy`.
+- The user needs a whole-workspace capability inventory; use `workspace-audit`.
+- The user wants a code diff review; use `code-review`.
 
 ## Examples
 
 Good example:
 
-- Prompt: plan: handle a planning request that needs explicit evidence boundaries and a clear stop condition.
-- Expected behavior: Run `plan` only after naming the target, evidence boundary, and stop condition.
-- Why: The request matches the catalog use case and keeps observed evidence separate from prepared guidance.
+- Prompt: codebase-onboarding 처음 보는 레포라서 구조, 주요 모듈, 테스트, 첫 작업 후보를 잡아줘.
+- Expected behavior: Prepare repo_map/v1, reading_path/v1, domain_glossary/v1, risk map, and first_task_runway/v1 from observed files.
+- Why: The request is repo orientation before implementation.
 
 Bad example:
 
-- Prompt: plan: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `plan`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: codebase-onboarding 파일 안 읽고 이 레포 아키텍처를 확정해줘.
+- Expected behavior: Mark architecture as unobserved and inspect source evidence before making claims.
+- Why: Onboarding is only useful when grounded in current repo evidence.
 
 ## Completion Checklist
 
@@ -62,48 +63,58 @@ Bad example:
 
 ## Use When
 
-Use for structured planning when implementation is not ready to start safely, including feature work that needs a safe plan before handoff.
+Use when Hermes should help an operator or coding executor understand an unfamiliar repository before planning implementation.
 
-    Strong routing signals: `plan`, `$plan`, `implementation plan`, `strategy`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `답할 차례`, `준비할 차례`, `project template`, `재현 계획`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `github pr workflow`, `상태와 다음 행동`, `프로젝트별 운영`
+    Strong routing signals: `codebase-onboarding`, `codebase onboarding`, `repo onboarding`, `repository onboarding`, `codebase tour`, `code tour`, `new repo orientation`, `understand this repo`, `how this repo works`, `first task runway`, `개발자 온보딩`, `레포 온보딩`, `코드베이스 온보딩`, `처음 보는 레포`, `레포 구조 설명`
 
 ## Catalog Metadata
 
 Category: `planning`
-Phase: `plan`
+Phase: `codebase-onboarding`
 Hermes role: `planner`
-Quality tier: `acceptance-gated`
+Quality tier: `onboarding-gated`
 
 Quality bar:
 
-- Make goals, non-goals, risks, acceptance criteria, and verification shape explicit.
-- Keep draft plans unapproved until a user or wrapper accepts them.
-- Only prepare coding handoff guidance after the plan is accepted.
+- Name the audience, depth, repo root, read-only boundary, and stop condition.
+- Separate observed files and commands from inferred architecture and unknowns.
+- Produce a practical reading path and first-task runway rather than a flat file tour.
+- Route follow-up implementation to plan, ultraprocess, verification-gate, or workspace-audit as needed.
 
 Handoff policy:
 
-Keep planning in Hermes; if the accepted plan requires code edits, prepare a selected executor/runtime handoff after acceptance.
+Keep codebase orientation in Hermes as prepared local context. File reads, generated maps, and first-task recommendations need observed repo evidence; code edits and executor handoffs happen only after onboarding identifies a concrete task.
 
 Required inputs:
 
-- requirements
-- constraints
-- known facts
-- non-goals
+- repo root or supplied source context
+- target audience: operator, new contributor, maintainer, or executor
+- desired depth: quick map, architecture tour, first issue, or handoff pack
+- known constraints such as no network, no secrets, or read-only mode
 
 Expected outputs:
 
-- plan
-- acceptance criteria
-- verification strategy
+- codebase_onboarding_plan/v1
+- repo_map/v1
+- reading_path/v1
+- domain_glossary/v1
+- risk_and_unknowns_map/v1
+- first_task_runway/v1
+- not-evidence boundary
 
 Artifact expectations:
 
-- plan artifact when durable execution will follow
+- repo_map/v1 with observed directories, entrypoints, generated surfaces, tests, docs, scripts, and runtime artifacts
+- reading_path/v1 ordered from product direction to architecture, core modules, tests, and operational docs
+- domain_glossary/v1 with repo-specific terms, owners, artifacts, and evidence references
+- first_task_runway/v1 with low-risk starter tasks, verification commands, and handoff readiness
 
 Safety rules:
 
-- Do not imply hidden Hermes runtime behavior.
-- Use the smallest verification that can prove the claim.
+- Do not invent architecture, ownership, maturity, or runtime behavior without observed repo evidence.
+- Do not mutate files, run setup, install dependencies, or dispatch an executor from onboarding alone.
+- Keep onboarding findings, inferred risks, first-task suggestions, and implementation handoffs separate.
+- Never expose secrets from config or environment files; record only redacted paths and risk categories.
 
 ## Harness Discipline
 
@@ -113,12 +124,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `planning`.
+Preferred harness for this skill: `codebase-onboarding`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill plan --harness planning --status started
+omh runtime record --skill codebase-onboarding --harness codebase-onboarding --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 
@@ -131,7 +142,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 - Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
 - Respect `omh_target_topology/v1` when a wrapper reports it: bind state to the current target/thread, adapt only the parts of this workflow that benefit from multiple Hermes agents, and fall back to single-target behavior when `active_agent_count` is one.
 - When target topology changes from one to many or many to one, give a concise setup-change comment or use the wrapper's apply action before treating the new topology as persistent.
-- When wrapper metadata includes `memory_review_card/v1` or `handoff_context_pack/v1`, treat it as reviewed OMH-local or wrapper-supplied context only. Use conflict-free context summaries to shape plans and handoffs, but do not claim Hermes internal memory was read or changed.
+- Treat wrapper-supplied memory/context summaries as advisory local context, not proof that opaque Hermes memory was read or changed.
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
   - goal tools -> `.omh/goals/` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, `goal_continuation/v1`, or explicit checklists with named next actions,
   - question renderers -> one concise question in the current Hermes interface,
