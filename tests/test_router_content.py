@@ -576,6 +576,17 @@ class RouterContentTests(unittest.TestCase):
         self.assertNotIn("Inputs:", harness_registry)
         self.assertNotIn("Quality Bar:", harness_registry)
 
+    def test_harness_session_inventory_uses_inventory_specific_completion_copy(self) -> None:
+        templates = {template.name: template.content for template in builtin_skill_templates()}
+        content = templates["harness-session-inventory"]
+        workflow_reference = workflow_reference_markdown()
+
+        self.assertIn("The inventory scope names the harnesses", content)
+        self.assertIn("Prepared, observed, missing, stale, and drifted entries", content)
+        self.assertIn("The inventory scope names the harnesses", workflow_reference)
+        self.assertNotIn("provider metrics", content)
+        self.assertNotIn("cost or latency", content)
+
     def test_research_harness_exposes_source_quality_ladder(self) -> None:
         contract = harness_quality_contract("research")
 

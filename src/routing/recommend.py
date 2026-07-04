@@ -1081,8 +1081,12 @@ def _phrase_match(query: str, value: str) -> bool:
     return bool(query and value and (query in value or value in query))
 
 
+def _explicit_phrase_match(query: str, value: str) -> bool:
+    return bool(query and value and value in query)
+
+
 def _harness_session_inventory_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if any(_phrase_match(normalized_query, phrase) for phrase in _HARNESS_SESSION_INVENTORY_INTENT_PHRASES):
+    if any(_explicit_phrase_match(normalized_query, phrase) for phrase in _HARNESS_SESSION_INVENTORY_INTENT_PHRASES):
         return True
     has_inventory_intent = bool(query_tokens & _HARNESS_SESSION_INVENTORY_INTENT_TOKENS)
     has_harness_context = bool(query_tokens & _HARNESS_SESSION_INVENTORY_CONTEXT_TOKENS)

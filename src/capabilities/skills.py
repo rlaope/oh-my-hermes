@@ -10,6 +10,11 @@ from ..plugin_bundle.omh.awareness import awareness_lane_examples, awareness_pri
 from .schema import SKILL_CAPABILITY_SCHEMA_VERSION
 
 
+_COMPACT_FULL_CAPABILITY_EXAMPLE_LANES = frozenset(
+    {"automation_and_status", "research_and_ops", "coding_handoff"}
+)
+
+
 def skill_capabilities() -> list[dict[str, object]]:
     awareness = awareness_primer_payload()
     lane_by_skill = _awareness_lane_by_skill(awareness)
@@ -131,7 +136,11 @@ def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_us
 
 def _capability_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    return examples[:1]
+    if skill_id in {"loop", "img-summary", "harness-session-inventory"}:
+        return examples[:1]
+    if lane_id in _COMPACT_FULL_CAPABILITY_EXAMPLE_LANES:
+        return examples[:1]
+    return examples[:2]
 
 
 def _skill_evidence_boundary(definition: SkillDefinition) -> str:

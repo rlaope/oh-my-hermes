@@ -3577,12 +3577,12 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
-  - Local telemetry, provider truth, billing truth, and completion evidence are separate states.
-  - Warnings name the next measurement or operator review action.
+  - The inventory scope names the harnesses, sessions, MCP hosts, connector configs, and worktrees being compared.
+  - Prepared, observed, missing, stale, and drifted entries are separated before any health or progress claim.
+  - The next action says whether to load a host, verify a connector, inspect a worktree, dispatch an executor, or stay blocked.
 - Recovery notes:
-  - If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-  - If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+  - If config sources are unavailable, report only the discovered surfaces and mark the missing hosts not_observed.
+  - If cleanup, host load, connector execution, or session progress is requested, route to the owning workflow instead of folding it into inventory.
 - Required inputs:
   - user request
   - target context

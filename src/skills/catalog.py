@@ -688,6 +688,8 @@ def _feature_surface_skill(
     bad_prompt: str,
     expected_outputs: tuple[str, ...] | None = None,
     artifact_expectations: tuple[str, ...] | None = None,
+    final_checklist: tuple[str, ...] | None = None,
+    recovery_notes: tuple[str, ...] | None = None,
 ) -> SkillDefinition:
     return SkillDefinition(
         name,
@@ -736,6 +738,8 @@ def _feature_surface_skill(
             expected="Report the missing observed evidence or authority instead of claiming the external step happened.",
             why="Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.",
         ),
+        final_checklist=final_checklist or (),
+        recovery_notes=recovery_notes or (),
     )
 
 
@@ -4420,6 +4424,15 @@ _FEATURE_SURFACE_SKILLS = (
             "harness_session_adapter_matrix/v1 with observed, prepared, missing, and stale adapters",
             "mcp_inventory_drift_report/v1 with secret-redacted config/source drift only",
             "worktree_lifecycle_snapshot/v1 with merge-conflict and cleanup candidates when observed",
+        ),
+        final_checklist=(
+            "The inventory scope names the harnesses, sessions, MCP hosts, connector configs, and worktrees being compared.",
+            "Prepared, observed, missing, stale, and drifted entries are separated before any health or progress claim.",
+            "The next action says whether to load a host, verify a connector, inspect a worktree, dispatch an executor, or stay blocked.",
+        ),
+        recovery_notes=(
+            "If config sources are unavailable, report only the discovered surfaces and mark the missing hosts not_observed.",
+            "If cleanup, host load, connector execution, or session progress is requested, route to the owning workflow instead of folding it into inventory.",
         ),
     ),
     _feature_surface_skill(

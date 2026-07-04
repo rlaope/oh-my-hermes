@@ -836,7 +836,9 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
 
 def _standalone_skill_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    return examples[:1]
+    if skill_id in {"loop", "img-summary", "harness-session-inventory"}:
+        return examples[:1]
+    return examples[:2]
 
 
 def _standalone_playbook_capabilities() -> list[dict[str, object]]:
