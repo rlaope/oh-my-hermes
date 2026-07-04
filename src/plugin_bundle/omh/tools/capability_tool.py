@@ -787,7 +787,9 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
     awareness = awareness_primer_payload()
     chat_rule = str(awareness.get("chat_rule") or "")
     context_rule = str(awareness.get("all_skill_context_rule") or "")
-    evidence_boundary = str(awareness.get("evidence_boundary") or "")
+    evidence_boundary = (
+        "Prepared OMH guidance is not observed execution, delivery, review, CI, merge-readiness, or merge evidence."
+    )
     fallback_rule = str(awareness.get("fallback_rule") or "")
     for lane in awareness["lanes"]:
         if not isinstance(lane, dict):
@@ -814,19 +816,25 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
                     "awareness_lane_label": lane_label,
                     "use_for": str(lane.get("use_for") or ""),
                     "workflow_routing_hint": (
-                        f"Use `{skill_id}` for {lane_label}: "
-                        f"{lane.get('use_for') or 'OMH workflow guidance'}. "
-                        "If it crosses lanes, name the adjacent workflow."
+                        f"Use `{skill_id}` for {lane_label}: {lane.get('use_for') or 'OMH workflow guidance'}. "
+                        "Name adjacent workflow for cross-lane requests."
                     ),
                     "workflow_context_rule": context_rule,
                     "chat_rule": chat_rule,
                     "fallback_rule": fallback_rule,
                     "evidence_boundary": evidence_boundary,
-                    "cross_lane_examples": awareness_lane_examples(lane_id),
+                    "cross_lane_examples": _standalone_skill_lane_examples(lane_id, skill_id),
                     "degraded": True,
                 }
             )
     return sorted(capabilities, key=lambda item: str(item["id"]))
+
+
+def _standalone_skill_lane_examples(lane_id: str, skill_id: str) -> list[str]:
+    examples = awareness_lane_examples(lane_id)
+    if skill_id in {"loop", "img-summary"}:
+        return examples[:1]
+    return examples[:2]
 
 
 def _standalone_playbook_capabilities() -> list[dict[str, object]]:
