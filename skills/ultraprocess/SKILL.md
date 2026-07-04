@@ -43,6 +43,7 @@ Bad example:
 - Research and codebase context are captured before implementation handoff.
 - A ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.
 - The implementation owner is selected and handoff, dispatch, run, review, CI, and PR readiness are separated.
+- If the implementation owner is Hermes, `hermes_coding_harness/v1` names the current stage, lane owner, next action, and missing evidence.
 - The code-review gate is observed or explicitly marked not_observed.
 - Docs sync is checked when behavior, setup, commands, examples, or public claims changed.
 

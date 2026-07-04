@@ -157,6 +157,9 @@ understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
 
 - Coding-heavy work can be prepared for Codex, Claude Code, Hermes runtime, or
   another selected executor while preserving the prepared-vs-observed boundary.
+- When Hermes itself owns the coding work, the Hermes coding harness shows the
+  builder, verifier, reviewer, docs, and PR lanes without claiming unobserved
+  execution.
 - Worktree and session helpers make it easier to open, attach, record, and
   review subagent work without mixing unrelated repo state.
 

@@ -89,6 +89,37 @@
         </div>
       </section>
 
+      <section class="feature-section feature-section--split">
+        <div class="feature-copy">
+          <h2>Hermes coding harness</h2>
+          <p>
+            When the user chooses Hermes itself as the coding owner, OMH adds a
+            read-only <code>hermes_coding_harness/v1</code> view. It does not
+            launch workers or create PRs. It tells the wrapper which stage is
+            current, which lane owns the next step, and which evidence is still
+            missing.
+          </p>
+          <div class="feature-flow feature-flow--handoff" aria-label="Hermes coding harness flow">
+            <span>intake</span>
+            <span>plan</span>
+            <span>build</span>
+            <span>verify</span>
+            <span>review</span>
+            <span>PR prep</span>
+          </div>
+        </div>
+        <aside class="feature-contract">
+          <h2>Separate lanes</h2>
+          <ul class="docs-list">
+            <li>Builder lane: implementation scope and workspace ownership.</li>
+            <li>Verifier lane: commands and observed check evidence.</li>
+            <li>Reviewer lane: code, architecture, security, or risk review.</li>
+            <li>Docs lane: README, docs, site, and generated skill sync.</li>
+            <li>PR lane: DCO, PR body, CI, merge readiness, and merge gaps.</li>
+          </ul>
+        </aside>
+      </section>
+
       <section class="feature-section">
         <h2>Use cases</h2>
         <div class="usecase-grid">

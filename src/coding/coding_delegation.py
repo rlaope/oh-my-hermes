@@ -30,6 +30,7 @@ from ..executors import (
     runtime_profile_contract,
     runtime_templates_for_profile,
 )
+from .hermes_harness import build_hermes_coding_harness
 from ..executor_readiness import (
     executor_readiness_contract,
     executor_readiness_for_selection,
@@ -941,6 +942,7 @@ def _runtime_handoff(
     team_path = hermes_coding_team_path_contract(profile)
     if team_path:
         handoff["hermes_coding_team_path"] = team_path
+        handoff["hermes_coding_harness"] = build_hermes_coding_harness(runtime_handoff=handoff)
     return handoff
 
 

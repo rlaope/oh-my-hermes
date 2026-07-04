@@ -115,6 +115,11 @@ _HANDOFF_FINAL_CHECKLIST = (
     "The final status cites observed runtime evidence or keeps the work prepared_not_observed.",
 )
 
+_HERMES_CODING_HARNESS_FINAL_CHECKLIST = (
+    "When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.",
+    "Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.",
+)
+
 _HANDOFF_RECOVERY_NOTES = (
     "If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.",
     "If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.",
@@ -282,7 +287,7 @@ _CATEGORY_RECOVERY_NOTES = {
 
 def _default_final_checklist(name: str, category: str, hermes_role: str, quality_tier: str) -> tuple[str, ...]:
     if hermes_role == "handoff-guide" or quality_tier == "handoff-gated":
-        return _HANDOFF_FINAL_CHECKLIST
+        return _HANDOFF_FINAL_CHECKLIST + _HERMES_CODING_HARNESS_FINAL_CHECKLIST
     return _CATEGORY_FINAL_CHECKLISTS.get(category, _GENERAL_FINAL_CHECKLIST)
 
 
@@ -870,6 +875,7 @@ _DEFINITIONS = [
             "All explicitly linked coding milestones have matching observed runtime evidence or are still named as gaps.",
             "The final user-facing status says complete, blocked, or continue with the exact remaining checkpoint.",
             "Long-running or background executor milestones report observed handles, current state, changed-file summaries, missing checks, and prepared-vs-observed boundaries while work is running.",
+            "When Hermes is the coding owner, use `hermes_coding_harness/v1` to separate builder, verifier, reviewer, docs, and PR lanes.",
             "Branch, PR, CI, review, and merge claims are verified against local HEAD, remote branch SHA, PR head SHA, and merge commit before saying a fix landed.",
         ),
         recovery_notes=(
@@ -1056,6 +1062,7 @@ _DEFINITIONS = [
             "Research and codebase context are captured before implementation handoff.",
             "A ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.",
             "The implementation owner is selected and handoff, dispatch, run, review, CI, and PR readiness are separated.",
+            "If the implementation owner is Hermes, `hermes_coding_harness/v1` names the current stage, lane owner, next action, and missing evidence.",
             "The code-review gate is observed or explicitly marked not_observed.",
             "Docs sync is checked when behavior, setup, commands, examples, or public claims changed.",
         ),
@@ -1146,6 +1153,7 @@ _DEFINITIONS = [
         final_checklist=(
             "Each lane has an owner, disjoint scope, expected output, and verification target.",
             "Worker ACK, dispatch, result, integration, and verification evidence are separated when wrappers record them.",
+            "Hermes-owned coding teams use `hermes_coding_harness/v1` so builder, verifier, reviewer, docs, and PR lanes stay distinct even in solo mode.",
             "The integrated status names which lanes are observed, blocked, or still prepared_not_observed.",
         ),
         recovery_notes=(
@@ -1196,6 +1204,7 @@ _DEFINITIONS = [
         final_checklist=(
             "All work lanes are disjoint by file, invariant, or responsibility before preparing parallel handoffs.",
             "Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.",
+            "When Hermes owns the coding path, use `hermes_coding_harness/v1` to separate builder, verifier, reviewer, docs, and PR lanes.",
             "Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.",
             "Integration verification ran after lane results before the final status claims completion.",
         ),
@@ -2683,6 +2692,7 @@ _DEFINITIONS = [
             "Generate hostile scenarios from changed behavior and known risk areas.",
             "Report pass/fail evidence separately from proposed fixes.",
             "Delegate code mutations discovered by QA to the selected coding executor.",
+            "When Hermes owns the coding path, read `hermes_coding_harness/v1` before saying build, verification, review, docs, or PR-prep evidence exists.",
         ),
     ),
     SkillDefinition(
@@ -2853,6 +2863,7 @@ _DEFINITIONS = [
         quality_bar=(
             "Lead with ranked findings grounded in file, diff, command, or artifact evidence.",
             "Separate review findings from fix implementation; fixes become executor work.",
+            "For Hermes-owned coding work, inspect `hermes_coding_harness/v1` and require review evidence before upgrading the reviewer lane.",
             "Say clearly when no actionable issue is found and name remaining test gaps.",
         ),
         why_this_exists="`code-review` exists to make review bug-first and evidence-grounded: findings must cite concrete files, diffs, commands, or artifacts before any summary or fix proposal.",
@@ -3157,7 +3168,7 @@ _FEATURE_SURFACE_SKILLS = (
         category="github-ops",
         phase="event-routing",
         next_action="prepare_github_event_ops_card",
-        boundary="A GitHub event ops card is not webhook delivery, GitHub API mutation, review completion, label application, CI rerun, or fix execution evidence.",
+        boundary="A GitHub event ops card is not webhook delivery, GitHub API mutation, review completion, label application, CI rerun, or fix execution evidence. When a fix is owned by Hermes coding, read `hermes_coding_harness/v1` before reporting build, review, CI, PR, or merge state.",
         good_prompt="github-event-ops PR opened with failing CI; triage whether this needs review or fix handoff.",
         bad_prompt="github-event-ops prove the issue was labelled and CI was rerun.",
     ),
@@ -3533,7 +3544,7 @@ _FEATURE_SURFACE_SKILLS = (
         category="operator",
         phase="manager-review",
         next_action="prepare_agent_ops_review",
-        boundary="An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence.",
+        boundary="An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence. If Hermes is the coding owner, summarize `hermes_coding_harness/v1` stage, lane owner, next action, and missing evidence.",
         good_prompt="agent-ops-review show quality, blockers, and throughput for AI-agent work.",
         bad_prompt="agent-ops-review claim Codex finished and CI passed because a handoff exists.",
     ),
@@ -4830,6 +4841,7 @@ _HARNESSES = [
             "Check public claims against implemented behavior and known limitations.",
             "Keep examples reproducible and avoid presenting roadmap as current capability.",
             "Regenerate generated references from catalog data instead of hand-editing them.",
+            "When Hermes owns coding, use `hermes_coding_harness/v1` docs lane state before saying docs sync, PR prep, review, or CI evidence exists.",
         ),
         evidence_ladder=("claims_scoped", "docs_updated", "generated_docs_checked", "public_claims_verified"),
         wrapper_actions=("show_docs", "record_claim_check", "show_status"),

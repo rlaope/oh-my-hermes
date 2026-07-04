@@ -539,6 +539,11 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
         executor_status,
     )
     status_card = build_executor_session_status_card(executor_status)
+    hermes_harness = executor_status.get("hermes_coding_harness", {})
+    hermes_harness = hermes_harness if isinstance(hermes_harness, dict) else {}
+    if hermes_harness:
+        chat_response["hermes_coding_harness"] = hermes_harness
+        status_card["hermes_coding_harness"] = hermes_harness
     coding_briefing = build_coding_briefing(
         session,
         executor_status=executor_status,
@@ -558,6 +563,7 @@ def build_wrapper_session_status(paths: OmhPaths, session_id: str) -> dict[str, 
         "runtime_handoff": session.get("runtime_handoff", {}) if session["status"] == "runtime_handoff_prepared" else {},
         "runtime_observation": runtime_observation,
         "runtime_observation_errors": observation_errors,
+        "hermes_coding_harness": hermes_harness,
         "executor_session_status": executor_status,
         "coding_briefing": coding_briefing,
         "status_card": status_card,

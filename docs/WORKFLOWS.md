@@ -111,6 +111,8 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The selected coding or runtime owner is named before any implementation claim.
   - Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
   - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+  - When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
+  - Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
 - Recovery notes:
   - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
   - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
@@ -170,6 +172,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - All explicitly linked coding milestones have matching observed runtime evidence or are still named as gaps.
   - The final user-facing status says complete, blocked, or continue with the exact remaining checkpoint.
   - Long-running or background executor milestones report observed handles, current state, changed-file summaries, missing checks, and prepared-vs-observed boundaries while work is running.
+  - When Hermes is the coding owner, use `hermes_coding_harness/v1` to separate builder, verifier, reviewer, docs, and PR lanes.
   - Branch, PR, CI, review, and merge claims are verified against local HEAD, remote branch SHA, PR head SHA, and merge commit before saying a fix landed.
 - Recovery notes:
   - If the goal ledger is stale or missing, inspect .omh/goals and ask which checkpoint to resume before continuing.
@@ -328,6 +331,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Research and codebase context are captured before implementation handoff.
   - A ralplan-style or reviewed plan names acceptance criteria, risks, and verification commands.
   - The implementation owner is selected and handoff, dispatch, run, review, CI, and PR readiness are separated.
+  - If the implementation owner is Hermes, `hermes_coding_harness/v1` names the current stage, lane owner, next action, and missing evidence.
   - The code-review gate is observed or explicitly marked not_observed.
   - Docs sync is checked when behavior, setup, commands, examples, or public claims changed.
 - Recovery notes:
@@ -446,6 +450,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Completion checklist:
   - Each lane has an owner, disjoint scope, expected output, and verification target.
   - Worker ACK, dispatch, result, integration, and verification evidence are separated when wrappers record them.
+  - Hermes-owned coding teams use `hermes_coding_harness/v1` so builder, verifier, reviewer, docs, and PR lanes stay distinct even in solo mode.
   - The integrated status names which lanes are observed, blocked, or still prepared_not_observed.
 - Recovery notes:
   - If two lanes are not independent, collapse them under one owner or re-plan before dispatch.
@@ -502,6 +507,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Completion checklist:
   - All work lanes are disjoint by file, invariant, or responsibility before preparing parallel handoffs.
   - Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.
+  - When Hermes owns the coding path, use `hermes_coding_harness/v1` to separate builder, verifier, reviewer, docs, and PR lanes.
   - Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.
   - Integration verification ran after lane results before the final status claims completion.
 - Recovery notes:
@@ -1709,6 +1715,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - Generate hostile scenarios from changed behavior and known risk areas.
   - Report pass/fail evidence separately from proposed fixes.
   - Delegate code mutations discovered by QA to the selected coding executor.
+  - When Hermes owns the coding path, read `hermes_coding_harness/v1` before saying build, verification, review, docs, or PR-prep evidence exists.
 - Completion checklist:
   - The scenario, expected behavior, observed result, and pass/fail basis are named.
   - Proposed fixes are separated from observed QA evidence.
@@ -1884,6 +1891,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Quality bar:
   - Lead with ranked findings grounded in file, diff, command, or artifact evidence.
   - Separate review findings from fix implementation; fixes become executor work.
+  - For Hermes-owned coding work, inspect `hermes_coding_harness/v1` and require review evidence before upgrading the reviewer lane.
   - Say clearly when no actionable issue is found and name remaining test gaps.
 - Completion checklist:
   - Findings come first and are ranked by severity before summary or praise.
@@ -1945,6 +1953,8 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The selected coding or runtime owner is named before any implementation claim.
   - Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
   - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+  - When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
+  - Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
 - Recovery notes:
   - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
   - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
@@ -2443,7 +2453,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Artifact expectations:
   - github-event-ops/v1 metadata-only runtime or wrapper card when recorded
 - Safety rules:
-  - A GitHub event ops card is not webhook delivery, GitHub API mutation, review completion, label application, CI rerun, or fix execution evidence.
+  - A GitHub event ops card is not webhook delivery, GitHub API mutation, review completion, label application, CI rerun, or fix execution evidence. When a fix is owned by Hermes coding, read `hermes_coding_harness/v1` before reporting build, review, CI, PR, or merge state.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ### agent-board
@@ -2648,6 +2658,8 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The selected coding or runtime owner is named before any implementation claim.
   - Prepared handoff, dispatch, execution, verification, review, CI, and merge states are separated.
   - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
+  - When Hermes is the selected coding owner, use `hermes_coding_harness/v1` to keep builder, verifier, reviewer, docs, and PR lanes separate.
+  - Report the current harness stage, owner, next action, and missing evidence without claiming PR creation, review, CI, merge-readiness, or merge until matching runtime observations exist.
 - Recovery notes:
   - If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.
   - If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.
@@ -3001,7 +3013,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Artifact expectations:
   - agent-ops-review/v1 metadata-only runtime or wrapper card when recorded
 - Safety rules:
-  - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence.
+  - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence. If Hermes is the coding owner, summarize `hermes_coding_harness/v1` stage, lane owner, next action, and missing evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ### workflow-learning
@@ -4512,6 +4524,7 @@ Keep public docs accurate, installable, and aligned with actual behavior.
   - Check public claims against implemented behavior and known limitations.
   - Keep examples reproducible and avoid presenting roadmap as current capability.
   - Regenerate generated references from catalog data instead of hand-editing them.
+  - When Hermes owns coding, use `hermes_coding_harness/v1` docs lane state before saying docs sync, PR prep, review, or CI evidence exists.
 - Inputs:
   - changed behavior
   - commands

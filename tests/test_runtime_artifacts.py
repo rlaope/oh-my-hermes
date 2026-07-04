@@ -508,6 +508,32 @@ class RuntimeArtifactTests(unittest.TestCase):
         handoff = build_coding_delegation_payload("coordinate a safe coding team", executor_target="hermes")["runtime_handoff"]
 
         self.assertEqual(validate_coding_runtime_handoff(handoff), [])
+        self.assertEqual(handoff["hermes_coding_harness"]["schema_version"], "hermes_coding_harness/v1")
+        self.assertEqual(
+            [stage["id"] for stage in handoff["hermes_coding_harness"]["workflow_graph"]],
+            ["intake", "scope", "plan", "workspace", "build", "verify", "review", "docs_sync", "pr_prep", "handover"],
+        )
+        self.assertEqual(
+            [lane["id"] for lane in handoff["hermes_coding_harness"]["lanes"]],
+            ["builder_lane", "verifier_lane", "reviewer_lane", "docs_lane", "pr_lane"],
+        )
+        self.assertIn("read-only projection", handoff["hermes_coding_harness"]["claim_boundary"])
+
+        missing_harness_stage = deepcopy(handoff)
+        missing_harness_stage["hermes_coding_harness"]["workflow_graph"] = [
+            stage
+            for stage in missing_harness_stage["hermes_coding_harness"]["workflow_graph"]
+            if stage["id"] != "pr_prep"
+        ]
+        self.assertIn("canonical ordered stages", json.dumps(validate_coding_runtime_handoff(missing_harness_stage)))
+
+        missing_harness_lane = deepcopy(handoff)
+        missing_harness_lane["hermes_coding_harness"]["lanes"] = [
+            lane
+            for lane in missing_harness_lane["hermes_coding_harness"]["lanes"]
+            if lane["id"] != "reviewer_lane"
+        ]
+        self.assertIn("builder/verifier/reviewer/docs/pr lanes", json.dumps(validate_coding_runtime_handoff(missing_harness_lane)))
 
         missing_durable_goal = deepcopy(handoff)
         missing_durable_goal["hermes_coding_team_path"]["start_modes"] = [
