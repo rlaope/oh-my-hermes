@@ -544,8 +544,12 @@ WORKFLOW_CONTEXT_CARDS = (
         "user_signal": "recurring digest, cron-like request, gateway command, health check, status confusion, workflow learning, or runtime question",
         "omh_pattern": "prepare a schedule/status/repair/learning card, name required tools or evidence, then keep observed runtime state separate",
         "representative_workflows": (
+            "workspace-audit",
+            "production-audit",
             "automation-blueprint",
             "agent-ops-review",
+            "agent-evaluation",
+            "rules-distill",
             "workflow-learning",
             "toolbelt-readiness",
             "doctor",
@@ -597,7 +601,10 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "frontend": "materials_and_visuals",
     "visual-qa": "materials_and_visuals",
     "achievements": "automation_and_status",
+    "workspace-audit": "automation_and_status",
+    "production-audit": "automation_and_status",
     "automation-blueprint": "automation_and_status",
+    "agent-evaluation": "automation_and_status",
     "agent-board": "automation_and_status",
     "agent-ops-review": "automation_and_status",
     "doctor": "automation_and_status",
@@ -609,10 +616,12 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "skill": "automation_and_status",
     "toolbelt-readiness": "automation_and_status",
     "voice-operator": "automation_and_status",
+    "rules-distill": "automation_and_status",
     "workflow-learning": "automation_and_status",
     "ai-slop-cleaner": "coding_handoff",
     "ask": "coding_handoff",
     "code-review": "coding_handoff",
+    "verification-gate": "coding_handoff",
     "cto-loop": "coding_handoff",
     "deploy-and-monitor": "coding_handoff",
     "executor-runtime-readiness": "coding_handoff",
@@ -1214,6 +1223,121 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": ("screenshot", "viewport", "diff", "clipping"),
         "adjacent_workflows": ("frontend", "design-quality-gate", "img-summary", "materials-package"),
+    },
+    {
+        "id": "workspace_surface_audit",
+        "workflow": "workspace-audit",
+        "lane": "automation_and_status",
+        "next_action": "prepare_workspace_audit",
+        "reason": "The user is asking for a repo/workspace surface inventory, config audit, or gap map before strengthening OMH.",
+        "fallback_action": "confirm_audit_scope_and_read_only_boundary",
+        "phrases": (
+            "workspace-audit",
+            "workspace audit",
+            "repo surface audit",
+            "workspace surface audit",
+            "skill inventory",
+            "plugin inventory",
+            "mcp inventory",
+            "config audit",
+            "what are we missing",
+            "레포 감사",
+            "워크스페이스 감사",
+            "설정 감사",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("doctor", "toolbelt-readiness", "rules-distill"),
+    },
+    {
+        "id": "production_readiness_audit",
+        "workflow": "production-audit",
+        "lane": "automation_and_status",
+        "next_action": "prepare_production_audit",
+        "reason": "The user is asking for production, launch, release, rollback, or operational readiness review.",
+        "fallback_action": "ask_for_release_scope_environment_and_observed_evidence",
+        "phrases": (
+            "production-audit",
+            "production audit",
+            "production readiness",
+            "ready to ship",
+            "release readiness",
+            "launch readiness",
+            "rollback readiness",
+            "프로덕션 준비",
+            "출시 준비",
+            "운영 준비",
+            "릴리즈 준비",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("verification-gate", "reliability-review", "ops-observability-card"),
+    },
+    {
+        "id": "verification_gate",
+        "workflow": "verification-gate",
+        "lane": "coding_handoff",
+        "next_action": "prepare_verification_gate",
+        "reason": "The user is asking for build, lint, typecheck, test, security, generated-output, CI, or merge-readiness evidence gating.",
+        "fallback_action": "list_required_checks_and_missing_fresh_evidence",
+        "phrases": (
+            "verification-gate",
+            "verification gate",
+            "quality gate",
+            "test gate",
+            "build lint test",
+            "verify before merge",
+            "merge readiness gate",
+            "검증 게이트",
+            "품질 게이트",
+            "테스트 게이트",
+            "머지 전 검증",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("code-review", "production-audit", "ultraprocess"),
+    },
+    {
+        "id": "agent_evaluation",
+        "workflow": "agent-evaluation",
+        "lane": "automation_and_status",
+        "next_action": "prepare_agent_evaluation",
+        "reason": "The user is asking to compare executors or agents with reproducible tasks and scorecards.",
+        "fallback_action": "define_eval_tasks_rubric_budget_and_observation_plan",
+        "phrases": (
+            "agent-evaluation",
+            "agent evaluation",
+            "agent eval",
+            "agent benchmark",
+            "executor evaluation",
+            "compare agents",
+            "compare codex claude",
+            "agent tournament",
+            "에이전트 평가",
+            "에이전트 비교",
+            "실행자 평가",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("executor-runtime-readiness", "agent-ops-review", "verification-gate"),
+    },
+    {
+        "id": "rules_distillation",
+        "workflow": "rules-distill",
+        "lane": "automation_and_status",
+        "next_action": "prepare_rules_distillation",
+        "reason": "The user is asking to extract repeated principles from skills, traces, prompts, reviews, or failures.",
+        "fallback_action": "collect_source_corpus_and_review_destination_boundary",
+        "phrases": (
+            "rules-distill",
+            "rules distill",
+            "distill rules",
+            "rule distillation",
+            "skill principles",
+            "extract agent rules",
+            "turn traces into rules",
+            "규칙 증류",
+            "원칙 추출",
+            "스킬 원칙",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("workflow-learning", "wiki", "workspace-audit"),
     },
     {
         "id": "reliability_incident_review",
@@ -2867,6 +2991,8 @@ def awareness_primer_payload() -> dict[str, object]:
             "label": "Automation and status",
             "skills": [
                 "achievements",
+                "workspace-audit",
+                "production-audit",
                 "automation-blueprint",
                 "github-event-ops",
                 "agent-board",
@@ -2875,6 +3001,8 @@ def awareness_primer_payload() -> dict[str, object]:
                 "toolbelt-readiness",
                 "ops-observability-card",
                 "agent-ops-review",
+                "agent-evaluation",
+                "rules-distill",
                 "memory-curation-review",
                 "workflow-learning",
                 "doctor",
@@ -2892,6 +3020,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "cto-loop",
                 "deploy-and-monitor",
                 "code-review",
+                "verification-gate",
                 "ultrawork",
                 "team",
                 "ultraqa",
@@ -3096,7 +3225,11 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
     lane = _lane_for_skill(skill_name, payload["lanes"])
     lane_line = "Use `omh_recommend` or the `oh-my-hermes` router for workflow choice, and `omh_capabilities` for manifest detail."
     if lane:
-        skills = "`, `".join(str(skill) for skill in lane["skills"])
+        lane_skills = tuple(str(skill) for skill in lane["skills"])
+        shown_skills = lane_skills[:8]
+        skills = "`, `".join(shown_skills)
+        if len(lane_skills) > len(shown_skills):
+            skills = f"{skills}`, `+{len(lane_skills) - len(shown_skills)} more"
         lane_line = f"Current lane: **{lane['label']}** (`{skills}`) - {lane['use_for']}."
     return "\n".join(
         [
@@ -3120,25 +3253,26 @@ def _compact_workflow_cue_line() -> str:
         "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
         "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
         "premium visuals -> design-quality-gate; frontend -> frontend; screenshots/render checks -> visual-qa; files/decks/PDF/sheets/docs/HWP -> materials/report-package; image cards -> img-summary; "
-        "coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; "
+        "code/CI/merge -> ultraprocess/code-review/verification-gate; "
         "trace/improve/regression -> workflow-learning"
     )
 
 
 def _compact_workflow_context_cards_line() -> str:
     return (
-        "intent -> deep-interview/ralplan/loop/ultraprocess; "
-        "signals -> web-research/research-department/feedback-triage/meeting-brief; "
-        "materials -> design-quality-gate/frontend/visual-qa/materials-package/report-package/img-summary; "
-        "automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; "
-        "code -> ultraprocess/code-review/team/ultrawork/ultraqa"
+        "intent -> deep-interview/ralplan/loop; "
+        "signals -> web-research/research-department/feedback-triage; "
+        "materials -> design-quality-gate/frontend/visual-qa/materials-package; "
+        "ops -> automation-blueprint/workspace-audit/production-audit/workflow-learning/doctor; "
+        "eval/rules -> agent-evaluation/rules-distill; "
+        "code -> ultraprocess/code-review/verification-gate/team/ultraqa"
     )
 
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
         "image->img-summary; frontend->frontend/visual-qa; paper->paper-learning; file->materials-package; "
-        "search->web-research; code->ultraprocess/ralplan/review"
+        "search->web-research; audit->workspace-audit/production-audit; verify->verification-gate; code->ultraprocess"
     )
 
 
@@ -3152,6 +3286,11 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "workflow-learning": "audit_learning_readiness",
     "frontend": "prepare_frontend_handoff",
     "visual-qa": "prepare_visual_qa",
+    "workspace-audit": "prepare_workspace_audit",
+    "production-audit": "prepare_production_audit",
+    "verification-gate": "prepare_verification_gate",
+    "agent-evaluation": "prepare_agent_evaluation",
+    "rules-distill": "prepare_rules_distillation",
     "code-review": "prepare_review_or_followup_handoff",
     "team": "show_runtime_handoff",
     "ultrawork": "prepare_parallel_delivery",
@@ -3422,6 +3561,18 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
             "dangerous refactoring",
             "위험한 리팩터링",
             "위험한 리팩토링",
+        )
+    ):
+        return True
+    if rule_id == "production_readiness_audit" and any(
+        phrase in text
+        for phrase in (
+            "cto loop",
+            "roadmap architecture tradeoffs",
+            "delivery risk and release readiness",
+            "deploy and monitor",
+            "monitor this release",
+            "rollback and health checks",
         )
     ):
         return True

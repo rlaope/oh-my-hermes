@@ -1,41 +1,42 @@
 ---
-name: ask
-description: [omh] Hermes adaptation for consulting an external advisor when configured.
+name: production-audit
+description: [omh] Hermes Production Audit workflow: evaluate release, deploy, security, observability, rollback, docs, and support readiness without claiming production access.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, review]
     category: review
-    phase: external-advice
+    phase: production-readiness
     role: reviewer
-    quality_tier: evidence-gated
+    quality_tier: production-readiness-gated
 ---
 
-# Ask
+# Production Audit
 
-This is a Hermes-native `ask` workflow skill.
+This is a Hermes-native `production-audit` workflow skill.
 
 ## Why This Exists
 
-`ask` exists to keep `review` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`production-audit` gives OMH a preflight release surface so operators can see production risks before launch while OMH stays out of deploy and infrastructure execution.
 
 ## Do Not Use When
 
-- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
-- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+- The user wants to implement a feature or fix; prepare a coding handoff first.
+- The user wants incident/SLO analysis after production behavior; use `reliability-review`.
+- The user wants a narrow code diff review; use `code-review`.
 
 ## Examples
 
 Good example:
 
-- Prompt: ask: ask Claude as an external advisor to critique this plugin bridge plan before implementation.
-- Expected behavior: Prepare an advisor prompt, capture the response boundary, and summarize reusable critique.
-- Why: The user wants outside review before committing to a direction.
+- Prompt: production-audit 이 릴리즈가 운영에 나가도 되는지 테스트, CI, 롤백, 모니터링 기준으로 봐줘.
+- Expected behavior: Prepare readiness_matrix/v1, release_gate_verdict/v1, rollback_and_monitoring_plan/v1, and missing-evidence list.
+- Why: The request is release-readiness review, not implementation or deploy execution.
 
 Bad example:
 
-- Prompt: ask: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ask`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: production-audit 지금 바로 prod 배포하고 정상이라고 말해줘.
+- Expected behavior: Block deploy/health claims without observed operator evidence and route deploy to an explicit authorized workflow.
+- Why: Production audit can assess readiness, but it cannot secretly deploy or observe live health.
 
 ## Completion Checklist
 
@@ -62,47 +63,55 @@ Bad example:
 
 ## Use When
 
-Use only when an external advisor is configured and would materially improve the answer.
+Use before launch, deploy, release, or public delivery when Hermes should check operational readiness and expose missing production evidence.
 
-    Strong routing signals: `ask`, `$ask`, `external advisor`, `claude`, `gemini`
+    Strong routing signals: `production-audit`, `production audit`, `production readiness`, `prod audit`, `prod readiness`, `ready for production`, `ready to ship`, `ship readiness`, `release readiness`, `launch readiness`, `preflight audit`, `operational readiness`, `rollback readiness`, `프로덕션 준비`, `출시 준비`, `운영 준비`, `릴리즈 준비`, `롤백 준비`
 
 ## Catalog Metadata
 
 Category: `review`
-Phase: `external-advice`
+Phase: `production-readiness`
 Hermes role: `reviewer`
-Quality tier: `evidence-gated`
+Quality tier: `production-readiness-gated`
 
 Quality bar:
 
-- Name the workflow target, constraints, validation evidence, and stop condition.
-- Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.
+- Name scope, environment, release channel, owners, and acceptable risk threshold.
+- Check build/test/CI, security/privacy, performance, observability, rollback, docs/support, and release communication.
+- Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.
+- Convert remediation into explicit follow-up workflows instead of silently patching.
 
 Handoff policy:
 
-Use as optional advice gathering; evaluate the advice in Hermes and delegate coding changes separately.
+Keep readiness synthesis in Hermes. Code fixes, deploys, infrastructure changes, security scans, and platform actions require selected executor/runtime or operator evidence.
 
 Required inputs:
 
-- question
-- context summary
-- why external advice helps
+- product, service, release, or artifact scope
+- target environment and release channel
+- known test, CI, deploy, observability, security, and support evidence
+- rollback owner and acceptable risk threshold
 
 Expected outputs:
 
-- advisor summary
-- accepted/rejected advice
-- decision note
+- production_audit_plan/v1
+- readiness_matrix/v1
+- release_gate_verdict/v1
+- rollback_and_monitoring_plan/v1
+- risk_register/v1
+- not-evidence boundary
 
 Artifact expectations:
 
-- advisor transcript reference only when explicitly captured
+- readiness_matrix/v1 covering build, tests, CI, security, performance, accessibility when relevant, deploy, rollback, observability, docs, support, and owners
+- release_gate_verdict/v1 with GO, HOLD, or BLOCK plus missing evidence
+- rollback_and_monitoring_plan/v1 with health signals, owner, threshold, and recovery path
 
 Safety rules:
 
-- Use only when configured and materially useful.
-- Treat advisor output as evidence to evaluate, not authority.
-- Do not send secrets or private prompts without explicit opt-in.
+- Do not claim production deploy, security scan, live traffic, monitoring health, rollback readiness, or support readiness without observed evidence.
+- Do not perform deploy, infra, credential, production, or external-platform actions from the audit lane.
+- Keep readiness verdict separate from implementation, CI, incident closure, or merge evidence.
 
 ## Harness Discipline
 
@@ -112,12 +121,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `critic`.
+Preferred harness for this skill: `production-audit`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill ask --harness critic --status started
+omh runtime record --skill production-audit --harness production-audit --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 
@@ -130,7 +139,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 - Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
 - Respect `omh_target_topology/v1` when a wrapper reports it: bind state to the current target/thread, adapt only the parts of this workflow that benefit from multiple Hermes agents, and fall back to single-target behavior when `active_agent_count` is one.
 - When target topology changes from one to many or many to one, give a concise setup-change comment or use the wrapper's apply action before treating the new topology as persistent.
-- When wrapper metadata includes `memory_review_card/v1` or `handoff_context_pack/v1`, treat it as reviewed OMH-local or wrapper-supplied context only. Use conflict-free context summaries to shape plans and handoffs, but do not claim Hermes internal memory was read or changed.
+- Treat wrapper-supplied memory/context summaries as advisory local context, not proof that opaque Hermes memory was read or changed.
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
   - goal tools -> `.omh/goals/` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, `goal_continuation/v1`, or explicit checklists with named next actions,
   - question renderers -> one concise question in the current Hermes interface,

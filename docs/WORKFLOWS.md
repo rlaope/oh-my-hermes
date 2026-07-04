@@ -1545,6 +1545,319 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - CJK clipping, broken wrapping, overlapping UI, invisible text, unusable controls, or offscreen critical content block PASS.
   - Do not call browsers, image tools, LLMs, or external services from OMH core.
 
+### workspace-audit
+
+[omh] Hermes Workspace Audit workflow: map repository, skill, prompt, plugin, MCP, hook, config, and runtime surfaces before strengthening or operating OMH.
+
+- Category: `operations`
+- Phase: `workspace-audit`
+- Hermes role: `operator`
+- Quality tier: `workspace-audit-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Keep the audit as Hermes-retained local evidence gathering. Prepare executor handoff only for later code changes, and record file reads, tool availability, config checks, and runtime observations only when observed.
+- Why this exists: `workspace-audit` gives OMH an ECC-inspired but OMH-native front door for understanding a large agent workspace before strengthening it, without turning inventory into hidden mutation or runtime proof.
+- Use when: Use when Hermes should inspect the local repo/workspace/operator surface and produce a safe inventory, risk map, and gap list before planning, routing, or feature strengthening.
+- Do not use when:
+  - The user already named a concrete implementation task with files and acceptance criteria; use the coding handoff or delivery workflow.
+  - The request is local OMH installation health only; use `doctor`.
+  - The request is a source acquisition or current web lookup; use `source-finder` or `web-research`.
+- Strong routing signals: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`, `skill inventory`, `prompt inventory`, `plugin inventory`, `mcp inventory`, `hook inventory`, `config audit`, `what are we missing`, `audit this repo`, `레포 감사`, `워크스페이스 감사`, `설정 감사`, `스킬 인벤토리`
+- Good example:
+  - Prompt: workspace-audit OMH에 스킬/프롬프트/플러그인 표면이 어디 비어있는지 먼저 점검해줘.
+  - Expected behavior: Prepare workspace_audit_plan/v1, observed surface_inventory/v1, gap matrix, redacted config findings, and downstream workflow recommendation.
+  - Why: The user asks for repo/workspace capability strengthening based on observed local surfaces.
+- Bad example:
+  - Prompt: workspace-audit 발견한 config 파일을 바로 고치고 secret 값도 출력해줘.
+  - Expected behavior: Refuse secret disclosure, keep the audit read-only, and prepare a separate remediation handoff if needed.
+  - Why: Workspace audit is inventory and risk mapping, not unsafe config mutation or secret extraction.
+- Quality bar:
+  - Name the audit scope, root, exclusions, and downstream decision before inspecting.
+  - Separate discovered surfaces, inferred relationships, missing evidence, risks, and candidate fixes.
+  - Rank gaps by user impact, operational risk, and reviewability rather than by file count.
+  - Route code changes, setup repair, security fixes, or skill updates into later explicit workflows.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- Required inputs:
+  - workspace or repo root
+  - audit scope: repo, skills, prompts, plugins, MCP/tools, hooks, config, docs, runtime artifacts
+  - known constraints such as no secrets, no network, or read-only mode
+  - desired downstream decision or strengthening goal
+- Expected outputs:
+  - workspace_audit_plan/v1
+  - surface_inventory/v1
+  - capability_gap_matrix/v1
+  - config_security_findings/v1
+  - downstream_workflow_recommendation/v1
+  - not-evidence boundary
+- Artifact expectations:
+  - workspace_audit_plan/v1 with target root, scopes, exclusions, and read-only boundary
+  - surface_inventory/v1 with repo, skill, prompt, plugin, MCP/tool, hook, config, docs, and runtime surfaces when observed
+  - capability_gap_matrix/v1 with missing, duplicate, stale, risky, and high-leverage strengthening candidates
+  - redacted config_security_findings/v1 when secrets, permissions, or external integrations are mentioned
+- Safety rules:
+  - Do not mutate repo files, installed skills, prompts, configs, plugins, MCP servers, hooks, secrets, or runtime state from the audit lane.
+  - Never print secret values; record only redacted key names, file paths, and risk categories.
+  - Do not claim a surface exists, is loaded, or is reachable unless file, CLI, wrapper, or supplied evidence was observed.
+  - Keep audit findings separate from implementation, setup repair, security remediation, or skill mutation.
+
+### production-audit
+
+[omh] Hermes Production Audit workflow: evaluate release, deploy, security, observability, rollback, docs, and support readiness without claiming production access.
+
+- Category: `review`
+- Phase: `production-readiness`
+- Hermes role: `reviewer`
+- Quality tier: `production-readiness-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Keep readiness synthesis in Hermes. Code fixes, deploys, infrastructure changes, security scans, and platform actions require selected executor/runtime or operator evidence.
+- Why this exists: `production-audit` gives OMH a preflight release surface so operators can see production risks before launch while OMH stays out of deploy and infrastructure execution.
+- Use when: Use before launch, deploy, release, or public delivery when Hermes should check operational readiness and expose missing production evidence.
+- Do not use when:
+  - The user wants to implement a feature or fix; prepare a coding handoff first.
+  - The user wants incident/SLO analysis after production behavior; use `reliability-review`.
+  - The user wants a narrow code diff review; use `code-review`.
+- Strong routing signals: `production-audit`, `production audit`, `production readiness`, `prod audit`, `prod readiness`, `ready for production`, `ready to ship`, `ship readiness`, `release readiness`, `launch readiness`, `preflight audit`, `operational readiness`, `rollback readiness`, `프로덕션 준비`, `출시 준비`, `운영 준비`, `릴리즈 준비`, `롤백 준비`
+- Good example:
+  - Prompt: production-audit 이 릴리즈가 운영에 나가도 되는지 테스트, CI, 롤백, 모니터링 기준으로 봐줘.
+  - Expected behavior: Prepare readiness_matrix/v1, release_gate_verdict/v1, rollback_and_monitoring_plan/v1, and missing-evidence list.
+  - Why: The request is release-readiness review, not implementation or deploy execution.
+- Bad example:
+  - Prompt: production-audit 지금 바로 prod 배포하고 정상이라고 말해줘.
+  - Expected behavior: Block deploy/health claims without observed operator evidence and route deploy to an explicit authorized workflow.
+  - Why: Production audit can assess readiness, but it cannot secretly deploy or observe live health.
+- Quality bar:
+  - Name scope, environment, release channel, owners, and acceptable risk threshold.
+  - Check build/test/CI, security/privacy, performance, observability, rollback, docs/support, and release communication.
+  - Return GO, HOLD, or BLOCK only with evidence IDs and missing evidence.
+  - Convert remediation into explicit follow-up workflows instead of silently patching.
+- Completion checklist:
+  - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
+  - Open questions, residual risk, and missing verification are named.
+  - Fixes or follow-up work are separate handoffs unless the user explicitly asked to implement them.
+- Recovery notes:
+  - If the reviewed target is missing, inspect the requested artifact or ask one target question.
+  - If independent verification is unavailable, report the gap and avoid an approval-style claim.
+- Required inputs:
+  - product, service, release, or artifact scope
+  - target environment and release channel
+  - known test, CI, deploy, observability, security, and support evidence
+  - rollback owner and acceptable risk threshold
+- Expected outputs:
+  - production_audit_plan/v1
+  - readiness_matrix/v1
+  - release_gate_verdict/v1
+  - rollback_and_monitoring_plan/v1
+  - risk_register/v1
+  - not-evidence boundary
+- Artifact expectations:
+  - readiness_matrix/v1 covering build, tests, CI, security, performance, accessibility when relevant, deploy, rollback, observability, docs, support, and owners
+  - release_gate_verdict/v1 with GO, HOLD, or BLOCK plus missing evidence
+  - rollback_and_monitoring_plan/v1 with health signals, owner, threshold, and recovery path
+- Safety rules:
+  - Do not claim production deploy, security scan, live traffic, monitoring health, rollback readiness, or support readiness without observed evidence.
+  - Do not perform deploy, infra, credential, production, or external-platform actions from the audit lane.
+  - Keep readiness verdict separate from implementation, CI, incident closure, or merge evidence.
+
+### verification-gate
+
+[omh] Hermes Verification Gate workflow: define and record build, lint, typecheck, test, security, docs, generated-output, and CI evidence before completion or merge.
+
+- Category: `verification`
+- Phase: `verification-gate`
+- Hermes role: `reviewer`
+- Quality tier: `verification-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Hermes owns the gate contract and verdict narration. Running commands, CI, browser checks, external scanners, and code fixes require observed executor, wrapper, or operator evidence.
+- Why this exists: `verification-gate` gives OMH a deterministic evidence surface before done/merge claims, inspired by ECC-style gates but rebuilt around OMH's prepared-versus-observed contract.
+- Use when: Use when Hermes must turn a change, PR, release, or claim into a concrete evidence checklist and PASS/HOLD/BLOCK verdict.
+- Do not use when:
+  - The user asks for visual render QA; use `visual-qa`.
+  - The user asks for production release readiness beyond verification commands; use `production-audit`.
+  - The user wants a bug-first code review of a diff; use `code-review`.
+- Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`
+- Good example:
+  - Prompt: verification-gate 이 PR 머지 전에 build/lint/test/docs/CI 증거를 정리해서 PASS 가능한지 봐줘.
+  - Expected behavior: Prepare verification_matrix/v1, record observed_check_results/v1, and issue PASS/HOLD/BLOCK with missing evidence.
+  - Why: The user asks for claim verification across command and CI evidence.
+- Bad example:
+  - Prompt: verification-gate 테스트 안 돌렸지만 준비됐다고 해줘.
+  - Expected behavior: Return HOLD/BLOCK and list missing or stale checks instead of claiming readiness.
+  - Why: A verification gate is useful only if planned checks and observed results stay separate.
+- Quality bar:
+  - Tie every completion claim to the smallest check that proves it, then broaden for shared surfaces.
+  - Record command/source, freshness, exit status, and scope for each observed result.
+  - Return PASS only when required checks pass and stale or missing evidence is resolved.
+  - Keep fixes, reruns, review, CI, and merge as separate observed states.
+- Completion checklist:
+  - The scenario, expected behavior, observed result, and pass/fail basis are named.
+  - Proposed fixes are separated from observed QA evidence.
+  - Missing or failed verification routes back to plan, fix, or a narrower test.
+- Recovery notes:
+  - If the expected behavior is unclear, route back to plan before running adversarial checks.
+  - If verification fails, return to fix or research with the failed signal instead of advancing.
+- Required inputs:
+  - claim or change under verification
+  - expected behavior and risk surface
+  - available local commands and CI requirements
+  - fresh observed outputs or explicit not-run gaps
+- Expected outputs:
+  - verification_gate_plan/v1
+  - verification_matrix/v1
+  - observed_check_results/v1 when observed
+  - claim_verdict/v1
+  - rerun_or_blocker/v1
+  - not-evidence boundary
+- Artifact expectations:
+  - verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable
+  - observed_check_results/v1 with command, timestamp/source, exit status, summary, and stale-output flag
+  - claim_verdict/v1 with PASS, HOLD, or BLOCK and exact missing or failed checks
+- Safety rules:
+  - Do not treat a planned command, stale output, green local check, or prepared handoff as fresh verification evidence.
+  - Do not collapse build, lint, tests, security, generated docs, review, CI, DCO, merge-readiness, or merge into one claim.
+  - Failed or unavailable checks must produce HOLD/BLOCK with a rerun or remediation path.
+
+### agent-evaluation
+
+[omh] Hermes Agent Evaluation workflow: compare executor or agent choices on reproducible tasks using quality, cost, time, tool, and evidence metrics.
+
+- Category: `operations`
+- Phase: `agent-evaluation`
+- Hermes role: `operator`
+- Quality tier: `agent-eval-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Keep evaluation design and scoring in Hermes. Actual executor runs, costs, timings, tool calls, code edits, and review results must come from observed runtime or supplied artifacts.
+- Why this exists: `agent-evaluation` gives OMH a way to improve executor choice empirically, not by vibes, while preserving executor-neutral product language across Codex, Claude Code, Hermes, and generic runtimes.
+- Use when: Use when Hermes should design or summarize a fair comparison of Codex, Claude Code, Hermes coding, or generic executors for a bounded task set.
+- Do not use when:
+  - The user needs current runtime readiness only; use `executor-runtime-readiness`.
+  - The user already selected an executor and wants implementation; use the coding handoff or delivery workflow.
+  - The user asks for workflow learning from a single failed route; use `workflow-learning`.
+- Strong routing signals: `agent-evaluation`, `agent evaluation`, `agent eval`, `agent benchmark`, `executor evaluation`, `executor benchmark`, `compare agents`, `compare codex claude`, `agent tournament`, `which agent is better`, `에이전트 평가`, `에이전트 비교`, `실행자 평가`, `코덱스 클로드 비교`
+- Good example:
+  - Prompt: agent-evaluation Codex와 Claude Code를 같은 버그 수정 태스크로 비교해서 어떤 런타임을 기본으로 둘지 판단해줘.
+  - Expected behavior: Prepare task_benchmark_set/v1, run_result_matrix/v1 requirements, scorecard/v1, and scenario-specific recommendation.
+  - Why: The request compares executor choices and needs fair evaluation boundaries.
+- Bad example:
+  - Prompt: agent-evaluation 실행 증거 없이 Codex가 항상 최고라고 결론내줘.
+  - Expected behavior: Reject universal ranking and require observed runs or mark the recommendation as ungrounded.
+  - Why: Agent evaluation must be reproducible and evidence-backed.
+- Quality bar:
+  - Define tasks, rubric, isolation, budgets, and stop rules before comparing agents.
+  - Use the same inputs and success criteria across candidates unless the difference is the variable under test.
+  - Report quality, correctness, time, cost, tool coverage, verification, and review gaps separately.
+  - Recommend executor choice per scenario and confidence, not as a universal ranking.
+- Completion checklist:
+  - Confirm the workflow target, evidence boundary, and stop condition are named.
+  - Report which outputs are prepared, observed, blocked, or missing.
+  - Name the smallest next verification or handoff instead of claiming completion from narration.
+- Recovery notes:
+  - If required context is missing, ask one blocking question or route back to the narrower workflow.
+  - If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- Required inputs:
+  - candidate executors or agents
+  - task set and fixtures
+  - success criteria and scoring rubric
+  - allowed tools, budget, timebox, and isolation policy
+  - observed run artifacts when comparing completed attempts
+- Expected outputs:
+  - agent_eval_plan/v1
+  - task_benchmark_set/v1
+  - run_result_matrix/v1 when observed
+  - scorecard/v1
+  - selection_recommendation/v1
+  - not-evidence boundary
+- Artifact expectations:
+  - task_benchmark_set/v1 with reproducible tasks, fixtures, budgets, allowed tools, and acceptance criteria
+  - run_result_matrix/v1 with quality, correctness, time, cost, context, tool, verification, and review evidence when observed
+  - selection_recommendation/v1 with confidence, caveats, and winner-by-scenario rather than global mythology
+- Safety rules:
+  - Do not claim an executor is better from anecdotes, brand names, or unobserved runs.
+  - Do not send secrets, credentials, private data, or production tasks into evaluation without explicit authority.
+  - Keep benchmark design, observed run evidence, scoring, and executor selection separate.
+
+### rules-distill
+
+[omh] Hermes Rules Distill workflow: extract repeated principles from skills, prompts, traces, reviews, and failures into reviewed rule candidates without auto-mutating guidance.
+
+- Category: `knowledge`
+- Phase: `rules-distillation`
+- Hermes role: `memory-keeper`
+- Quality tier: `rules-distillation-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Keep principle extraction and candidate review in Hermes. Editing AGENTS.md, catalog data, prompts, skills, or docs requires explicit approved implementation work and verification.
+- Why this exists: `rules-distill` gives OMH a disciplined way to learn from large skill ecosystems like ECC without wholesale copying: extract principles, review them, then patch OMH only through explicit verified work.
+- Use when: Use when Hermes should turn repeated workflow lessons, skill behavior, review comments, or failure traces into candidate rules that humans can review before docs or catalog changes.
+- Do not use when:
+  - The user wants a single workflow route regression; use `workflow-learning`.
+  - The user wants durable factual project memory; use `wiki` or memory curation.
+  - The user already approved a concrete code/doc change; use the implementation workflow.
+- Strong routing signals: `rules-distill`, `rules distill`, `distill rules`, `rule distillation`, `principle distill`, `skill principles`, `extract agent rules`, `turn traces into rules`, `policy distill`, `guidance distill`, `규칙 증류`, `원칙 추출`, `스킬 원칙`, `프롬프트 규칙`
+- Good example:
+  - Prompt: rules-distill 최근 실패 trace와 스킬들을 보고 OMH AGENTS에 넣을 만한 반복 원칙 후보만 뽑아줘.
+  - Expected behavior: Prepare principle_candidate_set/v1, duplication/conflict report, review queue, and approved patch handoff only after approval.
+  - Why: The request is meta-guidance learning and needs review before mutating rules.
+- Bad example:
+  - Prompt: rules-distill 한 번 본 실패를 바로 모든 스킬 규칙으로 써버려.
+  - Expected behavior: Keep it as a low-confidence candidate or regression case until repeated evidence and review approval exist.
+  - Why: Rule distillation should not turn one-off anecdotes into global behavior.
+- Quality bar:
+  - Collect repeated evidence before proposing a rule.
+  - Deduplicate against existing guidance and name conflicts or narrower scopes.
+  - Use imperative, testable wording and include non-goals for each candidate.
+  - Require review approval before any patch handoff or generated-skill update.
+- Completion checklist:
+  - The durable fact, source evidence, retrieval hint, and staleness risk are recorded.
+  - Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.
+  - Separate coding or docs tasks are extracted instead of buried in notes.
+- Recovery notes:
+  - If source evidence conflicts, route to memory or knowledge review before writing durable guidance.
+  - If the fact may be stale, record the staleness warning and next refresh action.
+- Required inputs:
+  - source corpus: skills, prompts, traces, reviews, failures, or docs
+  - destination boundary: AGENTS, skill catalog, prompt, docs, memory, or no-write review
+  - rule granularity and acceptance criteria
+  - reviewer or approval requirement
+- Expected outputs:
+  - rules_distillation_plan/v1
+  - principle_candidate_set/v1
+  - duplication_conflict_report/v1
+  - review_queue/v1
+  - approved_patch_handoff/v1 when approved
+  - not-evidence boundary
+- Artifact expectations:
+  - principle_candidate_set/v1 with source references, repeated pattern, candidate wording, scope, non-goals, and risk
+  - duplication_conflict_report/v1 with already-covered rules, conflicts, and stale guidance
+  - review_queue/v1 separating proposed, approved, rejected, deferred, and needs-evidence candidates
+- Safety rules:
+  - Do not silently mutate skills, prompts, AGENTS.md, docs, memory, or catalog data from a distillation result.
+  - Do not promote one-off preferences, weak anecdotes, or stale traces into global rules.
+  - Keep observed sources, inferred principles, candidate wording, review state, and implementation patches separate.
+
 ### automation-blueprint
 
 [omh] Hermes Scheduled Ops Blueprint workflow: design recurring Hermes operations with schedule, delivery, silence policy, context chain, and prepared-vs-observed status.
@@ -4168,6 +4481,306 @@ Prepare observed-only rendered visual QA gates for web, frontend, image, documen
   - Visual diff output is not a verdict without visual hierarchy, layout, text, and product-intent review.
   - One successful viewport or state does not prove visual QA for unobserved pages, states, files, or CJK-heavy regions.
 - Fallback: If fresh captures are missing or stale, return BLOCKED_BY_MISSING_RENDER_EVIDENCE and request the smallest recapture set.
+
+### workspace-audit
+
+Map repository, skill, prompt, plugin, MCP/tool, hook, config, docs, and runtime surfaces before OMH strengthening.
+
+- Use when: Use when the operator needs an observed local inventory, gap map, or risk scan before choosing implementation, setup, or rule changes.
+- Quality tier: `workspace-audit-gated`
+- Quality bar:
+  - Keep the audit read-only and metadata-safe.
+  - Separate observed local surfaces from inferred capability gaps.
+  - Rank gaps by user impact, operational risk, and reviewability.
+  - Route mutations to doctor, rules-distill, verification-gate, or coding handoff as explicit next work.
+- Inputs:
+  - workspace or repo root
+  - audit scope and exclusions
+  - read-only/no-secret boundary
+  - downstream decision or strengthening goal
+- Outputs:
+  - workspace_audit_plan/v1
+  - surface_inventory/v1
+  - capability_gap_matrix/v1
+  - config_security_findings/v1
+  - downstream_workflow_recommendation/v1
+- Stop conditions:
+  - audit scope and root are explicit
+  - observed surfaces and inferred gaps are separate
+  - secrets are redacted
+  - follow-up work is routed instead of silently mutating files
+- Verification:
+  - validate workspace_audit_plan/v1
+  - check observed file/tool/config provenance for every surface
+  - check secret redaction before reporting config findings
+  - verify downstream workflow recommendation does not claim execution
+- Evidence ladder:
+  - `audit_scope_recorded`
+  - `surface_inventory_observed_when_available`
+  - `config_security_findings_redacted`
+  - `capability_gap_matrix_prepared`
+  - `downstream_workflow_selected`
+- Wrapper actions:
+  - `prepare_workspace_audit`
+  - `show_workspace_audit`
+  - `record_workspace_inventory`
+  - `record_config_security_findings`
+  - `record_surface_gap`
+  - `route_to_downstream_workflow`
+  - `show_status`
+- Artifact events:
+  - `audit_scope_recorded`
+  - `surface_inventory_observed_when_available`
+  - `config_security_findings_redacted`
+  - `capability_gap_matrix_prepared`
+  - `downstream_workflow_selected`
+- Delegation expectation: Record workspace-audit as Hermes-retained local inventory; record setup repair, config mutation, skill edits, or runtime load only from separate observed evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A workspace_audit_plan/v1 artifact is not proof that every repo, skill, plugin, MCP server, hook, config, or runtime surface was observed.
+  - An inventory finding is not setup repair, secret validation, config mutation, skill mutation, runtime load, or executor dispatch evidence.
+  - A capability gap recommendation is not implementation or verification evidence.
+- Fallback: If scope or evidence is missing, return the smallest read-only inventory and mark unknown surfaces not_observed.
+
+### production-audit
+
+Evaluate release, deploy, security, observability, rollback, docs, and support readiness before launch.
+
+- Use when: Use when a product, service, release, PR, or deliverable needs a production-readiness verdict with observed-only evidence boundaries.
+- Quality tier: `production-readiness-gated`
+- Quality bar:
+  - Cover build, tests, CI, security/privacy, performance, observability, rollback, docs/support, and release communication.
+  - Treat GO/HOLD/BLOCK as a gate verdict tied to observed evidence and missing evidence.
+  - Keep deploy, production access, live traffic, incident closure, and remediation implementation outside the audit lane.
+- Inputs:
+  - product, service, release, or artifact scope
+  - target environment and release channel
+  - test, CI, deploy, observability, security, and support evidence
+  - rollback owner and acceptable risk threshold
+- Outputs:
+  - production_audit_plan/v1
+  - readiness_matrix/v1
+  - release_gate_verdict/v1
+  - rollback_and_monitoring_plan/v1
+  - risk_register/v1
+- Stop conditions:
+  - scope, environment, owners, and risk threshold are explicit
+  - readiness evidence is separated from missing evidence
+  - verdict is GO, HOLD, or BLOCK
+  - deploy and live-health claims remain observed-only
+- Verification:
+  - validate readiness_matrix/v1
+  - check build/test/CI/security/observability/rollback/doc/support coverage
+  - verify release_gate_verdict/v1 cites observed evidence or missing-evidence gaps
+  - check remediation handoffs separately from audit verdict
+- Evidence ladder:
+  - `production_scope_recorded`
+  - `readiness_matrix_prepared`
+  - `release_gate_verdict_recorded`
+  - `rollback_monitoring_plan_prepared`
+  - `remediation_route_selected_when_needed`
+- Wrapper actions:
+  - `prepare_production_audit`
+  - `show_production_audit`
+  - `record_release_gate`
+  - `record_production_signal`
+  - `record_rollback_path`
+  - `prepare_handoff`
+  - `show_status`
+- Artifact events:
+  - `production_scope_recorded`
+  - `readiness_matrix_prepared`
+  - `release_gate_verdict_recorded`
+  - `rollback_monitoring_plan_prepared`
+  - `remediation_route_selected_when_needed`
+- Delegation expectation: Record production-audit as Hermes-retained readiness review; record deploy, infra, external scans, monitoring health, support readiness, and fixes only when observed separately.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A production_audit_plan/v1 artifact is not deploy, live traffic, security scan, monitoring health, support readiness, incident closure, or rollback evidence.
+  - GO/HOLD/BLOCK readiness is not implementation, review, CI, merge-readiness, or merge evidence unless those states are observed separately.
+- Fallback: If production evidence is unavailable, produce HOLD/BLOCK with the missing evidence and the smallest remediation or observation path.
+
+### verification-gate
+
+Define and record build, lint, typecheck, test, security, generated-output, review, CI, and DCO evidence before completion or merge.
+
+- Use when: Use when a change, PR, release, or claim needs a concrete verification matrix and PASS/HOLD/BLOCK verdict.
+- Quality tier: `verification-gated`
+- Quality bar:
+  - Tie every claim to a proving check and note stale or not-run states.
+  - Broaden from targeted checks to generated docs, static checks, CI, and DCO when the changed surface requires it.
+  - Return PASS only when required evidence is fresh and complete.
+- Inputs:
+  - claim or change under verification
+  - expected behavior and risk surface
+  - available local commands and CI requirements
+  - fresh observed outputs or explicit not-run gaps
+- Outputs:
+  - verification_gate_plan/v1
+  - verification_matrix/v1
+  - observed_check_results/v1 when observed
+  - claim_verdict/v1
+  - rerun_or_blocker/v1
+- Stop conditions:
+  - the claim and required checks are explicit
+  - observed results include source, freshness, and status
+  - stale or missing checks block PASS
+  - review, CI, DCO, merge-readiness, and merge remain separate states
+- Verification:
+  - validate verification_matrix/v1
+  - check command/source, freshness, exit status, and scope for every observed result
+  - check generated docs or skill output when routing/catalog changed
+  - verify PASS/HOLD/BLOCK matches required evidence
+- Evidence ladder:
+  - `verification_scope_recorded`
+  - `verification_matrix_prepared`
+  - `check_results_observed_when_available`
+  - `stale_or_missing_checks_recorded`
+  - `claim_verdict_recorded`
+- Wrapper actions:
+  - `prepare_verification_gate`
+  - `show_verification_gate`
+  - `record_build_check`
+  - `record_lint_check`
+  - `record_test_check`
+  - `record_security_check`
+  - `record_ci_check`
+  - `record_verification_verdict`
+  - `show_status`
+- Artifact events:
+  - `verification_scope_recorded`
+  - `verification_matrix_prepared`
+  - `check_results_observed_when_available`
+  - `stale_or_missing_checks_recorded`
+  - `claim_verdict_recorded`
+- Delegation expectation: Record verification-gate as Hermes-retained evidence gating; record command execution, CI, review, fix, DCO, merge-readiness, and merge only from observed evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A verification_gate_plan/v1 artifact is not command execution, test pass, security scan, review, CI, DCO, merge-readiness, or merge evidence.
+  - A stale or partial check result cannot support PASS for a changed surface outside its scope.
+- Fallback: If checks are missing, stale, or failing, return HOLD/BLOCK with the exact rerun or remediation path.
+
+### agent-evaluation
+
+Compare executor or agent choices on reproducible tasks using quality, cost, time, tool, and evidence metrics.
+
+- Use when: Use when operators need to choose or improve an executor profile from observed benchmark-style evidence rather than anecdotes.
+- Quality tier: `agent-eval-gated`
+- Quality bar:
+  - Define tasks, rubric, isolation, budgets, and stop rules before comparing executors.
+  - Separate quality, correctness, time, cost, tool coverage, verification, and review evidence.
+  - Recommend executor choice per scenario with confidence rather than global rankings.
+- Inputs:
+  - candidate executors or agents
+  - task set and fixtures
+  - success criteria and scoring rubric
+  - allowed tools, budget, timebox, and isolation policy
+  - observed run artifacts when available
+- Outputs:
+  - agent_eval_plan/v1
+  - task_benchmark_set/v1
+  - run_result_matrix/v1 when observed
+  - scorecard/v1
+  - selection_recommendation/v1
+- Stop conditions:
+  - candidate set and tasks are explicit
+  - rubric, budget, and isolation are fair
+  - run results are observed or marked not_observed
+  - recommendation is scenario-specific with confidence and caveats
+- Verification:
+  - validate task_benchmark_set/v1
+  - check same inputs and acceptance criteria across candidates
+  - check observed run provenance before scoring
+  - verify selection_recommendation/v1 does not claim universal superiority
+- Evidence ladder:
+  - `agent_eval_scope_recorded`
+  - `task_benchmark_set_prepared`
+  - `run_results_observed_when_available`
+  - `scorecard_prepared`
+  - `selection_recommendation_recorded`
+- Wrapper actions:
+  - `prepare_agent_evaluation`
+  - `show_agent_evaluation`
+  - `record_eval_task`
+  - `record_eval_run`
+  - `record_eval_metric`
+  - `record_eval_verdict`
+  - `choose_executor`
+  - `show_status`
+- Artifact events:
+  - `agent_eval_scope_recorded`
+  - `task_benchmark_set_prepared`
+  - `run_results_observed_when_available`
+  - `scorecard_prepared`
+  - `selection_recommendation_recorded`
+- Delegation expectation: Record agent-evaluation as Hermes-retained evaluation design and synthesis; record executor runs, costs, timings, code edits, verification, and reviews only from observed artifacts.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - An agent_eval_plan/v1 artifact is not proof that any executor ran, edited code, used tools, incurred cost, passed tests, or completed review.
+  - A scorecard without observed comparable runs is a benchmark design, not an evidence-backed ranking.
+- Fallback: If no observed runs exist, prepare the benchmark design and mark the scorecard not_observed.
+
+### rules-distill
+
+Extract repeated principles from skills, prompts, traces, reviews, and failures into reviewed rule candidates.
+
+- Use when: Use when workflow lessons should become candidate guidance or catalog changes without silently mutating OMH rules.
+- Quality tier: `rules-distillation-gated`
+- Quality bar:
+  - Require repeated evidence before proposing a durable rule.
+  - Deduplicate against existing guidance and preserve narrower scopes or conflicts.
+  - Use imperative, testable wording with non-goals.
+  - Require review approval before any patch handoff.
+- Inputs:
+  - source corpus and provenance
+  - destination boundary
+  - rule granularity and acceptance criteria
+  - reviewer or approval requirement
+- Outputs:
+  - rules_distillation_plan/v1
+  - principle_candidate_set/v1
+  - duplication_conflict_report/v1
+  - review_queue/v1
+  - approved_patch_handoff/v1 when approved
+- Stop conditions:
+  - source corpus and destination boundary are explicit
+  - candidate principles cite repeated evidence
+  - duplicates and conflicts are named
+  - patch handoff appears only after approval
+- Verification:
+  - validate principle_candidate_set/v1
+  - check duplicate/conflict scan against existing guidance
+  - check review state before approved_patch_handoff/v1
+  - verify no skill, prompt, memory, or docs mutation is claimed without implementation evidence
+- Evidence ladder:
+  - `rules_scope_recorded`
+  - `source_corpus_reviewed`
+  - `principle_candidates_prepared`
+  - `duplication_conflict_report_prepared`
+  - `review_state_recorded`
+  - `approved_patch_handoff_prepared_when_approved`
+- Wrapper actions:
+  - `prepare_rules_distillation`
+  - `show_rules_distillation`
+  - `record_rule_candidate`
+  - `approve_rule_candidate`
+  - `reject_rule_candidate`
+  - `prepare_rule_patch`
+  - `show_status`
+- Artifact events:
+  - `rules_scope_recorded`
+  - `source_corpus_reviewed`
+  - `principle_candidates_prepared`
+  - `duplication_conflict_report_prepared`
+  - `review_state_recorded`
+  - `approved_patch_handoff_prepared_when_approved`
+- Delegation expectation: Record rules-distill as Hermes-retained principle extraction; record AGENTS, prompt, skill, docs, memory, or catalog changes only from approved implementation evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A rules_distillation_plan/v1 artifact is not AGENTS.md, prompt, skill, docs, memory, or catalog mutation evidence.
+  - A principle candidate is not approved guidance until review state says approved.
+  - Approved patch handoff is not implementation, verification, review, CI, or merge evidence.
+- Fallback: If evidence is weak or one-off, keep the item as a low-confidence candidate or regression case instead of a global rule.
 
 ### source-finder
 

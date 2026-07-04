@@ -1,41 +1,42 @@
 ---
-name: ultraqa
-description: [omh] Hermes UltraQA workflow: adversarial QA and fix loops.
+name: verification-gate
+description: [omh] Hermes Verification Gate workflow: define and record build, lint, typecheck, test, security, docs, generated-output, and CI evidence before completion or merge.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, verification]
     category: verification
-    phase: qa
+    phase: verification-gate
     role: reviewer
-    quality_tier: scenario-gated
+    quality_tier: verification-gated
 ---
 
-# Ultraqa
+# Verification Gate
 
-This is a Hermes-native `ultraqa` workflow skill.
+This is a Hermes-native `verification-gate` workflow skill.
 
 ## Why This Exists
 
-`ultraqa` exists to keep `verification` work explicit, evidence-backed, and inside the Hermes/executor boundary instead of relying on ad hoc chat narration.
+`verification-gate` gives OMH a deterministic evidence surface before done/merge claims, inspired by ECC-style gates but rebuilt around OMH's prepared-versus-observed contract.
 
 ## Do Not Use When
 
-- The request is casual chat, a status-only acknowledgement, or another workflow has stronger routing evidence.
-- The user needs implementation, review, CI, merge, or external publishing evidence that has not been delegated or observed.
+- The user asks for visual render QA; use `visual-qa`.
+- The user asks for production release readiness beyond verification commands; use `production-audit`.
+- The user wants a bug-first code review of a diff; use `code-review`.
 
 ## Examples
 
 Good example:
 
-- Prompt: $ultraqa test the setup wizard with hostile install paths, stale config, and missing PATH cases.
-- Expected behavior: Generate adversarial QA scenarios, expected signals, observed results, and fix-or-retry routing.
-- Why: The request asks for verification pressure and hostile scenarios.
+- Prompt: verification-gate 이 PR 머지 전에 build/lint/test/docs/CI 증거를 정리해서 PASS 가능한지 봐줘.
+- Expected behavior: Prepare verification_matrix/v1, record observed_check_results/v1, and issue PASS/HOLD/BLOCK with missing evidence.
+- Why: The user asks for claim verification across command and CI evidence.
 
 Bad example:
 
-- Prompt: ultraqa: treat casual chat or unaccepted work as if this workflow already produced verified results.
-- Expected behavior: Ask a clarification question or route to a narrower workflow instead of forcing `ultraqa`.
-- Why: The request lacks the required inputs or would overclaim work that Hermes did not observe.
+- Prompt: verification-gate 테스트 안 돌렸지만 준비됐다고 해줘.
+- Expected behavior: Return HOLD/BLOCK and list missing or stale checks instead of claiming readiness.
+- Why: A verification gate is useful only if planned checks and observed results stay separate.
 
 ## Completion Checklist
 
@@ -62,48 +63,55 @@ Bad example:
 
 ## Use When
 
-Use when the task needs adversarial test scenarios, verification, and fix loops.
+Use when Hermes must turn a change, PR, release, or claim into a concrete evidence checklist and PASS/HOLD/BLOCK verdict.
 
-    Strong routing signals: `ultraqa`, `$ultraqa`, `adversarial qa`, `hostile scenarios`, `e2e qa`, `real-world qa`, `qa scenario`, `release qa`, `장애 상황`, `쿠버네티스 장애`, `적절히 진단`, `검증 체크리스트`, `릴리즈 전 gate`
+    Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`
 
 ## Catalog Metadata
 
 Category: `verification`
-Phase: `qa`
+Phase: `verification-gate`
 Hermes role: `reviewer`
-Quality tier: `scenario-gated`
+Quality tier: `verification-gated`
 
 Quality bar:
 
-- Generate hostile scenarios from changed behavior and known risk areas.
-- Report pass/fail evidence separately from proposed fixes.
-- Delegate code mutations discovered by QA to the selected coding executor.
+- Tie every completion claim to the smallest check that proves it, then broaden for shared surfaces.
+- Record command/source, freshness, exit status, and scope for each observed result.
+- Return PASS only when required checks pass and stale or missing evidence is resolved.
+- Keep fixes, reruns, review, CI, and merge as separate observed states.
 
 Handoff policy:
 
-Hermes can design scenarios and report observed results; code fixes discovered by QA should become selected executor/runtime handoffs.
+Hermes owns the gate contract and verdict narration. Running commands, CI, browser checks, external scanners, and code fixes require observed executor, wrapper, or operator evidence.
 
 Required inputs:
 
-- changed behavior
-- acceptance criteria
-- known risk areas
+- claim or change under verification
+- expected behavior and risk surface
+- available local commands and CI requirements
+- fresh observed outputs or explicit not-run gaps
 
 Expected outputs:
 
-- adversarial scenarios
-- pass/fail evidence
-- fix recommendations
+- verification_gate_plan/v1
+- verification_matrix/v1
+- observed_check_results/v1 when observed
+- claim_verdict/v1
+- rerun_or_blocker/v1
+- not-evidence boundary
 
 Artifact expectations:
 
-- QA scenario evidence
-- runtime verification summary
+- verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable
+- observed_check_results/v1 with command, timestamp/source, exit status, summary, and stale-output flag
+- claim_verdict/v1 with PASS, HOLD, or BLOCK and exact missing or failed checks
 
 Safety rules:
 
-- Do not imply hidden Hermes runtime behavior.
-- Use the smallest verification that can prove the claim.
+- Do not treat a planned command, stale output, green local check, or prepared handoff as fresh verification evidence.
+- Do not collapse build, lint, tests, security, generated docs, review, CI, DCO, merge-readiness, or merge into one claim.
+- Failed or unavailable checks must produce HOLD/BLOCK with a rerun or remediation path.
 
 ## Harness Discipline
 
@@ -113,12 +121,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `qa-specialist`.
+Preferred harness for this skill: `verification-gate`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill ultraqa --harness qa-specialist --status started
+omh runtime record --skill verification-gate --harness verification-gate --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 
@@ -131,7 +139,7 @@ Record observed delegation results when Hermes or the wrapper exposes them. If d
 - Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
 - Respect `omh_target_topology/v1` when a wrapper reports it: bind state to the current target/thread, adapt only the parts of this workflow that benefit from multiple Hermes agents, and fall back to single-target behavior when `active_agent_count` is one.
 - When target topology changes from one to many or many to one, give a concise setup-change comment or use the wrapper's apply action before treating the new topology as persistent.
-- When wrapper metadata includes `memory_review_card/v1` or `handoff_context_pack/v1`, treat it as reviewed OMH-local or wrapper-supplied context only. Use conflict-free context summaries to shape plans and handoffs, but do not claim Hermes internal memory was read or changed.
+- Treat wrapper-supplied memory/context summaries as advisory local context, not proof that opaque Hermes memory was read or changed.
 - When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
   - goal tools -> `.omh/goals/` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, `goal_continuation/v1`, or explicit checklists with named next actions,
   - question renderers -> one concise question in the current Hermes interface,

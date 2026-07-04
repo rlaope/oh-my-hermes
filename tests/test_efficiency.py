@@ -186,6 +186,10 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("frontend", cards["materials_and_visuals"]["representative_workflows"])
         self.assertIn("visual-qa", cards["materials_and_visuals"]["representative_workflows"])
         self.assertNotIn("wiki", cards["materials_and_visuals"]["representative_workflows"])
+        self.assertIn("workspace-audit", cards["automation_and_status"]["representative_workflows"])
+        self.assertIn("production-audit", cards["automation_and_status"]["representative_workflows"])
+        self.assertIn("agent-evaluation", cards["automation_and_status"]["representative_workflows"])
+        self.assertIn("rules-distill", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
         self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"])
@@ -221,6 +225,11 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(workflow_context_card_for_workflow("visual-qa")["id"], "materials_and_visuals")
         self.assertEqual(workflow_context_card_for_workflow("feedback-triage")["id"], "research_and_ops")
         self.assertEqual(workflow_context_card_for_workflow("automation-blueprint")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("workspace-audit")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("production-audit")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("agent-evaluation")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("rules-distill")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("verification-gate")["id"], "coding_handoff")
         self.assertEqual(workflow_context_card_for_workflow("code-review")["id"], "coding_handoff")
 
     def test_mid_session_awareness_detector_is_bounded(self) -> None:
@@ -279,6 +288,41 @@ class EfficiencyContractTests(unittest.TestCase):
 
                 self.assertEqual(route_hint["primary_workflow"], workflow)
                 self.assertEqual(route_hint["primary_next_action"], next_action)
+
+    def test_ecc_operator_route_hints_match_explicit_skill_names(self) -> None:
+        cases = (
+            ("workspace-audit 레포 스킬이랑 MCP 표면 감사해줘", "workspace-audit", "prepare_workspace_audit"),
+            ("production-audit 릴리즈 프로덕션 준비 상태 감사해줘", "production-audit", "prepare_production_audit"),
+            ("verification-gate 머지 전 검증 게이트 준비해줘", "verification-gate", "prepare_verification_gate"),
+            ("agent-evaluation Codex랑 Claude Code 에이전트 평가해줘", "agent-evaluation", "prepare_agent_evaluation"),
+            ("rules-distill 실패 trace에서 스킬 원칙 규칙 증류해줘", "rules-distill", "prepare_rules_distillation"),
+        )
+
+        for message, workflow, next_action in cases:
+            with self.subTest(message=message):
+                route_hint = awareness_route_hint(message)
+
+                self.assertEqual(route_hint["primary_workflow"], workflow)
+                self.assertEqual(route_hint["primary_next_action"], next_action)
+
+    def test_ecc_operator_route_hints_do_not_steal_generic_language(self) -> None:
+        new_operator_workflows = {
+            "workspace-audit",
+            "verification-gate",
+            "rules-distill",
+        }
+        generic_messages = (
+            "verify the source before answering",
+            "can you audit my plan for unclear requirements?",
+            "show guidance for onboarding improvements",
+            "what rules apply to python packaging?",
+        )
+
+        for message in generic_messages:
+            with self.subTest(message=message):
+                route_hint = awareness_route_hint(message)
+
+                self.assertNotIn(route_hint["primary_workflow"], new_operator_workflows)
 
     def test_mid_session_awareness_detector_cache_reuses_locale_scan(self) -> None:
         awareness_module._awareness_context_matches_message_cached.cache_clear()
@@ -1215,6 +1259,11 @@ class EfficiencyContractTests(unittest.TestCase):
             ("코덱스로 이 이슈 PR 만들어줘", "ultraprocess"),
             ("오늘 아침 경쟁사 뉴스 요약 자동화해줘", "automation-blueprint"),
             ("매일 아침 리서치 요약을 보내게 준비해줘", "automation-blueprint"),
+            ("workspace-audit 레포 스킬이랑 MCP 표면 감사해줘", "workspace-audit"),
+            ("production-audit 릴리즈 프로덕션 준비 상태 감사해줘", "production-audit"),
+            ("verification-gate 머지 전 검증 게이트 준비해줘", "verification-gate"),
+            ("agent-evaluation Codex랑 Claude Code 에이전트 평가해줘", "agent-evaluation"),
+            ("rules-distill 실패 trace에서 스킬 원칙 규칙 증류해줘", "rules-distill"),
             ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board"),
             ("multiple Hermes agents target topology 어떻게 관리해?", "agent-board"),
             ("슬랙에서 /omh 치면 뭐가 떠야해?", "oh-my-hermes"),
