@@ -66,7 +66,15 @@ DEFAULT_HERMES_TAP = "rlaope/oh-my-hermes"
 DEFAULT_HERMES_SKILL = "oh-my-hermes"
 DEFAULT_FIRST_USE_MESSAGE = "I want to safely add a feature to this repo"
 INSTALL_PATHS = ("tap", "setup")
-REPRESENTATIVE_CONTEXT_RAIL_SKILLS = ("img-summary", "loop", "ultraprocess", "web-research", "materials-package")
+REPRESENTATIVE_CONTEXT_RAIL_SKILLS = (
+    "img-summary",
+    "frontend",
+    "visual-qa",
+    "loop",
+    "ultraprocess",
+    "web-research",
+    "materials-package",
+)
 ROUTER_CONTENT_MARKERS = ("OMH Awareness Primer", "img-summary", "Normal users should talk to Hermes Agent")
 WORKFLOW_CONTEXT_MARKERS = ("OMH Context Rail", "not a standalone executor", "Prepared OMH routing")
 ROLE_CONTEXT_MARKERS = ("OMH Role Context", "OMH workflow-layer responsibility context", "prepared guidance only")
@@ -75,9 +83,9 @@ AWARENESS_PRIMER_CONTEXT_CHAR_LIMIT = 900
 AWARENESS_PRIMER_MARKDOWN_CHAR_LIMIT = 3200
 AWARENESS_WORKFLOW_CONTEXT_CHAR_LIMIT = 1500
 ROLE_CONTEXT_CHAR_LIMIT = 2600
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 220000
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 235000
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 80000
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 82000
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 
 

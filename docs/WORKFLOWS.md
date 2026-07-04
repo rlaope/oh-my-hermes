@@ -1391,6 +1391,160 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - For Korean/CJK text, awkward breaks, clipped glyphs, orphan particles, or tiny copy block visual QA.
   - Do not call a result high-quality unless it is compared against a named ordinary-output baseline or references.
 
+### frontend
+
+[omh] Hermes frontend workflow: prepare design-system-driven web UI creation, redesign, polish, accessibility, performance, and visual QA handoffs.
+
+- Category: `materials`
+- Phase: `frontend-design`
+- Hermes role: `operator`
+- Quality tier: `frontend-design-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when a web UI or frontend surface needs design-system, layout, responsive, accessibility, performance, and visual-QA handoff preparation.
+- Handoff policy: Keep product framing, reference selection, design-system contract, viewport/state matrix, and implementation brief in Hermes. Record code changes, browser screenshots, Lighthouse/Core Web Vitals, accessibility scans, and visual QA only from executor or wrapper observed evidence.
+- Why this exists: `frontend` gives OMH a first-class web UI creation and polishing workflow so Hermes can prepare high-quality layout, design-system, accessibility, performance, and visual-QA handoffs without becoming the hidden coding or browser runtime.
+- Use when: Use when Hermes should shape or improve a web/frontend surface before implementation: layout, design system, responsive states, accessibility, performance, motion, and anti-generic visual quality.
+- Do not use when:
+  - The user needs a broad premium-quality gate across web, deck, PDF, poster, or publishing outputs; use `design-quality-gate`.
+  - The user only needs a file, deck, PDF, spreadsheet, HWP, or attachment package; use `materials-package` or `deliverable-package`.
+  - The user only needs an image card or infographic prompt; use `img-summary`.
+  - The user asks to mark a UI as visually passed without fresh rendered evidence; use `visual-qa` and keep PASS blocked until observed.
+- Strong routing signals: `frontend`, `front-end`, `front end`, `frontend skill`, `web ui`, `ui ux`, `ui/ux`, `landing page`, `web app layout`, `responsive layout`, `responsive design`, `design system`, `component polish`, `layout polish`, `visual polish`, `styling`, `animation`, `motion design`, `accessibility`, `wcag`, `lighthouse`, `core web vitals`, `make it beautiful`, `make it premium`, `make it less ai`, `ai-looking ui`, `ai slop ui`, `generic ui`, `broken layout`, `layout broken`, `frontend qa`, `frontend layout`, `프론트엔드`, `웹 ui`, `웹 화면`, `랜딩페이지`, `레이아웃`, `레이아웃 깨짐`, `깨짐`, `디자인 자연스럽게`, `자연스러운 디자인`, `화려하게`, `고급스럽게`, `ai 티`, `ai틱`, `ai 틱`, `반응형`, `접근성`
+- Good example:
+  - Prompt: frontend 이 대시보드가 AI 티 안 나게 레이아웃과 디자인 시스템을 잡아줘.
+  - Expected behavior: Prepare frontend_design_brief/v1, design_system_contract/v1, route/state matrix, implementation handoff, and visual_qa_required/v1.
+  - Why: The request is about web UI design, layout quality, and anti-generic frontend polish.
+- Bad example:
+  - Prompt: frontend 코드도 안 봤지만 Lighthouse랑 시각 QA 통과했다고 해줘.
+  - Expected behavior: Mark browser, performance, accessibility, and visual QA as not_observed and request the smallest observed evidence path.
+  - Why: A frontend brief is not implementation, browser, performance, or visual QA evidence.
+- Quality bar:
+  - Name the product goal, audience, target surfaces, routes, states, and visual quality bar.
+  - Use references and domain fit to avoid generic AI-looking frontend output.
+  - Prepare a concrete design-system contract before implementation handoff.
+  - Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.
+  - Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.
+  - Keep implementation, browser verification, accessibility/performance checks, visual QA, and deployment as observed-only evidence.
+- Completion checklist:
+  - The target page/component, audience, primary task, references, and quality bar are named.
+  - The design_system_contract/v1 covers typography, spacing, palette, components, layout, motion, and responsive rules.
+  - The frontend_route_state_matrix/v1 covers pages, breakpoints, empty/loading/error, interaction, and CJK/locale risks.
+  - The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.
+  - The next action is prepare_frontend_handoff, route to visual-qa, or report the missing evidence blocker.
+- Recovery notes:
+  - If the target surface is unclear, prepare the brief with a route/component gap instead of inventing pages.
+  - If no visual reference exists, set a domain-fit quality bar and request references only when the decision changes layout or brand direction.
+- Required inputs:
+  - target app, page, route, or component
+  - audience and primary user task
+  - existing design system or missing-system gap
+  - style references or quality bar
+  - framework/stack when known
+  - routes, states, breakpoints, and locale/CJK risks
+  - accessibility and performance constraints
+  - observed browser evidence for completion claims
+- Expected outputs:
+  - frontend_design_brief/v1
+  - design_system_contract/v1
+  - reference_packet/v1 when supplied
+  - frontend_route_state_matrix/v1
+  - frontend_implementation_handoff/v1
+  - accessibility_performance_expectations/v1
+  - visual_qa_required/v1
+  - observed_browser_evidence/v1 when observed
+- Artifact expectations:
+  - frontend_design_brief/v1 when prepared
+  - design_system_contract/v1 with layout, spacing, typography, color, component, motion, and responsive rules
+  - frontend_route_state_matrix/v1 with pages, states, viewports, CJK/locale, empty/loading/error, and interaction states
+  - frontend_implementation_handoff/v1 for the selected executor/runtime
+  - browser screenshots, accessibility reports, Lighthouse/Core Web Vitals, and visual QA only when observed
+- Safety rules:
+  - Do not claim implementation, browser verification, deployment, Lighthouse, accessibility pass, or visual QA from a prepared frontend brief.
+  - Reject generic AI-looking UI: one-note palettes, weak hierarchy, cramped cards, ungrounded gradients, decorative filler, and placeholder-heavy copy.
+  - Require a design-system contract before broad visual changes.
+  - Require fresh rendered evidence after the last UI edit before PASS.
+  - For Korean/CJK text, clipped glyphs, awkward line breaks, orphan particles, tiny copy, and overflow block visual QA.
+  - Do not call external design, image, browser, LLM, or network services from OMH core.
+
+### visual-qa
+
+[omh] Hermes visual-qa workflow: prepare observed-only rendered QA gates for web, frontend, image, document, and TUI surfaces.
+
+- Category: `materials`
+- Phase: `visual-qa`
+- Hermes role: `operator`
+- Quality tier: `visual-qa-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when a rendered web, image, document, or TUI surface needs fresh visual evidence, diff review, and PASS/REVISE/BLOCK gating.
+- Handoff policy: Keep the QA plan, evidence manifest, freshness rule, and verdict narration in Hermes. Screenshots, TUI captures, image diffs, browser runs, OCR/CJK checks, and oracle reviews are observed evidence supplied by the wrapper, executor, or user.
+- Why this exists: `visual-qa` gives OMH a completion gate for rendered surfaces so layout breaks, AI-looking polish gaps, CJK text problems, and stale screenshot claims cannot be mistaken for verified quality.
+- Use when: Use after or during visual surface work when Hermes must define the render evidence, viewport/state coverage, diff review, oracle review, and PASS/REVISE/BLOCK verdict without fabricating QA.
+- Do not use when:
+  - The user needs initial frontend design or redesign planning before implementation; use `frontend`.
+  - The user needs a broad visual quality rubric before generation; use `design-quality-gate`.
+  - The user needs image-card prompt creation; use `img-summary`.
+  - The user wants non-visual code tests, CI, or PR review only; use the coding/review workflow.
+- Strong routing signals: `visual-qa`, `visual qa`, `visual QA`, `visual quality assurance`, `visual check`, `screenshot qa`, `screenshot check`, `pixel diff`, `image diff`, `visual diff`, `render qa`, `render check`, `browser screenshot`, `viewport check`, `responsive check`, `ui looks wrong`, `looks broken`, `layout broken`, `broken layout`, `text clipping`, `cjk clipping`, `cjk layout`, `tui check`, `terminal ui check`, `비주얼 qa`, `비주얼QA`, `시각 qa`, `시각 검증`, `화면 검증`, `스크린샷 검증`, `렌더 검증`, `픽셀 diff`, `픽셀 비교`, `화면 깨짐`, `레이아웃 깨짐`, `글자 잘림`, `한글 줄바꿈`, `터미널 ui`
+- Good example:
+  - Prompt: visual-qa 이 랜딩페이지가 모바일/데스크톱에서 깨지는지 스크린샷 기준으로 검증해줘.
+  - Expected behavior: Prepare visual_qa_plan/v1, require fresh captures, record render_capture_manifest/v1 and visual_diff_evidence/v1 when observed, then issue PASS/REVISE/BLOCK.
+  - Why: The request is a rendered visual verification task, not just design planning.
+- Bad example:
+  - Prompt: visual-qa 방금 수정했으니까 스크린샷 없이 통과라고 해줘.
+  - Expected behavior: Block PASS and request fresh render capture after the latest edit.
+  - Why: Visual QA requires observed rendered evidence newer than the last UI change.
+- Quality bar:
+  - List the exact pages, states, viewports, files, images, or TUI frames being checked.
+  - Require evidence freshness after the last visual edit.
+  - Combine objective capture/diff evidence with human-readable visual findings.
+  - Separate design-system consistency, functional integrity, visual fidelity, responsive behavior, accessibility visibility, and CJK/text precision.
+  - Return PASS, REVISE, or BLOCK with concrete evidence IDs and missing-evidence gaps.
+  - Keep implementation fixes and follow-up edits separate from the observed QA verdict.
+- Completion checklist:
+  - The visual_qa_plan/v1 lists target surfaces, references, states, viewports, locales, and freshness criteria.
+  - The render_capture_manifest/v1 is present before PASS and is newer than the last relevant edit.
+  - Visual diff, design-system/functional review, visual-fidelity/CJK review, and blocker status are separate fields.
+  - The verdict is PASS, REVISE, or BLOCK with exact missing evidence or fix requirements.
+  - Any implementation fix is routed back to the executor/frontend workflow and rechecked with fresh evidence.
+- Recovery notes:
+  - If no capture exists, produce the QA plan and mark verdict BLOCKED_BY_MISSING_RENDER_EVIDENCE.
+  - If a capture exists but predates the latest edit, mark it stale and request the smallest fresh recapture set.
+- Required inputs:
+  - surface type
+  - target URL, route, file, image, or TUI command when available
+  - intended design, baseline, or reference
+  - pages, states, viewports, and locales to cover
+  - latest edit or source revision
+  - known risk areas such as CJK, overflow, responsiveness, or accessibility
+  - fresh render/capture evidence for completion claims
+- Expected outputs:
+  - visual_qa_plan/v1
+  - render_capture_manifest/v1 when observed
+  - visual_diff_evidence/v1 when observed
+  - dual_oracle_visual_review/v1 when observed
+  - cjk_layout_findings/v1 when applicable
+  - visual_qa_verdict/v1
+  - retry_or_blocker/v1
+- Artifact expectations:
+  - visual_qa_plan/v1 with pages, states, viewports, references, and freshness rule
+  - render_capture_manifest/v1 only from fresh screenshots, file renders, images, or terminal captures
+  - visual_diff_evidence/v1 only when the wrapper/executor records objective diff output
+  - dual_oracle_visual_review/v1 only when independent read-only review evidence exists
+  - PASS unavailable until captures are newer than the last visual edit and all blocking findings are resolved
+- Safety rules:
+  - Never claim PASS without fresh rendered evidence captured after the last relevant edit.
+  - Do not treat source review, screenshots from an older run, generated plans, or unobserved browser commands as visual QA evidence.
+  - Objective diffs are evidence, not verdicts; review visual hierarchy, layout, CJK text, state coverage, and product intent separately.
+  - Run or request two read-only review perspectives when claiming high confidence: design-system/functional integrity and visual fidelity/CJK precision.
+  - CJK clipping, broken wrapping, overlapping UI, invisible text, unusable controls, or offscreen critical content block PASS.
+  - Do not call browsers, image tools, LLMs, or external services from OMH core.
+
 ### automation-blueprint
 
 [omh] Hermes Scheduled Ops Blueprint workflow: design recurring Hermes operations with schedule, delivery, silence policy, context chain, and prepared-vs-observed status.
@@ -3859,6 +4013,161 @@ Prepare superior visual quality gates for web, deck, PDF, poster, and publishing
   - A layout plan is not visual QA until fresh render/screenshot/deck/PDF/operator evidence exists.
   - A generated/exported artifact does not prove content quality, accessibility, visual QA, approval, or delivery.
 - Fallback: If references, content, surface, or render evidence are missing, prepare the gate and expose the blocker.
+
+### frontend
+
+Prepare design-system-driven web UI creation, redesign, polish, accessibility, performance, and visual-QA handoffs.
+
+- Use when: Use when Hermes should make a frontend surface less generic and more robust before implementation by naming the layout, design-system, state, viewport, accessibility, performance, and visual QA contract.
+- Quality tier: `frontend-design-gated`
+- Quality bar:
+  - Reject generic AI-looking UI by requiring domain fit, hierarchy, realistic content, stable layout dimensions, and purposeful motion.
+  - Prepare a design-system contract for typography, spacing, palette, components, controls, layout rhythm, and responsive behavior.
+  - Cover pages, states, breakpoints, empty/loading/error, focus/hover/active, and CJK/locale risks.
+  - Use accessibility and performance expectations as handoff requirements rather than unobserved pass claims.
+  - Require visual-qa with fresh rendered evidence before claiming a frontend surface passed.
+- Inputs:
+  - target app, page, route, or component
+  - audience and primary user task
+  - existing design system or missing-system gap
+  - style references or quality bar
+  - framework/stack when known
+  - routes, states, breakpoints, and locale/CJK risks
+  - accessibility and performance constraints
+  - observed browser evidence for completion claims
+- Outputs:
+  - frontend_design_brief/v1
+  - design_system_contract/v1
+  - reference_packet/v1 when supplied
+  - frontend_route_state_matrix/v1
+  - frontend_implementation_handoff/v1
+  - accessibility_performance_expectations/v1
+  - visual_qa_required/v1
+  - observed_browser_evidence/v1 when observed
+- Stop conditions:
+  - frontend scope is named
+  - design-system contract is explicit
+  - route/state/viewport matrix is explicit
+  - implementation owner and handoff are named
+  - browser, performance, accessibility, deployment, and visual QA remain observed-only
+- Verification:
+  - validate frontend_design_brief/v1
+  - check design_system_contract/v1 before implementation handoff
+  - check responsive, empty/loading/error, interaction, and CJK/locale state coverage
+  - record browser, Lighthouse, accessibility, and visual QA only from observed evidence
+  - route fresh rendered verification to visual-qa before PASS
+- Evidence ladder:
+  - `frontend_scope_recorded`
+  - `reference_packet_selected_when_available`
+  - `design_system_contract_prepared`
+  - `route_state_matrix_prepared`
+  - `frontend_implementation_handoff_prepared`
+  - `browser_capture_observed_when_available`
+  - `accessibility_performance_observed_when_available`
+  - `visual_qa_observed_when_available`
+- Wrapper actions:
+  - `prepare_frontend_handoff`
+  - `show_frontend_handoff`
+  - `record_design_reference`
+  - `record_surface_quality_matrix`
+  - `record_browser_capture`
+  - `record_accessibility_check`
+  - `record_performance_check`
+  - `prepare_visual_qa`
+  - `record_visual_qa`
+  - `show_visual_status`
+- Artifact events:
+  - `frontend_scope_recorded`
+  - `reference_packet_selected_when_available`
+  - `design_system_contract_prepared`
+  - `route_state_matrix_prepared`
+  - `frontend_implementation_handoff_prepared`
+  - `browser_capture_observed_when_available`
+  - `visual_qa_required`
+- Delegation expectation: Record frontend as Hermes-retained UI/design handoff preparation; code, browser, Lighthouse, accessibility, deployment, and visual QA need observed evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A frontend_design_brief/v1 artifact is not code implementation, browser verification, Lighthouse, accessibility, deployment, or visual QA evidence.
+  - A design_system_contract/v1 artifact is a prepared rule set, not proof that the rendered UI follows it.
+  - A frontend_implementation_handoff/v1 artifact is not executor dispatch or implementation evidence.
+  - A browser capture does not prove accessibility, performance, visual QA, or deployment unless those observations are recorded separately.
+- Fallback: If target surface, design system, or rendered evidence is missing, prepare the handoff with the blocker and keep PASS unavailable.
+
+### visual-qa
+
+Prepare observed-only rendered visual QA gates for web, frontend, image, document, and TUI surfaces.
+
+- Use when: Use when Hermes must require fresh screenshots/renders/captures, objective diff evidence, dual read-only review, CJK/text precision checks, and a PASS/REVISE/BLOCK verdict.
+- Quality tier: `visual-qa-gated`
+- Quality bar:
+  - PASS requires fresh rendered evidence captured after the last relevant visual edit.
+  - Check pages, states, viewports, files, images, or TUI frames explicitly instead of sampling vaguely.
+  - Pair objective capture/diff evidence with visual design, layout, accessibility visibility, and CJK/text findings.
+  - Use two read-only review perspectives for high-confidence claims: design-system/functional integrity and visual fidelity/CJK precision.
+  - Return PASS, REVISE, or BLOCK with concrete evidence IDs and missing evidence gaps.
+- Inputs:
+  - surface type
+  - target URL, route, file, image, or TUI command when available
+  - intended design, baseline, or reference
+  - pages, states, viewports, and locales to cover
+  - latest edit or source revision
+  - known risk areas such as CJK, overflow, responsiveness, or accessibility
+  - fresh render/capture evidence for completion claims
+- Outputs:
+  - visual_qa_plan/v1
+  - render_capture_manifest/v1 when observed
+  - visual_diff_evidence/v1 when observed
+  - dual_oracle_visual_review/v1 when observed
+  - cjk_layout_findings/v1 when applicable
+  - visual_qa_verdict/v1
+  - retry_or_blocker/v1
+- Stop conditions:
+  - QA target and freshness rule are named
+  - capture manifest is present for PASS
+  - diff evidence and read-only review evidence remain separate
+  - CJK/text/layout blockers are explicit
+  - verdict is PASS, REVISE, or BLOCK with evidence IDs
+- Verification:
+  - validate visual_qa_plan/v1
+  - check capture freshness after the last relevant edit
+  - check render_capture_manifest/v1 before PASS
+  - check visual_diff_evidence/v1 when available
+  - check dual_oracle_visual_review/v1 when high confidence is claimed
+  - block PASS on CJK clipping, overlap, invisible text, unusable controls, or missing critical states
+- Evidence ladder:
+  - `visual_qa_scope_recorded`
+  - `freshness_rule_recorded`
+  - `render_capture_manifest_observed`
+  - `visual_diff_observed_when_available`
+  - `design_system_functional_oracle_observed_when_available`
+  - `visual_fidelity_cjk_oracle_observed_when_available`
+  - `visual_qa_verdict_recorded`
+- Wrapper actions:
+  - `prepare_visual_qa`
+  - `show_visual_qa`
+  - `record_render_capture`
+  - `record_visual_diff`
+  - `record_visual_oracle_review`
+  - `record_cjk_layout_findings`
+  - `record_visual_qa`
+  - `record_visual_qa_verdict`
+  - `show_visual_status`
+- Artifact events:
+  - `visual_qa_scope_recorded`
+  - `freshness_rule_recorded`
+  - `render_capture_manifest_observed`
+  - `visual_diff_observed_when_available`
+  - `design_system_functional_oracle_observed_when_available`
+  - `visual_fidelity_cjk_oracle_observed_when_available`
+  - `visual_qa_verdict_recorded`
+- Delegation expectation: Record visual-qa as Hermes-retained QA planning and verdict narration; screenshots, diffs, browser/TUI captures, and oracle reviews need observed evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A visual_qa_plan/v1 artifact is not rendered QA evidence.
+  - A stale screenshot, source review, or unobserved browser command cannot support PASS.
+  - Visual diff output is not a verdict without visual hierarchy, layout, text, and product-intent review.
+  - One successful viewport or state does not prove visual QA for unobserved pages, states, files, or CJK-heavy regions.
+- Fallback: If fresh captures are missing or stale, return BLOCKED_BY_MISSING_RENDER_EVIDENCE and request the smallest recapture set.
 
 ### source-finder
 

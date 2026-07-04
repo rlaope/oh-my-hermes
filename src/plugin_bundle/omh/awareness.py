@@ -397,7 +397,7 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
         "tool_family": "image_tools",
         "applies_before": ("image generation", "local rendering", "visual design tools"),
         "primary_workflow": "img-summary",
-        "preferred_workflows": ("img-summary", "design-quality-gate", "materials-package", "report-package"),
+        "preferred_workflows": ("img-summary", "design-quality-gate", "frontend", "visual-qa", "materials-package", "report-package"),
         "primary_next_action": "prepare_visual_prompt_card",
         "fallback_action": "choose_image_generator_or_setup",
         "not_evidence_yet": ("image generation", "visual QA", "attachment", "delivery"),
@@ -444,6 +444,8 @@ ROUTER_KEYWORD_SKILLS = (
     "materials-package",
     "img-summary",
     "design-quality-gate",
+    "frontend",
+    "visual-qa",
     "automation-blueprint",
     "workflow-learning",
     "code-review",
@@ -470,6 +472,7 @@ LANE_CROSS_LANE_EXAMPLES = {
     ],
     "materials_and_visuals": [
         "meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence",
+        "frontend request -> frontend -> visual-qa -> observed render evidence",
         "source spreadsheet -> materials-package -> report-package -> observed export evidence",
     ],
     "automation_and_status": [
@@ -520,12 +523,20 @@ WORKFLOW_CONTEXT_CARDS = (
     {
         "id": "materials_and_visuals",
         "label": "Materials and visuals",
-        "user_signal": "deck, PDF, spreadsheet, document, HWP, report, website, poster, image card, or shareable summary",
-        "omh_pattern": "shape the deliverable contract, prepare prompts/package/design-quality metadata, then record generation and QA only when observed",
-        "representative_workflows": ("design-quality-gate", "materials-package", "report-package", "deliverable-package", "img-summary"),
-        "user_examples": ("Turn this PR into a reviewer image card", "Make this spreadsheet a PDF report package"),
-        "first_response_shape": "Separate copy/layout/package prep from generated file or image evidence, then offer revise/copy/generate/record actions.",
-        "not_evidence_until_observed": ("file export", "image generation", "visual QA", "attachment"),
+        "user_signal": "deck, PDF, spreadsheet, document, HWP, report, website, frontend layout, visual QA, poster, image card, or shareable summary",
+        "omh_pattern": "shape the deliverable contract, prepare prompts/package/design/frontend/visual-QA metadata, then record generation and QA only when observed",
+        "representative_workflows": (
+            "design-quality-gate",
+            "frontend",
+            "visual-qa",
+            "materials-package",
+            "report-package",
+            "deliverable-package",
+            "img-summary",
+        ),
+        "user_examples": ("Turn this PR into a reviewer image card", "Make this frontend feel less generic and visually verified"),
+        "first_response_shape": "Separate copy/layout/package prep from generated file or image evidence; keep frontend implementation and browser evidence observed-only, then offer revise/copy/generate/record actions.",
+        "not_evidence_until_observed": ("file export", "image generation", "frontend implementation", "visual QA", "attachment"),
     },
     {
         "id": "automation_and_status",
@@ -583,6 +594,8 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "deliverable-package": "materials_and_visuals",
     "img-summary": "materials_and_visuals",
     "design-quality-gate": "materials_and_visuals",
+    "frontend": "materials_and_visuals",
+    "visual-qa": "materials_and_visuals",
     "achievements": "automation_and_status",
     "automation-blueprint": "automation_and_status",
     "agent-board": "automation_and_status",
@@ -1148,6 +1161,59 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": (),
         "adjacent_workflows": ("report-package", "deliverable-package", "img-summary"),
+    },
+    {
+        "id": "frontend_quality_handoff",
+        "workflow": "frontend",
+        "lane": "materials_and_visuals",
+        "next_action": "prepare_frontend_handoff",
+        "reason": "The user is asking for web/frontend layout, design-system, responsive, accessibility, performance, or anti-generic UI preparation.",
+        "fallback_action": "confirm_target_surface_design_system_and_visual_qa_path",
+        "phrases": (
+            "frontend",
+            "front-end",
+            "web ui",
+            "responsive layout",
+            "design system",
+            "ai-looking ui",
+            "generic ui",
+            "broken layout",
+            "프론트엔드",
+            "웹 ui",
+            "레이아웃 깨짐",
+            "디자인 자연스럽게",
+            "ai 티",
+            "ai틱",
+        ),
+        "tokens": ("frontend", "responsive", "layout", "lighthouse", "wcag"),
+        "adjacent_workflows": ("design-quality-gate", "visual-qa", "materials-package", "img-summary"),
+    },
+    {
+        "id": "visual_qa_gate",
+        "workflow": "visual-qa",
+        "lane": "materials_and_visuals",
+        "next_action": "prepare_visual_qa",
+        "reason": "The user is asking for rendered visual QA, screenshots, pixel diff, viewport checks, CJK/text clipping, or broken-layout verification.",
+        "fallback_action": "request_fresh_render_capture_after_last_edit",
+        "phrases": (
+            "visual qa",
+            "visual-qa",
+            "screenshot qa",
+            "pixel diff",
+            "visual diff",
+            "render qa",
+            "viewport check",
+            "text clipping",
+            "cjk layout",
+            "비주얼 qa",
+            "시각 검증",
+            "스크린샷 검증",
+            "화면 깨짐",
+            "글자 잘림",
+            "한글 줄바꿈",
+        ),
+        "tokens": ("screenshot", "viewport", "diff", "clipping"),
+        "adjacent_workflows": ("frontend", "design-quality-gate", "img-summary", "materials-package"),
     },
     {
         "id": "reliability_incident_review",
@@ -2785,8 +2851,16 @@ def awareness_primer_payload() -> dict[str, object]:
         {
             "id": "materials_and_visuals",
             "label": "Materials and visual summaries",
-            "skills": ["design-quality-gate", "materials-package", "img-summary", "report-package", "deliverable-package"],
-            "use_for": "premium websites, decks, PDFs, spreadsheets, documents, posters, image summary cards, and shareable packages",
+            "skills": [
+                "design-quality-gate",
+                "frontend",
+                "visual-qa",
+                "materials-package",
+                "img-summary",
+                "report-package",
+                "deliverable-package",
+            ],
+            "use_for": "premium web/frontends, visual QA, docs/decks/PDFs, image cards, and packages",
         },
         {
             "id": "automation_and_status",
@@ -3045,7 +3119,7 @@ def _compact_workflow_cue_line() -> str:
     return (
         "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
         "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
-        "premium design/web/poster/PPT/PDF quality -> design-quality-gate; decks/PDF/sheets/docs/HWP -> materials-package or report-package; image cards/infographics -> img-summary; "
+        "premium visuals -> design-quality-gate; frontend -> frontend; screenshots/render checks -> visual-qa; files/decks/PDF/sheets/docs/HWP -> materials/report-package; image cards -> img-summary; "
         "coding/status/review/CI/merge -> ultraprocess, code-review, or agent-ops-review; "
         "trace/improve/regression -> workflow-learning"
     )
@@ -3055,7 +3129,7 @@ def _compact_workflow_context_cards_line() -> str:
     return (
         "intent -> deep-interview/ralplan/loop/ultraprocess; "
         "signals -> web-research/research-department/feedback-triage/meeting-brief; "
-        "materials -> design-quality-gate/materials-package/report-package/img-summary; "
+        "materials -> design-quality-gate/frontend/visual-qa/materials-package/report-package/img-summary; "
         "automation/status/learning -> automation-blueprint/agent-ops-review/workflow-learning/doctor; "
         "code -> ultraprocess/code-review/team/ultrawork/ultraqa"
     )
@@ -3063,7 +3137,7 @@ def _compact_workflow_context_cards_line() -> str:
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
-        "image->img-summary; supplied paper->paper-learning; file->materials-package; "
+        "image->img-summary; frontend->frontend/visual-qa; paper->paper-learning; file->materials-package; "
         "search->web-research; code->ultraprocess/ralplan/review"
     )
 
@@ -3076,6 +3150,8 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "loop": "start_loop_cycle",
     "ultraprocess": "choose_executor",
     "workflow-learning": "audit_learning_readiness",
+    "frontend": "prepare_frontend_handoff",
+    "visual-qa": "prepare_visual_qa",
     "code-review": "prepare_review_or_followup_handoff",
     "team": "show_runtime_handoff",
     "ultrawork": "prepare_parallel_delivery",

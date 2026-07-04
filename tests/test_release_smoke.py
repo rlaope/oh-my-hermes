@@ -170,6 +170,8 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertTrue(payload["observed"])
         self.assertEqual(payload["router_skill"], "oh-my-hermes")
         self.assertIn("img-summary", payload["representative_skills"])
+        self.assertIn("frontend", payload["representative_skills"])
+        self.assertIn("visual-qa", payload["representative_skills"])
         self.assertEqual(payload["missing_representative_skills"], [])
         self.assertEqual(payload["missing_awareness_lane_skills"], [])
         self.assertEqual(payload["unexpected_awareness_surfaces"], [])
