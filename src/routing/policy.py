@@ -1039,6 +1039,18 @@ _FEEDBACK_TRIAGE_PHRASES = (
     "체크아웃 실패",
     "로그인 후 크래시",
 )
+_BROWSER_VISUAL_QA_PHRASES = (
+    "browser qa",
+    "browser interaction qa",
+    "click path",
+    "click-path audit",
+    "dead link check",
+    "console error check",
+    "network failure check",
+    "keyboard navigation check",
+    "screenshot qa",
+    "visual qa",
+)
 _FEEDBACK_TRIAGE_SOURCE_TOKENS = _normalized_token_set(
     {
         "customer",
@@ -3665,6 +3677,8 @@ def _feedback_before_coding_guard_applies(
     *,
     direct_coding_task_applies: bool | None = None,
 ) -> bool:
+    if _contains_phrase(normalized_query, _BROWSER_VISUAL_QA_PHRASES):
+        return False
     if _gateway_intent_guard_applies(normalized_query, query_tokens):
         return False
     if _github_event_ops_guard_applies(normalized_query, query_tokens):

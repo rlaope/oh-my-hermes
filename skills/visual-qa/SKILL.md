@@ -44,7 +44,7 @@ Bad example:
 - The visual_qa_plan/v1 lists target surfaces, references, states, viewports, locales, and freshness criteria.
 - The viewport_state_capture_matrix/v1 proves the QA did not sample only one page, viewport, or state.
 - The render_capture_manifest/v1 is present before PASS and is newer than the last relevant edit.
-- Visual diff, hotspot review, motion/interaction capture, design-system/functional review, visual-fidelity/CJK review, and blocker status are separate fields.
+- Browser interaction traces, console/network health, click-path state traces, keyboard/accessibility traces, visual diff, hotspot review, motion capture, design-system/functional review, visual-fidelity/CJK review, and blocker status are separate fields.
 - The verdict is PASS, REVISE, or BLOCK with exact missing evidence or fix requirements.
 - Any implementation fix is routed back to the executor/frontend workflow and rechecked with fresh evidence.
 
@@ -69,7 +69,7 @@ Bad example:
 
 Use after or during visual surface work when Hermes must define the render evidence, viewport/state coverage, diff review, oracle review, and PASS/REVISE/BLOCK verdict without fabricating QA.
 
-    Strong routing signals: `visual-qa`, `visual qa`, `visual QA`, `visual quality assurance`, `visual check`, `screenshot qa`, `screenshot check`, `pixel diff`, `image diff`, `visual diff`, `render qa`, `render check`, `browser screenshot`, `viewport check`, `responsive check`, `ui looks wrong`, `looks broken`, `layout broken`, `broken layout`, `text clipping`, `cjk clipping`, `cjk layout`, `tui check`, `terminal ui check`, `비주얼 qa`, `비주얼QA`, `시각 qa`, `시각 검증`, `화면 검증`, `스크린샷 검증`, `렌더 검증`, `픽셀 diff`, `픽셀 비교`, `화면 깨짐`, `레이아웃 깨짐`, `글자 잘림`, `한글 줄바꿈`, `터미널 ui`
+    Strong routing signals: `visual-qa`, `visual qa`, `visual QA`, `visual quality assurance`, `visual check`, `screenshot qa`, `screenshot check`, `pixel diff`, `image diff`, `visual diff`, `render qa`, `render check`, `browser screenshot`, `browser qa`, `browser interaction qa`, `click path`, `click-path audit`, `dead link check`, `console error check`, `network failure check`, `keyboard navigation check`, `viewport check`, `responsive check`, `ui looks wrong`, `looks broken`, `layout broken`, `broken layout`, `text clipping`, `cjk clipping`, `cjk layout`, `tui check`, `terminal ui check`, `비주얼 qa`, `비주얼QA`, `시각 qa`, `시각 검증`, `화면 검증`, `스크린샷 검증`, `렌더 검증`, `픽셀 diff`, `픽셀 비교`, `화면 깨짐`, `레이아웃 깨짐`, `글자 잘림`, `한글 줄바꿈`, `터미널 ui`
 
 ## Catalog Metadata
 
@@ -84,7 +84,8 @@ Quality bar:
 - Enumerate every page/state/viewport before capture and mark omitted surfaces as blockers rather than assumptions.
 - Require evidence freshness after the last visual edit.
 - Combine objective capture/diff evidence, hotspot review, alpha/transparent-background checks, and human-readable visual findings.
-- Capture interaction and motion states when the UI has hover/focus/active/load/scroll transitions.
+- Capture interaction, click-path, and motion states when the UI has hover/focus/active/load/scroll transitions or buttons/forms/navigation that change state.
+- Record console/network health, keyboard navigation, accessibility scan boundaries, and mutating-flow safety for live browser QA claims.
 - Separate design-system consistency, functional integrity, visual fidelity, responsive behavior, accessibility visibility, and CJK/text precision.
 - Return PASS, REVISE, or BLOCK with concrete evidence IDs and missing-evidence gaps.
 - Keep implementation fixes and follow-up edits separate from the observed QA verdict.
@@ -103,6 +104,8 @@ Required inputs:
 - latest edit or source revision
 - known risk areas such as CJK, overflow, responsiveness, or accessibility
 - motion and interaction states that need capture
+- browser interaction paths, mutating-flow boundary, and test credentials policy when a live web UI is in scope
+- console, network, accessibility, and keyboard navigation checks required for browser QA claims
 - fresh render/capture evidence for completion claims
 
 Expected outputs:
@@ -110,6 +113,10 @@ Expected outputs:
 - visual_qa_plan/v1
 - viewport_state_capture_matrix/v1
 - render_capture_manifest/v1 when observed
+- browser_interaction_trace/v1 when observed
+- console_network_health/v1 when observed
+- click_path_state_trace/v1 when observed
+- accessibility_keyboard_trace/v1 when observed
 - visual_diff_evidence/v1 when observed
 - visual_hotspot_review/v1 when observed
 - motion_interaction_capture/v1 when observed
@@ -123,6 +130,10 @@ Artifact expectations:
 - visual_qa_plan/v1 with pages, states, viewports, references, and freshness rule
 - viewport_state_capture_matrix/v1 enumerates every route/page, 375/768/1280-style viewport, scroll position, modal/tab state, and CJK-heavy region to capture
 - render_capture_manifest/v1 only from fresh screenshots, file renders, images, or terminal captures
+- browser_interaction_trace/v1 only from observed navigation, form, auth, search, modal, and critical journey runs with read-only or staging-safe boundaries recorded
+- console_network_health/v1 records observed critical console errors, failed requests, status codes, and ignored third-party noise before browser QA can pass
+- click_path_state_trace/v1 maps each user-facing button/touchpoint to its handler, ordered state reads/writes, final UI state, and undo/race/stale-closure risks when interaction behavior is in scope
+- accessibility_keyboard_trace/v1 records observed focus order, keyboard reachability, and automated accessibility scan boundaries; automated scans alone are not enough for an accessibility PASS
 - visual_diff_evidence/v1 only when the wrapper/executor records objective diff output such as dimensionsMatch, diffRatio, similarityScore, alphaChannelIntact, and hotspots
 - motion_interaction_capture/v1 only when hover/focus/active/load/scroll motion frames are observed before, during, and after transition
 - visual_hotspot_review/v1 maps diff hotspots, TUI overflow lines, or screenshot regions to concrete visual causes
@@ -134,6 +145,9 @@ Safety rules:
 - Never claim PASS without fresh rendered evidence captured after the last relevant edit.
 - Do not treat source review, screenshots from an older run, generated plans, or unobserved browser commands as visual QA evidence.
 - Do not sample only one good page, viewport, or state when the surface has more; missed pages, modals, scroll states, or CJK-heavy regions keep PASS unavailable.
+- Do not run destructive browser journeys such as checkout, payment, delete, or mass-update on production URLs; require staging or explicit safe test boundaries and redact credentials/PII from captures.
+- Do not claim browser interaction PASS without observed click-path/state-transition traces for the touchpoints in scope.
+- Do not claim accessibility from automated scan output alone; keyboard navigation and focus-order evidence remain separate observed checks.
 - Objective diffs are evidence, not verdicts; review visual hierarchy, layout, CJK text, state coverage, and product intent separately.
 - Do not excuse diff hotspots as animation; capture settled frames and motion frames separately.
 - Run or request two read-only review perspectives when claiming high confidence: design-system/functional integrity and visual fidelity/CJK precision.

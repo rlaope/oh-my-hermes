@@ -188,11 +188,14 @@ _SKILL_POLICIES = {
         next_action="prepare_visual_qa",
         evidence_boundary=(
             "A visual QA plan is not PASS evidence; PASS requires fresh rendered captures after the last relevant edit "
-            "plus recorded diff/review findings for the covered surfaces."
+            "plus recorded diff/review, browser interaction, console/network, click-path, and keyboard/accessibility findings "
+            "for the covered surfaces when those checks are in scope."
         ),
         wrapper_guidance=(
             "Prepare visual_qa_plan/v1 with capture freshness rules, render_capture_manifest/v1 requirements, "
-            "visual_diff_evidence/v1, dual_oracle_visual_review/v1, CJK/text checks, and a PASS/REVISE/BLOCK verdict."
+            "browser_interaction_trace/v1, console_network_health/v1, click_path_state_trace/v1, "
+            "accessibility_keyboard_trace/v1, visual_diff_evidence/v1, dual_oracle_visual_review/v1, CJK/text checks, "
+            "and a PASS/REVISE/BLOCK verdict."
         ),
     ),
     "workspace-audit": RecommendationPolicy(

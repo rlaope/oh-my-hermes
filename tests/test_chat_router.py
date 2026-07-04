@@ -992,6 +992,14 @@ class ChatRouterTests(unittest.TestCase):
                 "feedback-triage",
             ),
             (
+                "Browser QA this checkout page with console error and network failure checks.",
+                "visual-qa",
+            ),
+            (
+                "Click path audit the new dashboard buttons before release.",
+                "visual-qa",
+            ),
+            (
                 "This issue should become a PR.",
                 "github-event-ops",
             ),
