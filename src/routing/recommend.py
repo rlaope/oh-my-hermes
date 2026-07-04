@@ -910,6 +910,8 @@ def _score_definition(
     trigger_token_matches = query_tokens & prepared.trigger_tokens
     if definition.name == "ops-observability-card" and "dashboard" in trigger_token_matches and "slo" not in query_tokens:
         trigger_token_matches.remove("dashboard")
+    if definition.name == "codegraph-refresh" and not _codegraph_refresh_token_context(normalized_query, query_tokens):
+        trigger_token_matches -= {"index", "refresh", "stale", "갱신"}
     for token in trigger_token_matches:
         score += 3
         matched.add(f"trigger:{token}")
@@ -940,6 +942,13 @@ def _score_definition(
         evidence_boundary=policy.evidence_boundary,
         wrapper_guidance=policy.wrapper_guidance,
         suggested_prompt=_suggested_prompt(definition.name, original_query),
+    )
+
+
+def _codegraph_refresh_token_context(normalized_query: str, query_tokens: set[str]) -> bool:
+    return bool({"codegraph", "codemap", "codemaps", "code", "코드그래프", "코드맵", "코드"} & query_tokens) or _phrase_match(
+        normalized_query,
+        "code map",
     )
 
 

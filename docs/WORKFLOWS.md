@@ -1988,7 +1988,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs a narrative first-read tour of an unfamiliar repo; use `codebase-onboarding`.
   - The user already has accepted implementation criteria and wants code changes; use `ultraprocess` or a coding handoff.
   - The user asks for visual, frontend, or rendered UI QA; use `frontend`, `design-quality-gate`, or `visual-qa`.
-- Strong routing signals: `codegraph-refresh`, `codegraph refresh`, `refresh codegraph`, `update codegraph`, `codegraph stale`, `stale codegraph`, `codegraph handoff`, `codegraph summary`, `codemap`, `codemaps`, `update codemaps`, `refresh codemap`, `code map`, `code maps`, `stale index`, `refresh index`, `코드그래프`, `코드그래프 갱신`, `코드맵`, `코드맵 갱신`, `코드 인덱스`, `인덱스 갱신`
+- Strong routing signals: `codegraph-refresh`, `codegraph refresh`, `refresh codegraph`, `update codegraph`, `codegraph stale`, `stale codegraph`, `codegraph handoff`, `codegraph summary`, `codemap`, `codemaps`, `update codemaps`, `refresh codemap`, `code map`, `code maps`, `stale code index`, `refresh code index`, `codegraph index`, `codegraph index refresh`, `codemap index`, `코드그래프`, `코드그래프 갱신`, `코드맵`, `코드맵 갱신`, `코드 인덱스`, `코드 인덱스 갱신`
 - Good example:
   - Prompt: codegraph-refresh update codemaps and prepare a handoff for the routing package before the next coding pass.
   - Expected behavior: Prepare command plan, staleness report, summary/handoff requirements, and observed-only artifact boundaries.

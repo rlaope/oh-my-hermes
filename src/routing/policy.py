@@ -3770,9 +3770,13 @@ def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[st
             "update codemaps",
             "refresh codemap",
             "code map",
-            "stale index",
+            "stale code index",
+            "refresh code index",
+            "codegraph index",
+            "codemap index",
             "코드그래프 갱신",
             "코드맵 갱신",
+            "코드 인덱스 갱신",
         ),
     )
     explicit_learning_signal = bool({"learn", "learning", "regression", "회귀", "학습"} & query_tokens)
