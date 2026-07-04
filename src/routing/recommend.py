@@ -326,6 +326,18 @@ _SKILL_POLICIES = {
             "omh_codegraph_summary/v1 or omh_codegraph_context/v1 evidence."
         ),
     ),
+    "skill-scout": RecommendationPolicy(
+        next_action="prepare_skill_scout",
+        evidence_boundary=(
+            "A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, "
+            "network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt."
+        ),
+        wrapper_guidance=(
+            "Prepare skill_scout_query/v1, local_skill_candidate_inventory/v1 when observed, "
+            "external_skill_candidate_risk_review/v1 when observed, skill_adoption_decision_matrix/v1, "
+            "and skill_scout_recommendation/v1 without installing, copying, or trusting candidates."
+        ),
+    ),
     "skill-health": RecommendationPolicy(
         next_action="prepare_skill_health",
         evidence_boundary=(

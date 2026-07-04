@@ -470,6 +470,22 @@ _SPECIFIC_CAPABILITY_FAST_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "skill-scout",
+        (
+            "skill scout",
+            "skill scouting",
+            "skill candidate",
+            "skill candidates",
+            "skill candidate search",
+            "skill discovery",
+            "find a skill",
+            "find skills",
+            "existing skill",
+            "fork a skill",
+            "extend a skill",
+        ),
+    ),
+    (
         "skill-health",
         (
             "skill health",
@@ -1280,16 +1296,17 @@ def _route_chat_message_cached(
     if fast_maintenance_task_decision is not None:
         return fast_maintenance_task_decision.to_dict()
     if not _is_specific_capability_question_shape(routing_message):
-        fast_skill_health_decision = _operator_surface_fast_path_decision(
-            message,
-            routing_message=routing_message,
-            source=source,
-            min_confidence=min_confidence,
-            allow_explicit_skill=True,
-            only_skill="skill-health",
-        )
-        if fast_skill_health_decision is not None:
-            return fast_skill_health_decision.to_dict()
+        for early_operator_skill in ("skill-scout", "skill-health"):
+            fast_operator_decision = _operator_surface_fast_path_decision(
+                message,
+                routing_message=routing_message,
+                source=source,
+                min_confidence=min_confidence,
+                allow_explicit_skill=True,
+                only_skill=early_operator_skill,
+            )
+            if fast_operator_decision is not None:
+                return fast_operator_decision.to_dict()
     fast_explicit_skill_decision = _explicit_skill_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -2062,6 +2079,7 @@ def _specific_capability_fast_path_markers(skill: str, matched: tuple[str, ...])
     guard_by_skill = {
         "img-summary": "guard:img_summary",
         "paper-learning": "guard:paper_learning",
+        "skill-scout": "guard:skill_scout",
         "skill-health": "guard:skill_health",
     }
     guard = guard_by_skill.get(skill)
@@ -2596,6 +2614,33 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear harness/session/MCP inventory request; prepare the drift-aware inventory without scoring every workflow.",
     ),
     (
+        "skill-scout",
+        (
+            "skill-scout",
+            "skill scout",
+            "skill candidate",
+            "skill candidate search",
+            "skill discovery",
+            "find a skill",
+            "find skills",
+            "is there a skill",
+            "existing skill",
+            "fork a skill",
+            "extend a skill",
+            "create skill after search",
+            "new skill search",
+            "skill adoption",
+            "스킬 스카우트",
+            "스킬 후보",
+            "스킬 찾기",
+            "스킬 검색",
+            "스킬 만들기 전",
+            "기존 스킬",
+        ),
+        "operator_surface_fast_path:skill_scout",
+        "Clear skill candidate search-before-creation request; prepare a scout report without installing, copying, or trusting candidates.",
+    ),
+    (
         "skill-health",
         (
             "skill-health",
@@ -2687,6 +2732,11 @@ def _operator_surface_fast_path_decision(
         or _is_paper_learning_materials_request(routing_message)
     ):
         return None
+    if selected_skill == "skill-scout" and _is_installed_skill_repair_request(routing_message):
+        selected_skill = "doctor"
+        phrase = "installed skill repair"
+        marker = "operator_surface_fast_path:doctor"
+        reason = "Installed skill setup or repair request; run diagnostics instead of scouting new candidates."
     if _operator_surface_guard_preempts(
         selected_skill,
         routing_message,
@@ -2809,6 +2859,8 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:executor_runtime_readiness",)
     if skill == "harness-session-inventory":
         return ("guard:harness_session_inventory",)
+    if skill == "skill-scout":
+        return ("guard:skill_scout",)
     if skill == "skill-health":
         return ("guard:skill_health",)
     if skill != "ralplan":
@@ -2823,6 +2875,80 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
     if any(marker in normalized for marker in ("risk", "risky", "위험")):
         return ("guard:risky_refactor_before_cleanup",)
     return ()
+
+
+def _is_installed_skill_repair_request(message: str) -> bool:
+    normalized = _fast_path_text(message)
+    if not any(marker in normalized for marker in ("skill", "스킬")):
+        return False
+    if any(
+        marker in normalized
+        for marker in (
+            "skill-scout",
+            "skill scout",
+            "skill candidate",
+            "skill candidates",
+            "skill discovery",
+            "find a skill",
+            "find skills",
+            "fork a skill",
+            "extend a skill",
+            "create skill",
+            "before building",
+            "before we create",
+            "candidate search",
+            "skill adoption",
+            "스킬 후보",
+            "스킬 찾기",
+            "스킬 검색",
+            "만들기 전",
+            "만들지 결정",
+        )
+    ):
+        return False
+    repair_hit = any(
+        marker in normalized
+        for marker in (
+            "fix",
+            "repair",
+            "broken",
+            "broke",
+            "failed",
+            "failure",
+            "error",
+            "missing",
+            "not working",
+            "does not work",
+            "doesn't work",
+            "안 돼",
+            "안돼",
+            "안되",
+            "고장",
+            "깨",
+            "실패",
+            "오류",
+            "수리",
+            "복구",
+            "문제",
+        )
+    )
+    install_hit = any(
+        marker in normalized
+        for marker in (
+            "install",
+            "installed",
+            "setup",
+            "registration",
+            "registered",
+            "load",
+            "loaded",
+            "설치",
+            "셋업",
+            "등록",
+            "로드",
+        )
+    )
+    return repair_hit and install_hit
 
 
 def _is_paper_learning_citation_research_request(message: str) -> bool:

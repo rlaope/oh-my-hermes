@@ -1,22 +1,22 @@
 ---
-name: memory-curation-review
-description: [omh] Hermes memory curation workflow: review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.
+name: skill-scout
+description: [omh] Skill Scout workflow: prepare a metadata-only search-before-creation report for local, marketplace, GitHub, and web skill candidates with risk review and adoption options.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, memory]
-    category: memory
-    phase: curation-review
-    role: memory-keeper
+    tags: [workflow, oh-my-hermes, operations]
+    category: operations
+    phase: skill-scout
+    role: operator
     quality_tier: workflow-surface-gated
 ---
 
-# Memory Curation Review
+# Skill Scout
 
-This is a Hermes-native `memory-curation-review` workflow skill.
+This is a Hermes-native `skill-scout` workflow skill.
 
 ## Why This Exists
 
-`memory-curation-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`skill-scout` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,26 +28,27 @@ This is a Hermes-native `memory-curation-review` workflow skill.
 
 Good example:
 
-- Prompt: memory-curation-review inspect stale project memories and ask me what to keep.
-- Expected behavior: Produce `prepare_memory_curation_review` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: skill-scout find existing skill candidates before we create a release-note workflow skill.
+- Expected behavior: Produce `prepare_skill_scout` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: memory-curation-review silently delete all conflicting memories.
+- Prompt: skill-scout install the best GitHub skill and copy it into the marketplace without review.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Intent, keywords, source scope, and stop condition are explicit.
+- Local and external search evidence is separated from planned search.
+- No install, copy, write, credential, or trust claim is made without observed review or implementation.
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If the request is about setup or installed skill repair, route to doctor.
+- If the request is a portfolio health dashboard, route to skill-health.
+- If the request is an approved skill mutation or creation task, route to skill or implementation after the scout decision.
 
 ## OMH Context Rail
 
@@ -63,15 +64,15 @@ Bad example:
 
 ## Use When
 
-Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.
+Use before creating or adapting a skill so OMH can compare existing local, marketplace, GitHub, or web candidates without installing, copying, or trusting them by default.
 
-    Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `기억하는 맥락`, `현재 hermes가 기억하는 맥락`, `현재 헤르메스가 기억하는 맥락`, `헤르메스가 기억하는 맥락`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `메모리 업데이트`, `메모리 검사`, `메모리 점검`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `맥락 피드백`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
+    Strong routing signals: `skill-scout`, `skill scout`, `skill candidate`, `skill candidate search`, `skill discovery`, `find a skill`, `find skills`, `is there a skill`, `existing skill`, `fork a skill`, `extend a skill`, `create skill after search`, `new skill search`, `skill adoption`, `스킬 스카우트`, `스킬 후보`, `스킬 찾기`, `스킬 검색`, `스킬 만들기 전`, `기존 스킬`
 
 ## Catalog Metadata
 
-Category: `memory`
-Phase: `curation-review`
-Hermes role: `memory-keeper`
+Category: `operations`
+Phase: `skill-scout`
+Hermes role: `operator`
 Quality tier: `workflow-surface-gated`
 
 Quality bar:
@@ -93,17 +94,21 @@ Required inputs:
 
 Expected outputs:
 
-- memory-curation-review/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
+- skill_scout_query/v1
+- local_skill_candidate_inventory/v1 when observed
+- external_skill_candidate_risk_review/v1 when observed
+- skill_adoption_decision_matrix/v1
+- skill_scout_recommendation/v1
 
 Artifact expectations:
 
-- memory-curation-review/v1 metadata-only runtime or wrapper card when recorded
+- skill_scout_query/v1 with intended workflow, triggers, domains/tools, and search keywords
+- local_skill_candidate_inventory/v1 separating installed, bundled, marketplace, and repo-local matches when observed
+- skill_adoption_decision_matrix/v1 ranking use existing, fork or extend, and create fresh options with trust gaps
 
 Safety rules:
 
-- A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence until an approved write is observed.
+- A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -114,12 +119,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `memory-curation-review`.
+Preferred harness for this skill: `skill-scout`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill memory-curation-review --harness memory-curation-review --status started
+omh runtime record --skill skill-scout --harness skill-scout --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

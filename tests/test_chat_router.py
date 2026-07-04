@@ -2824,6 +2824,7 @@ selected_workflow=ultraprocess
             ("can OMH help with MCP setup?", "toolbelt-readiness"),
             ("does OMH support memory cleanup?", "memory-curation-review"),
             ("does OMH support voice commands?", "voice-operator"),
+            ("does OMH support skill candidate scouting?", "skill-scout"),
             ("does OMH support skill health dashboards?", "skill-health"),
             ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops"),
         )
@@ -2838,6 +2839,42 @@ selected_workflow=ultraprocess
                 self.assertEqual(decision["recommendations"][0]["skill"], selected_skill)
                 self.assertEqual(decision["confidence"], "high")
                 self.assertIn("Specific OMH capability question", decision["reason"])
+
+    def test_skill_scout_routes_without_stealing_skill_management_health_or_learning(self) -> None:
+        scout_cases = (
+            "skill-scout find existing skill candidates before we create one",
+            "skill scout release-note workflow candidates",
+            "find a skill for release notes before building one",
+            "is there a skill for release notes?",
+            "스킬 후보 찾아보고 만들지 결정해줘",
+        )
+
+        for message in scout_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["selected_skill"], "skill-scout")
+                self.assertEqual(decision["selected_harness"], "skill-scout")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_skill_scout")
+
+        skill_management = route_chat_message("skill list installed skills", source="discord")
+        health = route_chat_message("skill health dashboard", source="discord")
+        learning = route_chat_message("workflow trace 보고 다음에 스킬 고칠점 알려줘", source="discord")
+        skill_repair_cases = (
+            "fix existing skill install",
+            "existing skill is broken after install",
+        )
+
+        self.assertEqual(skill_management["selected_skill"], "skill")
+        self.assertEqual(health["selected_skill"], "skill-health")
+        self.assertEqual(learning["selected_skill"], "workflow-learning")
+        for message in skill_repair_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["selected_skill"], "doctor")
+                self.assertEqual(decision["selected_harness"], primary_harness_for_skill("doctor"))
+                self.assertEqual(decision["recommendations"][0]["next_action"], "run_local_operator_check")
 
     def test_skill_health_routes_without_stealing_setup_or_learning(self) -> None:
         health_cases = (

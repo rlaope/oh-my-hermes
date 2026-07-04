@@ -13,6 +13,7 @@ WORKFLOW_VOCABULARY = (
     "ultragoal",
     "loop",
     "ultraprocess",
+    "skill-scout",
     "skill-health",
     "workflow-learning",
     "codegraph-refresh",

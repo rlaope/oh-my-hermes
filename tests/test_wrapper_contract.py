@@ -1293,6 +1293,14 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_ops_observability_card",
             ),
             (
+                "skill-scout find existing skill candidates before creating a release-note workflow",
+                "skill-scout",
+                "skill_scout",
+                "I can scout existing skill candidates before creating a new one.",
+                "external source trust",
+                "prepare_skill_scout",
+            ),
+            (
                 "skill-health show the skill portfolio dashboard with failure patterns",
                 "skill-health",
                 "skill_health",
@@ -1350,6 +1358,8 @@ class WrapperContractTests(unittest.TestCase):
                 expected_schema = (
                     "ops_service_quality_board/v1"
                     if workflow == "ops-observability-card"
+                    else "skill_scout_recommendation/v1"
+                    if workflow == "skill-scout"
                     else "skill_portfolio_health_dashboard/v1"
                     if workflow == "skill-health"
                     else "harness_session_inventory/v1"
@@ -2425,6 +2435,13 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_codegraph_refresh",
                 "codegraph refresh",
                 "ack",
+            ),
+            (
+                "skill-scout find existing skill candidates before creating a release-note workflow",
+                "skill-scout",
+                "prepare_skill_scout",
+                "skill scout report",
+                "skill_scout",
             ),
             (
                 "skill-health show skill dashboard failure patterns and pending amendments",

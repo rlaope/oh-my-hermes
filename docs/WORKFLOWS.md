@@ -3844,6 +3844,66 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence. If Hermes is the coding owner, summarize `hermes_coding_harness/v1` stage, lane owner, next action, and missing evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### skill-scout
+
+[omh] Skill Scout workflow: prepare a metadata-only search-before-creation report for local, marketplace, GitHub, and web skill candidates with risk review and adoption options.
+
+- Category: `operations`
+- Phase: `skill-scout`
+- Hermes role: `operator`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill before creating, forking, installing, or adapting a skill so operators can compare candidates and risks first.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `skill-scout` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use before creating or adapting a skill so OMH can compare existing local, marketplace, GitHub, or web candidates without installing, copying, or trusting them by default.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `skill-scout`, `skill scout`, `skill candidate`, `skill candidate search`, `skill discovery`, `find a skill`, `find skills`, `is there a skill`, `existing skill`, `fork a skill`, `extend a skill`, `create skill after search`, `new skill search`, `skill adoption`, `스킬 스카우트`, `스킬 후보`, `스킬 찾기`, `스킬 검색`, `스킬 만들기 전`, `기존 스킬`
+- Good example:
+  - Prompt: skill-scout find existing skill candidates before we create a release-note workflow skill.
+  - Expected behavior: Produce `prepare_skill_scout` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: skill-scout install the best GitHub skill and copy it into the marketplace without review.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Intent, keywords, source scope, and stop condition are explicit.
+  - Local and external search evidence is separated from planned search.
+  - No install, copy, write, credential, or trust claim is made without observed review or implementation.
+- Recovery notes:
+  - If the request is about setup or installed skill repair, route to doctor.
+  - If the request is a portfolio health dashboard, route to skill-health.
+  - If the request is an approved skill mutation or creation task, route to skill or implementation after the scout decision.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - skill_scout_query/v1
+  - local_skill_candidate_inventory/v1 when observed
+  - external_skill_candidate_risk_review/v1 when observed
+  - skill_adoption_decision_matrix/v1
+  - skill_scout_recommendation/v1
+- Artifact expectations:
+  - skill_scout_query/v1 with intended workflow, triggers, domains/tools, and search keywords
+  - local_skill_candidate_inventory/v1 separating installed, bundled, marketplace, and repo-local matches when observed
+  - skill_adoption_decision_matrix/v1 ranking use existing, fork or extend, and create fresh options with trust gaps
+- Safety rules:
+  - A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### skill-health
 
 [omh] Skill Health workflow: prepare a metadata-only OMH skill portfolio dashboard with stale surfaces, observed failure signals, pending amendments, and top actions.
@@ -6750,6 +6810,57 @@ Prepare a manager-facing quality and throughput review for AI-agent research, co
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - An agent ops review card is not source retrieval, executor dispatch, implementation, verification, review, CI, merge, delivery, provider billing, or live telemetry evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### skill-scout
+
+Prepare a metadata-only scout report for existing skill candidates, external risk review, and adoption options before creating or adapting a skill.
+
+- Use when: Use before skill creation, forking, installation, or adaptation when operators need local and external candidate evidence without trusting or mutating candidates by default.
+- Quality tier: `skill-scout-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - skill intent or workflow gap
+  - candidate source scope
+  - keywords and synonyms
+  - allowed search/read boundaries
+  - adoption decision owner
+- Outputs:
+  - skill_scout_query/v1
+  - local_skill_candidate_inventory/v1 when observed
+  - external_skill_candidate_risk_review/v1 when observed
+  - skill_adoption_decision_matrix/v1
+  - skill_scout_recommendation/v1
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `skill_scout_scope_recorded`
+  - `search_keywords_prepared`
+  - `local_candidates_inventory_prepared_when_observed`
+  - `external_candidates_reviewed_when_observed`
+  - `adoption_options_prepared`
+- Wrapper actions:
+  - `prepare_skill_scout`
+  - `show_skill_scout`
+  - `record_skill_candidate`
+  - `record_skill_candidate_risk_review`
+  - `route_to_skill_creator_or_skill_health`
+- Artifact events:
+  - `skill-scout_scoped`
+  - `skill-scout_card_prepared`
+  - `skill-scout_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### skill-health

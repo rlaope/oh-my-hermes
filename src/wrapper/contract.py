@@ -213,6 +213,11 @@ VISIBLE_ACTIONS = (
     "record_codegraph_build",
     "record_codegraph_summary",
     "record_codegraph_handoff",
+    "prepare_skill_scout",
+    "show_skill_scout",
+    "record_skill_candidate",
+    "record_skill_candidate_risk_review",
+    "route_to_skill_creator_or_skill_health",
     "prepare_skill_health",
     "show_skill_health",
     "record_skill_health_signal",
@@ -581,6 +586,11 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "file-write policy, and observed-only codegraph summary or handoff evidence. Command execution and "
         "generated files stay separate until observed."
     ),
+    "skill-scout": (
+        "I will prepare a skill scout report: intended skill workflow, search keywords, local and external candidate "
+        "sources, risk review gaps, and use/fork/create options. Installation, copying, external trust, and "
+        "implementation stay separate until observed and reviewed."
+    ),
     "skill-health": (
         "I will prepare a skill health dashboard: catalog and generated-skill surfaces, stale or duplicate guidance, "
         "observed failure-pattern signals, pending amendment reviews, and top safe actions. Install repair, skill "
@@ -703,6 +713,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_rules_distillation": ("prepare_rules_distillation", "Distill rules"),
     "prepare_codebase_onboarding": ("prepare_codebase_onboarding", "Prepare onboarding"),
     "prepare_codegraph_refresh": ("prepare_codegraph_refresh", "Refresh codegraph"),
+    "prepare_skill_scout": ("prepare_skill_scout", "Prepare skill scout"),
     "prepare_skill_health": ("prepare_skill_health", "Prepare skill health"),
     "prepare_context_budget_review": ("prepare_context_budget_review", "Review context"),
     "prepare_security_safety_review": ("prepare_security_safety_review", "Review safety"),
@@ -1226,6 +1237,43 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "review",
             "CI",
             "future routing fix",
+        ],
+    },
+    "skill-scout": {
+        "kind": "skill_scout",
+        "headline": "I can scout existing skill candidates before creating a new one.",
+        "body": (
+            "I will prepare the skill scout report: intended workflow, trigger keywords, local and external candidate "
+            "sources, risk review gaps, and use/fork/create options. Installation, copying, external trust, file writes, "
+            "and implementation stay observed-only."
+        ),
+        "phase": "skill_scout_prepared",
+        "next_action": "prepare_skill_scout",
+        "artifact_schema": "skill_scout_recommendation/v1",
+        "claim_boundary_suffix": "It is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.",
+        "actions": [
+            {"id": "prepare_skill_scout", "label": "Prepare skill scout", "style": "primary"},
+            {"id": "record_skill_candidate", "label": "Record candidate", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "capture_skill_intent",
+            "prepare_search_keywords",
+            "inventory_local_candidates_when_observed",
+            "review_external_candidate_risks_when_observed",
+            "rank_use_fork_create_options",
+        ],
+        "evidence_not_observed": [
+            "skill installation",
+            "external source trust",
+            "marketplace mutation",
+            "file copy",
+            "network retrieval",
+            "credential use",
+            "implementation",
+            "review",
+            "CI",
+            "merge",
         ],
     },
     "gateway-intent-card": {
