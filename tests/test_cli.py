@@ -1826,6 +1826,192 @@ class CliTests(unittest.TestCase):
             state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
             self.assertEqual(state["last_setup"]["mcp_setup"]["mode"], "bridge_requested")
 
+    def test_setup_with_mcp_codex_host_writes_config_idempotently(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            codex_config = root / "codex-config.toml"
+            codex_config.write_text(
+                "\n".join(
+                    [
+                        "[profiles.default]",
+                        'model = "gpt-5"',
+                        "",
+                        "[mcp_servers.omh]",
+                        'command = "old-omh"',
+                        'args = ["old"]',
+                        "",
+                        "[mcp_servers.omh.env]",
+                        'OLD_SECRET = "kept"',
+                        "",
+                        "[mcp_servers.other]",
+                        'command = "other"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "setup",
+                    "--with-mcp",
+                    "--mcp-host",
+                    "codex",
+                    "--mcp-config-path",
+                    str(codex_config),
+                    "--mcp-command",
+                    "/tmp/omh",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            mcp = payload["steps"]["mcp"]
+            self.assertEqual(mcp["status"], "host_config_written")
+            self.assertEqual(mcp["host"], "codex")
+            self.assertEqual(mcp["host_config"]["status"], "updated")
+            self.assertTrue(mcp["host_config"]["written"])
+            self.assertFalse(mcp["host_config"]["host_runtime_observed"])
+            self.assertEqual(payload["operator_summary"]["mcp_host"], "codex")
+            self.assertEqual(payload["operator_summary"]["mcp_host_config_status"], "updated")
+            text = codex_config.read_text(encoding="utf-8")
+            self.assertIn("[profiles.default]", text)
+            self.assertIn("[mcp_servers.omh]", text)
+            self.assertIn("[mcp_servers.other]", text)
+            self.assertNotIn("[mcp_servers.omh.env]", text)
+            self.assertNotIn("OLD_SECRET", text)
+            self.assertIn('command = "/tmp/omh"', text)
+            self.assertIn('args = ["--omh-home"', text)
+            self.assertIn('"mcp"', text)
+            self.assertIn('"serve"', text)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "setup",
+                    "--with-mcp",
+                    "--mcp-host",
+                    "codex",
+                    "--mcp-config-path",
+                    str(codex_config),
+                    "--mcp-command",
+                    "/tmp/omh",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            second = json.loads(stdout)
+            self.assertEqual(second["steps"]["mcp"]["status"], "host_config_unchanged")
+            self.assertEqual(second["steps"]["mcp"]["host_config"]["status"], "unchanged")
+
+            status, stdout, stderr = run_cli(base + ["probe", "--parity", "--json"], output_json=False)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            probe = json.loads(stdout)
+            capabilities = {item["name"]: item for item in probe["capabilities"]}
+            self.assertEqual(capabilities["mcp_host_config"]["status"], "available")
+            self.assertIn(str(codex_config), capabilities["mcp_host_config"]["evidence"])
+            self.assertEqual(probe["parity_matrix"]["probe_alignment"]["mcp_host_config"], "available")
+
+            status, stdout, stderr = run_cli(base + ["setup", "--no-interactive"])
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["last_mcp_host_config_install"]["host"], "codex")
+            self.assertEqual(Path(state["last_mcp_host_config_install"]["path"]).resolve(), codex_config.resolve())
+            status, stdout, stderr = run_cli(base + ["probe", "--parity", "--json"], output_json=False)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            preserved_probe = json.loads(stdout)
+            preserved_capabilities = {item["name"]: item for item in preserved_probe["capabilities"]}
+            self.assertEqual(preserved_capabilities["mcp_host_config"]["status"], "available")
+            self.assertIn(str(codex_config), preserved_capabilities["mcp_host_config"]["evidence"])
+
+            codex_config.write_text("[profiles.default]\nmodel = \"gpt-5\"\n", encoding="utf-8")
+            status, stdout, stderr = run_cli(base + ["probe", "--parity", "--json"], output_json=False)
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            drift_probe = json.loads(stdout)
+            drift_capabilities = {item["name"]: item for item in drift_probe["capabilities"]}
+            self.assertEqual(drift_capabilities["mcp_host_config"]["status"], "missing")
+            self.assertIn("no longer contains the OMH entry", drift_capabilities["mcp_host_config"]["message"])
+
+    def test_setup_with_mcp_json_host_merges_without_removing_existing_keys(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / ".mcp.json"
+            config_path.write_text(
+                json.dumps({"project": "demo", "mcpServers": {"other": {"command": "other"}}}) + "\n",
+                encoding="utf-8",
+            )
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "setup",
+                    "--with-mcp",
+                    "--mcp-host",
+                    "claude-code",
+                    "--mcp-config-path",
+                    str(config_path),
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["steps"]["mcp"]["host_config"]["status"], "updated")
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["project"], "demo")
+            self.assertEqual(data["mcpServers"]["other"]["command"], "other")
+            self.assertEqual(data["mcpServers"]["omh"]["command"], "omh")
+            self.assertEqual(data["mcpServers"]["omh"]["type"], "stdio")
+            self.assertEqual(data["mcpServers"]["omh"]["args"][-2:], ["mcp", "serve"])
+
+    def test_setup_with_mcp_host_config_dry_run_does_not_write(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / ".cursor" / "mcp.json"
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "setup",
+                    "--with-mcp",
+                    "--mcp-host",
+                    "cursor",
+                    "--mcp-config-path",
+                    str(config_path),
+                    "--dry-run",
+                ]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["steps"]["mcp"]["status"], "host_config_planned")
+            self.assertEqual(payload["steps"]["mcp"]["host_config"]["status"], "dry_run_would_write")
+            self.assertFalse(config_path.exists())
+
+    def test_setup_rejects_mcp_host_without_mcp_bridge_flag(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            status, stdout, stderr = run_cli(base + ["setup", "--mcp-host", "codex"], output_json=False)
+
+            self.assertNotEqual(status, 0)
+            self.assertEqual(stdout, "")
+            self.assertIn("--mcp-host and --mcp-config-path require --with-mcp", stderr)
+
     def test_setup_and_install_support_localized_human_output(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -29,6 +30,8 @@ from ..installer import OmhError, install_skill_pack, uninstall_skill_pack
 from ..local_store import atomic_write_text
 from ..manifest import read_manifest
 from ..menubar_app import setup_menubar_app, uninstall_menubar_app
+from ..mcp.host_config import install_mcp_host_config
+from ..mcp_bridge import MCP_HOST_CONFIG_RECIPE_HOSTS
 from ..plugin_pack import PluginPackError, install_plugin_bundle
 from ..probe import probe_capabilities
 from ..release import RELEASE_CHANNELS, package_url_for
@@ -492,6 +495,8 @@ def _setup_operator_summary(
     team_status = "profile_pack" if getattr(args, "profile_pack", []) else "available"
     mcp = steps.get("mcp", {})
     mcp_mode = str(mcp.get("mode", "none")) if isinstance(mcp, dict) else "none"
+    mcp_host_config = mcp.get("host_config", {}) if isinstance(mcp, dict) else {}
+    mcp_host_config_status = str(mcp_host_config.get("status", "not_requested")) if isinstance(mcp_host_config, dict) else "not_requested"
     profile = steps.get("profile", {})
     operating_model_id = str(profile.get("operating_model_id", "")) if isinstance(profile, dict) else ""
     memory_policy = profile.get("memory_policy", {}) if isinstance(profile, dict) else {}
@@ -501,6 +506,9 @@ def _setup_operator_summary(
         "scope": _setup_scope(args),
         "install_mode": "managed_skills",
         "mcp_mode": mcp_mode,
+        "mcp_host": str(mcp.get("host", "generic")) if isinstance(mcp, dict) else "generic",
+        "mcp_host_config_status": mcp_host_config_status,
+        "mcp_host_config_path": str(mcp_host_config.get("path", "")) if isinstance(mcp_host_config, dict) else "",
         "plugin_mode": plugin_status,
         "menubar_mode": menubar_status,
         "team_mode": team_status,
@@ -884,6 +892,11 @@ def cmd_setup(args: argparse.Namespace) -> int:
             paths = _paths(args)
         _run_setup_wizard(args, paths, language)
         _offer_github_star_before_setup(language=language, use_color=_use_color(), dry_run=bool(args.dry_run))
+    if not args.with_mcp and (
+        str(getattr(args, "mcp_host", "generic") or "generic") != "generic"
+        or getattr(args, "mcp_config_path", None)
+    ):
+        raise OmhError("--mcp-host and --mcp-config-path require --with-mcp.")
 
     progress = _HumanProgress(enabled=not _wants_json(args), use_color=_use_color())
     if not _wants_json(args):
@@ -1020,22 +1033,23 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
     if not args.dry_run:
         operator_summary = _setup_operator_summary(args, paths, steps, hermes_native)
-        update_state(
-            paths,
-            {
-                "last_setup": {
-                    "ok": True,
-                    "apply_skipped": bool(args.skip_apply),
-                    "hermes_native": hermes_native,
-                    "operator_summary": operator_summary,
-                    "setup_profile": steps["profile"],
-                    "mcp_setup": steps["mcp"],
-                    "menubar_app": steps["menubar"],
-                    "team_profiles": steps.get("team_profiles", []),
-                    "target_observation": steps["targets"],
-                }
-            },
-        )
+        state_patch: dict[str, object] = {
+            "last_setup": {
+                "ok": True,
+                "apply_skipped": bool(args.skip_apply),
+                "hermes_native": hermes_native,
+                "operator_summary": operator_summary,
+                "setup_profile": steps["profile"],
+                "mcp_setup": steps["mcp"],
+                "menubar_app": steps["menubar"],
+                "team_profiles": steps.get("team_profiles", []),
+                "target_observation": steps["targets"],
+            }
+        }
+        durable_mcp_host_config = _durable_mcp_host_config_record(steps["mcp"])
+        if durable_mcp_host_config:
+            state_patch["last_mcp_host_config_install"] = durable_mcp_host_config
+        update_state(paths, state_patch)
     else:
         operator_summary = _setup_operator_summary(args, paths, steps, hermes_native)
     payload: dict[str, object] = {
@@ -1197,6 +1211,12 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
             note=tr(language, "mcp_note"),
             language=language,
         )
+        if args.with_mcp:
+            args.mcp_host = _ask_mcp_host(
+                use_color=use_color,
+                language=language,
+                default_host=_default_mcp_host_for_executor(str(getattr(args, "default_executor", "") or "")),
+            )
     else:
         args.with_mcp = False
     args.profile_pack = explicit_profile_packs
@@ -1283,6 +1303,34 @@ def _ask_default_executor(*, use_color: bool, language: str) -> str:
         print(_color(tr(language, "invalid_executor", error=exc), "31", use_color))
         return "choose"
     return value
+
+
+def _ask_mcp_host(*, use_color: bool, language: str, default_host: str = "generic") -> str:
+    options = [
+        {"choice": "1", "value": "generic", "label": "Generic MCP", "description": tr(language, "mcp_host_generic_desc")},
+        {"choice": "2", "value": "codex", "label": "Codex", "description": tr(language, "mcp_host_codex_desc")},
+        {"choice": "3", "value": "claude-code", "label": "Claude Code", "description": tr(language, "mcp_host_claude_desc")},
+        {"choice": "4", "value": "opencode", "label": "OpenCode", "description": tr(language, "mcp_host_opencode_desc")},
+        {"choice": "5", "value": "cursor", "label": "Cursor", "description": tr(language, "mcp_host_cursor_desc")},
+    ]
+    default_choice = next((option["choice"] for option in options if option["value"] == default_host), "1")
+    return _ask_single_choice(
+        tr(language, "mcp_host_title"),
+        [tr(language, "mcp_host_intro")],
+        options,
+        default_choice=default_choice,
+        use_color=use_color,
+        language=language,
+    )
+
+
+def _default_mcp_host_for_executor(executor: str) -> str:
+    normalized = executor.strip().lower()
+    if normalized == "codex":
+        return "codex"
+    if normalized == "claude-code":
+        return "claude-code"
+    return "generic"
 
 
 def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en") -> bool:
@@ -2338,10 +2386,34 @@ def _menubar_status_label(language: str, status: str) -> str:
 def _mcp_status_label(language: str, status: str) -> str:
     code = normalize_language(language)
     labels = {
-        "en": {"bridge_requested": "preference recorded", "not_requested": "not enabled"},
-        "ko": {"bridge_requested": "선호 기록됨", "not_requested": "사용 안 함"},
-        "ja": {"bridge_requested": "設定を記録済み", "not_requested": "無効"},
-        "zh": {"bridge_requested": "偏好已记录", "not_requested": "未启用"},
+        "en": {
+            "bridge_requested": "preference recorded",
+            "host_config_written": "host config written",
+            "host_config_unchanged": "host config already ready",
+            "host_config_planned": "host config planned",
+            "not_requested": "not enabled",
+        },
+        "ko": {
+            "bridge_requested": "선호 기록됨",
+            "host_config_written": "호스트 설정 작성됨",
+            "host_config_unchanged": "호스트 설정 이미 준비됨",
+            "host_config_planned": "호스트 설정 예정",
+            "not_requested": "사용 안 함",
+        },
+        "ja": {
+            "bridge_requested": "設定を記録済み",
+            "host_config_written": "ホスト設定を書き込み済み",
+            "host_config_unchanged": "ホスト設定は準備済み",
+            "host_config_planned": "ホスト設定を予定",
+            "not_requested": "無効",
+        },
+        "zh": {
+            "bridge_requested": "偏好已记录",
+            "host_config_written": "已写入 host 配置",
+            "host_config_unchanged": "host 配置已就绪",
+            "host_config_planned": "将写入 host 配置",
+            "not_requested": "未启用",
+        },
     }
     return labels.get(code, labels["en"]).get(status, status)
 
@@ -2386,10 +2458,55 @@ def _friendly_plugin_error(paths, message: str) -> str:
     return message
 
 
+def _durable_mcp_host_config_record(mcp_setup: object) -> dict[str, object] | None:
+    if not isinstance(mcp_setup, dict):
+        return None
+    host_config = mcp_setup.get("host_config")
+    if not isinstance(host_config, dict):
+        return None
+    status = str(host_config.get("status", ""))
+    path = str(host_config.get("path", "")).strip()
+    host = str(host_config.get("host", "generic"))
+    if host == "generic" or status not in {"updated", "unchanged"} or not path:
+        return None
+    return {**host_config, "durable_state_key": "last_mcp_host_config_install"}
+
+
 def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
     requested = bool(getattr(args, "with_mcp", False))
+    host = str(getattr(args, "mcp_host", "") or "generic")
+    command = str(getattr(args, "mcp_command", "") or "omh")
+    config_path = getattr(args, "mcp_config_path", None)
+    host_config: dict[str, object] = {
+        "schema_version": "omh_mcp_host_config_install/v1",
+        "host": host,
+        "status": "not_requested",
+        "changed": False,
+        "written": False,
+        "dry_run": bool(args.dry_run),
+        "path": str(config_path or ""),
+    }
     if requested:
-        status = "would_record_bridge_preference" if args.dry_run else "bridge_preference_recorded"
+        try:
+            host_config = install_mcp_host_config(
+                paths,
+                host=host,
+                command=command,
+                config_path=config_path,
+                scope=_setup_scope(args),
+                dry_run=bool(args.dry_run),
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise OmhError(f"Could not prepare MCP host config: {exc}") from exc
+        host_config_status = str(host_config.get("status", "skipped"))
+        if host_config_status == "updated":
+            status = "host_config_written"
+        elif host_config_status == "unchanged":
+            status = "host_config_unchanged"
+        elif host_config_status.startswith("dry_run"):
+            status = "host_config_planned"
+        else:
+            status = "bridge_requested"
         mode = "bridge_requested"
     else:
         status = "not_requested"
@@ -2397,10 +2514,12 @@ def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
     return {
         "schema_version": MCP_SETUP_SCHEMA_VERSION,
         "mode": mode,
+        "host": host,
         "requested": requested,
         "status": status,
         "dry_run": bool(args.dry_run),
         "observed": False,
+        "host_config": host_config,
         "scope": _setup_scope(args),
         "paths": {
             "omh_home": str(paths.omh_home),
@@ -2411,21 +2530,22 @@ def _mcp_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
             "host_config_recipes_command": "omh mcp config-recipe --host <host>",
             "known_recipe_hosts": ["generic", "claude-code", "codex", "opencode", "cursor"],
             "server_command": "omh mcp serve",
+            "server_command_configured": f"{command} mcp serve",
             "host_observation_command": (
-                "omh mcp observe-host --host <host> --session <session-id> "
+                f"{command} mcp observe-host --host <host> --session <session-id> "
                 "--event host_load --evidence-ref <host-log-or-session-ref>"
             ),
             "transport": "stdio",
             "tools": ["omh_status", "omh_recommend", "omh_probe"],
         },
         "claim_boundary": (
-            "OMH setup records the operator MCP bridge preference only; it does not prove an MCP host "
-            "loaded OMH, called a tool, or observed runtime evidence."
+            "OMH setup records the operator MCP bridge preference and may write a local host config entry; "
+            "it does not prove an MCP host loaded OMH, called a tool, or observed runtime evidence."
         ),
         "next_action": (
-            "Use Hermes skills as the normal surface. If the host supports MCP, export `omh mcp manifest` or "
-            "`omh mcp config-recipe --host <host>` and wire the stdio `omh mcp serve` bridge. Treat host load as unobserved until a Hermes/MCP host "
-            "records a concrete load or tool-call event with `omh mcp observe-host`."
+            "Use Hermes skills as the normal surface. If a concrete MCP host config was written, restart or reload "
+            "that host and record a concrete load or tool-call event with `omh mcp observe-host`. If the host is generic, "
+            "export `omh mcp manifest` or `omh mcp config-recipe --host <host>` and wire the stdio bridge manually."
         ),
     }
 
@@ -2602,7 +2722,23 @@ def _add_top_level_commands(sub) -> None:
     setup.add_argument(
         "--with-mcp",
         action="store_true",
-        help="Record an optional OMH MCP bridge preference without claiming MCP host runtime load.",
+        help="Prepare the optional OMH MCP bridge. Use --mcp-host to also write a supported host config.",
+    )
+    setup.add_argument(
+        "--mcp-host",
+        choices=MCP_HOST_CONFIG_RECIPE_HOSTS,
+        default="generic",
+        help="MCP host config to prepare when --with-mcp is set. generic keeps recipe-only output.",
+    )
+    setup.add_argument(
+        "--mcp-config-path",
+        default=None,
+        help="Explicit host config path to update for --with-mcp --mcp-host.",
+    )
+    setup.add_argument(
+        "--mcp-command",
+        default="omh",
+        help="Command path the MCP host should launch. Use an absolute installed omh path when needed.",
     )
     setup.add_argument(
         "--profile-pack",
