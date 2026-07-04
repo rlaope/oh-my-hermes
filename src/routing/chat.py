@@ -32,6 +32,12 @@ from .policy import (
 from .recommend import recommendation_for_definition, recommend_skills
 from .route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from .task_cards import classify_task, task_card_recommendation
+from .visual_qa_cues import (
+    BROWSER_VISUAL_QA_COMMAND_PHRASES,
+    BROWSER_VISUAL_QA_PHRASES,
+    CUSTOMER_SYMPTOM_REPORT_PHRASES,
+    contains_cue_phrase,
+)
 from ..learning_candidate import build_learning_candidate_card
 from ..surfaces.evidence_copy import not_evidence_action_suffix, not_evidence_reply_suffix
 from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routable_definitions
@@ -153,16 +159,7 @@ _FEEDBACK_TRIAGE_FAST_PATH_BLOCKERS = (
     "reproduction",
     "plan",
     "pr",
-    "browser qa",
-    "browser interaction qa",
-    "click path",
-    "click-path audit",
-    "dead link check",
-    "console error check",
-    "network failure check",
-    "keyboard navigation check",
-    "screenshot qa",
-    "visual qa",
+    *BROWSER_VISUAL_QA_PHRASES,
     "코덱스",
     "클로드 코드",
     "핸드오프",
@@ -176,36 +173,8 @@ _FEEDBACK_TRIAGE_FAST_PATH_BLOCKERS = (
     "계획",
     "pr",
 )
-_BROWSER_VISUAL_QA_FAST_PATH_TERMS = (
-    "browser qa",
-    "browser interaction qa",
-    "click path audit",
-    "click-path audit",
-    "dead link check",
-    "console error check",
-    "network failure check",
-    "keyboard navigation check",
-    "screenshot qa",
-    "visual qa",
-)
-_CUSTOMER_SYMPTOM_REPORT_FAST_PATH_TERMS = (
-    "customers say",
-    "customers report",
-    "customer says",
-    "customer reports",
-    "customer feedback says",
-    "customer feedback reports",
-    "users say",
-    "users report",
-    "user says",
-    "user reports",
-    "고객이 말",
-    "고객이 제보",
-    "고객 제보",
-    "사용자가 말",
-    "사용자가 제보",
-    "사용자 제보",
-)
+_BROWSER_VISUAL_QA_FAST_PATH_TERMS = BROWSER_VISUAL_QA_COMMAND_PHRASES
+_CUSTOMER_SYMPTOM_REPORT_FAST_PATH_TERMS = CUSTOMER_SYMPTOM_REPORT_PHRASES
 _FEEDBACK_TRIAGE_FAST_PATH_TERMS = (
     "payment failure",
     "payment failures",
@@ -3008,15 +2977,11 @@ def _feedback_triage_fast_path_signal(text: str) -> bool:
 
 
 def _browser_visual_qa_fast_path_signal(message: str) -> bool:
-    text = _fast_path_text(message)
-    compact = _fast_path_compact(text)
-    return any(term in text or _fast_path_compact(term) in compact for term in _BROWSER_VISUAL_QA_FAST_PATH_TERMS)
+    return contains_cue_phrase(message, _BROWSER_VISUAL_QA_FAST_PATH_TERMS)
 
 
 def _customer_symptom_report_fast_path_signal(message: str) -> bool:
-    text = _fast_path_text(message)
-    compact = _fast_path_compact(text)
-    return any(term in text or _fast_path_compact(term) in compact for term in _CUSTOMER_SYMPTOM_REPORT_FAST_PATH_TERMS)
+    return contains_cue_phrase(message, _CUSTOMER_SYMPTOM_REPORT_FAST_PATH_TERMS)
 
 
 def _product_shaping_fast_path_decision(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 import unicodedata
 
+from .visual_qa_cues import BROWSER_VISUAL_QA_PHRASES
 
 _EXPLICIT_CATALOG_PHRASES = (
     "what commands are available",
@@ -496,18 +497,7 @@ _FILE_OR_TEXT_MARKERS = (
     "찾아",
     "검색",
 )
-_VISUAL_QA_PATH_REQUEST_MARKERS = (
-    "browser qa",
-    "browser interaction qa",
-    "click path",
-    "click-path audit",
-    "dead link check",
-    "console error check",
-    "network failure check",
-    "keyboard navigation check",
-    "screenshot qa",
-    "visual qa",
-)
+_VISUAL_QA_PATH_REQUEST_MARKERS = BROWSER_VISUAL_QA_PHRASES
 _REPO_LOOKUP_CONTEXT_MARKERS = (
     "repo",
     "repository",
