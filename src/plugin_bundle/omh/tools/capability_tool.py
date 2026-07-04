@@ -113,10 +113,11 @@ STANDALONE_CAPABILITY_FAMILIES = (
         "label": "Create materials and visuals",
         "owner_role": "operator",
         "source_lanes": ("materials_and_visuals",),
-        "use_for": "Decks, PDFs, spreadsheets, reports, websites, frontend surfaces, posters, image cards, visual QA, and shareable packages.",
+        "use_for": "Decks, PDFs, spreadsheets, reports, websites, frontend surfaces, accessibility audits, posters, image cards, visual QA, and shareable packages.",
         "primary_workflows": (
             "design-quality-gate",
             "frontend",
+            "accessibility-audit",
             "visual-qa",
             "materials-package",
             "report-package",
@@ -126,7 +127,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
         "next_action": "prepare_material_or_visual_card",
         "example_prompt": "Make a PR summary card for reviewers.",
         "route_summary": "Prepare the copy, prompt, package, or QA contract before claiming generated output.",
-        "not_evidence_until_observed": ("frontend implementation", "file export", "image generation", "visual QA", "delivery"),
+        "not_evidence_until_observed": ("frontend implementation", "accessibility PASS", "file export", "image generation", "visual QA", "delivery"),
     },
     {
         "id": "delegate_coding_and_ship",

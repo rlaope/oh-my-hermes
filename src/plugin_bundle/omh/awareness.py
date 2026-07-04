@@ -452,7 +452,15 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
         "tool_family": "image_tools",
         "applies_before": ("image generation", "local rendering", "visual design tools"),
         "primary_workflow": "img-summary",
-        "preferred_workflows": ("img-summary", "design-quality-gate", "frontend", "visual-qa", "materials-package", "report-package"),
+        "preferred_workflows": (
+            "img-summary",
+            "design-quality-gate",
+            "frontend",
+            "accessibility-audit",
+            "visual-qa",
+            "materials-package",
+            "report-package",
+        ),
         "primary_next_action": "prepare_visual_prompt_card",
         "fallback_action": "choose_image_generator_or_setup",
         "not_evidence_yet": ("image generation", "visual QA", "attachment", "delivery"),
@@ -500,6 +508,7 @@ ROUTER_KEYWORD_SKILLS = (
     "img-summary",
     "design-quality-gate",
     "frontend",
+    "accessibility-audit",
     "visual-qa",
     "automation-blueprint",
     "harness-session-inventory",
@@ -540,6 +549,7 @@ LANE_CROSS_LANE_EXAMPLES = {
     "materials_and_visuals": [
         "meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence",
         "frontend request -> frontend -> visual-qa -> observed render evidence",
+        "WCAG concern -> accessibility-audit -> focus, screen-reader, target, contrast, and reflow evidence",
         "source spreadsheet -> materials-package -> report-package -> observed export evidence",
     ],
     "automation_and_status": [
@@ -605,11 +615,12 @@ WORKFLOW_CONTEXT_CARDS = (
     {
         "id": "materials_and_visuals",
         "label": "Materials and visuals",
-        "user_signal": "deck, PDF, spreadsheet, document, HWP, report, website, frontend layout, visual QA, poster, image card, or shareable summary",
-        "omh_pattern": "shape the deliverable contract, prepare prompts/package/design/frontend/visual-QA metadata, then record generation and QA only when observed",
+        "user_signal": "deck, PDF, spreadsheet, document, HWP, report, website, frontend layout, accessibility audit, visual QA, poster, image card, or shareable summary",
+        "omh_pattern": "shape the deliverable contract, prepare prompts/package/design/frontend/accessibility/visual-QA metadata, then record generation and QA only when observed",
         "representative_workflows": (
             "design-quality-gate",
             "frontend",
+            "accessibility-audit",
             "visual-qa",
             "materials-package",
             "report-package",
@@ -617,8 +628,8 @@ WORKFLOW_CONTEXT_CARDS = (
             "img-summary",
         ),
         "user_examples": ("Turn this PR into a reviewer image card", "Make this frontend feel less generic and visually verified"),
-        "first_response_shape": "Separate copy/layout/package prep from generated file or image evidence; keep frontend implementation and browser evidence observed-only, then offer revise/copy/generate/record actions.",
-        "not_evidence_until_observed": ("file export", "image generation", "frontend implementation", "visual QA", "attachment"),
+        "first_response_shape": "Separate copy/layout/package prep from generated file or image evidence; keep frontend, accessibility, and browser evidence observed-only, then offer revise/copy/generate/record actions.",
+        "not_evidence_until_observed": ("file export", "image generation", "frontend implementation", "accessibility PASS", "visual QA", "attachment"),
     },
     {
         "id": "automation_and_status",
@@ -689,6 +700,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "img-summary": "materials_and_visuals",
     "design-quality-gate": "materials_and_visuals",
     "frontend": "materials_and_visuals",
+    "accessibility-audit": "materials_and_visuals",
     "visual-qa": "materials_and_visuals",
     "achievements": "automation_and_status",
     "workspace-audit": "automation_and_status",
@@ -1292,6 +1304,61 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": (),
         "adjacent_workflows": ("report-package", "deliverable-package", "img-summary"),
+    },
+    {
+        "id": "accessibility_audit",
+        "workflow": "accessibility-audit",
+        "lane": "materials_and_visuals",
+        "next_action": "prepare_accessibility_audit",
+        "reason": "The user is asking for WCAG, screen-reader, keyboard, focus, target-size, contrast, reflow, or accessibility audit gating.",
+        "fallback_action": "prepare_accessibility_scope_or_route_to_frontend_visual_qa_or_remediation",
+        "not_evidence_yet": (
+            "WCAG PASS",
+            "screen-reader compatibility",
+            "keyboard proof",
+            "remediation",
+            "visual QA",
+        ),
+        "phrases": (
+            "accessibility-audit",
+            "accessibility audit",
+            "a11y audit",
+            "a11y architect",
+            "wcag audit",
+            "wcag 2.2",
+            "wcag 2.2 aa",
+            "accessibility pass",
+            "accessibility check",
+            "screen reader",
+            "screenreader",
+            "aria audit",
+            "keyboard navigation",
+            "focus order",
+            "focus appearance",
+            "focus trap",
+            "tab order",
+            "touch target",
+            "target size",
+            "color contrast",
+            "contrast ratio",
+            "reflow",
+            "400% zoom",
+            "accessible name",
+            "name role value",
+            "접근성 감사",
+            "접근성 검토",
+            "접근성 검사",
+            "스크린리더",
+            "키보드 내비게이션",
+            "포커스 순서",
+            "포커스 표시",
+            "터치 타깃",
+            "타깃 크기",
+            "색 대비",
+            "명도 대비",
+        ),
+        "tokens": ("a11y", "wcag", "aria", "screenreader", "screen-reader", "keyboard", "focus", "contrast"),
+        "adjacent_workflows": ("frontend", "visual-qa", "design-quality-gate", "security-safety-review"),
     },
     {
         "id": "frontend_quality_handoff",
@@ -3407,7 +3474,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "ralph",
                 "performance-goal",
             ],
-            "use_for": "clarify, plan, ship, or loop scoped goals",
+            "use_for": "clarify, plan, ship, or loop goals",
         },
         {
             "id": "research_and_ops",
@@ -3427,13 +3494,13 @@ def awareness_primer_payload() -> dict[str, object]:
                 "ops-review",
                 "reliability-review",
             ],
-            "use_for": "research, signals, ops records, and briefings",
+            "use_for": "research, signals, ops, and briefings",
         },
         {
             "id": "retained_knowledge",
             "label": "Retained knowledge",
             "skills": ["wiki"],
-            "use_for": "wiki notes, retrieval hints, and staleness",
+            "use_for": "wiki notes, retrieval, and staleness",
         },
         {
             "id": "materials_and_visuals",
@@ -3441,13 +3508,14 @@ def awareness_primer_payload() -> dict[str, object]:
             "skills": [
                 "design-quality-gate",
                 "frontend",
+                "accessibility-audit",
                 "visual-qa",
                 "materials-package",
                 "img-summary",
                 "report-package",
                 "deliverable-package",
             ],
-            "use_for": "web, visual QA, files, image cards, and packages",
+            "use_for": "web, accessibility, visual QA, files, and packages",
         },
         {
             "id": "automation_and_status",
@@ -3501,7 +3569,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "executor selection",
                 "coding runtime handoff",
             ],
-            "use_for": "coding owners, handoffs, and review/CI/merge evidence",
+            "use_for": "coding owners, handoffs, review, CI, and merge evidence",
         },
     ]
     return {
@@ -3509,12 +3577,12 @@ def awareness_primer_payload() -> dict[str, object]:
         "id": "omh_awareness",
         "purpose": "Give Hermes a compact first-turn mental model for using OMH across all workflow-shaped requests.",
         "product_context": (
-            "OMH is a Hermes-native workflow pack: it helps Hermes choose skills, shape work, prepare artifacts, "
-            "show status, and hand off with observed evidence boundaries."
+            "OMH is a Hermes-native workflow pack: choose skills, shape work, prepare artifacts, "
+            "show status, and hand off with evidence boundaries."
         ),
         "first_turn_rule": (
-            "For planning, research, retained knowledge, ops records, materials, visual summaries, automation, "
-            "coding delegation, review, status, or long loops, consider OMH before generic chat or generic tools."
+            "For planning, research, knowledge, ops, materials, visuals, automation, coding, review, "
+            "status, or loops, consider OMH before generic chat or generic tools."
         ),
         "all_skill_context_rule": (
             "For every OMH skill: match lane, name adjacent workflows; "
@@ -3522,7 +3590,7 @@ def awareness_primer_payload() -> dict[str, object]:
         ),
         "generic_tool_checkpoint": GENERIC_TOOL_CHECKPOINT_TEXT,
         "skill_coverage": "Every generated workflow skill carries this rail.",
-        "chat_rule": "Normal users talk to Hermes; OMH CLI is backend/setup/verification/wrapper infra.",
+        "chat_rule": "Normal users talk to Hermes; OMH CLI is setup/verification/wrapper infra.",
         "lanes": lanes,
         "workflow_context_cards": workflow_context_cards(),
         "generic_tool_checkpoint_routes": generic_tool_checkpoint_routes(),
@@ -3580,7 +3648,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "Use wrapper cards/actions for user-facing choices instead of asking users to approve shell catalog commands.",
         ],
         "evidence_boundary": (
-            "Prepared OMH routing, prompts, cards, handoffs, or artifacts are not observed execution, image generation, "
+            "Prepared OMH routing, cards, handoffs, or artifacts are not observed execution, image generation, "
             "delivery, review, CI, merge-readiness, or merge evidence."
         ),
         "fallback_rule": (
@@ -3723,7 +3791,7 @@ def _compact_workflow_cue_line() -> str:
     return (
         "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
         "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
-        "premium visuals -> design-quality-gate; frontend -> frontend; screenshots/render checks -> visual-qa; files/decks/PDF/sheets/docs/HWP -> materials/report-package; image cards -> img-summary; "
+        "premium visuals -> design-quality-gate; frontend -> frontend; accessibility/WCAG -> accessibility-audit; screenshots/render checks -> visual-qa; files/decks/PDF/sheets/docs/HWP -> materials/report-package; image cards -> img-summary; "
         "code/CI/merge -> ultraprocess/code-review/verification-gate; "
         "agent failure/drift -> agent-debug; hidden failures -> failure-signal-audit; lessons -> instinct-ledger; regression -> workflow-learning"
     )
@@ -3733,7 +3801,7 @@ def _compact_workflow_context_cards_line() -> str:
     return (
         "intent -> deep-interview/ralplan/codebase-onboarding/codegraph-refresh/loop; "
         "signals -> web-research/research-department/feedback-triage; "
-        "materials -> design-quality-gate/frontend/visual-qa/materials-package; "
+        "materials -> design-quality-gate/frontend/accessibility-audit/visual-qa/materials-package; "
         "ops -> automation/workspace/production/context-budget/agent-debug/failure-signal-audit/instinct-ledger/skill-health/learning/doctor; "
         "eval/rules -> agent-evaluation/rules-distill; "
         "code -> ultraprocess/code-review/verification-gate/security-safety-review/team/ultraqa"
@@ -3742,7 +3810,7 @@ def _compact_workflow_context_cards_line() -> str:
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
-        "image->img-summary; frontend->frontend/visual-qa; paper->paper-learning; file->materials-package; "
+        "image->img-summary; frontend->frontend/accessibility-audit/visual-qa; paper->paper-learning; file->materials-package; "
         "search->web-research; audit->workspace-audit/production-audit/security-safety-review; "
         "verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultraprocess"
     )
@@ -3761,6 +3829,7 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "failure-signal-audit": "prepare_failure_signal_audit",
     "instinct-ledger": "prepare_instinct_ledger",
     "frontend": "prepare_frontend_handoff",
+    "accessibility-audit": "prepare_accessibility_audit",
     "visual-qa": "prepare_visual_qa",
     "workspace-audit": "prepare_workspace_audit",
     "production-audit": "prepare_production_audit",

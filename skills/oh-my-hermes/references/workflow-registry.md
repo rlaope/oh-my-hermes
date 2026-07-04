@@ -11,7 +11,7 @@ The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery 
 - `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`, `agent-debug`, `skill-scout`, `skill-health`
 - `planner`: `loop`, `deep-interview`, `codebase-onboarding`, `codegraph-refresh`, `plan`, `ralplan`
 - `researcher`: `web-research`, `source-finder`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
-- `reviewer`: `production-audit`, `verification-gate`, `security-safety-review`, `ultraqa`, `code-review`, `ask`, `failure-signal-audit`
+- `reviewer`: `accessibility-audit`, `production-audit`, `verification-gate`, `security-safety-review`, `ultraqa`, `code-review`, `ask`, `failure-signal-audit`
 - `tracker`: `context-budget-review`, `performance-goal`, `cancel`, `skill`, `doctor`, `agent-board`, `toolbelt-readiness`, `harness-session-inventory`, `ops-observability-card`, `achievements`, `agent-ops-review`, `instinct-ledger`, `workflow-learning`
 - Installed workflow skill policies live in generated workflow skills; compatibility/reference-only surface policies live in `docs/WORKFLOWS.md` and are not guaranteed to have `skills/<name>/SKILL.md` files.
 
@@ -41,6 +41,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `img-summary`: `img-summary`, `img summary`, `visual prompt card`, `image card`, `image generation`, `image generation features`, `image generation support`
 - `design-quality-gate`: `design-quality-gate`, `design quality gate`, `ui ux pro max`, `design pro max`, `frontend pro max`, `visual qa pro`, `premium design`
 - `frontend`: `frontend`, `front-end`, `front end`, `frontend skill`, `web ui`, `ui ux`, `ui/ux`
+- `accessibility-audit`: `accessibility-audit`, `accessibility audit`, `a11y audit`, `a11y architect`, `wcag audit`, `wcag 2.2`, `wcag 2.2 aa`
 - `visual-qa`: `visual-qa`, `visual qa`, `visual QA`, `visual quality assurance`, `visual check`, `screenshot qa`, `screenshot check`
 - `workspace-audit`: `workspace-audit`, `workspace audit`, `repo surface audit`, `repository surface audit`, `workspace surface audit`, `repo inventory`, `surface inventory`
 - `production-audit`: `production-audit`, `production audit`, `production readiness`, `prod audit`, `prod readiness`, `ready for production`, `ready to ship`

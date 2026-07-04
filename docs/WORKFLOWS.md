@@ -1487,6 +1487,87 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - For Korean/CJK text, clipped glyphs, awkward line breaks, orphan particles, tiny copy, and overflow block visual QA.
   - Do not call external design, image, browser, LLM, or network services from OMH core.
 
+### accessibility-audit
+
+[omh] Hermes Accessibility Audit workflow: prepare WCAG, keyboard, focus, screen-reader, target-size, and reflow evidence gates for UI surfaces.
+
+- Category: `accessibility`
+- Phase: `accessibility-audit`
+- Hermes role: `reviewer`
+- Quality tier: `accessibility-audit-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when a UI surface needs WCAG, keyboard, focus, screen-reader, target-size, contrast, and reflow audit gates.
+- Handoff policy: Keep accessibility scope, WCAG mapping, focus-flow expectations, screen-reader semantics, and remediation routing in Hermes. Automated scans, browser keyboard walks, screen-reader observations, contrast measurements, and code fixes require observed wrapper, executor, or user evidence.
+- Why this exists: `accessibility-audit` adapts ECC's accessibility-architect posture into an OMH-native workflow so frontend quality includes WCAG, keyboard, screen-reader, pointer, contrast, and reflow gates without pretending a plan is observed compliance.
+- Use when: Use when Hermes must audit a UI or design system for WCAG 2.2 AA, keyboard reachability, focus flow, screen-reader semantics, target size, contrast, reflow, and accessibility evidence before claiming pass.
+- Do not use when:
+  - The user needs initial frontend design or redesign planning before accessibility-specific review; use `frontend` first.
+  - The user needs rendered layout, screenshot, CJK, or pixel-diff QA rather than accessibility semantics; use `visual-qa`.
+  - The user needs a broad premium-quality gate across web, deck, PDF, or posters; use `design-quality-gate`.
+  - The user asks to implement accessibility fixes directly; prepare a selected executor/runtime handoff after the audit or use the coding workflow.
+- Strong routing signals: `accessibility-audit`, `accessibility audit`, `a11y audit`, `a11y architect`, `wcag audit`, `wcag 2.2`, `wcag 2.2 aa`, `accessibility pass`, `accessibility check`, `screen reader`, `screenreader`, `aria audit`, `keyboard navigation`, `focus order`, `focus appearance`, `focus trap`, `tab order`, `touch target`, `target size`, `color contrast`, `contrast ratio`, `reflow`, `400% zoom`, `accessible name`, `name role value`, `접근성 감사`, `접근성 검토`, `접근성 검사`, `스크린리더`, `키보드 내비게이션`, `포커스 순서`, `포커스 표시`, `터치 타깃`, `타깃 크기`, `색 대비`, `명도 대비`, `aria`
+- Good example:
+  - Prompt: accessibility-audit 이 checkout flow가 WCAG 2.2 AA, 키보드 포커스, 스크린리더, 터치 타깃 기준으로 통과 가능한지 봐줘.
+  - Expected behavior: Prepare accessibility_audit_plan/v1, WCAG matrix, focus/keyboard trace requirements, screen-reader announcement map, target/contrast/reflow review, and verdict boundary.
+  - Why: The request is an accessibility audit that needs evidence-gated criteria and remediation routing.
+- Bad example:
+  - Prompt: accessibility-audit 스크린리더나 키보드 확인 없이 접근성 통과라고 말해줘.
+  - Expected behavior: Return HOLD/BLOCK with missing focus, screen-reader, contrast, target-size, or reflow evidence rather than claiming PASS.
+  - Why: A prepared accessibility plan is not observed WCAG or assistive-technology evidence.
+- Quality bar:
+  - Name platform, target surfaces, critical tasks, applicable WCAG level, and observed evidence before verdict.
+  - Map findings to concrete WCAG 2.2 criteria and user impact instead of generic accessibility advice.
+  - Separate semantic structure, focus/keyboard, screen-reader announcement, target-size/pointer, contrast/reflow, forms/errors, and dynamic status checks.
+  - Require observed keyboard and assistive-tech or accessibility-tree evidence before PASS.
+  - Route design-system or implementation changes back to frontend or the selected coding owner, then recheck with visual-qa/accessibility evidence.
+- Completion checklist:
+  - The platform, target surfaces, critical tasks, WCAG level, supplied evidence, and missing observations are explicit.
+  - The wcag_success_criteria_matrix/v1 separates PASS/HOLD/BLOCK and maps each issue to user impact.
+  - Semantic structure, focus/keyboard, screen-reader announcements, target size/pointer, contrast/reflow, and form/status behavior are separate checks.
+  - PASS is unavailable unless evidence is fresh after the latest UI edit and covers critical tasks.
+  - Remediation, frontend implementation, visual QA, browser proof, CI, release, and merge remain separate observed states.
+- Recovery notes:
+  - If no rendered or DOM/accessibility-tree evidence exists, prepare the audit plan and mark verdict BLOCKED_BY_MISSING_ACCESSIBILITY_EVIDENCE.
+  - If automated scan output exists without keyboard or screen-reader evidence, keep the verdict HOLD and request the smallest focus/announcement trace.
+  - If the request is mostly visual layout or CJK clipping, route to visual-qa while preserving accessibility follow-up checks.
+- Required inputs:
+  - target app, page, route, component, or design system
+  - platform: web, iOS, Android, desktop, TUI, or unknown
+  - available UI evidence: code, screenshots, DOM snapshots, accessibility tree, browser captures, or design specs
+  - interaction paths and critical tasks
+  - required standard or policy such as WCAG 2.2 AA
+  - known risk areas: keyboard traps, missing labels, low contrast, small targets, reflow, live regions, or CJK/localization
+  - observed accessibility evidence for PASS claims
+- Expected outputs:
+  - accessibility_audit_plan/v1
+  - wcag_success_criteria_matrix/v1
+  - semantic_structure_review/v1
+  - focus_and_keyboard_trace/v1 when observed
+  - screen_reader_announcement_map/v1 when observed
+  - target_size_and_pointer_review/v1
+  - contrast_and_reflow_review/v1
+  - accessibility_remediation_handoff/v1 when needed
+  - accessibility_audit_verdict/v1
+- Artifact expectations:
+  - accessibility_audit_plan/v1 with platform, surfaces, critical tasks, standard level, supplied evidence, and missing observations
+  - wcag_success_criteria_matrix/v1 covering perceivable, operable, understandable, robust requirements with PASS/HOLD/BLOCK per criterion
+  - semantic_structure_review/v1 with labels, roles, names, headings, landmarks, form errors, live regions, and state semantics
+  - focus_and_keyboard_trace/v1 only from observed keyboard navigation, tab order, focus appearance, skip/focus-trap checks, and critical interaction paths
+  - screen_reader_announcement_map/v1 only when announcements, accessible names, roles, values, hints, and dynamic updates are observed or supplied
+  - target_size_and_pointer_review/v1 with 24x24 CSS px / 44x44 mobile target expectations and pointer gesture alternatives
+  - contrast_and_reflow_review/v1 with measured contrast, zoom/reflow risk, clipping, overflow, and CJK/localized text concerns
+  - accessibility_audit_verdict/v1 returns PASS, HOLD, or BLOCK with missing evidence and remediation route
+- Safety rules:
+  - Do not claim WCAG PASS, screen-reader compatibility, keyboard accessibility, contrast compliance, target-size compliance, or reflow safety from a prepared plan.
+  - Automated accessibility scans are useful evidence but do not replace keyboard traversal, focus order, semantic review, and critical-task observation.
+  - Do not treat visual QA screenshots, source review, or old captures as current accessibility evidence after UI changes.
+  - Keep accessibility audit, remediation implementation, browser proof, visual QA, Lighthouse, CI, release, and merge evidence separate.
+  - For destructive or credentialed flows, require staging-safe or read-only paths before browser/accessibility walks.
+  - Do not call external scanners, browsers, screen readers, LLMs, or platform services from OMH core.
+
 ### visual-qa
 
 [omh] Hermes visual-qa workflow: prepare observed-only rendered QA gates for web, frontend, image, document, and TUI surfaces.
@@ -5095,6 +5176,85 @@ Prepare design-system-driven web UI creation, redesign, polish, accessibility, p
   - A frontend_implementation_handoff/v1 artifact is not executor dispatch or implementation evidence.
   - A browser capture does not prove accessibility, performance, visual QA, or deployment unless those observations are recorded separately.
 - Fallback: If target surface, design system, or rendered evidence is missing, prepare the handoff with the blocker and keep PASS unavailable.
+
+### accessibility-audit
+
+Prepare WCAG, keyboard, focus, screen-reader, target-size, contrast, and reflow audit gates for UI surfaces.
+
+- Use when: Use when Hermes must decide whether a UI surface has enough accessibility evidence for PASS/HOLD/BLOCK before remediation, visual QA, or release claims.
+- Quality tier: `accessibility-audit-gated`
+- Quality bar:
+  - Map findings to WCAG 2.2 criteria and user impact instead of generic checklist text.
+  - Separate semantic structure, keyboard/focus flow, screen-reader announcements, target size, pointer alternatives, contrast, reflow, forms, and live status messages.
+  - Do not treat automated scan output alone as a full accessibility PASS.
+  - Require fresh evidence after the latest UI edit before PASS.
+- Inputs:
+  - target app, route, page, component, or design system
+  - platform and applicable WCAG or policy level
+  - available code, screenshot, DOM, accessibility tree, scan, or browser evidence
+  - critical user journeys and interaction paths
+  - known accessibility risks such as keyboard traps, missing labels, contrast, target size, forms, status messages, or reflow
+  - observed assistive-tech, keyboard, or scan evidence for completion claims
+- Outputs:
+  - accessibility_audit_plan/v1
+  - wcag_success_criteria_matrix/v1
+  - semantic_structure_review/v1
+  - focus_and_keyboard_trace/v1 when observed
+  - screen_reader_announcement_map/v1 when observed
+  - target_size_and_pointer_review/v1
+  - contrast_and_reflow_review/v1
+  - accessibility_remediation_handoff/v1 when needed
+  - accessibility_audit_verdict/v1
+- Stop conditions:
+  - accessibility scope is named
+  - WCAG/policy level is explicit
+  - semantic structure review is prepared
+  - focus and keyboard trace requirements are explicit
+  - screen-reader or accessibility-tree evidence is separated from assumptions
+  - target size, pointer, contrast, and reflow risks are checked or marked missing
+  - PASS remains unavailable without fresh observed accessibility evidence
+- Verification:
+  - validate accessibility_audit_plan/v1
+  - check wcag_success_criteria_matrix/v1 for user-impact and criterion mapping
+  - check semantic_structure_review/v1 for labels, roles, headings, forms, live regions, and state semantics
+  - record keyboard/focus and screen-reader evidence only when observed
+  - route remediation to frontend or selected executor, then require visual-qa/accessibility recheck
+- Evidence ladder:
+  - `accessibility_scope_recorded`
+  - `wcag_level_recorded`
+  - `semantic_structure_review_prepared`
+  - `focus_keyboard_trace_recorded_when_available`
+  - `screen_reader_map_recorded_when_available`
+  - `target_size_pointer_review_prepared`
+  - `contrast_reflow_review_prepared`
+  - `remediation_route_prepared_when_needed`
+  - `accessibility_verdict_recorded`
+- Wrapper actions:
+  - `prepare_accessibility_audit`
+  - `show_accessibility_audit`
+  - `record_accessibility_check`
+  - `record_focus_flow`
+  - `record_screen_reader_check`
+  - `record_wcag_mapping`
+  - `record_target_size_review`
+  - `route_to_frontend_or_visual_qa`
+  - `show_status`
+- Artifact events:
+  - `accessibility_scope_recorded`
+  - `wcag_level_recorded`
+  - `semantic_structure_review_prepared`
+  - `focus_keyboard_trace_recorded_when_available`
+  - `screen_reader_map_recorded_when_available`
+  - `target_size_pointer_review_prepared`
+  - `contrast_reflow_review_prepared`
+  - `accessibility_verdict_recorded`
+- Delegation expectation: Record accessibility-audit as Hermes-retained audit guidance; compliance, screen-reader behavior, browser proof, remediation, CI, and release need observed evidence.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - An accessibility_audit_plan/v1 artifact is not WCAG PASS, assistive-technology compatibility, implementation, visual QA, CI, release, or merge evidence.
+  - Automated scan results do not prove keyboard reachability, focus order, screen-reader announcements, target-size compliance, or reflow safety by themselves.
+  - Fresh evidence is required after the last UI edit before accessibility PASS can be claimed.
+- Fallback: If keyboard, screen-reader, accessibility-tree, contrast, target-size, or reflow evidence is missing, prepare the audit and keep PASS unavailable.
 
 ### visual-qa
 

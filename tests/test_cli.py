@@ -3716,6 +3716,25 @@ class CliTests(unittest.TestCase):
         self.assertIn("direct:failure_signal_audit", top["matched"])
         self.assertNotEqual(top["skill"], "feedback-triage")
 
+    def test_recommend_accessibility_audit_beats_frontend(self) -> None:
+        status, stdout, stderr = run_cli(
+            [
+                "recommend",
+                "WCAG 2.2 accessibility audit for keyboard navigation, focus order, screen reader labels, and touch target size",
+                "--limit",
+                "3",
+            ]
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        top = recommendations[0]
+        self.assertEqual(top["skill"], "accessibility-audit")
+        self.assertEqual(top["next_action"], "prepare_accessibility_audit")
+        self.assertIn("direct:accessibility_audit", top["matched"])
+        self.assertNotEqual(top["skill"], "frontend")
+
     def test_recommend_omh_quality_loop_routes_to_process_despite_bug_terms(self) -> None:
         cases = (
             "updated OMH로 라우터/맥락/컨텍스트 손실/성능균형/코딩 handoff 유사버그를 계속 찾아 개선하는 루프 실행",

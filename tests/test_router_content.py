@@ -64,6 +64,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "deliverable-package": ("workflow_skill", True),
     "design-quality-gate": ("workflow_skill", True),
     "frontend": ("workflow_skill", True),
+    "accessibility-audit": ("workflow_skill", True),
     "visual-qa": ("workflow_skill", True),
     "voice-operator": ("agent_context", False),
     "toolbelt-readiness": ("harness_only", False),
@@ -122,10 +123,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`wiki`", router.content)
         self.assertIn("Materials and visual summaries", router.content)
         self.assertIn(
-            "`design-quality-gate`, `frontend`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`",
+            "`design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`",
             router.content,
         )
-        self.assertNotIn("`frontend`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki`", router.content)
+        self.assertNotIn("`frontend`, `accessibility-audit`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki`", router.content)
         self.assertIn("Coding handoff", router.content)
         self.assertIn("omh chat route", router.content)
         self.assertIn("omh coding delegate", wrapper_routing)
@@ -252,6 +253,7 @@ class RouterContentTests(unittest.TestCase):
             "materials-package",
             "img-summary",
             "frontend",
+            "accessibility-audit",
             "visual-qa",
             "workspace-audit",
             "production-audit",
@@ -313,6 +315,7 @@ class RouterContentTests(unittest.TestCase):
             "automation-blueprint",
             "design-quality-gate",
             "frontend",
+            "accessibility-audit",
             "visual-qa",
         }
 
@@ -375,6 +378,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["img-summary"].next_action, "prepare_visual_prompt_card")
         self.assertEqual(recommend_module._SKILL_POLICIES["frontend"].next_action, "prepare_frontend_handoff")
+        self.assertEqual(recommend_module._SKILL_POLICIES["accessibility-audit"].next_action, "prepare_accessibility_audit")
+        self.assertIn("WCAG 2.2", recommend_module._SKILL_POLICIES["accessibility-audit"].wrapper_guidance)
+        self.assertIn("screen-reader", recommend_module._SKILL_POLICIES["accessibility-audit"].evidence_boundary)
         self.assertEqual(recommend_module._SKILL_POLICIES["visual-qa"].next_action, "prepare_visual_qa")
         self.assertIn("browser_interaction_trace/v1", recommend_module._SKILL_POLICIES["visual-qa"].wrapper_guidance)
         self.assertIn("click-path", recommend_module._SKILL_POLICIES["visual-qa"].evidence_boundary)
@@ -545,6 +551,7 @@ class RouterContentTests(unittest.TestCase):
                 "img-summary",
                 "design-quality-gate",
                 "frontend",
+                "accessibility-audit",
                 "visual-qa",
                 "workspace-audit",
                 "production-audit",
@@ -860,6 +867,49 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("visual_qa_required/v1", templates["frontend"].content)
         self.assertIn("Preferred harness for this skill: `frontend`", templates["frontend"].content)
 
+    def test_accessibility_audit_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("accessibility-audit", definitions)
+        self.assertIn("accessibility-audit", harnesses)
+        self.assertIn("accessibility-audit", templates)
+        self.assertEqual(primary_harness_for_skill("accessibility-audit"), "accessibility-audit")
+        self.assertEqual(definitions["accessibility-audit"].category, "accessibility")
+        self.assertEqual(definitions["accessibility-audit"].phase, "accessibility-audit")
+        self.assertEqual(definitions["accessibility-audit"].quality_tier, "accessibility-audit-gated")
+        self.assertIn("accessibility_audit_plan/v1", definitions["accessibility-audit"].expected_outputs)
+        self.assertIn("wcag_success_criteria_matrix/v1", definitions["accessibility-audit"].expected_outputs)
+        self.assertIn("semantic_structure_review/v1", definitions["accessibility-audit"].expected_outputs)
+        self.assertIn("focus_and_keyboard_trace/v1 when observed", definitions["accessibility-audit"].expected_outputs)
+        self.assertIn("screen_reader_announcement_map/v1 when observed", definitions["accessibility-audit"].expected_outputs)
+        self.assertIn("target_size_and_pointer_review/v1", definitions["accessibility-audit"].expected_outputs)
+        self.assertIn("contrast_and_reflow_review/v1", definitions["accessibility-audit"].expected_outputs)
+        self.assertIn("WCAG PASS", " ".join(definitions["accessibility-audit"].safety_rules))
+        self.assertIn("Automated accessibility scans", " ".join(definitions["accessibility-audit"].safety_rules))
+        self.assertIn("screen_reader_announcement_map/v1", " ".join(definitions["accessibility-audit"].artifact_expectations))
+        self.assertIn("wcag_success_criteria_matrix/v1", harnesses["accessibility-audit"].expected_outputs)
+        self.assertIn("focus_keyboard_trace_recorded_when_available", harnesses["accessibility-audit"].evidence_ladder)
+        self.assertIn("screen_reader_map_recorded_when_available", harnesses["accessibility-audit"].evidence_ladder)
+        self.assertIn("target_size_pointer_review_prepared", harnesses["accessibility-audit"].evidence_ladder)
+        self.assertTrue(
+            {
+                "prepare_accessibility_audit",
+                "show_accessibility_audit",
+                "record_accessibility_check",
+                "record_focus_flow",
+                "record_screen_reader_check",
+                "record_wcag_mapping",
+                "record_target_size_review",
+                "route_to_frontend_or_visual_qa",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("accessibility_audit_plan/v1", templates["accessibility-audit"].content)
+        self.assertIn("wcag_success_criteria_matrix/v1", templates["accessibility-audit"].content)
+        self.assertIn("screen_reader_announcement_map/v1", templates["accessibility-audit"].content)
+        self.assertIn("Preferred harness for this skill: `accessibility-audit`", templates["accessibility-audit"].content)
+
     def test_visual_qa_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
         harnesses = {harness.name: harness for harness in builtin_harnesses()}
@@ -1039,6 +1089,15 @@ class RouterContentTests(unittest.TestCase):
                 "ladder": "fallback_risk_matrix_prepared",
                 "action": "prepare_failure_signal_audit",
                 "template": "false_green_status_review/v1",
+            },
+            "accessibility-audit": {
+                "category": "accessibility",
+                "phase": "accessibility-audit",
+                "quality_tier": "accessibility-audit-gated",
+                "output": "wcag_success_criteria_matrix/v1",
+                "ladder": "focus_keyboard_trace_recorded_when_available",
+                "action": "prepare_accessibility_audit",
+                "template": "screen_reader_announcement_map/v1",
             },
             "instinct-ledger": {
                 "category": "optimization",
