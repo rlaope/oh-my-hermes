@@ -334,8 +334,8 @@ _SKILL_POLICIES = {
         ),
         wrapper_guidance=(
             "Prepare skill_portfolio_health_dashboard/v1 with catalog/generated/reference surface status, "
-            "skill_surface_freshness_report/v1, observed-only failure clusters, pending amendment review, "
-            "and top safe actions while routing setup health to doctor and mutation work to reviewed implementation."
+            "observed-only failure clusters, pending amendment review, and top safe actions while routing setup "
+            "health to doctor and mutation work to reviewed implementation."
         ),
     ),
     "context-budget-review": RecommendationPolicy(
