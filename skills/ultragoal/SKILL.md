@@ -45,6 +45,7 @@ Bad example:
 - All explicitly linked coding milestones have matching observed runtime evidence or are still named as gaps.
 - The final user-facing status says complete, blocked, or continue with the exact remaining checkpoint.
 - Long-running or background executor milestones report observed handles, current state, changed-file summaries, missing checks, and prepared-vs-observed boundaries while work is running.
+- When Hermes is the coding owner, use `hermes_coding_harness/v1` to separate builder, verifier, reviewer, docs, and PR lanes.
 - Branch, PR, CI, review, and merge claims are verified against local HEAD, remote branch SHA, PR head SHA, and merge commit before saying a fix landed.
 
 ## Recovery Notes

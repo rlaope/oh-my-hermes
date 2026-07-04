@@ -339,6 +339,7 @@ def roles_reference_markdown() -> str:
                 f"- Primary harnesses: {', '.join(f'`{harness}`' for harness in role.primary_harnesses)}",
                 f"- Wrapper actions: {', '.join(f'`{action}`' for action in role.wrapper_actions)}",
                 f"- Evidence boundary: {role.evidence_boundary}",
+                *_hermes_coding_harness_role_note(role.id),
                 "",
             ]
         )
@@ -351,3 +352,25 @@ def roles_reference_markdown() -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _hermes_coding_harness_role_note(role_id: str) -> list[str]:
+    notes = {
+        "handoff-guide": (
+            "- Hermes coding harness: When Hermes is the selected coding owner, read",
+            "  `hermes_coding_harness/v1` before answering status questions. The Handoff",
+            "  Guide should name the current stage, lane owner, next action, and missing",
+            "  evidence without claiming PR creation, review, CI, merge readiness, or merge.",
+        ),
+        "builder": (
+            "- Hermes coding harness: In Hermes-owned coding work, the builder lane is one",
+            "  lane inside `hermes_coding_harness/v1`. It can be prepared or pending without",
+            "  proving that implementation happened.",
+        ),
+        "reviewer": (
+            "- Hermes coding harness: In Hermes-owned coding work, the reviewer lane upgrades",
+            "  only after observed review evidence. A prepared review gate is not review",
+            "  passed.",
+        ),
+    }
+    return list(notes.get(role_id, ()))

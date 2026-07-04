@@ -18,6 +18,10 @@ from ..coding_contracts import (
     TASK_PROMPT_CONTRACT_SCHEMA_VERSION,
     TASK_PROMPT_REQUIRED_SECTIONS,
 )
+from ..coding.hermes_harness import (
+    compact_hermes_coding_harness as _compact_hermes_coding_harness,
+    validate_hermes_coding_harness as _validate_hermes_coding_harness,
+)
 from ..executors import (
     DISPATCH_POLICIES,
     EXECUTOR_PROFILES,
@@ -274,6 +278,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "executor_readiness",
     "harness_quality",
     "hermes_coding_team_path",
+    "hermes_coding_harness",
     "context_pack",
     "context_pack_blocked",
     "memory_recall_pack",
@@ -1112,6 +1117,9 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     team_path = _compact_hermes_coding_team_path(value.get("hermes_coding_team_path"))
     if team_path:
         compact["hermes_coding_team_path"] = team_path
+    hermes_harness = _compact_hermes_coding_harness(value.get("hermes_coding_harness"))
+    if hermes_harness:
+        compact["hermes_coding_harness"] = hermes_harness
     return compact
 
 
@@ -2699,6 +2707,8 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
                 )
     if "hermes_coding_team_path" in handoff:
         errors.extend(validate_hermes_coding_team_path(handoff["hermes_coding_team_path"], selected=str(handoff.get("selected_executor_profile", ""))))
+    if "hermes_coding_harness" in handoff:
+        errors.extend(_validate_runtime_hermes_coding_harness(handoff["hermes_coding_harness"], selected=str(handoff.get("selected_executor_profile", ""))))
     if "harness_quality" in handoff:
         errors.extend(validate_harness_quality(handoff["harness_quality"], "coding_delegation runtime_handoff harness_quality"))
     if "executor_readiness" in handoff:
@@ -2711,6 +2721,13 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
         )
     errors.extend(validate_isolation_plan(handoff.get("isolation_plan"), "coding_delegation runtime_handoff isolation_plan"))
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation runtime_handoff"))
+    return errors
+
+
+def _validate_runtime_hermes_coding_harness(harness: Any, *, selected: str) -> list[str]:
+    errors: list[str] = []
+    _require(selected == "hermes", errors, "coding_delegation runtime_handoff hermes_coding_harness is only valid for hermes")
+    errors.extend(f"coding_delegation runtime_handoff {error}" for error in _validate_hermes_coding_harness(harness))
     return errors
 
 

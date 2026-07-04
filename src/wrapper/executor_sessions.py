@@ -18,6 +18,7 @@ from ..executor_progress import (
     refresh_binding_freshness,
 )
 from ..executors import CODING_EXECUTOR_TARGETS, executor_label
+from ..coding.hermes_harness import build_hermes_coding_harness
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, utc_now
 from ..paths import OmhPaths
 from ..runtime.artifacts import (
@@ -135,6 +136,16 @@ def build_executor_session_status(
             "result, verification, review, CI, or merge unless the matching observed evidence is recorded."
         ),
     }
+    hermes_harness = build_hermes_coding_harness(
+        session=session,
+        runtime_handoff=session.get("runtime_handoff") if isinstance(session.get("runtime_handoff"), dict) else {},
+        runtime_observation=runtime_status,
+        executor_status=status,
+    )
+    if hermes_harness:
+        status["hermes_coding_harness"] = hermes_harness
+        status["status_lines"].extend(f"hermes-harness: {line}" for line in hermes_harness["safe_status_lines"])
+        status["display_status_lines"].extend(hermes_harness["safe_status_lines"])
     if codex_session:
         status["codex_session"] = codex_session
     if codex_progress:
@@ -549,6 +560,10 @@ def enhance_chat_response_with_executor_session(
     executor_progress = executor_status.get("executor_progress")
     if isinstance(executor_progress, dict) and executor_progress:
         session_status["executor_progress"] = executor_progress
+    hermes_harness = executor_status.get("hermes_coding_harness")
+    if isinstance(hermes_harness, dict) and hermes_harness:
+        session_status["hermes_coding_harness"] = hermes_harness
+        updated["hermes_coding_harness"] = hermes_harness
     for key in ("progress_reporting", "progress_events", "latest_progress_event", "omitted_progress_event_count"):
         value = executor_status.get(key)
         if value:
@@ -584,6 +599,7 @@ def enhance_status_card_with_executor_session(
         "codex_session",
         "codex_progress",
         "executor_progress",
+        "hermes_coding_harness",
         "progress_reporting",
         "progress_events",
         "latest_progress_event",

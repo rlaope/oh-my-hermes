@@ -131,6 +131,10 @@ prepared handoffs, and observed evidence:
 - Primary harnesses: `goal-execution`, `parallel-delivery`, `coding-handling`
 - Wrapper actions: `choose_executor`, `show_prompt_handoff`, `show_runtime_handoff`, `start_team`, `start_swarm`, `prepare_worktree`, `send_to_executor`, `show_status`
 - Evidence boundary: A prepared coding handoff is not executor/runtime dispatch, worker start, worktree creation, result, verification, review, CI, merge readiness, or merge evidence. Hermes/OMX/OMO/OMC runtime handoffs must record separate `runtime_observation/v1` events before the status can move from prepared to observed.
+- Hermes coding harness: When Hermes is the selected coding owner, read
+  `hermes_coding_harness/v1` before answering status questions. The Handoff
+  Guide should name the current stage, lane owner, next action, and missing
+  evidence without claiming PR creation, review, CI, merge readiness, or merge.
 
 ### Builder
 
@@ -146,6 +150,9 @@ prepared handoffs, and observed evidence:
 - Primary harnesses: `goal-execution`, `coding-handling`
 - Wrapper actions: `choose_executor`, `show_prompt_handoff`, `show_runtime_handoff`, `send_to_executor`, `show_status`
 - Evidence boundary: A builder role label is not hidden coding execution, executor/runtime dispatch, worker start, implementation result, verification, review, CI, merge readiness, or merge evidence. The selected executor/runtime owns implementation only after observed evidence exists.
+- Hermes coding harness: In Hermes-owned coding work, the builder lane is one
+  lane inside `hermes_coding_harness/v1`. It can be prepared or pending without
+  proving that implementation happened.
 
 ### Tracker
 
@@ -176,6 +183,9 @@ prepared handoffs, and observed evidence:
 - Primary harnesses: `code-review`, `qa`, `ops-review`
 - Wrapper actions: `show_findings`, `prepare_fix_handoff`, `refresh_status`
 - Evidence boundary: Review findings are not fix evidence; merge-ready is not merged.
+- Hermes coding harness: In Hermes-owned coding work, the reviewer lane upgrades
+  only after observed review evidence. A prepared review gate is not review
+  passed.
 
 ## Public Claim Rule
 

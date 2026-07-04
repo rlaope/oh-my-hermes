@@ -449,6 +449,11 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_tmux_workers"])
             self.assertTrue(prepared["handoff"]["runtime_handoff"]["runtime_profile"]["supports_worktree_guidance"])
             self.assertEqual(prepared["handoff"]["runtime_handoff"]["hermes_coding_team_path"]["schema_version"], "hermes_coding_team_path/v1")
+            self.assertEqual(prepared["handoff"]["runtime_handoff"]["hermes_coding_harness"]["schema_version"], "hermes_coding_harness/v1")
+            self.assertEqual(prepared["handoff"]["runtime_handoff"]["hermes_coding_harness"]["status"], "prepared_not_observed")
+            self.assertEqual(prepared["status"]["hermes_coding_harness"]["selected_owner"], "hermes")
+            self.assertEqual(prepared["status"]["hermes_coding_harness"]["pr_preparation"]["status"], "pending")
+            self.assertIn("GitHub PR creation", prepared["status"]["hermes_coding_harness"]["pr_preparation"]["not_observed"])
             self.assertEqual(
                 prepared["status"]["coding_briefing"]["work_summary"]["handoff_contract"]["coding_team_path"]["status"],
                 "prepared_not_observed",
@@ -538,8 +543,15 @@ class WrapperSessionTests(unittest.TestCase):
 
             status = build_wrapper_session_status(paths, session_id)
             milestones = {item["id"]: item["state"] for item in status["coding_briefing"]["runtime_milestones"]}
+            harness = status["hermes_coding_harness"]
+            harness_stages = {item["id"]: item["state"] for item in harness["workflow_graph"]}
 
             self.assertEqual(status["coding_briefing"]["current_state"]["coding_agent"], "running(hermes)")
+            self.assertEqual(harness["status"], "in_progress")
+            self.assertEqual(harness["start_mode"], "team")
+            self.assertEqual(harness_stages["build"], "pending")
+            self.assertEqual(harness_stages["review"], "pending")
+            self.assertIn("runtime_observation:verification", harness["verification_matrix"]["missing_evidence"])
             lines = "\n".join(status["coding_briefing"]["user_facing_lines"])
             self.assertIn("runtime_start", lines)
             self.assertIn("worker_dispatch", lines)

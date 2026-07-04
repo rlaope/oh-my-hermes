@@ -80,6 +80,7 @@ Quality bar:
 
 - Lead with ranked findings grounded in file, diff, command, or artifact evidence.
 - Separate review findings from fix implementation; fixes become executor work.
+- For Hermes-owned coding work, inspect `hermes_coding_harness/v1` and require review evidence before upgrading the reviewer lane.
 - Say clearly when no actionable issue is found and name remaining test gaps.
 
 Handoff policy:

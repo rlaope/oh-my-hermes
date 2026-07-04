@@ -41,6 +41,7 @@ Bad example:
 
 - Each lane has an owner, disjoint scope, expected output, and verification target.
 - Worker ACK, dispatch, result, integration, and verification evidence are separated when wrappers record them.
+- Hermes-owned coding teams use `hermes_coding_harness/v1` so builder, verifier, reviewer, docs, and PR lanes stay distinct even in solo mode.
 - The integrated status names which lanes are observed, blocked, or still prepared_not_observed.
 
 ## Recovery Notes

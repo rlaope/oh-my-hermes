@@ -42,6 +42,7 @@ Bad example:
 
 - All work lanes are disjoint by file, invariant, or responsibility before preparing parallel handoffs.
 - Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.
+- When Hermes owns the coding path, use `hermes_coding_harness/v1` to separate builder, verifier, reviewer, docs, and PR lanes.
 - Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.
 - Integration verification ran after lane results before the final status claims completion.
 

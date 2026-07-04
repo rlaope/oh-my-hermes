@@ -91,13 +91,19 @@ runtime run exists and the wrapper needs a compact progress card.
    and skip later probes unless the user forces a retry. If readiness is
    `missing` or `blocked`, ask the user to choose another coding agent,
    configure PATH, continue in Hermes, or keep a prompt/runtime handoff.
-8. Dispatch the `coding_executor_handoff/v1`
+8. If the selected profile is Hermes, render `hermes_coding_harness/v1` from
+   the prepared runtime handoff or wrapper-session status. It is a read-only
+   projection, so answer status questions with the current stage, lane owner,
+   next action, and missing evidence. Do not say Hermes created a PR, passed
+   review, passed CI, or reached merge readiness unless the matching
+   `runtime_observation/v1` event exists.
+9. Dispatch the `coding_executor_handoff/v1`
    payload to the external executor outside OMH. For Codex targets, use
    `codex_skill` and `codex_invocation.dispatch_text_template`; this is the
    `$skill {message}` surface Codex actually receives.
-9. Record only evidence the wrapper actually observed: dispatch, executor
+10. Record only evidence the wrapper actually observed: dispatch, executor
    result, verification, review, CI, merge readiness, and merge.
-10. Re-render status from OMH after each observed transition.
+11. Re-render status from OMH after each observed transition.
 
 ## State Transition Reference
 
@@ -107,6 +113,7 @@ runtime run exists and the wrapper needs a compact progress card.
 | Plan presented | `message_received` | `planning` | Show accept/revise actions. | A draft plan is not execution evidence. |
 | Target topology changed | `single_agent_target` or `multi_agent_targets` | pending target update | Show `apply_target_change` or auto-apply only when the wrapper is configured to do so. | Setup topology is not proof another Hermes agent observed the workflow. |
 | Handoff prepared | `plan_accepted` | `handoff_prepared` | Show send-to-executor action. | Prepared handoff is not execution evidence. |
+| Hermes harness prepared | `runtime_handoff_prepared` | `hermes_coding_harness/v1` | Show current stage, lane owner, next action, and missing evidence. | Harness projection is not worker start, verification, review, CI, PR, or merge evidence. |
 | Dispatched, waiting | `handoff_prepared` | `dispatched` | Wait for executor evidence. | Dispatch is not completion evidence. |
 | Review pending | `executor_completed` | `awaiting_review` | Show review-pending status. | Execution is observed; review is not. |
 | CI pending | `review_passed` | `awaiting_ci` | Show CI-pending status. | Review is not CI evidence. |
@@ -165,6 +172,18 @@ and workspace command templates use `{workspace_path_shell_quoted}` for
 shell-safe paths. OMH itself still does not execute the coding agent; Hermes or
 the wrapper starts or attaches the terminal/app session, then calls
 `open-executor --observed` only after that coding session exists.
+
+For a Hermes-owned coding handoff, the wrapper does not need to invent a custom
+status model. Read `hermes_coding_harness/v1` and render the prepared graph:
+
+- current workflow stage: intake, scope, plan, workspace, build, verify,
+  review, docs sync, PR preparation, or handover
+- lane state: builder, verifier, reviewer, docs, and PR
+- nested `verification_matrix`, `docs_sync`, and `pr_preparation` sections
+- missing `runtime_observation/v1` events before any stronger claim is allowed
+
+This lets Hermes answer “what are you doing now?” with a concrete stage report,
+while preserving the rule that prepared PR packages are not GitHub PR creation.
 
 For a Codex handoff, the wrapper can record an observed open and later result:
 

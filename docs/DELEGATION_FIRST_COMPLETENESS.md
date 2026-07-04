@@ -34,7 +34,7 @@ evidence exists.
 | `omh hermes plan` | Produces Hermes-facing plan scaffolds and wrapper contracts under `.hermes/plans`, with accept/revise/cancel lifecycle events. | `src/workflows/hermes_planning.py`, `docs/ARCHITECTURE.md` |
 | `omh hermes readiness` | Inspects local Hermes Agent home/config/skills/plugins/sessions/state/source-checkout markers and maps them to OMH memory, learning, loop, wiki/external-knowledge, runtime-observation, and subagent/handoff reinforcement. | `src/workflows/hermes_readiness.py`, `src/commands/hermes.py` |
 | `omh hermes retained-context` | Inspects metadata-only Hermes sessions/state/memory-provider markers alongside OMH memory, workflow-learning, runtime journal, loop, and external knowledge-store markers so wrappers can show what durable context can actually be reinforced without reading raw retained artifacts or claiming opaque Hermes memory contents. | `src/workflows/hermes_retained_context.py`, `src/workflows/hermes_retained_context_probes.py`, `tests/test_hermes_retained_context.py` |
-| `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, runtime contracts, and accepted-plan `--from-plan` Codex handoffs without overclaiming execution. Hermes selection also exposes an optional coding team path with solo, durable-goal, team, and swarm start choices. Handoffs include an executor-neutral task prompt contract; Codex lifecycle handoffs also include a prepared-only session observation contract for future executor-session adapters. | `src/coding/coding_delegation.py`, `src/runtime/artifacts.py` |
+| `omh coding delegate` | Prepares metadata-only coding handoffs, executor/runtime-choice contracts, prompt-only payloads, runtime contracts, and accepted-plan `--from-plan` Codex handoffs without overclaiming execution. Hermes selection also exposes an optional coding team path with solo, durable-goal, team, and swarm start choices plus a read-only `hermes_coding_harness/v1` projection over builder, verifier, reviewer, docs, and PR lanes. Handoffs include an executor-neutral task prompt contract; Codex lifecycle handoffs also include a prepared-only session observation contract for future executor-session adapters. | `src/coding/coding_delegation.py`, `src/coding/hermes_harness.py`, `src/runtime/artifacts.py` |
 | `worktree_session_isolation/v1` | Adds deterministic workspace-isolation guidance to coding handoffs and executor-session status: same workspace ok, worktree recommended, or worktree required. | `src/coding/isolation.py`, `src/wrapper/executor_sessions.py`, `tests/test_wrapper_sessions.py` |
 | `omh coding lifecycle` | Tracks Codex-selected handoff dispatch, executor result, verification, and reportable status from existing runtime evidence. | `src/wrapper/lifecycle.py`, `tests/test_coding_lifecycle.py`, `tests/test_cli.py` |
 | `omh memory status/capture/review/approve/reject/recall` plus `inspect/pack/apply` | Captures typed OMH project-memory candidates, keeps reviewed records separate, recalls `memory_recall_pack/v1` into prepared coding handoffs, and reviews OMH-local or wrapper-supplied context before attaching conflict-free `handoff_context_pack/v1` summaries. | `src/workflows/memory.py`, `tests/test_memory.py` |
@@ -60,10 +60,14 @@ The strongest existing path is:
    prompt-only handoff; runtime profiles prepare a runtime handoff without a
    lifecycle run. When Hermes itself is selected, the runtime handoff also
    includes `hermes_coding_team_path/v1` so chat surfaces can show solo,
-   durable-goal, team, and swarm start choices. Runtime handoffs include
-   runtime-specific templates and a `runtime_observation/v1` contract so
-   wrappers know exactly which events must be observed later. Coding handoffs
-   also include `worktree_session_isolation/v1`, which tells the wrapper
+   durable-goal, team, and swarm start choices. It also includes
+   `hermes_coding_harness/v1`, a read-only projection that answers what Hermes
+   is doing now across intake, scope, plan, workspace, build, verify, review,
+   docs sync, PR preparation, and handover without creating a second evidence
+   ledger. Runtime handoffs include runtime-specific templates and a
+   `runtime_observation/v1` contract so wrappers know exactly which events must
+   be observed later. Coding handoffs also include
+   `worktree_session_isolation/v1`, which tells the wrapper
    whether the current workspace is acceptable, an isolated worktree is
    recommended, or an isolated worktree is required before starting a coding
    session.
@@ -111,6 +115,13 @@ Expected behavior:
   `hermes_coding_team_path/v1` with solo, durable-goal, team, and swarm start
   choices. The path stays prepared-only until matching runtime observations are
   recorded.
+- `omh coding delegate --executor hermes` also returns
+  `hermes_coding_harness/v1`, a read-only projection over existing session,
+  runtime handoff, status-card, worktree isolation, harness-progress, and
+  `runtime_observation/v1` evidence. The harness keeps builder, verifier,
+  reviewer, docs, and PR lanes separate even when one Hermes agent owns all
+  lanes. Its nested `verification_matrix`, `docs_sync`, and `pr_preparation`
+  sections are guidance until matching observed evidence exists.
 - Runtime-profile executor selections return a runtime handoff contract with
   team/swarm, worker-protocol, and worktree guidance, but still do not create a
   lifecycle run.
