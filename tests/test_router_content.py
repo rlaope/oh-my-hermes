@@ -66,6 +66,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "frontend": ("workflow_skill", True),
     "accessibility-audit": ("workflow_skill", True),
     "visual-qa": ("workflow_skill", True),
+    "build-failure-triage": ("workflow_skill", True),
     "voice-operator": ("agent_context", False),
     "toolbelt-readiness": ("harness_only", False),
     "harness-session-inventory": ("workflow_skill", True),
@@ -255,6 +256,7 @@ class RouterContentTests(unittest.TestCase):
             "frontend",
             "accessibility-audit",
             "visual-qa",
+            "build-failure-triage",
             "workspace-audit",
             "production-audit",
             "verification-gate",
@@ -317,6 +319,7 @@ class RouterContentTests(unittest.TestCase):
             "frontend",
             "accessibility-audit",
             "visual-qa",
+            "build-failure-triage",
         }
 
         self.assertEqual(feature_surface_names, generated_surface_exposures)
@@ -386,6 +389,18 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("click-path", recommend_module._SKILL_POLICIES["visual-qa"].evidence_boundary)
         self.assertEqual(recommend_module._SKILL_POLICIES["workspace-audit"].next_action, "prepare_workspace_audit")
         self.assertEqual(recommend_module._SKILL_POLICIES["production-audit"].next_action, "prepare_production_audit")
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["build-failure-triage"].next_action,
+            "prepare_build_failure_triage",
+        )
+        self.assertIn(
+            "failure_log_digest/v1",
+            recommend_module._SKILL_POLICIES["build-failure-triage"].wrapper_guidance,
+        )
+        self.assertIn(
+            "command rerun",
+            recommend_module._SKILL_POLICIES["build-failure-triage"].evidence_boundary,
+        )
         self.assertEqual(recommend_module._SKILL_POLICIES["verification-gate"].next_action, "prepare_verification_gate")
         self.assertEqual(recommend_module._SKILL_POLICIES["agent-evaluation"].next_action, "prepare_agent_evaluation")
         self.assertEqual(recommend_module._SKILL_POLICIES["rules-distill"].next_action, "prepare_rules_distillation")
@@ -553,6 +568,7 @@ class RouterContentTests(unittest.TestCase):
                 "frontend",
                 "accessibility-audit",
                 "visual-qa",
+                "build-failure-triage",
                 "workspace-audit",
                 "production-audit",
                 "verification-gate",
@@ -995,6 +1011,51 @@ class RouterContentTests(unittest.TestCase):
         self.assertTrue(set(BROWSER_VISUAL_QA_PHRASES).issubset(set(route_rules["visual_qa_gate"]["phrases"])))
         self.assertTrue(set(CUSTOMER_SYMPTOM_REPORT_PHRASES).issubset(set(route_rules["customer_signal"]["phrases"])))
 
+    def test_build_failure_triage_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("build-failure-triage", definitions)
+        self.assertIn("build-failure-triage", harnesses)
+        self.assertIn("build-failure-triage", templates)
+        self.assertEqual(primary_harness_for_skill("build-failure-triage"), "build-failure-triage")
+        self.assertEqual(definitions["build-failure-triage"].category, "verification")
+        self.assertEqual(definitions["build-failure-triage"].phase, "build-failure-triage")
+        self.assertEqual(definitions["build-failure-triage"].quality_tier, "build-failure-triage-gated")
+        self.assertIn("build_failure_triage_plan/v1", definitions["build-failure-triage"].expected_outputs)
+        self.assertIn("failure_log_digest/v1", definitions["build-failure-triage"].expected_outputs)
+        self.assertIn("failure_cluster_matrix/v1", definitions["build-failure-triage"].expected_outputs)
+        self.assertIn("root_cause_hypothesis_set/v1", definitions["build-failure-triage"].expected_outputs)
+        self.assertIn("minimal_fix_handoff/v1 when remediation is requested", definitions["build-failure-triage"].expected_outputs)
+        self.assertIn("build_failure_triage_verdict/v1", definitions["build-failure-triage"].expected_outputs)
+        self.assertIn("Do not claim the build", " ".join(definitions["build-failure-triage"].safety_rules))
+        self.assertIn("rerun_plan/v1", " ".join(definitions["build-failure-triage"].artifact_expectations))
+        self.assertIn("failure_log_digest/v1", harnesses["build-failure-triage"].expected_outputs)
+        self.assertIn("failure_cluster_matrix_prepared", harnesses["build-failure-triage"].evidence_ladder)
+        self.assertIn("root_cause_hypotheses_ranked", harnesses["build-failure-triage"].evidence_ladder)
+        self.assertTrue(
+            {
+                "prepare_build_failure_triage",
+                "show_build_failure_triage",
+                "record_failure_log",
+                "record_failure_cluster",
+                "record_root_cause_hypothesis",
+                "prepare_minimal_fix_handoff",
+                "record_rerun_plan",
+                "route_to_verification_gate",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("failure_log_digest/v1", templates["build-failure-triage"].content)
+        self.assertIn("failure_cluster_matrix/v1", templates["build-failure-triage"].content)
+        self.assertIn("minimal_fix_handoff/v1", templates["build-failure-triage"].content)
+        self.assertIn("Preferred harness for this skill: `build-failure-triage`", templates["build-failure-triage"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertEqual(route_rules["build_failure_triage"]["workflow"], "build-failure-triage")
+        self.assertEqual(route_rules["build_failure_triage"]["next_action"], "prepare_build_failure_triage")
+        self.assertIn("CI pass", route_rules["build_failure_triage"]["not_evidence_yet"])
+
     def test_ecc_inspired_operator_skill_contracts_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
         harnesses = {harness.name: harness for harness in builtin_harnesses()}
@@ -1026,6 +1087,15 @@ class RouterContentTests(unittest.TestCase):
                 "ladder": "claim_verdict_recorded",
                 "action": "prepare_verification_gate",
                 "template": "observed_check_results/v1",
+            },
+            "build-failure-triage": {
+                "category": "verification",
+                "phase": "build-failure-triage",
+                "quality_tier": "build-failure-triage-gated",
+                "output": "failure_log_digest/v1",
+                "ladder": "failure_cluster_matrix_prepared",
+                "action": "prepare_build_failure_triage",
+                "template": "minimal_fix_handoff/v1",
             },
             "agent-evaluation": {
                 "category": "operations",

@@ -196,6 +196,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("skill-scout", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("skill-health", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
+        self.assertIn("build-failure-triage", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
         self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"])
         tool_routes = {route["tool_family"]: route for route in payload["generic_tool_checkpoint_routes"]}
@@ -238,6 +239,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(workflow_context_card_for_workflow("failure-signal-audit")["id"], "automation_and_status")
         self.assertIn("audit", workflow_context_card_for_workflow("failure-signal-audit")["first_response_shape"])
         self.assertEqual(workflow_context_card_for_workflow("instinct-ledger")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("build-failure-triage")["id"], "coding_handoff")
         self.assertEqual(workflow_context_card_for_workflow("verification-gate")["id"], "coding_handoff")
         self.assertEqual(workflow_context_card_for_workflow("code-review")["id"], "coding_handoff")
 

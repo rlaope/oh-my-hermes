@@ -37,6 +37,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "prepare_failure_signal_audit": "preparing a failure signal audit",
     "prepare_frontend_handoff": "preparing a frontend implementation handoff",
     "prepare_accessibility_audit": "preparing an accessibility audit",
+    "prepare_build_failure_triage": "preparing build failure triage",
     "prepare_gateway_intent_card": "preparing a gateway intent card",
     "prepare_github_event_ops_card": "preparing a GitHub event operations card",
     "prepare_harness_session_inventory": "preparing a harness session inventory",

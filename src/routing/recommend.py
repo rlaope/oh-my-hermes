@@ -131,6 +131,134 @@ _ACCESSIBILITY_AUDIT_EXPLICIT_PHRASES = tuple(
         "터치 타깃",
     )
 )
+_BUILD_FAILURE_TRIAGE_EXPLICIT_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "build-failure-triage",
+        "build failure triage",
+        "build failure",
+        "build fix",
+        "build failed",
+        "build failing",
+        "compile error",
+        "compilation error",
+        "typecheck failed",
+        "typecheck failure",
+        "type check failed",
+        "tsc failed",
+        "lint failed",
+        "lint failure",
+        "test failed",
+        "test failure",
+        "tests failed",
+        "ci failed",
+        "ci failure",
+        "github actions failed",
+        "pr checks failed",
+        "pr check failure",
+        "dco failed",
+        "dco failure",
+        "pytest failed",
+        "pytest failure",
+        "npm build failed",
+        "cargo build failed",
+        "빌드 실패",
+        "빌드 고쳐",
+        "컴파일 에러",
+        "타입체크 실패",
+        "테스트 실패",
+        "CI 실패",
+        "체크 실패",
+        "DCO 실패",
+    )
+)
+_BUILD_FAILURE_TRIAGE_OVERRIDE_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "build-failure-triage",
+        "build failure triage",
+        "triage",
+        "minimal fix",
+        "minimal-fix",
+        "minimal safe fix",
+        "root cause",
+        "root-cause",
+        "diagnose",
+        "classify",
+        "failure log",
+        "log into",
+        "원인",
+        "분류",
+        "최소 수정",
+    )
+)
+_FIXED_OR_PASS_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "fixed",
+        "resolved",
+        "passed",
+        "passing",
+        "green",
+        "now passes",
+        "now passing",
+        "고쳤",
+        "수정 완료",
+        "해결",
+        "통과했",
+        "통과됨",
+        "통과 완료",
+    )
+)
+_VERIFY_OR_MERGE_READY_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "verify",
+        "verification",
+        "verification gate",
+        "verify before merge",
+        "merge readiness",
+        "merge-ready",
+        "ready to merge",
+        "before merge",
+        "evidence matrix",
+        "fresh rerun",
+        "rerun evidence",
+        "검증",
+        "머지 가능",
+        "머지 전",
+    )
+)
+_BUILD_OR_CHECK_CONTEXT_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "build",
+        "compile",
+        "typecheck",
+        "type check",
+        "tsc",
+        "lint",
+        "test",
+        "tests",
+        "pytest",
+        "ci",
+        "github actions",
+        "pr check",
+        "pr checks",
+        "check",
+        "checks",
+        "dco",
+        "failure",
+        "failed",
+        "failing",
+        "빌드",
+        "컴파일",
+        "타입체크",
+        "테스트",
+        "체크",
+        "실패",
+    )
+)
 _HARNESS_SESSION_INVENTORY_INTENT_PHRASES = (
     "harness-session-inventory",
     "harness session inventory",
@@ -329,6 +457,18 @@ _SKILL_POLICIES = {
         wrapper_guidance=(
             "Prepare verification_matrix/v1, record observed_check_results/v1 only from fresh outputs, "
             "and issue claim_verdict/v1 as PASS, HOLD, or BLOCK."
+        ),
+    ),
+    "build-failure-triage": RecommendationPolicy(
+        next_action="prepare_build_failure_triage",
+        evidence_boundary=(
+            "A build failure triage plan is not a code fix, dependency install, command rerun, test pass, "
+            "CI pass, DCO pass, review, merge-readiness, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare build_failure_triage_plan/v1, failure_log_digest/v1, failure_cluster_matrix/v1, "
+            "root_cause_hypothesis_set/v1, minimal_fix_handoff/v1 when allowed, rerun_plan/v1, "
+            "and build_failure_triage_verdict/v1."
         ),
     ),
     "agent-evaluation": RecommendationPolicy(
@@ -989,6 +1129,12 @@ def _score_definition(
         and not _harness_session_inventory_recommendation_applies(normalized_query, query_tokens)
     ):
         return None
+    if (
+        definition.name == "build-failure-triage"
+        and explicit_skill != "build-failure-triage"
+        and _build_failure_triage_fixed_or_pass_verification_context(normalized_query)
+    ):
+        return None
 
     for trigger_phrase in prepared.plain_trigger_phrases:
         if _phrase_match(normalized_query, trigger_phrase):
@@ -1036,6 +1182,14 @@ def _score_definition(
     if definition.name == "accessibility-audit" and _accessibility_audit_explicit_match(normalized_query):
         score += 30
         matched.add("direct:accessibility_audit")
+    if definition.name == "build-failure-triage" and _build_failure_triage_explicit_match(normalized_query):
+        score += 32
+        matched.add("direct:build_failure_triage")
+    if definition.name == "verification-gate" and _build_failure_triage_fixed_or_pass_verification_context(
+        normalized_query
+    ):
+        score += 28
+        matched.add("direct:fixed_or_pass_verification")
 
     if score <= 0:
         return None
@@ -1229,6 +1383,23 @@ def _failure_signal_audit_explicit_match(normalized_query: str) -> bool:
 
 def _accessibility_audit_explicit_match(normalized_query: str) -> bool:
     return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _ACCESSIBILITY_AUDIT_EXPLICIT_PHRASES)
+
+
+def _build_failure_triage_explicit_match(normalized_query: str) -> bool:
+    return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _BUILD_FAILURE_TRIAGE_EXPLICIT_PHRASES)
+
+
+def _build_failure_triage_fixed_or_pass_verification_context(normalized_query: str) -> bool:
+    if any(_explicit_phrase_match(normalized_query, phrase) for phrase in _BUILD_FAILURE_TRIAGE_OVERRIDE_PHRASES):
+        return False
+    has_fixed_or_pass = any(_explicit_phrase_match(normalized_query, phrase) for phrase in _FIXED_OR_PASS_PHRASES)
+    has_verify_or_merge = any(
+        _explicit_phrase_match(normalized_query, phrase) for phrase in _VERIFY_OR_MERGE_READY_PHRASES
+    )
+    has_build_or_check_context = any(
+        _explicit_phrase_match(normalized_query, phrase) for phrase in _BUILD_OR_CHECK_CONTEXT_PHRASES
+    )
+    return has_fixed_or_pass and (has_verify_or_merge or has_build_or_check_context)
 
 
 def _harness_session_inventory_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:

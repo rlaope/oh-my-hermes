@@ -139,6 +139,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "idea-to-deploy",
             "ultraprocess",
             "code-review",
+            "build-failure-triage",
             "verification-gate",
             "security-safety-review",
             "team",
