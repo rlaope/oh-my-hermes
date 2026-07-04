@@ -282,6 +282,13 @@ VISIBLE_ACTIONS = (
     "record_agent_failure_capture",
     "record_agent_recovery_action",
     "escalate_agent_debug",
+    "prepare_instinct_ledger",
+    "show_instinct_ledger",
+    "record_instinct_candidate",
+    "record_instinct_scope_decision",
+    "record_instinct_promotion_review",
+    "record_instinct_export_review",
+    "route_to_rules_distill_or_workflow_learning",
     "record_workflow_learning_trace",
     "record_missed_route",
     "show_learning_review_queue",
@@ -606,6 +613,11 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "pressure, environment assumptions, likely failure pattern, and the smallest safe recovery action. Executor "
         "reset, hidden mutation, tool repair, and proof of future fixes stay separate until observed."
     ),
+    "instinct-ledger": (
+        "I will prepare an instinct ledger: atomic trigger/action candidates, project or global scope, confidence, "
+        "source evidence, promotion review, and export/import boundaries. Hooks, memory writes, skill mutation, "
+        "global promotion, and behavior-change claims stay separate until observed."
+    ),
     "context-budget-review": (
         "I will prepare a context budget review: must-keep context, checkpoint cadence, budget risks, overflow "
         "recovery, and provider-truth gaps. Exact billing or token usage still needs observed runtime/provider evidence."
@@ -724,6 +736,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_codebase_onboarding": ("prepare_codebase_onboarding", "Prepare onboarding"),
     "prepare_codegraph_refresh": ("prepare_codegraph_refresh", "Refresh codegraph"),
     "prepare_agent_debug": ("prepare_agent_debug", "Prepare agent debug"),
+    "prepare_instinct_ledger": ("prepare_instinct_ledger", "Prepare instincts"),
     "prepare_skill_scout": ("prepare_skill_scout", "Prepare skill scout"),
     "prepare_skill_health": ("prepare_skill_health", "Prepare skill health"),
     "prepare_context_budget_review": ("prepare_context_budget_review", "Review context"),
@@ -1322,6 +1335,43 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "CI",
             "merge",
             "future loop fix",
+        ],
+    },
+    "instinct-ledger": {
+        "kind": "instinct_ledger",
+        "headline": "I can turn repeated lessons into scoped instinct candidates.",
+        "body": (
+            "I will prepare the instinct ledger: atomic trigger/action candidates, source evidence, confidence, "
+            "domain, project/global scope, promotion state, import/export review, and missing approvals. Hooks, "
+            "raw observation capture, memory writes, skill mutation, global promotion, and future behavior changes "
+            "stay observed-only."
+        ),
+        "phase": "instinct_ledger_prepared",
+        "next_action": "prepare_instinct_ledger",
+        "artifact_schema": "instinct_ledger_plan/v1",
+        "claim_boundary_suffix": "It is not hook installation, automatic observation, model training, hidden memory mutation, skill mutation, prompt mutation, global promotion, import/export, or proof that future behavior changed.",
+        "actions": [
+            {"id": "prepare_instinct_ledger", "label": "Prepare instincts", "style": "primary"},
+            {"id": "record_instinct_candidate", "label": "Record candidate", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "scope_project_or_global_boundary",
+            "redact_source_observations",
+            "write_atomic_trigger_action_candidates",
+            "score_confidence_and_domain",
+            "review_promotion_or_export_when_requested",
+        ],
+        "evidence_not_observed": [
+            "hook installation",
+            "automatic observation",
+            "model training",
+            "memory mutation",
+            "skill mutation",
+            "prompt mutation",
+            "global promotion",
+            "import/export",
+            "future behavior change",
         ],
     },
     "gateway-intent-card": {

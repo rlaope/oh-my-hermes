@@ -1,22 +1,22 @@
 ---
-name: ops-observability-card
-description: [omh] Hermes ops observability workflow: prepare an operations command-board for wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality evidence boundaries.
+name: instinct-ledger
+description: [omh] Instinct Ledger workflow: turn repeated project or cross-project lessons into atomic, confidence-scored instinct candidates with scoped promotion and export boundaries.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, observability]
-    category: observability
-    phase: telemetry-card
+    tags: [workflow, oh-my-hermes, optimization]
+    category: optimization
+    phase: instinct-ledger
     role: tracker
     quality_tier: workflow-surface-gated
 ---
 
-# Ops Observability Card
+# Instinct Ledger
 
-This is a Hermes-native `ops-observability-card` workflow skill.
+This is a Hermes-native `instinct-ledger` workflow skill.
 
 ## Why This Exists
 
-`ops-observability-card` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`instinct-ledger` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,26 +28,27 @@ This is a Hermes-native `ops-observability-card` workflow skill.
 
 Good example:
 
-- Prompt: ops-observability-card show token, cost, latency, supplied Prometheus/Grafana metrics, and missing service-quality evidence for this loop.
-- Expected behavior: Produce `prepare_ops_observability_card` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: instinct-ledger turn these repeated OMH review lessons into project-scoped instincts and show which ones could be promoted globally.
+- Expected behavior: Produce `prepare_instinct_ledger` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: ops-observability-card claim exact provider billing, healthy SLO, incident closure, or remediation completion from local estimates.
+- Prompt: instinct-ledger silently install hooks, learn from every prompt, and mutate all skills globally.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
-- Local telemetry, provider truth, billing truth, and completion evidence are separate states.
-- Warnings name the next measurement or operator review action.
+- Each instinct is atomic: one trigger, one action, one scope, confidence, evidence refs, and review state.
+- Project-specific conventions, global practices, project/global promotion candidates, imports, and exports are separated.
+- No hooks, memory writes, skill edits, global promotion, import/export, or behavior-change claims are made without observed approval and implementation evidence.
 
 ## Recovery Notes
 
-- If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-- If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+- If the request is a single missed route or run trace, route to workflow-learning first.
+- If the request is to mutate durable rules, prompts, skills, or AGENTS guidance, route to rules-distill or implementation after review approval.
+- If evidence comes from a stuck run, use agent-debug before converting lessons into instincts.
 
 ## OMH Context Rail
 
@@ -63,14 +64,14 @@ Bad example:
 
 ## Use When
 
-Use when automation, loops, gateway work, executor handoffs, or service operations need a safe command-board for cost, latency, token, history, failure-mode, supplied metric-provider, and service-quality visibility.
+Use when Hermes should review repeated observations, user corrections, workflow lessons, or failure patterns as atomic project-scoped or global instinct candidates with confidence, evidence, promotion, import, or export decisions.
 
-    Strong routing signals: `ops-observability-card`, `observability card`, `operations command board`, `ops command board`, `service quality board`, `service quality`, `external metric provider`, `metric provider`, `prometheus metrics`, `grafana metrics`, `cost telemetry`, `latency telemetry`, `token telemetry`, `run history`, `loop telemetry`, `failure mode`, `monitor tokens`, `service health`, `slo dashboard`, `비용`, `토큰`, `지연시간`, `관측성`, `운영 지휘판`, `서비스 품질`, `메트릭`, `프로메테우스`, `그라파나`
+    Strong routing signals: `instinct-ledger`, `instinct ledger`, `project instincts`, `project-scoped instincts`, `project scoped instincts`, `global instincts`, `instinct review`, `instinct candidate`, `instinct candidates`, `instinct promotion`, `promote instinct`, `promote learning`, `confidence scored learning`, `confidence-scored learning`, `project learning patterns`, `cross-project learning`, `export instincts`, `import instincts`, `학습 본능`, `프로젝트별 학습`, `프로젝트 스코프 학습`, `전역 학습 승격`, `학습 승격`, `학습 패턴 승격`
 
 ## Catalog Metadata
 
-Category: `observability`
-Phase: `telemetry-card`
+Category: `optimization`
+Phase: `instinct-ledger`
 Hermes role: `tracker`
 Quality tier: `workflow-surface-gated`
 
@@ -93,24 +94,22 @@ Required inputs:
 
 Expected outputs:
 
-- ops-observability-card/v1 card or guidance
-- external_metric_provider/v1 payload contract
-- external_metric_provider_adapter/v1 adapter contract
-- ops_service_quality_board/v1 service-quality board
-- typed service-quality downgrade gaps
-- next action
-- prepared-vs-observed boundary
+- instinct_ledger_plan/v1
+- instinct_candidate/v1
+- project_instinct_scope_map/v1
+- instinct_promotion_review/v1
+- instinct_export_review/v1 when requested
 
 Artifact expectations:
 
-- ops-observability-card/v1 metadata-only runtime or wrapper card when recorded
-- external_metric_provider/v1 supplied metric payload when available
-- external_metric_provider_adapter/v1 connector-ready adapter metadata when available
-- ops_service_quality_board/v1 evidence-gated service-quality board
+- instinct_candidate/v1 with trigger, action, confidence, domain, scope, source evidence, non-goals, and review state
+- project_instinct_scope_map/v1 separating project, global, imported, and promotion-candidate instincts
+- instinct_promotion_review/v1 with repeated evidence, confidence threshold, conflicts, and approval state
+- instinct_export_review/v1 with redaction, destination, import/export trust gaps, and raw-observation exclusion when requested
 
 Safety rules:
 
-- An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, root-cause proof, remediation completion, performance proof, or successful workflow completion evidence.
+- An instinct ledger is not hook installation, automatic observation, model training, hidden memory mutation, skill mutation, prompt mutation, global rule promotion, import, export, or proof that future behavior changed. Record only reviewed candidate instincts, confidence, scope, promotion state, and evidence gaps.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -121,12 +120,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `ops-observability-card`.
+Preferred harness for this skill: `instinct-ledger`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill ops-observability-card --harness ops-observability-card --status started
+omh runtime record --skill instinct-ledger --harness instinct-ledger --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

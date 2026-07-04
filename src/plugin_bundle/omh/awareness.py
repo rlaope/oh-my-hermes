@@ -504,6 +504,7 @@ ROUTER_KEYWORD_SKILLS = (
     "automation-blueprint",
     "harness-session-inventory",
     "agent-debug",
+    "instinct-ledger",
     "skill-scout",
     "skill-health",
     "workflow-learning",
@@ -544,6 +545,7 @@ LANE_CROSS_LANE_EXAMPLES = {
         "daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence",
         "long agent run -> context-budget-review -> must-keep pack -> checkpoint plan",
         "stuck agent run -> agent-debug -> failure capture, diagnosis, and contained recovery",
+        "repeated project lessons -> instinct-ledger -> scoped candidates, confidence, and promotion review",
         "new skill idea -> skill-scout -> candidate inventory, risk review, and use/fork/create decision",
         "skill portfolio concern -> skill-health -> stale surfaces, signals, amendments, and actions",
         "workflow attempt -> workflow-learning -> eval -> improvement candidate or regression case",
@@ -627,6 +629,7 @@ WORKFLOW_CONTEXT_CARDS = (
             "automation-blueprint",
             "agent-ops-review",
             "agent-debug",
+            "instinct-ledger",
             "agent-evaluation",
             "rules-distill",
             "skill-scout",
@@ -692,6 +695,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "agent-board": "automation_and_status",
     "agent-ops-review": "automation_and_status",
     "agent-debug": "automation_and_status",
+    "instinct-ledger": "automation_and_status",
     "doctor": "automation_and_status",
     "gateway-intent-card": "automation_and_status",
     "memory-curation-review": "automation_and_status",
@@ -1615,6 +1619,45 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": (),
         "adjacent_workflows": ("agent-ops-review", "doctor", "workflow-learning", "context-budget-review"),
+    },
+    {
+        "id": "instinct_ledger_review",
+        "workflow": "instinct-ledger",
+        "lane": "automation_and_status",
+        "next_action": "prepare_instinct_ledger",
+        "reason": "The user is asking to turn repeated lessons into project-scoped or global instinct candidates with confidence, evidence, promotion, import, or export review.",
+        "fallback_action": "prepare_instinct_candidates_or_route_to_workflow_learning_rules_distill_or_agent_debug",
+        "phrases": (
+            "instinct-ledger",
+            "instinct ledger",
+            "project instincts",
+            "project-scoped instincts",
+            "project scoped instincts",
+            "global instincts",
+            "instinct review",
+            "instinct candidate",
+            "instinct candidates",
+            "instinct promotion",
+            "promote instinct",
+            "promote learning",
+            "confidence scored learning",
+            "confidence-scored learning",
+            "project learning patterns",
+            "cross-project learning",
+            "export instincts",
+            "import instincts",
+            "학습 본능",
+            "반복된 프로젝트 교훈",
+            "본능 후보",
+            "프로젝트별 학습",
+            "프로젝트 스코프 학습",
+            "전역 학습 승격",
+            "전역 승격 검토",
+            "학습 승격",
+            "학습 패턴 승격",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("workflow-learning", "rules-distill", "agent-debug", "skill-health"),
     },
     {
         "id": "skill_portfolio_health",
@@ -3366,6 +3409,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "ops-observability-card",
                 "agent-ops-review",
                 "agent-debug",
+                "instinct-ledger",
                 "agent-evaluation",
                 "rules-distill",
                 "context-budget-review",
@@ -3415,12 +3459,12 @@ def awareness_primer_payload() -> dict[str, object]:
             "coding delegation, review, status, or long loops, consider OMH before generic chat or generic tools."
         ),
         "all_skill_context_rule": (
-            "For every OMH skill: match intent to a lane; name adjacent workflows; "
-            "generic tool can render or execute is not a dismissal."
+            "For every OMH skill: match lane, name adjacent workflows; "
+            "generic tool can render or execute is not dismissal."
         ),
         "generic_tool_checkpoint": GENERIC_TOOL_CHECKPOINT_TEXT,
         "skill_coverage": "Every generated workflow skill carries this rail.",
-        "chat_rule": "Normal users talk to Hermes; OMH CLI is backend, setup, verification, and wrapper infrastructure.",
+        "chat_rule": "Normal users talk to Hermes; OMH CLI is backend/setup/verification/wrapper infra.",
         "lanes": lanes,
         "workflow_context_cards": workflow_context_cards(),
         "generic_tool_checkpoint_routes": generic_tool_checkpoint_routes(),
@@ -3482,7 +3526,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "delivery, review, CI, merge-readiness, or merge evidence."
         ),
         "fallback_rule": (
-            "If an external image tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback."
+            "If external tool, coding agent, connector, credential, or runtime is missing, offer setup/selection fallback."
         ),
         "non_goals": [
             "no hidden executor dispatch",
@@ -3623,7 +3667,7 @@ def _compact_workflow_cue_line() -> str:
         "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
         "premium visuals -> design-quality-gate; frontend -> frontend; screenshots/render checks -> visual-qa; files/decks/PDF/sheets/docs/HWP -> materials/report-package; image cards -> img-summary; "
         "code/CI/merge -> ultraprocess/code-review/verification-gate; "
-        "agent failure/loop/drift -> agent-debug; trace/improve/regression -> workflow-learning"
+        "agent failure/loop/drift -> agent-debug; repeated lessons -> instinct-ledger; trace/improve/regression -> workflow-learning"
     )
 
 
@@ -3632,7 +3676,7 @@ def _compact_workflow_context_cards_line() -> str:
         "intent -> deep-interview/ralplan/codebase-onboarding/codegraph-refresh/loop; "
         "signals -> web-research/research-department/feedback-triage; "
         "materials -> design-quality-gate/frontend/visual-qa/materials-package; "
-        "ops -> automation-blueprint/workspace-audit/production-audit/context-budget-review/agent-debug/skill-scout/skill-health/workflow-learning/doctor; "
+        "ops -> automation/workspace/production/context-budget/agent-debug/instinct-ledger/skill-health/workflow-learning/doctor; "
         "eval/rules -> agent-evaluation/rules-distill; "
         "code -> ultraprocess/code-review/verification-gate/security-safety-review/team/ultraqa"
     )
@@ -3656,6 +3700,7 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "workflow-learning": "audit_learning_readiness",
     "harness-session-inventory": "prepare_harness_session_inventory",
     "agent-debug": "prepare_agent_debug",
+    "instinct-ledger": "prepare_instinct_ledger",
     "frontend": "prepare_frontend_handoff",
     "visual-qa": "prepare_visual_qa",
     "workspace-audit": "prepare_workspace_audit",

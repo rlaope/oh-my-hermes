@@ -14,6 +14,7 @@ WORKFLOW_VOCABULARY = (
     "loop",
     "ultraprocess",
     "agent-debug",
+    "instinct-ledger",
     "skill-scout",
     "skill-health",
     "workflow-learning",

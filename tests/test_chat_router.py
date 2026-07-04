@@ -130,6 +130,12 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "반복된 프로젝트 교훈을 본능 후보로 정리하고 전역 승격 검토해줘",
+                "instinct-ledger",
+                "prepare_instinct_ledger",
+                None,
+            ),
+            (
                 "웹서치해서 최신 자료 정리해줘",
                 "web-research",
                 "run_hermes_research",
@@ -800,6 +806,12 @@ class ChatRouterTests(unittest.TestCase):
                 "audit_learning_readiness",
                 "workflow_learning_fast_path",
             ),
+            (
+                "project-scoped instincts with promotion review",
+                "instinct-ledger",
+                "prepare_instinct_ledger",
+                "operator_surface_fast_path:instinct_ledger",
+            ),
         )
 
         for message, selected_skill, next_action, marker in cases:
@@ -956,6 +968,11 @@ class ChatRouterTests(unittest.TestCase):
                 "Can OMH make an automation blueprint for a daily research digest?",
                 "automation-blueprint",
                 "scheduled-ops-blueprint",
+            ),
+            (
+                "Turn repeated lessons into project-scoped instincts with confidence scores.",
+                "instinct-ledger",
+                "instinct-ledger",
             ),
             (
                 "오늘 아침 경쟁사 뉴스 요약 자동화해줘",
@@ -1502,6 +1519,11 @@ class ChatRouterTests(unittest.TestCase):
                 "guard:workflow_learning",
             ),
             (
+                "project-scoped instincts with promotion review",
+                "instinct-ledger",
+                "guard:instinct_ledger",
+            ),
+            (
                 "FAL_KEY 없어서 이미지 생성이 막히면 어떻게 연결해야 해?",
                 "toolbelt-readiness",
                 "guard:toolbelt_readiness",
@@ -1624,6 +1646,11 @@ class ChatRouterTests(unittest.TestCase):
                 "what can OMH do for workflow learning?",
                 "workflow-learning",
                 "workflow-learning",
+            ),
+            (
+                "what can OMH do for project instincts?",
+                "instinct-ledger",
+                "instinct-ledger",
             ),
             (
                 "what can OMH do for Discord gateway routing?",

@@ -3903,6 +3903,67 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - An agent debug report is not executor reset, hidden state mutation, tool repair, implementation, verification, CI, merge-readiness, merge, or proof that future loops are fixed. Record only observed failure evidence, diagnosis hypotheses, contained recovery actions, and remaining blockers.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### instinct-ledger
+
+[omh] Instinct Ledger workflow: turn repeated project or cross-project lessons into atomic, confidence-scored instinct candidates with scoped promotion and export boundaries.
+
+- Category: `optimization`
+- Phase: `instinct-ledger`
+- Hermes role: `tracker`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when repeated lessons should become reviewed, confidence-scored project or global instinct candidates without automatic hook-based learning or mutation.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `instinct-ledger` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes should review repeated observations, user corrections, workflow lessons, or failure patterns as atomic project-scoped or global instinct candidates with confidence, evidence, promotion, import, or export decisions.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `instinct-ledger`, `instinct ledger`, `project instincts`, `project-scoped instincts`, `project scoped instincts`, `global instincts`, `instinct review`, `instinct candidate`, `instinct candidates`, `instinct promotion`, `promote instinct`, `promote learning`, `confidence scored learning`, `confidence-scored learning`, `project learning patterns`, `cross-project learning`, `export instincts`, `import instincts`, `학습 본능`, `프로젝트별 학습`, `프로젝트 스코프 학습`, `전역 학습 승격`, `학습 승격`, `학습 패턴 승격`
+- Good example:
+  - Prompt: instinct-ledger turn these repeated OMH review lessons into project-scoped instincts and show which ones could be promoted globally.
+  - Expected behavior: Produce `prepare_instinct_ledger` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: instinct-ledger silently install hooks, learn from every prompt, and mutate all skills globally.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Each instinct is atomic: one trigger, one action, one scope, confidence, evidence refs, and review state.
+  - Project-specific conventions, global practices, project/global promotion candidates, imports, and exports are separated.
+  - No hooks, memory writes, skill edits, global promotion, import/export, or behavior-change claims are made without observed approval and implementation evidence.
+- Recovery notes:
+  - If the request is a single missed route or run trace, route to workflow-learning first.
+  - If the request is to mutate durable rules, prompts, skills, or AGENTS guidance, route to rules-distill or implementation after review approval.
+  - If evidence comes from a stuck run, use agent-debug before converting lessons into instincts.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - instinct_ledger_plan/v1
+  - instinct_candidate/v1
+  - project_instinct_scope_map/v1
+  - instinct_promotion_review/v1
+  - instinct_export_review/v1 when requested
+- Artifact expectations:
+  - instinct_candidate/v1 with trigger, action, confidence, domain, scope, source evidence, non-goals, and review state
+  - project_instinct_scope_map/v1 separating project, global, imported, and promotion-candidate instincts
+  - instinct_promotion_review/v1 with repeated evidence, confidence threshold, conflicts, and approval state
+  - instinct_export_review/v1 with redaction, destination, import/export trust gaps, and raw-observation exclusion when requested
+- Safety rules:
+  - An instinct ledger is not hook installation, automatic observation, model training, hidden memory mutation, skill mutation, prompt mutation, global rule promotion, import, export, or proof that future behavior changed. Record only reviewed candidate instincts, confidence, scope, promotion state, and evidence gaps.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### skill-scout
 
 [omh] Skill Scout workflow: prepare a metadata-only search-before-creation report for local, marketplace, GitHub, and web skill candidates with risk review and adoption options.
@@ -6922,6 +6983,62 @@ Prepare an evidence-bounded debugging report for a stuck, looping, drifting, or 
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - An agent debug report is not executor reset, hidden state mutation, tool repair, implementation, verification, review, CI, merge, or proof that future loops are fixed.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### instinct-ledger
+
+Prepare an evidence-bounded ledger of atomic project/global instinct candidates with confidence and promotion review.
+
+- Use when: Use when repeated workflow lessons, user corrections, failure patterns, or review findings should become scoped instinct candidates without automatic hooks, memory mutation, skill mutation, or global promotion.
+- Quality tier: `instinct-ledger-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - source observations or lesson summary
+  - project/repo identity and scope boundary
+  - candidate trigger/action behavior
+  - confidence and repeated-evidence threshold
+  - promotion, import, export, or review owner when requested
+- Outputs:
+  - instinct_ledger_plan/v1
+  - instinct_candidate/v1
+  - project_instinct_scope_map/v1
+  - instinct_promotion_review/v1
+  - instinct_export_review/v1 when requested
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `instinct_scope_recorded`
+  - `source_observations_redacted`
+  - `atomic_instinct_candidates_prepared`
+  - `confidence_and_domain_scored`
+  - `project_global_scope_decided`
+  - `promotion_or_export_review_prepared_when_requested`
+  - `approved_write_or_export_evidence_recorded_when_observed`
+- Wrapper actions:
+  - `prepare_instinct_ledger`
+  - `show_instinct_ledger`
+  - `record_instinct_candidate`
+  - `record_instinct_scope_decision`
+  - `record_instinct_promotion_review`
+  - `record_instinct_export_review`
+  - `route_to_rules_distill_or_workflow_learning`
+  - `show_status`
+- Artifact events:
+  - `instinct-ledger_scoped`
+  - `instinct-ledger_card_prepared`
+  - `instinct-ledger_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - An instinct ledger is not hook installation, automatic observation, model training, hidden memory mutation, skill mutation, prompt mutation, global promotion, import/export, or proof that future behavior changed.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### skill-scout

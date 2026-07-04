@@ -127,7 +127,7 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
   workflows into traces, evals, review queues, regression cases, and patch
   proposals.
 
-**+46** more built-in skills are included for operations, research, materials,
+**+47** more built-in skills are included for operations, research, materials,
 review, release, and workflow-support lanes.
 
 The full skill catalog is larger. These 7 are the representative modes to
@@ -174,6 +174,9 @@ understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
 
 - Missed routes, weak workflows, quality gaps, and regression cases can become
   workflow-learning traces, review queues, and patch proposals.
+- **Instinct Ledger** (`instinct-ledger`) can turn repeated project lessons into
+  scoped instinct candidates, confidence scores, and project/global promotion
+  reviews.
 - The product improves through observed outcomes, not by pretending every
   prepared handoff already executed.
 
