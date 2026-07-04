@@ -758,7 +758,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertLessEqual(standalone_section_chars, STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT)
         self.assertLessEqual(max_full_item_chars, FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT)
         self.assertLessEqual(max_standalone_item_chars, STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT)
-        self.assertLessEqual(len(next(item for item in full_items if item["id"] == "img-summary")["triggers"]), 12)
+        self.assertLessEqual(len(next(item for item in full_items if item["id"] == "img-summary")["triggers"]), 10)
         self.assertIn(
             "ambitious goal -> loopability check",
             " ".join(next(item for item in full_items if item["id"] == "loop")["cross_lane_examples"]),

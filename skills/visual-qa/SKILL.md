@@ -42,8 +42,9 @@ Bad example:
 ## Completion Checklist
 
 - The visual_qa_plan/v1 lists target surfaces, references, states, viewports, locales, and freshness criteria.
+- The viewport_state_capture_matrix/v1 proves the QA did not sample only one page, viewport, or state.
 - The render_capture_manifest/v1 is present before PASS and is newer than the last relevant edit.
-- Visual diff, design-system/functional review, visual-fidelity/CJK review, and blocker status are separate fields.
+- Visual diff, hotspot review, motion/interaction capture, design-system/functional review, visual-fidelity/CJK review, and blocker status are separate fields.
 - The verdict is PASS, REVISE, or BLOCK with exact missing evidence or fix requirements.
 - Any implementation fix is routed back to the executor/frontend workflow and rechecked with fresh evidence.
 
@@ -80,8 +81,10 @@ Quality tier: `visual-qa-gated`
 Quality bar:
 
 - List the exact pages, states, viewports, files, images, or TUI frames being checked.
+- Enumerate every page/state/viewport before capture and mark omitted surfaces as blockers rather than assumptions.
 - Require evidence freshness after the last visual edit.
-- Combine objective capture/diff evidence with human-readable visual findings.
+- Combine objective capture/diff evidence, hotspot review, alpha/transparent-background checks, and human-readable visual findings.
+- Capture interaction and motion states when the UI has hover/focus/active/load/scroll transitions.
 - Separate design-system consistency, functional integrity, visual fidelity, responsive behavior, accessibility visibility, and CJK/text precision.
 - Return PASS, REVISE, or BLOCK with concrete evidence IDs and missing-evidence gaps.
 - Keep implementation fixes and follow-up edits separate from the observed QA verdict.
@@ -96,15 +99,20 @@ Required inputs:
 - target URL, route, file, image, or TUI command when available
 - intended design, baseline, or reference
 - pages, states, viewports, and locales to cover
+- complete page/state/viewport enumeration rather than a sample
 - latest edit or source revision
 - known risk areas such as CJK, overflow, responsiveness, or accessibility
+- motion and interaction states that need capture
 - fresh render/capture evidence for completion claims
 
 Expected outputs:
 
 - visual_qa_plan/v1
+- viewport_state_capture_matrix/v1
 - render_capture_manifest/v1 when observed
 - visual_diff_evidence/v1 when observed
+- visual_hotspot_review/v1 when observed
+- motion_interaction_capture/v1 when observed
 - dual_oracle_visual_review/v1 when observed
 - cjk_layout_findings/v1 when applicable
 - visual_qa_verdict/v1
@@ -113,8 +121,11 @@ Expected outputs:
 Artifact expectations:
 
 - visual_qa_plan/v1 with pages, states, viewports, references, and freshness rule
+- viewport_state_capture_matrix/v1 enumerates every route/page, 375/768/1280-style viewport, scroll position, modal/tab state, and CJK-heavy region to capture
 - render_capture_manifest/v1 only from fresh screenshots, file renders, images, or terminal captures
-- visual_diff_evidence/v1 only when the wrapper/executor records objective diff output
+- visual_diff_evidence/v1 only when the wrapper/executor records objective diff output such as dimensionsMatch, diffRatio, similarityScore, alphaChannelIntact, and hotspots
+- motion_interaction_capture/v1 only when hover/focus/active/load/scroll motion frames are observed before, during, and after transition
+- visual_hotspot_review/v1 maps diff hotspots, TUI overflow lines, or screenshot regions to concrete visual causes
 - dual_oracle_visual_review/v1 only when independent read-only review evidence exists
 - PASS unavailable until captures are newer than the last visual edit and all blocking findings are resolved
 
@@ -122,7 +133,9 @@ Safety rules:
 
 - Never claim PASS without fresh rendered evidence captured after the last relevant edit.
 - Do not treat source review, screenshots from an older run, generated plans, or unobserved browser commands as visual QA evidence.
+- Do not sample only one good page, viewport, or state when the surface has more; missed pages, modals, scroll states, or CJK-heavy regions keep PASS unavailable.
 - Objective diffs are evidence, not verdicts; review visual hierarchy, layout, CJK text, state coverage, and product intent separately.
+- Do not excuse diff hotspots as animation; capture settled frames and motion frames separately.
 - Run or request two read-only review perspectives when claiming high confidence: design-system/functional integrity and visual fidelity/CJK precision.
 - CJK clipping, broken wrapping, overlapping UI, invisible text, unusable controls, or offscreen critical content block PASS.
 - Do not call browsers, image tools, LLMs, or external services from OMH core.

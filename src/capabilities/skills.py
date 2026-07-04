@@ -46,7 +46,7 @@ def _skill_capability(
         "preferred_usage": exposure["preferred_usage"],
         "compatibility_alias": exposure["compatibility_alias"],
         "projections": exposure["projections"],
-        "triggers": _bounded_list(definition.triggers, 12),
+        "triggers": _bounded_list(definition.triggers, 10),
         "required_inputs": list(definition.required_inputs),
         "expected_outputs": _bounded_list(definition.expected_outputs, 8),
         "artifact_expectations": list(definition.artifact_expectations),
