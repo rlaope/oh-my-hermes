@@ -112,6 +112,22 @@ class CatalogQuestionTests(unittest.TestCase):
         self.assertFalse(is_skill_catalog_question(message))
         self.assertFalse(is_file_or_text_lookup_question(message))
 
+    def test_visual_qa_click_path_requests_are_not_file_lookup_fallbacks(self) -> None:
+        visual_qa_requests = (
+            "Click path audit checkout buttons.",
+            "Browser QA the customer feedback page for dead links.",
+            "Run console error check and network failure check on checkout.",
+        )
+
+        for message in visual_qa_requests:
+            with self.subTest(message=message):
+                self.assertFalse(is_file_or_text_lookup_question(message))
+
+    def test_plain_checkout_path_file_requests_remain_file_lookup(self) -> None:
+        message = "Please inspect the checkout path file."
+
+        self.assertTrue(is_file_or_text_lookup_question(message))
+
 
 if __name__ == "__main__":
     unittest.main()
