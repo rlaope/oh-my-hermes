@@ -12,6 +12,7 @@ load_local_package()
 from omh.routing import recommend as recommend_module
 from omh.routing import chat as chat_module
 from omh.routing.action_copy import next_action_label
+from omh.routing.visual_qa_cues import BROWSER_VISUAL_QA_PHRASES, CUSTOMER_SYMPTOM_REPORT_PHRASES
 from omh.capabilities.orchestration import orchestration_patterns
 from omh.wrapper.contract import VISIBLE_ACTIONS
 from omh.roles import role_definitions, role_file_markdown, roles_reference_markdown
@@ -25,7 +26,7 @@ from omh.skill_pack import (
     skill_exposure_payload,
 )
 from omh.playbooks import inspect_playbook, list_playbooks
-from omh.plugin_bundle.omh.awareness import ROUTER_KEYWORD_SKILLS, router_keyword_summary
+from omh.plugin_bundle.omh.awareness import ROUTER_KEYWORD_SKILLS, _ROUTE_HINT_RULES, router_keyword_summary
 from omh.quality.grounded_score import GROUNDED_SCENARIOS
 from omh.runtime.records import validate_harness_quality
 from omh.skills.catalog import (
@@ -802,6 +803,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("dual_oracle_visual_review/v1 when observed", definitions["visual-qa"].expected_outputs)
         self.assertIn("browser qa", definitions["visual-qa"].triggers)
         self.assertIn("click path", definitions["visual-qa"].triggers)
+        self.assertTrue(set(BROWSER_VISUAL_QA_PHRASES).issubset(set(definitions["visual-qa"].triggers)))
         self.assertIn("fresh rendered evidence", " ".join(definitions["visual-qa"].safety_rules))
         self.assertIn("sample only one good page", " ".join(definitions["visual-qa"].safety_rules))
         self.assertIn("settled frames", " ".join(definitions["visual-qa"].safety_rules))
@@ -856,6 +858,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("dual_oracle_visual_review/v1", templates["visual-qa"].content)
         self.assertIn("fresh rendered evidence", templates["visual-qa"].content)
         self.assertIn("Preferred harness for this skill: `visual-qa`", templates["visual-qa"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertTrue(set(BROWSER_VISUAL_QA_PHRASES).issubset(set(route_rules["visual_qa_gate"]["phrases"])))
+        self.assertTrue(set(CUSTOMER_SYMPTOM_REPORT_PHRASES).issubset(set(route_rules["customer_signal"]["phrases"])))
 
     def test_ecc_inspired_operator_skill_contracts_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

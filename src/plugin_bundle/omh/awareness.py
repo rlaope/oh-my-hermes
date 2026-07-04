@@ -61,18 +61,6 @@ _OMH_DIAGNOSTIC_EVALUATION_CUES = (
     "플랜으로 잡",
     "반복해서 강화",
 )
-_BROWSER_VISUAL_QA_HINT_PHRASES = (
-    "browser qa",
-    "browser interaction qa",
-    "click path",
-    "click-path audit",
-    "dead link check",
-    "console error check",
-    "network failure check",
-    "keyboard navigation check",
-    "screenshot qa",
-    "visual qa",
-)
 _RELEASE_CLAIM_REVIEW_HINT_PHRASES = (
     "claim",
     "claims",
@@ -83,24 +71,51 @@ _RELEASE_CLAIM_REVIEW_HINT_PHRASES = (
     "claim이",
     "주장",
 )
-_CUSTOMER_SYMPTOM_REPORT_HINT_PHRASES = (
-    "customers say",
-    "customers report",
-    "customer says",
-    "customer reports",
-    "customer feedback says",
-    "customer feedback reports",
-    "users say",
-    "users report",
-    "user says",
-    "user reports",
-    "고객이 말",
-    "고객이 제보",
-    "고객 제보",
-    "사용자가 말",
-    "사용자가 제보",
-    "사용자 제보",
-)
+
+try:
+    from ...routing.visual_qa_cues import (
+        BROWSER_VISUAL_QA_PHRASES as _BROWSER_VISUAL_QA_HINT_PHRASES,
+        CUSTOMER_SYMPTOM_REPORT_PHRASES as _CUSTOMER_SYMPTOM_REPORT_HINT_PHRASES,
+        contains_cue_phrase as _contains_route_cue_phrase,
+    )
+except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
+    _BROWSER_VISUAL_QA_HINT_PHRASES = (
+        "browser qa",
+        "browser interaction qa",
+        "click path",
+        "click-path audit",
+        "dead link check",
+        "console error check",
+        "network failure check",
+        "keyboard navigation check",
+        "screenshot qa",
+        "visual qa",
+    )
+    _CUSTOMER_SYMPTOM_REPORT_HINT_PHRASES = (
+        "customers say",
+        "customers report",
+        "customer says",
+        "customer reports",
+        "customer feedback says",
+        "customer feedback reports",
+        "users say",
+        "users report",
+        "user says",
+        "user reports",
+        "고객이 말",
+        "고객이 제보",
+        "고객 제보",
+        "사용자가 말",
+        "사용자가 제보",
+        "사용자 제보",
+    )
+
+    def _contains_route_cue_phrase(message: str, phrases: tuple[str, ...]) -> bool:
+        compact = "".join(character for character in message if character.isalnum())
+        return any(
+            phrase in message or "".join(character for character in phrase if character.isalnum()) in compact
+            for phrase in phrases
+        )
 
 try:  # Keep installed plugin bundles usable even when the full package is absent.
     from ...routing.intent import META_OR_FEEDBACK_INTENTS, classify_omh_quality_intent, classify_workflow_intent
@@ -1257,20 +1272,11 @@ _ROUTE_HINT_RULES = (
         "reason": "The user is asking for rendered visual QA, browser interaction QA, screenshots, pixel diff, viewport checks, CJK/text clipping, or broken-layout verification.",
         "fallback_action": "request_fresh_render_capture_after_last_edit",
         "phrases": (
-            "visual qa",
             "visual-qa",
-            "browser qa",
-            "browser interaction qa",
-            "screenshot qa",
+            *_BROWSER_VISUAL_QA_HINT_PHRASES,
             "pixel diff",
             "visual diff",
             "render qa",
-            "click path",
-            "click-path audit",
-            "dead link check",
-            "console error check",
-            "network failure check",
-            "keyboard navigation check",
             "viewport check",
             "text clipping",
             "cjk layout",
@@ -2465,20 +2471,9 @@ _ROUTE_HINT_RULES = (
             "bug report",
             "issue triage",
             "user feedback",
-            "customers say",
-            "customers report",
-            "customer says",
-            "customer reports",
-            "customer feedback says",
-            "customer feedback reports",
-            "users say",
-            "users report",
-            "user says",
-            "user reports",
+            *_CUSTOMER_SYMPTOM_REPORT_HINT_PHRASES,
             "결제 실패",
             "고객 피드백",
-            "고객 제보",
-            "사용자 제보",
             "버그",
             "이슈",
             "피드백",
@@ -3841,17 +3836,17 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
 
 
 def _browser_visual_qa_hint_suppresses_release_gate(text: str) -> bool:
-    has_browser_visual_qa = any(phrase in text for phrase in _BROWSER_VISUAL_QA_HINT_PHRASES)
+    has_browser_visual_qa = _contains_route_cue_phrase(text, _BROWSER_VISUAL_QA_HINT_PHRASES)
     if not has_browser_visual_qa:
         return False
     return not any(phrase in text for phrase in _RELEASE_CLAIM_REVIEW_HINT_PHRASES)
 
 
 def _customer_symptom_report_hint_suppresses_visual_qa(text: str) -> bool:
-    has_browser_visual_qa = any(phrase in text for phrase in _BROWSER_VISUAL_QA_HINT_PHRASES)
+    has_browser_visual_qa = _contains_route_cue_phrase(text, _BROWSER_VISUAL_QA_HINT_PHRASES)
     if not has_browser_visual_qa:
         return False
-    return any(phrase in text for phrase in _CUSTOMER_SYMPTOM_REPORT_HINT_PHRASES)
+    return _contains_route_cue_phrase(text, _CUSTOMER_SYMPTOM_REPORT_HINT_PHRASES)
 
 
 def _unique_strings(values: object) -> list[str]:

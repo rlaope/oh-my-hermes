@@ -6,6 +6,7 @@ from functools import lru_cache
 from .intent import classify_omh_quality_intent
 from .localization import normalized_phrase, routing_tokens
 from .missed_route import has_normalized_missed_omh_workflow_context
+from .visual_qa_cues import BROWSER_VISUAL_QA_PHRASES, CUSTOMER_SYMPTOM_REPORT_PHRASES
 
 
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
@@ -1038,36 +1039,6 @@ _FEEDBACK_TRIAGE_PHRASES = (
     "체크아웃이 깨",
     "체크아웃 실패",
     "로그인 후 크래시",
-)
-_BROWSER_VISUAL_QA_PHRASES = (
-    "browser qa",
-    "browser interaction qa",
-    "click path",
-    "click-path audit",
-    "dead link check",
-    "console error check",
-    "network failure check",
-    "keyboard navigation check",
-    "screenshot qa",
-    "visual qa",
-)
-_CUSTOMER_SYMPTOM_REPORT_PHRASES = (
-    "customers say",
-    "customers report",
-    "customer says",
-    "customer reports",
-    "customer feedback says",
-    "customer feedback reports",
-    "users say",
-    "users report",
-    "user says",
-    "user reports",
-    "고객이 말",
-    "고객이 제보",
-    "고객 제보",
-    "사용자가 말",
-    "사용자가 제보",
-    "사용자 제보",
 )
 _FEEDBACK_TRIAGE_SOURCE_TOKENS = _normalized_token_set(
     {
@@ -3695,9 +3666,9 @@ def _feedback_before_coding_guard_applies(
     *,
     direct_coding_task_applies: bool | None = None,
 ) -> bool:
-    if _contains_phrase(normalized_query, _BROWSER_VISUAL_QA_PHRASES) and not _contains_phrase(
+    if _contains_phrase(normalized_query, BROWSER_VISUAL_QA_PHRASES) and not _contains_phrase(
         normalized_query,
-        _CUSTOMER_SYMPTOM_REPORT_PHRASES,
+        CUSTOMER_SYMPTOM_REPORT_PHRASES,
     ):
         return False
     if _gateway_intent_guard_applies(normalized_query, query_tokens):
