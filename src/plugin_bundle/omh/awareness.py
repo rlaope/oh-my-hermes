@@ -504,6 +504,7 @@ ROUTER_KEYWORD_SKILLS = (
     "automation-blueprint",
     "harness-session-inventory",
     "agent-debug",
+    "failure-signal-audit",
     "instinct-ledger",
     "skill-scout",
     "skill-health",
@@ -545,6 +546,7 @@ LANE_CROSS_LANE_EXAMPLES = {
         "daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence",
         "long agent run -> context-budget-review -> must-keep pack -> checkpoint plan",
         "stuck agent run -> agent-debug -> failure capture, diagnosis, and contained recovery",
+        "hidden failure -> failure-signal-audit -> fallback and false-green review",
         "repeated project lessons -> instinct-ledger -> scoped candidates, confidence, and promotion review",
         "new skill idea -> skill-scout -> candidate inventory, risk review, and use/fork/create decision",
         "skill portfolio concern -> skill-health -> stale surfaces, signals, amendments, and actions",
@@ -621,14 +623,15 @@ WORKFLOW_CONTEXT_CARDS = (
     {
         "id": "automation_and_status",
         "label": "Automation and status",
-        "user_signal": "recurring digest, cron-like request, gateway command, health check, status confusion, workflow learning, or runtime question",
-        "omh_pattern": "prepare a schedule/status/repair/learning card, name required tools or evidence, then keep observed runtime state separate",
+        "user_signal": "recurring digest, cron-like request, gateway command, health check, status confusion, failure audit, workflow learning, or runtime question",
+        "omh_pattern": "prepare a schedule/status/repair/audit/learning card, name required tools or evidence, then keep observed runtime state separate",
         "representative_workflows": (
             "workspace-audit",
             "production-audit",
             "automation-blueprint",
             "agent-ops-review",
             "agent-debug",
+            "failure-signal-audit",
             "instinct-ledger",
             "agent-evaluation",
             "rules-distill",
@@ -643,8 +646,8 @@ WORKFLOW_CONTEXT_CARDS = (
             "Every morning send a digest if something changed",
             "Why did this route to plan? Make it a regression.",
         ),
-        "first_response_shape": "Show the prepared status, schedule, or learning shape, name the missing evidence, and expose refresh, repair, or review actions.",
-        "not_evidence_until_observed": ("schedule creation", "connector I/O", "runtime load", "skill patch approval"),
+        "first_response_shape": "Show the prepared status, schedule, audit, or learning shape, name the missing evidence, and expose refresh, repair, review, or remediation-route actions.",
+        "not_evidence_until_observed": ("schedule creation", "connector I/O", "runtime load", "audit remediation"),
     },
     {
         "id": "coding_handoff",
@@ -695,6 +698,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "agent-board": "automation_and_status",
     "agent-ops-review": "automation_and_status",
     "agent-debug": "automation_and_status",
+    "failure-signal-audit": "automation_and_status",
     "instinct-ledger": "automation_and_status",
     "doctor": "automation_and_status",
     "gateway-intent-card": "automation_and_status",
@@ -1619,6 +1623,55 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": (),
         "adjacent_workflows": ("agent-ops-review", "doctor", "workflow-learning", "context-budget-review"),
+    },
+    {
+        "id": "failure_signal_audit",
+        "workflow": "failure-signal-audit",
+        "lane": "automation_and_status",
+        "next_action": "prepare_failure_signal_audit",
+        "reason": "The user is asking to audit swallowed errors, unsafe fallbacks, hidden frontend/runtime failures, propagation gaps, or false-green status claims.",
+        "fallback_action": "prepare_failure_signal_scope_or_route_to_visual_qa_reliability_review_or_code_review",
+        "not_evidence_yet": (
+            "remediation",
+            "runtime repair",
+            "console/network pass",
+            "verification",
+            "CI/merge",
+        ),
+        "phrases": (
+            "failure-signal-audit",
+            "failure signal audit",
+            "silent failure",
+            "silent failures",
+            "silent failure hunter",
+            "swallowed error",
+            "swallowed errors",
+            "empty catch",
+            "ignored exception",
+            "hidden failure",
+            "hidden failures",
+            "dangerous fallback",
+            "bad fallback",
+            "fallback hides errors",
+            "missing error propagation",
+            "error propagation",
+            "console errors ignored",
+            "network failures ignored",
+            "false green",
+            "false pass",
+            "무음 실패",
+            "조용한 실패",
+            "숨은 실패",
+            "삼킨 에러",
+            "에러 삼킴",
+            "위험한 fallback",
+            "위험한 폴백",
+            "폴백이 에러 숨김",
+            "실패 신호 감사",
+            "실패 신호",
+        ),
+        "tokens": ("silent", "fallback", "swallowed", "propagation", "false-green"),
+        "adjacent_workflows": ("agent-debug", "visual-qa", "reliability-review", "code-review", "workflow-learning"),
     },
     {
         "id": "instinct_ledger_review",
@@ -3179,16 +3232,20 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
     if normalized.strip() and hint_limit:
         if omh_quality_intent.applies and not diagnostic_learning_first:
             hints.append(_omh_quality_improvement_hint(omh_quality_intent))
-        if len(hints) < hint_limit and (
-            diagnostic_learning_first
-            or (_prefers_workflow_learning_hint(intent) and not omh_quality_intent.applies)
-        ):
-            hints.append(_workflow_vocabulary_reference_hint(intent))
         direct_hint = _direct_workflow_invocation_hint(intent, routing_normalized, message)
         if len(hints) < hint_limit and direct_hint and not any(
             isinstance(hint, dict) and hint.get("workflow") == direct_hint.get("workflow") for hint in hints
         ):
             hints.append(direct_hint)
+        if len(hints) < hint_limit and (
+            diagnostic_learning_first
+            or (_prefers_workflow_learning_hint(intent) and not omh_quality_intent.applies)
+        ):
+            reference_hint = _workflow_vocabulary_reference_hint(intent)
+            if not any(
+                isinstance(hint, dict) and hint.get("workflow") == reference_hint.get("workflow") for hint in hints
+            ):
+                hints.append(reference_hint)
         for rule in _ROUTE_HINT_RULES:
             if len(hints) >= hint_limit:
                 break
@@ -3224,7 +3281,7 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
                     "matched_cues": _bounded_matches(phrase_matches + token_matches),
                     "adjacent_workflows": list(rule["adjacent_workflows"]),
                     "workflow_context_card": context_card,
-                    "not_evidence_yet": list(context_card.get("not_evidence_until_observed", []))
+                    "not_evidence_yet": _workflow_not_evidence_yet(workflow, context_card, rule)
                     if isinstance(context_card, dict)
                     else [],
                 }
@@ -3409,6 +3466,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "ops-observability-card",
                 "agent-ops-review",
                 "agent-debug",
+                "failure-signal-audit",
                 "instinct-ledger",
                 "agent-evaluation",
                 "rules-distill",
@@ -3422,7 +3480,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "ask",
                 "cancel",
             ],
-            "use_for": "schedules, status, health, and release/ops review",
+            "use_for": "schedules, status, health, and ops review",
         },
         {
             "id": "coding_handoff",
@@ -3667,7 +3725,7 @@ def _compact_workflow_cue_line() -> str:
         "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
         "premium visuals -> design-quality-gate; frontend -> frontend; screenshots/render checks -> visual-qa; files/decks/PDF/sheets/docs/HWP -> materials/report-package; image cards -> img-summary; "
         "code/CI/merge -> ultraprocess/code-review/verification-gate; "
-        "agent failure/loop/drift -> agent-debug; repeated lessons -> instinct-ledger; trace/improve/regression -> workflow-learning"
+        "agent failure/drift -> agent-debug; hidden failures -> failure-signal-audit; lessons -> instinct-ledger; regression -> workflow-learning"
     )
 
 
@@ -3676,7 +3734,7 @@ def _compact_workflow_context_cards_line() -> str:
         "intent -> deep-interview/ralplan/codebase-onboarding/codegraph-refresh/loop; "
         "signals -> web-research/research-department/feedback-triage; "
         "materials -> design-quality-gate/frontend/visual-qa/materials-package; "
-        "ops -> automation/workspace/production/context-budget/agent-debug/instinct-ledger/skill-health/workflow-learning/doctor; "
+        "ops -> automation/workspace/production/context-budget/agent-debug/failure-signal-audit/instinct-ledger/skill-health/learning/doctor; "
         "eval/rules -> agent-evaluation/rules-distill; "
         "code -> ultraprocess/code-review/verification-gate/security-safety-review/team/ultraqa"
     )
@@ -3700,6 +3758,7 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "workflow-learning": "audit_learning_readiness",
     "harness-session-inventory": "prepare_harness_session_inventory",
     "agent-debug": "prepare_agent_debug",
+    "failure-signal-audit": "prepare_failure_signal_audit",
     "instinct-ledger": "prepare_instinct_ledger",
     "frontend": "prepare_frontend_handoff",
     "visual-qa": "prepare_visual_qa",
@@ -3758,13 +3817,14 @@ def _coding_delivery_route_hint_next_action(message: str, default_action: str) -
 
 def _direct_workflow_invocation_hint(intent: object, routing_normalized: str, message: str) -> dict[str, object]:
     mentioned = [str(item) for item in getattr(intent, "mentioned_workflows", ()) if str(item)]
-    if not mentioned:
+    direct_prefix_workflow = _direct_workflow_prefix(routing_normalized)
+    if not mentioned and not direct_prefix_workflow:
         return {}
     structural = {str(item) for item in getattr(intent, "structural_cues", ())}
     direct_omh_form = routing_normalized.strip().startswith(("use omh ", "use oh-my-hermes ", "use oh-my-hermes-agent "))
-    if "workflow_marker" not in structural and not direct_omh_form:
+    if not direct_prefix_workflow and "workflow_marker" not in structural and not direct_omh_form:
         return {}
-    workflow = mentioned[0]
+    workflow = direct_prefix_workflow or mentioned[0]
     context_card = workflow_context_card_for_workflow(workflow)
     lane = str(context_card.get("id") or _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW.get(workflow.casefold(), "intent_to_plan"))
     next_action = _DIRECT_WORKFLOW_NEXT_ACTIONS.get(workflow, "route_to_downstream_workflow")
@@ -3780,10 +3840,36 @@ def _direct_workflow_invocation_hint(intent: object, routing_normalized: str, me
         "matched_cues": ["direct workflow invocation"],
         "adjacent_workflows": [],
         "workflow_context_card": context_card,
-        "not_evidence_yet": list(context_card.get("not_evidence_until_observed", []))
+        "not_evidence_yet": _workflow_not_evidence_yet(workflow, context_card)
         if isinstance(context_card, dict)
         else [],
     }
+
+
+def _workflow_not_evidence_yet(
+    workflow: str,
+    context_card: dict[str, object],
+    rule: dict[str, object] | None = None,
+) -> list[str]:
+    if isinstance(rule, dict) and "not_evidence_yet" in rule:
+        return [str(item) for item in rule["not_evidence_yet"]]
+    for candidate in _ROUTE_HINT_RULES:
+        if candidate.get("workflow") == workflow and "not_evidence_yet" in candidate:
+            return [str(item) for item in candidate["not_evidence_yet"]]
+    return [str(item) for item in context_card.get("not_evidence_until_observed", [])]
+
+
+def _direct_workflow_prefix(routing_normalized: str) -> str:
+    normalized = routing_normalized.strip()
+    for workflow in _DIRECT_WORKFLOW_NEXT_ACTIONS:
+        aliases = (workflow, workflow.replace("-", " "))
+        if any(_starts_with_direct_workflow_alias(normalized, alias) for alias in aliases):
+            return workflow
+    return ""
+
+
+def _starts_with_direct_workflow_alias(normalized: str, alias: str) -> bool:
+    return re.match(rf"^(?:use\s+(?:omh\s+)?|run\s+)?{re.escape(alias)}(?:\b|$)", normalized) is not None
 
 
 def _bounded_matches(matches: list[str]) -> list[str]:

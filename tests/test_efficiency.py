@@ -233,6 +233,8 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(workflow_context_card_for_workflow("production-audit")["id"], "automation_and_status")
         self.assertEqual(workflow_context_card_for_workflow("agent-evaluation")["id"], "automation_and_status")
         self.assertEqual(workflow_context_card_for_workflow("rules-distill")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("failure-signal-audit")["id"], "automation_and_status")
+        self.assertIn("audit", workflow_context_card_for_workflow("failure-signal-audit")["first_response_shape"])
         self.assertEqual(workflow_context_card_for_workflow("instinct-ledger")["id"], "automation_and_status")
         self.assertEqual(workflow_context_card_for_workflow("verification-gate")["id"], "coding_handoff")
         self.assertEqual(workflow_context_card_for_workflow("code-review")["id"], "coding_handoff")

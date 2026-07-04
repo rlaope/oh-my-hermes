@@ -1,22 +1,22 @@
 ---
-name: workflow-learning
-description: [omh] Hermes workflow learning workflow: classify and review self-improvement store routes as an auxiliary review lane before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.
+name: failure-signal-audit
+description: [omh] Failure Signal Audit workflow: find swallowed errors, unsafe fallbacks, hidden UI/runtime failures, and missing propagation before they become false green status.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, optimization]
-    category: optimization
-    phase: workflow-learning
-    role: tracker
+    tags: [workflow, oh-my-hermes, review]
+    category: review
+    phase: failure-signal-audit
+    role: reviewer
     quality_tier: workflow-surface-gated
 ---
 
-# Workflow Learning
+# Failure Signal Audit
 
-This is a Hermes-native `workflow-learning` workflow skill.
+This is a Hermes-native `failure-signal-audit` workflow skill.
 
 ## Why This Exists
 
-`workflow-learning` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`failure-signal-audit` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,26 +28,28 @@ This is a Hermes-native `workflow-learning` workflow skill.
 
 Good example:
 
-- Prompt: workflow-learning route this self-improvement note before deciding whether it is memory, skill, wiki, failure-retrospective, or automation material.
-- Expected behavior: Produce `record_workflow_learning_trace` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: failure-signal-audit check this frontend and agent trace for swallowed errors, false green status, and dangerous fallbacks.
+- Expected behavior: Produce `prepare_failure_signal_audit` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: workflow-learning silently patch the skill and claim future behavior is fixed.
+- Prompt: failure-signal-audit silently patch every catch block and claim the system is reliable now.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Audit scope, source surfaces, and evidence types are named.
+- Swallowed errors, dangerous fallbacks, propagation gaps, and false-green claims are reported as separate finding types.
+- Each finding names location or evidence ref, severity, user/operator impact, and a smallest safe remediation route.
+- No remediation, runtime repair, verification, CI, merge, or future reliability claim is made without observed follow-up evidence.
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If no code/trace/runtime evidence is supplied, prepare the audit plan and request the smallest source surface to inspect.
+- If the user wants live service SLO or incident review, route to reliability-review.
+- If the user wants rendered browser proof, route frontend visual evidence to visual-qa before PASS.
 
 ## OMH Context Rail
 
@@ -63,15 +65,15 @@ Bad example:
 
 ## Use When
 
-Use after a Hermes/OMH workflow attempt should become inspectable, evaluable, routed to memory/skill/wiki/failure-retrospective/automation review, persisted as a metadata-only store-route decision, queued for review, audited, replayable as a regression, converted to a patch handoff, exported, repaired after index drift, or captured as a missed-route signal without raw prompts. Store-route records are an auxiliary review lane surfaced by `learning review` and `learning store-routes`; they are not canonical learning index/export records until a reviewed destination produces its own artifact.
+Use when Hermes should audit code, frontend/browser behavior, agent traces, or runtime reports for failures that were swallowed, downgraded, hidden by fallbacks, or reported as green without enough evidence.
 
-    Strong routing signals: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `store route review`, `memory skill wiki routing`, `learning trace`, `learning audit`, `self improvement store routing`, `store routing`, `where should this learning go`, `audit learning`, `learning review`, `review queue`, `review-route`, `store-routes`, `learning readiness`, `learning export`, `export bundle`, `learning index`, `index rebuild`, `execution trace`, `skill improvement`, `improvement candidate`, `regression corpus`, `GEPA`, `VPRM`, `process supervision`, `why did this route`, `missed route`, `missed workflow`, `did not use OMH`, `OMH was not used`, `learn from this run`, `이번 실행 학습`, `스킬 개선`, `회귀 케이스`, `실행 기록`, `학습 기록`, `학습 점검`, `학습 준비 상태`, `학습 내보내기`, `OMH 안 썼어`, `워크플로 누락`, `라우팅 누락`
+    Strong routing signals: `failure-signal-audit`, `failure signal audit`, `silent failure`, `silent failures`, `silent failure hunter`, `swallowed error`, `swallowed errors`, `empty catch`, `ignored exception`, `hidden failure`, `hidden failures`, `dangerous fallback`, `bad fallback`, `fallback hides errors`, `missing error propagation`, `error propagation`, `console errors ignored`, `network failures ignored`, `false green`, `false pass`, `무음 실패`, `조용한 실패`, `숨은 실패`, `삼킨 에러`, `에러 삼킴`, `위험한 fallback`, `위험한 폴백`, `폴백이 에러 숨김`, `실패 신호 감사`, `실패 신호`
 
 ## Catalog Metadata
 
-Category: `optimization`
-Phase: `workflow-learning`
-Hermes role: `tracker`
+Category: `review`
+Phase: `failure-signal-audit`
+Hermes role: `reviewer`
 Quality tier: `workflow-surface-gated`
 
 Quality bar:
@@ -93,17 +95,25 @@ Required inputs:
 
 Expected outputs:
 
-- workflow-learning/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
+- failure_signal_audit_plan/v1
+- silent_failure_finding/v1 when observed
+- fallback_risk_matrix/v1
+- propagation_gap_map/v1
+- false_green_status_review/v1
+- remediation_handoff/v1 when needed
 
 Artifact expectations:
 
-- workflow-learning/v1 metadata-only runtime or wrapper card when recorded
+- failure_signal_audit_plan/v1 with source boundary, surfaces, evidence types, and stop condition
+- silent_failure_finding/v1 only from observed code, trace, console, network, test, or runtime evidence
+- fallback_risk_matrix/v1 separating safe fallback, user-visible degraded mode, masked failure, and destructive fallback
+- propagation_gap_map/v1 for missing context, lost stack, ignored async rejection, empty catch, null/empty default, or log-only handling
+- false_green_status_review/v1 comparing PASS/green claims against observed checks and missing signals
+- remediation_handoff/v1 only after findings are accepted and the selected owner is explicit
 
 Safety rules:
 
-- A workflow learning trace, self-improvement store route, patch proposal, or export is process evidence for review. It is not automatic model training, memory mutation, skill mutation, wiki write, automation creation, execution, verification, CI, or merge evidence.
+- A failure signal audit is not remediation, code modification, runtime repair, console/network pass, incident closure, verification, review, CI, merge-readiness, merge, or proof that hidden failures no longer exist.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -114,12 +124,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `workflow-learning`.
+Preferred harness for this skill: `failure-signal-audit`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill workflow-learning --harness workflow-learning --status started
+omh runtime record --skill failure-signal-audit --harness failure-signal-audit --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

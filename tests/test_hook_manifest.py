@@ -104,6 +104,18 @@ class HookManifestTests(unittest.TestCase):
         self.assertEqual(suppressed["status"], "no_hint")
         self.assertEqual(suppressed["hints"], [])
 
+    def test_awareness_route_hint_prioritizes_explicit_failure_signal_audit(self) -> None:
+        message = "failure-signal-audit check this frontend and agent trace for swallowed errors, false green status, and dangerous fallbacks."
+
+        payload = awareness_route_hint(message)
+
+        self.assertEqual(payload["status"], "hinted")
+        self.assertEqual(payload["primary_workflow"], "failure-signal-audit")
+        self.assertEqual(payload["primary_next_action"], "prepare_failure_signal_audit")
+        self.assertEqual(payload["hints"][0]["id"], "direct_workflow_invocation")
+        self.assertIn("remediation", payload["hints"][0]["not_evidence_yet"])
+        self.assertNotEqual(payload["primary_workflow"], "frontend")
+
     def test_awareness_route_hint_uses_missed_route_primary_action(self) -> None:
         message = "missed route: Hermes skipped OMH for my image request with secret-token-123"
 
