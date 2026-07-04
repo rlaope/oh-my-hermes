@@ -8,7 +8,7 @@ The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery 
 - `guide`: `oh-my-hermes`, `gateway-intent-card`, `voice-operator`
 - `handoff-guide`: `ralph`, `ultragoal`, `ultraprocess`, `team`, `ultrawork`, `ai-slop-cleaner`, `executor-runtime-readiness`
 - `memory-keeper`: `rules-distill`, `wiki`, `memory-curation-review`
-- `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`, `skill-scout`, `skill-health`
+- `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`, `agent-debug`, `skill-scout`, `skill-health`
 - `planner`: `loop`, `deep-interview`, `codebase-onboarding`, `codegraph-refresh`, `plan`, `ralplan`
 - `researcher`: `web-research`, `source-finder`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `production-audit`, `verification-gate`, `security-safety-review`, `ultraqa`, `code-review`, `ask`
@@ -81,6 +81,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `ops-observability-card`: `ops-observability-card`, `observability card`, `operations command board`, `ops command board`, `service quality board`, `service quality`, `external metric provider`
 - `achievements`: `achievements`, `achievement`, `badges`, `badge`, `my badges`, `show achievements`, `achievement summary`
 - `agent-ops-review`: `agent-ops-review`, `agent ops review`, `agent productivity`, `operator productivity`, `manager view`, `quality dashboard`, `throughput review`
+- `agent-debug`: `agent-debug`, `agent debug`, `agent debugging`, `agent introspection`, `agent self-debug`, `self-debug`, `self debugging`
 - `skill-scout`: `skill-scout`, `skill scout`, `skill candidate`, `skill candidate search`, `skill discovery`, `find a skill`, `find skills`
 - `skill-health`: `skill-health`, `skill health`, `skill portfolio health`, `skill dashboard`, `skill health dashboard`, `skill failure pattern dashboard`, `skill failure patterns`
 - `workflow-learning`: `workflow-learning`, `workflow learning`, `route-signal`, `self-improvement store routing`, `store route review`, `memory skill wiki routing`, `learning trace`

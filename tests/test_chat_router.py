@@ -2826,6 +2826,7 @@ selected_workflow=ultraprocess
             ("does OMH support voice commands?", "voice-operator"),
             ("does OMH support skill candidate scouting?", "skill-scout"),
             ("does OMH support skill health dashboards?", "skill-health"),
+            ("does OMH support agent run debugging?", "agent-debug"),
             ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops"),
         )
 
@@ -2900,6 +2901,37 @@ selected_workflow=ultraprocess
         self.assertEqual(setup_health["selected_skill"], "doctor")
         self.assertEqual(learning["selected_skill"], "workflow-learning")
         self.assertEqual(skill_management["selected_skill"], "skill")
+
+    def test_agent_debug_routes_without_stealing_status_setup_or_learning(self) -> None:
+        debug_cases = (
+            "agent-debug capture why this agent is looping on the same tool",
+            "agent run stuck repeating the same command and burning tokens",
+            "tool retry loop with context drift in this agent run",
+            "에이전트 반복 실패 디버그해줘",
+        )
+
+        for message in debug_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["selected_skill"], "agent-debug")
+                self.assertEqual(decision["selected_harness"], "agent-debug")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_agent_debug")
+                if "agent-debug" not in message:
+                    self.assertIn("guard:agent_debug", decision["recommendations"][0]["matched"])
+
+        setup_health = route_chat_message("setup 잘 됐어?", source="discord")
+        ops_status = route_chat_message("what are you working on?", source="discord")
+        learning = route_chat_message("workflow trace 보고 다음에 스킬 고칠점 알려줘", source="discord")
+        context_budget = route_chat_message(
+            "long-running task is burning tokens; review context budget",
+            source="discord",
+        )
+
+        self.assertEqual(setup_health["selected_skill"], "doctor")
+        self.assertEqual(ops_status["selected_skill"], "agent-ops-review")
+        self.assertEqual(learning["selected_skill"], "workflow-learning")
+        self.assertEqual(context_budget["selected_skill"], "context-budget-review")
 
     def test_file_lookup_does_not_dispatch_to_workflow_keyword(self) -> None:
         for message in (

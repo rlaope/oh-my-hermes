@@ -13,6 +13,7 @@ WORKFLOW_VOCABULARY = (
     "ultragoal",
     "loop",
     "ultraprocess",
+    "agent-debug",
     "skill-scout",
     "skill-health",
     "workflow-learning",

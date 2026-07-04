@@ -3844,6 +3844,65 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence. If Hermes is the coding owner, summarize `hermes_coding_harness/v1` stage, lane owner, next action, and missing evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### agent-debug
+
+[omh] Agent Debug workflow: capture a stuck, looping, drifting, or repeatedly failing agent run, diagnose the likely failure pattern, and prepare the smallest safe recovery action.
+
+- Category: `operations`
+- Phase: `agent-debug`
+- Hermes role: `operator`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when an agent run is stuck, looping, drifting, or failing repeatedly and needs evidence-bounded diagnosis plus contained recovery guidance.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `agent-debug` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when an agent run is stuck, looping on tools, burning tokens without progress, drifting from the objective, losing context, or failing on recoverable environment/tool assumptions.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `agent-debug`, `agent debug`, `agent debugging`, `agent introspection`, `agent self-debug`, `self-debug`, `self debugging`, `looping agent`, `agent loop failure`, `agent run stuck`, `agent failure capture`, `tool retry loop`, `repeated tool calls`, `context drift`, `prompt drift`, `token burn`, `에이전트 디버그`, `에이전트 실패`, `에이전트 반복 실패`, `반복 실패`, `도구 반복`, `컨텍스트 드리프트`, `토큰 낭비`
+- Good example:
+  - Prompt: agent-debug capture why this agent is looping on the same tool and prepare the smallest safe recovery action.
+  - Expected behavior: Produce `prepare_agent_debug` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: agent-debug silently reset the executor, patch the environment, and claim the future loop is fixed.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Failure state, intended goal, recent tool sequence, and context pressure are captured.
+  - Diagnosis distinguishes repeated command/tool loops, context drift, environment mismatch, service errors, and wrong-hypothesis tests.
+  - Recovery action is contained, reversible, and does not claim implementation, verification, CI, merge, or future-loop fixes.
+- Recovery notes:
+  - If the request is install/setup health, route to doctor.
+  - If the request is a manager status or throughput review, route to agent-ops-review.
+  - If the request is a durable self-improvement record after diagnosis, route to workflow-learning.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - agent_debug_report/v1
+  - agent_failure_capture/v1
+  - agent_failure_pattern_hypothesis/v1
+  - contained_recovery_action/v1
+- Artifact expectations:
+  - agent_debug_report/v1 with failure pattern, recent tool sequence, goal/context pressure, environment assumptions, recovery action, and evidence status
+  - agent_failure_capture/v1 separating observed errors and tool loops from inferred root-cause hypotheses
+  - contained_recovery_action/v1 with the smallest safe next action and explicit escalation boundary
+- Safety rules:
+  - An agent debug report is not executor reset, hidden state mutation, tool repair, implementation, verification, CI, merge-readiness, merge, or proof that future loops are fixed. Record only observed failure evidence, diagnosis hypotheses, contained recovery actions, and remaining blockers.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### skill-scout
 
 [omh] Skill Scout workflow: prepare a metadata-only search-before-creation report for local, marketplace, GitHub, and web skill candidates with risk review and adoption options.
@@ -6810,6 +6869,59 @@ Prepare a manager-facing quality and throughput review for AI-agent research, co
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - An agent ops review card is not source retrieval, executor dispatch, implementation, verification, review, CI, merge, delivery, provider billing, or live telemetry evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### agent-debug
+
+Prepare an evidence-bounded debugging report for a stuck, looping, drifting, or repeatedly failing agent run.
+
+- Use when: Use when an operator needs to capture the failure state, diagnose the likely failure pattern, and choose the smallest safe recovery action without pretending to reset or repair the executor.
+- Quality tier: `agent-debug-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - agent run objective
+  - recent error or failure symptom
+  - recent tool or command sequence
+  - context pressure or drift signals
+  - environment assumptions such as cwd, branch, process, service, or credential state
+- Outputs:
+  - agent_debug_report/v1
+  - agent_failure_capture/v1
+  - agent_failure_pattern_hypothesis/v1
+  - contained_recovery_action/v1
+  - remaining blocker or escalation boundary
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `failure_state_captured`
+  - `tool_sequence_recorded_when_available`
+  - `context_pressure_checked`
+  - `environment_assumptions_checked`
+  - `failure_pattern_hypothesized`
+  - `contained_recovery_action_selected`
+  - `post_recovery_evidence_recorded_when_observed`
+- Wrapper actions:
+  - `prepare_agent_debug`
+  - `show_agent_debug_report`
+  - `record_agent_failure_capture`
+  - `record_agent_recovery_action`
+  - `escalate_agent_debug`
+- Artifact events:
+  - `agent-debug_scoped`
+  - `agent-debug_card_prepared`
+  - `agent-debug_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - An agent debug report is not executor reset, hidden state mutation, tool repair, implementation, verification, review, CI, merge, or proof that future loops are fixed.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### skill-scout

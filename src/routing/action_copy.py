@@ -21,6 +21,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "gather_source_backed_evidence": "gathering source-backed evidence",
     "open_picker_or_clarify": "opening the picker or asking one clarification",
     "prepare_agent_board_card": "preparing an agent board card",
+    "prepare_agent_debug": "preparing an agent debug report",
     "prepare_agent_evaluation": "preparing an agent evaluation",
     "prepare_agent_ops_review": "preparing an agent-ops review",
     "prepare_behavior_lock_and_refactor_scope": "preparing behavior locks and refactor scope",

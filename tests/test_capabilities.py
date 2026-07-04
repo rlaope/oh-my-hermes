@@ -94,6 +94,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("production-audit", families["operate_and_observe"]["primary_workflows"])
         self.assertIn("agent-evaluation", families["operate_and_observe"]["primary_workflows"])
         self.assertIn("rules-distill", families["operate_and_observe"]["primary_workflows"])
+        self.assertIn("agent-debug", families["operate_and_observe"]["primary_workflows"])
         self.assertIn("skill-scout", families["operate_and_observe"]["primary_workflows"])
         self.assertIn("skill-health", families["operate_and_observe"]["primary_workflows"])
         self.assertEqual(projection["workflow_to_family"]["img-summary"], "create_materials_and_visuals")
@@ -107,11 +108,13 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(projection["workflow_to_family"]["production-audit"], "operate_and_observe")
         self.assertEqual(projection["workflow_to_family"]["agent-evaluation"], "operate_and_observe")
         self.assertEqual(projection["workflow_to_family"]["rules-distill"], "operate_and_observe")
+        self.assertEqual(projection["workflow_to_family"]["agent-debug"], "operate_and_observe")
         self.assertEqual(projection["workflow_to_family"]["skill-scout"], "operate_and_observe")
         self.assertEqual(projection["workflow_to_family"]["skill-health"], "operate_and_observe")
         self.assertEqual(family_for_workflow("wiki")["id"], "retain_knowledge")
         self.assertEqual(family_for_workflow("code-review")["id"], "delegate_coding_and_ship")
         self.assertEqual(family_for_workflow("workflow-learning")["id"], "operate_and_observe")
+        self.assertEqual(family_for_workflow("agent-debug")["id"], "operate_and_observe")
         self.assertEqual(family_for_workflow("skill-scout")["id"], "operate_and_observe")
         self.assertEqual(family_for_workflow("skill-health")["id"], "operate_and_observe")
         self.assertEqual(family_for_workflow("workspace-audit")["id"], "operate_and_observe")
@@ -187,6 +190,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("research-department", lanes["research_and_ops"]["primary_skills"])
         self.assertIn("workspace-audit", lanes["automation_and_status"]["primary_skills"])
         self.assertIn("agent-evaluation", lanes["automation_and_status"]["primary_skills"])
+        self.assertIn("agent-debug", lanes["automation_and_status"]["primary_skills"])
         self.assertIn("skill-scout", lanes["automation_and_status"]["primary_skills"])
         self.assertIn("skill-health", lanes["automation_and_status"]["primary_skills"])
         self.assertIn("verification-gate", lanes["coding_handoff"]["primary_skills"])
@@ -204,6 +208,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("revise/copy/generate/record", context_cards["materials_and_visuals"]["first_response_shape"])
         self.assertIn("workspace-audit", context_cards["automation_and_status"]["representative_workflows"])
         self.assertIn("rules-distill", context_cards["automation_and_status"]["representative_workflows"])
+        self.assertIn("agent-debug", context_cards["automation_and_status"]["representative_workflows"])
         self.assertIn("skill-scout", context_cards["automation_and_status"]["representative_workflows"])
         self.assertIn("skill-health", context_cards["automation_and_status"]["representative_workflows"])
         self.assertIn("implementation", context_cards["coding_handoff"]["not_evidence_until_observed"])
@@ -213,6 +218,7 @@ class CapabilityManifestTests(unittest.TestCase):
         wiki_skill = inspect_capability("wiki", section="skills")["capability"]
         ops_surface = inspect_capability("ops-observability-card", section="skills")["capability"]
         codegraph_skill = inspect_capability("codegraph-refresh", section="skills")["capability"]
+        agent_debug_skill = inspect_capability("agent-debug", section="skills")["capability"]
         awareness = inspect_capability("omh_awareness", section="omh_awareness")["capability"]
         role = inspect_capability("handoff-guide", section="agent_roles")["capability"]
         playbook = inspect_capability("request-to-handoff", section="playbooks")["capability"]
@@ -243,6 +249,9 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertIn("preferred_usage", ops_surface)
         self.assertIn("secret values", " ".join(codegraph_skill["safety_rules"]))
         self.assertIn("codebase-onboarding", " ".join(codegraph_skill["quality_bar"]))
+        self.assertTrue(codegraph_skill["artifact_expectations"])
+        self.assertIn("codegraph", " ".join(codegraph_skill["artifact_expectations"]))
+        self.assertIn("agent_debug_report/v1", agent_debug_skill["artifact_expectations"])
         self.assertEqual(role["runtime_claim"], "descriptor_not_runtime_agent")
         self.assertIn("OMH workflow-layer responsibility context", role["workflow_context_rule"])
         self.assertIn("Normal users talk to Hermes", role["chat_rule"])

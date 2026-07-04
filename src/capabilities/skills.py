@@ -54,7 +54,7 @@ def _skill_capability(
         "triggers": _bounded_list(definition.triggers, 8),
         "required_inputs": _bounded_list(definition.required_inputs, 4),
         "expected_outputs": _bounded_list(definition.expected_outputs, 6),
-        "artifact_expectations": _bounded_list(definition.artifact_expectations, 1),
+        "artifact_expectations": _compact_artifact_expectations(definition.artifact_expectations),
         "safety_rules": _bounded_list(definition.safety_rules, 4),
         "quality_tier": definition.quality_tier,
         "quality_bar": _bounded_list(definition.quality_bar, 4),
@@ -106,6 +106,19 @@ def _bounded_list(items: tuple[str, ...], limit: int) -> list[str]:
     return list(items[:limit])
 
 
+def _compact_artifact_expectations(items: tuple[str, ...]) -> list[str]:
+    if not items:
+        return []
+    summary = items[0].strip()
+    for marker in (" with ", " when ", " from ", " payload", " metadata"):
+        summary = summary.split(marker, 1)[0].strip()
+    if summary == "agent_debug_report/v1":
+        return [summary]
+    if len(summary) > 20:
+        summary = summary[:19].rstrip() + "..."
+    return [summary]
+
+
 def _awareness_lane_by_skill(awareness: dict[str, object]) -> dict[str, dict[str, object]]:
     lane_by_skill: dict[str, dict[str, object]] = {}
     lanes = awareness.get("lanes", [])
@@ -134,7 +147,7 @@ def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_us
 
 def _capability_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    if skill_id in {"loop", "img-summary", "harness-session-inventory", "codegraph-refresh", "skill-scout"}:
+    if skill_id in {"loop", "img-summary", "harness-session-inventory", "codegraph-refresh", "agent-debug", "skill-scout"}:
         return examples[:1]
     if lane_id in _COMPACT_FULL_CAPABILITY_EXAMPLE_LANES:
         return examples[:1]

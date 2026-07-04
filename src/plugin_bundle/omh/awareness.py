@@ -503,6 +503,7 @@ ROUTER_KEYWORD_SKILLS = (
     "visual-qa",
     "automation-blueprint",
     "harness-session-inventory",
+    "agent-debug",
     "skill-scout",
     "skill-health",
     "workflow-learning",
@@ -542,6 +543,7 @@ LANE_CROSS_LANE_EXAMPLES = {
     "automation_and_status": [
         "daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence",
         "long agent run -> context-budget-review -> must-keep pack -> checkpoint plan",
+        "stuck agent run -> agent-debug -> failure capture, diagnosis, and contained recovery",
         "new skill idea -> skill-scout -> candidate inventory, risk review, and use/fork/create decision",
         "skill portfolio concern -> skill-health -> stale surfaces, signals, amendments, and actions",
         "workflow attempt -> workflow-learning -> eval -> improvement candidate or regression case",
@@ -624,6 +626,7 @@ WORKFLOW_CONTEXT_CARDS = (
             "production-audit",
             "automation-blueprint",
             "agent-ops-review",
+            "agent-debug",
             "agent-evaluation",
             "rules-distill",
             "skill-scout",
@@ -688,6 +691,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "agent-evaluation": "automation_and_status",
     "agent-board": "automation_and_status",
     "agent-ops-review": "automation_and_status",
+    "agent-debug": "automation_and_status",
     "doctor": "automation_and_status",
     "gateway-intent-card": "automation_and_status",
     "memory-curation-review": "automation_and_status",
@@ -1575,6 +1579,42 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": (),
         "adjacent_workflows": ("skill", "skill-health", "workflow-learning", "source-finder"),
+    },
+    {
+        "id": "agent_debug_recovery",
+        "workflow": "agent-debug",
+        "lane": "automation_and_status",
+        "next_action": "prepare_agent_debug",
+        "reason": "The user is asking to debug a stuck, looping, drifting, or repeatedly failing agent run while keeping failure capture, diagnosis, and contained recovery separate from hidden resets or implementation evidence.",
+        "fallback_action": "prepare_failure_capture_or_route_to_doctor_agent_ops_or_workflow_learning",
+        "phrases": (
+            "agent-debug",
+            "agent debug",
+            "agent debugging",
+            "agent introspection",
+            "agent self-debug",
+            "agent failure capture",
+            "agent run stuck",
+            "agent loop failure",
+            "agent looping",
+            "looping agent",
+            "tool retry loop",
+            "repeated tool calls",
+            "repeating the same command",
+            "agent context drift",
+            "prompt drift",
+            "agent token burn",
+            "agent burning tokens",
+            "에이전트 디버그",
+            "에이전트 실패",
+            "에이전트 반복 실패",
+            "반복 실패",
+            "도구 반복",
+            "컨텍스트 드리프트",
+            "토큰 낭비",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("agent-ops-review", "doctor", "workflow-learning", "context-budget-review"),
     },
     {
         "id": "skill_portfolio_health",
@@ -3325,6 +3365,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "harness-session-inventory",
                 "ops-observability-card",
                 "agent-ops-review",
+                "agent-debug",
                 "agent-evaluation",
                 "rules-distill",
                 "context-budget-review",
@@ -3582,7 +3623,7 @@ def _compact_workflow_cue_line() -> str:
         "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
         "premium visuals -> design-quality-gate; frontend -> frontend; screenshots/render checks -> visual-qa; files/decks/PDF/sheets/docs/HWP -> materials/report-package; image cards -> img-summary; "
         "code/CI/merge -> ultraprocess/code-review/verification-gate; "
-        "trace/improve/regression -> workflow-learning"
+        "agent failure/loop/drift -> agent-debug; trace/improve/regression -> workflow-learning"
     )
 
 
@@ -3591,7 +3632,7 @@ def _compact_workflow_context_cards_line() -> str:
         "intent -> deep-interview/ralplan/codebase-onboarding/codegraph-refresh/loop; "
         "signals -> web-research/research-department/feedback-triage; "
         "materials -> design-quality-gate/frontend/visual-qa/materials-package; "
-        "ops -> automation-blueprint/workspace-audit/production-audit/context-budget-review/skill-scout/skill-health/workflow-learning/doctor; "
+        "ops -> automation-blueprint/workspace-audit/production-audit/context-budget-review/agent-debug/skill-scout/skill-health/workflow-learning/doctor; "
         "eval/rules -> agent-evaluation/rules-distill; "
         "code -> ultraprocess/code-review/verification-gate/security-safety-review/team/ultraqa"
     )
@@ -3614,6 +3655,7 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "ultraprocess": "choose_executor",
     "workflow-learning": "audit_learning_readiness",
     "harness-session-inventory": "prepare_harness_session_inventory",
+    "agent-debug": "prepare_agent_debug",
     "frontend": "prepare_frontend_handoff",
     "visual-qa": "prepare_visual_qa",
     "workspace-audit": "prepare_workspace_audit",

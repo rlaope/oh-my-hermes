@@ -1,22 +1,22 @@
 ---
-name: skill-scout
-description: [omh] Skill Scout workflow: prepare a metadata-only search-before-creation report for local, marketplace, GitHub, and web skill candidates with risk review and adoption options.
+name: agent-debug
+description: [omh] Agent Debug workflow: capture a stuck, looping, drifting, or repeatedly failing agent run, diagnose the likely failure pattern, and prepare the smallest safe recovery action.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, operations]
     category: operations
-    phase: skill-scout
+    phase: agent-debug
     role: operator
     quality_tier: workflow-surface-gated
 ---
 
-# Skill Scout
+# Agent Debug
 
-This is a Hermes-native `skill-scout` workflow skill.
+This is a Hermes-native `agent-debug` workflow skill.
 
 ## Why This Exists
 
-`skill-scout` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`agent-debug` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,27 +28,27 @@ This is a Hermes-native `skill-scout` workflow skill.
 
 Good example:
 
-- Prompt: skill-scout find existing skill candidates before we create a release-note workflow skill.
-- Expected behavior: Produce `prepare_skill_scout` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: agent-debug capture why this agent is looping on the same tool and prepare the smallest safe recovery action.
+- Expected behavior: Produce `prepare_agent_debug` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: skill-scout install the best GitHub skill and copy it into the marketplace without review.
+- Prompt: agent-debug silently reset the executor, patch the environment, and claim the future loop is fixed.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- Intent, keywords, source scope, and stop condition are explicit.
-- Local and external search evidence is separated from planned search.
-- No install, copy, write, credential, or trust claim is made without observed review or implementation.
+- Failure state, intended goal, recent tool sequence, and context pressure are captured.
+- Diagnosis distinguishes repeated command/tool loops, context drift, environment mismatch, service errors, and wrong-hypothesis tests.
+- Recovery action is contained, reversible, and does not claim implementation, verification, CI, merge, or future-loop fixes.
 
 ## Recovery Notes
 
-- If the request is about setup or installed skill repair, route to doctor.
-- If the request is a portfolio health dashboard, route to skill-health.
-- If the request is an approved skill mutation or creation task, route to skill or implementation after the scout decision.
+- If the request is install/setup health, route to doctor.
+- If the request is a manager status or throughput review, route to agent-ops-review.
+- If the request is a durable self-improvement record after diagnosis, route to workflow-learning.
 
 ## OMH Context Rail
 
@@ -64,14 +64,14 @@ Bad example:
 
 ## Use When
 
-Use before creating or adapting a skill so OMH can compare existing local, marketplace, GitHub, or web candidates without installing, copying, or trusting them by default.
+Use when an agent run is stuck, looping on tools, burning tokens without progress, drifting from the objective, losing context, or failing on recoverable environment/tool assumptions.
 
-    Strong routing signals: `skill-scout`, `skill scout`, `skill candidate`, `skill candidate search`, `skill discovery`, `find a skill`, `find skills`, `is there a skill`, `existing skill`, `fork a skill`, `extend a skill`, `create skill after search`, `new skill search`, `skill adoption`, `스킬 스카우트`, `스킬 후보`, `스킬 찾기`, `스킬 검색`, `스킬 만들기 전`, `기존 스킬`
+    Strong routing signals: `agent-debug`, `agent debug`, `agent debugging`, `agent introspection`, `agent self-debug`, `self-debug`, `self debugging`, `looping agent`, `agent loop failure`, `agent run stuck`, `agent failure capture`, `tool retry loop`, `repeated tool calls`, `context drift`, `prompt drift`, `token burn`, `에이전트 디버그`, `에이전트 실패`, `에이전트 반복 실패`, `반복 실패`, `도구 반복`, `컨텍스트 드리프트`, `토큰 낭비`
 
 ## Catalog Metadata
 
 Category: `operations`
-Phase: `skill-scout`
+Phase: `agent-debug`
 Hermes role: `operator`
 Quality tier: `workflow-surface-gated`
 
@@ -94,21 +94,20 @@ Required inputs:
 
 Expected outputs:
 
-- skill_scout_query/v1
-- local_skill_candidate_inventory/v1 when observed
-- external_skill_candidate_risk_review/v1 when observed
-- skill_adoption_decision_matrix/v1
-- skill_scout_recommendation/v1
+- agent_debug_report/v1
+- agent_failure_capture/v1
+- agent_failure_pattern_hypothesis/v1
+- contained_recovery_action/v1
 
 Artifact expectations:
 
-- skill_scout_query/v1 with intended workflow, triggers, domains/tools, and search keywords
-- local_skill_candidate_inventory/v1 separating installed, bundled, marketplace, and repo-local matches when observed
-- skill_adoption_decision_matrix/v1 ranking use existing, fork or extend, and create fresh options with trust gaps
+- agent_debug_report/v1 with failure pattern, recent tool sequence, goal/context pressure, environment assumptions, recovery action, and evidence status
+- agent_failure_capture/v1 separating observed errors and tool loops from inferred root-cause hypotheses
+- contained_recovery_action/v1 with the smallest safe next action and explicit escalation boundary
 
 Safety rules:
 
-- A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.
+- An agent debug report is not executor reset, hidden state mutation, tool repair, implementation, verification, CI, merge-readiness, merge, or proof that future loops are fixed. Record only observed failure evidence, diagnosis hypotheses, contained recovery actions, and remaining blockers.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -119,12 +118,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `skill-scout`.
+Preferred harness for this skill: `agent-debug`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill skill-scout --harness skill-scout --status started
+omh runtime record --skill agent-debug --harness agent-debug --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

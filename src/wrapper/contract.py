@@ -277,6 +277,11 @@ VISIBLE_ACTIONS = (
     "prepare_review_lane",
     "refresh_agent_ops_status",
     "record_agent_ops_observation",
+    "prepare_agent_debug",
+    "show_agent_debug_report",
+    "record_agent_failure_capture",
+    "record_agent_recovery_action",
+    "escalate_agent_debug",
     "record_workflow_learning_trace",
     "record_missed_route",
     "show_learning_review_queue",
@@ -596,6 +601,11 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "observed failure-pattern signals, pending amendment reviews, and top safe actions. Install repair, skill "
         "mutation, and future routing fixes stay separate until observed and reviewed."
     ),
+    "agent-debug": (
+        "I will prepare an agent debug report: failure state, recent tool sequence, goal or prompt drift, context "
+        "pressure, environment assumptions, likely failure pattern, and the smallest safe recovery action. Executor "
+        "reset, hidden mutation, tool repair, and proof of future fixes stay separate until observed."
+    ),
     "context-budget-review": (
         "I will prepare a context budget review: must-keep context, checkpoint cadence, budget risks, overflow "
         "recovery, and provider-truth gaps. Exact billing or token usage still needs observed runtime/provider evidence."
@@ -713,6 +723,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_rules_distillation": ("prepare_rules_distillation", "Distill rules"),
     "prepare_codebase_onboarding": ("prepare_codebase_onboarding", "Prepare onboarding"),
     "prepare_codegraph_refresh": ("prepare_codegraph_refresh", "Refresh codegraph"),
+    "prepare_agent_debug": ("prepare_agent_debug", "Prepare agent debug"),
     "prepare_skill_scout": ("prepare_skill_scout", "Prepare skill scout"),
     "prepare_skill_health": ("prepare_skill_health", "Prepare skill health"),
     "prepare_context_budget_review": ("prepare_context_budget_review", "Review context"),
@@ -1274,6 +1285,43 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "review",
             "CI",
             "merge",
+        ],
+    },
+    "agent-debug": {
+        "kind": "agent_debug",
+        "headline": "I can debug a stuck agent run without pretending to reset it.",
+        "body": (
+            "I will prepare the agent debug report: failure pattern, recent tool or command loop, goal drift, "
+            "context pressure, environment assumptions, diagnosis hypothesis, smallest safe recovery action, "
+            "and remaining blockers. Executor reset, hidden state mutation, tool repair, implementation, "
+            "verification, CI, and future-loop fixes stay observed-only."
+        ),
+        "phase": "agent_debug_prepared",
+        "next_action": "prepare_agent_debug",
+        "artifact_schema": "agent_debug_report/v1",
+        "claim_boundary_suffix": "It is not executor reset, hidden state mutation, tool repair, implementation, verification, review, CI, merge, or proof that future loops are fixed.",
+        "actions": [
+            {"id": "prepare_agent_debug", "label": "Prepare agent debug", "style": "primary"},
+            {"id": "record_agent_failure_capture", "label": "Record failure", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "capture_failure_state",
+            "classify_failure_pattern",
+            "verify_environment_assumptions",
+            "choose_smallest_safe_recovery",
+            "record_result_or_escalation",
+        ],
+        "evidence_not_observed": [
+            "executor reset",
+            "hidden state mutation",
+            "tool repair",
+            "implementation",
+            "verification",
+            "review",
+            "CI",
+            "merge",
+            "future loop fix",
         ],
     },
     "gateway-intent-card": {
