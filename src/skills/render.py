@@ -149,6 +149,7 @@ def _harness_summary(harness: HarnessDefinition) -> str:
         "visual_qa",
         "frontend_handoff",
         "first_task_runway",
+        "codegraph_handoff",
         "overflow_recovery",
         "safe_action_policy",
         "remediation_handoff",

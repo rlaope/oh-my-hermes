@@ -505,6 +505,7 @@ ROUTER_KEYWORD_SKILLS = (
     "harness-session-inventory",
     "workflow-learning",
     "codebase-onboarding",
+    "codegraph-refresh",
     "context-budget-review",
     "security-safety-review",
     "code-review",
@@ -518,6 +519,7 @@ LANE_CROSS_LANE_EXAMPLES = {
     "intent_to_plan": [
         "ambitious goal -> loopability check -> loop or ultraprocess -> verification status",
         "new repo -> codebase-onboarding -> reading path -> first-task runway",
+        "stale code index -> codegraph-refresh -> summary or task-scoped handoff",
         "fuzzy feature request -> deep-interview -> ralplan -> accepted plan",
     ],
     "research_and_ops": [
@@ -553,7 +555,15 @@ WORKFLOW_CONTEXT_CARDS = (
         "label": "Intent to plan",
         "user_signal": "fuzzy goal, ambitious target, safe feature, or one-cycle delivery request",
         "omh_pattern": "clarify or plan first, then move to ultragoal, ultraprocess, loop, or handoff only when concrete",
-        "representative_workflows": ("deep-interview", "ralplan", "codebase-onboarding", "ultragoal", "loop", "ultraprocess"),
+        "representative_workflows": (
+            "deep-interview",
+            "ralplan",
+            "codebase-onboarding",
+            "codegraph-refresh",
+            "ultragoal",
+            "loop",
+            "ultraprocess",
+        ),
         "user_examples": ("Make onboarding feel smoother", "Make this repo star-worthy"),
         "first_response_shape": "Name the ambiguity, choose clarify/plan/loop/process, then state the next concrete action and what is not evidence yet.",
         "not_evidence_until_observed": ("plan acceptance", "executor dispatch", "verification"),
@@ -645,6 +655,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "ultraprocess": "intent_to_plan",
     "performance-goal": "intent_to_plan",
     "codebase-onboarding": "intent_to_plan",
+    "codegraph-refresh": "intent_to_plan",
     "web-research": "research_and_ops",
     "research-department": "research_and_ops",
     "source-finder": "research_and_ops",
@@ -738,6 +749,10 @@ _AWARENESS_MESSAGE_MARKERS = (
     "source-finder",
     "paper-learning",
     "codebase-onboarding",
+    "codegraph-refresh",
+    "codegraph",
+    "codemap",
+    "code map",
     "context-budget-review",
     "security-safety-review",
     "자동화",
@@ -755,6 +770,9 @@ _AWARENESS_MESSAGE_MARKERS = (
     "클로드",
     "리뷰",
     "릴리즈",
+    "코드그래프",
+    "코드맵",
+    "코드 인덱스 갱신",
     "보고서",
     "자료",
     "setup log",
@@ -1425,6 +1443,12 @@ _ROUTE_HINT_RULES = (
             "understand this repo",
             "how this repo works",
             "first task runway",
+            "first-read onboarding",
+            "first-read onboarding path",
+            "first-read repo",
+            "first-read codebase",
+            "repo reading path",
+            "reading path for this repo",
             "레포 온보딩",
             "코드베이스 온보딩",
             "처음 보는 레포",
@@ -1432,6 +1456,45 @@ _ROUTE_HINT_RULES = (
         ),
         "tokens": (),
         "adjacent_workflows": ("workspace-audit", "ralplan", "ultraprocess"),
+    },
+    {
+        "id": "codegraph_refresh",
+        "workflow": "codegraph-refresh",
+        "lane": "intent_to_plan",
+        "next_action": "prepare_codegraph_refresh",
+        "reason": "The user is asking to refresh codegraph/codemaps, inspect stale local code intelligence, or prepare a task-scoped codegraph handoff.",
+        "fallback_action": "prepare_codegraph_build_summary_or_handoff_plan",
+        "phrases": (
+            "codegraph-refresh",
+            "codegraph refresh",
+            "refresh codegraph",
+            "refresh the codegraph",
+            "update codegraph",
+            "update the codegraph",
+            "codegraph stale",
+            "stale codegraph",
+            "codegraph handoff",
+            "codegraph summary",
+            "codemap",
+            "codemaps",
+            "update codemaps",
+            "refresh codemap",
+            "code map",
+            "code maps",
+            "stale code index",
+            "refresh code index",
+            "codegraph index",
+            "codegraph index refresh",
+            "codemap index",
+            "코드그래프",
+            "코드그래프 갱신",
+            "코드맵",
+            "코드맵 갱신",
+            "코드 인덱스",
+            "코드 인덱스 갱신",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("codebase-onboarding", "workspace-audit", "ultraprocess"),
     },
     {
         "id": "context_budget_review",
@@ -3116,6 +3179,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "plan",
                 "ralplan",
                 "codebase-onboarding",
+                "codegraph-refresh",
                 "ultragoal",
                 "ultraprocess",
                 "loop",
@@ -3441,7 +3505,7 @@ def _compact_workflow_cue_line() -> str:
 
 def _compact_workflow_context_cards_line() -> str:
     return (
-        "intent -> deep-interview/ralplan/codebase-onboarding/loop; "
+        "intent -> deep-interview/ralplan/codebase-onboarding/codegraph-refresh/loop; "
         "signals -> web-research/research-department/feedback-triage; "
         "materials -> design-quality-gate/frontend/visual-qa/materials-package; "
         "ops -> automation-blueprint/workspace-audit/production-audit/context-budget-review/workflow-learning/doctor; "
@@ -3454,7 +3518,7 @@ def _compact_generic_tool_checkpoint_line() -> str:
     return (
         "image->img-summary; frontend->frontend/visual-qa; paper->paper-learning; file->materials-package; "
         "search->web-research; audit->workspace-audit/production-audit/security-safety-review; "
-        "verify->verification-gate; code->codebase-onboarding/ultraprocess"
+        "verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultraprocess"
     )
 
 
@@ -3475,6 +3539,7 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "agent-evaluation": "prepare_agent_evaluation",
     "rules-distill": "prepare_rules_distillation",
     "codebase-onboarding": "prepare_codebase_onboarding",
+    "codegraph-refresh": "prepare_codegraph_refresh",
     "context-budget-review": "prepare_context_budget_review",
     "security-safety-review": "prepare_security_safety_review",
     "code-review": "prepare_review_or_followup_handoff",

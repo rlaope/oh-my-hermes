@@ -2410,6 +2410,13 @@ class WrapperContractTests(unittest.TestCase):
                 "ops_observability",
             ),
             (
+                "refresh the codegraph and prepare a handoff for routing changes",
+                "codegraph-refresh",
+                "prepare_codegraph_refresh",
+                "codegraph refresh",
+                "ack",
+            ),
+            (
                 "turn this sprint retro into a report package with decisions and actions",
                 "report-package",
                 "prepare_report_package",

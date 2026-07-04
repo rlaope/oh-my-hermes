@@ -214,6 +214,24 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "refresh the codegraph and prepare a handoff for routing changes",
+                "codegraph-refresh",
+                "prepare_codegraph_refresh",
+                None,
+            ),
+            (
+                "understand this repo first, then refresh the codemap only if a task-scoped handoff is needed",
+                "codebase-onboarding",
+                "prepare_codebase_onboarding",
+                None,
+            ),
+            (
+                "코드맵 갱신하고 다음 구현에 필요한 handoff 만들어줘",
+                "codegraph-refresh",
+                "prepare_codegraph_refresh",
+                None,
+            ),
+            (
                 "공개 발표자료 찾아서 요약해줘",
                 "source-finder",
                 "prepare_source_finder_plan",
@@ -283,6 +301,32 @@ class ChatRouterTests(unittest.TestCase):
                     self.assertIsNone(decision["task_card"])
                 else:
                     self.assertEqual(decision["task_card"]["task_type"], task_type)
+
+    def test_codegraph_refresh_does_not_steal_generic_index_refresh(self) -> None:
+        generic_cases = (
+            "database index is stale, refresh it",
+            "package index is stale, refresh it",
+            "검색 인덱스 갱신해줘",
+        )
+
+        for message in generic_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertNotEqual(decision["selected_skill"], "codegraph-refresh")
+
+        codegraph_cases = (
+            "codegraph index is stale, refresh it",
+            "code index is stale, refresh it",
+            "코드 인덱스 갱신하고 다음 handoff 준비해줘",
+        )
+
+        for message in codegraph_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["selected_skill"], "codegraph-refresh")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_codegraph_refresh")
 
     def test_coding_handoff_status_is_not_router_design_feedback(self) -> None:
         decision = route_chat_message("what is the coding handoff status?", source="discord")
@@ -954,6 +998,14 @@ class ChatRouterTests(unittest.TestCase):
             (
                 "inventory Codex Claude Code Hermes MCP configs and worktrees for drift",
                 "harness-session-inventory",
+            ),
+            (
+                "update codemaps and prepare a handoff for the routing package before the next coding pass",
+                "codegraph-refresh",
+            ),
+            (
+                "give me a first-read onboarding path for this repo before touching codemaps",
+                "codebase-onboarding",
             ),
             (
                 "release before lunch, check risky parts from mobile.",
@@ -2020,6 +2072,12 @@ class ChatRouterTests(unittest.TestCase):
                 "MCP tool-call",
                 "connector availability",
                 "session progress",
+            ),
+            "codegraph-refresh": (
+                "command execution",
+                "artifact write",
+                "implementation",
+                "CI",
             ),
             "ops-observability-card": (
                 "billing truth",

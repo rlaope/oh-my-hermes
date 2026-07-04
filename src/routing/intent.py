@@ -14,6 +14,7 @@ WORKFLOW_VOCABULARY = (
     "loop",
     "ultraprocess",
     "workflow-learning",
+    "codegraph-refresh",
     "code-review",
     "team",
     "ultrawork",

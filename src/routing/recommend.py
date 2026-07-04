@@ -314,6 +314,18 @@ _SKILL_POLICIES = {
             "risk_and_unknowns_map/v1, and first_task_runway/v1 from observed repo evidence."
         ),
     ),
+    "codegraph-refresh": RecommendationPolicy(
+        next_action="prepare_codegraph_refresh",
+        evidence_boundary=(
+            "A codegraph refresh plan is not command execution, artifact write, architecture proof, executor dispatch, "
+            "implementation, review, CI, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare codegraph_refresh_plan/v1 with repo root, refresh depth, build/summary/handoff command choices, "
+            "staleness_and_scope_report/v1, `.omh/codegraph/codegraph.json` write requirements, and observed-only "
+            "omh_codegraph_summary/v1 or omh_codegraph_context/v1 evidence."
+        ),
+    ),
     "context-budget-review": RecommendationPolicy(
         next_action="prepare_context_budget_review",
         evidence_boundary=(
@@ -898,6 +910,8 @@ def _score_definition(
     trigger_token_matches = query_tokens & prepared.trigger_tokens
     if definition.name == "ops-observability-card" and "dashboard" in trigger_token_matches and "slo" not in query_tokens:
         trigger_token_matches.remove("dashboard")
+    if definition.name == "codegraph-refresh" and not _codegraph_refresh_token_context(normalized_query, query_tokens):
+        trigger_token_matches -= {"index", "refresh", "stale", "갱신"}
     for token in trigger_token_matches:
         score += 3
         matched.add(f"trigger:{token}")
@@ -928,6 +942,13 @@ def _score_definition(
         evidence_boundary=policy.evidence_boundary,
         wrapper_guidance=policy.wrapper_guidance,
         suggested_prompt=_suggested_prompt(definition.name, original_query),
+    )
+
+
+def _codegraph_refresh_token_context(normalized_query: str, query_tokens: set[str]) -> bool:
+    return bool({"codegraph", "codemap", "codemaps", "code", "코드그래프", "코드맵", "코드"} & query_tokens) or _phrase_match(
+        normalized_query,
+        "code map",
     )
 
 

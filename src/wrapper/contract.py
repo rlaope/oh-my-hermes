@@ -208,6 +208,11 @@ VISIBLE_ACTIONS = (
     "record_reading_path",
     "record_domain_glossary",
     "record_first_task_runway",
+    "prepare_codegraph_refresh",
+    "show_codegraph_refresh",
+    "record_codegraph_build",
+    "record_codegraph_summary",
+    "record_codegraph_handoff",
     "prepare_context_budget_review",
     "show_context_budget_review",
     "record_must_keep_context",
@@ -566,6 +571,11 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "I will prepare a codebase onboarding pack: observed repo map, reading path, glossary, risks, unknowns, "
         "and first-task runway. Setup, code edits, executor dispatch, and verification stay separate."
     ),
+    "codegraph-refresh": (
+        "I will prepare a codegraph refresh: repo root, build/summary/handoff command choices, staleness scope, "
+        "file-write policy, and observed-only codegraph summary or handoff evidence. Command execution and "
+        "generated files stay separate until observed."
+    ),
     "context-budget-review": (
         "I will prepare a context budget review: must-keep context, checkpoint cadence, budget risks, overflow "
         "recovery, and provider-truth gaps. Exact billing or token usage still needs observed runtime/provider evidence."
@@ -682,6 +692,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_agent_evaluation": ("prepare_agent_evaluation", "Prepare eval"),
     "prepare_rules_distillation": ("prepare_rules_distillation", "Distill rules"),
     "prepare_codebase_onboarding": ("prepare_codebase_onboarding", "Prepare onboarding"),
+    "prepare_codegraph_refresh": ("prepare_codegraph_refresh", "Refresh codegraph"),
     "prepare_context_budget_review": ("prepare_context_budget_review", "Review context"),
     "prepare_security_safety_review": ("prepare_security_safety_review", "Review safety"),
     "prepare_material_package": ("prepare_material_package", "Prepare package"),

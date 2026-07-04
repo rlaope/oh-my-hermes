@@ -27,6 +27,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "prepare_coding_handoff": "preparing a coding handoff",
     "prepare_coding_runtime_handoff": "preparing a coding runtime handoff",
     "prepare_codebase_onboarding": "preparing a codebase onboarding pack",
+    "prepare_codegraph_refresh": "preparing a codegraph refresh",
     "prepare_context_budget_review": "preparing a context budget review",
     "prepare_deliverable_package": "preparing a deliverable package",
     "prepare_deploy_monitor_plan": "preparing a deploy-and-monitor plan",

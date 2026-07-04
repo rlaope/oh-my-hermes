@@ -202,6 +202,7 @@ class CapabilityManifestTests(unittest.TestCase):
         skill = inspect_capability("ultragoal", section="skills")["capability"]
         wiki_skill = inspect_capability("wiki", section="skills")["capability"]
         ops_surface = inspect_capability("ops-observability-card", section="skills")["capability"]
+        codegraph_skill = inspect_capability("codegraph-refresh", section="skills")["capability"]
         awareness = inspect_capability("omh_awareness", section="omh_awareness")["capability"]
         role = inspect_capability("handoff-guide", section="agent_roles")["capability"]
         playbook = inspect_capability("request-to-handoff", section="playbooks")["capability"]
@@ -230,6 +231,8 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertTrue(ops_surface["install_visibility"])
         self.assertFalse(ops_surface["compatibility_alias"])
         self.assertIn("preferred_usage", ops_surface)
+        self.assertIn("secret values", " ".join(codegraph_skill["safety_rules"]))
+        self.assertIn("codebase-onboarding", " ".join(codegraph_skill["quality_bar"]))
         self.assertEqual(role["runtime_claim"], "descriptor_not_runtime_agent")
         self.assertIn("OMH workflow-layer responsibility context", role["workflow_context_rule"])
         self.assertIn("Normal users talk to Hermes", role["chat_rule"])
