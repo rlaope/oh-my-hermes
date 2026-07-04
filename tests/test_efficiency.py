@@ -191,6 +191,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("agent-evaluation", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("rules-distill", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("agent-debug", cards["automation_and_status"]["representative_workflows"])
+        self.assertIn("instinct-ledger", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("skill-scout", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("skill-health", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
@@ -232,6 +233,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertEqual(workflow_context_card_for_workflow("production-audit")["id"], "automation_and_status")
         self.assertEqual(workflow_context_card_for_workflow("agent-evaluation")["id"], "automation_and_status")
         self.assertEqual(workflow_context_card_for_workflow("rules-distill")["id"], "automation_and_status")
+        self.assertEqual(workflow_context_card_for_workflow("instinct-ledger")["id"], "automation_and_status")
         self.assertEqual(workflow_context_card_for_workflow("verification-gate")["id"], "coding_handoff")
         self.assertEqual(workflow_context_card_for_workflow("code-review")["id"], "coding_handoff")
 
@@ -301,6 +303,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("rules-distill 실패 trace에서 스킬 원칙 규칙 증류해줘", "rules-distill", "prepare_rules_distillation"),
             ("codebase-onboarding 처음 보는 레포 구조 잡아줘", "codebase-onboarding", "prepare_codebase_onboarding"),
             ("agent-debug 에이전트 반복 실패 캡처해줘", "agent-debug", "prepare_agent_debug"),
+            ("instinct-ledger 프로젝트 학습 패턴을 승격 검토해줘", "instinct-ledger", "prepare_instinct_ledger"),
             ("skill-scout 스킬 후보 찾아보고 만들지 결정해줘", "skill-scout", "prepare_skill_scout"),
             ("skill-health 스킬 포트폴리오 상태 대시보드 보여줘", "skill-health", "prepare_skill_health"),
             (
@@ -329,6 +332,7 @@ class EfficiencyContractTests(unittest.TestCase):
             "rules-distill",
             "codebase-onboarding",
             "agent-debug",
+            "instinct-ledger",
             "skill-health",
             "context-budget-review",
             "security-safety-review",
@@ -1291,6 +1295,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("rules-distill 실패 trace에서 스킬 원칙 규칙 증류해줘", "rules-distill"),
             ("codebase-onboarding 처음 보는 레포 구조 잡아줘", "codebase-onboarding"),
             ("agent-debug 에이전트 반복 실패 캡처해줘", "agent-debug"),
+            ("instinct-ledger 프로젝트 학습 패턴을 승격 검토해줘", "instinct-ledger"),
             ("skill-scout 스킬 후보 찾아보고 만들지 결정해줘", "skill-scout"),
             ("skill-health 스킬 포트폴리오 상태 대시보드 보여줘", "skill-health"),
             ("context-budget-review 장기 작업 컨텍스트 예산 잡아줘", "context-budget-review"),
@@ -1302,6 +1307,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("Hermes가 omh list 승인하라고 하는데 굳이 쳐야해?", "oh-my-hermes"),
             ("what OMH workflows are available without running omh list?", "oh-my-hermes"),
             ("workflow trace 보고 다음에 스킬 고칠점 알려줘", "workflow-learning"),
+            ("project-scoped instincts with promotion review", "instinct-ledger"),
         )
 
         with patch.object(
@@ -1469,6 +1475,11 @@ class EfficiencyContractTests(unittest.TestCase):
                 "agent-debug",
                 "operator_surface_fast_path:agent_debug",
             ),
+            (
+                "project-scoped instincts with promotion review",
+                "instinct-ledger",
+                "operator_surface_fast_path:instinct_ledger",
+            ),
         )
 
         with patch.object(
@@ -1496,6 +1507,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("what can OMH do for papers?", "paper-learning"),
             ("what can OMH do for source finding?", "source-finder"),
             ("what can OMH do for workflow learning?", "workflow-learning"),
+            ("what can OMH do for project instincts?", "instinct-ledger"),
             ("what can OMH do for agent debugging?", "agent-debug"),
             ("what can OMH do for Discord gateway routing?", "gateway-intent-card"),
             ("what can OMH do for coding agents?", "executor-runtime-readiness"),

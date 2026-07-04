@@ -1317,6 +1317,14 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_agent_debug",
             ),
             (
+                "instinct-ledger turn repeated lessons into project-scoped instincts",
+                "instinct-ledger",
+                "instinct_ledger",
+                "I can turn repeated lessons into scoped instinct candidates.",
+                "global promotion",
+                "prepare_instinct_ledger",
+            ),
+            (
                 "회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘",
                 "operating-rhythm",
                 "operating_rhythm",
@@ -1372,6 +1380,8 @@ class WrapperContractTests(unittest.TestCase):
                     if workflow == "skill-health"
                     else "agent_debug_report/v1"
                     if workflow == "agent-debug"
+                    else "instinct_ledger_plan/v1"
+                    if workflow == "instinct-ledger"
                     else "harness_session_inventory/v1"
                     if workflow == "harness-session-inventory"
                     else f"{kind}_card/v1"
@@ -2466,6 +2476,13 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_agent_debug",
                 "agent debug report",
                 "agent_debug",
+            ),
+            (
+                "instinct-ledger turn repeated lessons into project-scoped instincts",
+                "instinct-ledger",
+                "prepare_instinct_ledger",
+                "instinct ledger",
+                "instinct_ledger",
             ),
             (
                 "turn this sprint retro into a report package with decisions and actions",

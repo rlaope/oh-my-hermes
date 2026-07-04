@@ -72,6 +72,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "achievements": ("workflow_skill", True),
     "agent-ops-review": ("workflow_skill", True),
     "agent-debug": ("workflow_skill", True),
+    "instinct-ledger": ("workflow_skill", True),
     "skill-scout": ("workflow_skill", True),
     "skill-health": ("workflow_skill", True),
     "workflow-learning": ("workflow_skill", True),
@@ -392,6 +393,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["agent-debug"].next_action, "prepare_agent_debug")
         self.assertIn("agent_debug_report/v1", recommend_module._SKILL_POLICIES["agent-debug"].wrapper_guidance)
         self.assertIn("hidden state mutation", recommend_module._SKILL_POLICIES["agent-debug"].evidence_boundary)
+        self.assertEqual(recommend_module._SKILL_POLICIES["instinct-ledger"].next_action, "prepare_instinct_ledger")
+        self.assertIn("instinct_ledger_plan/v1", recommend_module._SKILL_POLICIES["instinct-ledger"].wrapper_guidance)
+        self.assertIn("global promotion", recommend_module._SKILL_POLICIES["instinct-ledger"].evidence_boundary)
         self.assertEqual(
             recommend_module._SKILL_POLICIES["context-budget-review"].next_action,
             "prepare_context_budget_review",
@@ -559,6 +563,7 @@ class RouterContentTests(unittest.TestCase):
                 "ops-observability-card",
                 "agent-ops-review",
                 "agent-debug",
+                "instinct-ledger",
                 "skill-scout",
                 "skill-health",
                 "workflow-learning",
@@ -605,6 +610,11 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertIn("failure_state_captured", agent_debug_line)
         self.assertIn("record_agent_failure_capture", agent_debug_line)
+        instinct_ledger_line = next(
+            line for line in harness_registry.splitlines() if line.startswith("- `instinct-ledger`:")
+        )
+        self.assertIn("atomic_instinct_candidates_prepared", instinct_ledger_line)
+        self.assertIn("record_instinct_candidate", instinct_ledger_line)
         context_budget_line = next(
             line for line in harness_registry.splitlines() if line.startswith("- `context-budget-review`:")
         )
@@ -1007,6 +1017,15 @@ class RouterContentTests(unittest.TestCase):
                 "action": "prepare_agent_debug",
                 "template": "contained_recovery_action/v1",
             },
+            "instinct-ledger": {
+                "category": "optimization",
+                "phase": "instinct-ledger",
+                "quality_tier": "workflow-surface-gated",
+                "output": "instinct_ledger_plan/v1",
+                "ladder": "atomic_instinct_candidates_prepared",
+                "action": "prepare_instinct_ledger",
+                "template": "instinct_candidate/v1",
+            },
             "context-budget-review": {
                 "category": "observability",
                 "phase": "context-budget-review",
@@ -1331,6 +1350,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("interviewer, planner, researcher, builder, reviewer, and loop controller", skills["loop"].content)
         self.assertIn("memory/skill/wiki/failure-retrospective/automation", skills["workflow-learning"].content)
         self.assertIn("self-improvement store routing", skills["workflow-learning"].content)
+        self.assertIn("project/global promotion", skills["instinct-ledger"].content)
+        self.assertIn("instinct_candidate/v1", skills["instinct-ledger"].content)
         workflow_docs = workflow_reference_markdown()
         self.assertIn("self_improvement_store_routing/v1", workflow_docs)
         self.assertIn("self_improvement_store_route_record/v1", workflow_docs)
@@ -1652,7 +1673,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`web-research`", readme)
         self.assertIn("`idea-to-deploy`", readme)
         self.assertIn("`workflow-learning`", readme)
-        self.assertIn("**+46** more built-in skills", readme)
+        self.assertIn("`instinct-ledger`", readme)
+        self.assertIn("**+47** more built-in skills", readme)
         self.assertIn("Plan and decide", readme)
         self.assertIn("Learn and gather", readme)
         self.assertIn("Create materials and visuals", readme)

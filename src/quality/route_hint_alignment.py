@@ -348,6 +348,14 @@ _OPERATOR_ROUTE_HINT_ALIGNMENT_CASES = (
     ),
     RouteHintAlignmentCase(
         "operator_regression",
+        "project-instinct-promotion-review",
+        "Project instinct promotion review",
+        "project-scoped instincts with promotion review",
+        "instinct-ledger",
+        "prepare_instinct_ledger",
+    ),
+    RouteHintAlignmentCase(
+        "operator_regression",
         "test-until-pass-coding-korean",
         "Korean test-as-stop-signal coding request",
         "테스트 통과할때까지 고쳐줘",

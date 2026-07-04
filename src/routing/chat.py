@@ -470,6 +470,17 @@ _SPECIFIC_CAPABILITY_FAST_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "instinct-ledger",
+        (
+            "instinct ledger",
+            "project instincts",
+            "project-scoped instincts",
+            "global instincts",
+            "instinct promotion",
+            "export instincts",
+        ),
+    ),
+    (
         "agent-debug",
         (
             "agent debug",
@@ -2097,6 +2108,7 @@ def _specific_capability_fast_path_markers(skill: str, matched: tuple[str, ...])
         "img-summary": "guard:img_summary",
         "paper-learning": "guard:paper_learning",
         "agent-debug": "guard:agent_debug",
+        "instinct-ledger": "guard:instinct_ledger",
         "skill-scout": "guard:skill_scout",
         "skill-health": "guard:skill_health",
     }
@@ -2653,6 +2665,37 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear context or token budget request; prepare the context budget review without treating token burn as agent failure.",
     ),
     (
+        "instinct-ledger",
+        (
+            "instinct-ledger",
+            "instinct ledger",
+            "project instincts",
+            "project-scoped instincts",
+            "project scoped instincts",
+            "global instincts",
+            "instinct review",
+            "instinct candidate",
+            "instinct candidates",
+            "instinct promotion",
+            "promote instinct",
+            "promote learning",
+            "confidence scored learning",
+            "confidence-scored learning",
+            "project learning patterns",
+            "cross-project learning",
+            "export instincts",
+            "import instincts",
+            "학습 본능",
+            "프로젝트별 학습",
+            "프로젝트 스코프 학습",
+            "전역 학습 승격",
+            "학습 승격",
+            "학습 패턴 승격",
+        ),
+        "operator_surface_fast_path:instinct_ledger",
+        "Clear project/global instinct learning request; prepare scoped instinct candidates without automatic hooks, writes, or promotion.",
+    ),
+    (
         "agent-debug",
         (
             "agent-debug",
@@ -2933,6 +2976,8 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:context_budget",)
     if skill == "agent-debug":
         return ("guard:agent_debug",)
+    if skill == "instinct-ledger":
+        return ("guard:instinct_ledger",)
     if skill == "skill-scout":
         return ("guard:skill_scout",)
     if skill == "skill-health":

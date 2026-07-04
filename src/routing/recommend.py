@@ -372,6 +372,18 @@ _SKILL_POLICIES = {
             "prompt_injection_risk_review/v1, safe_action_policy/v1, and remediation_handoff/v1 when needed."
         ),
     ),
+    "instinct-ledger": RecommendationPolicy(
+        next_action="prepare_instinct_ledger",
+        evidence_boundary=(
+            "An instinct ledger is not hook installation, automatic observation, model training, hidden memory mutation, "
+            "skill mutation, prompt mutation, global promotion, import/export, or proof that future behavior changed."
+        ),
+        wrapper_guidance=(
+            "Prepare instinct_ledger_plan/v1, atomic instinct_candidate/v1 items, project_instinct_scope_map/v1, "
+            "instinct_promotion_review/v1, and instinct_export_review/v1 when requested while keeping raw observations, "
+            "writes, imports, exports, and global promotion observed-only."
+        ),
+    ),
     "workflow-learning": RecommendationPolicy(
         next_action="audit_learning_readiness",
         evidence_boundary=(

@@ -51,9 +51,9 @@ def _skill_capability(
         "preferred_usage": exposure["preferred_usage"],
         "compatibility_alias": exposure["compatibility_alias"],
         "projections": exposure["projections"],
-        "triggers": _bounded_list(definition.triggers, 8),
+        "triggers": _bounded_list_with_overflow(definition.triggers, 8, "more triggers"),
         "required_inputs": _bounded_list(definition.required_inputs, 4),
-        "expected_outputs": _bounded_list(definition.expected_outputs, 6),
+        "expected_outputs": _bounded_list_with_overflow(definition.expected_outputs, 6, "more expected outputs"),
         "artifact_expectations": _compact_artifact_expectations(definition.artifact_expectations),
         "safety_rules": _bounded_list(definition.safety_rules, 4),
         "quality_tier": definition.quality_tier,
@@ -106,13 +106,20 @@ def _bounded_list(items: tuple[str, ...], limit: int) -> list[str]:
     return list(items[:limit])
 
 
+def _bounded_list_with_overflow(items: tuple[str, ...], limit: int, label: str) -> list[str]:
+    if len(items) <= limit:
+        return list(items)
+    shown = max(limit - 1, 0)
+    return [*items[:shown], f"+{len(items) - shown} {label}"]
+
+
 def _compact_artifact_expectations(items: tuple[str, ...]) -> list[str]:
     if not items:
         return []
     summary = items[0].strip()
     for marker in (" with ", " when ", " from ", " payload", " metadata"):
         summary = summary.split(marker, 1)[0].strip()
-    if summary == "agent_debug_report/v1":
+    if summary in {"agent_debug_report/v1", "instinct_candidate/v1", "instinct_ledger_plan/v1"}:
         return [summary]
     if len(summary) > 20:
         summary = summary[:19].rstrip() + "..."
@@ -138,16 +145,24 @@ def _awareness_lane_by_skill(awareness: dict[str, object]) -> dict[str, dict[str
 def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_use_for: str) -> str:
     if lane_label and lane_use_for:
         return (
-            f"Use `{definition.name}` for {lane_label}: {lane_use_for}; name adjacent workflow."
+            f"Use `{definition.name}` ({lane_label}) for {lane_use_for}; name adjacent."
         )
     return (
-        f"Use `{definition.name}` for its catalog purpose: {definition.use_when}; name adjacent workflow."
+        f"Use `{definition.name}` for {definition.use_when}; name adjacent."
     )
 
 
 def _capability_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    if skill_id in {"loop", "img-summary", "harness-session-inventory", "codegraph-refresh", "agent-debug", "skill-scout"}:
+    if skill_id in {
+        "loop",
+        "img-summary",
+        "harness-session-inventory",
+        "codegraph-refresh",
+        "agent-debug",
+        "instinct-ledger",
+        "skill-scout",
+    }:
         return examples[:1]
     if lane_id in _COMPACT_FULL_CAPABILITY_EXAMPLE_LANES:
         return examples[:1]
@@ -159,4 +174,4 @@ def _skill_evidence_boundary(definition: SkillDefinition) -> str:
         return "Review guidance or findings are not fix, verification, CI, merge-readiness, or merge evidence."
     if definition.category in {"execution", "process", "goal-loop"}:
         return "Execution-oriented workflow guidance remains prepared_not_observed until matching executor/runtime evidence exists."
-    return "Skill routing and Hermes guidance are not execution evidence."
+    return "Skill routing/guidance is not execution evidence."
