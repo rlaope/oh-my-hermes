@@ -1051,6 +1051,22 @@ _BROWSER_VISUAL_QA_PHRASES = (
     "screenshot qa",
     "visual qa",
 )
+_CUSTOMER_SYMPTOM_REPORT_PHRASES = (
+    "customers say",
+    "customers report",
+    "customer says",
+    "customer reports",
+    "users say",
+    "users report",
+    "user says",
+    "user reports",
+    "고객이 말",
+    "고객이 제보",
+    "고객 제보",
+    "사용자가 말",
+    "사용자가 제보",
+    "사용자 제보",
+)
 _FEEDBACK_TRIAGE_SOURCE_TOKENS = _normalized_token_set(
     {
         "customer",
@@ -3677,7 +3693,10 @@ def _feedback_before_coding_guard_applies(
     *,
     direct_coding_task_applies: bool | None = None,
 ) -> bool:
-    if _contains_phrase(normalized_query, _BROWSER_VISUAL_QA_PHRASES):
+    if _contains_phrase(normalized_query, _BROWSER_VISUAL_QA_PHRASES) and not _contains_phrase(
+        normalized_query,
+        _CUSTOMER_SYMPTOM_REPORT_PHRASES,
+    ):
         return False
     if _gateway_intent_guard_applies(normalized_query, query_tokens):
         return False

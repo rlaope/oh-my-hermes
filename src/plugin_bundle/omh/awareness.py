@@ -61,6 +61,44 @@ _OMH_DIAGNOSTIC_EVALUATION_CUES = (
     "플랜으로 잡",
     "반복해서 강화",
 )
+_BROWSER_VISUAL_QA_HINT_PHRASES = (
+    "browser qa",
+    "browser interaction qa",
+    "click path",
+    "click-path audit",
+    "dead link check",
+    "console error check",
+    "network failure check",
+    "keyboard navigation check",
+    "screenshot qa",
+    "visual qa",
+)
+_RELEASE_CLAIM_REVIEW_HINT_PHRASES = (
+    "claim",
+    "claims",
+    "readme claim",
+    "docs claim",
+    "claim-vs-code",
+    "claim vs code",
+    "claim이",
+    "주장",
+)
+_CUSTOMER_SYMPTOM_REPORT_HINT_PHRASES = (
+    "customers say",
+    "customers report",
+    "customer says",
+    "customer reports",
+    "users say",
+    "users report",
+    "user says",
+    "user reports",
+    "고객이 말",
+    "고객이 제보",
+    "고객 제보",
+    "사용자가 말",
+    "사용자가 제보",
+    "사용자 제보",
+)
 
 try:  # Keep installed plugin bundles usable even when the full package is absent.
     from ...routing.intent import META_OR_FEEDBACK_INTENTS, classify_omh_quality_intent, classify_workflow_intent
@@ -2425,8 +2463,18 @@ _ROUTE_HINT_RULES = (
             "bug report",
             "issue triage",
             "user feedback",
+            "customers say",
+            "customers report",
+            "customer says",
+            "customer reports",
+            "users say",
+            "users report",
+            "user says",
+            "user reports",
             "결제 실패",
             "고객 피드백",
+            "고객 제보",
+            "사용자 제보",
             "버그",
             "이슈",
             "피드백",
@@ -3669,6 +3717,10 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
         )
     ):
         return True
+    if rule_id == "release_gate_review" and _browser_visual_qa_hint_suppresses_release_gate(text):
+        return True
+    if rule_id == "visual_qa_gate" and _customer_symptom_report_hint_suppresses_visual_qa(text):
+        return True
     if rule_id == "production_readiness_audit" and any(
         phrase in text
         for phrase in (
@@ -3782,6 +3834,20 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
     ):
         return True
     return False
+
+
+def _browser_visual_qa_hint_suppresses_release_gate(text: str) -> bool:
+    has_browser_visual_qa = any(phrase in text for phrase in _BROWSER_VISUAL_QA_HINT_PHRASES)
+    if not has_browser_visual_qa:
+        return False
+    return not any(phrase in text for phrase in _RELEASE_CLAIM_REVIEW_HINT_PHRASES)
+
+
+def _customer_symptom_report_hint_suppresses_visual_qa(text: str) -> bool:
+    has_browser_visual_qa = any(phrase in text for phrase in _BROWSER_VISUAL_QA_HINT_PHRASES)
+    if not has_browser_visual_qa:
+        return False
+    return any(phrase in text for phrase in _CUSTOMER_SYMPTOM_REPORT_HINT_PHRASES)
 
 
 def _unique_strings(values: object) -> list[str]:

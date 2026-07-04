@@ -176,6 +176,34 @@ _FEEDBACK_TRIAGE_FAST_PATH_BLOCKERS = (
     "계획",
     "pr",
 )
+_BROWSER_VISUAL_QA_FAST_PATH_TERMS = (
+    "browser qa",
+    "browser interaction qa",
+    "click path audit",
+    "click-path audit",
+    "dead link check",
+    "console error check",
+    "network failure check",
+    "keyboard navigation check",
+    "screenshot qa",
+    "visual qa",
+)
+_CUSTOMER_SYMPTOM_REPORT_FAST_PATH_TERMS = (
+    "customers say",
+    "customers report",
+    "customer says",
+    "customer reports",
+    "users say",
+    "users report",
+    "user says",
+    "user reports",
+    "고객이 말",
+    "고객이 제보",
+    "고객 제보",
+    "사용자가 말",
+    "사용자가 제보",
+    "사용자 제보",
+)
 _FEEDBACK_TRIAGE_FAST_PATH_TERMS = (
     "payment failure",
     "payment failures",
@@ -1358,6 +1386,12 @@ def _route_chat_message_cached(
     )
     if specific_catalog_match is not None:
         full_recommendations = _prioritize_recommendation(full_recommendations, specific_catalog_match)
+    browser_visual_qa_request = _browser_visual_qa_fast_path_signal(routing_message)
+    customer_symptom_report = _customer_symptom_report_fast_path_signal(routing_message)
+    if browser_visual_qa_request and not customer_symptom_report:
+        visual_qa_match = _recommendation_for_skill(full_recommendations, "visual-qa")
+        if visual_qa_match is not None:
+            full_recommendations = _prioritize_recommendation(full_recommendations, visual_qa_match)
     recommendations = tuple(full_recommendations[:limit])
     top = full_recommendations[0]
     candidate_skill = str(top["skill"])
@@ -2971,6 +3005,18 @@ def _feedback_triage_fast_path_signal(text: str) -> bool:
     return any(term in text or _fast_path_compact(term) in compact for term in _FEEDBACK_TRIAGE_FAST_PATH_TERMS)
 
 
+def _browser_visual_qa_fast_path_signal(message: str) -> bool:
+    text = _fast_path_text(message)
+    compact = _fast_path_compact(text)
+    return any(term in text or _fast_path_compact(term) in compact for term in _BROWSER_VISUAL_QA_FAST_PATH_TERMS)
+
+
+def _customer_symptom_report_fast_path_signal(message: str) -> bool:
+    text = _fast_path_text(message)
+    compact = _fast_path_compact(text)
+    return any(term in text or _fast_path_compact(term) in compact for term in _CUSTOMER_SYMPTOM_REPORT_FAST_PATH_TERMS)
+
+
 def _product_shaping_fast_path_decision(
     message: str,
     *,
@@ -3706,6 +3752,16 @@ def _prioritize_recommendation(
 ) -> list[dict[str, object]]:
     selected_skill = str(selected.get("skill", ""))
     return [selected] + [item for item in recommendations if str(item.get("skill", "")) != selected_skill]
+
+
+def _recommendation_for_skill(
+    recommendations: list[dict[str, object]],
+    skill: str,
+) -> dict[str, object] | None:
+    for item in recommendations:
+        if str(item.get("skill", "")) == skill:
+            return item
+    return None
 
 
 def _clarification(action: str, candidate_skill: str, candidate_confidence: str, threshold: str, reason: str = "") -> str:

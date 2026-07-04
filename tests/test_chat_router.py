@@ -1143,6 +1143,37 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(decision["recommendations"][0]["skill"], skill)
                 self.assertEqual(decision["confidence"], "high")
 
+    def test_browser_visual_qa_precedence_keeps_feedback_and_release_boundaries(self) -> None:
+        visual_decision = route_chat_message(
+            "Browser QA the customer feedback page for dead links.",
+            source="discord",
+            limit=5,
+        )
+
+        self.assertEqual(visual_decision["selected_skill"], "visual-qa")
+        self.assertEqual(visual_decision["recommendations"][0]["skill"], "visual-qa")
+
+        feedback_decision = route_chat_message(
+            "Customers say checkout has console error check failures.",
+            source="discord",
+            limit=5,
+        )
+
+        self.assertEqual(feedback_decision["selected_skill"], "feedback-triage")
+        self.assertEqual(feedback_decision["recommendations"][0]["skill"], "feedback-triage")
+
+        feedback_hint = awareness_route_hint("Customers say checkout has console error check failures.")
+        self.assertEqual(feedback_hint["primary_workflow"], "feedback-triage")
+        self.assertEqual(feedback_hint["hints"][0]["id"], "customer_signal")
+
+        click_path_hint = awareness_route_hint("Click path audit the new dashboard buttons before release.")
+        self.assertEqual(click_path_hint["primary_workflow"], "visual-qa")
+        self.assertEqual(click_path_hint["hints"][0]["id"], "visual_qa_gate")
+
+        release_claim_hint = awareness_route_hint("Review README docs claim before release.")
+        self.assertEqual(release_claim_hint["primary_workflow"], "code-review")
+        self.assertEqual(release_claim_hint["hints"][0]["id"], "release_gate_review")
+
     def test_external_wiki_destination_phrases_route_to_wiki_capture(self) -> None:
         cases = (
             (

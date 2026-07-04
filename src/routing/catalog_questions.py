@@ -496,6 +496,18 @@ _FILE_OR_TEXT_MARKERS = (
     "찾아",
     "검색",
 )
+_VISUAL_QA_PATH_REQUEST_MARKERS = (
+    "browser qa",
+    "browser interaction qa",
+    "click path",
+    "click-path audit",
+    "dead link check",
+    "console error check",
+    "network failure check",
+    "keyboard navigation check",
+    "screenshot qa",
+    "visual qa",
+)
 _REPO_LOOKUP_CONTEXT_MARKERS = (
     "repo",
     "repository",
@@ -717,6 +729,8 @@ def _is_file_or_text_search_question(search_texts: tuple[str, ...]) -> bool:
     if _contains_catalog_token(search_texts, _WORKFLOW_REVIEW_INTENT_MARKERS):
         return False
     if _contains_catalog_token(search_texts, _SOURCE_ACQUISITION_CONTEXT_MARKERS):
+        return False
+    if _contains_catalog_token(search_texts, _VISUAL_QA_PATH_REQUEST_MARKERS):
         return False
     if _contains_catalog_token(search_texts, _FILE_OR_TEXT_MARKERS) and _contains_catalog_token(
         search_texts, _REPO_LOOKUP_CONTEXT_MARKERS
