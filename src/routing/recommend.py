@@ -314,6 +314,18 @@ _SKILL_POLICIES = {
             "risk_and_unknowns_map/v1, and first_task_runway/v1 from observed repo evidence."
         ),
     ),
+    "codegraph-refresh": RecommendationPolicy(
+        next_action="prepare_codegraph_refresh",
+        evidence_boundary=(
+            "A codegraph refresh plan is not command execution, artifact write, architecture proof, executor dispatch, "
+            "implementation, review, CI, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare codegraph_refresh_plan/v1 with repo root, refresh depth, build/summary/handoff command choices, "
+            "staleness_and_scope_report/v1, `.omh/codegraph/codegraph.json` write requirements, and observed-only "
+            "omh_codegraph_summary/v1 or omh_codegraph_context/v1 evidence."
+        ),
+    ),
     "context-budget-review": RecommendationPolicy(
         next_action="prepare_context_budget_review",
         evidence_boundary=(

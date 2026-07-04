@@ -3759,6 +3759,25 @@ def _feedback_before_coding_guard_applies(
 def _workflow_learning_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _WORKFLOW_LEARNING_PHRASES):
         return True
+    codegraph_refresh_signal = bool({"codegraph", "codemap", "codemaps", "코드그래프", "코드맵"} & query_tokens) or _contains_phrase(
+        normalized_query,
+        (
+            "codegraph refresh",
+            "refresh codegraph",
+            "refresh the codegraph",
+            "update codegraph",
+            "update the codegraph",
+            "update codemaps",
+            "refresh codemap",
+            "code map",
+            "stale index",
+            "코드그래프 갱신",
+            "코드맵 갱신",
+        ),
+    )
+    explicit_learning_signal = bool({"learn", "learning", "regression", "회귀", "학습"} & query_tokens)
+    if codegraph_refresh_signal and not explicit_learning_signal:
+        return False
     capability_terms = bool({"learning", "trace", "eval", "regression", "patch"} & query_tokens) or _contains_phrase(
         normalized_query,
         (

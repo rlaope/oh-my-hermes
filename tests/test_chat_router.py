@@ -214,6 +214,24 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "refresh the codegraph and prepare a handoff for routing changes",
+                "codegraph-refresh",
+                "prepare_codegraph_refresh",
+                None,
+            ),
+            (
+                "understand this repo first, then refresh the codemap only if a task-scoped handoff is needed",
+                "codebase-onboarding",
+                "prepare_codebase_onboarding",
+                None,
+            ),
+            (
+                "코드맵 갱신하고 다음 구현에 필요한 handoff 만들어줘",
+                "codegraph-refresh",
+                "prepare_codegraph_refresh",
+                None,
+            ),
+            (
                 "공개 발표자료 찾아서 요약해줘",
                 "source-finder",
                 "prepare_source_finder_plan",
@@ -954,6 +972,14 @@ class ChatRouterTests(unittest.TestCase):
             (
                 "inventory Codex Claude Code Hermes MCP configs and worktrees for drift",
                 "harness-session-inventory",
+            ),
+            (
+                "update codemaps and prepare a handoff for the routing package before the next coding pass",
+                "codegraph-refresh",
+            ),
+            (
+                "give me a first-read onboarding path for this repo before touching codemaps",
+                "codebase-onboarding",
             ),
             (
                 "release before lunch, check risky parts from mobile.",
@@ -2020,6 +2046,12 @@ class ChatRouterTests(unittest.TestCase):
                 "MCP tool-call",
                 "connector availability",
                 "session progress",
+            ),
+            "codegraph-refresh": (
+                "command execution",
+                "artifact write",
+                "implementation",
+                "CI",
             ),
             "ops-observability-card": (
                 "billing truth",

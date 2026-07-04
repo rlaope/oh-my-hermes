@@ -60,6 +60,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "deep-interview",
             "ralplan",
             "codebase-onboarding",
+            "codegraph-refresh",
             "ultragoal",
             "loop",
             "strategy-brief",
@@ -836,7 +837,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
 
 def _standalone_skill_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    if skill_id in {"loop", "img-summary", "harness-session-inventory"}:
+    if skill_id in {"loop", "img-summary", "harness-session-inventory", "codegraph-refresh"}:
         return examples[:1]
     return examples[:2]
 

@@ -254,6 +254,7 @@ class RouterContentTests(unittest.TestCase):
             "agent-evaluation",
             "rules-distill",
             "codebase-onboarding",
+            "codegraph-refresh",
             "context-budget-review",
             "security-safety-review",
             "automation-blueprint",
@@ -376,6 +377,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["agent-evaluation"].next_action, "prepare_agent_evaluation")
         self.assertEqual(recommend_module._SKILL_POLICIES["rules-distill"].next_action, "prepare_rules_distillation")
         self.assertEqual(recommend_module._SKILL_POLICIES["codebase-onboarding"].next_action, "prepare_codebase_onboarding")
+        self.assertEqual(recommend_module._SKILL_POLICIES["codegraph-refresh"].next_action, "prepare_codegraph_refresh")
         self.assertEqual(
             recommend_module._SKILL_POLICIES["context-budget-review"].next_action,
             "prepare_context_budget_review",
@@ -519,6 +521,7 @@ class RouterContentTests(unittest.TestCase):
                 "agent-evaluation",
                 "rules-distill",
                 "codebase-onboarding",
+                "codegraph-refresh",
                 "context-budget-review",
                 "security-safety-review",
                 "scheduled-ops-blueprint",
@@ -564,6 +567,12 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertIn("first_task_runway_prepared", codebase_line)
         self.assertIn("record_first_task_runway", codebase_line)
+        codegraph_line = next(
+            line for line in harness_registry.splitlines() if line.startswith("- `codegraph-refresh`:")
+        )
+        self.assertIn("codegraph_handoff_prepared_when_task_scoped", codegraph_line)
+        self.assertIn("codegraph_handoff_observed_when_available", codegraph_line)
+        self.assertIn("record_codegraph_handoff", codegraph_line)
         context_budget_line = next(
             line for line in harness_registry.splitlines() if line.startswith("- `context-budget-review`:")
         )
@@ -938,6 +947,15 @@ class RouterContentTests(unittest.TestCase):
                 "ladder": "first_task_runway_prepared",
                 "action": "prepare_codebase_onboarding",
                 "template": "first_task_runway/v1",
+            },
+            "codegraph-refresh": {
+                "category": "planning",
+                "phase": "codegraph-refresh",
+                "quality_tier": "codegraph-gated",
+                "output": "codegraph_command_plan/v1",
+                "ladder": "codegraph_handoff_observed_when_available",
+                "action": "prepare_codegraph_refresh",
+                "template": ".omh/codegraph/codegraph.json",
             },
             "context-budget-review": {
                 "category": "observability",

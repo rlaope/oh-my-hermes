@@ -68,7 +68,7 @@ def _skill_capability(
         "chat_rule": str(awareness.get("chat_rule") or ""),
         "fallback_rule": str(awareness.get("fallback_rule") or ""),
         "cross_lane_examples": _capability_lane_examples(lane_id, definition.name),
-        "do_not_use_when": _bounded_list(definition.do_not_use_when, 4),
+        "do_not_use_when": _bounded_list(definition.do_not_use_when, 2),
         "orchestration_eligibility": _orchestration_eligibility(definition),
         "tool_requirements": {
             "derivation_status": "partial",
@@ -136,7 +136,7 @@ def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_us
 
 def _capability_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    if skill_id in {"loop", "img-summary", "harness-session-inventory"}:
+    if skill_id in {"loop", "img-summary", "harness-session-inventory", "codegraph-refresh"}:
         return examples[:1]
     if lane_id in _COMPACT_FULL_CAPABILITY_EXAMPLE_LANES:
         return examples[:1]
