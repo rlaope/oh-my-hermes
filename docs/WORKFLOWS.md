@@ -3844,6 +3844,64 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - An agent ops review card is not source retrieval, executor dispatch, coding progress, implementation, review, verification, CI, merge, platform delivery, provider billing, or live runtime telemetry evidence. If Hermes is the coding owner, summarize `hermes_coding_harness/v1` stage, lane owner, next action, and missing evidence.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### skill-health
+
+[omh] Skill Health workflow: prepare a metadata-only OMH skill portfolio dashboard with stale surfaces, observed failure signals, pending amendments, and top actions.
+
+- Category: `operations`
+- Phase: `skill-health`
+- Hermes role: `operator`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when operators need a portfolio health dashboard for skills, generated surfaces, failure-pattern signals, pending amendments, and safe improvement actions.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `skill-health` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when operators need portfolio-level skill health without treating it as install repair, live execution success, or automatic skill mutation.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `skill-health`, `skill health`, `skill portfolio health`, `skill dashboard`, `skill health dashboard`, `skill failure pattern dashboard`, `skill failure patterns`, `pending skill amendments`, `skill amendments`, `스킬 헬스`, `스킬 상태`, `스킬 대시보드`, `스킬 실패 패턴`, `스킬 개선 후보`, `스킬 보류 수정`
+- Good example:
+  - Prompt: skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.
+  - Expected behavior: Produce `prepare_skill_health` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: skill-health claim every skill is working and patch the failures automatically without observed signals or review.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Dashboard scope, source surfaces, stale/duplicate criteria, and stop condition are explicit.
+  - Install/setup health is routed to doctor; catalog operations are routed to skill; failure retrospectives are routed to workflow-learning.
+  - No skill, prompt, doc, memory, or model behavior is claimed changed until a reviewed implementation records evidence.
+- Recovery notes:
+  - If the request is about OMH setup, install, stale package paths, or command availability, route to doctor.
+  - If the request is a missed-route or self-improvement trace, route to workflow-learning before adding health actions.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - skill_portfolio_health_dashboard/v1
+  - skill_failure_pattern_clusters/v1 when observed
+  - pending_skill_amendment_review/v1
+  - skill_health_action_plan/v1
+- Artifact expectations:
+  - skill_portfolio_health_dashboard/v1 with catalog, generated, reference, harness, and capability-surface status
+  - skill_failure_pattern_clusters/v1 only from supplied traces, tests, reviews, missed routes, or wrapper observations
+  - skill_health_action_plan/v1 with top actions, owner lane, verification path, and non-mutation boundary
+- Safety rules:
+  - A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### workflow-learning
 
 [omh] Hermes workflow learning workflow: classify and review self-improvement store routes as an auxiliary review lane before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.
@@ -6692,6 +6750,55 @@ Prepare a manager-facing quality and throughput review for AI-agent research, co
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - An agent ops review card is not source retrieval, executor dispatch, implementation, verification, review, CI, merge, delivery, provider billing, or live telemetry evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### skill-health
+
+Prepare a metadata-only health dashboard for OMH skills, observed failure signals, pending amendments, and top actions.
+
+- Use when: Use when operators need portfolio-level skill health without treating health review as install repair, live execution success, automatic mutation, or future-routing proof.
+- Quality tier: `skill-health-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - skill portfolio scope
+  - catalog/generated/reference surfaces
+  - observed failure signals or explicit missing-signal statement
+  - pending amendment sources when available
+- Outputs:
+  - skill_portfolio_health_dashboard/v1
+  - skill_failure_pattern_clusters/v1 when observed
+  - pending_skill_amendment_review/v1
+  - skill_health_action_plan/v1
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `skill_health_scope_recorded`
+  - `catalog_surface_inventory_prepared`
+  - `failure_signals_clustered_when_observed`
+  - `pending_amendments_recorded_when_available`
+  - `top_actions_prepared`
+- Wrapper actions:
+  - `prepare_skill_health`
+  - `show_skill_health`
+  - `record_skill_health_signal`
+  - `record_skill_amendment_review`
+  - `route_to_doctor_skill_or_workflow_learning`
+- Artifact events:
+  - `skill-health_scoped`
+  - `skill-health_card_prepared`
+  - `skill-health_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### workflow-learning

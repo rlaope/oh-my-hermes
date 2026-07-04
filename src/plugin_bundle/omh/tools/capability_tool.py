@@ -171,6 +171,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "agent-evaluation",
             "rules-distill",
             "context-budget-review",
+            "skill-health",
             "workflow-learning",
             "memory-curation-review",
             "achievements",
@@ -821,8 +822,8 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
                     "awareness_lane_label": lane_label,
                     "use_for": str(lane.get("use_for") or ""),
                     "workflow_routing_hint": (
-                        f"Use `{skill_id}` for {lane_label}: {lane.get('use_for') or 'OMH workflow guidance'}. "
-                        "Name adjacent workflow for cross-lane requests."
+                        f"Use `{skill_id}` for {lane_label}: {lane.get('use_for') or 'OMH workflow guidance'}; "
+                        "name adjacent workflow."
                     ),
                     "workflow_context_rule": context_rule,
                     "chat_rule": chat_rule,

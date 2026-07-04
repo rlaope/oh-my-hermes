@@ -71,6 +71,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "ops-observability-card": ("workflow_skill", True),
     "achievements": ("workflow_skill", True),
     "agent-ops-review": ("workflow_skill", True),
+    "skill-health": ("workflow_skill", True),
     "workflow-learning": ("workflow_skill", True),
 }
 
@@ -255,6 +256,7 @@ class RouterContentTests(unittest.TestCase):
             "rules-distill",
             "codebase-onboarding",
             "codegraph-refresh",
+            "skill-health",
             "context-budget-review",
             "security-safety-review",
             "automation-blueprint",
@@ -378,6 +380,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["rules-distill"].next_action, "prepare_rules_distillation")
         self.assertEqual(recommend_module._SKILL_POLICIES["codebase-onboarding"].next_action, "prepare_codebase_onboarding")
         self.assertEqual(recommend_module._SKILL_POLICIES["codegraph-refresh"].next_action, "prepare_codegraph_refresh")
+        self.assertEqual(recommend_module._SKILL_POLICIES["skill-health"].next_action, "prepare_skill_health")
+        self.assertIn("skill_portfolio_health_dashboard/v1", recommend_module._SKILL_POLICIES["skill-health"].wrapper_guidance)
+        self.assertIn("future routing is fixed", recommend_module._SKILL_POLICIES["skill-health"].evidence_boundary)
         self.assertEqual(
             recommend_module._SKILL_POLICIES["context-budget-review"].next_action,
             "prepare_context_budget_review",
@@ -544,6 +549,7 @@ class RouterContentTests(unittest.TestCase):
                 "harness-session-inventory",
                 "ops-observability-card",
                 "agent-ops-review",
+                "skill-health",
                 "workflow-learning",
             },
             harnesses,
@@ -573,6 +579,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("codegraph_handoff_prepared_when_task_scoped", codegraph_line)
         self.assertIn("codegraph_handoff_observed_when_available", codegraph_line)
         self.assertIn("record_codegraph_handoff", codegraph_line)
+        skill_health_line = next(
+            line for line in harness_registry.splitlines() if line.startswith("- `skill-health`:")
+        )
+        self.assertIn("failure_signals_clustered_when_observed", skill_health_line)
+        self.assertIn("record_skill_health_signal", skill_health_line)
         context_budget_line = next(
             line for line in harness_registry.splitlines() if line.startswith("- `context-budget-review`:")
         )

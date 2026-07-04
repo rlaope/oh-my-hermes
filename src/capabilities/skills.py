@@ -73,7 +73,7 @@ def _skill_capability(
         "tool_requirements": {
             "derivation_status": "partial",
             "required_tools": [],
-            "fallback": "No declared tool requirement.",
+            "fallback": "none",
         },
         "evidence_boundary": _skill_evidence_boundary(definition),
     }
@@ -125,12 +125,10 @@ def _awareness_lane_by_skill(awareness: dict[str, object]) -> dict[str, dict[str
 def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_use_for: str) -> str:
     if lane_label and lane_use_for:
         return (
-            f"Use `{definition.name}` for {lane_label}: {lane_use_for}. "
-            "Name adjacent workflow for cross-lane requests."
+            f"Use `{definition.name}` for {lane_label}: {lane_use_for}; name adjacent workflow."
         )
     return (
-        f"Use `{definition.name}` for its catalog purpose: {definition.use_when}. "
-        "Name adjacent workflow for cross-lane requests."
+        f"Use `{definition.name}` for its catalog purpose: {definition.use_when}; name adjacent workflow."
     )
 
 
