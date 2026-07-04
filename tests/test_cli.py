@@ -4378,6 +4378,43 @@ class CliTests(unittest.TestCase):
                 self.assertIn("process orchestration", top["evidence_boundary"])
                 self.assertIn("prepared_not_observed", top["wrapper_guidance"])
 
+    def test_recommend_build_failure_triage_beats_verification_gate(self) -> None:
+        message = "CI failed on Python 3.12 test with pytest failure and PR checks failed; triage the build failure"
+
+        status, stdout, stderr = run_cli(["recommend", message, "--limit", "3", "--json"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        top = recommendations[0]
+        self.assertEqual(top["skill"], "build-failure-triage")
+        self.assertEqual(top["next_action"], "prepare_build_failure_triage")
+        self.assertIn("direct:build_failure_triage", top["matched"])
+        self.assertIn("failure_log_digest/v1", top["wrapper_guidance"])
+        self.assertIn("command rerun", top["evidence_boundary"])
+        self.assertNotEqual(top["skill"], "verification-gate")
+
+    def test_recommend_fixed_failure_verification_routes_to_verification_gate(self) -> None:
+        cases = (
+            "I fixed the CI failure; verify before merge",
+            "CI failure is fixed",
+            "CI passed after the fix",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "3", "--json"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                top = recommendations[0]
+                self.assertEqual(top["skill"], "verification-gate")
+                self.assertEqual(top["next_action"], "prepare_verification_gate")
+                self.assertIn("observed_check_results/v1", top["wrapper_guidance"])
+                self.assertIn("direct:fixed_or_pass_verification", top["matched"])
+                self.assertNotIn("build-failure-triage", {item["skill"] for item in recommendations})
+
     def test_chat_interact_multilingual_safe_feature_request_uses_reviewed_plan_surface(self) -> None:
         status, stdout, stderr = run_cli(
             ["chat", "interact", "--source", "hermes", "Ajoute une fonctionnalité en toute sécurité à ce dépôt"]

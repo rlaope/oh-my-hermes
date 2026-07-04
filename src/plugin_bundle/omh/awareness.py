@@ -523,6 +523,7 @@ ROUTER_KEYWORD_SKILLS = (
     "context-budget-review",
     "security-safety-review",
     "code-review",
+    "build-failure-triage",
     "team",
     "ultrawork",
     "ultraqa",
@@ -565,6 +566,7 @@ LANE_CROSS_LANE_EXAMPLES = {
     ],
     "coding_handoff": [
         "accepted plan -> ultraprocess -> coding handoff -> review and CI evidence",
+        "failed checks -> build-failure-triage -> minimal fix handoff -> verification-gate",
         "agentic action risk -> security-safety-review -> safe action policy -> remediation handoff",
         "risky change -> ralplan -> executor selection -> observed coding-agent status",
     ],
@@ -665,7 +667,15 @@ WORKFLOW_CONTEXT_CARDS = (
         "label": "Coding handoff",
         "user_signal": "risky code change, issue-to-PR, review, CI, merge, coding-agent progress, or Hermes coding request",
         "omh_pattern": "choose the coding owner, prepare executor-neutral handoff or Hermes coding team path, then track dispatch and result evidence",
-        "representative_workflows": ("ultraprocess", "code-review", "team", "ultrawork", "ultraqa"),
+        "representative_workflows": (
+            "ultraprocess",
+            "code-review",
+            "build-failure-triage",
+            "verification-gate",
+            "team",
+            "ultrawork",
+            "ultraqa",
+        ),
         "user_examples": ("Turn this issue into a PR-ready plan", "Is the Codex run done yet?"),
         "first_response_shape": "State the selected coding owner or choice point, prepare the handoff/status, and keep dispatch, result, review, CI, and merge evidence separate.",
         "not_evidence_until_observed": ("dispatch", "implementation", "review", "CI", "merge"),
@@ -730,6 +740,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "ai-slop-cleaner": "coding_handoff",
     "ask": "coding_handoff",
     "code-review": "coding_handoff",
+    "build-failure-triage": "coding_handoff",
     "verification-gate": "coding_handoff",
     "security-safety-review": "coding_handoff",
     "cto-loop": "coding_handoff",
@@ -1460,6 +1471,62 @@ _ROUTE_HINT_RULES = (
         "adjacent_workflows": ("verification-gate", "reliability-review", "ops-observability-card"),
     },
     {
+        "id": "build_failure_triage",
+        "workflow": "build-failure-triage",
+        "lane": "coding_handoff",
+        "next_action": "prepare_build_failure_triage",
+        "reason": "The user is asking to triage failing build, typecheck, lint, test, CI, PR check, or DCO signals into a minimal fix handoff.",
+        "fallback_action": "ask_for_fresh_failure_log_or_check_url",
+        "not_evidence_yet": (
+            "code fix",
+            "command rerun",
+            "test pass",
+            "CI pass",
+            "DCO pass",
+            "merge-readiness",
+        ),
+        "phrases": (
+            "build-failure-triage",
+            "build failure triage",
+            "build failure",
+            "build fix",
+            "build failed",
+            "build failing",
+            "compile error",
+            "compilation error",
+            "typecheck failed",
+            "typecheck failure",
+            "type check failed",
+            "tsc failed",
+            "lint failed",
+            "lint failure",
+            "test failed",
+            "test failure",
+            "tests failed",
+            "ci failed",
+            "ci failure",
+            "github actions failed",
+            "pr checks failed",
+            "pr check failure",
+            "dco failed",
+            "dco failure",
+            "pytest failed",
+            "pytest failure",
+            "npm build failed",
+            "cargo build failed",
+            "빌드 실패",
+            "빌드 고쳐",
+            "컴파일 에러",
+            "타입체크 실패",
+            "테스트 실패",
+            "ci 실패",
+            "체크 실패",
+            "dco 실패",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("verification-gate", "code-review", "failure-signal-audit", "ultraprocess"),
+    },
+    {
         "id": "verification_gate",
         "workflow": "verification-gate",
         "lane": "coding_handoff",
@@ -1473,7 +1540,12 @@ _ROUTE_HINT_RULES = (
             "test gate",
             "build lint test",
             "verify before merge",
+            "merge readiness",
             "merge readiness gate",
+            "verification evidence",
+            "evidence matrix",
+            "fresh rerun",
+            "rerun evidence",
             "검증 게이트",
             "품질 게이트",
             "테스트 게이트",
@@ -3291,6 +3363,16 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
         else _without_diagnostic_status_lines(localized_normalized)
     )
     tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]*", routing_normalized))
+    fixed_or_pass_verification_context = (
+        _fixed_or_pass_verification_context(routing_normalized)
+        and not _fixed_or_pass_status_question_context(routing_normalized)
+    )
+    build_failure_triage_match = _route_hint_rule_matches(
+        "build_failure_triage",
+        routing_normalized,
+        tokens,
+        suppress_fixed_or_pass_verification=fixed_or_pass_verification_context,
+    )
     hint_limit = max_hints
     intent = classify_workflow_intent(message)
     omh_quality_intent = classify_omh_quality_intent(message)
@@ -3306,13 +3388,43 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
             hints.append(direct_hint)
         if len(hints) < hint_limit and (
             diagnostic_learning_first
-            or (_prefers_workflow_learning_hint(intent) and not omh_quality_intent.applies)
+            or (
+                _prefers_workflow_learning_hint(intent)
+                and not omh_quality_intent.applies
+                and not build_failure_triage_match
+            )
         ):
             reference_hint = _workflow_vocabulary_reference_hint(intent)
             if not any(
                 isinstance(hint, dict) and hint.get("workflow") == reference_hint.get("workflow") for hint in hints
             ):
                 hints.append(reference_hint)
+        if len(hints) < hint_limit and fixed_or_pass_verification_context:
+            verification_rule = _route_hint_rule_by_id("verification_gate")
+            if verification_rule and not any(
+                isinstance(hint, dict) and hint.get("workflow") == "verification-gate" for hint in hints
+            ):
+                context_card = workflow_context_card_for_workflow("verification-gate")
+                hints.append(
+                    {
+                        "id": str(verification_rule["id"]),
+                        "workflow": "verification-gate",
+                        "lane": str(verification_rule["lane"]),
+                        "next_action": str(verification_rule["next_action"]),
+                        "reason": "The user is making a fixed or passing check claim, so Hermes should gather fresh verification evidence instead of re-triaging stale failures.",
+                        "fallback_action": str(verification_rule["fallback_action"]),
+                        "matched_cues": ["fixed_or_pass_claim"],
+                        "adjacent_workflows": list(verification_rule["adjacent_workflows"]),
+                        "workflow_context_card": context_card,
+                        "not_evidence_yet": _workflow_not_evidence_yet(
+                            "verification-gate",
+                            context_card,
+                            verification_rule,
+                        )
+                        if isinstance(context_card, dict)
+                        else [],
+                    }
+                )
         for rule in _ROUTE_HINT_RULES:
             if len(hints) >= hint_limit:
                 break
@@ -3321,6 +3433,8 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
             if _rule_suppressed_by_reference_intent(rule, intent):
                 continue
             if _rule_suppressed_by_context(rule, routing_normalized):
+                continue
+            if rule["id"] == "build_failure_triage" and fixed_or_pass_verification_context:
                 continue
             phrase_matches = [phrase for phrase in rule["phrases"] if phrase in routing_normalized]
             token_matches = [token for token in rule["tokens"] if token in tokens]
@@ -3389,6 +3503,153 @@ def _awareness_route_hint_cached(message: str, max_hints: int) -> dict[str, obje
             "tool invocation, generated output, verification, review, CI, merge, or proof that routing was correct."
         ),
     }
+
+
+def _route_hint_rule_matches(
+    rule_id: str,
+    routing_normalized: str,
+    tokens: set[str],
+    *,
+    suppress_fixed_or_pass_verification: bool = False,
+) -> bool:
+    if rule_id == "build_failure_triage" and suppress_fixed_or_pass_verification:
+        return False
+    for rule in _ROUTE_HINT_RULES:
+        if rule.get("id") != rule_id:
+            continue
+        return any(phrase in routing_normalized for phrase in rule["phrases"]) or any(
+            token in tokens for token in rule["tokens"]
+        )
+    return False
+
+
+def _route_hint_rule_by_id(rule_id: str) -> dict[str, object] | None:
+    for rule in _ROUTE_HINT_RULES:
+        if rule.get("id") == rule_id:
+            return rule
+    return None
+
+
+def _fixed_or_pass_verification_context(routing_normalized: str) -> bool:
+    if any(_contains_phrase(routing_normalized, phrase) for phrase in _BUILD_FAILURE_TRIAGE_OVERRIDE_PHRASES):
+        return False
+    has_fixed_or_pass = any(_contains_phrase(routing_normalized, phrase) for phrase in _FIXED_OR_PASS_PHRASES)
+    has_verify_or_merge = any(
+        _contains_phrase(routing_normalized, phrase) for phrase in _VERIFY_OR_MERGE_READY_PHRASES
+    )
+    has_build_or_check_context = any(
+        _contains_phrase(routing_normalized, phrase) for phrase in _BUILD_OR_CHECK_CONTEXT_PHRASES
+    )
+    return has_fixed_or_pass and (has_verify_or_merge or has_build_or_check_context)
+
+
+def _fixed_or_pass_status_question_context(routing_normalized: str) -> bool:
+    if any(_contains_phrase(routing_normalized, phrase) for phrase in _FIXED_OR_PASS_COMPLETION_CLAIM_PHRASES):
+        return False
+    return any(_contains_phrase(routing_normalized, phrase) for phrase in _FIXED_OR_PASS_STATUS_QUESTION_PHRASES)
+
+
+_BUILD_FAILURE_TRIAGE_OVERRIDE_PHRASES = (
+    "build-failure-triage",
+    "build failure triage",
+    "triage",
+    "minimal fix",
+    "minimal-fix",
+    "minimal safe fix",
+    "root cause",
+    "root-cause",
+    "diagnose",
+    "classify",
+    "failure log",
+    "log into",
+    "원인",
+    "분류",
+    "최소 수정",
+)
+_FIXED_OR_PASS_PHRASES = (
+    "fixed",
+    "resolved",
+    "passed",
+    "passing",
+    "green",
+    "now passes",
+    "now passing",
+    "고쳤",
+    "수정 완료",
+    "해결",
+    "통과했",
+    "통과됨",
+    "통과 완료",
+)
+_FIXED_OR_PASS_COMPLETION_CLAIM_PHRASES = (
+    "after the fix",
+    "after fix",
+    "fixed",
+    "resolved",
+    "수정 완료",
+    "고쳤",
+    "해결",
+)
+_FIXED_OR_PASS_STATUS_QUESTION_PHRASES = (
+    "did ci pass",
+    "did the ci pass",
+    "did checks pass",
+    "did the checks pass",
+    "ci status",
+    "pr review status",
+    "ci passed",
+    "ci 통과했어",
+    "ci 통과했는지",
+    "현재 pr 리뷰 통과",
+    "현재 pr 리뷰 통과했어",
+)
+_VERIFY_OR_MERGE_READY_PHRASES = (
+    "verify",
+    "verification",
+    "verification gate",
+    "verify before merge",
+    "merge readiness",
+    "merge-ready",
+    "ready to merge",
+    "before merge",
+    "evidence matrix",
+    "fresh rerun",
+    "rerun evidence",
+    "검증",
+    "머지 가능",
+    "머지 전",
+)
+_BUILD_OR_CHECK_CONTEXT_PHRASES = (
+    "build",
+    "compile",
+    "typecheck",
+    "type check",
+    "tsc",
+    "lint",
+    "test",
+    "tests",
+    "pytest",
+    "ci",
+    "github actions",
+    "pr check",
+    "pr checks",
+    "check",
+    "checks",
+    "dco",
+    "failure",
+    "failed",
+    "failing",
+    "빌드",
+    "컴파일",
+    "타입체크",
+    "테스트",
+    "체크",
+    "실패",
+)
+
+
+def _contains_phrase(haystack: str, phrase: str) -> bool:
+    return phrase in haystack
 
 
 def _localized_routing_text(message: str) -> str:
@@ -3558,6 +3819,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "cto-loop",
                 "deploy-and-monitor",
                 "code-review",
+                "build-failure-triage",
                 "verification-gate",
                 "security-safety-review",
                 "ultrawork",
@@ -3790,9 +4052,9 @@ def awareness_workflow_context_markdown(skill_name: str) -> str:
 def _compact_workflow_cue_line() -> str:
     return (
         "notes/retros -> operating-rhythm/meeting-brief; PR/issue/bug/feedback/release -> github-event-ops, "
-        "feedback-triage, report-package, or img-summary; supplied papers -> paper-learning; sources/news -> web-research or research-department; "
-        "premium visuals -> design-quality-gate; frontend -> frontend; accessibility/WCAG -> accessibility-audit; screenshots/render checks -> visual-qa; files/decks/PDF/sheets/docs/HWP -> materials/report-package; image cards -> img-summary; "
-        "code/CI/merge -> ultraprocess/code-review/verification-gate; "
+        "feedback-triage, report-package, or img-summary; papers -> paper-learning; sources/news -> web-research/research-department; "
+        "premium visuals -> design-quality-gate; frontend -> frontend; accessibility/WCAG -> accessibility-audit; screenshots/render -> visual-qa; files/docs -> materials/report-package; image cards -> img-summary; "
+        "failed checks -> build-failure-triage; code/CI/merge -> ultraprocess/code-review/verification-gate; "
         "agent failure/drift -> agent-debug; hidden failures -> failure-signal-audit; lessons -> instinct-ledger; regression -> workflow-learning"
     )
 
@@ -3804,7 +4066,7 @@ def _compact_workflow_context_cards_line() -> str:
         "materials -> design-quality-gate/frontend/accessibility-audit/visual-qa/materials-package; "
         "ops -> automation/workspace/production/context-budget/agent-debug/failure-signal-audit/instinct-ledger/skill-health/learning/doctor; "
         "eval/rules -> agent-evaluation/rules-distill; "
-        "code -> ultraprocess/code-review/verification-gate/security-safety-review/team/ultraqa"
+        "code -> ultraprocess/code-review/build-failure-triage/verification-gate/team/ultraqa"
     )
 
 
@@ -3812,7 +4074,7 @@ def _compact_generic_tool_checkpoint_line() -> str:
     return (
         "image->img-summary; frontend->frontend/accessibility-audit/visual-qa; paper->paper-learning; file->materials-package; "
         "search->web-research; audit->workspace-audit/production-audit/security-safety-review; "
-        "verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultraprocess"
+        "failures->build-failure-triage; verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultraprocess"
     )
 
 
@@ -3833,6 +4095,7 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "visual-qa": "prepare_visual_qa",
     "workspace-audit": "prepare_workspace_audit",
     "production-audit": "prepare_production_audit",
+    "build-failure-triage": "prepare_build_failure_triage",
     "verification-gate": "prepare_verification_gate",
     "agent-evaluation": "prepare_agent_evaluation",
     "rules-distill": "prepare_rules_distillation",

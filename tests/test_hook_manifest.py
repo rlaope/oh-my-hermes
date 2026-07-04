@@ -128,6 +128,60 @@ class HookManifestTests(unittest.TestCase):
         self.assertIn("WCAG PASS", payload["hints"][0]["not_evidence_yet"])
         self.assertNotEqual(payload["primary_workflow"], "frontend")
 
+    def test_awareness_route_hint_prioritizes_explicit_build_failure_triage(self) -> None:
+        message = "build-failure-triage CI failed on Python 3.12 pytest and PR checks failed; make a minimal fix handoff."
+
+        payload = awareness_route_hint(message)
+
+        self.assertEqual(payload["status"], "hinted")
+        self.assertEqual(payload["primary_workflow"], "build-failure-triage")
+        self.assertEqual(payload["primary_next_action"], "prepare_build_failure_triage")
+        self.assertEqual(payload["hints"][0]["id"], "direct_workflow_invocation")
+        self.assertIn("CI pass", payload["hints"][0]["not_evidence_yet"])
+        self.assertNotEqual(payload["primary_workflow"], "verification-gate")
+
+    def test_awareness_route_hint_prioritizes_failed_check_triage_over_workflow_learning(self) -> None:
+        message = "CI failed on Python 3.12 pytest and PR checks failed; triage the build failure into a minimal fix handoff."
+
+        payload = awareness_route_hint(message)
+
+        self.assertEqual(payload["status"], "hinted")
+        self.assertEqual(payload["primary_workflow"], "build-failure-triage")
+        self.assertEqual(payload["primary_next_action"], "prepare_build_failure_triage")
+        self.assertEqual(payload["hints"][0]["id"], "build_failure_triage")
+        self.assertIn("CI pass", payload["hints"][0]["not_evidence_yet"])
+        self.assertNotEqual(payload["primary_workflow"], "workflow-learning")
+
+    def test_awareness_route_hint_keeps_generic_check_matrix_on_verification_gate(self) -> None:
+        message = "verify before merge: build lint typecheck tests and DCO evidence matrix"
+
+        payload = awareness_route_hint(message)
+
+        self.assertEqual(payload["status"], "hinted")
+        self.assertEqual(payload["primary_workflow"], "verification-gate")
+        self.assertEqual(payload["primary_next_action"], "prepare_verification_gate")
+        self.assertEqual(payload["hints"][0]["id"], "verification_gate")
+        self.assertNotEqual(payload["primary_workflow"], "build-failure-triage")
+
+    def test_awareness_route_hint_routes_fixed_failure_claims_to_verification_gate(self) -> None:
+        cases = (
+            "I fixed the CI failure; verify before merge",
+            "CI failure is fixed, please verify before merge and check DCO",
+            "CI passed after the fix; prepare merge readiness verification",
+            "CI failure is fixed",
+            "CI passed after the fix",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertEqual(payload["status"], "hinted")
+                self.assertEqual(payload["primary_workflow"], "verification-gate")
+                self.assertEqual(payload["primary_next_action"], "prepare_verification_gate")
+                self.assertEqual(payload["hints"][0]["id"], "verification_gate")
+                self.assertNotEqual(payload["primary_workflow"], "build-failure-triage")
+
     def test_awareness_route_hint_uses_missed_route_primary_action(self) -> None:
         message = "missed route: Hermes skipped OMH for my image request with secret-token-123"
 

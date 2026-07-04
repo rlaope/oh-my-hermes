@@ -15,6 +15,7 @@ WORKFLOW_VOCABULARY = (
     "ultraprocess",
     "agent-debug",
     "failure-signal-audit",
+    "build-failure-triage",
     "accessibility-audit",
     "instinct-ledger",
     "skill-scout",
