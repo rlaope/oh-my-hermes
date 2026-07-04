@@ -169,6 +169,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "automation-blueprint",
             "agent-ops-review",
             "agent-debug",
+            "failure-signal-audit",
             "instinct-ledger",
             "agent-evaluation",
             "rules-distill",

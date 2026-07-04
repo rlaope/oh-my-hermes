@@ -3704,6 +3704,18 @@ class CliTests(unittest.TestCase):
         self.assertEqual(recommendations[0]["next_action"], "triage_feedback")
         self.assertIn("Feedback triage", recommendations[0]["evidence_boundary"])
 
+    def test_recommend_failure_signal_audit_beats_feedback_guard(self) -> None:
+        status, stdout, stderr = run_cli(["recommend", "실패 신호 감사 해줘", "--limit", "3"])
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        top = recommendations[0]
+        self.assertEqual(top["skill"], "failure-signal-audit")
+        self.assertEqual(top["next_action"], "prepare_failure_signal_audit")
+        self.assertIn("direct:failure_signal_audit", top["matched"])
+        self.assertNotEqual(top["skill"], "feedback-triage")
+
     def test_recommend_omh_quality_loop_routes_to_process_despite_bug_terms(self) -> None:
         cases = (
             "updated OMH로 라우터/맥락/컨텍스트 손실/성능균형/코딩 handoff 유사버그를 계속 찾아 개선하는 루프 실행",

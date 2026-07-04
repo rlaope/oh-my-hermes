@@ -93,6 +93,19 @@ _RISKY_REFACTOR_FOLLOWUP_GUIDANCE_PREFIX = (
     "Treat this as a follow-up only after an accepted reviewed plan; do not present cleanup "
     "as the first action for risk-marked refactoring language. "
 )
+_FAILURE_SIGNAL_AUDIT_EXPLICIT_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "failure-signal-audit",
+        "failure signal audit",
+        "silent failure hunter",
+        "silent failure audit",
+        "hidden failure audit",
+        "false green audit",
+        "실패 신호 감사",
+        "실패 신호",
+    )
+)
 _HARNESS_SESSION_INVENTORY_INTENT_PHRASES = (
     "harness-session-inventory",
     "harness session inventory",
@@ -564,6 +577,18 @@ _SKILL_POLICIES.update(
                 "recovery action, and whether evidence improved or the run remains blocked."
             ),
         ),
+        "failure-signal-audit": RecommendationPolicy(
+            next_action="prepare_failure_signal_audit",
+            evidence_boundary=(
+                "A failure signal audit is not remediation, code modification, runtime repair, console/network pass, "
+                "incident closure, verification, review, CI, merge-readiness, merge, or proof that hidden failures no longer exist."
+            ),
+            wrapper_guidance=(
+                "Prepare failure_signal_audit_plan/v1 with scope, observed-only silent_failure_finding/v1 evidence, "
+                "fallback_risk_matrix/v1, propagation_gap_map/v1, false_green_status_review/v1, and a remediation "
+                "or visual-qa route when hidden failure signals require follow-up."
+            ),
+        ),
     }
 )
 _CATEGORY_POLICIES = {
@@ -968,6 +993,10 @@ def _score_definition(
         score += 1
         matched.add(f"metadata:{token}")
 
+    if definition.name == "failure-signal-audit" and _failure_signal_audit_explicit_match(normalized_query):
+        score += 34
+        matched.add("direct:failure_signal_audit")
+
     if score <= 0:
         return None
 
@@ -1152,6 +1181,10 @@ def _phrase_match(query: str, value: str) -> bool:
 
 def _explicit_phrase_match(query: str, value: str) -> bool:
     return bool(query and value and value in query)
+
+
+def _failure_signal_audit_explicit_match(normalized_query: str) -> bool:
+    return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _FAILURE_SIGNAL_AUDIT_EXPLICIT_PHRASES)
 
 
 def _harness_session_inventory_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:

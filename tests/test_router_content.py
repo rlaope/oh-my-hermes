@@ -72,6 +72,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "achievements": ("workflow_skill", True),
     "agent-ops-review": ("workflow_skill", True),
     "agent-debug": ("workflow_skill", True),
+    "failure-signal-audit": ("workflow_skill", True),
     "instinct-ledger": ("workflow_skill", True),
     "skill-scout": ("workflow_skill", True),
     "skill-health": ("workflow_skill", True),
@@ -393,6 +394,18 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["agent-debug"].next_action, "prepare_agent_debug")
         self.assertIn("agent_debug_report/v1", recommend_module._SKILL_POLICIES["agent-debug"].wrapper_guidance)
         self.assertIn("hidden state mutation", recommend_module._SKILL_POLICIES["agent-debug"].evidence_boundary)
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["failure-signal-audit"].next_action,
+            "prepare_failure_signal_audit",
+        )
+        self.assertIn(
+            "failure_signal_audit_plan/v1",
+            recommend_module._SKILL_POLICIES["failure-signal-audit"].wrapper_guidance,
+        )
+        self.assertIn(
+            "hidden failures no longer exist",
+            recommend_module._SKILL_POLICIES["failure-signal-audit"].evidence_boundary,
+        )
         self.assertEqual(recommend_module._SKILL_POLICIES["instinct-ledger"].next_action, "prepare_instinct_ledger")
         self.assertIn("instinct_ledger_plan/v1", recommend_module._SKILL_POLICIES["instinct-ledger"].wrapper_guidance)
         self.assertIn("global promotion", recommend_module._SKILL_POLICIES["instinct-ledger"].evidence_boundary)
@@ -563,6 +576,7 @@ class RouterContentTests(unittest.TestCase):
                 "ops-observability-card",
                 "agent-ops-review",
                 "agent-debug",
+                "failure-signal-audit",
                 "instinct-ledger",
                 "skill-scout",
                 "skill-health",
@@ -1016,6 +1030,15 @@ class RouterContentTests(unittest.TestCase):
                 "ladder": "failure_state_captured",
                 "action": "prepare_agent_debug",
                 "template": "contained_recovery_action/v1",
+            },
+            "failure-signal-audit": {
+                "category": "review",
+                "phase": "failure-signal-audit",
+                "quality_tier": "workflow-surface-gated",
+                "output": "failure_signal_audit_plan/v1",
+                "ladder": "fallback_risk_matrix_prepared",
+                "action": "prepare_failure_signal_audit",
+                "template": "false_green_status_review/v1",
             },
             "instinct-ledger": {
                 "category": "optimization",
