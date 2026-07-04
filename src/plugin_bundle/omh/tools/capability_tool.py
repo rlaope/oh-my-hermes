@@ -171,6 +171,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "agent-evaluation",
             "rules-distill",
             "context-budget-review",
+            "skill-scout",
             "skill-health",
             "workflow-learning",
             "memory-curation-review",
@@ -838,9 +839,7 @@ def _standalone_skill_capabilities() -> list[dict[str, object]]:
 
 def _standalone_skill_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    if skill_id in {"loop", "img-summary", "harness-session-inventory", "codegraph-refresh"}:
-        return examples[:1]
-    return examples[:2]
+    return examples[:1]
 
 
 def _standalone_playbook_capabilities() -> list[dict[str, object]]:

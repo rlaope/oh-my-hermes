@@ -57,6 +57,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "prepare_rules_distillation": "preparing rule candidates",
     "prepare_scheduled_ops_blueprint": "preparing a scheduled-ops blueprint",
     "prepare_security_safety_review": "preparing a security safety review",
+    "prepare_skill_scout": "preparing a skill candidate scout",
     "prepare_skill_health": "preparing a skill health dashboard",
     "prepare_source_finder_plan": "scoping source candidates",
     "prepare_strategy_brief": "preparing a strategy brief",

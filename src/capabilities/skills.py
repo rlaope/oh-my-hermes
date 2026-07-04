@@ -54,7 +54,7 @@ def _skill_capability(
         "triggers": _bounded_list(definition.triggers, 8),
         "required_inputs": _bounded_list(definition.required_inputs, 4),
         "expected_outputs": _bounded_list(definition.expected_outputs, 6),
-        "artifact_expectations": _bounded_list(definition.artifact_expectations, 3),
+        "artifact_expectations": _bounded_list(definition.artifact_expectations, 1),
         "safety_rules": _bounded_list(definition.safety_rules, 4),
         "quality_tier": definition.quality_tier,
         "quality_bar": _bounded_list(definition.quality_bar, 4),
@@ -134,7 +134,7 @@ def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_us
 
 def _capability_lane_examples(lane_id: str, skill_id: str) -> list[str]:
     examples = awareness_lane_examples(lane_id)
-    if skill_id in {"loop", "img-summary", "harness-session-inventory", "codegraph-refresh"}:
+    if skill_id in {"loop", "img-summary", "harness-session-inventory", "codegraph-refresh", "skill-scout"}:
         return examples[:1]
     if lane_id in _COMPACT_FULL_CAPABILITY_EXAMPLE_LANES:
         return examples[:1]
