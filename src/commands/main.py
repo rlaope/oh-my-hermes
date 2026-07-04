@@ -5,6 +5,13 @@ import sys
 
 from ..version import __version__
 from ..installer import OmhError
+from .achievements import (
+    _add_achievements_commands,
+    cmd_achievements_export,
+    cmd_achievements_list,
+    cmd_achievements_show,
+    cmd_achievements_summary,
+)
 from .capabilities import (
     _add_capabilities_commands,
     cmd_capabilities_export,
@@ -193,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh playbook recommend \"turn this issue into a PR\"\n"
             "  omh chat interact \"turn this issue into a PR-ready plan\"\n"
             "  omh hud\n"
+            "  omh achievements summary\n"
             "  omh menubar status\n"
             "  omh mcp manifest\n"
             "  omh mcp config-recipe --host codex\n"
@@ -235,6 +243,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_release_commands(sub)
     _add_demo_commands(sub)
     _add_chat_commands(sub)
+    _add_achievements_commands(sub)
     _add_capabilities_commands(sub)
     _add_conformance_commands(sub)
     _add_context_commands(sub)
@@ -296,6 +305,8 @@ Useful operator commands:
   omh playbook recommend "turn this issue into a PR"
   omh chat interact "turn this issue into a PR-ready plan"
   omh hud                Show the compact OMH status line
+  omh achievements summary
+                          Show observed hermes-achievements badges
   omh menubar status     Show the OMH menu bar status summary
   omh mcp manifest       Print the optional stdio MCP bridge manifest
   omh release evidence-bundle --version 1.0.2 --write

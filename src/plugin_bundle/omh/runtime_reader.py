@@ -309,6 +309,7 @@ def read_omh_hud(
         "target_topology": _target_topology_summary(target_registry),
         "executor": _executor_summary(profile),
         "runtime": _hud_runtime_summary(status, latest_run),
+        "achievements": _achievements_summary(hermes),
         "tokens": _token_summary(token_metadata or {}),
         "evidence_boundary": (
             "HUD is metadata-only. Prepared handoffs are not execution, review, CI, merge, or token-usage evidence."
@@ -479,6 +480,40 @@ def _executor_summary(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _achievements_summary(hermes_home: Path) -> dict[str, Any]:
+    # The plugin bundle stays standalone, so this mirrors the tolerant reading
+    # in workflows/hermes_achievements.py at HUD granularity: counts only.
+    plugin_dir = hermes_home / "plugins" / "hermes-achievements"
+    snapshot = _read_json(plugin_dir / "scan_snapshot.json")
+    state = _read_json(plugin_dir / "state.json")
+    total = 0
+    unlocked_flags = 0
+    for key in ("achievements", "badges", "catalog", "items"):
+        entries = snapshot.get(key)
+        if isinstance(entries, dict):
+            entries = list(entries.values())
+        if isinstance(entries, list):
+            total = len(entries)
+            unlocked_flags = sum(
+                1
+                for entry in entries
+                if isinstance(entry, dict)
+                and (entry.get("unlocked") is True or str(entry.get("state", "")).lower() == "unlocked")
+            )
+            break
+    unlocked = 0
+    for key in ("unlocked", "unlocks", "unlocked_badges"):
+        container = state.get(key)
+        if isinstance(container, (dict, list)):
+            unlocked = len(container)
+            break
+    return {
+        "observed": bool(snapshot or state),
+        "unlocked_count": max(unlocked, unlocked_flags),
+        "total_count": total,
+    }
+
+
 def _hud_runtime_summary(status: dict[str, Any], latest_run: dict[str, Any]) -> dict[str, Any]:
     runs = status.get("runs", [])
     run_count = len(runs) if isinstance(runs, list) else 0
@@ -602,6 +637,9 @@ def _hud_segments(payload: dict[str, Any], *, preset: str) -> list[str]:
     evidence_state = str(runtime.get("evidence_state", "unknown") or "unknown")
     if preset == "full" and evidence_state not in {"idle", "unknown"}:
         focused.append(f"evidence:{_evidence_display_status(evidence_state)}")
+    achievements = payload.get("achievements", {})
+    if preset == "full" and isinstance(achievements, dict) and achievements.get("observed"):
+        focused.append(f"ach:{achievements.get('unlocked_count', 0)}/{achievements.get('total_count', 0)}")
     return focused
 
 
