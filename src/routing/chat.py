@@ -470,6 +470,18 @@ _SPECIFIC_CAPABILITY_FAST_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "skill-health",
+        (
+            "skill health",
+            "skill health dashboard",
+            "skill health dashboards",
+            "skill portfolio health",
+            "skill dashboard",
+            "skill dashboards",
+            "pending skill amendments",
+        ),
+    ),
+    (
         "gateway-intent-card",
         (
             "discord gateway routing",
@@ -1267,6 +1279,17 @@ def _route_chat_message_cached(
     )
     if fast_maintenance_task_decision is not None:
         return fast_maintenance_task_decision.to_dict()
+    if not _is_specific_capability_question_shape(routing_message):
+        fast_skill_health_decision = _operator_surface_fast_path_decision(
+            message,
+            routing_message=routing_message,
+            source=source,
+            min_confidence=min_confidence,
+            allow_explicit_skill=True,
+            only_skill="skill-health",
+        )
+        if fast_skill_health_decision is not None:
+            return fast_skill_health_decision.to_dict()
     fast_explicit_skill_decision = _explicit_skill_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1632,7 +1655,7 @@ def _omh_help_fast_path_decision(
             wrapper_guidance="Render the OMH quickstart card with the smallest useful next action.",
             score=12,
         )
-    if is_omh_status_question(routing_message):
+    if is_omh_status_question(routing_message) and not _is_specific_capability_question_shape(routing_message):
         return _router_help_decision(
             message,
             source=source,
@@ -1994,6 +2017,7 @@ def _specific_capability_fast_path_result(
     catalog_question: bool,
 ) -> _CatalogFastPathResult:
     definition = _skill_definition_by_name(skill)
+    matched = _specific_capability_fast_path_markers(skill, matched)
     recommendation = recommendation_for_definition(
         definition,
         message,
@@ -2030,6 +2054,20 @@ def _specific_capability_fast_path_result(
         ),
         catalog_question=catalog_question,
     )
+
+
+def _specific_capability_fast_path_markers(skill: str, matched: tuple[str, ...]) -> tuple[str, ...]:
+    if not any(marker.startswith("alias:") for marker in matched):
+        return matched
+    guard_by_skill = {
+        "img-summary": "guard:img_summary",
+        "paper-learning": "guard:paper_learning",
+        "skill-health": "guard:skill_health",
+    }
+    guard = guard_by_skill.get(skill)
+    if not guard or guard in matched:
+        return matched
+    return (guard, *matched)
 
 
 def _file_lookup_fast_path_decision(
@@ -2558,6 +2596,26 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear harness/session/MCP inventory request; prepare the drift-aware inventory without scoring every workflow.",
     ),
     (
+        "skill-health",
+        (
+            "skill-health",
+            "skill health",
+            "skill portfolio health",
+            "skill health dashboard",
+            "skill dashboard",
+            "skill portfolio dashboard",
+            "skill failure pattern dashboard",
+            "pending skill amendments",
+            "스킬 헬스",
+            "스킬 상태",
+            "스킬 대시보드",
+            "스킬 실패 패턴",
+            "스킬 보류 수정",
+        ),
+        "operator_surface_fast_path:skill_health",
+        "Clear skill portfolio health request; prepare the dashboard without treating it as install repair or automatic skill mutation.",
+    ),
+    (
         "automation-blueprint",
         (
             "automate this",
@@ -2609,15 +2667,19 @@ def _operator_surface_fast_path_decision(
     routing_message: str,
     source: str,
     min_confidence: str,
+    allow_explicit_skill: bool = False,
+    only_skill: str | None = None,
 ) -> ChatRouteDecision | None:
     if _has_explicit_invocation_prefix(routing_message):
         return None
-    if explicit_skill_invocation(routing_message):
+    if not allow_explicit_skill and explicit_skill_invocation(routing_message):
         return None
     match = _operator_surface_fast_path_match(routing_message)
     if match is None:
         return None
     selected_skill, phrase, marker, reason = match
+    if only_skill is not None and selected_skill != only_skill:
+        return None
     if selected_skill == "ralplan" and _is_fast_plain_direct_answer_question(routing_message):
         return None
     if selected_skill == "paper-learning" and (
@@ -2747,6 +2809,8 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:executor_runtime_readiness",)
     if skill == "harness-session-inventory":
         return ("guard:harness_session_inventory",)
+    if skill == "skill-health":
+        return ("guard:skill_health",)
     if skill != "ralplan":
         return ()
     if any(marker in normalized for marker in ("safe", "safely", "안전", "सुरक्षित")):
@@ -3366,6 +3430,7 @@ def _generic_catalog_listing_question(text: str) -> bool:
 
 
 def _is_specific_capability_question_shape(text: str) -> bool:
+    text = text.strip().lower()
     return any(
         marker in text
         for marker in (
@@ -3373,6 +3438,8 @@ def _is_specific_capability_question_shape(text: str) -> bool:
             "what can oh-my-hermes do for ",
             "can omh help with ",
             "can oh-my-hermes help with ",
+            "does omh support ",
+            "does oh-my-hermes support ",
         )
     )
 

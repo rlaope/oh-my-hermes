@@ -670,6 +670,7 @@ _CODING_INTENT_BY_SKILL.update(
         "ops-observability-card": "planning",
         "achievements": "planning",
         "agent-ops-review": "planning",
+        "skill-health": "planning",
         "workflow-learning": "planning",
     }
 )
@@ -4696,6 +4697,54 @@ _FEATURE_SURFACE_SKILLS = (
         bad_prompt="agent-ops-review claim Codex finished and CI passed because a handoff exists.",
     ),
     _feature_surface_skill(
+        "skill-health",
+        "Skill Health workflow: prepare a metadata-only OMH skill portfolio dashboard with stale surfaces, observed failure signals, pending amendments, and top actions.",
+        (
+            "skill-health",
+            "skill health",
+            "skill portfolio health",
+            "skill dashboard",
+            "skill health dashboard",
+            "skill failure pattern dashboard",
+            "skill failure patterns",
+            "pending skill amendments",
+            "skill amendments",
+            "스킬 헬스",
+            "스킬 상태",
+            "스킬 대시보드",
+            "스킬 실패 패턴",
+            "스킬 개선 후보",
+            "스킬 보류 수정",
+        ),
+        "Use when operators need portfolio-level skill health without treating it as install repair, live execution success, or automatic skill mutation.",
+        category="operations",
+        phase="skill-health",
+        next_action="prepare_skill_health",
+        boundary="A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.",
+        good_prompt="skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.",
+        bad_prompt="skill-health claim every skill is working and patch the failures automatically without observed signals or review.",
+        expected_outputs=(
+            "skill_portfolio_health_dashboard/v1",
+            "skill_failure_pattern_clusters/v1 when observed",
+            "pending_skill_amendment_review/v1",
+            "skill_health_action_plan/v1",
+        ),
+        artifact_expectations=(
+            "skill_portfolio_health_dashboard/v1 with catalog, generated, reference, harness, and capability-surface status",
+            "skill_failure_pattern_clusters/v1 only from supplied traces, tests, reviews, missed routes, or wrapper observations",
+            "skill_health_action_plan/v1 with top actions, owner lane, verification path, and non-mutation boundary",
+        ),
+        final_checklist=(
+            "Dashboard scope, source surfaces, stale/duplicate criteria, and stop condition are explicit.",
+            "Install/setup health is routed to doctor; catalog operations are routed to skill; failure retrospectives are routed to workflow-learning.",
+            "No skill, prompt, doc, memory, or model behavior is claimed changed until a reviewed implementation records evidence.",
+        ),
+        recovery_notes=(
+            "If the request is about OMH setup, install, stale package paths, or command availability, route to doctor.",
+            "If the request is a missed-route or self-improvement trace, route to workflow-learning before adding health actions.",
+        ),
+    ),
+    _feature_surface_skill(
         "workflow-learning",
         "Hermes workflow learning workflow: classify and review self-improvement store routes as an auxiliary review lane before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.",
         (
@@ -4910,6 +4959,14 @@ _SURFACE_EXPOSURES = (
         True,
         "primary_workflow_skill",
         "Use as an installed Hermes workflow skill when a manager wants quality, blockers, next actions, and throughput guidance for AI-agent work.",
+    ),
+    SurfaceExposure(
+        "skill-health",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill when operators need a portfolio health dashboard for skills, generated surfaces, failure-pattern signals, pending amendments, and safe improvement actions.",
     ),
     SurfaceExposure(
         "workflow-learning",
@@ -7045,6 +7102,39 @@ _FEATURE_SURFACE_HARNESSES = (
         overclaim_guard="An agent ops review card is not source retrieval, executor dispatch, implementation, verification, review, CI, merge, delivery, provider billing, or live telemetry evidence.",
     ),
     _feature_surface_harness(
+        "skill-health",
+        "Prepare a metadata-only health dashboard for OMH skills, observed failure signals, pending amendments, and top actions.",
+        "Use when operators need portfolio-level skill health without treating health review as install repair, live execution success, automatic mutation, or future-routing proof.",
+        (
+            "skill portfolio scope",
+            "catalog/generated/reference surfaces",
+            "observed failure signals or explicit missing-signal statement",
+            "pending amendment sources when available",
+        ),
+        (
+            "skill_portfolio_health_dashboard/v1",
+            "skill_failure_pattern_clusters/v1 when observed",
+            "pending_skill_amendment_review/v1",
+            "skill_health_action_plan/v1",
+        ),
+        quality_tier="skill-health-gated",
+        evidence_ladder=(
+            "skill_health_scope_recorded",
+            "catalog_surface_inventory_prepared",
+            "failure_signals_clustered_when_observed",
+            "pending_amendments_recorded_when_available",
+            "top_actions_prepared",
+        ),
+        wrapper_actions=(
+            "prepare_skill_health",
+            "show_skill_health",
+            "record_skill_health_signal",
+            "record_skill_amendment_review",
+            "route_to_doctor_skill_or_workflow_learning",
+        ),
+        overclaim_guard="A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.",
+    ),
+    _feature_surface_harness(
         "workflow-learning",
         "Route self-improvement signals to memory, skill, wiki, failure-retrospective, automation, or discard review before recording workflow attempts as metadata-only traces, evals, missed-route bundles, candidates, patch proposals, regression cases, audits, indexes, and exports.",
         "Use after chat routing, wrapper sessions, runtime runs, or manual feedback should improve future behavior without hidden self-modification; also use when a signal needs a recorded store-route review decision before any memory/skill/wiki/automation write, Hermes missed the expected OMH workflow, learning readiness needs audit, a reviewer needs the queue, an approved candidate needs a patch handoff, the index needs check/rebuild, or a metadata-only bundle is needed.",
@@ -7184,6 +7274,7 @@ _PRIMARY_HARNESSES.update(
         "harness-session-inventory": "harness-session-inventory",
         "ops-observability-card": "ops-observability-card",
         "agent-ops-review": "agent-ops-review",
+        "skill-health": "skill-health",
         "workflow-learning": "workflow-learning",
     }
 )

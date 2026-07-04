@@ -162,8 +162,8 @@ def _harness_summary(harness: HarnessDefinition) -> str:
     )
     return (
         f"- `{harness.name}`: {harness.purpose} Tier `{harness.quality_tier}`. "
-        f"Ladder: {evidence_ladder}. Actions: {wrapper_actions or '`show_status`'}. "
-        f"Privacy `{harness.privacy_default}`."
+        f"L: {evidence_ladder}. A: {wrapper_actions or '`show_status`'}. "
+        f"P `{harness.privacy_default}`."
     )
 
 
@@ -355,6 +355,8 @@ def _router_harness_registry_reference(harnesses: list[HarnessDefinition]) -> st
     return f"""# OMH Harness Registry
 
 Harnesses shape response quality and evidence gates. They are not proof that a separate runtime role exists.
+
+Legend: Tier `quality-tier`; Ladder: evidence steps; Actions: wrapper actions; Privacy `metadata_only`.
 
 ## Representative Harnesses
 

@@ -1,22 +1,22 @@
 ---
-name: memory-curation-review
-description: [omh] Hermes memory curation workflow: review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.
+name: skill-health
+description: [omh] Skill Health workflow: prepare a metadata-only OMH skill portfolio dashboard with stale surfaces, observed failure signals, pending amendments, and top actions.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, memory]
-    category: memory
-    phase: curation-review
-    role: memory-keeper
+    tags: [workflow, oh-my-hermes, operations]
+    category: operations
+    phase: skill-health
+    role: operator
     quality_tier: workflow-surface-gated
 ---
 
-# Memory Curation Review
+# Skill Health
 
-This is a Hermes-native `memory-curation-review` workflow skill.
+This is a Hermes-native `skill-health` workflow skill.
 
 ## Why This Exists
 
-`memory-curation-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`skill-health` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,26 +28,26 @@ This is a Hermes-native `memory-curation-review` workflow skill.
 
 Good example:
 
-- Prompt: memory-curation-review inspect stale project memories and ask me what to keep.
-- Expected behavior: Produce `prepare_memory_curation_review` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.
+- Expected behavior: Produce `prepare_skill_health` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: memory-curation-review silently delete all conflicting memories.
+- Prompt: skill-health claim every skill is working and patch the failures automatically without observed signals or review.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- Confirm the workflow target, evidence boundary, and stop condition are named.
-- Report which outputs are prepared, observed, blocked, or missing.
-- Name the smallest next verification or handoff instead of claiming completion from narration.
+- Dashboard scope, source surfaces, stale/duplicate criteria, and stop condition are explicit.
+- Install/setup health is routed to doctor; catalog operations are routed to skill; failure retrospectives are routed to workflow-learning.
+- No skill, prompt, doc, memory, or model behavior is claimed changed until a reviewed implementation records evidence.
 
 ## Recovery Notes
 
-- If required context is missing, ask one blocking question or route back to the narrower workflow.
-- If runtime or wrapper evidence is unavailable, keep the status as not_observed and expose the next observable action.
+- If the request is about OMH setup, install, stale package paths, or command availability, route to doctor.
+- If the request is a missed-route or self-improvement trace, route to workflow-learning before adding health actions.
 
 ## OMH Context Rail
 
@@ -63,15 +63,15 @@ Bad example:
 
 ## Use When
 
-Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.
+Use when operators need portfolio-level skill health without treating it as install repair, live execution success, or automatic skill mutation.
 
-    Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `기억하는 맥락`, `현재 hermes가 기억하는 맥락`, `현재 헤르메스가 기억하는 맥락`, `헤르메스가 기억하는 맥락`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `메모리 업데이트`, `메모리 검사`, `메모리 점검`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `맥락 피드백`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
+    Strong routing signals: `skill-health`, `skill health`, `skill portfolio health`, `skill dashboard`, `skill health dashboard`, `skill failure pattern dashboard`, `skill failure patterns`, `pending skill amendments`, `skill amendments`, `스킬 헬스`, `스킬 상태`, `스킬 대시보드`, `스킬 실패 패턴`, `스킬 개선 후보`, `스킬 보류 수정`
 
 ## Catalog Metadata
 
-Category: `memory`
-Phase: `curation-review`
-Hermes role: `memory-keeper`
+Category: `operations`
+Phase: `skill-health`
+Hermes role: `operator`
 Quality tier: `workflow-surface-gated`
 
 Quality bar:
@@ -93,17 +93,20 @@ Required inputs:
 
 Expected outputs:
 
-- memory-curation-review/v1 card or guidance
-- next action
-- prepared-vs-observed boundary
+- skill_portfolio_health_dashboard/v1
+- skill_failure_pattern_clusters/v1 when observed
+- pending_skill_amendment_review/v1
+- skill_health_action_plan/v1
 
 Artifact expectations:
 
-- memory-curation-review/v1 metadata-only runtime or wrapper card when recorded
+- skill_portfolio_health_dashboard/v1 with catalog, generated, reference, harness, and capability-surface status
+- skill_failure_pattern_clusters/v1 only from supplied traces, tests, reviews, missed routes, or wrapper observations
+- skill_health_action_plan/v1 with top actions, owner lane, verification path, and non-mutation boundary
 
 Safety rules:
 
-- A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence until an approved write is observed.
+- A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -114,12 +117,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `memory-curation-review`.
+Preferred harness for this skill: `skill-health`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill memory-curation-review --harness memory-curation-review --status started
+omh runtime record --skill skill-health --harness skill-health --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

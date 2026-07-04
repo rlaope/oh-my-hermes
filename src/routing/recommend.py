@@ -326,6 +326,18 @@ _SKILL_POLICIES = {
             "omh_codegraph_summary/v1 or omh_codegraph_context/v1 evidence."
         ),
     ),
+    "skill-health": RecommendationPolicy(
+        next_action="prepare_skill_health",
+        evidence_boundary=(
+            "A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, "
+            "model training, verification, review, CI, or proof that future routing is fixed."
+        ),
+        wrapper_guidance=(
+            "Prepare skill_portfolio_health_dashboard/v1 with catalog/generated/reference surface status, "
+            "observed-only failure clusters, pending amendment review, and top safe actions while routing setup "
+            "health to doctor and mutation work to reviewed implementation."
+        ),
+    ),
     "context-budget-review": RecommendationPolicy(
         next_action="prepare_context_budget_review",
         evidence_boundary=(

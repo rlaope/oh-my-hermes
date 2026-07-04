@@ -190,6 +190,7 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("production-audit", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("agent-evaluation", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("rules-distill", cards["automation_and_status"]["representative_workflows"])
+        self.assertIn("skill-health", cards["automation_and_status"]["representative_workflows"])
         self.assertIn("ultraprocess", cards["coding_handoff"]["representative_workflows"])
         self.assertIn("not_evidence_until_observed", cards["intent_to_plan"])
         self.assertIn("prep/status/learning", payload["generic_tool_checkpoint"])
@@ -297,6 +298,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("agent-evaluation Codex랑 Claude Code 에이전트 평가해줘", "agent-evaluation", "prepare_agent_evaluation"),
             ("rules-distill 실패 trace에서 스킬 원칙 규칙 증류해줘", "rules-distill", "prepare_rules_distillation"),
             ("codebase-onboarding 처음 보는 레포 구조 잡아줘", "codebase-onboarding", "prepare_codebase_onboarding"),
+            ("skill-health 스킬 포트폴리오 상태 대시보드 보여줘", "skill-health", "prepare_skill_health"),
             (
                 "context-budget-review 장기 작업 컨텍스트 예산 잡아줘",
                 "context-budget-review",
@@ -322,6 +324,7 @@ class EfficiencyContractTests(unittest.TestCase):
             "verification-gate",
             "rules-distill",
             "codebase-onboarding",
+            "skill-health",
             "context-budget-review",
             "security-safety-review",
         }
@@ -1282,6 +1285,7 @@ class EfficiencyContractTests(unittest.TestCase):
             ("agent-evaluation Codex랑 Claude Code 에이전트 평가해줘", "agent-evaluation"),
             ("rules-distill 실패 trace에서 스킬 원칙 규칙 증류해줘", "rules-distill"),
             ("codebase-onboarding 처음 보는 레포 구조 잡아줘", "codebase-onboarding"),
+            ("skill-health 스킬 포트폴리오 상태 대시보드 보여줘", "skill-health"),
             ("context-budget-review 장기 작업 컨텍스트 예산 잡아줘", "context-budget-review"),
             ("security-safety-review 프롬프트 인젝션과 시크릿 위험 봐줘", "security-safety-review"),
             ("hermes agent가 한개가 아니라 여러개일땐 어떻게 동작해?", "agent-board"),

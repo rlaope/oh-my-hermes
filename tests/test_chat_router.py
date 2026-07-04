@@ -2824,6 +2824,7 @@ selected_workflow=ultraprocess
             ("can OMH help with MCP setup?", "toolbelt-readiness"),
             ("does OMH support memory cleanup?", "memory-curation-review"),
             ("does OMH support voice commands?", "voice-operator"),
+            ("does OMH support skill health dashboards?", "skill-health"),
             ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops"),
         )
 
@@ -2837,6 +2838,31 @@ selected_workflow=ultraprocess
                 self.assertEqual(decision["recommendations"][0]["skill"], selected_skill)
                 self.assertEqual(decision["confidence"], "high")
                 self.assertIn("Specific OMH capability question", decision["reason"])
+
+    def test_skill_health_routes_without_stealing_setup_or_learning(self) -> None:
+        health_cases = (
+            "skill-health show the skill portfolio dashboard with failure patterns",
+            "skill health dashboard",
+            "skill dashboard",
+            "skill portfolio dashboard",
+            "스킬 대시보드 보여줘",
+        )
+
+        for message in health_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["selected_skill"], "skill-health")
+                self.assertEqual(decision["selected_harness"], "skill-health")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_skill_health")
+
+        setup_health = route_chat_message("doctor setup health 확인해줘", source="discord")
+        learning = route_chat_message("workflow trace 보고 다음에 스킬 고칠점 알려줘", source="discord")
+        skill_management = route_chat_message("skill list installed skills", source="discord")
+
+        self.assertEqual(setup_health["selected_skill"], "doctor")
+        self.assertEqual(learning["selected_skill"], "workflow-learning")
+        self.assertEqual(skill_management["selected_skill"], "skill")
 
     def test_file_lookup_does_not_dispatch_to_workflow_keyword(self) -> None:
         for message in (

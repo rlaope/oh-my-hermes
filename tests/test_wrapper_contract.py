@@ -1293,6 +1293,14 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_ops_observability_card",
             ),
             (
+                "skill-health show the skill portfolio dashboard with failure patterns",
+                "skill-health",
+                "skill_health",
+                "I can prepare a skill portfolio health dashboard.",
+                "automatic skill mutation",
+                "prepare_skill_health",
+            ),
+            (
                 "회의록 히스토리 관리하고 스크럼 스프린트 회고 운영 리듬 정리해줘",
                 "operating-rhythm",
                 "operating_rhythm",
@@ -1342,6 +1350,8 @@ class WrapperContractTests(unittest.TestCase):
                 expected_schema = (
                     "ops_service_quality_board/v1"
                     if workflow == "ops-observability-card"
+                    else "skill_portfolio_health_dashboard/v1"
+                    if workflow == "skill-health"
                     else "harness_session_inventory/v1"
                     if workflow == "harness-session-inventory"
                     else f"{kind}_card/v1"
@@ -2415,6 +2425,13 @@ class WrapperContractTests(unittest.TestCase):
                 "prepare_codegraph_refresh",
                 "codegraph refresh",
                 "ack",
+            ),
+            (
+                "skill-health show skill dashboard failure patterns and pending amendments",
+                "skill-health",
+                "prepare_skill_health",
+                "skill health dashboard",
+                "skill_health",
             ),
             (
                 "turn this sprint retro into a report package with decisions and actions",

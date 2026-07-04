@@ -213,6 +213,11 @@ VISIBLE_ACTIONS = (
     "record_codegraph_build",
     "record_codegraph_summary",
     "record_codegraph_handoff",
+    "prepare_skill_health",
+    "show_skill_health",
+    "record_skill_health_signal",
+    "record_skill_amendment_review",
+    "route_to_doctor_skill_or_workflow_learning",
     "prepare_context_budget_review",
     "show_context_budget_review",
     "record_must_keep_context",
@@ -576,6 +581,11 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "file-write policy, and observed-only codegraph summary or handoff evidence. Command execution and "
         "generated files stay separate until observed."
     ),
+    "skill-health": (
+        "I will prepare a skill health dashboard: catalog and generated-skill surfaces, stale or duplicate guidance, "
+        "observed failure-pattern signals, pending amendment reviews, and top safe actions. Install repair, skill "
+        "mutation, and future routing fixes stay separate until observed and reviewed."
+    ),
     "context-budget-review": (
         "I will prepare a context budget review: must-keep context, checkpoint cadence, budget risks, overflow "
         "recovery, and provider-truth gaps. Exact billing or token usage still needs observed runtime/provider evidence."
@@ -693,6 +703,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_rules_distillation": ("prepare_rules_distillation", "Distill rules"),
     "prepare_codebase_onboarding": ("prepare_codebase_onboarding", "Prepare onboarding"),
     "prepare_codegraph_refresh": ("prepare_codegraph_refresh", "Refresh codegraph"),
+    "prepare_skill_health": ("prepare_skill_health", "Prepare skill health"),
     "prepare_context_budget_review": ("prepare_context_budget_review", "Review context"),
     "prepare_security_safety_review": ("prepare_security_safety_review", "Review safety"),
     "prepare_material_package": ("prepare_material_package", "Prepare package"),
@@ -1180,6 +1191,41 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "skill-file modification",
             "external source freshness",
             "Hermes internal memory update",
+        ],
+    },
+    "skill-health": {
+        "kind": "skill_health",
+        "headline": "I can prepare a skill portfolio health dashboard.",
+        "body": (
+            "I will prepare the skill health dashboard: catalog and generated-skill surfaces, stale or duplicate guidance, "
+            "observed failure-pattern signals, pending amendment review slots, and the top safe improvement actions. "
+            "Install repair, skill mutation, model training, verification, CI, and future routing fixes stay observed-only."
+        ),
+        "phase": "skill_health_prepared",
+        "next_action": "prepare_skill_health",
+        "artifact_schema": "skill_portfolio_health_dashboard/v1",
+        "claim_boundary_suffix": "It is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.",
+        "actions": [
+            {"id": "prepare_skill_health", "label": "Prepare skill health", "style": "primary"},
+            {"id": "record_skill_health_signal", "label": "Record signal", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "scope_skill_portfolio",
+            "inventory_catalog_and_generated_surfaces",
+            "separate_observed_failures_from_inferred_patterns",
+            "queue_pending_amendments_for_review",
+            "prepare_top_safe_actions",
+        ],
+        "evidence_not_observed": [
+            "install/setup health",
+            "live skill execution success",
+            "automatic skill mutation",
+            "model training",
+            "verification",
+            "review",
+            "CI",
+            "future routing fix",
         ],
     },
     "gateway-intent-card": {
