@@ -1279,6 +1279,17 @@ def _route_chat_message_cached(
     )
     if fast_maintenance_task_decision is not None:
         return fast_maintenance_task_decision.to_dict()
+    if not _is_specific_capability_question_shape(routing_message):
+        fast_skill_health_decision = _operator_surface_fast_path_decision(
+            message,
+            routing_message=routing_message,
+            source=source,
+            min_confidence=min_confidence,
+            allow_explicit_skill=True,
+            only_skill="skill-health",
+        )
+        if fast_skill_health_decision is not None:
+            return fast_skill_health_decision.to_dict()
     fast_explicit_skill_decision = _explicit_skill_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -2656,15 +2667,19 @@ def _operator_surface_fast_path_decision(
     routing_message: str,
     source: str,
     min_confidence: str,
+    allow_explicit_skill: bool = False,
+    only_skill: str | None = None,
 ) -> ChatRouteDecision | None:
     if _has_explicit_invocation_prefix(routing_message):
         return None
-    if explicit_skill_invocation(routing_message):
+    if not allow_explicit_skill and explicit_skill_invocation(routing_message):
         return None
     match = _operator_surface_fast_path_match(routing_message)
     if match is None:
         return None
     selected_skill, phrase, marker, reason = match
+    if only_skill is not None and selected_skill != only_skill:
+        return None
     if selected_skill == "ralplan" and _is_fast_plain_direct_answer_question(routing_message):
         return None
     if selected_skill == "paper-learning" and (
