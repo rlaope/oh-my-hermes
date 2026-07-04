@@ -173,6 +173,28 @@ _SKILL_POLICIES = {
             "content and layout QA, downstream generation route, and observed-only visual QA requirements."
         ),
     ),
+    "frontend": RecommendationPolicy(
+        next_action="prepare_frontend_handoff",
+        evidence_boundary=(
+            "A frontend brief is not implementation, browser verification, Lighthouse/Core Web Vitals, accessibility, "
+            "deployment, or visual QA evidence until observed executor or wrapper evidence exists."
+        ),
+        wrapper_guidance=(
+            "Prepare frontend_design_brief/v1 with design_system_contract/v1, route/state/viewport matrix, "
+            "accessibility/performance expectations, implementation handoff, and visual_qa_required/v1."
+        ),
+    ),
+    "visual-qa": RecommendationPolicy(
+        next_action="prepare_visual_qa",
+        evidence_boundary=(
+            "A visual QA plan is not PASS evidence; PASS requires fresh rendered captures after the last relevant edit "
+            "plus recorded diff/review findings for the covered surfaces."
+        ),
+        wrapper_guidance=(
+            "Prepare visual_qa_plan/v1 with capture freshness rules, render_capture_manifest/v1 requirements, "
+            "visual_diff_evidence/v1, dual_oracle_visual_review/v1, CJK/text checks, and a PASS/REVISE/BLOCK verdict."
+        ),
+    ),
     "workflow-learning": RecommendationPolicy(
         next_action="audit_learning_readiness",
         evidence_boundary=(

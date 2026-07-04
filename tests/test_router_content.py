@@ -62,6 +62,8 @@ FEATURE_SURFACE_EXPOSURES = {
     "executor-runtime-readiness": ("harness_only", False),
     "deliverable-package": ("workflow_skill", True),
     "design-quality-gate": ("workflow_skill", True),
+    "frontend": ("workflow_skill", True),
+    "visual-qa": ("workflow_skill", True),
     "voice-operator": ("agent_context", False),
     "toolbelt-readiness": ("harness_only", False),
     "ops-observability-card": ("workflow_skill", True),
@@ -112,8 +114,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Retained knowledge", router.content)
         self.assertIn("`wiki`", router.content)
         self.assertIn("Materials and visual summaries", router.content)
-        self.assertIn("`design-quality-gate`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`", router.content)
-        self.assertNotIn("`design-quality-gate`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki`", router.content)
+        self.assertIn(
+            "`design-quality-gate`, `frontend`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`",
+            router.content,
+        )
+        self.assertNotIn("`frontend`, `visual-qa`, `materials-package`, `img-summary`, `report-package`, `deliverable-package`, `wiki`", router.content)
         self.assertIn("Coding handoff", router.content)
         self.assertIn("omh chat route", router.content)
         self.assertIn("omh coding delegate", wrapper_routing)
@@ -239,6 +244,8 @@ class RouterContentTests(unittest.TestCase):
             "report-package",
             "materials-package",
             "img-summary",
+            "frontend",
+            "visual-qa",
             "automation-blueprint",
             "reliability-review",
             "idea-to-deploy",
@@ -284,7 +291,12 @@ class RouterContentTests(unittest.TestCase):
             for definition in builtin_definitions()
             if definition.quality_tier == "workflow-surface-gated"
         }
-        generated_surface_exposures = set(FEATURE_SURFACE_EXPOSURES) - {"automation-blueprint", "design-quality-gate"}
+        generated_surface_exposures = set(FEATURE_SURFACE_EXPOSURES) - {
+            "automation-blueprint",
+            "design-quality-gate",
+            "frontend",
+            "visual-qa",
+        }
 
         self.assertEqual(feature_surface_names, generated_surface_exposures)
         for name in feature_surface_names:
@@ -344,6 +356,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["report-package"].next_action, "prepare_report_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["materials-package"].next_action, "prepare_material_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["img-summary"].next_action, "prepare_visual_prompt_card")
+        self.assertEqual(recommend_module._SKILL_POLICIES["frontend"].next_action, "prepare_frontend_handoff")
+        self.assertEqual(recommend_module._SKILL_POLICIES["visual-qa"].next_action, "prepare_visual_qa")
         self.assertEqual(recommend_module._SKILL_POLICIES["paper-learning"].next_action, "prepare_paper_learning")
         self.assertEqual(recommend_module._SKILL_POLICIES["source-finder"].next_action, "prepare_source_finder_plan")
         self.assertEqual(recommend_module._SKILL_POLICIES["automation-blueprint"].next_action, "prepare_scheduled_ops_blueprint")
@@ -467,6 +481,8 @@ class RouterContentTests(unittest.TestCase):
                 "materials-package",
                 "img-summary",
                 "design-quality-gate",
+                "frontend",
+                "visual-qa",
                 "scheduled-ops-blueprint",
                 "reliability-review",
                 "app-delivery-loop",
@@ -665,6 +681,85 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("better than ordinary output", templates["design-quality-gate"].content)
         self.assertIn("visual_qa_evidence/v1", templates["design-quality-gate"].content)
         self.assertIn("Preferred harness for this skill: `design-quality-gate`", templates["design-quality-gate"].content)
+
+    def test_frontend_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("frontend", definitions)
+        self.assertIn("frontend", harnesses)
+        self.assertIn("frontend", templates)
+        self.assertEqual(primary_harness_for_skill("frontend"), "frontend")
+        self.assertEqual(definitions["frontend"].category, "materials")
+        self.assertEqual(definitions["frontend"].phase, "frontend-design")
+        self.assertEqual(definitions["frontend"].quality_tier, "frontend-design-gated")
+        self.assertIn("frontend_design_brief/v1", definitions["frontend"].expected_outputs)
+        self.assertIn("design_system_contract/v1", definitions["frontend"].expected_outputs)
+        self.assertIn("frontend_route_state_matrix/v1", definitions["frontend"].expected_outputs)
+        self.assertIn("visual_qa_required/v1", definitions["frontend"].expected_outputs)
+        self.assertIn("AI-looking", " ".join(definitions["frontend"].safety_rules))
+        self.assertIn("fresh rendered evidence", " ".join(definitions["frontend"].safety_rules))
+        self.assertIn("CJK", " ".join(definitions["frontend"].artifact_expectations))
+        self.assertIn("design_system_contract/v1", harnesses["frontend"].expected_outputs)
+        self.assertIn("frontend_route_state_matrix/v1", harnesses["frontend"].expected_outputs)
+        self.assertIn("design_system_contract_prepared", harnesses["frontend"].evidence_ladder)
+        self.assertIn("frontend_implementation_handoff_prepared", harnesses["frontend"].evidence_ladder)
+        self.assertIn("visual_qa_observed_when_available", harnesses["frontend"].evidence_ladder)
+        self.assertTrue(
+            {
+                "prepare_frontend_handoff",
+                "show_frontend_handoff",
+                "record_browser_capture",
+                "record_accessibility_check",
+                "record_performance_check",
+                "prepare_visual_qa",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("frontend_design_brief/v1", templates["frontend"].content)
+        self.assertIn("design_system_contract/v1", templates["frontend"].content)
+        self.assertIn("visual_qa_required/v1", templates["frontend"].content)
+        self.assertIn("Preferred harness for this skill: `frontend`", templates["frontend"].content)
+
+    def test_visual_qa_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("visual-qa", definitions)
+        self.assertIn("visual-qa", harnesses)
+        self.assertIn("visual-qa", templates)
+        self.assertEqual(primary_harness_for_skill("visual-qa"), "visual-qa")
+        self.assertEqual(definitions["visual-qa"].category, "materials")
+        self.assertEqual(definitions["visual-qa"].phase, "visual-qa")
+        self.assertEqual(definitions["visual-qa"].quality_tier, "visual-qa-gated")
+        self.assertIn("visual_qa_plan/v1", definitions["visual-qa"].expected_outputs)
+        self.assertIn("render_capture_manifest/v1 when observed", definitions["visual-qa"].expected_outputs)
+        self.assertIn("visual_diff_evidence/v1 when observed", definitions["visual-qa"].expected_outputs)
+        self.assertIn("dual_oracle_visual_review/v1 when observed", definitions["visual-qa"].expected_outputs)
+        self.assertIn("fresh rendered evidence", " ".join(definitions["visual-qa"].safety_rules))
+        self.assertIn("CJK", " ".join(definitions["visual-qa"].safety_rules))
+        self.assertIn("PASS unavailable", " ".join(definitions["visual-qa"].artifact_expectations))
+        self.assertIn("visual_qa_plan/v1", harnesses["visual-qa"].expected_outputs)
+        self.assertIn("render_capture_manifest/v1 when observed", harnesses["visual-qa"].expected_outputs)
+        self.assertIn("visual_diff_observed_when_available", harnesses["visual-qa"].evidence_ladder)
+        self.assertIn("visual_qa_verdict_recorded", harnesses["visual-qa"].evidence_ladder)
+        self.assertTrue(
+            {
+                "prepare_visual_qa",
+                "show_visual_qa",
+                "record_render_capture",
+                "record_visual_diff",
+                "record_visual_oracle_review",
+                "record_cjk_layout_findings",
+                "record_visual_qa_verdict",
+            }.issubset(set(VISIBLE_ACTIONS))
+        )
+        self.assertIn("visual_qa_plan/v1", templates["visual-qa"].content)
+        self.assertIn("render_capture_manifest/v1", templates["visual-qa"].content)
+        self.assertIn("dual_oracle_visual_review/v1", templates["visual-qa"].content)
+        self.assertIn("fresh rendered evidence", templates["visual-qa"].content)
+        self.assertIn("Preferred harness for this skill: `visual-qa`", templates["visual-qa"].content)
 
     def test_paper_learning_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
