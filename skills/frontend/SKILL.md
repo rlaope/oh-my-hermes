@@ -42,8 +42,10 @@ Bad example:
 ## Completion Checklist
 
 - The target page/component, audience, primary task, references, and quality bar are named.
+- Greenfield work includes frontend_initial_generation_contract/v1 before implementation handoff.
 - The design_system_contract/v1 covers typography, spacing, palette, components, layout, motion, and responsive rules.
-- The frontend_route_state_matrix/v1 covers pages, breakpoints, empty/loading/error, interaction, and CJK/locale risks.
+- The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks.
+- The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.
 - The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.
 - The next action is prepare_frontend_handoff, route to visual-qa, or report the missing evidence blocker.
 
@@ -82,6 +84,7 @@ Quality bar:
 - Name the product goal, audience, target surfaces, routes, states, and visual quality bar.
 - Use references and domain fit to avoid generic AI-looking frontend output.
 - Prepare a concrete design-system contract before implementation handoff.
+- For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.
 - Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.
 - Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.
 - Keep implementation, browser verification, accessibility/performance checks, visual QA, and deployment as observed-only evidence.
@@ -96,6 +99,8 @@ Required inputs:
 - audience and primary user task
 - existing design system or missing-system gap
 - style references or quality bar
+- initial generation mode or redesign mode
+- DESIGN.md or design-system source of truth when available
 - framework/stack when known
 - routes, states, breakpoints, and locale/CJK risks
 - accessibility and performance constraints
@@ -104,9 +109,12 @@ Required inputs:
 Expected outputs:
 
 - frontend_design_brief/v1
+- frontend_initial_generation_contract/v1 when greenfield
 - design_system_contract/v1
+- design_reference_selection/v1
 - reference_packet/v1 when supplied
 - frontend_route_state_matrix/v1
+- frontend_component_state_inventory/v1
 - frontend_implementation_handoff/v1
 - accessibility_performance_expectations/v1
 - visual_qa_required/v1
@@ -115,8 +123,11 @@ Expected outputs:
 Artifact expectations:
 
 - frontend_design_brief/v1 when prepared
+- frontend_initial_generation_contract/v1 declares DESIGN.md/design-system work, reference lane, token extraction, reusable primitives, and visual QA path before new UI code
 - design_system_contract/v1 with layout, spacing, typography, color, component, motion, and responsive rules
+- design_reference_selection/v1 names supplied references or the domain-fit style direction and explicitly avoids copying third-party logos, assets, or brand copy
 - frontend_route_state_matrix/v1 with pages, states, viewports, CJK/locale, empty/loading/error, and interaction states
+- frontend_component_state_inventory/v1 with default, hover, focus, active, disabled, loading, empty, and error states for reusable primitives
 - frontend_implementation_handoff/v1 for the selected executor/runtime
 - browser screenshots, accessibility reports, Lighthouse/Core Web Vitals, and visual QA only when observed
 
@@ -125,6 +136,7 @@ Safety rules:
 - Do not claim implementation, browser verification, deployment, Lighthouse, accessibility pass, or visual QA from a prepared frontend brief.
 - Reject generic AI-looking UI: one-note palettes, weak hierarchy, cramped cards, ungrounded gradients, decorative filler, and placeholder-heavy copy.
 - Require a design-system contract before broad visual changes.
+- For greenfield UI, require an initial generation contract before implementation handoff so the first generated screen has tokens, references, primitives, states, and QA expectations.
 - Require fresh rendered evidence after the last UI edit before PASS.
 - For Korean/CJK text, clipped glyphs, awkward line breaks, orphan particles, tiny copy, and overflow block visual QA.
 - Do not call external design, image, browser, LLM, or network services from OMH core.
