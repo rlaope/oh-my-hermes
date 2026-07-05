@@ -1431,6 +1431,10 @@ class WrapperContractTests(unittest.TestCase):
                     self.assertIn("Local status:", payload["chat_response"]["body"])
                     self.assertIn("Next in Hermes:", payload["chat_response"]["body"])
                     self.assertIn("Use OMH request-to-handoff", payload["chat_response"]["body"])
+                    self.assertIn("High-value things to try:", payload["chat_response"]["body"])
+                    self.assertIn("Frontend Rescue", payload["chat_response"]["body"])
+                    self.assertIn("Repo First-Win", payload["chat_response"]["body"])
+                    self.assertIn("Failure-to-Fix", payload["chat_response"]["body"])
                     self.assertIn("Boundary:", payload["chat_response"]["body"])
                     rendering_blocks = payload["chat_response"]["messenger_rendering"]["body_blocks"]
                     self.assertGreaterEqual(
@@ -1441,6 +1445,11 @@ class WrapperContractTests(unittest.TestCase):
                     self.assertEqual(state["status_source"], "omh_quickstart")
                     self.assertEqual(state["quickstart_card"]["schema_version"], "omh_quickstart_card/v1")
                     self.assertEqual(state["quickstart_card"]["source"], "discord")
+                    self.assertEqual(len(state["quickstart_card"]["first_value_packs"]), 6)
+                    self.assertEqual(
+                        state["quickstart_card"]["first_value_packs"][0]["label"],
+                        "Frontend Rescue",
+                    )
                     roadmap = state["capability_gap_roadmap"]
                     self.assertEqual(roadmap["schema_version"], "omh_capability_gap_roadmap/v1")
                     self.assertGreaterEqual(roadmap["summary"]["baseline_product_gaps"], 1)

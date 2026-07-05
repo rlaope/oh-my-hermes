@@ -27,6 +27,24 @@ First-run expectation:
 3. You restart or reload Hermes Agent.
 4. You ask Hermes: `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
 
+First-value packs are the stronger first-use paths once setup is done:
+
+- **Frontend Rescue** for natural frontend layout, anti-AI polish, responsive
+  repair, accessibility checks, and visual QA handoff.
+- **Repo First-Win** for mapping a new repository and finding the first safe
+  valuable improvement.
+- **Failure-to-Fix** for failing deploys, Pages, CI, DCO, builds, and tests.
+- **Visual Deliverable** for polished PR, release, report, deck, PDF, or image
+  summary packages.
+- **Toolbelt Readiness** for local CLIs, MCP hosts, credentials, connectors,
+  and executor runtime readiness.
+- **CTO/Product Loop** for roadmap, architecture, launch, QA, security, and
+  operations tradeoff review.
+
+These packs prepare routes, handoffs, and evidence boundaries. They do not
+claim execution, visual QA, CI, deployment, publication, credential validity, or
+merge evidence until Hermes or the selected runtime observes those steps.
+
 If the next step is still unclear, ask Hermes:
 
 ```text

@@ -4464,6 +4464,16 @@ def build_chat_response_from_omh_quickstart(
     evidence_gap = str(evidence_gaps[0]) if isinstance(evidence_gaps, list) and evidence_gaps else _default_overclaim_guard()
     roadmap = _nested(card, "capability_gap_roadmap")
     next_actions = _roadmap_next_actions(roadmap, limit=3)
+    packs = card.get("first_value_packs", [])
+    pack_lines: list[str] = []
+    if isinstance(packs, list):
+        for pack in packs[:3]:
+            if not isinstance(pack, dict):
+                continue
+            label = str(pack.get("label", "")).strip()
+            outcome = str(pack.get("outcome", "")).strip()
+            if label and outcome:
+                pack_lines.append(f"- {label}: {outcome}")
 
     body_lines = [
         (
@@ -4478,6 +4488,7 @@ def build_chat_response_from_omh_quickstart(
         "",
         "Next in Hermes:",
         f"- {first_prompt}" if first_prompt else "- Ask Hermes what you want to do with OMH.",
+        *(["", "High-value things to try:", *pack_lines] if pack_lines else []),
         "- Open the workflow picker with ./omh when you want to choose manually.",
         "- Use Show detailed status only when setup or registration looks wrong.",
         "",

@@ -5583,6 +5583,92 @@ body.home-page {
     monospace;
 }
 
+.first-value-section {
+  background: #ffffff;
+}
+
+.first-value-section .section-heading p {
+  color: var(--home-muted);
+}
+
+.first-value-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--home-black);
+  border-radius: 8px;
+  background: var(--home-black);
+}
+
+.first-value-card {
+  display: grid;
+  align-content: space-between;
+  min-height: 270px;
+  padding: 20px;
+  background: #ffffff;
+  color: var(--home-black);
+}
+
+.first-value-card span {
+  color: var(--home-teal);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.first-value-card h3 {
+  margin: 18px 0 0;
+  color: inherit;
+  font-size: 1.38rem;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.first-value-card p {
+  margin: 14px 0 20px;
+  color: var(--home-muted);
+}
+
+.first-value-card code {
+  justify-self: start;
+  padding: 6px 8px;
+  border: 1px solid rgba(22, 214, 182, 0.28);
+  border-radius: 8px;
+  background: rgba(22, 214, 182, 0.08);
+  color: #087263;
+  font-size: 0.82rem;
+}
+
+.first-value-card--accent {
+  background: var(--home-teal);
+}
+
+.first-value-card--accent span,
+.first-value-card--accent p {
+  color: rgba(0, 0, 0, 0.68);
+}
+
+.first-value-card--accent code {
+  border-color: rgba(0, 0, 0, 0.16);
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--home-black);
+}
+
+.first-value-card--dark {
+  background: var(--home-black);
+  color: #ffffff;
+}
+
+.first-value-card--dark p {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.first-value-card--dark code {
+  color: #b8fff2;
+}
+
 .lane-section,
 .wrapper-section {
   background: var(--home-black);
@@ -6283,6 +6369,7 @@ body.docs-page {
 }
 
 .message-board,
+.first-value-section,
 .truth-section,
 .wrapper-section,
 .artifact-section,
@@ -6308,6 +6395,7 @@ body.docs-page {
   }
 
   .value-grid,
+  .first-value-grid,
   .lane-grid,
   .docs-value-rail,
   .docs-lane-map,
@@ -6351,6 +6439,7 @@ body.docs-page {
   }
 
   .value-grid,
+  .first-value-grid,
   .lane-grid,
   .truth-grid,
   .docs-start-grid,
@@ -6363,6 +6452,7 @@ body.docs-page {
   }
 
   .value-card,
+  .first-value-card,
   .lane-card,
   .truth-grid article,
   .docs-value-rail article,

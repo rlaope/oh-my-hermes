@@ -54,6 +54,14 @@ def _print_quickstart_card(card: dict[str, object]) -> None:
     for line in _string_list(card.get("first_five_minutes", [])):
         print(f"  - {line}")
 
+    print(_color("First-value packs", "1;32", use_color))
+    for pack in _dict_list(card.get("first_value_packs", [])):
+        label = str(pack.get("label", "pack")).strip()
+        outcome = str(pack.get("outcome", "")).strip()
+        workflows = ", ".join(_string_list(pack.get("primary_workflows", []))[:3])
+        suffix = f" ({workflows})" if workflows else ""
+        print(f"  - {label}: {outcome}{suffix}")
+
     print(_color("Try one prompt", "1;32", use_color))
     for prompt in _dict_list(card.get("chat_prompts", []))[:3]:
         print(f"  - {prompt.get('label', 'prompt')}: {prompt.get('prompt', '')}")
