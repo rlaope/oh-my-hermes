@@ -1877,6 +1877,17 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh setup", quick_start)
         self.assertLess(quick_start.index("omh setup"), quick_start.index("omh doctor"))
         self.assertIn("Use OMH request-to-handoff for: I want to safely add a feature to this repo.", quick_start)
+        self.assertIn("First-value packs after setup", quick_start)
+        for label in (
+            "Frontend Rescue",
+            "Repo First-Win",
+            "Failure-to-Fix",
+            "Visual Deliverable",
+            "Toolbelt Readiness",
+            "CTO/Product Loop",
+        ):
+            self.assertIn(label, quick_start)
+        self.assertIn("not observed execution", quick_start)
         self.assertIn("hermes skills tap add", quick_start)
         self.assertNotIn("That is the normal path", quick_start)
         self.assertNotIn("name the responsible role", quick_start)
@@ -1908,6 +1919,12 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("isolated OMH virtual environment", installation)
         self.assertIn("add the printed directory to", installation)
         self.assertIn("Use OMH request-to-handoff for: I want to safely add a feature to this repo.", installation)
+        self.assertIn("First-value packs are the stronger first-use paths once setup is done", installation)
+        self.assertIn("Frontend Rescue", installation)
+        self.assertIn("Failure-to-Fix", installation)
+        self.assertIn("Toolbelt Readiness", installation)
+        self.assertIn("They do not", installation)
+        self.assertIn("execution, visual QA, CI, deployment", installation)
         self.assertIn("omh chat native-command --source discord", installation)
         self.assertIn("omh_command_fallback_card/v1", installation)
         self.assertIn("chat_response.state.command_preview.suggestions", installation)
@@ -2062,6 +2079,12 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("request-to-handoff", site)
         self.assertIn("planner", site)
         self.assertIn("Prepared is not observed", site)
+        self.assertIn("First-value packs", site)
+        self.assertIn("Useful immediately after install.", site)
+        self.assertIn("Frontend Rescue", site)
+        self.assertIn("Failure-to-Fix", site)
+        self.assertIn("Toolbelt Readiness", site)
+        self.assertIn("prepared guidance is not observed execution", site)
         self.assertIn("Reference pages when the lane needs detail.", site)
         self.assertIn("Loop</span>", site)
         self.assertIn("Source-specific prompt cards for meetings, PRs, issues, releases, and research.", site)

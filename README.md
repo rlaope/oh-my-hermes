@@ -74,6 +74,25 @@ hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
+First-value packs after setup:
+
+- **Frontend Rescue** - make a web UI feel natural, fix fragile responsive
+  layout, and require visual QA before claiming the frontend is ready.
+- **Repo First-Win** - map a new repository and identify the safest valuable
+  PR-sized improvement.
+- **Failure-to-Fix** - classify failing CI, deploy, Pages, DCO, build, or test
+  signals and prepare the smallest verified fix path.
+- **Visual Deliverable** - turn a PR, release, report, deck, or PDF into a
+  polished shareable artifact plan.
+- **Toolbelt Readiness** - check whether local tools, MCP hosts, credentials,
+  and executor surfaces are ready before a workflow depends on them.
+- **CTO/Product Loop** - review roadmap, architecture, delivery, QA, security,
+  and ops tradeoffs before launch.
+
+These packs are prepared routing and handoff guidance, not observed execution
+evidence. Browser QA, CI, deployment, publication, and merge proof still have
+to be recorded by the responsible runtime.
+
 [Website](https://rlaope.github.io/oh-my-hermes/) -
 [Documentation](docs/README.md) -
 [Installation](docs/INSTALLATION.md) -

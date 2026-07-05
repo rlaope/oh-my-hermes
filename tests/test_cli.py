@@ -16,10 +16,12 @@ from omh.cli import OmhError, cmd_runtime_merge
 from omh.commands import setup as setup_commands
 from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
+from omh.capabilities.families import CONCEPTUAL_WORKFLOW_SURFACES, capability_family_projection
 from omh.config_adapter import external_dirs
 from omh.paths import resolve_paths
 from omh.routing.intent import classify_omh_quality_intent
 from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
+from omh.skills.catalog import builtin_harnesses, installable_skill_names
 from omh.wrapper.localized_copy import detect_copy_locale
 
 
@@ -998,10 +1000,15 @@ class CliTests(unittest.TestCase):
             self.assertIn("Plugin bridge: ready locally", stdout)
             self.assertIn("Live Hermes plugin use: not observed yet", stdout)
             self.assertIn("Wrapper usage: not recorded yet", stdout)
+            self.assertIn("First-value packs", stdout)
+            self.assertIn("Frontend Rescue", stdout)
+            self.assertIn("Failure-to-Fix", stdout)
+            self.assertIn("Toolbelt Readiness", stdout)
             self.assertIn("Use OMH request-to-handoff", stdout)
             self.assertIn("A ready local plugin bridge is not proof", stdout)
             self.assertIn("For machine-readable output, rerun with `--json`.", stdout)
             self.assertFalse((root / ".omh" / "runtime" / "wrapper_sessions").exists())
+            self.assertFalse((root / ".omh" / "runtime" / "plugin_runtime_observations.jsonl").exists())
 
             with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
                 status, stdout, stderr = run_cli(base + ["quickstart", "--source", "discord", "--json"], output_json=False)
@@ -1016,6 +1023,55 @@ class CliTests(unittest.TestCase):
             self.assertIn("paper-learning", family_cards["learn_and_gather"]["primary_workflows"])
             self.assertIn("img-summary", family_cards["create_materials_and_visuals"]["primary_workflows"])
             self.assertIn("Claude Code", family_cards["delegate_coding_and_ship"]["executor_choices"])
+            pack_ids = {pack["id"] for pack in payload["first_value_packs"]}
+            self.assertEqual(
+                {
+                    "frontend_rescue",
+                    "repo_first_win",
+                    "failure_to_fix",
+                    "visual_deliverable",
+                    "toolbelt_readiness",
+                    "cto_product_loop",
+                },
+                pack_ids,
+            )
+            pack_labels = {pack["label"] for pack in payload["first_value_packs"]}
+            self.assertEqual(
+                {
+                    "Frontend Rescue",
+                    "Repo First-Win",
+                    "Failure-to-Fix",
+                    "Visual Deliverable",
+                    "Toolbelt Readiness",
+                    "CTO/Product Loop",
+                },
+                pack_labels,
+            )
+            pack_required_fields = {
+                "id",
+                "label",
+                "problem",
+                "prompt",
+                "primary_workflows",
+                "harness_surfaces",
+                "conceptual_surfaces",
+                "family_ids",
+                "outcome",
+                "evidence_boundary",
+            }
+            installable = set(installable_skill_names())
+            harnesses = {harness.name for harness in builtin_harnesses()}
+            conceptual = set(CONCEPTUAL_WORKFLOW_SURFACES)
+            families = set(capability_family_projection()["family_order"])
+            for pack in payload["first_value_packs"]:
+                with self.subTest(pack=pack["id"]):
+                    self.assertLessEqual(pack_required_fields, set(pack))
+                    self.assertLessEqual(set(pack["primary_workflows"]), installable)
+                    self.assertLessEqual(set(pack["harness_surfaces"]), harnesses)
+                    self.assertLessEqual(set(pack["conceptual_surfaces"]), conceptual)
+                    self.assertLessEqual(set(pack["family_ids"]), families)
+                    self.assertTrue(pack["prompt"].startswith("Use OMH "))
+                    self.assertIn("not", pack["evidence_boundary"])
             self.assertEqual(payload["local_status"]["plugin_bridge"]["status"], "ready_locally")
             self.assertFalse(payload["local_status"]["plugin_runtime_observed"])
             self.assertFalse(payload["local_status"]["plugin_runtime_active"])
