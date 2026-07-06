@@ -3214,6 +3214,20 @@ selected_workflow=ultraprocess
         self.assertNotEqual(readiness["selected_skill"], "connector-operator")
         self.assertNotEqual(github["selected_skill"], "connector-operator")
 
+    def test_connector_operator_handles_external_app_write_targets(self) -> None:
+        cases = (
+            "send a Slack DM to the incident channel after I approve the draft",
+            "post this summary to Discord after approval",
+            "create a Linear issue for the checkout regression with acceptance criteria",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["selected_skill"], "connector-operator")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_connector_operator_card")
+
     def test_live_info_operator_does_not_steal_research_connector_or_toolbelt(self) -> None:
         research = route_chat_message("web search current weather API best practices with citations", source="discord")
         connector = route_chat_message("create a calendar event for tomorrow's weather review", source="discord")

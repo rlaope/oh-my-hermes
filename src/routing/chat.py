@@ -2759,14 +2759,26 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "gmail draft",
             "gmail send",
             "create linear ticket",
+            "create linear issue",
             "linear ticket",
+            "linear issue",
             "update linear",
             "jira ticket",
+            "jira issue",
+            "create jira issue",
+            "open jira ticket",
             "notion page",
             "update notion",
             "crm update",
             "calendar invite",
             "google calendar",
+            "send slack dm",
+            "slack dm",
+            "discord dm",
+            "post to discord",
+            "post to slack",
+            "discord post",
+            "slack post",
             "connector action",
             "이메일 보내",
             "이메일 발송",
@@ -2774,7 +2786,9 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "gmail 초안",
             "linear ticket",
             "linear 티켓",
+            "linear 이슈",
             "jira 티켓",
+            "jira 이슈",
             "notion 페이지",
             "노션 페이지",
             "캘린더 초대",
@@ -3570,7 +3584,7 @@ def _is_command_operator_failure_or_coding_request(message: str) -> bool:
 
 def _is_connector_operator_setup_or_gateway_request(message: str) -> bool:
     normalized = _fast_path_text(message)
-    return any(
+    if any(
         marker in normalized
         for marker in (
             "connector is missing",
@@ -3580,18 +3594,56 @@ def _is_connector_operator_setup_or_gateway_request(message: str) -> bool:
             "api key missing",
             "not connected",
             "not configured",
-            "send to discord",
-            "send to slack",
-            "post to discord",
-            "post to slack",
-            "notify discord",
-            "notify slack",
-            "discord thread",
-            "slack thread",
             "커넥터가 없어",
             "커넥터 없음",
+        )
+    ):
+        return True
+    return _is_gateway_delivery_policy_request(normalized)
+
+
+def _is_gateway_delivery_policy_request(normalized: str) -> bool:
+    platform = any(
+        marker in normalized
+        for marker in (
+            "discord",
+            "slack",
+            "telegram",
+            "whatsapp",
+            "signal",
             "디스코드",
             "슬랙",
+            "텔레그램",
+        )
+    )
+    if not platform:
+        return False
+    return any(
+        marker in normalized
+        for marker in (
+            "gateway",
+            "route ",
+            "routing",
+            "thread",
+            "delivery policy",
+            "channel delivery",
+            "session delivery",
+            "silent",
+            "silently",
+            "quiet",
+            "quietly",
+            "status update",
+            "attachment policy",
+            "file attachment",
+            "update the thread",
+            "thread update",
+            "게이트웨이",
+            "라우팅",
+            "스레드",
+            "전달 정책",
+            "조용히",
+            "상태 업데이트",
+            "첨부",
         )
     )
 
