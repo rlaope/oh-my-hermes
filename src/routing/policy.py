@@ -2828,9 +2828,14 @@ _CONNECTOR_OPERATOR_PHRASES = (
     "gmail draft",
     "gmail send",
     "create linear ticket",
+    "create linear issue",
     "linear ticket",
+    "linear issue",
     "update linear",
     "jira ticket",
+    "jira issue",
+    "create jira issue",
+    "open jira ticket",
     "create jira",
     "notion page",
     "update notion",
@@ -2840,6 +2845,13 @@ _CONNECTOR_OPERATOR_PHRASES = (
     "create calendar event",
     "calendar invite",
     "google calendar",
+    "send slack dm",
+    "slack dm",
+    "discord dm",
+    "post to discord",
+    "post to slack",
+    "discord post",
+    "slack post",
     "connector action",
     "이메일 보내",
     "이메일 발송",
@@ -2847,7 +2859,9 @@ _CONNECTOR_OPERATOR_PHRASES = (
     "gmail 초안",
     "linear ticket",
     "linear 티켓",
+    "linear 이슈",
     "jira 티켓",
+    "jira 이슈",
     "notion 페이지",
     "노션 페이지",
     "캘린더 초대",
@@ -2873,6 +2887,8 @@ _CONNECTOR_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
         "crm",
         "ticket",
         "tickets",
+        "issue",
+        "issues",
         "invite",
         "recipient",
         "assignee",
@@ -2899,9 +2915,12 @@ _CONNECTOR_OPERATOR_ACTION_TOKENS = _normalized_token_set(
         "invite",
         "prepare",
         "confirm",
+        "confirmation",
         "approve",
+        "approval",
         "notify",
         "post",
+        "schedule",
         "보내",
         "발송",
         "초안",
@@ -6586,7 +6605,31 @@ def _connector_operator_guard_applies(normalized_query: str, query_tokens: set[s
         return True
     connector_context = bool(_CONNECTOR_OPERATOR_CONTEXT_TOKENS & query_tokens)
     connector_action = bool(_CONNECTOR_OPERATOR_ACTION_TOKENS & query_tokens)
-    return connector_context and connector_action
+    platform_write = _platform_connector_write_applies(normalized_query, query_tokens)
+    return (connector_context and connector_action) or platform_write
+
+
+def _platform_connector_write_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    platform = bool({"slack", "discord"} & query_tokens)
+    if not platform:
+        return False
+    connector_action = bool(_CONNECTOR_OPERATOR_ACTION_TOKENS & query_tokens)
+    explicit_write_boundary = (
+        bool({"dm", "channel", "approval", "confirmation"} & query_tokens)
+        or _contains_phrase(
+            normalized_query,
+            (
+                "after approval",
+                "after i approve",
+                "confirmation gate",
+                "post this",
+                "send a slack dm",
+                "slack dm",
+                "discord dm",
+            ),
+        )
+    )
+    return connector_action and explicit_write_boundary
 
 
 def _live_info_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

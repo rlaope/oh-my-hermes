@@ -66,7 +66,7 @@ Bad example:
 
 Use when Hermes should prepare or supervise a provider-backed external app action without claiming connector availability, credentials, API mutation, delivery, or success.
 
-    Strong routing signals: `connector-operator`, `connector operator`, `external app action`, `external connector action`, `saas action`, `api action`, `send email`, `email customer`, `gmail draft`, `gmail send`, `create linear ticket`, `linear ticket`, `update linear`, `jira ticket`, `create jira`, `notion page`, `update notion`, `crm update`, `salesforce update`, `hubspot update`, `create calendar event`, `calendar invite`, `google calendar`, `send slack dm`, `slack dm`, `discord dm`, `connector action`, `이메일 보내`, `이메일 발송`, `메일 보내`, `gmail 초안`, `linear ticket`, `linear 티켓`, `jira 티켓`, `notion 페이지`, `노션 페이지`, `캘린더 초대`, `외부 앱`, `외부 커넥터`, `커넥터 액션`
+    Strong routing signals: `connector-operator`, `connector operator`, `external app action`, `external connector action`, `saas action`, `api action`, `send email`, `email customer`, `gmail draft`, `gmail send`, `create linear ticket`, `create linear issue`, `linear ticket`, `linear issue`, `update linear`, `jira ticket`, `jira issue`, `create jira issue`, `open jira ticket`, `create jira`, `notion page`, `update notion`, `crm update`, `salesforce update`, `hubspot update`, `create calendar event`, `calendar invite`, `google calendar`, `send slack dm`, `slack dm`, `discord dm`, `post to discord`, `post to slack`, `discord post`, `slack post`, `connector action`, `이메일 보내`, `이메일 발송`, `메일 보내`, `gmail 초안`, `linear ticket`, `linear 티켓`, `linear 이슈`, `jira 티켓`, `jira 이슈`, `notion 페이지`, `노션 페이지`, `캘린더 초대`, `외부 앱`, `외부 커넥터`, `커넥터 액션`
 
 ## Catalog Metadata
 
