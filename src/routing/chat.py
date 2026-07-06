@@ -117,6 +117,8 @@ _GUARDED_OPERATOR_FAST_PATH_IDS = frozenset(
         "memory_curation_before_generic_clarification",
         "ops_observability_before_generic_loop",
         "toolbelt_readiness_before_generic_or_visual_fallback",
+        "workspace_file_operator_before_materials_or_coding",
+        "command_operator_before_generic_terminal_or_coding",
     }
 )
 _GUARDED_OPERATOR_FAST_PATH_PRIORITY = (
@@ -127,6 +129,8 @@ _GUARDED_OPERATOR_FAST_PATH_PRIORITY = (
     "ops_observability_before_generic_loop",
     "doctor_health_before_skill_catalog",
     "toolbelt_readiness_before_generic_or_visual_fallback",
+    "workspace_file_operator_before_materials_or_coding",
+    "command_operator_before_generic_terminal_or_coding",
     "img_summary_before_materials_or_delivery",
     "memory_curation_before_generic_clarification",
 )
@@ -1952,6 +1956,12 @@ def _catalog_fast_path_decision(
 ) -> _CatalogFastPathResult:
     direct_picker = _direct_picker_alias(routing_message)
     catalog_question = False if direct_picker else is_skill_catalog_question(routing_message)
+    specific_named_question = (
+        not direct_picker
+        and _is_specific_capability_question_shape(routing_message)
+        and bool(_specific_capability_named_hits(routing_message))
+    )
+    catalog_question = catalog_question or specific_named_question
     exact_skill = (
         _specific_capability_exact_id_hit(routing_message)
         if catalog_question and not _is_broad_capability_catalog_question(routing_message)
@@ -2615,6 +2625,229 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear materials or document-package request; prepare the file/package workflow without scoring every workflow.",
     ),
     (
+        "command-operator",
+        (
+            "command operator",
+            "terminal command",
+            "terminal task",
+            "shell command",
+            "shell task",
+            "cli command",
+            "command execution",
+            "run command",
+            "run this command",
+            "execute command",
+            "execute this command",
+            "run npm test",
+            "run tests",
+            "npm test",
+            "pnpm test",
+            "bun test",
+            "uv run",
+            "python -m unittest",
+            "pytest",
+            "make test",
+            "cargo test",
+            "go test",
+            "summarize command output",
+            "터미널 명령",
+            "터미널에서",
+            "셸 명령",
+            "쉘 명령",
+            "명령 실행",
+            "명령어 실행",
+            "실행 준비",
+            "npm test 실행",
+            "테스트 실행",
+            "결과 요약",
+        ),
+        "operator_surface_fast_path:command_operator",
+        "Clear terminal/CLI command request; prepare command scope, safety gates, cwd, timeout, and observed-result boundaries without scoring every workflow.",
+    ),
+    (
+        "connector-operator",
+        (
+            "connector operator",
+            "external app action",
+            "external connector action",
+            "send an email",
+            "send the email",
+            "send email",
+            "email customer",
+            "gmail draft",
+            "gmail send",
+            "create linear ticket",
+            "linear ticket",
+            "update linear",
+            "jira ticket",
+            "notion page",
+            "update notion",
+            "crm update",
+            "calendar invite",
+            "google calendar",
+            "connector action",
+            "이메일 보내",
+            "이메일 발송",
+            "메일 보내",
+            "gmail 초안",
+            "linear ticket",
+            "linear 티켓",
+            "jira 티켓",
+            "notion 페이지",
+            "노션 페이지",
+            "캘린더 초대",
+            "외부 앱",
+            "외부 커넥터",
+        ),
+        "operator_surface_fast_path:connector_operator",
+        "Clear external app or SaaS connector action request; prepare provider, auth, target, payload, confirmation, and observed-result boundaries without scoring every workflow.",
+    ),
+    (
+        "live-info-operator",
+        (
+            "live info operator",
+            "live information",
+            "weather today",
+            "current weather",
+            "weather forecast",
+            "stock price",
+            "crypto price",
+            "btc price",
+            "exchange rate",
+            "sports score",
+            "game score",
+            "time zone",
+            "timezone",
+            "time in",
+            "map directions",
+            "directions to",
+            "near me",
+            "traffic now",
+            "오늘 날씨",
+            "현재 날씨",
+            "날씨 예보",
+            "주가",
+            "코인 가격",
+            "환율",
+            "스포츠 점수",
+            "경기 결과",
+            "시간대",
+            "현재 시간",
+            "지도",
+            "길찾기",
+        ),
+        "operator_surface_fast_path:live_info",
+        "Clear live information lookup request; prepare provider, freshness, units, source-quality, and observed-result boundaries without scoring every workflow.",
+    ),
+    (
+        "content-operator",
+        (
+            "content operator",
+            "content workflow",
+            "writing workflow",
+            "publish-ready writing",
+            "publish ready writing",
+            "release notes",
+            "release note draft",
+            "newsletter draft",
+            "customer announcement",
+            "customer copy",
+            "product copy",
+            "landing page copy",
+            "social post draft",
+            "email draft",
+            "draft an email",
+            "rewrite for executives",
+            "summarize for customers",
+            "style guide rewrite",
+            "audience and tone",
+            "tone of voice",
+            "콘텐츠 오퍼레이터",
+            "글쓰기 워크플로",
+            "릴리즈 노트",
+            "릴리즈노트",
+            "뉴스레터 초안",
+            "고객 공지문",
+            "고객 공지",
+            "고객용 요약",
+            "메일 초안",
+            "이메일 초안",
+            "채널별 톤",
+            "문체 가이드",
+        ),
+        "operator_surface_fast_path:content_operator",
+        "Clear quality-controlled content request; prepare source scope, audience, tone, review, hallucination, and output-evidence boundaries without scoring every workflow.",
+    ),
+    (
+        "data-analysis",
+        (
+            "analyze this csv",
+            "analyze csv",
+            "csv analysis",
+            "csv data analysis",
+            "analyze json",
+            "json analysis",
+            "json log analysis",
+            "log analysis",
+            "analyze logs",
+            "summarize anomalies",
+            "anomalies by segment",
+            "trend analysis",
+            "segment analysis",
+            "schema check",
+            "column analysis",
+            "csv 매출 데이터를 분석",
+            "데이터 분석",
+            "데이터를 분석",
+            "csv 분석",
+            "json 로그를 분석",
+            "json 분석",
+            "로그 분석",
+            "오류 패턴",
+            "이상치",
+            "추세를 요약",
+            "추세 분석",
+            "컬럼 분석",
+        ),
+        "operator_surface_fast_path:data_analysis",
+        "Clear supplied data/table/log analysis request; prepare dataset scope, method, and evidence boundaries without scoring every workflow.",
+    ),
+    (
+        "workspace-file-operator",
+        (
+            "list files",
+            "list folder",
+            "list directory",
+            "find local files",
+            "search files in folder",
+            "organize files",
+            "organize folder",
+            "move old pdfs",
+            "move files",
+            "copy files",
+            "rename files",
+            "delete files",
+            "remove files",
+            "archive files",
+            "downloads folder file cleanup",
+            "reports folder",
+            "folder cleanup",
+            "file cleanup",
+            "다운로드 폴더 파일 정리",
+            "다운로드 폴더 정리",
+            "폴더 파일 정리",
+            "파일 정리해줘",
+            "파일 삭제 전 확인",
+            "오래된 zip 삭제",
+            "파일 이동",
+            "파일 복사",
+            "파일 이름 변경",
+            "디렉터리 목록",
+        ),
+        "operator_surface_fast_path:workspace_file",
+        "Clear local file or folder operation request; prepare path scope and destructive-operation boundaries without scoring every workflow.",
+    ),
+    (
         "harness-session-inventory",
         (
             "harness session inventory",
@@ -2832,7 +3065,7 @@ def _operator_surface_fast_path_decision(
         return None
     if not allow_explicit_skill and explicit_skill_invocation(routing_message):
         return None
-    match = _operator_surface_fast_path_match(routing_message)
+    match = _operator_surface_fast_path_match(routing_message, only_skill=only_skill)
     if match is None:
         return None
     selected_skill, phrase, marker, reason = match
@@ -2844,6 +3077,14 @@ def _operator_surface_fast_path_decision(
         _is_paper_learning_citation_research_request(routing_message)
         or _is_paper_learning_materials_request(routing_message)
     ):
+        return None
+    if selected_skill == "command-operator" and _is_command_operator_failure_or_coding_request(routing_message):
+        return None
+    if selected_skill == "connector-operator" and _is_connector_operator_setup_or_gateway_request(routing_message):
+        return None
+    if selected_skill == "live-info-operator" and _is_live_info_operator_setup_or_research_request(routing_message):
+        return None
+    if selected_skill == "content-operator" and _is_content_operator_research_connector_or_materials_request(routing_message):
         return None
     if selected_skill == "skill-scout" and _is_installed_skill_repair_request(routing_message):
         selected_skill = "doctor"
@@ -2911,10 +3152,16 @@ def _operator_surface_fast_path_decision(
     )
 
 
-def _operator_surface_fast_path_match(message: str) -> tuple[str, str, str, str] | None:
+def _operator_surface_fast_path_match(
+    message: str,
+    *,
+    only_skill: str | None = None,
+) -> tuple[str, str, str, str] | None:
     text = _fast_path_text(message)
     compact = _fast_path_compact(text)
     for skill, phrase, normalized_phrase, normalized_compact, marker, reason in _operator_surface_fast_path_patterns():
+        if only_skill is not None and skill != only_skill:
+            continue
         if normalized_phrase in text or (normalized_compact and normalized_compact in compact):
             return skill, phrase, marker, reason
     return None
@@ -2972,6 +3219,18 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:executor_runtime_readiness",)
     if skill == "harness-session-inventory":
         return ("guard:harness_session_inventory",)
+    if skill == "workspace-file-operator":
+        return ("guard:workspace_file_operator",)
+    if skill == "command-operator":
+        return ("guard:command_operator",)
+    if skill == "connector-operator":
+        return ("guard:connector_operator",)
+    if skill == "live-info-operator":
+        return ("guard:live_info_operator",)
+    if skill == "content-operator":
+        return ("guard:content_operator",)
+    if skill == "data-analysis":
+        return ("guard:data_analysis",)
     if skill == "context-budget-review":
         return ("guard:context_budget",)
     if skill == "agent-debug":
@@ -3097,6 +3356,174 @@ def _is_paper_learning_materials_request(message: str) -> bool:
     )
 
 
+def _is_command_operator_failure_or_coding_request(message: str) -> bool:
+    normalized = _fast_path_text(message)
+    return any(
+        marker in normalized
+        for marker in (
+            "failed with",
+            "failure log",
+            "stack trace",
+            "root cause",
+            "find root cause",
+            "fix the failing",
+            "fix failing",
+            "fix test",
+            "fix tests",
+            "test failed",
+            "tests failed",
+            "build failed",
+            "ci failed",
+            "lint failed",
+            "typecheck failed",
+            "고쳐",
+            "수정",
+            "실패 원인",
+            "실패 로그",
+            "스택 트레이스",
+            "원인 찾아",
+        )
+    )
+
+
+def _is_connector_operator_setup_or_gateway_request(message: str) -> bool:
+    normalized = _fast_path_text(message)
+    return any(
+        marker in normalized
+        for marker in (
+            "connector is missing",
+            "connector missing",
+            "missing connector",
+            "credential missing",
+            "api key missing",
+            "not connected",
+            "not configured",
+            "send to discord",
+            "send to slack",
+            "post to discord",
+            "post to slack",
+            "notify discord",
+            "notify slack",
+            "discord thread",
+            "slack thread",
+            "커넥터가 없어",
+            "커넥터 없음",
+            "디스코드",
+            "슬랙",
+        )
+    )
+
+
+def _is_live_info_operator_setup_or_research_request(message: str) -> bool:
+    normalized = _fast_path_text(message)
+    return any(
+        marker in normalized
+        for marker in (
+            "web search",
+            "web research",
+            "source backed",
+            "with citations",
+            "citations",
+            "sources",
+            "best practices",
+            "api best practices",
+            "plugin is missing",
+            "plugin missing",
+            "provider setup",
+            "setup needed",
+            "what setup",
+            "connector is missing",
+            "connector missing",
+            "create calendar event",
+            "calendar event",
+            "calendar invite",
+            "웹서치",
+            "웹 리서치",
+            "출처",
+            "근거",
+            "셋업",
+            "설정 필요",
+            "캘린더 초대",
+        )
+    )
+
+
+def _is_content_operator_research_connector_or_materials_request(message: str) -> bool:
+    normalized = _fast_path_text(message)
+    return any(
+        marker in normalized
+        for marker in (
+            "web search",
+            "web research",
+            "with citations",
+            "citations",
+            "source finder",
+            "find sources",
+            "find a skill",
+            "find skills",
+            "is there a skill",
+            "skill for",
+            "skill candidate",
+            "skill discovery",
+            "existing skill",
+            "before building one",
+            "before creating one",
+            "ops review",
+            "weekly ops review",
+            "operating review",
+            "customer feedback",
+            "release risks",
+            "image card",
+            "summary card",
+            "announcement card",
+            "release notes image",
+            "release notes card",
+            "release notes thumbnail",
+            "thumbnail",
+            "poster",
+            "visual",
+            "image",
+            "send email",
+            "send an email",
+            "send the email",
+            "send slack",
+            "post to slack",
+            "post to discord",
+            "create linear ticket",
+            "export pdf",
+            "export to pdf",
+            "export to ppt",
+            "make a ppt",
+            "make slides",
+            "turn into slides",
+            "웹서치",
+            "웹 리서치",
+            "출처 찾아",
+            "스킬 찾아",
+            "스킬 있어",
+            "스킬이 있어",
+            "스킬 후보",
+            "기존 스킬",
+            "ops 리뷰",
+            "운영 리뷰",
+            "고객 피드백",
+            "릴리즈 리스크",
+            "이미지",
+            "사진",
+            "카드",
+            "썸네일",
+            "포스터",
+            "메일 보내",
+            "이메일 보내",
+            "이메일 발송",
+            "pdf로",
+            "ppt로",
+            "피피티",
+            "슬라이드",
+        )
+    )
+
+
 def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
     if marker == "operator_surface_fast_path:planning":
         normalized = _fast_path_text(phrase)
@@ -3123,6 +3550,18 @@ def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
         return "phrase:executor_request"
     if marker == "operator_surface_fast_path:materials":
         return "phrase:materials_request"
+    if marker == "operator_surface_fast_path:command_operator":
+        return "phrase:command_operator_request"
+    if marker == "operator_surface_fast_path:connector_operator":
+        return "phrase:connector_operator_request"
+    if marker == "operator_surface_fast_path:live_info":
+        return "phrase:live_info_request"
+    if marker == "operator_surface_fast_path:content_operator":
+        return "phrase:content_request"
+    if marker == "operator_surface_fast_path:data_analysis":
+        return "phrase:data_analysis_request"
+    if marker == "operator_surface_fast_path:workspace_file":
+        return "phrase:workspace_file_request"
     if marker == "operator_surface_fast_path:harness_inventory":
         return "phrase:harness_inventory_request"
     if marker == "operator_surface_fast_path:automation":

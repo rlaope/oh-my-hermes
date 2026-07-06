@@ -161,9 +161,18 @@ def _harness_summary(harness: HarnessDefinition) -> str:
         f"`{action}`" for action in _compact_sequence(harness.wrapper_actions, 4, keep_contains=keep_markers)
     )
     return (
-        f"- `{harness.name}`: {harness.purpose} T `{harness.quality_tier}`. "
+        f"- `{harness.name}`: {_compact_harness_purpose(harness.purpose)}. "
         f"L: {evidence_ladder}. A: {wrapper_actions or '`show_status`'}."
     )
+
+
+def _compact_harness_purpose(purpose: str, limit: int = 84) -> str:
+    if len(purpose) <= limit:
+        return purpose
+    prefix = purpose[: limit - 3].rstrip()
+    if " " in prefix:
+        prefix = prefix.rsplit(" ", 1)[0]
+    return f"{prefix}..."
 
 
 def _compact_sequence(items: tuple[str, ...], limit: int, keep_contains: tuple[str, ...] = ()) -> tuple[str, ...]:
@@ -355,7 +364,7 @@ def _router_harness_registry_reference(harnesses: list[HarnessDefinition]) -> st
 
 Harnesses shape response quality and evidence gates. They are not proof that a separate runtime role exists.
 
-Legend: Tier `quality-tier`; Ladder: evidence steps; Actions: wrapper actions; Privacy `metadata_only`.
+Legend: Tier `quality-tier` is in each harness definition; Ladder: evidence steps; Actions: wrapper actions; Privacy `metadata_only`.
 
 ## Representative Harnesses
 

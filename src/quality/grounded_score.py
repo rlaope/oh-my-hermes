@@ -433,8 +433,8 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
         "executor-runtime-readiness",
         "executor_runtime_readiness",
         "prepare_executor_runtime_readiness",
-        "delegate",
-        True,
+        "clarify",
+        False,
         expected_playbook="executor-runtime-readiness",
     ),
     GroundedScenario(

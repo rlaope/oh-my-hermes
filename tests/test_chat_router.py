@@ -142,6 +142,90 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "open the staging checkout URL, click login, fill the form, and capture blockers",
+                "browser-operator",
+                "prepare_browser_operator_card",
+                None,
+            ),
+            (
+                "웹페이지 열고 로그인 폼 클릭해서 막히는 부분 캡처해줘",
+                "browser-operator",
+                "prepare_browser_operator_card",
+                None,
+            ),
+            (
+                "list files in the reports folder and move old PDFs into archive after confirmation",
+                "workspace-file-operator",
+                "prepare_workspace_file_operator_card",
+                None,
+            ),
+            (
+                "다운로드 폴더 파일 정리하고 오래된 zip 삭제 전 확인해줘",
+                "workspace-file-operator",
+                "prepare_workspace_file_operator_card",
+                None,
+            ),
+            (
+                "run npm test in the project terminal and summarize the output",
+                "command-operator",
+                "prepare_command_operator_card",
+                None,
+            ),
+            (
+                "터미널 명령으로 uv run python -m unittest tests/test_cli.py 실행 준비해줘",
+                "command-operator",
+                "prepare_command_operator_card",
+                None,
+            ),
+            (
+                "send an email to the customer with this release summary after approval",
+                "connector-operator",
+                "prepare_connector_operator_card",
+                None,
+            ),
+            (
+                "Linear ticket 만들어서 이 장애 내용을 담당자에게 배정하는 카드 준비해줘",
+                "connector-operator",
+                "prepare_connector_operator_card",
+                None,
+            ),
+            (
+                "what is the weather today in Seoul?",
+                "live-info-operator",
+                "prepare_live_info_operator_card",
+                None,
+            ),
+            (
+                "AAPL stock price and BTC price 지금 기준으로 확인 경계 잡아줘",
+                "live-info-operator",
+                "prepare_live_info_operator_card",
+                None,
+            ),
+            (
+                "analyze this CSV and summarize anomalies by segment",
+                "data-analysis",
+                "prepare_data_analysis_card",
+                None,
+            ),
+            (
+                "첨부한 JSON 로그를 분석해서 오류 패턴과 이상치를 정리해줘",
+                "data-analysis",
+                "prepare_data_analysis_card",
+                None,
+            ),
+            (
+                "draft publish-ready release notes for this changelog with audience, tone, and review gates",
+                "content-operator",
+                "prepare_content_operator_card",
+                None,
+            ),
+            (
+                "고객 공지문 초안을 채널별 톤과 검토 기준까지 잡아서 작성해줘",
+                "content-operator",
+                "prepare_content_operator_card",
+                None,
+            ),
+            (
                 "I want to safely add a feature to this repo",
                 "ralplan",
                 "present_plan",
@@ -717,6 +801,22 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(public["route_explanation"]["next_action"], next_action)
                 self.assertNotEqual(decision["recommendations"][0]["matched"], ["direct_answer_fast_path"])
 
+    def test_content_operator_keeps_simple_text_transforms_direct(self) -> None:
+        cases = (
+            "translate this sentence to English",
+            "rewrite this paragraph more naturally",
+            "아래 문장을 자연스럽게 고쳐줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                public = public_route_payload(decision)
+
+                self.assertNotEqual(decision["selected_skill"], "content-operator")
+                self.assertEqual(decision["recommendations"][0]["matched"], ["direct_answer_fast_path"])
+                self.assertNotIn("workflow_route_plan", public)
+
     def test_below_threshold_chat_clarifies_before_dispatch(self) -> None:
         decision = route_chat_message("architecture", min_confidence="high")
 
@@ -781,6 +881,36 @@ class ChatRouterTests(unittest.TestCase):
             ("웹서치해서 최신 자료 정리해줘", "web-research", "run_hermes_research", "operator_surface_fast_path:research"),
             ("이미지 생성해줘. 회의록을 세로 카드로 요약해줘", "img-summary", "prepare_visual_prompt_card", "operator_surface_fast_path:visual"),
             ("PPT 만들어줘", "materials-package", "prepare_material_package", "operator_surface_fast_path:materials"),
+            (
+                "다운로드 폴더 파일 정리해줘",
+                "workspace-file-operator",
+                "prepare_workspace_file_operator_card",
+                "operator_surface_fast_path:workspace_file",
+            ),
+            (
+                "CSV 매출 데이터를 분석해서 이상치와 추세를 요약해줘",
+                "data-analysis",
+                "prepare_data_analysis_card",
+                "operator_surface_fast_path:data_analysis",
+            ),
+            (
+                "터미널에서 npm test 실행하고 결과 요약해줘",
+                "command-operator",
+                "prepare_command_operator_card",
+                "operator_surface_fast_path:command_operator",
+            ),
+            (
+                "이메일 보내기 전에 수신자와 본문 승인 경계 잡아줘",
+                "connector-operator",
+                "prepare_connector_operator_card",
+                "operator_surface_fast_path:connector_operator",
+            ),
+            (
+                "오늘 날씨와 환율 확인하기 전에 위치와 freshness 경계 잡아줘",
+                "live-info-operator",
+                "prepare_live_info_operator_card",
+                "operator_surface_fast_path:live_info",
+            ),
             ("codex로 열어줘", "executor-runtime-readiness", "prepare_executor_runtime_readiness", "operator_surface_fast_path:executor"),
             (
                 "codex로 새 세션 만들어서 열어줘",
@@ -3025,6 +3155,76 @@ selected_workflow=ultraprocess
         self.assertIn("File or text lookup", lookup["reason"])
         self.assertNotEqual(edit["reason"], lookup["reason"])
         self.assertNotEqual(edit["action"], "fallback")
+
+    def test_workspace_file_operator_does_not_steal_lookup_materials_or_coding(self) -> None:
+        lookup = route_chat_message("README 파일 찾아줘", source="discord")
+        edit = route_chat_message("README 제목 수정해줘", source="discord")
+        materials = route_chat_message("PDF를 PPT로 바꿔줘", source="discord")
+        code = route_chat_message("fix the file upload bug", source="discord")
+
+        self.assertEqual(lookup["selected_skill"], "oh-my-hermes")
+        self.assertNotEqual(edit["selected_skill"], "workspace-file-operator")
+        self.assertEqual(materials["selected_skill"], "materials-package")
+        self.assertEqual(code["selected_skill"], "ultraprocess")
+
+    def test_data_analysis_does_not_steal_source_lookup_materials_or_coding(self) -> None:
+        source_lookup = route_chat_message("find datasets and github repos for agent memory", source="discord")
+        materials = route_chat_message("엑셀을 월간 보고서로 만들어줘", source="discord")
+        code = route_chat_message("fix the data upload bug", source="discord")
+
+        self.assertEqual(source_lookup["selected_skill"], "source-finder")
+        self.assertEqual(materials["selected_skill"], "materials-package")
+        self.assertEqual(code["selected_skill"], "ultraprocess")
+        self.assertNotEqual(materials["selected_skill"], "data-analysis")
+        self.assertNotEqual(code["selected_skill"], "data-analysis")
+
+    def test_command_operator_does_not_steal_coding_file_or_build_triage(self) -> None:
+        coding = route_chat_message("fix the failing npm test by updating the parser", source="discord")
+        file_task = route_chat_message("move old log files into archive", source="discord")
+        build_failure = route_chat_message("npm test failed with this stack trace, find root cause", source="discord")
+
+        self.assertEqual(coding["selected_skill"], "ultraprocess")
+        self.assertEqual(file_task["selected_skill"], "workspace-file-operator")
+        self.assertEqual(build_failure["selected_skill"], "build-failure-triage")
+        self.assertNotEqual(coding["selected_skill"], "command-operator")
+        self.assertNotEqual(file_task["selected_skill"], "command-operator")
+        self.assertNotEqual(build_failure["selected_skill"], "command-operator")
+
+    def test_connector_operator_does_not_steal_gateway_toolbelt_or_github_ops(self) -> None:
+        gateway = route_chat_message("send this status update to Discord silently", source="discord")
+        readiness = route_chat_message("gmail connector is missing, check what setup is needed", source="discord")
+        github = route_chat_message("github issue opened, label it and prepare a PR handoff", source="discord")
+
+        self.assertEqual(gateway["selected_skill"], "gateway-intent-card")
+        self.assertEqual(readiness["selected_skill"], "toolbelt-readiness")
+        self.assertEqual(github["selected_skill"], "github-event-ops")
+        self.assertNotEqual(gateway["selected_skill"], "connector-operator")
+        self.assertNotEqual(readiness["selected_skill"], "connector-operator")
+        self.assertNotEqual(github["selected_skill"], "connector-operator")
+
+    def test_live_info_operator_does_not_steal_research_connector_or_toolbelt(self) -> None:
+        research = route_chat_message("web search current weather API best practices with citations", source="discord")
+        connector = route_chat_message("create a calendar event for tomorrow's weather review", source="discord")
+        readiness = route_chat_message("weather plugin is missing, check provider setup", source="discord")
+
+        self.assertEqual(research["selected_skill"], "web-research")
+        self.assertEqual(connector["selected_skill"], "connector-operator")
+        self.assertEqual(readiness["selected_skill"], "toolbelt-readiness")
+        self.assertNotEqual(research["selected_skill"], "live-info-operator")
+        self.assertNotEqual(connector["selected_skill"], "live-info-operator")
+        self.assertNotEqual(readiness["selected_skill"], "live-info-operator")
+
+    def test_content_operator_does_not_steal_research_connector_or_materials(self) -> None:
+        research = route_chat_message("web search latest newsletter benchmarks with citations", source="discord")
+        connector = route_chat_message("send this customer update email after approval", source="discord")
+        materials = route_chat_message("turn these notes into a PDF and PPT handout", source="discord")
+
+        self.assertEqual(research["selected_skill"], "web-research")
+        self.assertEqual(connector["selected_skill"], "connector-operator")
+        self.assertEqual(materials["selected_skill"], "materials-package")
+        self.assertNotEqual(research["selected_skill"], "content-operator")
+        self.assertNotEqual(connector["selected_skill"], "content-operator")
+        self.assertNotEqual(materials["selected_skill"], "content-operator")
 
     def test_web_search_chat_dispatches_to_research_harness(self) -> None:
         cases = (
