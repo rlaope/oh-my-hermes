@@ -18,7 +18,7 @@ from omh.routing.intent import classify_workflow_intent
 from omh.routing import chat as chat_router_impl
 from omh.routing.localization import normalized_phrase
 from omh.routing.recommend import recommend_skills
-from omh.plugin_bundle.omh.awareness import awareness_route_hint
+from omh.plugin_bundle.omh.awareness import awareness_route_hint, awareness_route_hint_context
 from omh.skills.catalog import primary_harness_for_skill, routable_definitions
 
 
@@ -238,6 +238,18 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "OCR this receipt image into a table with totals and confidence notes",
+                "media-input-operator",
+                "prepare_media_input_card",
+                None,
+            ),
+            (
+                "스크린샷에서 텍스트 추출하고 핵심만 요약해줘",
+                "media-input-operator",
+                "prepare_media_input_card",
+                None,
+            ),
+            (
                 "I want to safely add a feature to this repo",
                 "ralplan",
                 "present_plan",
@@ -403,6 +415,89 @@ class ChatRouterTests(unittest.TestCase):
                     self.assertIsNone(decision["task_card"])
                 else:
                     self.assertEqual(decision["task_card"]["task_type"], task_type)
+
+    def test_awareness_route_hint_keeps_receipt_image_generation_on_img_summary(self) -> None:
+        cases = (
+            "make an image of a receipt",
+            "create a receipt image for a checkout mockup",
+            "generate an image of a receipt",
+            "make an image with a table of totals",
+            "generate an image containing a receipt table",
+            "create a receipt image table for a checkout mockup",
+            "make an image with receipt text",
+            "generate a receipt image with fields",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+
+                self.assertEqual(decision["selected_skill"], "img-summary")
+                self.assertEqual(hint["status"], "hinted")
+                self.assertEqual(hint["primary_workflow"], "img-summary")
+                self.assertEqual(hint["primary_next_action"], "prepare_visual_prompt_card")
+
+    def test_receipt_image_extraction_without_ocr_routes_to_media_input(self) -> None:
+        cases = (
+            "receipt text",
+            "receipt text from image",
+            "receipt fields",
+            "receipt fields from image",
+            "receipt image extraction",
+            "parse receipt image into fields",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+
+                self.assertEqual(decision["selected_skill"], "media-input-operator")
+                self.assertEqual(decision["recommendations"][0]["skill"], "media-input-operator")
+                self.assertEqual(hint["status"], "hinted")
+                self.assertEqual(hint["primary_workflow"], "media-input-operator")
+
+    def test_awareness_route_hint_prefers_media_input_for_screenshot_text_extraction(self) -> None:
+        cases = (
+            "extract text from screenshot",
+            "screenshot text extraction",
+            "image OCR",
+            "do image OCR",
+            "photo OCR",
+            "screenshot OCR",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+                hook_context = awareness_route_hint_context(message)
+
+                self.assertEqual(decision["selected_skill"], "media-input-operator")
+                self.assertEqual(hint["status"], "hinted")
+                self.assertEqual(hint["primary_workflow"], "media-input-operator")
+                self.assertIn("selected=media-input-operator", hook_context)
+
+    def test_media_input_ocr_boundary_names_extraction_evidence(self) -> None:
+        message = "OCR this receipt image into a table with totals and confidence notes"
+        decision = route_chat_message(
+            message,
+            source="discord",
+        )
+        hint = awareness_route_hint(message)
+        hook_context = awareness_route_hint_context(message)
+
+        self.assertEqual(decision["selected_skill"], "media-input-operator")
+        public = public_route_payload(decision)
+        explanation = public["route_explanation"]
+        top_recommendation = public["recommendations"][0]
+        for expected in ("OCR output", "screenshot text extraction", "receipt fields"):
+            self.assertIn(expected, explanation["claim_boundary"])
+            self.assertIn(expected, explanation["not_evidence_yet"])
+            self.assertIn(expected, top_recommendation["evidence_boundary"])
+            self.assertIn(expected, hint["hints"][0]["not_evidence_yet"])
+            self.assertIn(expected, hook_context)
 
     def test_codegraph_refresh_does_not_steal_generic_index_refresh(self) -> None:
         generic_cases = (
@@ -1739,6 +1834,9 @@ class ChatRouterTests(unittest.TestCase):
             "Create an image summary card from these notes.",
             "make a poster explaining cron automation",
             "make an image explaining the cron feature",
+            "make an image of a receipt",
+            "create a receipt image for a checkout mockup",
+            "generate an image of a receipt",
             "크론 기능 설명 사진 하나 만들어줘",
             "PR 요약을 이미지가 아니라 사진처럼 만들어줘",
             "create a picture card from these meeting notes",

@@ -2664,13 +2664,13 @@ class CliTests(unittest.TestCase):
             self.assertIn("11/11 fast-path cases", gates["router_fast_path"]["summary"])
             self.assertIn("missing markers 0", gates["router_fast_path"]["summary"])
             self.assertEqual(gates["common_request_coverage"]["status"], "passed")
-            self.assertIn("80/80 common request cases", gates["common_request_coverage"]["summary"])
+            self.assertIn("82/82 common request cases", gates["common_request_coverage"]["summary"])
             self.assertIn("coverage 100.0%", gates["common_request_coverage"]["summary"])
             self.assertIn("popular plugin families 10/10 (100.0%)", gates["common_request_coverage"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
             self.assertIn("8/8 UX gates passing", gates["hermes_ux_quality"]["summary"])
             self.assertIn("fast paths 11/11", gates["hermes_ux_quality"]["summary"])
-            self.assertIn("common requests 80/80", gates["hermes_ux_quality"]["summary"])
+            self.assertIn("common requests 82/82", gates["hermes_ux_quality"]["summary"])
             self.assertEqual(gates["parity_contracts"]["status"], "passed")
             self.assertIn("not run the release checklist", payload["boundary"])
 
@@ -2714,7 +2714,7 @@ class CliTests(unittest.TestCase):
             )
             self.assertIn("Localized chat copy: 8/8 (locales 6)", stdout)
             self.assertIn(
-                "Common request coverage: 80/80 "
+                "Common request coverage: 82/82 "
                 "(100.0%; target 95.0%; generic ack 0; popular plugin families 10/10 at 100.0%)",
                 stdout,
             )
@@ -2754,8 +2754,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["router_fast_path_passing"], 11)
             self.assertEqual(payload["summary"]["router_fast_path_total"], 11)
             self.assertEqual(payload["summary"]["router_fast_path_missing_marker_count"], 0)
-            self.assertEqual(payload["summary"]["common_request_coverage_passing"], 80)
-            self.assertEqual(payload["summary"]["common_request_coverage_total"], 80)
+            self.assertEqual(payload["summary"]["common_request_coverage_passing"], 82)
+            self.assertEqual(payload["summary"]["common_request_coverage_total"], 82)
             self.assertEqual(payload["summary"]["common_request_coverage_percent"], 100.0)
             self.assertEqual(payload["summary"]["common_request_coverage_target"], 95.0)
             self.assertEqual(payload["summary"]["common_request_generic_ack_count"], 0)
@@ -5016,6 +5016,9 @@ class CliTests(unittest.TestCase):
             "OMH 루프 기능 소개 이미지 만들어줘",
             "generate an image",
             "generate an image.",
+            "make an image of a receipt",
+            "create a receipt image for a checkout mockup",
+            "generate an image of a receipt",
         )
 
         for message in cases:

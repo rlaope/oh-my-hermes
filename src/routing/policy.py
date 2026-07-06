@@ -579,6 +579,9 @@ _VISUAL_SUMMARY_CARD_TOKENS = _normalized_token_set(
 ) - {"one", "pager"}
 _VISUAL_SUMMARY_CAPABILITY_TOKENS = _normalized_token_set(
     {
+        "make",
+        "create",
+        "generate",
         "support",
         "supports",
         "feature",
@@ -591,6 +594,10 @@ _VISUAL_SUMMARY_CAPABILITY_TOKENS = _normalized_token_set(
         "does",
         "can",
         "기능",
+        "만들어줘",
+        "만들어",
+        "생성해줘",
+        "생성",
         "지원",
         "가능",
         "있어",
@@ -3104,6 +3111,34 @@ _MEDIA_INPUT_OPERATOR_PHRASES = (
     "summarize this youtube",
     "video summary",
     "summarize this video",
+    "ocr image",
+    "image ocr",
+    "photo ocr",
+    "picture ocr",
+    "graphic ocr",
+    "screenshot ocr",
+    "ocr this image",
+    "ocr receipt image",
+    "ocr this receipt image",
+    "receipt ocr",
+    "receipt image ocr",
+    "receipt text",
+    "receipt text from image",
+    "receipt fields",
+    "receipt fields from image",
+    "receipt image extraction",
+    "receipt image text",
+    "receipt image fields",
+    "parse receipt image",
+    "receipt image parse",
+    "receipt image into fields",
+    "image text extraction",
+    "extract text from image",
+    "extract text from this image",
+    "screenshot text extraction",
+    "extract text from screenshot",
+    "extract text from this screenshot",
+    "screenshot to text",
     "with timestamps",
     "clip summary",
     "podcast summary",
@@ -3115,8 +3150,36 @@ _MEDIA_INPUT_OPERATOR_PHRASES = (
     "영상 요약",
     "유튜브 요약",
     "youtube 요약",
+    "이미지 ocr",
+    "이미지 OCR",
+    "이미지 텍스트 추출",
+    "이미지에서 텍스트 추출",
+    "영수증 ocr",
+    "영수증 OCR",
+    "영수증 이미지 ocr",
+    "영수증 이미지 OCR",
+    "스크린샷 텍스트 추출",
+    "스크린샷에서 텍스트 추출",
     "타임스탬프",
     "타임라인 요약",
+)
+_MEDIA_INPUT_RECEIPT_EXTRACTION_PHRASES = (
+    "receipt text",
+    "receipt text from image",
+    "receipt fields",
+    "receipt fields from image",
+    "receipt image extraction",
+    "receipt image text",
+    "receipt image fields",
+    "parse receipt image",
+    "receipt image parse",
+    "receipt image into fields",
+    "extract receipt text",
+    "extract receipt fields",
+    "영수증 텍스트",
+    "영수증 필드",
+    "영수증 이미지 텍스트",
+    "영수증 이미지 필드",
 )
 _MEDIA_INPUT_CONTEXT_TOKENS = _normalized_token_set(
     {
@@ -3132,6 +3195,12 @@ _MEDIA_INPUT_CONTEXT_TOKENS = _normalized_token_set(
         "podcast",
         "webinar",
         "media",
+        "ocr",
+        "image",
+        "screenshot",
+        "receipt",
+        "photo",
+        "text",
         "오디오",
         "음성",
         "녹음",
@@ -3141,11 +3210,31 @@ _MEDIA_INPUT_CONTEXT_TOKENS = _normalized_token_set(
         "youtube",
         "전사",
         "자막",
+        "이미지",
+        "사진",
+        "스크린샷",
+        "영수증",
+        "텍스트",
         "타임스탬프",
         "타임라인",
         "클립",
         "팟캐스트",
         "웨비나",
+    }
+)
+_MEDIA_INPUT_VISUAL_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "ocr",
+        "image",
+        "screenshot",
+        "receipt",
+        "photo",
+        "text",
+        "이미지",
+        "사진",
+        "스크린샷",
+        "영수증",
+        "텍스트",
     }
 )
 _MEDIA_INPUT_ACTION_TOKENS = _normalized_token_set(
@@ -3157,6 +3246,11 @@ _MEDIA_INPUT_ACTION_TOKENS = _normalized_token_set(
         "summarise",
         "summary",
         "extract",
+        "ocr",
+        "table",
+        "fields",
+        "totals",
+        "parse",
         "timestamp",
         "timestamps",
         "action",
@@ -3166,6 +3260,10 @@ _MEDIA_INPUT_ACTION_TOKENS = _normalized_token_set(
         "전사",
         "요약",
         "추출",
+        "정리해줘",
+        "표",
+        "필드",
+        "금액",
         "정리",
         "타임스탬프",
         "타임라인",
@@ -3173,6 +3271,15 @@ _MEDIA_INPUT_ACTION_TOKENS = _normalized_token_set(
         "액션",
         "자막",
         "챕터",
+    }
+)
+_MEDIA_INPUT_EXTRACTIVE_ACTION_TOKENS = _normalized_token_set(
+    {
+        "ocr",
+        "extract",
+        "extraction",
+        "parse",
+        "추출",
     }
 )
 _MEDIA_INPUT_OPERATOR_BLOCKERS = (
@@ -4152,11 +4259,11 @@ LIVE_INFO_OPERATOR_GUARD = RoutingGuardRule(
 )
 MEDIA_INPUT_OPERATOR_GUARD = RoutingGuardRule(
     id="media_input_operator_before_generic_content_or_direct",
-    rule="Audio, video, YouTube, transcript, recording, podcast, webinar, timestamp, or clip-summary requests should route to media-input-operator before generic content or direct fallback.",
+    rule="Audio, video, YouTube, transcript, recording, OCR, screenshot-text, receipt-image, podcast, webinar, timestamp, or clip-summary requests should route to media-input-operator before generic content or direct fallback.",
     matched_label="guard:media_input",
     preferred_skills=("media-input-operator",),
     score_boost=42,
-    why="Matched guard/trigger metadata; media input requests need source, permission, transcript, timestamp, summary-method, and observed-result boundaries.",
+    why="Matched guard/trigger metadata; media input requests need source, permission, extraction, transcript, timestamp, summary-method, and observed-result boundaries.",
     activation_status="active",
 )
 CONTENT_OPERATOR_GUARD = RoutingGuardRule(
@@ -4517,6 +4624,7 @@ def _active_routing_guard_rules_cached(
     if (
         not direct_coding_task_applies
         and not feedback_before_coding_applies
+        and not workflow_learning_applies
         and _media_input_operator_guard_applies(normalized_query, query_tokens)
     ):
         rules.append(MEDIA_INPUT_OPERATOR_GUARD)
@@ -6649,15 +6757,34 @@ def _media_input_operator_guard_applies(normalized_query: str, query_tokens: set
         return False
     if _connector_operator_guard_applies(normalized_query, query_tokens):
         return False
+    if _voice_operator_guard_applies(normalized_query, query_tokens) and not _contains_phrase(
+        normalized_query,
+        _MEDIA_INPUT_OPERATOR_PHRASES,
+    ):
+        return False
     if _materials_package_guard_applies(normalized_query, query_tokens):
         return False
     if _web_research_guard_applies(normalized_query, query_tokens):
         return False
+    receipt_extraction_phrase = _contains_phrase(normalized_query, _MEDIA_INPUT_RECEIPT_EXTRACTION_PHRASES)
+    extractive_action = bool(_MEDIA_INPUT_EXTRACTIVE_ACTION_TOKENS & query_tokens)
+    if receipt_extraction_phrase:
+        if _visual_summary_guard_applies(normalized_query, query_tokens) and not extractive_action:
+            return False
+        return True
     if _contains_phrase(normalized_query, _MEDIA_INPUT_OPERATOR_PHRASES):
         return True
-    media_context = bool(_MEDIA_INPUT_CONTEXT_TOKENS & query_tokens)
+    context_tokens = _MEDIA_INPUT_CONTEXT_TOKENS & query_tokens
+    visual_context = bool(_MEDIA_INPUT_VISUAL_CONTEXT_TOKENS & query_tokens)
+    non_visual_media_context = bool(context_tokens - _MEDIA_INPUT_VISUAL_CONTEXT_TOKENS)
     media_action = bool(_MEDIA_INPUT_ACTION_TOKENS & query_tokens)
-    return media_context and media_action
+    if visual_context and not non_visual_media_context:
+        return extractive_action
+    return bool(context_tokens) and media_action
+
+
+def media_input_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    return _media_input_operator_guard_applies(normalized_query, query_tokens)
 
 
 def _content_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

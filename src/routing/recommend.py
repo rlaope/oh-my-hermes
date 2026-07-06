@@ -12,6 +12,7 @@ from .policy import (
     active_routing_guard_rules,
     explicit_skill_invocation,
     is_explicit_one_off_request,
+    media_input_operator_guard_applies,
     ops_observability_external_blocked,
     ops_observability_generic_metrics_blocked,
 )
@@ -63,6 +64,7 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         "loop_goal_before_generic_clarification",
         "materials_package_before_report_or_clarify",
         "memory_curation_before_generic_clarification",
+        "media_input_operator_before_generic_content_or_direct",
         "ops_observability_before_generic_loop",
         "release_claim_review_before_file_lookup",
         "safe_feature_change_before_generic_plan",
@@ -778,13 +780,14 @@ _SKILL_POLICIES.update(
             next_action="prepare_media_input_card",
             evidence_boundary=(
                 "A media input card is not media access, file upload, download, transcript extraction, "
-                "speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or "
-                "media-summary correctness evidence."
+                "OCR output, screenshot text extraction, receipt fields, speech-to-text output, timestamp accuracy, "
+                "copyright clearance, source retrieval, or media-summary correctness evidence."
             ),
             wrapper_guidance=(
-                "Prepare media_input_task_card/v1 with media source, permission boundary, transcript availability, "
-                "language, speaker and timestamp requirements, summary method, result manifest slots, and a stop "
-                "condition before media access, transcription, timestamp, or summary claims are made."
+                "Prepare media_input_task_card/v1 with media source, permission boundary, transcript or extraction "
+                "availability, language, speaker, OCR/receipt fields, and timestamp requirements, summary method, "
+                "result manifest slots, and a stop condition before media access, transcription, OCR, timestamp, "
+                "or summary claims are made."
             ),
         ),
         "data-analysis": RecommendationPolicy(
@@ -1230,6 +1233,12 @@ def _score_definition(
         definition.name == "build-failure-triage"
         and explicit_skill != "build-failure-triage"
         and _build_failure_triage_fixed_or_pass_verification_context(normalized_query)
+    ):
+        return None
+    if (
+        definition.name == "media-input-operator"
+        and explicit_skill != "media-input-operator"
+        and not media_input_operator_guard_applies(normalized_query, query_tokens)
     ):
         return None
 
