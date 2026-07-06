@@ -910,6 +910,36 @@ _OPERATING_BRIEF_CHAT_CARDS: dict[str, dict[str, object]] = {
             "verification",
         ],
     },
+    "meeting-brief": {
+        "kind": "meeting_brief",
+        "headline": "I can prepare the meeting brief and follow-up slots.",
+        "body": (
+            "I will prepare the agenda, context prompts, decision slots, owner follow-ups, and meeting record template. "
+            "Prepared material is not evidence that the meeting happened or that owners accepted follow-ups."
+        ),
+        "phase": "meeting_brief_prepared",
+        "next_action": "prepare_meeting_brief",
+        "artifact_schema": "meeting_brief_card/v1",
+        "actions": [
+            {"id": "prepare_meeting_brief", "label": "Prepare brief", "style": "primary"},
+            {"id": "prepare_report_package", "label": "Prepare report", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "prepare_agenda",
+            "name_decision_slots",
+            "assign_follow_up_slots",
+            "separate_prepared_material_from_meeting_evidence",
+        ],
+        "evidence_not_observed": [
+            "meeting completion",
+            "attendee approval",
+            "decision acceptance",
+            "owner acceptance",
+            "follow-up completion",
+            "delivery",
+        ],
+    },
     "report-package": {
         "kind": "report_package",
         "headline": "I can package this into a report people can review.",
@@ -1060,6 +1090,163 @@ _REVIEW_QUALITY_CHAT_CARDS: dict[str, dict[str, object]] = {
             "review",
             "CI",
             "merge",
+        ],
+    },
+    "production-audit": {
+        "kind": "production_audit",
+        "headline": "I can prepare a production-readiness audit.",
+        "body": (
+            "I will prepare the production-readiness audit: release scope, build, test, CI, security, observability, "
+            "rollback, support handoff, and a GO/HOLD/BLOCK verdict. Deploy and live-health claims still need observed evidence."
+        ),
+        "phase": "production_audit_prepared",
+        "next_action": "prepare_production_audit",
+        "artifact_schema": "production_readiness_audit/v1",
+        "claim_boundary_suffix": "It is not deployment, live health, rollback readiness, support readiness, or release approval evidence.",
+        "actions": [
+            {"id": "prepare_production_audit", "label": "Audit production", "style": "primary"},
+            {"id": "prepare_reliability_review", "label": "Review reliability", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "scope_release_surface",
+            "check_build_test_ci_security_evidence",
+            "review_observability_and_rollback",
+            "record_go_hold_block_verdict",
+        ],
+        "evidence_not_observed": [
+            "deployment",
+            "live health check",
+            "rollback readiness",
+            "support readiness",
+            "release approval",
+            "CI rerun",
+        ],
+    },
+    "verification-gate": {
+        "kind": "verification_gate",
+        "headline": "I can prepare the verification gate before completion claims.",
+        "body": (
+            "I will prepare required checks, observed result freshness, generated-output checks, CI/DCO boundaries, "
+            "and a PASS/HOLD/BLOCK claim verdict before completion, release, or merge claims."
+        ),
+        "phase": "verification_gate_prepared",
+        "next_action": "prepare_verification_gate",
+        "artifact_schema": "verification_gate/v1",
+        "claim_boundary_suffix": "It is not test execution, CI pass, review completion, merge-readiness, or merge evidence.",
+        "actions": [
+            {"id": "prepare_verification_gate", "label": "Prepare gate", "style": "primary"},
+            {"id": "prepare_review_or_followup_handoff", "label": "Prepare review", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "name_claims_to_verify",
+            "list_required_checks",
+            "record_observed_freshness",
+            "issue_pass_hold_block_verdict",
+        ],
+        "evidence_not_observed": [
+            "test execution",
+            "CI pass",
+            "review completion",
+            "merge readiness",
+            "merge",
+        ],
+    },
+    "build-failure-triage": {
+        "kind": "build_failure_triage",
+        "headline": "I can triage the build failure before proposing a fix.",
+        "body": (
+            "I will prepare a failure-log digest, cluster likely failure modes, rank root-cause hypotheses, "
+            "and outline a minimal fix handoff only when the evidence supports it. The build is not fixed until observed."
+        ),
+        "phase": "build_failure_triage_prepared",
+        "next_action": "prepare_build_failure_triage",
+        "artifact_schema": "build_failure_triage_plan/v1",
+        "claim_boundary_suffix": "It is not log retrieval, root-cause proof, fix implementation, rerun success, CI pass, or merge evidence.",
+        "actions": [
+            {"id": "prepare_build_failure_triage", "label": "Triage build failure", "style": "primary"},
+            {
+                "id": "prepare_coding_handoff",
+                "label": "Prepare fix handoff",
+                "style": "secondary",
+                "enabled": False,
+                "payload": {"requires": "ranked root-cause evidence and accepted remediation scope"},
+            },
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "digest_failure_logs",
+            "cluster_failure_modes",
+            "rank_root_cause_hypotheses",
+            "prepare_minimal_fix_handoff_when_supported",
+        ],
+        "evidence_not_observed": [
+            "log retrieval",
+            "root-cause proof",
+            "fix implementation",
+            "rerun success",
+            "CI pass",
+            "merge",
+        ],
+    },
+    "context-budget-review": {
+        "kind": "context_budget_review",
+        "headline": "I can prepare a context budget review.",
+        "body": (
+            "I will prepare the must-keep context, checkpoint cadence, budget risks, overflow recovery path, "
+            "and provider-truth gaps. Exact billing or token usage still needs observed runtime or provider evidence."
+        ),
+        "phase": "context_budget_review_prepared",
+        "next_action": "prepare_context_budget_review",
+        "artifact_schema": "context_budget_review/v1",
+        "claim_boundary_suffix": "It is not provider billing truth, exact token usage, compaction success, or future context-safety evidence.",
+        "actions": [
+            {"id": "prepare_context_budget_review", "label": "Review context", "style": "primary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "identify_must_keep_context",
+            "set_checkpoint_cadence",
+            "name_overflow_recovery_path",
+            "separate_estimates_from_provider_truth",
+        ],
+        "evidence_not_observed": [
+            "provider billing truth",
+            "exact token usage",
+            "compaction success",
+            "future context safety",
+        ],
+    },
+    "security-safety-review": {
+        "kind": "security_safety_review",
+        "headline": "I can prepare a redacted security and safety review.",
+        "body": (
+            "I will prepare threat surfaces, prompt-injection risks, tool permissions, secret/dependency/destructive-action gates, "
+            "and safe remediation handoff options without exposing secrets."
+        ),
+        "phase": "security_safety_review_prepared",
+        "next_action": "prepare_security_safety_review",
+        "artifact_schema": "security_safety_review/v1",
+        "claim_boundary_suffix": "It is not secret access, dependency audit completion, vulnerability proof, remediation, CI, or security sign-off evidence.",
+        "actions": [
+            {"id": "prepare_security_safety_review", "label": "Review safety", "style": "primary"},
+            {"id": "prepare_review_or_followup_handoff", "label": "Prepare review", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "redact_sensitive_context",
+            "map_prompt_injection_and_tool_risks",
+            "check_secret_dependency_destructive_gates",
+            "prepare_safe_remediation_handoff_options",
+        ],
+        "evidence_not_observed": [
+            "secret access",
+            "dependency audit completion",
+            "vulnerability proof",
+            "remediation",
+            "CI",
+            "security sign-off",
         ],
     },
 }
@@ -1273,6 +1460,130 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "completion",
         ],
     },
+    "design-quality-gate": {
+        "kind": "design_quality_gate",
+        "headline": "I can prepare the design quality gate before calling it polished.",
+        "body": (
+            "I will prepare the design quality gate: reference packet, layout and content checks, CJK/text-fit review, "
+            "surface quality matrix, comparative rubric, and visual QA evidence slots. Better-looking output still needs rendered evidence."
+        ),
+        "phase": "design_quality_gate_prepared",
+        "next_action": "prepare_design_quality_gate",
+        "artifact_schema": "design_quality_gate/v1",
+        "claim_boundary_suffix": "It is not rendered visual QA, comparative PASS, generated asset quality, publication, approval, or delivery evidence.",
+        "actions": [
+            {"id": "prepare_design_quality_gate", "label": "Prepare design gate", "style": "primary"},
+            {"id": "prepare_visual_qa", "label": "Prepare visual QA", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "select_reference_packet",
+            "prepare_surface_quality_matrix",
+            "check_text_fit_cjk_and_layout",
+            "record_visual_qa_when_observed",
+        ],
+        "evidence_not_observed": [
+            "rendered visual QA",
+            "comparative PASS",
+            "generated asset quality",
+            "publication",
+            "approval",
+            "delivery",
+        ],
+    },
+    "frontend": {
+        "kind": "frontend_handoff",
+        "headline": "I can prepare the frontend handoff with visual QA gates.",
+        "body": (
+            "I will prepare the frontend brief: routes, states, responsive breakpoints, component inventory, design-system contract, "
+            "implementation owner, and visual QA follow-up. Implementation and screenshots remain observed-only."
+        ),
+        "phase": "frontend_handoff_prepared",
+        "next_action": "prepare_frontend_handoff",
+        "artifact_schema": "frontend_design_brief/v1",
+        "claim_boundary_suffix": "It is not frontend implementation, browser rendering, screenshot evidence, accessibility pass, or deployment evidence.",
+        "actions": [
+            {"id": "prepare_frontend_handoff", "label": "Prepare frontend", "style": "primary"},
+            {"id": "prepare_visual_qa", "label": "Prepare visual QA", "style": "secondary"},
+            {"id": "prepare_accessibility_audit", "label": "Audit accessibility", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "define_routes_and_states",
+            "prepare_component_inventory",
+            "name_responsive_breakpoints",
+            "attach_visual_qa_requirement",
+        ],
+        "evidence_not_observed": [
+            "frontend implementation",
+            "browser rendering",
+            "screenshot capture",
+            "accessibility pass",
+            "deployment",
+        ],
+    },
+    "visual-qa": {
+        "kind": "visual_qa",
+        "headline": "I can prepare rendered visual QA without pretending screenshots exist.",
+        "body": (
+            "I will prepare viewport captures, screenshot/diff slots, console and network health checks, click-path traces, "
+            "accessibility keyboard trace, and a PASS/HOLD verdict. No visual pass exists until rendered evidence is recorded."
+        ),
+        "phase": "visual_qa_prepared",
+        "next_action": "prepare_visual_qa",
+        "artifact_schema": "visual_qa_plan/v1",
+        "claim_boundary_suffix": "It is not screenshot capture, pixel-diff evidence, browser interaction proof, accessibility pass, or visual PASS evidence.",
+        "actions": [
+            {"id": "prepare_visual_qa", "label": "Prepare visual QA", "style": "primary"},
+            {"id": "prepare_accessibility_audit", "label": "Audit accessibility", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "define_viewport_matrix",
+            "prepare_render_capture_manifest",
+            "separate_screenshot_diff_and_interaction_evidence",
+            "record_pass_hold_verdict_only_after_rendered_evidence",
+        ],
+        "evidence_not_observed": [
+            "screenshot capture",
+            "pixel diff",
+            "browser interaction",
+            "console/network health",
+            "accessibility keyboard trace",
+            "visual PASS",
+        ],
+    },
+    "accessibility-audit": {
+        "kind": "accessibility_audit",
+        "headline": "I can prepare an accessibility audit without overclaiming WCAG PASS.",
+        "body": (
+            "I will prepare WCAG criteria, semantic structure review, focus and keyboard trace slots, screen-reader map, "
+            "target-size review, contrast/reflow checks, and the observed evidence needed before any PASS claim."
+        ),
+        "phase": "accessibility_audit_prepared",
+        "next_action": "prepare_accessibility_audit",
+        "artifact_schema": "accessibility_audit_plan/v1",
+        "claim_boundary_suffix": "It is not automated scan completion, screen-reader evidence, keyboard trace evidence, WCAG PASS, remediation, or deployment evidence.",
+        "actions": [
+            {"id": "prepare_accessibility_audit", "label": "Audit accessibility", "style": "primary"},
+            {"id": "prepare_visual_qa", "label": "Prepare visual QA", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "map_wcag_success_criteria",
+            "review_semantic_structure",
+            "prepare_focus_keyboard_and_screen_reader_slots",
+            "separate_scan_output_from_pass_verdict",
+        ],
+        "evidence_not_observed": [
+            "automated scan completion",
+            "screen-reader evidence",
+            "keyboard trace evidence",
+            "WCAG PASS",
+            "remediation",
+            "deployment",
+        ],
+    },
     "memory-curation-review": {
         "kind": "memory_curation",
         "headline": "I can review memory and context before anything is changed.",
@@ -1412,6 +1723,158 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "CI",
             "merge",
             "future loop fix",
+        ],
+    },
+    "workspace-audit": {
+        "kind": "workspace_audit",
+        "headline": "I can prepare a read-only workspace audit.",
+        "body": (
+            "I will prepare the workspace audit: repo, skill, prompt, plugin, MCP/tool, hook, config, docs, and runtime surfaces, "
+            "with secrets redacted and any mutation routed to a separate follow-up workflow."
+        ),
+        "phase": "workspace_audit_prepared",
+        "next_action": "prepare_workspace_audit",
+        "artifact_schema": "workspace_audit_report/v1",
+        "claim_boundary_suffix": "It is not config mutation, secret inspection, plugin installation, MCP load proof, runtime dispatch, or repair evidence.",
+        "actions": [
+            {"id": "prepare_workspace_audit", "label": "Prepare audit", "style": "primary"},
+            {"id": "prepare_toolbelt_readiness", "label": "Check toolbelt", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "inventory_workspace_surfaces",
+            "redact_secrets_and_credentials",
+            "classify_stale_or_missing_configs",
+            "route_repairs_to_follow_up_workflows",
+        ],
+        "evidence_not_observed": [
+            "config mutation",
+            "secret inspection",
+            "plugin installation",
+            "MCP load proof",
+            "runtime dispatch",
+            "repair completion",
+        ],
+    },
+    "agent-evaluation": {
+        "kind": "agent_evaluation",
+        "headline": "I can prepare a fair agent evaluation instead of anecdotal ranking.",
+        "body": (
+            "I will prepare tasks, fixtures, rubric, budgets, isolation, observed run matrix, and a scenario-specific recommendation. "
+            "No agent is declared better until comparable run evidence exists."
+        ),
+        "phase": "agent_evaluation_prepared",
+        "next_action": "prepare_agent_evaluation",
+        "artifact_schema": "agent_evaluation_plan/v1",
+        "claim_boundary_suffix": "It is not executor dispatch, benchmark execution, quality proof, cost truth, or final agent ranking evidence.",
+        "actions": [
+            {"id": "prepare_agent_evaluation", "label": "Prepare eval", "style": "primary"},
+            {"id": "prepare_report_package", "label": "Prepare report", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "define_representative_tasks",
+            "freeze_rubric_and_budgets",
+            "isolate_executor_runs",
+            "compare_observed_outputs_before_recommendation",
+        ],
+        "evidence_not_observed": [
+            "executor dispatch",
+            "benchmark execution",
+            "quality proof",
+            "provider cost truth",
+            "final ranking",
+        ],
+    },
+    "rules-distill": {
+        "kind": "rules_distill",
+        "headline": "I can distill repeated lessons into reviewed rule candidates.",
+        "body": (
+            "I will prepare source-linked rule candidates, duplicates, conflicts, scope, approval state, and implementation path. "
+            "Nothing mutates AGENTS.md, skills, prompts, docs, or memory until approved and implemented."
+        ),
+        "phase": "rules_distillation_prepared",
+        "next_action": "prepare_rules_distillation",
+        "artifact_schema": "rules_distillation_candidate_set/v1",
+        "claim_boundary_suffix": "It is not AGENTS.md mutation, skill mutation, prompt mutation, memory write, approval, or future-behavior evidence.",
+        "actions": [
+            {"id": "prepare_rules_distillation", "label": "Distill rules", "style": "primary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "collect_source_failures",
+            "dedupe_rule_candidates",
+            "check_conflicts_and_scope",
+            "wait_for_review_before_mutation",
+        ],
+        "evidence_not_observed": [
+            "AGENTS.md mutation",
+            "skill mutation",
+            "prompt mutation",
+            "memory write",
+            "approval",
+            "future behavior change",
+        ],
+    },
+    "codebase-onboarding": {
+        "kind": "codebase_onboarding",
+        "headline": "I can prepare a codebase onboarding pack.",
+        "body": (
+            "I will prepare the observed repo map, reading path, glossary, risks, unknowns, and first-task runway. "
+            "Setup, code edits, executor dispatch, and verification stay separate."
+        ),
+        "phase": "codebase_onboarding_prepared",
+        "next_action": "prepare_codebase_onboarding",
+        "artifact_schema": "codebase_onboarding_pack/v1",
+        "claim_boundary_suffix": "It is not code inspection completion, setup, implementation, executor dispatch, verification, or CI evidence.",
+        "actions": [
+            {"id": "prepare_codebase_onboarding", "label": "Prepare onboarding", "style": "primary"},
+            {"id": "prepare_workspace_audit", "label": "Prepare audit", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "map_repo_surfaces",
+            "prepare_reading_path",
+            "record_glossary_risks_and_unknowns",
+            "separate_onboarding_from_first_task_execution",
+        ],
+        "evidence_not_observed": [
+            "code inspection completion",
+            "setup",
+            "implementation",
+            "executor dispatch",
+            "verification",
+            "CI",
+        ],
+    },
+    "codegraph-refresh": {
+        "kind": "codegraph_refresh",
+        "headline": "I can prepare a CodeGraph refresh without claiming an index update.",
+        "body": (
+            "I will prepare the repo root, sync/status command choice, staleness scope, file-write policy, and observed-only summary slots. "
+            "Command execution and generated files stay separate until observed."
+        ),
+        "phase": "codegraph_refresh_prepared",
+        "next_action": "prepare_codegraph_refresh",
+        "artifact_schema": "codegraph_refresh_plan/v1",
+        "claim_boundary_suffix": "It is not command execution, index sync, generated file write, code intelligence freshness, or handoff evidence.",
+        "actions": [
+            {"id": "prepare_codegraph_refresh", "label": "Refresh codegraph", "style": "primary"},
+            {"id": "prepare_command_operator_card", "label": "Prepare command card", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "confirm_repo_root",
+            "choose_status_or_sync_command",
+            "scope_staleness_and_write_policy",
+            "record_index_result_only_after_command_evidence",
+        ],
+        "evidence_not_observed": [
+            "command execution",
+            "index sync",
+            "generated file write",
+            "code intelligence freshness",
+            "handoff evidence",
         ],
     },
     "instinct-ledger": {

@@ -173,7 +173,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "prepare meeting agenda decision slots and follow-up template",
         "dispatch",
         "meeting-brief",
-        "ack",
+        "meeting_brief",
         "prepare_meeting_brief",
     ),
     CommonRequestCoverageCase(
@@ -223,7 +223,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "웹페이지 디자인 레이아웃 QA 해줘",
         "dispatch",
         "design-quality-gate",
-        "ack",
+        "design_quality_gate",
         "prepare_design_quality_gate",
     ),
     CommonRequestCoverageCase(
@@ -233,7 +233,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "프론트엔드 구현 handoff 준비해줘",
         "dispatch",
         "frontend",
-        "ack",
+        "frontend_handoff",
         "prepare_frontend_handoff",
     ),
     CommonRequestCoverageCase(
@@ -243,7 +243,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "visual QA로 화면 깨지는지 봐줘",
         "dispatch",
         "visual-qa",
-        "ack",
+        "visual_qa",
         "prepare_visual_qa",
     ),
     CommonRequestCoverageCase(
@@ -253,7 +253,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "접근성 WCAG 체크해줘",
         "dispatch",
         "accessibility-audit",
-        "ack",
+        "accessibility_audit",
         "prepare_accessibility_audit",
     ),
     CommonRequestCoverageCase(
@@ -323,7 +323,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "production readiness audit with rollback health checks",
         "dispatch",
         "production-audit",
-        "ack",
+        "production_audit",
         "prepare_production_audit",
     ),
     CommonRequestCoverageCase(
@@ -363,7 +363,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "audit this workspace prompts skills plugins and hooks for stale config",
         "dispatch",
         "workspace-audit",
-        "ack",
+        "workspace_audit",
         "prepare_workspace_audit",
     ),
     CommonRequestCoverageCase(
@@ -373,7 +373,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "검증 게이트 열고 테스트 CI 증거 확인해줘",
         "dispatch",
         "verification-gate",
-        "ack",
+        "verification_gate",
         "prepare_verification_gate",
     ),
     CommonRequestCoverageCase(
@@ -383,7 +383,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "CI build failure logs triage root cause and minimal fix handoff",
         "dispatch",
         "build-failure-triage",
-        "ack",
+        "build_failure_triage",
         "prepare_build_failure_triage",
     ),
     CommonRequestCoverageCase(
@@ -393,7 +393,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "compare agent outputs with rubric and metrics",
         "dispatch",
         "agent-evaluation",
-        "ack",
+        "agent_evaluation",
         "prepare_agent_evaluation",
     ),
     CommonRequestCoverageCase(
@@ -403,7 +403,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "이 반복 실수를 AGENTS.md 규칙 후보로 정리해줘",
         "dispatch",
         "rules-distill",
-        "ack",
+        "rules_distill",
         "prepare_rules_distillation",
     ),
     CommonRequestCoverageCase(
@@ -413,7 +413,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "처음 보는 repo 온보딩 reading path 만들어줘",
         "dispatch",
         "codebase-onboarding",
-        "ack",
+        "codebase_onboarding",
         "prepare_codebase_onboarding",
     ),
     CommonRequestCoverageCase(
@@ -423,7 +423,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "codegraph refresh 상태 점검해줘",
         "dispatch",
         "codegraph-refresh",
-        "ack",
+        "codegraph_refresh",
         "prepare_codegraph_refresh",
     ),
     CommonRequestCoverageCase(
@@ -493,7 +493,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "context budget 압박이 있는지 검토해줘",
         "dispatch",
         "context-budget-review",
-        "ack",
+        "context_budget_review",
         "prepare_context_budget_review",
     ),
     CommonRequestCoverageCase(
@@ -503,7 +503,7 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "security safety review prompt injection secrets destructive action check",
         "dispatch",
         "security-safety-review",
-        "ack",
+        "security_safety_review",
         "prepare_security_safety_review",
     ),
     CommonRequestCoverageCase(
