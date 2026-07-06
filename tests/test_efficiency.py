@@ -66,6 +66,7 @@ from omh.quality import common_request_coverage as common_request_coverage_modul
 from omh.quality import context_brief_coverage as context_brief_coverage_module
 from omh.quality import hermes_ux_quality as hermes_ux_quality_module
 from omh.quality import localized_chat_copy as localized_chat_copy_module
+from omh.quality import popular_plugin_coverage as popular_plugin_coverage_module
 from omh.quality import router_fast_path as router_fast_path_module
 from omh.quality import routing_precision as routing_precision_module
 from omh.quality import route_hint_alignment as route_hint_alignment_module
@@ -738,8 +739,31 @@ class EfficiencyContractTests(unittest.TestCase):
                 "workflow_count": 1,
                 "dispatch_count": 1,
                 "fallback_count": 0,
+                "popular_plugin_family_count": 1,
+                "popular_plugin_covered_family_count": 1,
+                "popular_plugin_weighted_coverage_percent": 100.0,
+                "popular_plugin_target_percent": 95.0,
             },
             "families": [],
+            "popular_plugin_coverage": {
+                "schema_version": popular_plugin_coverage_module.POPULAR_PLUGIN_COVERAGE_SCHEMA_VERSION,
+                "target_percent": 95.0,
+                "summary": {
+                    "family_count": 1,
+                    "covered_family_count": 1,
+                    "case_reference_count": 1,
+                    "covered_case_reference_count": 1,
+                    "unique_case_count": 1,
+                    "covered_unique_case_count": 1,
+                    "total_weight": 1,
+                    "covered_weight": 1,
+                    "weighted_coverage_percent": 100.0,
+                    "target_met": True,
+                    "generic_ack_count": 0,
+                },
+                "families": [],
+                "claim_boundary": "popular plugin boundary",
+            },
             "cases": [],
             "claim_boundary": "common request boundary",
         }

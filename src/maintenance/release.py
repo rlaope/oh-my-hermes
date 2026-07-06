@@ -874,7 +874,10 @@ def _product_readiness_report_from_evidence(
                 f"{common_request_summary.get('case_count', 0)} common request cases; "
                 f"coverage {common_request_summary.get('coverage_percent', 0)}%; "
                 f"target {common_request_coverage.get('target_percent', 0)}%; "
-                f"generic ack {common_request_summary.get('generic_ack_count', 0)}"
+                f"generic ack {common_request_summary.get('generic_ack_count', 0)}; "
+                f"popular plugin families {common_request_summary.get('popular_plugin_covered_family_count', 0)}/"
+                f"{common_request_summary.get('popular_plugin_family_count', 0)} "
+                f"({common_request_summary.get('popular_plugin_weighted_coverage_percent', 0)}%)"
             ),
             "omh demo common-request-coverage --json",
             common_request_gate_errors,
@@ -1897,6 +1900,11 @@ def release_evidence_bundle(
             "common_request_coverage_percent": common_request_summary.get("coverage_percent"),
             "common_request_coverage_target": common_request_coverage.get("target_percent"),
             "common_request_generic_ack_count": common_request_summary.get("generic_ack_count"),
+            "popular_plugin_family_covered": common_request_summary.get("popular_plugin_covered_family_count"),
+            "popular_plugin_family_total": common_request_summary.get("popular_plugin_family_count"),
+            "popular_plugin_weighted_coverage_percent": common_request_summary.get(
+                "popular_plugin_weighted_coverage_percent"
+            ),
             "hermes_ux_quality_score": hermes_ux.get("score"),
             "hermes_ux_quality_passing_gates": hermes_ux_summary.get("passing_gate_count"),
             "hermes_ux_quality_total_gates": hermes_ux_summary.get("gate_count"),

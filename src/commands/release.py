@@ -527,7 +527,10 @@ def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
             f"{summary.get('common_request_coverage_passing')}/{summary.get('common_request_coverage_total')} "
             f"({summary.get('common_request_coverage_percent')}%; "
             f"target {summary.get('common_request_coverage_target')}%; "
-            f"generic ack {summary.get('common_request_generic_ack_count')})"
+            f"generic ack {summary.get('common_request_generic_ack_count')}; "
+            f"popular plugin families {summary.get('popular_plugin_family_covered')}/"
+            f"{summary.get('popular_plugin_family_total')} at "
+            f"{summary.get('popular_plugin_weighted_coverage_percent')}%)"
         )
     if "hermes_ux_quality_score" in summary:
         print(
