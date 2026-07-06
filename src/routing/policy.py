@@ -3067,6 +3067,130 @@ _LIVE_INFO_OPERATOR_BLOCKERS = (
     "설정 필요",
     "캘린더 초대",
 )
+_MEDIA_INPUT_OPERATOR_PHRASES = (
+    "media-input-operator",
+    "media input operator",
+    "media input",
+    "audio transcription",
+    "audio transcript",
+    "transcribe audio",
+    "transcribe this audio",
+    "transcribe this recording",
+    "meeting recording",
+    "recording transcript",
+    "video transcript",
+    "youtube summary",
+    "youtube video",
+    "summarize youtube",
+    "summarize this youtube",
+    "video summary",
+    "summarize this video",
+    "with timestamps",
+    "clip summary",
+    "podcast summary",
+    "webinar summary",
+    "오디오 전사",
+    "음성 전사",
+    "회의 녹음",
+    "녹음 요약",
+    "영상 요약",
+    "유튜브 요약",
+    "youtube 요약",
+    "타임스탬프",
+    "타임라인 요약",
+)
+_MEDIA_INPUT_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "audio",
+        "voice",
+        "recording",
+        "video",
+        "youtube",
+        "transcript",
+        "timestamps",
+        "timestamp",
+        "clip",
+        "podcast",
+        "webinar",
+        "media",
+        "오디오",
+        "음성",
+        "녹음",
+        "영상",
+        "동영상",
+        "유튜브",
+        "youtube",
+        "전사",
+        "자막",
+        "타임스탬프",
+        "타임라인",
+        "클립",
+        "팟캐스트",
+        "웨비나",
+    }
+)
+_MEDIA_INPUT_ACTION_TOKENS = _normalized_token_set(
+    {
+        "transcribe",
+        "transcription",
+        "transcript",
+        "summarize",
+        "summarise",
+        "summary",
+        "extract",
+        "timestamp",
+        "timestamps",
+        "action",
+        "items",
+        "notes",
+        "chapters",
+        "전사",
+        "요약",
+        "추출",
+        "정리",
+        "타임스탬프",
+        "타임라인",
+        "액션아이템",
+        "액션",
+        "자막",
+        "챕터",
+    }
+)
+_MEDIA_INPUT_OPERATOR_BLOCKERS = (
+    "web search",
+    "web research",
+    "with citations",
+    "citations",
+    "source finder",
+    "find sources",
+    "find papers",
+    "best practices",
+    "market trends",
+    "make a ppt",
+    "make slides",
+    "export pdf",
+    "export to pdf",
+    "export to ppt",
+    "send email",
+    "send an email",
+    "post to slack",
+    "post to discord",
+    "create calendar event",
+    "create linear ticket",
+    "웹서치",
+    "웹 리서치",
+    "출처",
+    "근거",
+    "논문",
+    "시장 조사",
+    "시장조사",
+    "피피티",
+    "슬라이드",
+    "pdf로",
+    "메일 보내",
+    "이메일 보내",
+    "슬랙에 보내",
+)
 _CONTENT_OPERATOR_PHRASES = (
     "content-operator",
     "content operator",
@@ -3243,6 +3367,21 @@ _CONTENT_OPERATOR_BLOCKERS = (
     "make a ppt",
     "make slides",
     "turn into slides",
+    "media input",
+    "audio transcription",
+    "audio transcript",
+    "transcribe audio",
+    "meeting recording",
+    "recording transcript",
+    "video transcript",
+    "youtube summary",
+    "youtube video",
+    "summarize youtube",
+    "video summary",
+    "summarize this video",
+    "with timestamps",
+    "podcast summary",
+    "webinar summary",
     "웹서치",
     "웹 리서치",
     "출처 찾아",
@@ -3269,6 +3408,13 @@ _CONTENT_OPERATOR_BLOCKERS = (
     "ppt로",
     "피피티",
     "슬라이드",
+    "오디오 전사",
+    "음성 전사",
+    "회의 녹음",
+    "녹음 요약",
+    "영상 요약",
+    "유튜브 요약",
+    "타임스탬프",
 )
 _CAPABILITY_INTENT_TOKENS = _normalized_token_set(
     {
@@ -3985,6 +4131,15 @@ LIVE_INFO_OPERATOR_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; live information requests need provider, freshness, units, source-quality, and observed-result boundaries.",
     activation_status="active",
 )
+MEDIA_INPUT_OPERATOR_GUARD = RoutingGuardRule(
+    id="media_input_operator_before_generic_content_or_direct",
+    rule="Audio, video, YouTube, transcript, recording, podcast, webinar, timestamp, or clip-summary requests should route to media-input-operator before generic content or direct fallback.",
+    matched_label="guard:media_input",
+    preferred_skills=("media-input-operator",),
+    score_boost=42,
+    why="Matched guard/trigger metadata; media input requests need source, permission, transcript, timestamp, summary-method, and observed-result boundaries.",
+    activation_status="active",
+)
 CONTENT_OPERATOR_GUARD = RoutingGuardRule(
     id="content_operator_before_generic_text_transform",
     rule="Publish-ready content, copy, release-note, newsletter, announcement, email-draft, or style-guided writing requests should route to content-operator before generic fallback.",
@@ -4340,6 +4495,12 @@ def _active_routing_guard_rules_cached(
         and _live_info_operator_guard_applies(normalized_query, query_tokens)
     ):
         rules.append(LIVE_INFO_OPERATOR_GUARD)
+    if (
+        not direct_coding_task_applies
+        and not feedback_before_coding_applies
+        and _media_input_operator_guard_applies(normalized_query, query_tokens)
+    ):
+        rules.append(MEDIA_INPUT_OPERATOR_GUARD)
     if (
         not direct_coding_task_applies
         and not feedback_before_coding_applies
@@ -6440,6 +6601,22 @@ def _live_info_operator_guard_applies(normalized_query: str, query_tokens: set[s
     return live_context and lookup_intent
 
 
+def _media_input_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _MEDIA_INPUT_OPERATOR_BLOCKERS):
+        return False
+    if _connector_operator_guard_applies(normalized_query, query_tokens):
+        return False
+    if _materials_package_guard_applies(normalized_query, query_tokens):
+        return False
+    if _web_research_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _MEDIA_INPUT_OPERATOR_PHRASES):
+        return True
+    media_context = bool(_MEDIA_INPUT_CONTEXT_TOKENS & query_tokens)
+    media_action = bool(_MEDIA_INPUT_ACTION_TOKENS & query_tokens)
+    return media_context and media_action
+
+
 def _content_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _CONTENT_OPERATOR_BLOCKERS):
         return False
@@ -6448,6 +6625,8 @@ def _content_operator_guard_applies(normalized_query: str, query_tokens: set[str
     if _materials_package_guard_applies(normalized_query, query_tokens):
         return False
     if _connector_operator_guard_applies(normalized_query, query_tokens):
+        return False
+    if _media_input_operator_guard_applies(normalized_query, query_tokens):
         return False
     if _contains_phrase(normalized_query, _CONTENT_OPERATOR_PHRASES):
         return True

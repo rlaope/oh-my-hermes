@@ -72,6 +72,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "connector-operator": ("workflow_skill", True),
     "live-info-operator": ("workflow_skill", True),
     "content-operator": ("workflow_skill", True),
+    "media-input-operator": ("workflow_skill", True),
     "data-analysis": ("workflow_skill", True),
     "build-failure-triage": ("workflow_skill", True),
     "voice-operator": ("workflow_skill", True),
@@ -600,6 +601,7 @@ class RouterContentTests(unittest.TestCase):
                 "connector-operator",
                 "live-info-operator",
                 "content-operator",
+                "media-input-operator",
                 "data-analysis",
                 "build-failure-triage",
                 "workspace-audit",
@@ -1308,6 +1310,41 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("content_operator", route_rules)
         self.assertIn("content-operator", route_rules["content_operator"]["workflow"])
         self.assertIn("release notes", route_rules["content_operator"]["phrases"])
+
+    def test_media_input_operator_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("media-input-operator", definitions)
+        self.assertIn("media-input-operator", harnesses)
+        self.assertIn("media-input-operator", templates)
+        self.assertEqual(primary_harness_for_skill("media-input-operator"), "media-input-operator")
+        self.assertEqual(definitions["media-input-operator"].category, "media")
+        self.assertEqual(definitions["media-input-operator"].phase, "media-input-task")
+        self.assertEqual(definitions["media-input-operator"].quality_tier, "workflow-surface-gated")
+        self.assertIn("media_input_task_card/v1", definitions["media-input-operator"].expected_outputs)
+        self.assertIn("media_source_scope/v1", definitions["media-input-operator"].expected_outputs)
+        self.assertIn("transcript_boundary/v1", definitions["media-input-operator"].expected_outputs)
+        self.assertIn("media_result_manifest/v1 when observed", definitions["media-input-operator"].expected_outputs)
+        self.assertIn("youtube summary", definitions["media-input-operator"].triggers)
+        self.assertIn("transcribe audio", definitions["media-input-operator"].triggers)
+        self.assertIn("유튜브 요약", definitions["media-input-operator"].triggers)
+        self.assertIn("transcript", " ".join(definitions["media-input-operator"].safety_rules).lower())
+        self.assertIn("media_input_task_card/v1", " ".join(definitions["media-input-operator"].artifact_expectations))
+        self.assertIn("media_input_task_card/v1", harnesses["media-input-operator"].expected_outputs)
+        self.assertIn("media_source_scope/v1", harnesses["media-input-operator"].expected_outputs)
+        self.assertIn("transcript_boundary/v1", harnesses["media-input-operator"].expected_outputs)
+        self.assertIn("media_source_scope_recorded", harnesses["media-input-operator"].evidence_ladder)
+        self.assertIn("transcript_boundary_recorded", harnesses["media-input-operator"].evidence_ladder)
+        self.assertIn("media_input_task_card/v1", templates["media-input-operator"].content)
+        self.assertIn("media_result_manifest/v1", templates["media-input-operator"].content)
+        self.assertIn("Preferred harness for this skill: `media-input-operator`", templates["media-input-operator"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("media_input_operator", route_rules)
+        self.assertIn("media-input-operator", route_rules["media_input_operator"]["workflow"])
+        self.assertIn("youtube summary", route_rules["media_input_operator"]["phrases"])
 
     def test_build_failure_triage_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

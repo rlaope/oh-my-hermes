@@ -226,6 +226,18 @@ class ChatRouterTests(unittest.TestCase):
                 None,
             ),
             (
+                "transcribe this audio meeting and summarize action items",
+                "media-input-operator",
+                "prepare_media_input_card",
+                None,
+            ),
+            (
+                "summarize this YouTube video with timestamps",
+                "media-input-operator",
+                "prepare_media_input_card",
+                None,
+            ),
+            (
                 "I want to safely add a feature to this repo",
                 "ralplan",
                 "present_plan",

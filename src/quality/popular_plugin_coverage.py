@@ -62,9 +62,9 @@ POPULAR_PLUGIN_FAMILIES: tuple[PopularPluginFamily, ...] = (
     ),
     PopularPluginFamily(
         "docs_slides_pdf_and_visuals",
-        "Documents, slides, PDFs, posters, and frontend/design QA",
+        "Documents, slides, PDFs, media, posters, and frontend/design QA",
         10,
-        ("docs", "sheets", "slides", "pdf", "image", "frontend", "accessibility"),
+        ("docs", "sheets", "slides", "pdf", "image", "frontend", "accessibility", "transcription", "youtube"),
         (
             "report-package",
             "materials-package",
@@ -74,8 +74,10 @@ POPULAR_PLUGIN_FAMILIES: tuple[PopularPluginFamily, ...] = (
             "frontend-handoff",
             "accessibility-audit",
             "content-operator",
+            "audio-transcription-summary",
+            "youtube-video-summary",
         ),
-        "Prepares publishable material, frontend, and visual QA flows with render/evidence boundaries.",
+        "Prepares publishable material, frontend, media-input, and visual QA flows with render/evidence boundaries.",
     ),
     PopularPluginFamily(
         "communications_and_connectors",

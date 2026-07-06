@@ -515,6 +515,22 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
         "not_evidence_yet": ("source retrieval", "fact verification", "approval", "publish/send", "file export"),
     },
     {
+        "tool_family": "media_input_tools",
+        "applies_before": ("audio/video transcription", "YouTube or video summaries", "timestamped media notes"),
+        "primary_workflow": "media-input-operator",
+        "preferred_workflows": ("media-input-operator", "source-finder", "materials-package", "content-operator"),
+        "primary_next_action": "prepare_media_input_card",
+        "fallback_action": "confirm_media_source_permission_transcript_and_timestamp_boundary",
+        "not_evidence_yet": (
+            "media access",
+            "download",
+            "transcript extraction",
+            "speech-to-text output",
+            "timestamp accuracy",
+            "media summary correctness",
+        ),
+    },
+    {
         "tool_family": "command_tools",
         "applies_before": ("terminal commands", "shell/CLI execution", "package-manager commands", "test commands"),
         "primary_workflow": "command-operator",
@@ -587,6 +603,7 @@ ROUTER_KEYWORD_SKILLS = (
     "connector-operator",
     "live-info-operator",
     "content-operator",
+    "media-input-operator",
     "feedback-triage",
     "materials-package",
     "img-summary",
@@ -640,6 +657,7 @@ LANE_CROSS_LANE_EXAMPLES = {
         "frontend request -> frontend -> visual-qa -> observed render evidence",
         "WCAG concern -> accessibility-audit -> focus, screen-reader, target, contrast, and reflow evidence",
         "source spreadsheet -> materials-package -> report-package -> observed export evidence",
+        "audio or video summary -> media-input-operator -> transcript boundary -> observed summary evidence",
     ],
     "automation_and_status": [
         "daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence",
@@ -722,6 +740,7 @@ WORKFLOW_CONTEXT_CARDS = (
             "deliverable-package",
             "img-summary",
             "content-operator",
+            "media-input-operator",
         ),
         "user_examples": ("Turn this PR into a reviewer image card", "Make this frontend feel less generic and visually verified"),
         "first_response_shape": "Separate copy/layout/package prep from generated file or image evidence; keep frontend, accessibility, and browser evidence observed-only, then offer revise/copy/generate/record actions.",
@@ -825,6 +844,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "accessibility-audit": "materials_and_visuals",
     "visual-qa": "materials_and_visuals",
     "content-operator": "materials_and_visuals",
+    "media-input-operator": "materials_and_visuals",
     "achievements": "automation_and_status",
     "workspace-audit": "automation_and_status",
     "production-audit": "automation_and_status",
@@ -2585,6 +2605,56 @@ _ROUTE_HINT_RULES = (
         "adjacent_workflows": ("web-research", "connector-operator", "materials-package", "deliverable-package"),
     },
     {
+        "id": "media_input_operator",
+        "workflow": "media-input-operator",
+        "lane": "materials_and_visuals",
+        "next_action": "prepare_media_input_card",
+        "reason": "The user is asking for audio, video, YouTube, transcript, recording, timestamp, or clip-summary work that needs source, permission, transcript, and observed-result boundaries.",
+        "fallback_action": "confirm_media_source_permission_transcript_and_timestamp_boundary",
+        "phrases": (
+            "media input operator",
+            "media input",
+            "audio transcription",
+            "audio transcript",
+            "transcribe audio",
+            "transcribe this audio",
+            "meeting recording",
+            "recording transcript",
+            "video transcript",
+            "youtube summary",
+            "youtube video",
+            "summarize youtube",
+            "summarize this youtube",
+            "video summary",
+            "summarize this video",
+            "with timestamps",
+            "clip summary",
+            "podcast summary",
+            "webinar summary",
+            "오디오 전사",
+            "음성 전사",
+            "회의 녹음",
+            "녹음 요약",
+            "영상 요약",
+            "유튜브 요약",
+            "youtube 요약",
+            "타임스탬프",
+            "타임라인 요약",
+        ),
+        "tokens": (),
+        "adjacent_workflows": ("source-finder", "materials-package", "content-operator"),
+        "not_evidence_yet": (
+            "media access",
+            "file upload",
+            "download",
+            "transcript extraction",
+            "speech-to-text output",
+            "timestamp accuracy",
+            "copyright clearance",
+            "media summary correctness",
+        ),
+    },
+    {
         "id": "toolbelt_readiness",
         "workflow": "toolbelt-readiness",
         "lane": "automation_and_status",
@@ -4169,6 +4239,7 @@ def awareness_primer_payload() -> dict[str, object]:
                 "accessibility-audit",
                 "visual-qa",
                 "content-operator",
+                "media-input-operator",
                 "materials-package",
                 "img-summary",
                 "report-package",
@@ -4470,9 +4541,9 @@ def _compact_workflow_context_cards_line() -> str:
 
 def _compact_generic_tool_checkpoint_line() -> str:
     return (
-        "image->img-summary; frontend->frontend/accessibility-audit/visual-qa; paper->paper-learning; content->content-operator; file->materials-package; "
-        "search->web-research; live info->live-info-operator; audit->workspace-audit/production-audit/security-safety-review; "
-        "failures->build-failure-triage; verify->verification-gate; code->codegraph-refresh/codebase-onboarding/ultraprocess"
+        "image->img-summary; frontend->frontend/a11y/visual-qa; paper->paper-learning; content->content-operator; media->media-input-operator; file->materials-package; "
+        "search->web-research; live->live-info-operator; audit->workspace/production/security; "
+        "failures->build-failure; verify->verification-gate; code->codegraph/onboarding/ultraprocess"
     )
 
 
@@ -4489,6 +4560,7 @@ _DIRECT_WORKFLOW_NEXT_ACTIONS = {
     "connector-operator": "prepare_connector_operator_card",
     "live-info-operator": "prepare_live_info_operator_card",
     "content-operator": "prepare_content_operator_card",
+    "media-input-operator": "prepare_media_input_card",
     "harness-session-inventory": "prepare_harness_session_inventory",
     "agent-debug": "prepare_agent_debug",
     "failure-signal-audit": "prepare_failure_signal_audit",
@@ -4821,6 +4893,8 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
             "슬라이드",
         )
     ):
+        return True
+    if rule_id == "media_input_operator" and any(phrase in text for phrase in visual_markers):
         return True
     if rule_id == "github_event_ops_delivery" and any(
         phrase in text for phrase in visual_markers

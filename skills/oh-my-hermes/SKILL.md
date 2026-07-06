@@ -12,7 +12,7 @@ metadata:
 
 # Oh My Hermes Router
 
-Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `source-finder`, `paper-learning`, `data-analysis`, `command-operator`, `connector-operator`, `live-info-operator`, `content-operator`, `feedback-triage`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`, `browser-operator`, `workspace-file-operator`, `automation-blueprint`, `harness-session-inventory`, `agent-debug`, `failure-signal-audit`, `instinct-ledger`, `skill-scout`, `skill-health`, `workflow-learning`, `codebase-onboarding`, `codegraph-refresh`, `context-budget-review`, `security-safety-review`, `code-review`, `build-failure-triage`, `team`, `ultrawork`, `ultraqa`, `doctor`.
+Use this skill when the user mentions oh-my-hermes or a workflow keyword such as `deep-interview`, `ralplan`, `ultragoal`, `loop`, `ultraprocess`, `web-research`, `research-department`, `source-finder`, `paper-learning`, `data-analysis`, `command-operator`, `connector-operator`, `live-info-operator`, `content-operator`, `media-input-operator`, `feedback-triage`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`, `browser-operator`, `workspace-file-operator`, `automation-blueprint`, `harness-session-inventory`, `agent-debug`, `failure-signal-audit`, `instinct-ledger`, `skill-scout`, `skill-health`, `workflow-learning`, `codebase-onboarding`, `codegraph-refresh`, `context-budget-review`, `security-safety-review`, `code-review`, `build-failure-triage`, `team`, `ultrawork`, `ultraqa`, `doctor`.
 
 ## Routing Contract
 
