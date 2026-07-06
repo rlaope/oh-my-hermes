@@ -59,6 +59,7 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         "gateway_intent_before_feedback_triage",
         "hermes_coding_team_before_generic_clarification",
         "github_event_ops_before_generic_planning",
+        "live_info_operator_before_generic_current_facts",
         "loop_goal_before_generic_clarification",
         "materials_package_before_report_or_clarify",
         "memory_curation_before_generic_clarification",
@@ -70,6 +71,7 @@ _GUARDRAIL_CANDIDATE_INJECTION_IDS = frozenset(
         "source_finder_before_generic_web_research",
         "toolbelt_readiness_before_generic_or_visual_fallback",
         "voice_operator_before_generic_clarification",
+        "browser_operator_before_generic_clarification",
         "missed_workflow_research_recovery",
         "missed_workflow_operating_record_recovery",
         "product_shaping_before_ops_review",
@@ -700,6 +702,88 @@ _SKILL_POLICIES.update(
             next_action="prepare_voice_operator_card",
             evidence_boundary="A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
             wrapper_guidance="Turn terse voice/mobile requests into concise clarify, plan, status, handoff, or confirmation cards; require confirmation for risky actions.",
+        ),
+        "browser-operator": RecommendationPolicy(
+            next_action="prepare_browser_operator_card",
+            evidence_boundary=(
+                "A browser operator card is not browser launch, login, credential validation, page mutation, "
+                "form submission, scraping, screenshot capture, or successful interaction evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare browser_task_card/v1 with target URL, allowed actions, auth/credential boundary, "
+                "destructive confirmation gate, observation manifest slots, and a stop condition before any "
+                "browser interaction is claimed."
+            ),
+        ),
+        "workspace-file-operator": RecommendationPolicy(
+            next_action="prepare_workspace_file_operator_card",
+            evidence_boundary=(
+                "A workspace file operator card is not file read, write, copy, move, rename, delete, archive, "
+                "permission change, upload, download, or destructive filesystem evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare workspace_file_task_card/v1 with path root, allowed operations, excluded paths, "
+                "destructive confirmation gate, observation manifest slots, and a stop condition before any "
+                "filesystem action is claimed."
+            ),
+        ),
+        "command-operator": RecommendationPolicy(
+            next_action="prepare_command_operator_card",
+            evidence_boundary=(
+                "A command operator card is not terminal launch, shell execution, package-manager action, test run, "
+                "stdout/stderr capture, exit-code success, filesystem mutation, network access, or destructive command evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare command_task_card/v1 with command text, working directory, environment assumptions, "
+                "timeout, safety gate, result manifest slots, and a stop condition before command execution is claimed."
+            ),
+        ),
+        "connector-operator": RecommendationPolicy(
+            next_action="prepare_connector_operator_card",
+            evidence_boundary=(
+                "A connector operator card is not connector availability, credential validation, API call, message send, "
+                "ticket mutation, external write, webhook delivery, or provider success evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare connector_task_card/v1 with provider, target object or recipient, allowed action, "
+                "payload summary, auth boundary, confirmation gate, result manifest slots, and a stop condition "
+                "before external app execution is claimed."
+            ),
+        ),
+        "live-info-operator": RecommendationPolicy(
+            next_action="prepare_live_info_operator_card",
+            evidence_boundary=(
+                "A live information card is not provider availability, API access, live data retrieval, weather, "
+                "market price, sports score, exchange-rate, time-zone, map, or place-result evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare live_info_task_card/v1 with domain, location or symbol, time window, provider preference, "
+                "freshness boundary, units, source-quality rule, result manifest slots, and a stop condition before "
+                "live data is claimed."
+            ),
+        ),
+        "content-operator": RecommendationPolicy(
+            next_action="prepare_content_operator_card",
+            evidence_boundary=(
+                "A content operator card is not source retrieval, fact verification, hallucination-free copy, "
+                "stakeholder approval, publishing, email/message sending, file export, delivery, or accepted-final-copy evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare content_task_card/v1 with source scope, audience, channel, language, tone, style guide, "
+                "fact-risk, review gate, output manifest slots, and a stop condition before content quality or "
+                "delivery claims are made."
+            ),
+        ),
+        "data-analysis": RecommendationPolicy(
+            next_action="prepare_data_analysis_card",
+            evidence_boundary=(
+                "A data analysis card is not file extraction, query execution, chart generation, statistical proof, "
+                "data correctness, or hallucination-safe numeric evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare data_analysis_task_card/v1 with dataset scope, columns or schema, analysis question, "
+                "method plan, result-evidence slots, and a stop condition before numeric findings are claimed."
+            ),
         ),
         "toolbelt-readiness": RecommendationPolicy(
             next_action="prepare_toolbelt_readiness",

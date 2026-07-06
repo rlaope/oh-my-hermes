@@ -56,19 +56,26 @@ FLAGSHIP_SKILLS = {
 
 FEATURE_SURFACE_EXPOSURES = {
     "automation-blueprint": ("workflow_skill", True),
-    "github-event-ops": ("router_only", False),
-    "agent-board": ("agent_context", False),
+    "github-event-ops": ("workflow_skill", True),
+    "agent-board": ("workflow_skill", True),
     "memory-curation-review": ("workflow_skill", True),
-    "gateway-intent-card": ("router_only", False),
-    "executor-runtime-readiness": ("harness_only", False),
+    "gateway-intent-card": ("workflow_skill", True),
+    "executor-runtime-readiness": ("workflow_skill", True),
     "deliverable-package": ("workflow_skill", True),
     "design-quality-gate": ("workflow_skill", True),
     "frontend": ("workflow_skill", True),
     "accessibility-audit": ("workflow_skill", True),
     "visual-qa": ("workflow_skill", True),
+    "browser-operator": ("workflow_skill", True),
+    "workspace-file-operator": ("workflow_skill", True),
+    "command-operator": ("workflow_skill", True),
+    "connector-operator": ("workflow_skill", True),
+    "live-info-operator": ("workflow_skill", True),
+    "content-operator": ("workflow_skill", True),
+    "data-analysis": ("workflow_skill", True),
     "build-failure-triage": ("workflow_skill", True),
-    "voice-operator": ("agent_context", False),
-    "toolbelt-readiness": ("harness_only", False),
+    "voice-operator": ("workflow_skill", True),
+    "toolbelt-readiness": ("workflow_skill", True),
     "harness-session-inventory": ("workflow_skill", True),
     "ops-observability-card": ("workflow_skill", True),
     "achievements": ("workflow_skill", True),
@@ -256,6 +263,12 @@ class RouterContentTests(unittest.TestCase):
             "frontend",
             "accessibility-audit",
             "visual-qa",
+            "browser-operator",
+            "workspace-file-operator",
+            "command-operator",
+            "connector-operator",
+            "live-info-operator",
+            "data-analysis",
             "build-failure-triage",
             "workspace-audit",
             "production-audit",
@@ -387,6 +400,18 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["visual-qa"].next_action, "prepare_visual_qa")
         self.assertIn("browser_interaction_trace/v1", recommend_module._SKILL_POLICIES["visual-qa"].wrapper_guidance)
         self.assertIn("click-path", recommend_module._SKILL_POLICIES["visual-qa"].evidence_boundary)
+        self.assertEqual(recommend_module._SKILL_POLICIES["browser-operator"].next_action, "prepare_browser_operator_card")
+        self.assertIn("browser_task_card/v1", recommend_module._SKILL_POLICIES["browser-operator"].wrapper_guidance)
+        self.assertIn("credential", recommend_module._SKILL_POLICIES["browser-operator"].evidence_boundary)
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["workspace-file-operator"].next_action,
+            "prepare_workspace_file_operator_card",
+        )
+        self.assertIn(
+            "workspace_file_task_card/v1",
+            recommend_module._SKILL_POLICIES["workspace-file-operator"].wrapper_guidance,
+        )
+        self.assertIn("destructive", recommend_module._SKILL_POLICIES["workspace-file-operator"].evidence_boundary)
         self.assertEqual(recommend_module._SKILL_POLICIES["workspace-audit"].next_action, "prepare_workspace_audit")
         self.assertEqual(recommend_module._SKILL_POLICIES["production-audit"].next_action, "prepare_production_audit")
         self.assertEqual(
@@ -511,8 +536,9 @@ class RouterContentTests(unittest.TestCase):
             {path.relative_to(Path("skills")) for path in Path("skills").glob("*/references/*.md")},
             set(reference_templates),
         )
-        hidden = {name for name, (_, installable) in FEATURE_SURFACE_EXPOSURES.items() if not installable}
-        self.assertTrue(hidden)
+        installable_surfaces = {name for name, (_, installable) in FEATURE_SURFACE_EXPOSURES.items() if installable}
+        self.assertLessEqual(installable_surfaces, set(templates))
+        hidden = set(FEATURE_SURFACE_EXPOSURES) - installable_surfaces
         for name in hidden:
             self.assertFalse((Path("skills") / name / "SKILL.md").exists(), f"{name} should stay routable only")
 
@@ -568,6 +594,13 @@ class RouterContentTests(unittest.TestCase):
                 "frontend",
                 "accessibility-audit",
                 "visual-qa",
+                "browser-operator",
+                "workspace-file-operator",
+                "command-operator",
+                "connector-operator",
+                "live-info-operator",
+                "content-operator",
+                "data-analysis",
                 "build-failure-triage",
                 "workspace-audit",
                 "production-audit",
@@ -1010,6 +1043,271 @@ class RouterContentTests(unittest.TestCase):
         route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
         self.assertTrue(set(BROWSER_VISUAL_QA_PHRASES).issubset(set(route_rules["visual_qa_gate"]["phrases"])))
         self.assertTrue(set(CUSTOMER_SYMPTOM_REPORT_PHRASES).issubset(set(route_rules["customer_signal"]["phrases"])))
+
+    def test_browser_operator_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("browser-operator", definitions)
+        self.assertIn("browser-operator", harnesses)
+        self.assertIn("browser-operator", templates)
+        self.assertEqual(primary_harness_for_skill("browser-operator"), "browser-operator")
+        self.assertEqual(definitions["browser-operator"].category, "browser")
+        self.assertEqual(definitions["browser-operator"].phase, "browser-task")
+        self.assertEqual(definitions["browser-operator"].quality_tier, "workflow-surface-gated")
+        self.assertIn("browser_task_card/v1", definitions["browser-operator"].expected_outputs)
+        self.assertIn("browser_interaction_scope/v1", definitions["browser-operator"].expected_outputs)
+        self.assertIn("browser_auth_boundary/v1", definitions["browser-operator"].expected_outputs)
+        self.assertIn("browser_observation_manifest/v1 when observed", definitions["browser-operator"].expected_outputs)
+        self.assertIn("browser_confirmation_gate/v1 when destructive", definitions["browser-operator"].expected_outputs)
+        self.assertIn("browser task", definitions["browser-operator"].triggers)
+        self.assertIn("open url", definitions["browser-operator"].triggers)
+        self.assertIn("click page", definitions["browser-operator"].triggers)
+        self.assertIn("login page", definitions["browser-operator"].triggers)
+        self.assertIn("웹페이지", definitions["browser-operator"].triggers)
+        self.assertIn("로그인", definitions["browser-operator"].triggers)
+        self.assertIn("credential", " ".join(definitions["browser-operator"].safety_rules).lower())
+        self.assertIn("destructive", " ".join(definitions["browser-operator"].safety_rules).lower())
+        self.assertIn("browser_task_card/v1", " ".join(definitions["browser-operator"].artifact_expectations))
+        self.assertIn("browser_task_card/v1", harnesses["browser-operator"].expected_outputs)
+        self.assertIn("browser_interaction_scope/v1", harnesses["browser-operator"].expected_outputs)
+        self.assertIn("browser_auth_boundary/v1", harnesses["browser-operator"].expected_outputs)
+        self.assertIn("browser_observation_manifest/v1 when observed", harnesses["browser-operator"].expected_outputs)
+        self.assertIn("scope_recorded", harnesses["browser-operator"].evidence_ladder)
+        self.assertIn("auth_boundary_recorded", harnesses["browser-operator"].evidence_ladder)
+        self.assertIn("confirmation_recorded_when_destructive", harnesses["browser-operator"].evidence_ladder)
+        self.assertIn("browser_task_card/v1", templates["browser-operator"].content)
+        self.assertIn("browser_confirmation_gate/v1", templates["browser-operator"].content)
+        self.assertIn("Preferred harness for this skill: `browser-operator`", templates["browser-operator"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("browser_operator", route_rules)
+        self.assertIn("browser-operator", route_rules["browser_operator"]["workflow"])
+        self.assertIn("open url", route_rules["browser_operator"]["phrases"])
+
+    def test_workspace_file_operator_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("workspace-file-operator", definitions)
+        self.assertIn("workspace-file-operator", harnesses)
+        self.assertIn("workspace-file-operator", templates)
+        self.assertEqual(primary_harness_for_skill("workspace-file-operator"), "workspace-file-operator")
+        self.assertEqual(definitions["workspace-file-operator"].category, "filesystem")
+        self.assertEqual(definitions["workspace-file-operator"].phase, "file-task")
+        self.assertEqual(definitions["workspace-file-operator"].quality_tier, "workflow-surface-gated")
+        self.assertIn("workspace_file_task_card/v1", definitions["workspace-file-operator"].expected_outputs)
+        self.assertIn("file_operation_scope/v1", definitions["workspace-file-operator"].expected_outputs)
+        self.assertIn(
+            "file_observation_manifest/v1 when observed",
+            definitions["workspace-file-operator"].expected_outputs,
+        )
+        self.assertIn(
+            "file_confirmation_gate/v1 when destructive",
+            definitions["workspace-file-operator"].expected_outputs,
+        )
+        self.assertIn("file operation", definitions["workspace-file-operator"].triggers)
+        self.assertIn("list files", definitions["workspace-file-operator"].triggers)
+        self.assertIn("move file", definitions["workspace-file-operator"].triggers)
+        self.assertIn("delete file", definitions["workspace-file-operator"].triggers)
+        self.assertIn("파일 정리", definitions["workspace-file-operator"].triggers)
+        self.assertIn("파일 삭제", definitions["workspace-file-operator"].triggers)
+        self.assertIn("destructive", " ".join(definitions["workspace-file-operator"].safety_rules).lower())
+        self.assertIn("workspace_file_task_card/v1", " ".join(definitions["workspace-file-operator"].artifact_expectations))
+        self.assertIn("workspace_file_task_card/v1", harnesses["workspace-file-operator"].expected_outputs)
+        self.assertIn("file_operation_scope/v1", harnesses["workspace-file-operator"].expected_outputs)
+        self.assertIn(
+            "file_observation_manifest/v1 when observed",
+            harnesses["workspace-file-operator"].expected_outputs,
+        )
+        self.assertIn("path_scope_recorded", harnesses["workspace-file-operator"].evidence_ladder)
+        self.assertIn("confirmation_recorded_when_destructive", harnesses["workspace-file-operator"].evidence_ladder)
+        self.assertIn("workspace_file_task_card/v1", templates["workspace-file-operator"].content)
+        self.assertIn("file_confirmation_gate/v1", templates["workspace-file-operator"].content)
+        self.assertIn("Preferred harness for this skill: `workspace-file-operator`", templates["workspace-file-operator"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("workspace_file_operator", route_rules)
+        self.assertIn("workspace-file-operator", route_rules["workspace_file_operator"]["workflow"])
+        self.assertIn("list files", route_rules["workspace_file_operator"]["phrases"])
+
+    def test_data_analysis_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("data-analysis", definitions)
+        self.assertIn("data-analysis", harnesses)
+        self.assertIn("data-analysis", templates)
+        self.assertEqual(primary_harness_for_skill("data-analysis"), "data-analysis")
+        self.assertEqual(definitions["data-analysis"].category, "analysis")
+        self.assertEqual(definitions["data-analysis"].phase, "data-task")
+        self.assertEqual(definitions["data-analysis"].quality_tier, "workflow-surface-gated")
+        self.assertIn("data_analysis_task_card/v1", definitions["data-analysis"].expected_outputs)
+        self.assertIn("dataset_scope/v1", definitions["data-analysis"].expected_outputs)
+        self.assertIn("analysis_method_plan/v1", definitions["data-analysis"].expected_outputs)
+        self.assertIn("analysis_result_summary/v1 when observed", definitions["data-analysis"].expected_outputs)
+        self.assertIn("csv analysis", definitions["data-analysis"].triggers)
+        self.assertIn("json analysis", definitions["data-analysis"].triggers)
+        self.assertIn("log analysis", definitions["data-analysis"].triggers)
+        self.assertIn("데이터 분석", definitions["data-analysis"].triggers)
+        self.assertIn("hallucination", " ".join(definitions["data-analysis"].safety_rules).lower())
+        self.assertIn("data_analysis_task_card/v1", " ".join(definitions["data-analysis"].artifact_expectations))
+        self.assertIn("data_analysis_task_card/v1", harnesses["data-analysis"].expected_outputs)
+        self.assertIn("dataset_scope/v1", harnesses["data-analysis"].expected_outputs)
+        self.assertIn("schema_or_columns_recorded", harnesses["data-analysis"].evidence_ladder)
+        self.assertIn("analysis_method_selected", harnesses["data-analysis"].evidence_ladder)
+        self.assertIn("data_analysis_task_card/v1", templates["data-analysis"].content)
+        self.assertIn("analysis_result_summary/v1", templates["data-analysis"].content)
+        self.assertIn("Preferred harness for this skill: `data-analysis`", templates["data-analysis"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("data_analysis", route_rules)
+        self.assertIn("data-analysis", route_rules["data_analysis"]["workflow"])
+        self.assertIn("csv analysis", route_rules["data_analysis"]["phrases"])
+
+    def test_command_operator_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("command-operator", definitions)
+        self.assertIn("command-operator", harnesses)
+        self.assertIn("command-operator", templates)
+        self.assertEqual(primary_harness_for_skill("command-operator"), "command-operator")
+        self.assertEqual(definitions["command-operator"].category, "command")
+        self.assertEqual(definitions["command-operator"].phase, "command-task")
+        self.assertEqual(definitions["command-operator"].quality_tier, "workflow-surface-gated")
+        self.assertIn("command_task_card/v1", definitions["command-operator"].expected_outputs)
+        self.assertIn("command_scope/v1", definitions["command-operator"].expected_outputs)
+        self.assertIn("command_safety_gate/v1", definitions["command-operator"].expected_outputs)
+        self.assertIn("command_result_manifest/v1 when observed", definitions["command-operator"].expected_outputs)
+        self.assertIn("run command", definitions["command-operator"].triggers)
+        self.assertIn("terminal command", definitions["command-operator"].triggers)
+        self.assertIn("터미널 명령", definitions["command-operator"].triggers)
+        self.assertIn("destructive", " ".join(definitions["command-operator"].safety_rules).lower())
+        self.assertIn("command_task_card/v1", " ".join(definitions["command-operator"].artifact_expectations))
+        self.assertIn("command_task_card/v1", harnesses["command-operator"].expected_outputs)
+        self.assertIn("command_scope/v1", harnesses["command-operator"].expected_outputs)
+        self.assertIn("command_safety_gate/v1", harnesses["command-operator"].expected_outputs)
+        self.assertIn("command_text_recorded", harnesses["command-operator"].evidence_ladder)
+        self.assertIn("working_directory_recorded", harnesses["command-operator"].evidence_ladder)
+        self.assertIn("command_task_card/v1", templates["command-operator"].content)
+        self.assertIn("command_result_manifest/v1", templates["command-operator"].content)
+        self.assertIn("Preferred harness for this skill: `command-operator`", templates["command-operator"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("command_operator", route_rules)
+        self.assertIn("command-operator", route_rules["command_operator"]["workflow"])
+        self.assertIn("run command", route_rules["command_operator"]["phrases"])
+
+    def test_connector_operator_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("connector-operator", definitions)
+        self.assertIn("connector-operator", harnesses)
+        self.assertIn("connector-operator", templates)
+        self.assertEqual(primary_harness_for_skill("connector-operator"), "connector-operator")
+        self.assertEqual(definitions["connector-operator"].category, "connector")
+        self.assertEqual(definitions["connector-operator"].phase, "connector-task")
+        self.assertEqual(definitions["connector-operator"].quality_tier, "workflow-surface-gated")
+        self.assertIn("connector_task_card/v1", definitions["connector-operator"].expected_outputs)
+        self.assertIn("connector_scope/v1", definitions["connector-operator"].expected_outputs)
+        self.assertIn("connector_auth_boundary/v1", definitions["connector-operator"].expected_outputs)
+        self.assertIn("connector_result_manifest/v1 when observed", definitions["connector-operator"].expected_outputs)
+        self.assertIn("send email", definitions["connector-operator"].triggers)
+        self.assertIn("linear ticket", definitions["connector-operator"].triggers)
+        self.assertIn("notion page", definitions["connector-operator"].triggers)
+        self.assertIn("이메일 보내", definitions["connector-operator"].triggers)
+        self.assertIn("credential", " ".join(definitions["connector-operator"].safety_rules).lower())
+        self.assertIn("connector_task_card/v1", " ".join(definitions["connector-operator"].artifact_expectations))
+        self.assertIn("connector_task_card/v1", harnesses["connector-operator"].expected_outputs)
+        self.assertIn("connector_scope/v1", harnesses["connector-operator"].expected_outputs)
+        self.assertIn("connector_auth_boundary/v1", harnesses["connector-operator"].expected_outputs)
+        self.assertIn("connector_action_recorded", harnesses["connector-operator"].evidence_ladder)
+        self.assertIn("provider_boundary_recorded", harnesses["connector-operator"].evidence_ladder)
+        self.assertIn("connector_task_card/v1", templates["connector-operator"].content)
+        self.assertIn("connector_result_manifest/v1", templates["connector-operator"].content)
+        self.assertIn("Preferred harness for this skill: `connector-operator`", templates["connector-operator"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("connector_operator", route_rules)
+        self.assertIn("connector-operator", route_rules["connector_operator"]["workflow"])
+        self.assertIn("send email", route_rules["connector_operator"]["phrases"])
+
+    def test_live_info_operator_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("live-info-operator", definitions)
+        self.assertIn("live-info-operator", harnesses)
+        self.assertIn("live-info-operator", templates)
+        self.assertEqual(primary_harness_for_skill("live-info-operator"), "live-info-operator")
+        self.assertEqual(definitions["live-info-operator"].category, "live-info")
+        self.assertEqual(definitions["live-info-operator"].phase, "live-info-task")
+        self.assertEqual(definitions["live-info-operator"].quality_tier, "workflow-surface-gated")
+        self.assertIn("live_info_task_card/v1", definitions["live-info-operator"].expected_outputs)
+        self.assertIn("live_info_scope/v1", definitions["live-info-operator"].expected_outputs)
+        self.assertIn("freshness_boundary/v1", definitions["live-info-operator"].expected_outputs)
+        self.assertIn("live_info_result_manifest/v1 when observed", definitions["live-info-operator"].expected_outputs)
+        self.assertIn("weather today", definitions["live-info-operator"].triggers)
+        self.assertIn("stock price", definitions["live-info-operator"].triggers)
+        self.assertIn("sports score", definitions["live-info-operator"].triggers)
+        self.assertIn("오늘 날씨", definitions["live-info-operator"].triggers)
+        self.assertIn("provider", " ".join(definitions["live-info-operator"].safety_rules).lower())
+        self.assertIn("live_info_task_card/v1", " ".join(definitions["live-info-operator"].artifact_expectations))
+        self.assertIn("live_info_task_card/v1", harnesses["live-info-operator"].expected_outputs)
+        self.assertIn("live_info_scope/v1", harnesses["live-info-operator"].expected_outputs)
+        self.assertIn("freshness_boundary/v1", harnesses["live-info-operator"].expected_outputs)
+        self.assertIn("provider_boundary_recorded", harnesses["live-info-operator"].evidence_ladder)
+        self.assertIn("freshness_boundary_recorded", harnesses["live-info-operator"].evidence_ladder)
+        self.assertIn("live_info_task_card/v1", templates["live-info-operator"].content)
+        self.assertIn("live_info_result_manifest/v1", templates["live-info-operator"].content)
+        self.assertIn("Preferred harness for this skill: `live-info-operator`", templates["live-info-operator"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("live_info_operator", route_rules)
+        self.assertIn("live-info-operator", route_rules["live_info_operator"]["workflow"])
+        self.assertIn("weather today", route_rules["live_info_operator"]["phrases"])
+
+    def test_content_operator_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("content-operator", definitions)
+        self.assertIn("content-operator", harnesses)
+        self.assertIn("content-operator", templates)
+        self.assertEqual(primary_harness_for_skill("content-operator"), "content-operator")
+        self.assertEqual(definitions["content-operator"].category, "content")
+        self.assertEqual(definitions["content-operator"].phase, "content-task")
+        self.assertEqual(definitions["content-operator"].quality_tier, "workflow-surface-gated")
+        self.assertIn("content_task_card/v1", definitions["content-operator"].expected_outputs)
+        self.assertIn("source_scope/v1", definitions["content-operator"].expected_outputs)
+        self.assertIn("audience_tone_style/v1", definitions["content-operator"].expected_outputs)
+        self.assertIn("content_output_manifest/v1 when observed", definitions["content-operator"].expected_outputs)
+        self.assertIn("release notes", definitions["content-operator"].triggers)
+        self.assertIn("newsletter draft", definitions["content-operator"].triggers)
+        self.assertIn("고객 공지문", definitions["content-operator"].triggers)
+        self.assertIn("hallucination", " ".join(definitions["content-operator"].safety_rules).lower())
+        self.assertIn("content_task_card/v1", " ".join(definitions["content-operator"].artifact_expectations))
+        self.assertIn("content_task_card/v1", harnesses["content-operator"].expected_outputs)
+        self.assertIn("source_scope/v1", harnesses["content-operator"].expected_outputs)
+        self.assertIn("audience_tone_style/v1", harnesses["content-operator"].expected_outputs)
+        self.assertIn("audience_recorded", harnesses["content-operator"].evidence_ladder)
+        self.assertIn("content_task_card/v1", templates["content-operator"].content)
+        self.assertIn("content_output_manifest/v1", templates["content-operator"].content)
+        self.assertIn("Preferred harness for this skill: `content-operator`", templates["content-operator"].content)
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("content_operator", route_rules)
+        self.assertIn("content-operator", route_rules["content_operator"]["workflow"])
+        self.assertIn("release notes", route_rules["content_operator"]["phrases"])
 
     def test_build_failure_triage_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

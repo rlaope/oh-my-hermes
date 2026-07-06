@@ -11,7 +11,7 @@ from .schema import SKILL_CAPABILITY_SCHEMA_VERSION
 
 
 _COMPACT_FULL_CAPABILITY_EXAMPLE_LANES = frozenset(
-    {"automation_and_status", "research_and_ops", "coding_handoff"}
+    {"automation_and_status", "research_and_ops", "materials_and_visuals", "coding_handoff"}
 )
 
 
@@ -55,7 +55,7 @@ def _skill_capability(
         "required_inputs": _bounded_list(definition.required_inputs, 4),
         "expected_outputs": _bounded_list_with_overflow(definition.expected_outputs, 6, "more expected outputs"),
         "artifact_expectations": _compact_artifact_expectations(definition.artifact_expectations),
-        "safety_rules": _bounded_list(definition.safety_rules, 4),
+        "safety_rules": _compact_safety_rules(definition.safety_rules),
         "quality_tier": definition.quality_tier,
         "quality_bar": _bounded_list(definition.quality_bar, 4),
         "handoff_policy": definition.handoff_policy,
@@ -68,7 +68,7 @@ def _skill_capability(
         "chat_rule": str(awareness.get("chat_rule") or ""),
         "fallback_rule": str(awareness.get("fallback_rule") or ""),
         "cross_lane_examples": _capability_lane_examples(lane_id, definition.name),
-        "do_not_use_when": _bounded_list(definition.do_not_use_when, 2),
+        "do_not_use_when": _bounded_list(definition.do_not_use_when, 1),
         "orchestration_eligibility": _orchestration_eligibility(definition),
         "tool_requirements": {
             "derivation_status": "partial",
@@ -126,6 +126,20 @@ def _compact_artifact_expectations(items: tuple[str, ...]) -> list[str]:
     return [summary]
 
 
+def _compact_safety_rules(items: tuple[str, ...]) -> list[str]:
+    selected = list(items[:3])
+    for item in items[3:]:
+        if "secret values" in item and item not in selected:
+            selected.append(item)
+    compacted: list[str] = []
+    for item in selected:
+        summary = item.strip()
+        if len(summary) > 160:
+            summary = summary[:157].rstrip() + "..."
+        compacted.append(summary)
+    return compacted
+
+
 def _awareness_lane_by_skill(awareness: dict[str, object]) -> dict[str, dict[str, object]]:
     lane_by_skill: dict[str, dict[str, object]] = {}
     lanes = awareness.get("lanes", [])
@@ -143,13 +157,9 @@ def _awareness_lane_by_skill(awareness: dict[str, object]) -> dict[str, dict[str
 
 
 def _workflow_routing_hint(definition: SkillDefinition, lane_label: str, lane_use_for: str) -> str:
-    if lane_label and lane_use_for:
-        return (
-            f"Use `{definition.name}` ({lane_label}) for {lane_use_for}; name adjacent."
-        )
-    return (
-        f"Use `{definition.name}` for {definition.use_when}; name adjacent."
-    )
+    if lane_label:
+        return f"Use `{definition.name}`; lane={lane_label}; name adjacent."
+    return f"Use `{definition.name}`; name adjacent."
 
 
 def _capability_lane_examples(lane_id: str, skill_id: str) -> list[str]:

@@ -179,6 +179,38 @@ VISIBLE_ACTIONS = (
     "record_visual_oracle_review",
     "record_cjk_layout_findings",
     "record_visual_qa_verdict",
+    "prepare_browser_operator_card",
+    "show_browser_operator_card",
+    "confirm_browser_action",
+    "record_browser_observation",
+    "prepare_workspace_file_operator_card",
+    "show_workspace_file_operator_card",
+    "confirm_file_operation",
+    "record_file_observation",
+    "record_file_operation_result",
+    "prepare_command_operator_card",
+    "show_command_operator_card",
+    "prepare_connector_operator_card",
+    "show_connector_operator_card",
+    "prepare_live_info_operator_card",
+    "show_live_info_operator_card",
+    "prepare_content_operator_card",
+    "show_content_operator_card",
+    "confirm_command_execution",
+    "confirm_connector_action",
+    "record_command_observation",
+    "record_command_result",
+    "record_connector_observation",
+    "record_connector_result",
+    "record_live_info_observation",
+    "record_live_info_result",
+    "record_content_draft",
+    "record_content_review",
+    "record_content_output",
+    "prepare_data_analysis_card",
+    "show_data_analysis_card",
+    "record_dataset_scope",
+    "record_analysis_result",
     "prepare_workspace_audit",
     "show_workspace_audit",
     "record_workspace_inventory",
@@ -668,6 +700,21 @@ _HUMAN_ACK_BODY_BY_SKILL = {
         "I will turn the short voice or mobile request into a concise clarify, plan, status, handoff, or "
         "confirmation card, and require confirmation before risky actions."
     ),
+    "workspace-file-operator": (
+        "I will prepare the file-operation path: path scope, allowed operations, excluded paths, destructive "
+        "confirmation, and observation slots. File reads, writes, moves, renames, deletes, uploads, and downloads "
+        "stay unobserved until a wrapper records them."
+    ),
+    "command-operator": (
+        "I will prepare the command path: command text, working directory, environment assumptions, timeout, "
+        "safety gate, result-evidence slots, and stop condition. Terminal launch, shell execution, stdout/stderr, "
+        "exit code, package-manager effects, and filesystem mutations stay unobserved until command evidence is recorded."
+    ),
+    "data-analysis": (
+        "I will prepare the data-analysis path: dataset scope, columns or schema, analysis question, method, "
+        "result-evidence slots, and stop condition. File extraction, query execution, chart generation, and numeric "
+        "findings stay unobserved until data and method evidence are recorded."
+    ),
     "toolbelt-readiness": (
         "I will map the MCP, CLI, API, credential, and connector pieces this workflow needs, show what is "
         "observed versus missing, and suggest the safest setup or handoff next step."
@@ -775,6 +822,13 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_memory_curation_review": ("prepare_memory_curation_review", "Review memory"),
     "prepare_gateway_intent_card": ("prepare_gateway_intent_card", "Open gateway card"),
     "prepare_voice_operator_card": ("prepare_voice_operator_card", "Open voice card"),
+    "prepare_browser_operator_card": ("prepare_browser_operator_card", "Open browser card"),
+    "prepare_workspace_file_operator_card": ("prepare_workspace_file_operator_card", "Open file card"),
+    "prepare_command_operator_card": ("prepare_command_operator_card", "Open command card"),
+    "prepare_connector_operator_card": ("prepare_connector_operator_card", "Open connector card"),
+    "prepare_live_info_operator_card": ("prepare_live_info_operator_card", "Open live info card"),
+    "prepare_content_operator_card": ("prepare_content_operator_card", "Open content card"),
+    "prepare_data_analysis_card": ("prepare_data_analysis_card", "Open analysis card"),
     "prepare_toolbelt_readiness": ("prepare_toolbelt_readiness", "Check toolbelt"),
     "prepare_harness_session_inventory": ("prepare_harness_session_inventory", "Open inventory"),
     "prepare_ops_observability_card": ("prepare_ops_observability_card", "Open observability"),
@@ -1492,6 +1546,236 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "platform action",
             "destructive approval",
             "workflow completion",
+        ],
+    },
+    "browser-operator": {
+        "kind": "browser_operator",
+        "headline": "I can prepare the browser task without claiming the page was touched.",
+        "body": (
+            "I will prepare the browser task card: target URL, allowed clicks or form actions, auth boundary, "
+            "destructive-action confirmation, observation slots, and stop condition. Browser launch, login, page "
+            "mutation, screenshot, and form submission stay observed-only."
+        ),
+        "phase": "browser_operator_prepared",
+        "next_action": "prepare_browser_operator_card",
+        "artifact_schema": "browser_task_card/v1",
+        "claim_boundary_suffix": "It is not browser launch, login, credential validation, page mutation, screenshot, scraping, or form submission evidence.",
+        "actions": [
+            {"id": "prepare_browser_operator_card", "label": "Open browser card", "style": "primary"},
+            {"id": "confirm_browser_action", "label": "Confirm action", "style": "secondary", "enabled": False},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_target_url",
+            "list_allowed_browser_actions",
+            "separate_auth_and_destructive_boundaries",
+            "record_observations_only after browser evidence exists",
+        ],
+        "evidence_not_observed": [
+            "browser launch",
+            "credential validation",
+            "page mutation",
+            "form submission",
+            "screenshot capture",
+            "successful interaction",
+        ],
+    },
+    "workspace-file-operator": {
+        "kind": "workspace_file_operator",
+        "headline": "I can prepare the file task without claiming files changed.",
+        "body": (
+            "I will prepare the workspace file task card: path root, allowed file operations, excluded paths, "
+            "destructive-action confirmation, observation slots, and stop condition. File reads, writes, moves, "
+            "renames, deletes, archive changes, uploads, and downloads stay observed-only."
+        ),
+        "phase": "workspace_file_operator_prepared",
+        "next_action": "prepare_workspace_file_operator_card",
+        "artifact_schema": "workspace_file_task_card/v1",
+        "claim_boundary_suffix": "It is not file read, write, copy, move, rename, delete, archive, upload, download, or permission-change evidence.",
+        "actions": [
+            {"id": "prepare_workspace_file_operator_card", "label": "Open file card", "style": "primary"},
+            {"id": "confirm_file_operation", "label": "Confirm file action", "style": "secondary", "enabled": False},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_path_root",
+            "list_allowed_file_operations",
+            "separate_excluded_paths_and_destructive_boundaries",
+            "record_observations_only after file-operation evidence exists",
+        ],
+        "evidence_not_observed": [
+            "file read",
+            "file write",
+            "copy or move",
+            "rename or delete",
+            "archive mutation",
+            "upload or download",
+            "permission change",
+        ],
+    },
+    "command-operator": {
+        "kind": "command_operator",
+        "headline": "I can prepare the command task without claiming it ran.",
+        "body": (
+            "I will prepare the command task card: command text, working directory, environment assumptions, "
+            "timeout, safety gate, result-evidence slots, and stop condition. Terminal launch, shell execution, "
+            "stdout/stderr capture, exit-code success, package-manager effects, and filesystem mutations stay observed-only."
+        ),
+        "phase": "command_operator_prepared",
+        "next_action": "prepare_command_operator_card",
+        "artifact_schema": "command_task_card/v1",
+        "claim_boundary_suffix": "It is not terminal launch, shell execution, test run, stdout/stderr, exit-code success, package-manager effect, filesystem mutation, network access, or destructive command evidence.",
+        "actions": [
+            {"id": "prepare_command_operator_card", "label": "Open command card", "style": "primary"},
+            {"id": "confirm_command_execution", "label": "Confirm command", "style": "secondary", "enabled": False},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_command_text",
+            "record_working_directory_and_environment",
+            "classify_safety_level_and_timeout",
+            "record_results_only after command evidence exists",
+        ],
+        "evidence_not_observed": [
+            "terminal launch",
+            "shell execution",
+            "stdout or stderr",
+            "exit code",
+            "test result",
+            "package-manager effect",
+            "filesystem mutation",
+        ],
+    },
+    "connector-operator": {
+        "kind": "connector_operator",
+        "headline": "I can prepare the external app action without claiming it ran.",
+        "body": (
+            "I will prepare the connector task card: provider, target object, allowed action, recipient or assignee, "
+            "payload summary, credential boundary, confirmation gate, result-evidence slots, and stop condition. "
+            "API calls, message sends, ticket mutations, external writes, webhook delivery, and connector success stay observed-only."
+        ),
+        "phase": "connector_operator_prepared",
+        "next_action": "prepare_connector_operator_card",
+        "artifact_schema": "connector_task_card/v1",
+        "claim_boundary_suffix": "It is not connector availability, credential validation, API call, message send, ticket creation, external write, webhook delivery, or provider success evidence.",
+        "actions": [
+            {"id": "prepare_connector_operator_card", "label": "Open connector card", "style": "primary"},
+            {"id": "confirm_connector_action", "label": "Confirm connector action", "style": "secondary", "enabled": False},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_provider_and_target",
+            "record_allowed_connector_action",
+            "separate_auth_payload_confirmation_and_dry_run_boundaries",
+            "record_results_only after connector evidence exists",
+        ],
+        "evidence_not_observed": [
+            "connector availability",
+            "credential validation",
+            "API call",
+            "message send",
+            "ticket mutation",
+            "external write",
+            "webhook delivery",
+        ],
+    },
+    "live-info-operator": {
+        "kind": "live_info_operator",
+        "headline": "I can prepare the live information lookup without claiming the data was fetched.",
+        "body": (
+            "I will prepare the live information card: requested domain, location or symbol, time window, "
+            "provider preference, freshness requirement, units, source-quality rule, result slots, and stop condition. "
+            "Weather, price, score, exchange-rate, time-zone, map, and local-place answers stay observed-only."
+        ),
+        "phase": "live_info_operator_prepared",
+        "next_action": "prepare_live_info_operator_card",
+        "artifact_schema": "live_info_task_card/v1",
+        "claim_boundary_suffix": "It is not provider availability, API access, live data retrieval, weather, market price, sports score, exchange-rate, time-zone, map, or place-result evidence.",
+        "actions": [
+            {"id": "prepare_live_info_operator_card", "label": "Open live info card", "style": "primary"},
+            {"id": "record_live_info_result", "label": "Record provider result", "style": "secondary", "enabled": False},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_domain_location_symbol_or_time_window",
+            "record_provider_and_freshness_boundary",
+            "separate_units_source_quality_and_result_evidence",
+            "record_results_only after provider evidence exists",
+        ],
+        "evidence_not_observed": [
+            "provider availability",
+            "API access",
+            "live data retrieval",
+            "weather result",
+            "market price",
+            "sports score",
+            "map/place result",
+        ],
+    },
+    "content-operator": {
+        "kind": "content_operator",
+        "headline": "I can prepare the content task without claiming it was published, sent, or approved.",
+        "body": (
+            "I will prepare the content operator card: source scope, audience, channel, language, tone, style guide, "
+            "fact-risk, review gate, output slots, and stop condition. Source retrieval, fact verification, approval, "
+            "publishing, sending, file export, and delivery stay observed-only."
+        ),
+        "phase": "content_operator_prepared",
+        "next_action": "prepare_content_operator_card",
+        "artifact_schema": "content_task_card/v1",
+        "claim_boundary_suffix": "It is not source retrieval, fact verification, hallucination-free copy, stakeholder approval, publishing, email/message sending, file export, delivery, or accepted-final-copy evidence.",
+        "actions": [
+            {"id": "prepare_content_operator_card", "label": "Open content card", "style": "primary"},
+            {"id": "record_content_output", "label": "Record output", "style": "secondary", "enabled": False},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_source_scope_and_fact_risk",
+            "record_audience_channel_tone_and_style",
+            "separate_draft_review_publish_send_and_export_boundaries",
+            "record_outputs_only after draft or approval evidence exists",
+        ],
+        "evidence_not_observed": [
+            "source retrieval",
+            "fact verification",
+            "stakeholder approval",
+            "publishing",
+            "email or message sending",
+            "file export",
+            "delivery",
+            "accepted final copy",
+        ],
+    },
+    "data-analysis": {
+        "kind": "data_analysis",
+        "headline": "I can prepare the data analysis without claiming results.",
+        "body": (
+            "I will prepare the data analysis task card: dataset source and scope, columns or schema, analysis "
+            "question, method plan, result-evidence slots, and stop condition. File extraction, query execution, "
+            "chart generation, statistical proof, and numeric findings stay observed-only."
+        ),
+        "phase": "data_analysis_prepared",
+        "next_action": "prepare_data_analysis_card",
+        "artifact_schema": "data_analysis_task_card/v1",
+        "claim_boundary_suffix": "It is not file extraction, query execution, chart generation, statistical proof, data correctness, or numeric finding evidence.",
+        "actions": [
+            {"id": "prepare_data_analysis_card", "label": "Open analysis card", "style": "primary"},
+            {"id": "record_dataset_scope", "label": "Record scope", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_dataset_source_and_scope",
+            "record_columns_or_schema",
+            "choose_analysis_method",
+            "record_results_only after data or query evidence exists",
+        ],
+        "evidence_not_observed": [
+            "file extraction",
+            "query execution",
+            "chart generation",
+            "statistical proof",
+            "data correctness",
+            "numeric findings",
         ],
     },
     "toolbelt-readiness": {

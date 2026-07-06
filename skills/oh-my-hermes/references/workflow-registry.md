@@ -5,7 +5,7 @@ The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery 
 
 ## Role Registry
 
-- `guide`: `oh-my-hermes`, `gateway-intent-card`, `voice-operator`
+- `guide`: `oh-my-hermes`, `gateway-intent-card`, `voice-operator`, `browser-operator`, `workspace-file-operator`, `command-operator`, `connector-operator`, `live-info-operator`, `content-operator`, `data-analysis`
 - `handoff-guide`: `ralph`, `ultragoal`, `ultraprocess`, `team`, `ultrawork`, `ai-slop-cleaner`, `executor-runtime-readiness`
 - `memory-keeper`: `rules-distill`, `wiki`, `memory-curation-review`
 - `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`, `agent-debug`, `skill-scout`, `skill-health`
@@ -71,14 +71,21 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `cancel`: `cancel`, `$cancel`, `stop`, `abort`
 - `skill`: `skill`, `$skill`, `skills`, `manage skills`
 - `doctor`: `doctor`, `$doctor`, `diagnose omh`, `installation health`
-- `github-event-ops`: `github-event-ops`, `github event ops`, `pr opened`, `ci failed`, `issue opened`, `pull request webhook`, `github webhook`
-- `agent-board`: `agent-board`, `agent board`, `kanban`, `multi agent board`, `multiple hermes agents`, `multiple hermes profiles`, `hermes profiles`
+- `github-event-ops`: `github-event-ops`, `github event ops`, `github ops`, `github triage`, `github pr`, `github review`, `github action`
+- `agent-board`: `agent-board`, `agent board`, `kanban`, `multi-agent`, `multi agent`, `multi agent board`, `multiple hermes agents`
 - `memory-curation-review`: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`
-- `gateway-intent-card`: `gateway-intent-card`, `gateway intent`, `discord thread`, `slack thread`, `telegram delivery`, `session delivery`, `silent update`
-- `executor-runtime-readiness`: `executor-runtime-readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `executor tools`, `missing tools`, `handoff mode`
+- `gateway-intent-card`: `gateway-intent-card`, `gateway intent`, `discord thread`, `slack thread`, `telegram delivery`, `send to discord`, `send to slack`
+- `executor-runtime-readiness`: `executor-runtime-readiness`, `executor readiness`, `runtime readiness`, `codex readiness`, `claude code readiness`, `hermes coding readiness`, `executor tools`
 - `deliverable-package`: `deliverable-package`, `deliverable mode`, `file attachment`, `attach file`, `attachment status`, `file delivery`, `file deliverable status`
-- `voice-operator`: `voice-operator`, `voice operator`, `voice-first`, `mobile command`, `short command`, `spoken request`, `accessibility`
-- `toolbelt-readiness`: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `connector readiness`, `needed mcp`, `api credential`, `missing cli`
+- `voice-operator`: `voice-operator`, `voice operator`, `voice-first`, `voice command`, `mobile command`, `short command`, `dictated command`
+- `browser-operator`: `browser-operator`, `browser operator`, `browser task`, `browser operation`, `browser automation`, `browser session`, `webpage operation`
+- `workspace-file-operator`: `workspace-file-operator`, `workspace file operator`, `file operator`, `file operation`, `file operations`, `filesystem task`, `filesystem operation`
+- `command-operator`: `command-operator`, `command operator`, `terminal command`, `terminal task`, `shell command`, `shell task`, `cli command`
+- `connector-operator`: `connector-operator`, `connector operator`, `external app action`, `external connector action`, `saas action`, `api action`, `send email`
+- `live-info-operator`: `live-info-operator`, `live info operator`, `live information`, `real time information`, `real-time information`, `weather today`, `current weather`
+- `content-operator`: `content-operator`, `content operator`, `content workflow`, `writing workflow`, `publish-ready writing`, `publish ready writing`, `release notes`
+- `data-analysis`: `data-analysis`, `data analysis`, `dataset analysis`, `csv analysis`, `json analysis`, `log analysis`, `table analysis`
+- `toolbelt-readiness`: `toolbelt-readiness`, `mcp readiness`, `tool readiness`, `plugin readiness`, `connector readiness`, `needed mcp`, `api credential`
 - `harness-session-inventory`: `harness-session-inventory`, `harness session inventory`, `session inventory`, `session adapter`, `session adapters`, `harness sessions`, `mcp inventory`
 - `ops-observability-card`: `ops-observability-card`, `observability card`, `operations command board`, `ops command board`, `service quality board`, `service quality`, `external metric provider`
 - `achievements`: `achievements`, `achievement`, `badges`, `badge`, `my badges`, `show achievements`, `achievement summary`

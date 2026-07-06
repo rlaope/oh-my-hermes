@@ -2504,6 +2504,772 @@ _VOICE_OPERATOR_TOKENS = _normalized_token_set(
         "접근성",
     }
 )
+_BROWSER_OPERATOR_PHRASES = (
+    "browser operator",
+    "browser task",
+    "browser operation",
+    "browser automation",
+    "browser session",
+    "webpage operation",
+    "web page operation",
+    "open url",
+    "open the url",
+    "open page",
+    "open the page",
+    "visit url",
+    "visit page",
+    "navigate url",
+    "navigate page",
+    "click page",
+    "click this page",
+    "click login",
+    "fill form",
+    "fill the form",
+    "submit form",
+    "checkout url",
+    "capture blockers",
+    "page blockers",
+    "브라우저 작업",
+    "브라우저 조작",
+    "웹페이지 열",
+    "웹 페이지 열",
+    "url 열",
+    "링크 열",
+    "로그인 폼",
+    "폼 작성",
+    "폼 입력",
+    "막히는 부분 캡처",
+)
+_BROWSER_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "browser",
+        "page",
+        "webpage",
+        "website",
+        "url",
+        "link",
+        "login",
+        "form",
+        "checkout",
+        "staging",
+        "브라우저",
+        "페이지",
+        "웹페이지",
+        "웹",
+        "url",
+        "링크",
+        "로그인",
+        "폼",
+    }
+)
+_BROWSER_OPERATOR_ACTION_TOKENS = _normalized_token_set(
+    {
+        "open",
+        "visit",
+        "navigate",
+        "click",
+        "fill",
+        "submit",
+        "capture",
+        "inspect",
+        "check",
+        "login",
+        "열",
+        "열고",
+        "클릭",
+        "입력",
+        "작성",
+        "제출",
+        "캡처",
+        "확인",
+        "로그인",
+    }
+)
+_BROWSER_OPERATOR_VISUAL_QA_BLOCKERS = (
+    "visual qa",
+    "browser qa",
+    "browser interaction qa",
+    "click path audit",
+    "click-path audit",
+    "screenshot qa",
+    "dead link check",
+    "console error check",
+    "network failure check",
+    "keyboard navigation check",
+)
+_WORKSPACE_FILE_OPERATOR_PHRASES = (
+    "workspace-file-operator",
+    "workspace file operator",
+    "file operator",
+    "file operation",
+    "file operations",
+    "filesystem task",
+    "filesystem operation",
+    "file system task",
+    "file system operation",
+    "list files",
+    "list folder",
+    "list directory",
+    "find local files",
+    "search local files",
+    "search files in folder",
+    "organize files",
+    "organize folder",
+    "move file",
+    "move files",
+    "copy file",
+    "copy files",
+    "rename file",
+    "rename files",
+    "delete file",
+    "delete files",
+    "remove file",
+    "remove files",
+    "archive files",
+    "downloads folder",
+    "reports folder",
+    "folder cleanup",
+    "file cleanup",
+    "파일 작업",
+    "파일 조작",
+    "파일 정리",
+    "파일 검색",
+    "파일 찾아",
+    "파일 이동",
+    "파일 복사",
+    "파일 이름 변경",
+    "파일 삭제",
+    "폴더 정리",
+    "다운로드 폴더",
+    "디렉터리 목록",
+)
+_WORKSPACE_FILE_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "file",
+        "files",
+        "folder",
+        "folders",
+        "directory",
+        "directories",
+        "filesystem",
+        "path",
+        "paths",
+        "downloads",
+        "reports",
+        "archive",
+        "local",
+        "workspace",
+        "파일",
+        "폴더",
+        "디렉터리",
+        "경로",
+        "다운로드",
+        "아카이브",
+        "작업공간",
+        "워크스페이스",
+    }
+)
+_WORKSPACE_FILE_OPERATOR_ACTION_TOKENS = _normalized_token_set(
+    {
+        "list",
+        "find",
+        "search",
+        "organize",
+        "cleanup",
+        "clean",
+        "move",
+        "copy",
+        "rename",
+        "delete",
+        "remove",
+        "archive",
+        "sort",
+        "group",
+        "confirm",
+        "목록",
+        "찾아",
+        "검색",
+        "정리",
+        "이동",
+        "복사",
+        "변경",
+        "삭제",
+        "제거",
+        "아카이브",
+        "확인",
+    }
+)
+_WORKSPACE_FILE_OPERATOR_BLOCKERS = (
+    "pdf to ppt",
+    "pdf into ppt",
+    "make a ppt",
+    "make a deck",
+    "export pdf",
+    "export a pdf",
+    "attach file",
+    "file attachment",
+    "generated file",
+    "file upload bug",
+    "파일 업로드 버그",
+    "pdf를 ppt",
+    "ppt 만들어",
+    "발표자료",
+    "첨부할 수 있게",
+)
+_COMMAND_OPERATOR_PHRASES = (
+    "command operator",
+    "terminal command",
+    "terminal task",
+    "shell command",
+    "shell task",
+    "cli command",
+    "command execution",
+    "run command",
+    "run this command",
+    "execute command",
+    "execute this command",
+    "run npm test",
+    "run tests",
+    "npm test",
+    "pnpm test",
+    "bun test",
+    "uv run",
+    "python -m unittest",
+    "pytest",
+    "make test",
+    "cargo test",
+    "go test",
+    "summarize command output",
+    "터미널 명령",
+    "터미널에서",
+    "셸 명령",
+    "쉘 명령",
+    "명령 실행",
+    "명령어 실행",
+    "실행 준비",
+    "npm test 실행",
+    "테스트 실행",
+    "결과 요약",
+)
+_COMMAND_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "terminal",
+        "shell",
+        "cli",
+        "command",
+        "commands",
+        "npm",
+        "pnpm",
+        "bun",
+        "uv",
+        "python",
+        "pytest",
+        "unittest",
+        "cargo",
+        "go",
+        "test",
+        "tests",
+        "터미널",
+        "셸",
+        "쉘",
+        "명령",
+        "명령어",
+        "테스트",
+    }
+)
+_COMMAND_OPERATOR_ACTION_TOKENS = _normalized_token_set(
+    {
+        "run",
+        "execute",
+        "start",
+        "launch",
+        "prepare",
+        "summarize",
+        "capture",
+        "실행",
+        "돌려",
+        "돌리고",
+        "준비",
+        "요약",
+        "캡처",
+    }
+)
+_COMMAND_OPERATOR_BLOCKERS = (
+    "failed with",
+    "failure log",
+    "stack trace",
+    "root cause",
+    "find root cause",
+    "fix the failing",
+    "fix failing",
+    "fix test",
+    "fix tests",
+    "test failed",
+    "tests failed",
+    "build failed",
+    "ci failed",
+    "lint failed",
+    "typecheck failed",
+    "실패 원인",
+    "실패 로그",
+    "스택 트레이스",
+    "고쳐",
+    "수정",
+    "원인 찾아",
+)
+_CONNECTOR_OPERATOR_PHRASES = (
+    "connector operator",
+    "external app action",
+    "external connector action",
+    "saas action",
+    "api action",
+    "send email",
+    "email customer",
+    "gmail draft",
+    "gmail send",
+    "create linear ticket",
+    "linear ticket",
+    "update linear",
+    "jira ticket",
+    "create jira",
+    "notion page",
+    "update notion",
+    "crm update",
+    "salesforce update",
+    "hubspot update",
+    "create calendar event",
+    "calendar invite",
+    "google calendar",
+    "connector action",
+    "이메일 보내",
+    "이메일 발송",
+    "메일 보내",
+    "gmail 초안",
+    "linear ticket",
+    "linear 티켓",
+    "jira 티켓",
+    "notion 페이지",
+    "노션 페이지",
+    "캘린더 초대",
+    "외부 앱",
+    "외부 커넥터",
+    "커넥터 액션",
+)
+_CONNECTOR_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "connector",
+        "connectors",
+        "external",
+        "saas",
+        "api",
+        "email",
+        "gmail",
+        "linear",
+        "jira",
+        "notion",
+        "calendar",
+        "salesforce",
+        "hubspot",
+        "crm",
+        "ticket",
+        "tickets",
+        "invite",
+        "recipient",
+        "assignee",
+        "provider",
+        "이메일",
+        "메일",
+        "외부",
+        "커넥터",
+        "티켓",
+        "노션",
+        "캘린더",
+        "초대",
+        "수신자",
+        "담당자",
+    }
+)
+_CONNECTOR_OPERATOR_ACTION_TOKENS = _normalized_token_set(
+    {
+        "send",
+        "draft",
+        "create",
+        "update",
+        "assign",
+        "invite",
+        "prepare",
+        "confirm",
+        "approve",
+        "notify",
+        "post",
+        "보내",
+        "발송",
+        "초안",
+        "생성",
+        "만들",
+        "업데이트",
+        "배정",
+        "초대",
+        "준비",
+        "승인",
+        "확인",
+    }
+)
+_CONNECTOR_OPERATOR_BLOCKERS = (
+    "connector is missing",
+    "connector missing",
+    "missing connector",
+    "credential missing",
+    "credentials missing",
+    "api key missing",
+    "api key is missing",
+    "not connected",
+    "not configured",
+    "setup needed",
+    "what setup",
+    "커넥터가 없어",
+    "커넥터 없음",
+    "연결 안",
+    "설정 필요",
+    "셋업 필요",
+)
+_LIVE_INFO_OPERATOR_PHRASES = (
+    "live info operator",
+    "live information",
+    "real time information",
+    "real-time information",
+    "weather today",
+    "current weather",
+    "weather forecast",
+    "stock price",
+    "crypto price",
+    "btc price",
+    "exchange rate",
+    "sports score",
+    "game score",
+    "time zone",
+    "timezone",
+    "time in",
+    "map directions",
+    "directions to",
+    "near me",
+    "nearby restaurants",
+    "traffic now",
+    "오늘 날씨",
+    "현재 날씨",
+    "날씨 예보",
+    "주가",
+    "코인 가격",
+    "환율",
+    "스포츠 점수",
+    "경기 결과",
+    "시간대",
+    "현재 시간",
+    "지도",
+    "길찾기",
+    "주변 식당",
+)
+_LIVE_INFO_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "weather",
+        "forecast",
+        "temperature",
+        "stock",
+        "stocks",
+        "price",
+        "crypto",
+        "btc",
+        "bitcoin",
+        "eth",
+        "sports",
+        "score",
+        "scores",
+        "game",
+        "exchange",
+        "rate",
+        "currency",
+        "timezone",
+        "time",
+        "map",
+        "directions",
+        "traffic",
+        "nearby",
+        "restaurant",
+        "location",
+        "날씨",
+        "예보",
+        "기온",
+        "주가",
+        "가격",
+        "코인",
+        "환율",
+        "스포츠",
+        "점수",
+        "경기",
+        "시간",
+        "시간대",
+        "지도",
+        "길찾기",
+        "주변",
+        "식당",
+        "위치",
+    }
+)
+_LIVE_INFO_OPERATOR_LOOKUP_TOKENS = _normalized_token_set(
+    {
+        "what",
+        "current",
+        "today",
+        "now",
+        "latest",
+        "lookup",
+        "look",
+        "check",
+        "get",
+        "find",
+        "tell",
+        "freshness",
+        "현재",
+        "오늘",
+        "지금",
+        "최신",
+        "확인",
+        "조회",
+        "알려",
+        "찾아",
+        "경계",
+    }
+)
+_LIVE_INFO_OPERATOR_BLOCKERS = (
+    "web search",
+    "web research",
+    "source backed",
+    "with citations",
+    "citations",
+    "sources",
+    "best practices",
+    "api best practices",
+    "plugin is missing",
+    "plugin missing",
+    "provider setup",
+    "setup needed",
+    "what setup",
+    "connector is missing",
+    "connector missing",
+    "create calendar event",
+    "calendar event",
+    "calendar invite",
+    "웹서치",
+    "웹 리서치",
+    "출처",
+    "근거",
+    "셋업",
+    "설정 필요",
+    "캘린더 초대",
+)
+_CONTENT_OPERATOR_PHRASES = (
+    "content-operator",
+    "content operator",
+    "content workflow",
+    "writing workflow",
+    "publish-ready writing",
+    "publish ready writing",
+    "release notes",
+    "release note draft",
+    "newsletter draft",
+    "customer announcement",
+    "customer copy",
+    "product copy",
+    "landing page copy",
+    "social post draft",
+    "email draft",
+    "draft an email",
+    "rewrite for executives",
+    "summarize for customers",
+    "style guide rewrite",
+    "audience and tone",
+    "tone of voice",
+    "콘텐츠 오퍼레이터",
+    "글쓰기 워크플로",
+    "릴리즈 노트",
+    "릴리즈노트",
+    "뉴스레터 초안",
+    "고객 공지문",
+    "고객 공지",
+    "고객용 요약",
+    "메일 초안",
+    "이메일 초안",
+    "채널별 톤",
+    "문체 가이드",
+)
+_CONTENT_OPERATOR_CONTEXT_TOKENS = _normalized_token_set(
+    {
+        "content",
+        "copy",
+        "writing",
+        "draft",
+        "newsletter",
+        "announcement",
+        "release",
+        "notes",
+        "email",
+        "mail",
+        "blog",
+        "readme",
+        "landing",
+        "post",
+        "summary",
+        "translation",
+        "rewrite",
+        "콘텐츠",
+        "글쓰기",
+        "초안",
+        "뉴스레터",
+        "공지",
+        "공지문",
+        "릴리즈",
+        "노트",
+        "메일",
+        "이메일",
+        "요약",
+        "번역",
+        "카피",
+    }
+)
+_CONTENT_OPERATOR_ACTION_TOKENS = _normalized_token_set(
+    {
+        "write",
+        "draft",
+        "create",
+        "prepare",
+        "rewrite",
+        "summarize",
+        "summarise",
+        "translate",
+        "proofread",
+        "edit",
+        "polish",
+        "작성",
+        "써",
+        "초안",
+        "만들",
+        "준비",
+        "고쳐",
+        "다듬",
+        "요약",
+        "번역",
+        "교정",
+        "정리",
+    }
+)
+_CONTENT_OPERATOR_QUALITY_TOKENS = _normalized_token_set(
+    {
+        "publish-ready",
+        "publish",
+        "audience",
+        "channel",
+        "tone",
+        "style",
+        "brand",
+        "executive",
+        "executives",
+        "customer",
+        "customers",
+        "review",
+        "approval",
+        "legal",
+        "compliance",
+        "hallucination",
+        "fact",
+        "facts",
+        "source",
+        "sources",
+        "공개",
+        "게시",
+        "고객",
+        "채널",
+        "톤",
+        "문체",
+        "브랜드",
+        "검토",
+        "승인",
+        "팩트",
+        "출처",
+        "근거",
+    }
+)
+_CONTENT_OPERATOR_BLOCKERS = (
+    "web search",
+    "web research",
+    "with citations",
+    "citations",
+    "source finder",
+    "find sources",
+    "find a skill",
+    "find skills",
+    "is there a skill",
+    "skill for",
+    "skill candidate",
+    "skill discovery",
+    "existing skill",
+    "before building one",
+    "before creating one",
+    "ops review",
+    "weekly ops review",
+    "operating review",
+    "customer feedback",
+    "release risks",
+    "image card",
+    "summary card",
+    "announcement card",
+    "release notes image",
+    "release notes card",
+    "release notes thumbnail",
+    "thumbnail",
+    "poster",
+    "visual",
+    "image",
+    "send email",
+    "send an email",
+    "send the email",
+    "send slack",
+    "post to slack",
+    "post to discord",
+    "create calendar event",
+    "create linear ticket",
+    "export pdf",
+    "export to pdf",
+    "export to ppt",
+    "make a ppt",
+    "make slides",
+    "turn into slides",
+    "웹서치",
+    "웹 리서치",
+    "출처 찾아",
+    "스킬 찾아",
+    "스킬 있어",
+    "스킬이 있어",
+    "스킬 후보",
+    "기존 스킬",
+    "ops 리뷰",
+    "운영 리뷰",
+    "고객 피드백",
+    "릴리즈 리스크",
+    "이미지",
+    "사진",
+    "카드",
+    "썸네일",
+    "포스터",
+    "메일 보내",
+    "이메일 보내",
+    "이메일 발송",
+    "슬랙에 보내",
+    "디스코드에 보내",
+    "pdf로",
+    "ppt로",
+    "피피티",
+    "슬라이드",
+)
 _CAPABILITY_INTENT_TOKENS = _normalized_token_set(
     {
         "support",
@@ -3174,6 +3940,60 @@ VOICE_OPERATOR_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; voice/mobile-style requests need concise clarify/plan/status UX with confirmation boundaries.",
     activation_status="active",
 )
+BROWSER_OPERATOR_GUARD = RoutingGuardRule(
+    id="browser_operator_before_generic_clarification",
+    rule="Browser page-operation requests should route to browser-operator before generic clarification, web research, or visual QA.",
+    matched_label="guard:browser_operator",
+    preferred_skills=("browser-operator",),
+    score_boost=42,
+    why="Matched guard/trigger metadata; browser interaction requests need URL, auth, action, destructive-confirmation, and observation boundaries.",
+    activation_status="active",
+)
+WORKSPACE_FILE_OPERATOR_GUARD = RoutingGuardRule(
+    id="workspace_file_operator_before_materials_or_coding",
+    rule="Local file/folder operation requests should route to workspace-file-operator before materials packaging or generic coding fallback.",
+    matched_label="guard:workspace_file_operator",
+    preferred_skills=("workspace-file-operator",),
+    score_boost=44,
+    why="Matched guard/trigger metadata; file operations need path scope, allowed actions, destructive-confirmation, and observation boundaries.",
+    activation_status="active",
+)
+COMMAND_OPERATOR_GUARD = RoutingGuardRule(
+    id="command_operator_before_generic_terminal_or_coding",
+    rule="Terminal, shell, CLI, package-manager, or test command requests should route to command-operator before generic coding fallback.",
+    matched_label="guard:command_operator",
+    preferred_skills=("command-operator",),
+    score_boost=44,
+    why="Matched guard/trigger metadata; command execution requests need command text, cwd, environment, safety, timeout, and observed-result boundaries.",
+    activation_status="active",
+)
+CONNECTOR_OPERATOR_GUARD = RoutingGuardRule(
+    id="connector_operator_before_generic_api_or_command",
+    rule="External app, SaaS, email, ticket, calendar, CRM, or connector action requests should route to connector-operator before generic command or coding fallback.",
+    matched_label="guard:connector_operator",
+    preferred_skills=("connector-operator",),
+    score_boost=44,
+    why="Matched guard/trigger metadata; external connector actions need provider, target, auth, payload, confirmation, and observed-result boundaries.",
+    activation_status="active",
+)
+LIVE_INFO_OPERATOR_GUARD = RoutingGuardRule(
+    id="live_info_operator_before_generic_current_facts",
+    rule="Weather, finance, sports, map, place, exchange-rate, and time-zone lookup requests should route to live-info-operator before generic fallback.",
+    matched_label="guard:live_info_operator",
+    preferred_skills=("live-info-operator",),
+    score_boost=42,
+    why="Matched guard/trigger metadata; live information requests need provider, freshness, units, source-quality, and observed-result boundaries.",
+    activation_status="active",
+)
+CONTENT_OPERATOR_GUARD = RoutingGuardRule(
+    id="content_operator_before_generic_text_transform",
+    rule="Publish-ready content, copy, release-note, newsletter, announcement, email-draft, or style-guided writing requests should route to content-operator before generic fallback.",
+    matched_label="guard:content_operator",
+    preferred_skills=("content-operator",),
+    score_boost=38,
+    why="Matched guard/trigger metadata; quality-controlled content requests need source scope, audience, tone, review, and output-evidence boundaries.",
+    activation_status="active",
+)
 VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     id="img_summary_before_materials_or_delivery",
     rule="Image, card, or img-summary requests should route to img-summary before materials or PR delivery-cycle lanes.",
@@ -3255,7 +4075,11 @@ ROUTING_GUARD_RULES = (
     DOCTOR_HEALTH_GUARD,
     EXECUTOR_RUNTIME_READINESS_GUARD,
     TOOLBELT_READINESS_GUARD,
+    CONNECTOR_OPERATOR_GUARD,
     VOICE_OPERATOR_GUARD,
+    BROWSER_OPERATOR_GUARD,
+    WORKSPACE_FILE_OPERATOR_GUARD,
+    COMMAND_OPERATOR_GUARD,
     VISUAL_SUMMARY_GUARD,
     DELIVERABLE_PACKAGE_GUARD,
     DELIVERY_CYCLE_GUARD,
@@ -3364,11 +4188,12 @@ def _active_routing_guard_rules_cached(
     )
     if direct_coding_task_applies:
         rules.append(DIRECT_CODING_TASK_GUARD)
-    if _feedback_before_coding_guard_applies(
+    feedback_before_coding_applies = _feedback_before_coding_guard_applies(
         normalized_query,
         query_tokens,
         direct_coding_task_applies=direct_coding_task_applies,
-    ):
+    )
+    if feedback_before_coding_applies:
         rules.append(FEEDBACK_BEFORE_CODING_GUARD)
     if _product_shaping_guard_applies(normalized_query, query_tokens):
         rules.append(PRODUCT_SHAPING_GUARD)
@@ -3464,12 +4289,21 @@ def _active_routing_guard_rules_cached(
         query_tokens,
         visual_summary_applies=visual_summary_applies,
     )
+    workspace_file_operator_applies = _workspace_file_operator_guard_applies(normalized_query, query_tokens)
+    if (
+        workspace_file_operator_applies
+        and not feedback_before_coding_applies
+        and not paper_learning_applies
+        and not deliverable_package_applies
+    ):
+        rules.append(WORKSPACE_FILE_OPERATOR_GUARD)
     if (
         _materials_package_guard_applies(
             normalized_query,
             query_tokens,
             visual_summary_applies=visual_summary_applies,
         )
+        and not workspace_file_operator_applies
         and not paper_learning_applies
         and not deliverable_package_applies
     ):
@@ -3494,8 +4328,38 @@ def _active_routing_guard_rules_cached(
         rules.append(HARNESS_SESSION_INVENTORY_GUARD)
     if _toolbelt_readiness_guard_applies(normalized_query, query_tokens):
         rules.append(TOOLBELT_READINESS_GUARD)
+    if (
+        not direct_coding_task_applies
+        and not feedback_before_coding_applies
+        and _connector_operator_guard_applies(normalized_query, query_tokens)
+    ):
+        rules.append(CONNECTOR_OPERATOR_GUARD)
+    if (
+        not direct_coding_task_applies
+        and not feedback_before_coding_applies
+        and _live_info_operator_guard_applies(normalized_query, query_tokens)
+    ):
+        rules.append(LIVE_INFO_OPERATOR_GUARD)
+    if (
+        not direct_coding_task_applies
+        and not feedback_before_coding_applies
+        and _content_operator_guard_applies(normalized_query, query_tokens)
+    ):
+        rules.append(CONTENT_OPERATOR_GUARD)
+    if (
+        not direct_coding_task_applies
+        and not feedback_before_coding_applies
+        and _command_operator_guard_applies(normalized_query, query_tokens)
+    ):
+        rules.append(COMMAND_OPERATOR_GUARD)
     if _voice_operator_guard_applies(normalized_query, query_tokens):
         rules.append(VOICE_OPERATOR_GUARD)
+    if (
+        not direct_coding_task_applies
+        and not feedback_before_coding_applies
+        and _browser_operator_guard_applies(normalized_query, query_tokens)
+    ):
+        rules.append(BROWSER_OPERATOR_GUARD)
     if visual_summary_applies and not workflow_learning_applies:
         rules.append(VISUAL_SUMMARY_GUARD)
     if deliverable_package_applies:
@@ -3596,6 +4460,8 @@ def _direct_coding_task_guard_applies(
         ),
     )
     if not action:
+        return False
+    if _workspace_file_operator_guard_applies(normalized_query, query_tokens):
         return False
 
     concrete_surface = bool(
@@ -5484,6 +6350,113 @@ def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str])
         normalized_query,
         ("clarify", "summarize", "route", "safe", "confirm", "정리", "안전", "확인", "라우팅"),
     )
+
+
+def _browser_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _BROWSER_OPERATOR_VISUAL_QA_BLOCKERS):
+        return False
+    if _contains_phrase(normalized_query, _BROWSER_OPERATOR_PHRASES):
+        return True
+    browser_context = bool(_BROWSER_OPERATOR_CONTEXT_TOKENS & query_tokens)
+    browser_action = bool(_BROWSER_OPERATOR_ACTION_TOKENS & query_tokens)
+    if browser_context and browser_action:
+        return True
+    return bool({"url", "link", "페이지", "웹페이지", "링크"} & query_tokens) and _contains_phrase(
+        normalized_query,
+        ("open", "click", "fill", "login", "capture", "열고", "클릭", "로그인", "캡처"),
+    )
+
+
+def _workspace_file_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _WORKSPACE_FILE_OPERATOR_BLOCKERS):
+        return False
+    if _contains_phrase(normalized_query, _WORKSPACE_FILE_OPERATOR_PHRASES):
+        return True
+    file_context = bool(_WORKSPACE_FILE_OPERATOR_CONTEXT_TOKENS & query_tokens)
+    file_action = bool(_WORKSPACE_FILE_OPERATOR_ACTION_TOKENS & query_tokens)
+    if not (file_context and file_action):
+        return False
+    if {"bug", "bugs", "upload", "uploads", "코드", "버그"} & query_tokens:
+        return False
+    return not _contains_phrase(
+        normalized_query,
+        (
+            "readme title",
+            "readme 제목",
+            "리드미 제목",
+            "file upload",
+            "upload file",
+            "code file",
+            "source file",
+        ),
+    )
+
+
+def _command_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _COMMAND_OPERATOR_BLOCKERS):
+        return False
+    if _contains_phrase(normalized_query, _COMMAND_OPERATOR_PHRASES):
+        return True
+    command_context = bool(_COMMAND_OPERATOR_CONTEXT_TOKENS & query_tokens)
+    command_action = bool(_COMMAND_OPERATOR_ACTION_TOKENS & query_tokens)
+    if not (command_context and command_action):
+        return False
+    return not _contains_phrase(
+        normalized_query,
+        (
+            "fix the",
+            "fix failing",
+            "root cause",
+            "failed with",
+            "stack trace",
+            "고쳐",
+            "수정",
+            "원인",
+        ),
+    )
+
+
+def _connector_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _CONNECTOR_OPERATOR_BLOCKERS):
+        return False
+    if _gateway_intent_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _CONNECTOR_OPERATOR_PHRASES):
+        return True
+    connector_context = bool(_CONNECTOR_OPERATOR_CONTEXT_TOKENS & query_tokens)
+    connector_action = bool(_CONNECTOR_OPERATOR_ACTION_TOKENS & query_tokens)
+    return connector_context and connector_action
+
+
+def _live_info_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _LIVE_INFO_OPERATOR_BLOCKERS):
+        return False
+    if _connector_operator_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _LIVE_INFO_OPERATOR_PHRASES):
+        return True
+    live_context = bool(_LIVE_INFO_OPERATOR_CONTEXT_TOKENS & query_tokens)
+    lookup_intent = bool(_LIVE_INFO_OPERATOR_LOOKUP_TOKENS & query_tokens)
+    return live_context and lookup_intent
+
+
+def _content_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _CONTENT_OPERATOR_BLOCKERS):
+        return False
+    if _visual_summary_guard_applies(normalized_query, query_tokens):
+        return False
+    if _materials_package_guard_applies(normalized_query, query_tokens):
+        return False
+    if _connector_operator_guard_applies(normalized_query, query_tokens):
+        return False
+    if _contains_phrase(normalized_query, _CONTENT_OPERATOR_PHRASES):
+        return True
+    if _web_research_guard_applies(normalized_query, query_tokens):
+        return False
+    content_context = bool(_CONTENT_OPERATOR_CONTEXT_TOKENS & query_tokens)
+    content_action = bool(_CONTENT_OPERATOR_ACTION_TOKENS & query_tokens)
+    quality_context = bool(_CONTENT_OPERATOR_QUALITY_TOKENS & query_tokens)
+    return content_context and content_action and quality_context
 
 
 def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:

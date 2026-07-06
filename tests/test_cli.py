@@ -6683,7 +6683,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(direct["korean-loop-cost-latency"]["observed"]["playbook"]["id"], "ops-observability-card")
         self.assertEqual(
             direct["executor-runtime-selection"]["observed"]["handoff_status"],
-            "prepared_not_observed",
+            "handoff_absent",
         )
         self.assertIsNone(direct["direct-goal-loop"]["expected"]["playbook"])
         self.assertIsNone(direct["direct-ultraprocess-cycle"]["expected"]["playbook"])
