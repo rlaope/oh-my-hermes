@@ -51,6 +51,10 @@ _CANONICAL_VISUAL_SUMMARY = (
     "img-summary visual summary image card summary image explainer image visual prompt card "
     "image generation prompt explain feature cron workflow poster infographic thumbnail"
 )
+_CANONICAL_MATERIALS_PACKAGE = (
+    "materials-package material package deck ppt pptx slide deck speaker notes spreadsheet dashboard "
+    "formulas charts summary tab pdf xlsx format qa export handoff"
+)
 _CANONICAL_PAPER_LEARNING = (
     "paper-learning paper pdf research paper explain summarize easy moderate expert "
     "section walkthrough coverage ledger without dropping details"
@@ -465,6 +469,22 @@ _ALIASES: tuple[LocaleAlias, ...] = (
             "poster",
         ),
         _CANONICAL_VISUAL_SUMMARY,
+    ),
+    LocaleAlias(
+        "ko",
+        "materials_package",
+        (
+            "엑셀 파일로 kpi 대시보드",
+            "kpi 대시보드 만들",
+            "차트랑 요약 탭",
+            "차트와 요약 탭",
+            "요약 탭까지",
+            "발표용 pptx",
+            "발표자 노트",
+            "pptx로 만들",
+            "발표자료로 만들",
+        ),
+        _CANONICAL_MATERIALS_PACKAGE,
     ),
     LocaleAlias(
         "ja",

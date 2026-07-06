@@ -25,7 +25,7 @@ class CommonRequestCoverageTests(unittest.TestCase):
 
         self.assertEqual(common_request_coverage_errors(payload), [])
         summary = payload["summary"]
-        self.assertEqual(summary["case_count"], 78)
+        self.assertEqual(summary["case_count"], 80)
         self.assertEqual(summary["popular_plugin_family_count"], 10)
         self.assertEqual(summary["popular_plugin_covered_family_count"], 10)
         self.assertEqual(summary["popular_plugin_weighted_coverage_percent"], 100.0)
