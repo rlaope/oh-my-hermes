@@ -2712,7 +2712,7 @@ class CliTests(unittest.TestCase):
                 stdout,
             )
             self.assertIn("Localized chat copy: 8/8 (locales 6)", stdout)
-            self.assertIn("Common request coverage: 64/64 (100.0%; target 95.0%; generic ack 15)", stdout)
+            self.assertIn("Common request coverage: 64/64 (100.0%; target 95.0%; generic ack 0)", stdout)
             self.assertIn("Hermes UX quality: 100/100 (8/8 gates)", stdout)
             self.assertIn("Local artifact store: not_written", stdout)
             self.assertFalse((omh_home / "runtime" / "release-evidence" / "index.json").exists())
@@ -2753,7 +2753,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["common_request_coverage_total"], 64)
             self.assertEqual(payload["summary"]["common_request_coverage_percent"], 100.0)
             self.assertEqual(payload["summary"]["common_request_coverage_target"], 95.0)
-            self.assertEqual(payload["summary"]["common_request_generic_ack_count"], 15)
+            self.assertEqual(payload["summary"]["common_request_generic_ack_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 8)
             self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 8)

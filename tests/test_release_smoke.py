@@ -423,7 +423,7 @@ class ReleaseSmokeTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["common_request_coverage_total"], 64)
             self.assertEqual(payload["summary"]["common_request_coverage_percent"], 100.0)
             self.assertEqual(payload["summary"]["common_request_coverage_target"], 95.0)
-            self.assertEqual(payload["summary"]["common_request_generic_ack_count"], 15)
+            self.assertEqual(payload["summary"]["common_request_generic_ack_count"], 0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 8)
             self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 8)

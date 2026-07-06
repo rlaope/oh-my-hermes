@@ -125,6 +125,7 @@ class WrapperContractTests(unittest.TestCase):
 
         response = payload["chat_response"]
         actions = {action["id"]: action for action in response["actions"]}
+        self.assertEqual(response["kind"], "design_quality_gate")
         self.assertEqual(response["state"]["selected_workflow"], "design-quality-gate")
         self.assertEqual(response["state"]["next_action"], "prepare_design_quality_gate")
         self.assertIn("prepare_design_quality_gate", actions)
@@ -2462,8 +2463,8 @@ class WrapperContractTests(unittest.TestCase):
                 "refresh the codegraph and prepare a handoff for routing changes",
                 "codegraph-refresh",
                 "prepare_codegraph_refresh",
-                "codegraph refresh",
-                "ack",
+                "repo root",
+                "codegraph_refresh",
             ),
             (
                 "skill-scout find existing skill candidates before creating a release-note workflow",

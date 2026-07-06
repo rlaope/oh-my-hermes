@@ -45,6 +45,7 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["common_request_passing_count"], 64)
         self.assertEqual(payload["summary"]["common_request_coverage_percent"], 100.0)
         self.assertEqual(payload["summary"]["common_request_target_percent"], 95.0)
+        self.assertEqual(payload["summary"]["common_request_generic_ack_count"], 0)
         self.assertEqual(hermes_ux_quality_errors(payload), [])
 
         gates = {gate["id"]: gate for gate in payload["gates"]}
