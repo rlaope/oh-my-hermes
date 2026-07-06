@@ -774,6 +774,19 @@ _SKILL_POLICIES.update(
                 "delivery claims are made."
             ),
         ),
+        "media-input-operator": RecommendationPolicy(
+            next_action="prepare_media_input_card",
+            evidence_boundary=(
+                "A media input card is not media access, file upload, download, transcript extraction, "
+                "speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or "
+                "media-summary correctness evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare media_input_task_card/v1 with media source, permission boundary, transcript availability, "
+                "language, speaker and timestamp requirements, summary method, result manifest slots, and a stop "
+                "condition before media access, transcription, timestamp, or summary claims are made."
+            ),
+        ),
         "data-analysis": RecommendationPolicy(
             next_action="prepare_data_analysis_card",
             evidence_boundary=(

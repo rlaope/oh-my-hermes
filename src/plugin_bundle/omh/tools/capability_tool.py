@@ -125,6 +125,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "deliverable-package",
             "img-summary",
             "content-operator",
+            "media-input-operator",
         ),
         "next_action": "prepare_material_or_visual_card",
         "example_prompt": "Make a PR summary card for reviewers.",

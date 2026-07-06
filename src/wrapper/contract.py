@@ -196,6 +196,8 @@ VISIBLE_ACTIONS = (
     "show_live_info_operator_card",
     "prepare_content_operator_card",
     "show_content_operator_card",
+    "prepare_media_input_card",
+    "show_media_input_card",
     "confirm_command_execution",
     "confirm_connector_action",
     "record_command_observation",
@@ -207,6 +209,9 @@ VISIBLE_ACTIONS = (
     "record_content_draft",
     "record_content_review",
     "record_content_output",
+    "record_media_source_scope",
+    "record_transcript_boundary",
+    "record_media_result",
     "prepare_data_analysis_card",
     "show_data_analysis_card",
     "record_dataset_scope",
@@ -828,6 +833,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_connector_operator_card": ("prepare_connector_operator_card", "Open connector card"),
     "prepare_live_info_operator_card": ("prepare_live_info_operator_card", "Open live info card"),
     "prepare_content_operator_card": ("prepare_content_operator_card", "Open content card"),
+    "prepare_media_input_card": ("prepare_media_input_card", "Open media card"),
     "prepare_data_analysis_card": ("prepare_data_analysis_card", "Open analysis card"),
     "prepare_toolbelt_readiness": ("prepare_toolbelt_readiness", "Check toolbelt"),
     "prepare_harness_session_inventory": ("prepare_harness_session_inventory", "Open inventory"),
@@ -2207,6 +2213,40 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "file export",
             "delivery",
             "accepted final copy",
+        ],
+    },
+    "media-input-operator": {
+        "kind": "media_input",
+        "headline": "I can prepare the media input task without claiming media was accessed or transcribed.",
+        "body": (
+            "I will prepare the media input card: source location, media type, permission boundary, supplied transcript "
+            "or extraction need, language, speaker and timestamp requirements, summary method, result slots, and stop "
+            "condition. Media access, download, transcription, timestamps, and summary correctness stay observed-only."
+        ),
+        "phase": "media_input_prepared",
+        "next_action": "prepare_media_input_card",
+        "artifact_schema": "media_input_task_card/v1",
+        "claim_boundary_suffix": "It is not media access, file upload, download, transcript extraction, speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or media-summary correctness evidence.",
+        "actions": [
+            {"id": "prepare_media_input_card", "label": "Open media card", "style": "primary"},
+            {"id": "record_transcript_boundary", "label": "Record transcript boundary", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_media_source_and_permission_boundary",
+            "record_transcript_availability_language_and_speaker_needs",
+            "choose_timestamp_or_summary_method",
+            "record_results_only after media or transcript evidence exists",
+        ],
+        "evidence_not_observed": [
+            "media access",
+            "file upload",
+            "download",
+            "transcript extraction",
+            "speech-to-text output",
+            "timestamp accuracy",
+            "copyright clearance",
+            "media summary correctness",
         ],
     },
     "data-analysis": {

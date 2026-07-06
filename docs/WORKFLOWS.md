@@ -4089,6 +4089,70 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - A content operator card is not source retrieval, fact verification, hallucination-free copy, stakeholder approval, publishing, email/message sending, file export, delivery, or proof that final copy was accepted unless observed content output evidence records it.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### media-input-operator
+
+[omh] Hermes media input workflow: scope audio, video, YouTube, meeting recording, transcript, timestamp, and clip-summary requests with source, permission, extraction, transcription, and hallucination gates.
+
+- Category: `media`
+- Phase: `media-input-task`
+- Hermes role: `guide`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when users ask to prepare or supervise audio/video transcription, YouTube/video summaries, meeting recordings, timestamps, or clip summaries without claiming media access or transcript evidence.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `media-input-operator` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes should prepare or supervise audio/video transcript, YouTube/video summary, or timestamped media extraction work without claiming media access, download, transcription, or factual summary evidence.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `media-input-operator`, `media input operator`, `media input`, `audio transcription`, `audio transcript`, `transcribe audio`, `transcribe this audio`, `meeting recording`, `recording transcript`, `video transcript`, `youtube summary`, `youtube video`, `summarize youtube`, `summarize this youtube`, `video summary`, `summarize this video`, `timestamps`, `with timestamps`, `clip summary`, `podcast summary`, `webinar summary`, `오디오 전사`, `음성 전사`, `회의 녹음`, `녹음 요약`, `영상 요약`, `유튜브 요약`, `youtube 요약`, `타임스탬프`, `타임라인 요약`
+- Good example:
+  - Prompt: media-input-operator transcribe this audio meeting and summarize action items with evidence and timestamp boundaries.
+  - Expected behavior: Produce `prepare_media_input_card` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: media-input-operator invent a YouTube transcript and claim the timestamps are verified without media evidence.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Media type, source location, permission boundary, transcript availability, language, requested output, timestamp requirement, and stop condition are explicit.
+  - Downloads, uploads, ASR, transcript extraction, speaker labels, copyrighted media access, and provider setup are gated or marked missing.
+  - Transcript text, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript evidence.
+- Recovery notes:
+  - If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.
+  - If the request is broad current-source research about a video topic, route to web-research or source-finder before summary.
+  - If the user wants a PPT/PDF/report generated from the media summary, route to materials-package after media input evidence is clear.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - media_input_task_card/v1
+  - media_source_scope/v1
+  - transcript_boundary/v1
+  - media_summary_plan/v1
+  - media_result_manifest/v1 when observed
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - media_input_task_card/v1 metadata-only wrapper card when prepared
+  - media_source_scope/v1 with media type, source location, permission boundary, requested time range, and stop condition
+  - transcript_boundary/v1 separating supplied transcript, missing transcript, ASR/extraction requirement, language, speaker labels, and confidence gaps
+  - media_summary_plan/v1 naming action-item, timestamped, clip, chapter, quote, or evidence-linked summary method
+  - media_result_manifest/v1 only when supplied transcript, media file metadata, provider response, or observed transcript output exists
+- Safety rules:
+  - A media input card is not media access, file upload, download, transcript extraction, speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or summary correctness evidence unless observed media-result evidence records it.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### data-analysis
 
 [omh] Hermes data analysis workflow: scope supplied CSV, JSON, log, table, or metric-like data analysis with schema, method, and hallucination guards.
@@ -7841,6 +7905,58 @@ Scope publish-ready content with audience, source, tone, review, and hallucinati
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A content operator card is not source retrieval, fact verification, approval, publishing, sending, file export, delivery, or accepted-final-copy evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### media-input-operator
+
+Scope audio, video, YouTube, transcript, timestamp, and clip-summary work with media access, extraction, transcription, and summary evidence boundaries.
+
+- Use when: Use for meeting recordings, audio transcription, YouTube/video summaries, podcast/webinar summaries, timestamped notes, or clip summaries.
+- Quality tier: `media-input-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - media type
+  - source location
+  - permission boundary
+  - transcript availability
+  - requested output and stop condition
+- Outputs:
+  - media_input_task_card/v1
+  - media_source_scope/v1
+  - transcript_boundary/v1
+  - media_summary_plan/v1
+  - media_result_manifest/v1 when observed
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `media_source_scope_recorded`
+  - `permission_boundary_recorded`
+  - `transcript_boundary_recorded`
+  - `summary_method_selected`
+  - `media_result_recorded_when_observed`
+- Wrapper actions:
+  - `prepare_media_input_card`
+  - `show_media_input_card`
+  - `record_media_source_scope`
+  - `record_transcript_boundary`
+  - `record_media_result`
+  - `show_status`
+- Artifact events:
+  - `media-input-operator_scoped`
+  - `media-input-operator_card_prepared`
+  - `media-input-operator_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A media input card is not media access, download, transcript extraction, speech-to-text output, timestamp accuracy, copyright clearance, or media-summary correctness evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### data-analysis

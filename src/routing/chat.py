@@ -2861,6 +2861,41 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear quality-controlled content request; prepare source scope, audience, tone, review, hallucination, and output-evidence boundaries without scoring every workflow.",
     ),
     (
+        "media-input-operator",
+        (
+            "media input operator",
+            "media input",
+            "audio transcription",
+            "audio transcript",
+            "transcribe audio",
+            "transcribe this audio",
+            "meeting recording",
+            "recording transcript",
+            "video transcript",
+            "youtube summary",
+            "youtube video",
+            "summarize youtube",
+            "summarize this youtube",
+            "video summary",
+            "summarize this video",
+            "with timestamps",
+            "clip summary",
+            "podcast summary",
+            "webinar summary",
+            "오디오 전사",
+            "음성 전사",
+            "회의 녹음",
+            "녹음 요약",
+            "영상 요약",
+            "유튜브 요약",
+            "youtube 요약",
+            "타임스탬프",
+            "타임라인 요약",
+        ),
+        "operator_surface_fast_path:media_input",
+        "Clear media input request; prepare source, permission, transcript, timestamp, and observed-result boundaries without scoring every workflow.",
+    ),
+    (
         "data-analysis",
         (
             "analyze this csv",
@@ -3374,6 +3409,8 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:live_info_operator",)
     if skill == "content-operator":
         return ("guard:content_operator",)
+    if skill == "media-input-operator":
+        return ("guard:media_input",)
     if skill == "data-analysis":
         return ("guard:data_analysis",)
     if skill == "context-budget-review":
@@ -3703,6 +3740,8 @@ def _operator_surface_phrase_marker(marker: str, phrase: str) -> str:
         return "phrase:live_info_request"
     if marker == "operator_surface_fast_path:content_operator":
         return "phrase:content_request"
+    if marker == "operator_surface_fast_path:media_input":
+        return "phrase:media_input_request"
     if marker == "operator_surface_fast_path:data_analysis":
         return "phrase:data_analysis_request"
     if marker == "operator_surface_fast_path:workspace_file":

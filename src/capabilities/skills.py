@@ -134,8 +134,8 @@ def _compact_safety_rules(items: tuple[str, ...]) -> list[str]:
     compacted: list[str] = []
     for item in selected:
         summary = item.strip()
-        if len(summary) > 160:
-            summary = summary[:157].rstrip() + "..."
+        if len(summary) > 100:
+            summary = summary[:97].rstrip() + "..."
         compacted.append(summary)
     return compacted
 

@@ -1,22 +1,22 @@
 ---
-name: browser-operator
-description: [omh] Hermes browser operator workflow: scope URL opening, page interaction, login/form boundaries, observations, and destructive confirmation gates.
+name: media-input-operator
+description: [omh] Hermes media input workflow: scope audio, video, YouTube, meeting recording, transcript, timestamp, and clip-summary requests with source, permission, extraction, transcription, and hallucination gates.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, browser]
-    category: browser
-    phase: browser-task
+    tags: [workflow, oh-my-hermes, media]
+    category: media
+    phase: media-input-task
     role: guide
     quality_tier: workflow-surface-gated
 ---
 
-# Browser Operator
+# Media Input Operator
 
-This is a Hermes-native `browser-operator` workflow skill.
+This is a Hermes-native `media-input-operator` workflow skill.
 
 ## Why This Exists
 
-`browser-operator` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`media-input-operator` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,33 +28,33 @@ This is a Hermes-native `browser-operator` workflow skill.
 
 Good example:
 
-- Prompt: browser-operator open the staging checkout URL, click login, fill the form, and capture blockers.
-- Expected behavior: Produce `prepare_browser_operator_card` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: media-input-operator transcribe this audio meeting and summarize action items with evidence and timestamp boundaries.
+- Expected behavior: Produce `prepare_media_input_card` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: browser-operator use saved credentials and submit the production payment form without confirmation.
+- Prompt: media-input-operator invent a YouTube transcript and claim the timestamps are verified without media evidence.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- The target URL, allowed interactions, prohibited interactions, auth boundary, and stop condition are explicit.
-- Credentials, login, payment, purchase, destructive submission, scraping, and data export are gated or marked missing.
-- Screenshots, DOM state, console/network logs, and click/form traces are reported only from observed browser evidence.
+- Media type, source location, permission boundary, transcript availability, language, requested output, timestamp requirement, and stop condition are explicit.
+- Downloads, uploads, ASR, transcript extraction, speaker labels, copyrighted media access, and provider setup are gated or marked missing.
+- Transcript text, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript evidence.
 
 ## Recovery Notes
 
-- If no URL or target page is supplied, ask for the smallest target needed before opening a browser task.
-- If login, payment, destructive mutation, or credential use is requested, require an explicit confirmation gate and do not proceed from vague intent.
-- If the request is visual correctness rather than general page operation, route to visual-qa instead.
+- If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.
+- If the request is broad current-source research about a video topic, route to web-research or source-finder before summary.
+- If the user wants a PPT/PDF/report generated from the media summary, route to materials-package after media input evidence is clear.
 
 ## OMH Context Rail
 
 - This skill is part of OMH's Hermes workflow layer, not a standalone executor.
 - Product context: OMH is a Hermes-native workflow pack: choose skills, shape work, prepare artifacts, show status, and hand off with evidence boundaries.
-- Current lane: **Automation and status** (`achievements`, `workspace-audit`, `production-audit`, `automation-blueprint`, `github-event-ops`, `agent-board`, `gateway-intent-card`, `voice-operator`, `+23 more`) - schedules, status, health, and ops review.
+- Current lane: **Materials and visual summaries** (`design-quality-gate`, `frontend`, `accessibility-audit`, `visual-qa`, `content-operator`, `media-input-operator`, `materials-package`, `img-summary`, `+2 more`) - web, accessibility, visual QA, files, and packages.
 - If the user intent belongs to another OMH lane, hand back to `oh-my-hermes` or name the adjacent workflow instead of force-fitting this skill.
 - Cross-skill context: every OMH skill: match lane; generic tool can render or execute.
 - Generic-tool checkpoint: image->img-summary; frontend->frontend/a11y/visual-qa; paper->paper-learning; content->content-operator; media->media-input-operator; file->materials-package; search->web-research; live->live-info-operator; audit->workspace/production/security; failures->build-failure; verify->verification-gate; code->codegraph/onboarding/ultraprocess.
@@ -64,14 +64,14 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should prepare or supervise a browser/page interaction request such as opening a URL, clicking, logging in, filling forms, or capturing page blockers without claiming browser execution.
+Use when Hermes should prepare or supervise audio/video transcript, YouTube/video summary, or timestamped media extraction work without claiming media access, download, transcription, or factual summary evidence.
 
-    Strong routing signals: `browser-operator`, `browser operator`, `browser task`, `browser operation`, `browser automation`, `browser session`, `webpage operation`, `web page operation`, `open url`, `open the url`, `open page`, `open the page`, `visit url`, `visit page`, `navigate url`, `navigate page`, `click page`, `click this page`, `click button`, `click login`, `login page`, `fill form`, `fill the form`, `submit form`, `checkout url`, `capture blockers`, `page blockers`, `interactive page`, `browser trace`, `browser observation`, `playwright task`, `웹페이지`, `웹 페이지`, `브라우저`, `브라우저 작업`, `브라우저 조작`, `페이지 열고`, `url 열고`, `링크 열고`, `클릭`, `로그인`, `로그인 폼`, `폼 작성`, `폼 입력`, `캡처`, `막히는 부분`
+    Strong routing signals: `media-input-operator`, `media input operator`, `media input`, `audio transcription`, `audio transcript`, `transcribe audio`, `transcribe this audio`, `meeting recording`, `recording transcript`, `video transcript`, `youtube summary`, `youtube video`, `summarize youtube`, `summarize this youtube`, `video summary`, `summarize this video`, `timestamps`, `with timestamps`, `clip summary`, `podcast summary`, `webinar summary`, `오디오 전사`, `음성 전사`, `회의 녹음`, `녹음 요약`, `영상 요약`, `유튜브 요약`, `youtube 요약`, `타임스탬프`, `타임라인 요약`
 
 ## Catalog Metadata
 
-Category: `browser`
-Phase: `browser-task`
+Category: `media`
+Phase: `media-input-task`
 Hermes role: `guide`
 Quality tier: `workflow-surface-gated`
 
@@ -94,24 +94,25 @@ Required inputs:
 
 Expected outputs:
 
-- browser_task_card/v1
-- browser_interaction_scope/v1
-- browser_auth_boundary/v1
-- browser_observation_manifest/v1 when observed
-- browser_confirmation_gate/v1 when destructive
+- media_input_task_card/v1
+- media_source_scope/v1
+- transcript_boundary/v1
+- media_summary_plan/v1
+- media_result_manifest/v1 when observed
 - next action
 - prepared-vs-observed boundary
 
 Artifact expectations:
 
-- browser_task_card/v1 metadata-only wrapper card when prepared
-- browser_interaction_scope/v1 with target URL, allowed actions, stop condition, and prohibited actions
-- browser_auth_boundary/v1 separating supplied credentials, missing credentials, and credential-use prohibition
-- browser_observation_manifest/v1 only when screenshots, DOM notes, console/network traces, or click traces are observed
+- media_input_task_card/v1 metadata-only wrapper card when prepared
+- media_source_scope/v1 with media type, source location, permission boundary, requested time range, and stop condition
+- transcript_boundary/v1 separating supplied transcript, missing transcript, ASR/extraction requirement, language, speaker labels, and confidence gaps
+- media_summary_plan/v1 naming action-item, timestamped, clip, chapter, quote, or evidence-linked summary method
+- media_result_manifest/v1 only when supplied transcript, media file metadata, provider response, or observed transcript output exists
 
 Safety rules:
 
-- A browser operator card is not browser launch, login, credential validation, page mutation, form submission, purchase/payment/destructive action, screenshot, scraping, or successful interaction evidence unless an observed browser trace records it.
+- A media input card is not media access, file upload, download, transcript extraction, speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or summary correctness evidence unless observed media-result evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -122,12 +123,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `browser-operator`.
+Preferred harness for this skill: `media-input-operator`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill browser-operator --harness browser-operator --status started
+omh runtime record --skill media-input-operator --harness media-input-operator --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 
