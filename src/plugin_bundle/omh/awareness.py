@@ -516,7 +516,12 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
     },
     {
         "tool_family": "media_input_tools",
-        "applies_before": ("audio/video transcription", "YouTube or video summaries", "timestamped media notes"),
+        "applies_before": (
+            "audio/video transcription",
+            "YouTube or video summaries",
+            "OCR or screenshot text extraction",
+            "timestamped media notes",
+        ),
         "primary_workflow": "media-input-operator",
         "preferred_workflows": ("media-input-operator", "source-finder", "materials-package", "content-operator"),
         "primary_next_action": "prepare_media_input_card",
@@ -525,6 +530,9 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
             "media access",
             "download",
             "transcript extraction",
+            "OCR output",
+            "screenshot text extraction",
+            "receipt fields",
             "speech-to-text output",
             "timestamp accuracy",
             "media summary correctness",
@@ -2609,7 +2617,7 @@ _ROUTE_HINT_RULES = (
         "workflow": "media-input-operator",
         "lane": "materials_and_visuals",
         "next_action": "prepare_media_input_card",
-        "reason": "The user is asking for audio, video, YouTube, transcript, recording, timestamp, or clip-summary work that needs source, permission, transcript, and observed-result boundaries.",
+        "reason": "The user is asking for audio, video, YouTube, OCR, screenshot text, receipt image, transcript, recording, timestamp, or clip-summary work that needs source, permission, extraction, transcript, and observed-result boundaries.",
         "fallback_action": "confirm_media_source_permission_transcript_and_timestamp_boundary",
         "phrases": (
             "media input operator",
@@ -2627,6 +2635,34 @@ _ROUTE_HINT_RULES = (
             "summarize this youtube",
             "video summary",
             "summarize this video",
+            "ocr image",
+            "image ocr",
+            "photo ocr",
+            "picture ocr",
+            "graphic ocr",
+            "screenshot ocr",
+            "ocr this image",
+            "ocr receipt image",
+            "ocr this receipt image",
+            "receipt ocr",
+            "receipt image ocr",
+            "receipt text",
+            "receipt text from image",
+            "receipt fields",
+            "receipt fields from image",
+            "receipt image extraction",
+            "receipt image text",
+            "receipt image fields",
+            "parse receipt image",
+            "receipt image parse",
+            "receipt image into fields",
+            "image text extraction",
+            "extract text from image",
+            "extract text from this image",
+            "screenshot text extraction",
+            "extract text from screenshot",
+            "extract text from this screenshot",
+            "screenshot to text",
             "with timestamps",
             "clip summary",
             "podcast summary",
@@ -2638,6 +2674,16 @@ _ROUTE_HINT_RULES = (
             "영상 요약",
             "유튜브 요약",
             "youtube 요약",
+            "이미지 ocr",
+            "이미지 OCR",
+            "이미지 텍스트 추출",
+            "이미지에서 텍스트 추출",
+            "영수증 ocr",
+            "영수증 OCR",
+            "영수증 이미지 ocr",
+            "영수증 이미지 OCR",
+            "스크린샷 텍스트 추출",
+            "스크린샷에서 텍스트 추출",
             "타임스탬프",
             "타임라인 요약",
         ),
@@ -2648,6 +2694,9 @@ _ROUTE_HINT_RULES = (
             "file upload",
             "download",
             "transcript extraction",
+            "OCR output",
+            "screenshot text extraction",
+            "receipt fields",
             "speech-to-text output",
             "timestamp accuracy",
             "copyright clearance",
@@ -4175,7 +4224,7 @@ def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str
             lines.append(f"  fallback_action_label={fallback_action_label}; fallback_action={fallback_action}.")
         if adjacent:
             lines.append(f"  adjacent_workflows={adjacent}.")
-        not_evidence = ", ".join(str(item) for item in hint.get("not_evidence_yet", [])[:4])
+        not_evidence = ", ".join(str(item) for item in hint.get("not_evidence_yet", []))
         if not_evidence:
             lines.append(f"  not_evidence_yet={not_evidence}.")
     lines.append("Boundary: " + str(payload.get("claim_boundary", "")))
@@ -4843,12 +4892,83 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
         "thumbnail",
         "poster",
         "visual",
+        "image",
+        "photo",
+        "picture",
+        "graphic",
         "이미지",
         "사진",
         "카드",
         "썸네일",
         "포스터",
     )
+    media_extraction_markers = (
+        "ocr image",
+        "image ocr",
+        "photo ocr",
+        "picture ocr",
+        "graphic ocr",
+        "screenshot ocr",
+        "ocr this",
+        "ocr the",
+        "ocr receipt",
+        "receipt ocr",
+        "receipt image ocr",
+        "receipt text",
+        "receipt text from image",
+        "receipt fields",
+        "receipt fields from image",
+        "receipt image extraction",
+        "receipt image text",
+        "receipt image fields",
+        "parse receipt image",
+        "receipt image parse",
+        "receipt image into fields",
+        "extract text",
+        "text extraction",
+        "screenshot text",
+        "screenshot to text",
+        "이미지 ocr",
+        "이미지 텍스트 추출",
+        "이미지에서 텍스트 추출",
+        "영수증 ocr",
+        "영수증 OCR",
+        "영수증 이미지 ocr",
+        "영수증 이미지 OCR",
+        "영수증 텍스트",
+        "영수증 필드",
+        "스크린샷 텍스트",
+        "스크린샷에서 텍스트",
+        "텍스트 추출",
+    )
+    media_extraction_requested = any(phrase in text for phrase in media_extraction_markers)
+    visual_generation_requested = any(phrase in text for phrase in visual_markers) and any(
+        phrase in text
+        for phrase in (
+            "make",
+            "create",
+            "generate",
+            "generated",
+            "generation",
+            "만들",
+            "생성",
+        )
+    )
+    strong_media_extraction_markers = (
+        "ocr",
+        "extract",
+        "extraction",
+        "parse",
+        "from image",
+        "from this image",
+        "to text",
+        "추출",
+        "ocr",
+    )
+    if visual_generation_requested and not any(phrase in text for phrase in strong_media_extraction_markers):
+        media_extraction_requested = False
+    if rule_id in {"visual_summary", "visual_qa_gate"} and media_extraction_requested:
+        return True
     if rule_id == "loopability_goal" and any(phrase in text for phrase in visual_markers):
         return True
     if rule_id == "content_operator" and any(
@@ -4894,7 +5014,11 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
         )
     ):
         return True
-    if rule_id == "media_input_operator" and any(phrase in text for phrase in visual_markers):
+    if (
+        rule_id == "media_input_operator"
+        and any(phrase in text for phrase in visual_markers)
+        and not media_extraction_requested
+    ):
         return True
     if rule_id == "github_event_ops_delivery" and any(
         phrase in text for phrase in visual_markers

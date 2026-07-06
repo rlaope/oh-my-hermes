@@ -4091,7 +4091,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 
 ### media-input-operator
 
-[omh] Hermes media input workflow: scope audio, video, YouTube, meeting recording, transcript, timestamp, and clip-summary requests with source, permission, extraction, transcription, and hallucination gates.
+[omh] Hermes media input workflow: scope audio, video, YouTube, screenshot, receipt image, OCR, meeting recording, transcript, timestamp, and clip-summary requests with source, permission, extraction, transcription, and hallucination gates.
 
 - Category: `media`
 - Phase: `media-input-task`
@@ -4101,15 +4101,15 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Install visibility: `true`
 - Docs visibility: `primary_workflow_skill`
 - Compatibility alias: `false`
-- Preferred usage: Use as an installed Hermes workflow skill when users ask to prepare or supervise audio/video transcription, YouTube/video summaries, meeting recordings, timestamps, or clip summaries without claiming media access or transcript evidence.
+- Preferred usage: Use as an installed Hermes workflow skill when users ask to prepare or supervise audio/video transcription, YouTube/video summaries, OCR, screenshot text extraction, receipt image parsing, meeting recordings, timestamps, or clip summaries without claiming media access, transcript, OCR, or parsed-field evidence.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `media-input-operator` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use when Hermes should prepare or supervise audio/video transcript, YouTube/video summary, or timestamped media extraction work without claiming media access, download, transcription, or factual summary evidence.
+- Use when: Use when Hermes should prepare or supervise audio/video transcript, YouTube/video summary, OCR, screenshot text extraction, receipt image parsing, or timestamped media extraction work without claiming media access, download, transcription, OCR output, or factual summary evidence.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `media-input-operator`, `media input operator`, `media input`, `audio transcription`, `audio transcript`, `transcribe audio`, `transcribe this audio`, `meeting recording`, `recording transcript`, `video transcript`, `youtube summary`, `youtube video`, `summarize youtube`, `summarize this youtube`, `video summary`, `summarize this video`, `timestamps`, `with timestamps`, `clip summary`, `podcast summary`, `webinar summary`, `오디오 전사`, `음성 전사`, `회의 녹음`, `녹음 요약`, `영상 요약`, `유튜브 요약`, `youtube 요약`, `타임스탬프`, `타임라인 요약`
+- Strong routing signals: `media-input-operator`, `media input operator`, `media input`, `audio transcription`, `audio transcript`, `transcribe audio`, `transcribe this audio`, `meeting recording`, `recording transcript`, `video transcript`, `youtube summary`, `youtube video`, `summarize youtube`, `summarize this youtube`, `video summary`, `summarize this video`, `ocr image`, `image ocr`, `photo ocr`, `picture ocr`, `graphic ocr`, `screenshot ocr`, `ocr this image`, `ocr receipt image`, `ocr this receipt image`, `receipt ocr`, `receipt image ocr`, `receipt text`, `receipt text from image`, `receipt fields`, `receipt fields from image`, `receipt image extraction`, `receipt image text`, `receipt image fields`, `parse receipt image`, `receipt image parse`, `receipt image into fields`, `image text extraction`, `extract text from image`, `extract text from this image`, `screenshot text extraction`, `extract text from screenshot`, `extract text from this screenshot`, `screenshot to text`, `timestamps`, `with timestamps`, `clip summary`, `podcast summary`, `webinar summary`, `오디오 전사`, `음성 전사`, `회의 녹음`, `녹음 요약`, `영상 요약`, `유튜브 요약`, `youtube 요약`, `이미지 ocr`, `이미지 OCR`, `이미지 텍스트 추출`, `이미지에서 텍스트 추출`, `영수증 ocr`, `영수증 OCR`, `영수증 이미지 ocr`, `영수증 이미지 OCR`, `스크린샷 텍스트 추출`, `스크린샷에서 텍스트 추출`, `타임스탬프`, `타임라인 요약`
 - Good example:
   - Prompt: media-input-operator transcribe this audio meeting and summarize action items with evidence and timestamp boundaries.
   - Expected behavior: Produce `prepare_media_input_card` with required context, wrapper actions, and not-evidence boundaries.
@@ -4125,7 +4125,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Completion checklist:
   - Media type, source location, permission boundary, transcript availability, language, requested output, timestamp requirement, and stop condition are explicit.
   - Downloads, uploads, ASR, transcript extraction, speaker labels, copyrighted media access, and provider setup are gated or marked missing.
-  - Transcript text, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript evidence.
+  - Transcript text, OCR output, screenshot text, receipt fields, timestamps, quotes, action items, and media-summary claims are reported only from observed media or supplied transcript/extraction evidence.
 - Recovery notes:
   - If the media or transcript is missing, ask for the smallest source, file, transcript, or provider result needed.
   - If the request is broad current-source research about a video topic, route to web-research or source-finder before summary.
@@ -4150,7 +4150,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - media_summary_plan/v1 naming action-item, timestamped, clip, chapter, quote, or evidence-linked summary method
   - media_result_manifest/v1 only when supplied transcript, media file metadata, provider response, or observed transcript output exists
 - Safety rules:
-  - A media input card is not media access, file upload, download, transcript extraction, speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or summary correctness evidence unless observed media-result evidence records it.
+  - A media input card is not media access, file upload, download, transcript extraction, OCR output, screenshot text extraction, receipt fields, speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or summary correctness evidence unless observed media-result evidence records it.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ### data-analysis
@@ -7909,9 +7909,9 @@ Scope publish-ready content with audience, source, tone, review, and hallucinati
 
 ### media-input-operator
 
-Scope audio, video, YouTube, transcript, timestamp, and clip-summary work with media access, extraction, transcription, and summary evidence boundaries.
+Scope audio, video, YouTube, OCR, screenshot text, receipt image, transcript, timestamp, and clip-summary work with media access, extraction, transcription, and summary evidence boundaries.
 
-- Use when: Use for meeting recordings, audio transcription, YouTube/video summaries, podcast/webinar summaries, timestamped notes, or clip summaries.
+- Use when: Use for meeting recordings, audio transcription, YouTube/video summaries, OCR, screenshot text extraction, receipt image parsing, podcast/webinar summaries, timestamped notes, or clip summaries.
 - Quality tier: `media-input-gated`
 - Quality bar:
   - Name the workflow objective, owner, input boundary, next action, and stop condition.
@@ -7921,7 +7921,7 @@ Scope audio, video, YouTube, transcript, timestamp, and clip-summary work with m
   - media type
   - source location
   - permission boundary
-  - transcript availability
+  - transcript or extraction availability
   - requested output and stop condition
 - Outputs:
   - media_input_task_card/v1
@@ -7956,7 +7956,7 @@ Scope audio, video, YouTube, transcript, timestamp, and clip-summary work with m
 - Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
 - Privacy default: `metadata_only`
 - Overclaim guards:
-  - A media input card is not media access, download, transcript extraction, speech-to-text output, timestamp accuracy, copyright clearance, or media-summary correctness evidence.
+  - A media input card is not media access, download, transcript extraction, OCR output, screenshot text extraction, receipt fields, speech-to-text output, timestamp accuracy, copyright clearance, or media-summary correctness evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### data-analysis

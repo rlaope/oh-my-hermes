@@ -2220,13 +2220,14 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         "headline": "I can prepare the media input task without claiming media was accessed or transcribed.",
         "body": (
             "I will prepare the media input card: source location, media type, permission boundary, supplied transcript "
-            "or extraction need, language, speaker and timestamp requirements, summary method, result slots, and stop "
-            "condition. Media access, download, transcription, timestamps, and summary correctness stay observed-only."
+            "or extraction need, language, speaker, OCR/receipt field, and timestamp requirements, summary method, "
+            "result slots, and stop condition. Media access, download, transcription, OCR output, screenshot text, "
+            "receipt fields, timestamps, and summary correctness stay observed-only."
         ),
         "phase": "media_input_prepared",
         "next_action": "prepare_media_input_card",
         "artifact_schema": "media_input_task_card/v1",
-        "claim_boundary_suffix": "It is not media access, file upload, download, transcript extraction, speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or media-summary correctness evidence.",
+        "claim_boundary_suffix": "It is not media access, file upload, download, transcript extraction, OCR output, screenshot text extraction, receipt fields, speech-to-text output, timestamp accuracy, copyright clearance, source retrieval, or media-summary correctness evidence.",
         "actions": [
             {"id": "prepare_media_input_card", "label": "Open media card", "style": "primary"},
             {"id": "record_transcript_boundary", "label": "Record transcript boundary", "style": "secondary"},
@@ -2234,15 +2235,18 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         ],
         "recommended_flow": [
             "record_media_source_and_permission_boundary",
-            "record_transcript_availability_language_and_speaker_needs",
+            "record_transcript_or_extraction_availability_language_and_speaker_needs",
             "choose_timestamp_or_summary_method",
-            "record_results_only after media or transcript evidence exists",
+            "record_results_only after media, transcript, or extraction evidence exists",
         ],
         "evidence_not_observed": [
             "media access",
             "file upload",
             "download",
             "transcript extraction",
+            "OCR output",
+            "screenshot text extraction",
+            "receipt fields",
             "speech-to-text output",
             "timestamp accuracy",
             "copyright clearance",

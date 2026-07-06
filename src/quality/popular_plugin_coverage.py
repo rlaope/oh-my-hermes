@@ -94,6 +94,8 @@ POPULAR_PLUGIN_FAMILIES: tuple[PopularPluginFamily, ...] = (
             "accessibility",
             "transcription",
             "youtube",
+            "ocr",
+            "screenshot",
         ),
         (
             "report-package",
@@ -108,6 +110,8 @@ POPULAR_PLUGIN_FAMILIES: tuple[PopularPluginFamily, ...] = (
             "content-operator",
             "audio-transcription-summary",
             "youtube-video-summary",
+            "receipt-image-ocr-table",
+            "korean-screenshot-text-extraction",
         ),
         "Prepares publishable material, frontend, media-input, and visual QA flows with render/evidence boundaries.",
     ),
