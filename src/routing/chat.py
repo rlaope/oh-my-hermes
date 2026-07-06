@@ -2991,6 +2991,14 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "segment analysis",
             "schema check",
             "column analysis",
+            "table into a chart",
+            "table to chart",
+            "chart with an executive summary",
+            "spreadsheet delta analysis",
+            "revenue deltas",
+            "cohort analysis",
+            "cohorts and retention",
+            "retention analysis",
             "csv 매출 데이터를 분석",
             "데이터 분석",
             "데이터를 분석",
@@ -3003,6 +3011,9 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "추세를 요약",
             "추세 분석",
             "컬럼 분석",
+            "매출 표",
+            "전환율 델타",
+            "차트 요약",
         ),
         "operator_surface_fast_path:data_analysis",
         "Clear supplied data/table/log analysis request; prepare dataset scope, method, and evidence boundaries without scoring every workflow.",
@@ -3419,6 +3430,8 @@ def _operator_surface_fast_path_match(
     compact = _fast_path_compact(text)
     for skill, phrase, normalized_phrase, normalized_compact, marker, reason in _operator_surface_fast_path_patterns():
         if only_skill is not None and skill != only_skill:
+            continue
+        if skill == "live-info-operator" and normalized_phrase == "환율" and "전환율" in text:
             continue
         if normalized_phrase in text or (normalized_compact and normalized_compact in compact):
             return skill, phrase, marker, reason
