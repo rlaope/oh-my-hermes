@@ -164,8 +164,16 @@ POPULAR_PLUGIN_FAMILIES: tuple[PopularPluginFamily, ...] = (
         "data_analysis_and_reporting",
         "CSV, tables, charts, and analysis reporting",
         6,
-        ("csv", "spreadsheet", "charting", "analytics"),
-        ("data-analysis", "materials-package", "report-package"),
+        ("csv", "spreadsheet", "charting", "analytics", "cohort-analysis"),
+        (
+            "data-analysis",
+            "table-chart-executive-summary",
+            "spreadsheet-delta-analysis",
+            "cohort-retention-analysis",
+            "korean-conversion-delta-chart-analysis",
+            "materials-package",
+            "report-package",
+        ),
         "Routes data work to analysis/material cards instead of treating files as generic attachments.",
     ),
     PopularPluginFamily(

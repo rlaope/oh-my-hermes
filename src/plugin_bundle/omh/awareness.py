@@ -535,7 +535,12 @@ GENERIC_TOOL_CHECKPOINT_ROUTES = (
     },
     {
         "tool_family": "data_tools",
-        "applies_before": ("CSV/JSON/log/table analysis", "schema checks", "anomaly/trend/segment summaries"),
+        "applies_before": (
+            "CSV/JSON/log/table analysis",
+            "schema checks",
+            "anomaly/trend/segment summaries",
+            "chart or executive summaries from observed data",
+        ),
         "primary_workflow": "data-analysis",
         "preferred_workflows": ("data-analysis", "source-finder", "materials-package", "toolbelt-readiness"),
         "primary_next_action": "prepare_data_analysis_card",
@@ -1235,7 +1240,13 @@ _ROUTE_HINT_RULES = (
             "paper link",
             "arxiv link",
             "dataset search",
+            "find dataset",
+            "find a dataset",
             "find datasets",
+            "find a public dataset",
+            "find public datasets",
+            "find a public sales dataset",
+            "find public sales datasets",
             "public slide deck",
             "public slides",
             "public slide deck and github repo",
@@ -2482,6 +2493,15 @@ _ROUTE_HINT_RULES = (
             "trend analysis",
             "segment analysis",
             "schema check",
+            "table analysis",
+            "table into a chart",
+            "table to chart",
+            "chart with an executive summary",
+            "spreadsheet delta analysis",
+            "revenue deltas",
+            "cohort analysis",
+            "cohorts and retention",
+            "retention analysis",
             "데이터 분석",
             "csv 분석",
             "json 분석",
@@ -2492,6 +2512,9 @@ _ROUTE_HINT_RULES = (
             "이상치",
             "이상치 분석",
             "추세 분석",
+            "매출 표",
+            "전환율 델타",
+            "차트 요약",
         ),
         "tokens": (),
         "adjacent_workflows": ("source-finder", "materials-package", "toolbelt-readiness"),
@@ -3616,6 +3639,9 @@ _ROUTE_HINT_RULES = (
             "convert pdf to presentation",
             "turn pdf into presentation",
             "convert pdf to deck",
+            "make a pdf report",
+            "create a pdf report",
+            "pdf report",
             "pdf and excel file",
             *_OFFICE_FILE_MATERIAL_PHRASES,
             "convierte este pdf",
@@ -5016,6 +5042,60 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
         "ocr",
     )
     office_material_requested = any(phrase in text for phrase in _OFFICE_FILE_MATERIAL_PHRASES)
+    material_output_requested = office_material_requested or any(
+        phrase in text
+        for phrase in (
+            "ppt",
+            "pptx",
+            "pdf",
+            "presentation",
+            "deck",
+            "slides",
+            "slide deck",
+            "report package",
+            "pdf report",
+            "발표자료",
+            "발표 자료",
+            "보고서",
+            "자료 패키지",
+        )
+    )
+    material_generation_requested = material_output_requested and any(
+        phrase in text
+        for phrase in (
+            "make",
+            "create",
+            "generate",
+            "build",
+            "turn",
+            "convert",
+            "export",
+            "package",
+            "만들",
+            "생성",
+            "변환",
+            "내보내",
+            "패키지",
+        )
+    )
+    source_acquisition_requested = any(
+        phrase in text
+        for phrase in (
+            "find",
+            "search",
+            "source candidate",
+            "source candidates",
+            "source link",
+            "source links",
+            "dataset link",
+            "dataset search",
+            "찾",
+            "검색",
+            "출처",
+            "후보",
+            "링크",
+        )
+    )
     direct_concept_requested = text.strip().startswith(
         (
             "what is ",
@@ -5027,7 +5107,17 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
             "explain what ",
         )
     )
+    if (
+        rule_id in {"source_finder", "source_finder_candidates"}
+        and material_generation_requested
+        and not source_acquisition_requested
+    ):
+        return True
+    if rule_id == "data_analysis" and material_generation_requested and not source_acquisition_requested:
+        return True
     if rule_id == "materials_package" and office_material_requested and direct_concept_requested:
+        return True
+    if rule_id == "paper_learning" and material_generation_requested:
         return True
     if rule_id in {"workspace_file_operator", "paper_learning"} and office_material_requested:
         return True

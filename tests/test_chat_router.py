@@ -522,6 +522,57 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertEqual(hint["primary_workflow"], "materials-package")
                 self.assertEqual(hint["primary_next_action"], "prepare_material_package")
 
+    def test_data_analysis_routes_table_chart_and_spreadsheet_delta_requests(self) -> None:
+        cases = (
+            "turn this table into a chart with an executive summary",
+            "compare these two spreadsheets and explain revenue deltas",
+            "analyze this sales dataset and explain cohorts and retention",
+            "첨부한 매출 표에서 전환율 델타와 이상치를 분석해서 차트 요약으로 정리해줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "data-analysis")
+                self.assertEqual(decision["selected_harness"], "data-analysis")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_data_analysis_card")
+                self.assertEqual(hint["status"], "hinted")
+                self.assertEqual(hint["primary_workflow"], "data-analysis")
+                self.assertEqual(hint["primary_next_action"], "prepare_data_analysis_card")
+
+    def test_data_analysis_does_not_steal_dataset_packages_or_source_acquisition(self) -> None:
+        package_cases = (
+            "create a PPT from this sales dataset",
+            "make a PDF report from this sales dataset with charts",
+            "make slides from this sales dataset with cohort analysis",
+        )
+        source_cases = (
+            "find a public sales dataset for retention analysis",
+            "find a dataset for retention analysis",
+            "find public datasets for retention analysis",
+        )
+
+        for message in package_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+
+                self.assertEqual(decision["selected_skill"], "materials-package")
+                self.assertEqual(hint["primary_workflow"], "materials-package")
+                self.assertNotEqual(decision["selected_skill"], "data-analysis")
+
+        for message in source_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+
+                self.assertEqual(decision["selected_skill"], "source-finder")
+                self.assertEqual(hint["primary_workflow"], "source-finder")
+                self.assertNotEqual(hint["primary_workflow"], "data-analysis")
+
     def test_office_file_terms_do_not_steal_direct_answer_hints(self) -> None:
         for message in (
             "translate this word to Spanish",

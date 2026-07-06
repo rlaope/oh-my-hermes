@@ -4168,12 +4168,12 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 - Preferred usage: Use as an installed Hermes workflow skill when users ask to analyze supplied CSV, JSON, logs, tables, or metric-like data with schema, method, and hallucination guards.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `data-analysis` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use when Hermes should prepare or supervise analysis of supplied tabular, JSON, or log data without claiming unsupported numeric findings.
+- Use when: Use when Hermes should prepare or supervise analysis of supplied tabular, JSON, or log data, including chart or executive summaries from observed data, without claiming unsupported numeric findings.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `data-analysis`, `data analysis`, `dataset analysis`, `csv analysis`, `json analysis`, `log analysis`, `table analysis`, `analyze csv`, `analyze this csv`, `analyze json`, `analyze logs`, `summarize anomalies`, `anomaly analysis`, `trend analysis`, `segment analysis`, `column analysis`, `schema check`, `데이터 분석`, `csv 분석`, `json 분석`, `로그 분석`, `이상치 분석`, `추세 분석`, `오류 패턴`, `컬럼 분석`
+- Strong routing signals: `data-analysis`, `data analysis`, `dataset analysis`, `csv analysis`, `json analysis`, `log analysis`, `table analysis`, `analyze csv`, `analyze this csv`, `analyze json`, `analyze logs`, `summarize anomalies`, `anomaly analysis`, `trend analysis`, `segment analysis`, `column analysis`, `schema check`, `table to chart`, `chart with an executive summary`, `spreadsheet delta analysis`, `cohort analysis`, `retention analysis`, `데이터 분석`, `csv 분석`, `json 분석`, `로그 분석`, `이상치 분석`, `추세 분석`, `오류 패턴`, `컬럼 분석`, `전환율 델타`, `차트 요약`
 - Good example:
   - Prompt: data-analysis analyze this CSV and summarize anomalies by segment.
   - Expected behavior: Produce `prepare_data_analysis_card` with required context, wrapper actions, and not-evidence boundaries.

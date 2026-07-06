@@ -41,8 +41,8 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["router_fast_path_cases"], 11)
         self.assertEqual(payload["summary"]["router_fast_path_passing_count"], 11)
         self.assertEqual(payload["summary"]["router_fast_path_missing_marker_count"], 0)
-        self.assertEqual(payload["summary"]["common_request_cases"], 86)
-        self.assertEqual(payload["summary"]["common_request_passing_count"], 86)
+        self.assertEqual(payload["summary"]["common_request_cases"], 90)
+        self.assertEqual(payload["summary"]["common_request_passing_count"], 90)
         self.assertEqual(payload["summary"]["common_request_coverage_percent"], 100.0)
         self.assertEqual(payload["summary"]["common_request_target_percent"], 95.0)
         self.assertEqual(payload["summary"]["common_request_generic_ack_count"], 0)
@@ -85,7 +85,7 @@ class HermesUxQualityTests(unittest.TestCase):
         self.assertIn("missed interventions 0", stdout)
         self.assertIn("localized 8/8", stdout)
         self.assertIn("fast paths 11/11", stdout)
-        self.assertIn("common requests 86/86", stdout)
+        self.assertIn("common requests 90/90", stdout)
 
         status, stdout, stderr = run_cli(["demo", "hermes-ux-quality", "--json"], output_json=False)
 
