@@ -3190,6 +3190,21 @@ selected_workflow=ultraprocess
         self.assertNotEqual(materials["selected_skill"], "data-analysis")
         self.assertNotEqual(code["selected_skill"], "data-analysis")
 
+    def test_korean_artifact_generation_routes_to_materials_package(self) -> None:
+        cases = (
+            "엑셀 파일로 KPI 대시보드 만들고 차트랑 요약 탭까지 준비해줘",
+            "이 원고를 발표용 PPTX로 만들고 발표자 노트도 넣어줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "materials-package")
+                self.assertEqual(decision["selected_harness"], "materials-package")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_material_package")
+
     def test_command_operator_does_not_steal_coding_file_or_build_triage(self) -> None:
         coding = route_chat_message("fix the failing npm test by updating the parser", source="discord")
         file_task = route_chat_message("move old log files into archive", source="discord")
