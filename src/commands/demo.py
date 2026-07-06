@@ -6,6 +6,10 @@ from ..coding_delegation import CODING_EXECUTOR_TARGETS
 from ..demo import DEFAULT_ORCHESTRATION_MESSAGE, build_orchestration_demo
 from ..grounded_score import build_grounded_score_demo, format_grounded_score_summary
 from ..quality.chat_card_coverage import build_chat_card_coverage_demo, format_chat_card_coverage_summary
+from ..quality.common_request_coverage import (
+    build_common_request_coverage_demo,
+    format_common_request_coverage_summary,
+)
 from ..quality.context_brief_coverage import (
     build_context_brief_coverage_demo,
     format_context_brief_coverage_summary,
@@ -31,10 +35,12 @@ DEMO_EPILOG = """Demo lanes:
   context-brief-coverage  Checks compact OMH context briefs keep the right workflow visible.
   routing-precision       Guards against over-routing simple requests and missing OMH interventions.
   router-fast-path        Checks common chat turns stay on deterministic fast-path routes.
+  common-request-coverage Checks ordinary Hermes-agent request breadth against a 95% target.
   localized-chat-copy     Verifies common non-English prompts keep local Hermes card framing.
   hermes-ux-quality       Runs the combined user-feel gate across routing, cards, hints, and context.
 
 Recommended operator checks:
+  omh demo common-request-coverage --summary
   omh demo hermes-ux-quality --summary
   omh demo localized-chat-copy --summary
   omh demo router-fast-path --summary
@@ -142,6 +148,18 @@ def cmd_demo_router_fast_path(args: argparse.Namespace) -> int:
         raise OmhError(str(exc)) from exc
     if args.summary:
         print(format_router_fast_path_summary(payload))
+    else:
+        _print_json(payload)
+    return 0
+
+
+def cmd_demo_common_request_coverage(args: argparse.Namespace) -> int:
+    try:
+        payload = build_common_request_coverage_demo(source=args.source)
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if args.summary:
+        print(format_common_request_coverage_summary(payload))
     else:
         _print_json(payload)
     return 0
@@ -274,6 +292,20 @@ def _add_demo_commands(sub) -> None:
     fast_path_output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
     fast_path_output.add_argument("--summary", action="store_true", help="Print a compact human-readable fast-path summary.")
     router_fast_path.set_defaults(func=cmd_demo_router_fast_path)
+
+    common_request_coverage = demo_sub.add_parser(
+        "common-request-coverage",
+        help="Check ordinary Hermes-agent request breadth against a 95%% target.",
+        description=(
+            "Evaluate a curated common-request corpus so OMH can prove broad deterministic coverage "
+            "without claiming live Hermes, connector, or executor evidence."
+        ),
+    )
+    common_request_coverage.add_argument("--source", choices=CHAT_SOURCES, default="discord")
+    common_output = common_request_coverage.add_mutually_exclusive_group()
+    common_output.add_argument("--json", action="store_true", help="Print the full machine-readable JSON payload. This is the default.")
+    common_output.add_argument("--summary", action="store_true", help="Print a compact human-readable common-request coverage summary.")
+    common_request_coverage.set_defaults(func=cmd_demo_common_request_coverage)
 
     hermes_ux_quality = demo_sub.add_parser(
         "hermes-ux-quality",

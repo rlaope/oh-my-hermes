@@ -521,6 +521,14 @@ def _print_release_evidence_bundle_summary(payload: dict[str, object]) -> None:
             f"{summary.get('router_fast_path_passing')}/{summary.get('router_fast_path_total')} "
             f"(missing markers {summary.get('router_fast_path_missing_marker_count')})"
         )
+    if "common_request_coverage_passing" in summary or "common_request_coverage_total" in summary:
+        print(
+            "  Common request coverage: "
+            f"{summary.get('common_request_coverage_passing')}/{summary.get('common_request_coverage_total')} "
+            f"({summary.get('common_request_coverage_percent')}%; "
+            f"target {summary.get('common_request_coverage_target')}%; "
+            f"generic ack {summary.get('common_request_generic_ack_count')})"
+        )
     if "hermes_ux_quality_score" in summary:
         print(
             "  Hermes UX quality: "

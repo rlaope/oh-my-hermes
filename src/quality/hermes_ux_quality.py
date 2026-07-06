@@ -4,6 +4,7 @@ from typing import Mapping, Sequence
 
 from ..ingress import CHAT_SOURCES
 from .chat_card_coverage import build_chat_card_coverage_demo
+from .common_request_coverage import build_common_request_coverage_demo, common_request_coverage_errors
 from .context_brief_coverage import build_context_brief_coverage_demo
 from .grounded_score import build_grounded_score_demo
 from .localized_chat_copy import build_localized_chat_copy_demo, localized_chat_copy_errors
@@ -25,6 +26,7 @@ def build_hermes_ux_quality_demo(
     routing_precision: Mapping[str, object] | None = None,
     localized_chat_copy: Mapping[str, object] | None = None,
     router_fast_path: Mapping[str, object] | None = None,
+    common_request_coverage: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported demo source: {source}")
@@ -62,6 +64,11 @@ def build_hermes_ux_quality_demo(
         dict(router_fast_path)
         if router_fast_path is not None
         else build_router_fast_path_demo(source=source)
+    )
+    common_requests = (
+        dict(common_request_coverage)
+        if common_request_coverage is not None
+        else build_common_request_coverage_demo(source=source)
     )
 
     gates = [
@@ -135,6 +142,16 @@ def build_hermes_ux_quality_demo(
             errors=router_fast_path_errors(fast_paths),
             claim_boundary=str(fast_paths.get("claim_boundary", "")),
         ),
+        _gate(
+            gate_id="common_request_coverage",
+            title="Ordinary request coverage breadth",
+            status="passed" if _common_requests_ready(common_requests) else "failed",
+            summary=_common_request_summary(common_requests),
+            user_value="OMH covers a broad curated set of ordinary Hermes-agent asks instead of only a few demo prompts.",
+            command="omh demo common-request-coverage --json",
+            errors=common_request_coverage_errors(common_requests),
+            claim_boundary=str(common_requests.get("claim_boundary", "")),
+        ),
     ]
     passing_count = sum(1 for gate in gates if gate["status"] == "passed")
     total = len(gates)
@@ -146,6 +163,7 @@ def build_hermes_ux_quality_demo(
     precision_summary = _nested(precision, "summary")
     localized_summary = _nested(localized_copy, "summary")
     fast_path_summary = _nested(fast_paths, "summary")
+    common_request_summary = _nested(common_requests, "summary")
     return {
         "schema_version": HERMES_UX_QUALITY_SCHEMA_VERSION,
         "source": source,
@@ -180,6 +198,11 @@ def build_hermes_ux_quality_demo(
             "router_fast_path_cases": fast_path_summary.get("case_count", 0),
             "router_fast_path_passing_count": fast_path_summary.get("passing_count", 0),
             "router_fast_path_missing_marker_count": fast_path_summary.get("missing_marker_count", 0),
+            "common_request_cases": common_request_summary.get("case_count", 0),
+            "common_request_passing_count": common_request_summary.get("passing_count", 0),
+            "common_request_coverage_percent": common_request_summary.get("coverage_percent", 0),
+            "common_request_target_percent": common_requests.get("target_percent", 0),
+            "common_request_generic_ack_count": common_request_summary.get("generic_ack_count", 0),
         },
         "user_story": [
             "Natural chat requests route to an OMH workflow instead of a vague generic answer.",
@@ -190,11 +213,12 @@ def build_hermes_ux_quality_demo(
             "Common non-English operator prompts get local card framing without external translation.",
             "Frequent picker, status, direct-answer, file lookup, and workflow requests stay on deterministic fast paths.",
             "Real OMH-shaped requests still route to the expected workflow, picker, or context brief.",
+            "A curated ordinary-request corpus stays above the 95% breadth target while preserving direct answers.",
         ],
         "gates": gates,
         "claim_boundary": (
             "Hermes UX quality proves deterministic local routing, card, hint, context, precision, "
-            "localized-copy, and fast-path contracts only. "
+            "localized-copy, fast-path, and common-request breadth contracts only. "
             "It does not prove live Hermes chat rendering, platform delivery, plugin load, generic tool invocation, "
             "source retrieval, image generation, executor dispatch, implementation, verification, review, CI, merge, "
             "or delivery."
@@ -218,7 +242,9 @@ def format_hermes_ux_quality_summary(payload: Mapping[str, object]) -> str:
             f"precision overroutes {summary.get('routing_precision_overroute_count', 0)}; "
             f"missed interventions {summary.get('routing_precision_missed_intervention_count', 0)}; "
             f"localized {summary.get('localized_chat_copy_passing_count', 0)}/{summary.get('localized_chat_copy_cases', 0)}; "
-            f"fast paths {summary.get('router_fast_path_passing_count', 0)}/{summary.get('router_fast_path_cases', 0)}"
+            f"fast paths {summary.get('router_fast_path_passing_count', 0)}/{summary.get('router_fast_path_cases', 0)}; "
+            f"common requests {summary.get('common_request_passing_count', 0)}/{summary.get('common_request_cases', 0)} "
+            f"({summary.get('common_request_coverage_percent', 0)}%)"
         ),
         "",
         "What users feel:",
@@ -319,6 +345,10 @@ def _router_fast_path_ready(payload: Mapping[str, object]) -> bool:
     return not router_fast_path_errors(payload)
 
 
+def _common_requests_ready(payload: Mapping[str, object]) -> bool:
+    return not common_request_coverage_errors(payload)
+
+
 def _grounded_summary(payload: Mapping[str, object]) -> str:
     summary = _nested(payload, "summary")
     return (
@@ -378,6 +408,15 @@ def _router_fast_path_summary(payload: Mapping[str, object]) -> str:
         f"{summary.get('passing_count', 0)}/{summary.get('case_count', 0)} fast-path cases; "
         f"missing markers {summary.get('missing_marker_count', 0)}; "
         f"route mismatches {summary.get('route_mismatch_count', 0)}"
+    )
+
+
+def _common_request_summary(payload: Mapping[str, object]) -> str:
+    summary = _nested(payload, "summary")
+    return (
+        f"{summary.get('passing_count', 0)}/{summary.get('case_count', 0)} common request cases; "
+        f"coverage {summary.get('coverage_percent', 0)}%; target {payload.get('target_percent', 0)}%; "
+        f"generic ack {summary.get('generic_ack_count', 0)}"
     )
 
 

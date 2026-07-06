@@ -32,6 +32,7 @@ from ..plugin_bundle.omh.tools.capability_tool import (
 )
 from ..parity import build_parity_matrix
 from ..quality.chat_card_coverage import build_chat_card_coverage_demo
+from ..quality.common_request_coverage import build_common_request_coverage_demo, common_request_coverage_errors
 from ..quality.context_brief_coverage import build_context_brief_coverage_demo
 from ..quality.grounded_score import build_grounded_score_demo
 from ..quality.hermes_ux_quality import build_hermes_ux_quality_demo, hermes_ux_quality_errors
@@ -170,6 +171,7 @@ class ReleaseQualityEvidence:
     routing_precision: dict[str, object]
     localized_chat_copy: dict[str, object]
     router_fast_path: dict[str, object]
+    common_request_coverage: dict[str, object]
     hermes_ux: dict[str, object]
     checklist: dict[str, object]
 
@@ -345,14 +347,24 @@ def release_readiness_checklist(
             "Router fast-path quality proves deterministic local fast-path route markers only; it does not prove wall-clock latency, live Hermes chat rendering, platform delivery, executor work, review, CI, merge, or plugin-load evidence.",
         ),
         ReleaseChecklistItem(
+            "common_request_coverage",
+            "Check common Hermes-agent request coverage",
+            "uv run python -m omh.cli demo common-request-coverage --json",
+            "contract-quality",
+            True,
+            False,
+            "Common request coverage reports the curated ordinary Hermes-agent request corpus at or above the 95% target.",
+            "Common request coverage proves deterministic local routing breadth only; it does not prove live Hermes chat rendering, external plugin telemetry, connector work, executor work, review, CI, merge, delivery, or market-share evidence.",
+        ),
+        ReleaseChecklistItem(
             "hermes_ux_quality",
             "Check Hermes-facing UX quality rollup",
             "uv run python -m omh.cli demo hermes-ux-quality --json",
             "contract-quality",
             True,
             False,
-            "Hermes UX quality reports routing score, dedicated chat-card coverage, route-hint alignment, context-brief coverage, routing precision, localized chat copy, and router fast-path quality as passing in one user-facing rollup.",
-            "Hermes UX quality proves deterministic local routing, card, hint, context, precision, localized-copy, and fast-path contracts only; it does not prove live Hermes chat rendering, platform delivery, plugin load, generic tool invocation, executor work, review, CI, merge, or delivery.",
+            "Hermes UX quality reports routing score, dedicated chat-card coverage, route-hint alignment, context-brief coverage, routing precision, localized chat copy, router fast-path quality, and common request coverage as passing in one user-facing rollup.",
+            "Hermes UX quality proves deterministic local routing, card, hint, context, precision, localized-copy, fast-path, and common-request contracts only; it does not prove live Hermes chat rendering, platform delivery, plugin load, generic tool invocation, executor work, review, CI, merge, or delivery.",
         ),
         ReleaseChecklistItem(
             "product_readiness",
@@ -361,7 +373,7 @@ def release_readiness_checklist(
             "contract-quality",
             True,
             False,
-            "Product readiness reports skill-content, G1-G10 use-case, grounded score, wrapper chat card coverage, route hint alignment, context brief coverage, routing precision, localized chat copy, router fast-path quality, Hermes UX quality, parity, and release checklist gates as passing.",
+            "Product readiness reports skill-content, G1-G10 use-case, grounded score, wrapper chat card coverage, route hint alignment, context brief coverage, routing precision, localized chat copy, router fast-path quality, common request coverage, Hermes UX quality, parity, and release checklist gates as passing.",
             "Product readiness proves deterministic local package and product contracts only; it does not prove live Hermes chat behavior, connector work, executor work, review, CI, merge, delivery, or billing evidence.",
         ),
         ReleaseChecklistItem(
@@ -371,7 +383,7 @@ def release_readiness_checklist(
             "evidence-packaging",
             True,
             False,
-            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, grounded score, chat card coverage, route hint alignment, context brief coverage, routing precision, localized chat copy, router fast-path quality, Hermes UX quality, and parity snapshots.",
+            "A local `omh_release_evidence_bundle/v1` artifact is written with checklist, product readiness, skill content, use-case readiness, grounded score, chat card coverage, route hint alignment, context brief coverage, routing precision, localized chat copy, router fast-path quality, common request coverage, Hermes UX quality, and parity snapshots.",
             "The evidence bundle packages local deterministic evidence only; it is not live Hermes runtime use, connector execution, executor dispatch, review, CI, merge, delivery, or release publication evidence.",
         ),
         ReleaseChecklistItem(
@@ -596,6 +608,7 @@ def _build_release_quality_evidence(*, release_version: str, omh_command: str) -
     routing_precision = build_routing_precision_demo()
     localized_chat_copy = build_localized_chat_copy_demo()
     router_fast_path = build_router_fast_path_demo()
+    common_request_coverage = build_common_request_coverage_demo()
     hermes_ux = build_hermes_ux_quality_demo(
         grounded_score=grounded_score,
         chat_card_coverage=chat_cards,
@@ -604,6 +617,7 @@ def _build_release_quality_evidence(*, release_version: str, omh_command: str) -
         routing_precision=routing_precision,
         localized_chat_copy=localized_chat_copy,
         router_fast_path=router_fast_path,
+        common_request_coverage=common_request_coverage,
     )
     checklist = release_readiness_checklist(version=release_version, omh_command=omh_command)
     return ReleaseQualityEvidence(
@@ -616,6 +630,7 @@ def _build_release_quality_evidence(*, release_version: str, omh_command: str) -
         routing_precision=routing_precision,
         localized_chat_copy=localized_chat_copy,
         router_fast_path=router_fast_path,
+        common_request_coverage=common_request_coverage,
         hermes_ux=hermes_ux,
         checklist=checklist,
     )
@@ -638,6 +653,7 @@ def _product_readiness_report_from_evidence(
     routing_precision = evidence.routing_precision
     localized_chat_copy = evidence.localized_chat_copy
     router_fast_path = evidence.router_fast_path
+    common_request_coverage = evidence.common_request_coverage
     hermes_ux = evidence.hermes_ux
     checklist = evidence.checklist
     use_case_readiness_payload = use_case_readiness(paths)
@@ -664,6 +680,7 @@ def _product_readiness_report_from_evidence(
         "routing_precision",
         "localized_chat_copy",
         "router_fast_path",
+        "common_request_coverage",
         "hermes_ux_quality",
         "product_readiness",
         "release_evidence_bundle",
@@ -701,6 +718,12 @@ def _product_readiness_report_from_evidence(
         router_fast_path.get("summary", {}) if isinstance(router_fast_path.get("summary"), Mapping) else {}
     )
     router_fast_path_gate_errors = router_fast_path_errors(router_fast_path)
+    common_request_summary = (
+        common_request_coverage.get("summary", {})
+        if isinstance(common_request_coverage.get("summary"), Mapping)
+        else {}
+    )
+    common_request_gate_errors = common_request_coverage_errors(common_request_coverage)
     hermes_ux_summary = hermes_ux.get("summary", {}) if isinstance(hermes_ux.get("summary"), Mapping) else {}
     hermes_ux_errors = hermes_ux_quality_errors(hermes_ux)
     gates = [
@@ -842,6 +865,23 @@ def _product_readiness_report_from_evidence(
             str(router_fast_path.get("claim_boundary", "")),
         ),
         _product_readiness_gate(
+            "common_request_coverage",
+            "Common Hermes-agent request coverage",
+            "passed" if not common_request_gate_errors else "failed",
+            True,
+            (
+                f"{common_request_summary.get('passing_count', 0)}/"
+                f"{common_request_summary.get('case_count', 0)} common request cases; "
+                f"coverage {common_request_summary.get('coverage_percent', 0)}%; "
+                f"target {common_request_coverage.get('target_percent', 0)}%; "
+                f"generic ack {common_request_summary.get('generic_ack_count', 0)}"
+            ),
+            "omh demo common-request-coverage --json",
+            common_request_gate_errors,
+            [],
+            str(common_request_coverage.get("claim_boundary", "")),
+        ),
+        _product_readiness_gate(
             "hermes_ux_quality",
             "Hermes-facing UX quality",
             "passed" if not hermes_ux_errors else "failed",
@@ -856,7 +896,9 @@ def _product_readiness_report_from_evidence(
                 f"localized {hermes_ux_summary.get('localized_chat_copy_passing_count', 0)}/"
                 f"{hermes_ux_summary.get('localized_chat_copy_cases', 0)}; "
                 f"fast paths {hermes_ux_summary.get('router_fast_path_passing_count', 0)}/"
-                f"{hermes_ux_summary.get('router_fast_path_cases', 0)}"
+                f"{hermes_ux_summary.get('router_fast_path_cases', 0)}; "
+                f"common requests {hermes_ux_summary.get('common_request_passing_count', 0)}/"
+                f"{hermes_ux_summary.get('common_request_cases', 0)}"
             ),
             "omh demo hermes-ux-quality --json",
             hermes_ux_errors,
@@ -1751,6 +1793,7 @@ def release_evidence_bundle(
     routing_precision = quality_evidence.routing_precision
     localized_chat_copy = quality_evidence.localized_chat_copy
     router_fast_path = quality_evidence.router_fast_path
+    common_request_coverage = quality_evidence.common_request_coverage
     hermes_ux = quality_evidence.hermes_ux
     parity = quality_evidence.parity
     local_store_status = _release_local_store_status(use_cases)
@@ -1766,6 +1809,7 @@ def release_evidence_bundle(
         "routing_precision": "passed" if not routing_precision_errors(routing_precision) else "failed",
         "localized_chat_copy": "passed" if not localized_chat_copy_errors(localized_chat_copy) else "failed",
         "router_fast_path": "passed" if not router_fast_path_errors(router_fast_path) else "failed",
+        "common_request_coverage": "passed" if not common_request_coverage_errors(common_request_coverage) else "failed",
         "hermes_ux_quality": "passed" if not hermes_ux_quality_errors(hermes_ux) else "failed",
         "parity_contracts": "passed" if _parity_contracts_ready(parity) else "failed",
     }
@@ -1791,6 +1835,11 @@ def release_evidence_bundle(
     )
     router_fast_path_summary = (
         router_fast_path.get("summary", {}) if isinstance(router_fast_path.get("summary"), Mapping) else {}
+    )
+    common_request_summary = (
+        common_request_coverage.get("summary", {})
+        if isinstance(common_request_coverage.get("summary"), Mapping)
+        else {}
     )
     hermes_ux_summary = hermes_ux.get("summary", {}) if isinstance(hermes_ux.get("summary"), Mapping) else {}
     payload: dict[str, object] = {
@@ -1843,6 +1892,11 @@ def release_evidence_bundle(
             "router_fast_path_passing": router_fast_path_summary.get("passing_count"),
             "router_fast_path_total": router_fast_path_summary.get("case_count"),
             "router_fast_path_missing_marker_count": router_fast_path_summary.get("missing_marker_count"),
+            "common_request_coverage_passing": common_request_summary.get("passing_count"),
+            "common_request_coverage_total": common_request_summary.get("case_count"),
+            "common_request_coverage_percent": common_request_summary.get("coverage_percent"),
+            "common_request_coverage_target": common_request_coverage.get("target_percent"),
+            "common_request_generic_ack_count": common_request_summary.get("generic_ack_count"),
             "hermes_ux_quality_score": hermes_ux.get("score"),
             "hermes_ux_quality_passing_gates": hermes_ux_summary.get("passing_gate_count"),
             "hermes_ux_quality_total_gates": hermes_ux_summary.get("gate_count"),
@@ -1866,6 +1920,7 @@ def release_evidence_bundle(
             "routing_precision": routing_precision,
             "localized_chat_copy": localized_chat_copy,
             "router_fast_path": router_fast_path,
+            "common_request_coverage": common_request_coverage,
             "hermes_ux_quality": hermes_ux,
             "parity_contracts": parity,
         },
@@ -1882,6 +1937,7 @@ def release_evidence_bundle(
             "routing_precision_ready",
             "localized_chat_copy_ready",
             "router_fast_path_ready",
+            "common_request_coverage_ready",
             "hermes_ux_quality_ready",
             "parity_contract_matrix_ready",
         ],
