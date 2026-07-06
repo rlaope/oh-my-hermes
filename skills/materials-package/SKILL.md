@@ -16,7 +16,7 @@ This is a Hermes-native `materials-package` workflow skill.
 
 ## Why This Exists
 
-`materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Keynote, HWP, and Markdown work as a first-class material-processing workflow without becoming a hidden file generator.
+`materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Word, Keynote, HWP, and Markdown work as a first-class material-processing workflow without becoming a hidden file generator.
 
 ## Do Not Use When
 
@@ -63,9 +63,9 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should turn source inputs into a material plan for decks, PDFs, spreadsheets, documents, HWP, Markdown, or binary export handoff without claiming file generation.
+Use when Hermes should turn source inputs into a material plan for decks, PDFs, Word/documents, spreadsheets, HWP, Markdown, office-file summaries, comparisons, table extraction plans, or binary export handoff without claiming file generation.
 
-    Strong routing signals: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`, `ppt and pdf`, `pdf and ppt`, `ppt/pdf`, `pdf/ppt`, `spreadsheet to pdf`, `excel to pdf`, `monthly report pdf`, `attached spreadsheet`, `pdf`, `pptx`, `keynote`, `keynote deck`, `docx`, `xlsx`, `csv report`, `spreadsheet`, `excel`, `hwp`, `korean hwp`, `proposal document`, `자료 패키지`, `자료 처리`, `자료 생성`, `문서 패키지`, `문서 생성`, `제안서 문서`, `엑셀`, `스프레드시트`, `피디에프`, `PDF`, `한글 문서`, `HWP`, `키노트`, `파일 export`, `파일 생성`, `렌더 QA`, `첨부한 엑셀`, `엑셀을 월간 보고서`, `PDF랑 PPT`, `PPT랑 PDF`, `PDF와 PPT`, `PPT와 PDF`, `PDF랑 PPT로`
+    Strong routing signals: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`, `ppt and pdf`, `pdf and ppt`, `ppt/pdf`, `pdf/ppt`, `spreadsheet to pdf`, `excel to pdf`, `monthly report pdf`, `attached spreadsheet`, `word document`, `word doc`, `document action items`, `compare pdfs`, `pdf differences`, `extract tables from pdf`, `pdf to csv`, `spreadsheet analysis brief`, `clean analysis brief`, `첨부한 엑셀`, `첨부한 워드`, `워드 문서`, `PDF 두 개 비교`, `PDF 표를 CSV`, `PDF 표 추출`, `분석 브리프`, `엑셀을 월간 보고서`, `pdf`, `pptx`, `keynote`, `keynote deck`, `docx`, `xlsx`, `csv report`, `spreadsheet`, `excel`, `hwp`, `korean hwp`, `proposal document`, `자료 패키지`, `자료 처리`, `자료 생성`, `문서 패키지`, `문서 생성`, `제안서 문서`, `엑셀`, `스프레드시트`, `피디에프`, `PDF`, `한글 문서`, `HWP`, `키노트`, `파일 export`, `파일 생성`, `렌더 QA`, `PDF랑 PPT`, `PPT랑 PDF`, `PDF와 PPT`, `PPT와 PDF`, `PDF랑 PPT로`
 
 ## Catalog Metadata
 
@@ -76,7 +76,7 @@ Quality tier: `material-gated`
 
 Quality bar:
 
-- Name audience, source inputs, target formats, outline sections, assumptions, missing inputs, and output owner.
+- Name audience, source inputs, requested extraction/comparison task, target formats, outline sections, assumptions, missing inputs, and output owner.
 - Attach format-specific QA expectations before preparing a binary-generation handoff.
 - Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.
 
