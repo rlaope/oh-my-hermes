@@ -12,6 +12,7 @@ from ..paper_learning import (
     PAPER_LEARNING_NOT_OBSERVED,
     PAPER_LEARNING_SOURCE_STATES,
 )
+from ..routing.materials_cues import OFFICE_FILE_MATERIAL_CATALOG_TRIGGERS
 from ..source_finder import (
     SOURCE_ACQUISITION_STATUS_SCHEMA_VERSION,
     SOURCE_CANDIDATE_SCHEMA_VERSION,
@@ -2029,6 +2030,7 @@ _DEFINITIONS = [
             "excel to pdf",
             "monthly report pdf",
             "attached spreadsheet",
+            *OFFICE_FILE_MATERIAL_CATALOG_TRIGGERS,
             "pdf",
             "pptx",
             "keynote",
@@ -2057,15 +2059,13 @@ _DEFINITIONS = [
             "파일 export",
             "파일 생성",
             "렌더 QA",
-            "첨부한 엑셀",
-            "엑셀을 월간 보고서",
             "PDF랑 PPT",
             "PPT랑 PDF",
             "PDF와 PPT",
             "PPT와 PDF",
             "PDF랑 PPT로",
         ),
-        "Use when Hermes should turn source inputs into a material plan for decks, PDFs, spreadsheets, documents, HWP, Markdown, or binary export handoff without claiming file generation.",
+        "Use when Hermes should turn source inputs into a material plan for decks, PDFs, Word/documents, spreadsheets, HWP, Markdown, office-file summaries, comparisons, table extraction plans, or binary export handoff without claiming file generation.",
         category="materials",
         phase="material-plan",
         hermes_role="retained-cognition",
@@ -2084,12 +2084,12 @@ _DEFINITIONS = [
         ),
         quality_tier="material-gated",
         quality_bar=(
-            "Name audience, source inputs, target formats, outline sections, assumptions, missing inputs, and output owner.",
+            "Name audience, source inputs, requested extraction/comparison task, target formats, outline sections, assumptions, missing inputs, and output owner.",
             "Attach format-specific QA expectations before preparing a binary-generation handoff.",
             "Record binary export, render QA, formula checks, approvals, and delivery only from observed evidence.",
         ),
         why_this_exists=(
-            "`materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Keynote, HWP, and Markdown "
+            "`materials-package` exists so Hermes can handle document, deck, spreadsheet, PDF, Word, Keynote, HWP, and Markdown "
             "work as a first-class material-processing workflow without becoming a hidden file generator."
         ),
         do_not_use_when=(

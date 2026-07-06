@@ -11,7 +11,9 @@ from _local_package import load_local_package
 load_local_package()
 from omh.routing import recommend as recommend_module
 from omh.routing import chat as chat_module
+from omh.routing import policy as policy_module
 from omh.routing.action_copy import next_action_label
+from omh.routing.materials_cues import OFFICE_FILE_MATERIAL_CATALOG_TRIGGERS, OFFICE_FILE_MATERIAL_PHRASES
 from omh.routing.visual_qa_cues import BROWSER_VISUAL_QA_PHRASES, CUSTOMER_SYMPTOM_REPORT_PHRASES
 from omh.capabilities.orchestration import orchestration_patterns
 from omh.wrapper.contract import VISIBLE_ACTIONS
@@ -1169,6 +1171,22 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("data_analysis", route_rules)
         self.assertIn("data-analysis", route_rules["data_analysis"]["workflow"])
         self.assertIn("csv analysis", route_rules["data_analysis"]["phrases"])
+
+    def test_office_file_material_cues_stay_shared_across_surfaces(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        office_phrases = set(OFFICE_FILE_MATERIAL_PHRASES)
+
+        self.assertTrue(
+            set(OFFICE_FILE_MATERIAL_CATALOG_TRIGGERS).issubset(
+                set(definitions["materials-package"].triggers)
+            )
+        )
+        self.assertTrue(office_phrases.issubset(set(policy_module._MATERIALS_PACKAGE_PHRASES)))
+        self.assertTrue(
+            office_phrases.issubset(set(policy_module._WORKSPACE_FILE_OPERATOR_MATERIALS_BLOCKERS))
+        )
+        self.assertTrue(office_phrases.issubset(set(route_rules["materials_package"]["phrases"])))
 
     def test_command_operator_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

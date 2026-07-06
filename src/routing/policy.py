@@ -5,6 +5,7 @@ from functools import lru_cache
 
 from .intent import classify_omh_quality_intent
 from .localization import normalized_phrase, routing_tokens
+from .materials_cues import OFFICE_FILE_MATERIAL_PHRASES
 from .missed_route import has_normalized_missed_omh_workflow_context
 from .visual_qa_cues import BROWSER_VISUAL_QA_PHRASES, CUSTOMER_SYMPTOM_REPORT_PHRASES
 
@@ -1713,8 +1714,7 @@ _MATERIALS_PACKAGE_PHRASES = (
     "summarize this pdf deck",
     "summarize this deck",
     "deck into action items",
-    "첨부한 엑셀",
-    "엑셀을 월간 보고서",
+    *OFFICE_FILE_MATERIAL_PHRASES,
     "pdf랑 ppt",
     "ppt랑 pdf",
     "ppt와 pdf",
@@ -1759,7 +1759,9 @@ _MATERIALS_PACKAGE_FORMAT_TOKENS = _normalized_token_set(
         "xlsx",
         "deck",
         "slides",
+        "doc",
         "docx",
+        "csv",
         "hwp",
         "document",
         "피디에프",
@@ -1768,6 +1770,7 @@ _MATERIALS_PACKAGE_FORMAT_TOKENS = _normalized_token_set(
         "발표자료",
         "발표",
         "덱",
+        "워드",
         "엑셀",
         "문서",
         "자료",
@@ -1783,12 +1786,17 @@ _MATERIALS_PACKAGE_ACTION_TOKENS = _normalized_token_set(
         "summary",
         "prepare",
         "package",
+        "compare",
+        "extract",
         "export",
         "share",
         "render",
         "만들",
         "정리",
         "요약",
+        "비교",
+        "추출",
+        "뽑",
         "공유",
         "준비",
         "생성",
@@ -2723,6 +2731,7 @@ _WORKSPACE_FILE_OPERATOR_BLOCKERS = (
     "발표자료",
     "첨부할 수 있게",
 )
+_WORKSPACE_FILE_OPERATOR_MATERIALS_BLOCKERS = OFFICE_FILE_MATERIAL_PHRASES
 _COMMAND_OPERATOR_PHRASES = (
     "command operator",
     "terminal command",
@@ -6003,12 +6012,15 @@ def _materials_package_guard_applies(
         "xlsx",
         "deck",
         "slides",
+        "doc",
         "docx",
+        "csv",
         "hwp",
         "document",
         "피피티",
         "슬라이드",
         "덱",
+        "워드",
         "엑셀",
         "문서",
     }
@@ -6657,6 +6669,8 @@ def _browser_operator_guard_applies(normalized_query: str, query_tokens: set[str
 
 def _workspace_file_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _contains_phrase(normalized_query, _WORKSPACE_FILE_OPERATOR_BLOCKERS):
+        return False
+    if _contains_phrase(normalized_query, _WORKSPACE_FILE_OPERATOR_MATERIALS_BLOCKERS):
         return False
     if _contains_phrase(normalized_query, _WORKSPACE_FILE_OPERATOR_PHRASES):
         return True

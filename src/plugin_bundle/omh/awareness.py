@@ -117,6 +117,43 @@ except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
             for phrase in phrases
         )
 
+try:
+    from ...routing.materials_cues import OFFICE_FILE_MATERIAL_PHRASES as _OFFICE_FILE_MATERIAL_PHRASES
+except ImportError:
+    _OFFICE_FILE_MATERIAL_PHRASES = (
+        "summarize this word document",
+        "summarize this document",
+        "word document",
+        "word doc",
+        "word file",
+        "document action items",
+        "document into action items",
+        "compare these two pdfs",
+        "compare pdfs",
+        "pdf differences",
+        "extract tables from this pdf",
+        "extract table from this pdf",
+        "extract tables from pdf",
+        "pdf into csv",
+        "pdf to csv",
+        "spreadsheet analysis brief",
+        "clean analysis brief",
+        "첨부한 엑셀",
+        "첨부한 엑셀 파일",
+        "엑셀 파일 정리",
+        "분석 브리프",
+        "엑셀을 월간 보고서",
+        "첨부한 워드",
+        "워드 문서",
+        "워드 문서 요약",
+        "액션아이템 뽑",
+        "pdf 두 개 비교",
+        "pdf 두개 비교",
+        "pdf 차이점",
+        "pdf 표를 csv",
+        "pdf 표 추출",
+    )
+
 try:  # Keep installed plugin bundles usable even when the full package is absent.
     from ...routing.intent import META_OR_FEEDBACK_INTENTS, classify_omh_quality_intent, classify_workflow_intent
 except ImportError:  # pragma: no cover - exercised by standalone plugin hosts.
@@ -3580,6 +3617,7 @@ _ROUTE_HINT_RULES = (
             "turn pdf into presentation",
             "convert pdf to deck",
             "pdf and excel file",
+            *_OFFICE_FILE_MATERIAL_PHRASES,
             "convierte este pdf",
             "pdf en una presentación",
             "pdf en una presentacion",
@@ -3599,7 +3637,19 @@ _ROUTE_HINT_RULES = (
             "엑셀 파일",
             "자료 패키지",
         ),
-        "tokens": ("ppt", "pptx", "spreadsheet", "excel", "xlsx", "deck", "slides", "presentacion", "datei"),
+        "tokens": (
+            "ppt",
+            "pptx",
+            "spreadsheet",
+            "excel",
+            "xlsx",
+            "deck",
+            "slides",
+            "docx",
+            "presentacion",
+            "datei",
+            "워드",
+        ),
         "adjacent_workflows": ("report-package", "deliverable-package", "paper-learning", "img-summary"),
     },
     {
@@ -4965,6 +5015,22 @@ def _rule_suppressed_by_context(rule: dict[str, object], text: str) -> bool:
         "추출",
         "ocr",
     )
+    office_material_requested = any(phrase in text for phrase in _OFFICE_FILE_MATERIAL_PHRASES)
+    direct_concept_requested = text.strip().startswith(
+        (
+            "what is ",
+            "what's ",
+            "whats ",
+            "what are ",
+            "define ",
+            "meaning of ",
+            "explain what ",
+        )
+    )
+    if rule_id == "materials_package" and office_material_requested and direct_concept_requested:
+        return True
+    if rule_id in {"workspace_file_operator", "paper_learning"} and office_material_requested:
+        return True
     if visual_generation_requested and not any(phrase in text for phrase in strong_media_extraction_markers):
         media_extraction_requested = False
     if rule_id in {"visual_summary", "visual_qa_gate"} and media_extraction_requested:

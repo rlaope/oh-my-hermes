@@ -499,6 +499,44 @@ class ChatRouterTests(unittest.TestCase):
             self.assertIn(expected, hint["hints"][0]["not_evidence_yet"])
             self.assertIn(expected, hook_context)
 
+    def test_office_file_intake_routes_to_materials_package(self) -> None:
+        cases = (
+            "summarize this Word document and extract action items",
+            "첨부한 워드 문서 요약하고 액션아이템 뽑아줘",
+            "compare these two PDFs and summarize the differences",
+            "첨부한 PDF 두 개 비교해서 차이점 정리해줘",
+            "extract tables from this PDF into CSV",
+            "이 PDF 표를 CSV로 추출해줘",
+            "turn this spreadsheet into a clean analysis brief",
+            "첨부한 엑셀 파일 정리해서 분석 브리프로 만들어줘",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+
+                self.assertEqual(decision["selected_skill"], "materials-package")
+                self.assertEqual(decision["recommendations"][0]["skill"], "materials-package")
+                self.assertEqual(hint["status"], "hinted")
+                self.assertEqual(hint["primary_workflow"], "materials-package")
+                self.assertEqual(hint["primary_next_action"], "prepare_material_package")
+
+    def test_office_file_terms_do_not_steal_direct_answer_hints(self) -> None:
+        for message in (
+            "translate this word to Spanish",
+            "translate this word into Korean",
+            "what is a Word document?",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+
+                self.assertEqual(decision["action"], "fallback")
+                self.assertEqual(decision["selected_skill"], "oh-my-hermes")
+                self.assertEqual(decision["recommendations"][0]["matched"], ["direct_answer_fast_path"])
+                self.assertEqual(hint["status"], "no_hint")
+
     def test_codegraph_refresh_does_not_steal_generic_index_refresh(self) -> None:
         generic_cases = (
             "database index is stale, refresh it",
@@ -589,6 +627,8 @@ class ChatRouterTests(unittest.TestCase):
             "summarize this paragraph in Korean",
             "summarize this in Korean",
             "translate this to Korean",
+            "translate this word to Spanish",
+            "translate this word into Korean",
             "rewrite this more politely",
             "make this more natural",
             "이 문장 영어로 번역해줘",
@@ -734,6 +774,8 @@ class ChatRouterTests(unittest.TestCase):
             "쿠버네티스가 뭐야?",
             "이 에러 무슨 뜻이야?",
             "translate this to Korean",
+            "translate this word to Spanish",
+            "translate this word into Korean",
             "summarize this in Korean",
             "이 문장 영어로 번역해줘",
             "이 문단 요약해줘",
