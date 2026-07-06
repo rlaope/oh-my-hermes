@@ -229,8 +229,23 @@ deterministic route-contract guard, not a wall-clock benchmark. It catches
 regressions where frequent chat turns accidentally fall back to slower full
 workflow scoring or drift into the wrong next action.
 
+The common request coverage gate checks ordinary Hermes-agent request breadth
+against a curated 95% target corpus:
+
+```sh
+omh demo common-request-coverage --json
+```
+
+It should report every representative common request passing, including
+planning, coding handoff, research, materials, frontend/design, observability,
+service-quality, memory, skill, tool, catalog, direct-answer, and file-lookup
+turns. This is deterministic local coverage evidence only; it is not live
+Hermes chat rendering, external plugin telemetry, connector work, executor
+work, review, CI, merge, delivery, or market-share evidence.
+
 The Hermes UX quality rollup checks the chat-first user experience across the
-routing, card, hint, context, precision, localized-copy, and fast-path rails:
+routing, card, hint, context, precision, localized-copy, fast-path, and common
+request coverage rails:
 
 ```sh
 omh demo hermes-ux-quality --json
@@ -242,10 +257,10 @@ aligned with the router, first-turn context briefs with catalog picker coverage,
 negative-control prompts that stay out of OMH workflows, expected intervention
 prompts that still enter the right workflow surface, and common non-English
 operator prompts that keep local card framing, and frequent requests that stay
-on deterministic fast paths. It is local UX-contract evidence only: it does not
-prove live Hermes chat rendering, plugin load, platform
-delivery, generic tool invocation, executor dispatch, review, CI, merge, or
-delivery.
+on deterministic fast paths, plus a broad common-request corpus above the 95%
+target. It is local UX-contract evidence only: it does not prove live Hermes
+chat rendering, plugin load, platform delivery, generic tool invocation,
+executor dispatch, review, CI, merge, or delivery.
 
 The product readiness rollup sits one level above use cases:
 
@@ -255,11 +270,12 @@ omh release product-readiness --version 1.0.2 --json
 
 It checks the generated skill content, G1-G10 readiness, grounded routing score,
 wrapper chat-card coverage, route-hint alignment, context-brief coverage,
-routing precision, router fast-path quality, Hermes UX quality, parity matrix,
-and release checklist shape in one operator-readable card. It is useful for
-release notes and maintainer handoff, but it is still local deterministic evidence only: it does
-not run the checklist, mutate Hermes, dispatch executors, review code, pass CI,
-merge, deliver messages, or spend provider budget.
+routing precision, router fast-path quality, common request coverage, Hermes UX
+quality, parity matrix, and release checklist shape in one operator-readable
+card. It is useful for release notes and maintainer handoff, but it is still
+local deterministic evidence only: it does not run the checklist, mutate Hermes,
+dispatch executors, review code, pass CI, merge, deliver messages, or spend
+provider budget.
 
 When the local release story is ready, write an attachable evidence bundle:
 

@@ -62,6 +62,7 @@ from omh.skills.catalog import (
     retained_delegation_skill_names,
 )
 from omh.quality import grounded_score as grounded_score_module
+from omh.quality import common_request_coverage as common_request_coverage_module
 from omh.quality import context_brief_coverage as context_brief_coverage_module
 from omh.quality import hermes_ux_quality as hermes_ux_quality_module
 from omh.quality import localized_chat_copy as localized_chat_copy_module
@@ -724,6 +725,24 @@ class EfficiencyContractTests(unittest.TestCase):
             "cases": [],
             "claim_boundary": "router fast-path boundary",
         }
+        common_request_payload = {
+            "schema_version": common_request_coverage_module.COMMON_REQUEST_COVERAGE_SCHEMA_VERSION,
+            "summary": {
+                "all_passing": True,
+                "target_met": True,
+                "case_count": 1,
+                "passing_count": 1,
+                "coverage_percent": 100.0,
+                "target_percent": 95.0,
+                "generic_ack_count": 0,
+                "workflow_count": 1,
+                "dispatch_count": 1,
+                "fallback_count": 0,
+            },
+            "families": [],
+            "cases": [],
+            "claim_boundary": "common request boundary",
+        }
 
         with (
             patch.object(
@@ -761,6 +780,11 @@ class EfficiencyContractTests(unittest.TestCase):
                 "build_router_fast_path_demo",
                 side_effect=AssertionError("precomputed router fast-path payload should be reused"),
             ),
+            patch.object(
+                hermes_ux_quality_module,
+                "build_common_request_coverage_demo",
+                side_effect=AssertionError("precomputed common request payload should be reused"),
+            ),
         ):
             payload = hermes_ux_quality_module.build_hermes_ux_quality_demo(
                 source="discord",
@@ -771,12 +795,14 @@ class EfficiencyContractTests(unittest.TestCase):
                 routing_precision=precision_payload,
                 localized_chat_copy=localized_payload,
                 router_fast_path=router_fast_path_payload,
+                common_request_coverage=common_request_payload,
             )
 
         self.assertEqual(payload["status"], "passed")
-        self.assertEqual(payload["summary"]["passing_gate_count"], 7)
+        self.assertEqual(payload["summary"]["passing_gate_count"], 8)
         self.assertEqual(payload["summary"]["localized_chat_copy_passing_count"], 1)
         self.assertEqual(payload["summary"]["router_fast_path_passing_count"], 1)
+        self.assertEqual(payload["summary"]["common_request_passing_count"], 1)
 
     def test_capability_context_is_strong_but_bounded(self) -> None:
         full_items = skill_capabilities()
