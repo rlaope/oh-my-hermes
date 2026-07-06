@@ -239,9 +239,14 @@ omh demo common-request-coverage --json
 It should report every representative common request passing, including
 planning, coding handoff, research, materials, frontend/design, observability,
 service-quality, memory, skill, tool, catalog, direct-answer, and file-lookup
-turns. This is deterministic local coverage evidence only; it is not live
-Hermes chat rendering, external plugin telemetry, connector work, executor
-work, review, CI, merge, delivery, or market-share evidence.
+turns. It also reports a 100-point popular-plugin-family rollup covering
+search/source, browser/live info, files/shell/workspace, GitHub/coding,
+documents/slides/PDF/visuals, communications/connectors, ops metrics,
+data analysis, knowledge/memory, and subagent safety families. This is
+deterministic local coverage evidence only; the plugin-family rollup is a
+local heuristic, not live Hermes chat rendering, external plugin telemetry,
+connector work, executor work, review, CI, merge, delivery, or market-share
+evidence.
 
 The Hermes UX quality rollup checks the chat-first user experience across the
 routing, card, hint, context, precision, localized-copy, fast-path, and common

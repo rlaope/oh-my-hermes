@@ -2666,6 +2666,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(gates["common_request_coverage"]["status"], "passed")
             self.assertIn("64/64 common request cases", gates["common_request_coverage"]["summary"])
             self.assertIn("coverage 100.0%", gates["common_request_coverage"]["summary"])
+            self.assertIn("popular plugin families 10/10 (100.0%)", gates["common_request_coverage"]["summary"])
             self.assertEqual(gates["hermes_ux_quality"]["status"], "passed")
             self.assertIn("8/8 UX gates passing", gates["hermes_ux_quality"]["summary"])
             self.assertIn("fast paths 11/11", gates["hermes_ux_quality"]["summary"])
@@ -2712,7 +2713,11 @@ class CliTests(unittest.TestCase):
                 stdout,
             )
             self.assertIn("Localized chat copy: 8/8 (locales 6)", stdout)
-            self.assertIn("Common request coverage: 64/64 (100.0%; target 95.0%; generic ack 0)", stdout)
+            self.assertIn(
+                "Common request coverage: 64/64 "
+                "(100.0%; target 95.0%; generic ack 0; popular plugin families 10/10 at 100.0%)",
+                stdout,
+            )
             self.assertIn("Hermes UX quality: 100/100 (8/8 gates)", stdout)
             self.assertIn("Local artifact store: not_written", stdout)
             self.assertFalse((omh_home / "runtime" / "release-evidence" / "index.json").exists())
@@ -2754,6 +2759,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["common_request_coverage_percent"], 100.0)
             self.assertEqual(payload["summary"]["common_request_coverage_target"], 95.0)
             self.assertEqual(payload["summary"]["common_request_generic_ack_count"], 0)
+            self.assertEqual(payload["summary"]["popular_plugin_family_covered"], 10)
+            self.assertEqual(payload["summary"]["popular_plugin_family_total"], 10)
+            self.assertEqual(payload["summary"]["popular_plugin_weighted_coverage_percent"], 100.0)
             self.assertEqual(payload["summary"]["hermes_ux_quality_score"], 100)
             self.assertEqual(payload["summary"]["hermes_ux_quality_passing_gates"], 8)
             self.assertEqual(payload["summary"]["hermes_ux_quality_total_gates"], 8)
