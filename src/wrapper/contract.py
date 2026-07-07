@@ -34,6 +34,7 @@ from ..skills.catalog import installable_skill_definitions, primary_harness_for_
 from ..setup_profiles import read_setup_profile
 from ..surfaces.evidence_copy import not_evidence_action_suffix, not_evidence_reply_suffix
 from ..visual_summary import image_generation_setup_fallback
+from ..workflows.web_visual_qa_projection import build_prepared_web_visual_qa_chat_state
 from .hermes_runtime import (
     hermes_coding_team_body,
     hermes_coding_team_claim_boundary,
@@ -174,9 +175,12 @@ VISIBLE_ACTIONS = (
     "route_to_frontend_or_visual_qa",
     "prepare_visual_qa",
     "show_visual_qa",
+    "show_capture_package",
+    "prepare_message_attachment_projection",
     "record_render_capture",
     "record_visual_diff",
     "record_visual_oracle_review",
+    "record_multimodal_review",
     "record_cjk_layout_findings",
     "record_visual_qa_verdict",
     "prepare_browser_operator_card",
@@ -1538,16 +1542,27 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         "phase": "visual_qa_prepared",
         "next_action": "prepare_visual_qa",
         "artifact_schema": "visual_qa_plan/v1",
-        "claim_boundary_suffix": "It is not screenshot capture, pixel-diff evidence, browser interaction proof, accessibility pass, or visual PASS evidence.",
+        "claim_boundary_suffix": (
+            "It is not screenshot capture, pixel-diff evidence, browser interaction proof, accessibility pass, visual PASS evidence, "
+            "message attachment upload, platform delivery, or a multimodal model call by OMH."
+        ),
         "actions": [
             {"id": "prepare_visual_qa", "label": "Prepare visual QA", "style": "primary"},
+            {"id": "show_capture_package", "label": "Show capture package", "style": "secondary"},
+            {"id": "prepare_message_attachment_projection", "label": "Prepare attachments", "style": "secondary"},
+            {"id": "record_browser_capture", "label": "Record capture", "style": "secondary"},
+            {"id": "record_multimodal_review", "label": "Record multimodal review", "style": "secondary"},
+            {"id": "record_visual_qa_verdict", "label": "Record verdict", "style": "secondary"},
             {"id": "prepare_accessibility_audit", "label": "Audit accessibility", "style": "secondary"},
             {"id": "show_status", "label": "Show status", "style": "secondary"},
         ],
         "recommended_flow": [
+            "prepare_web_visual_qa_package",
             "define_viewport_matrix",
+            "project_captures_to_message_attachments",
             "prepare_render_capture_manifest",
             "separate_screenshot_diff_and_interaction_evidence",
+            "auto_route_by_cost_risk_and_observed_evidence",
             "record_pass_hold_verdict_only_after_rendered_evidence",
         ],
         "evidence_not_observed": [
@@ -1557,6 +1572,9 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "console/network health",
             "accessibility keyboard trace",
             "visual PASS",
+            "message attachment upload",
+            "platform delivery",
+            "model called by OMH",
         ],
     },
     "accessibility-audit": {
@@ -3494,6 +3512,18 @@ def _operating_brief_chat_response(
     action_specs = config.get("actions", [])
     actions = [_action_from_spec(spec) for spec in action_specs if isinstance(spec, dict)]
     evidence_boundary = str(policy.get("evidence_boundary", "")) or "This prepared operating card is not observed work evidence."
+    extra_state = {
+        "route_action": action,
+        "confidence": decision.get("confidence", "low"),
+        "selected_workflow": workflow,
+        "workflow_explanation_reason": workflow_explanation_reason,
+        "policy_next_action": policy_next_action,
+        "artifact_schema": str(config["artifact_schema"]),
+        "recommended_flow": list(config.get("recommended_flow", [])),
+        "evidence_not_observed": list(config.get("evidence_not_observed", [])),
+    }
+    if workflow == "visual-qa":
+        extra_state.update(build_prepared_web_visual_qa_chat_state())
     return _chat_response(
         kind=str(config["kind"]),
         headline=str(config["headline"]),
@@ -3503,18 +3533,8 @@ def _operating_brief_chat_response(
         thread_key=thread_key,
         actions=actions,
         claim_boundary=evidence_boundary,
-        extra_state={
-            "route_action": action,
-            "confidence": decision.get("confidence", "low"),
-            "selected_workflow": workflow,
-            "workflow_explanation_reason": workflow_explanation_reason,
-            "policy_next_action": policy_next_action,
-            "artifact_schema": str(config["artifact_schema"]),
-            "recommended_flow": list(config.get("recommended_flow", [])),
-            "evidence_not_observed": list(config.get("evidence_not_observed", [])),
-        },
+        extra_state=extra_state,
     )
-
 
 def _review_quality_chat_response(
     *,
@@ -3536,6 +3556,18 @@ def _review_quality_chat_response(
     claim_boundary_suffix = str(config.get("claim_boundary_suffix", "")).strip()
     if claim_boundary_suffix and claim_boundary_suffix.lower() not in evidence_boundary.lower():
         evidence_boundary = f"{evidence_boundary} {claim_boundary_suffix}".strip()
+    extra_state = {
+        "route_action": action,
+        "confidence": decision.get("confidence", "low"),
+        "selected_workflow": selected,
+        "workflow_explanation_reason": workflow_explanation_reason,
+        "policy_next_action": policy_next_action,
+        "artifact_schema": str(config["artifact_schema"]),
+        "recommended_flow": list(config.get("recommended_flow", [])),
+        "evidence_not_observed": list(config.get("evidence_not_observed", [])),
+    }
+    if selected == "visual-qa":
+        extra_state.update(build_prepared_web_visual_qa_chat_state())
     return _chat_response(
         kind=str(config["kind"]),
         headline=str(config["headline"]),
@@ -3545,16 +3577,7 @@ def _review_quality_chat_response(
         thread_key=thread_key,
         actions=actions,
         claim_boundary=evidence_boundary,
-        extra_state={
-            "route_action": action,
-            "confidence": decision.get("confidence", "low"),
-            "selected_workflow": selected,
-            "workflow_explanation_reason": workflow_explanation_reason,
-            "policy_next_action": policy_next_action,
-            "artifact_schema": str(config["artifact_schema"]),
-            "recommended_flow": list(config.get("recommended_flow", [])),
-            "evidence_not_observed": list(config.get("evidence_not_observed", [])),
-        },
+        extra_state=extra_state,
     )
 
 
@@ -3619,6 +3642,18 @@ def _workflow_operations_chat_response(
     claim_boundary_suffix = str(config.get("claim_boundary_suffix", "")).strip()
     if claim_boundary_suffix and claim_boundary_suffix.lower() not in evidence_boundary.lower():
         evidence_boundary = f"{evidence_boundary} {claim_boundary_suffix}".strip()
+    extra_state = {
+        "route_action": action,
+        "confidence": decision.get("confidence", "low"),
+        "selected_workflow": selected,
+        "workflow_explanation_reason": workflow_explanation_reason,
+        "policy_next_action": policy_next_action,
+        "artifact_schema": str(config["artifact_schema"]),
+        "recommended_flow": list(config.get("recommended_flow", [])),
+        "evidence_not_observed": list(config.get("evidence_not_observed", [])),
+    }
+    if selected == "visual-qa":
+        extra_state.update(build_prepared_web_visual_qa_chat_state())
     return _chat_response(
         kind=str(config["kind"]),
         headline=str(config["headline"]),
@@ -3628,16 +3663,7 @@ def _workflow_operations_chat_response(
         thread_key=thread_key,
         actions=actions,
         claim_boundary=evidence_boundary,
-        extra_state={
-            "route_action": action,
-            "confidence": decision.get("confidence", "low"),
-            "selected_workflow": selected,
-            "workflow_explanation_reason": workflow_explanation_reason,
-            "policy_next_action": policy_next_action,
-            "artifact_schema": str(config["artifact_schema"]),
-            "recommended_flow": list(config.get("recommended_flow", [])),
-            "evidence_not_observed": list(config.get("evidence_not_observed", [])),
-        },
+        extra_state=extra_state,
     )
 
 

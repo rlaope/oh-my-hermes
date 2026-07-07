@@ -149,6 +149,32 @@ not evidence yet until your connected image tool or wrapper records them.
 [ Open img-summary ] [ Choose image tool ] [ Record visual evidence ]
 ```
 
+For a web visual QA request that should later show screenshot attachments in a
+Discord-like surface, Hermes can prepare the capture package without claiming
+the capture, upload, delivery, or multimodal review already happened:
+
+```text
+Hermes Agent  BOT
+[omh] visual-qa - I can prepare rendered visual QA without pretending screenshots exist.
+
+I will prepare web_visual_qa_package/v1 with captures[], criteria[],
+criteria_results[], optional host-observed multimodal_reviews[], and
+message_attachment_projection/v1 for chat attachment candidates. Auto-routing
+starts at prepare_capture when no screenshot evidence is observed; higher-risk
+or unresolved evidence routes to operator review.
+
+[ Prepare visual QA ] [ Show capture package ] [ Prepare attachments ] [ Record capture ] [ Record multimodal review ]
+
+Claim boundary: This is not screenshot capture, message upload, platform
+delivery, visual PASS, or a multimodal model call by OMH.
+```
+
+The wrapper may render the attachment projection as a message UI preview only
+after capture paths or URIs are observed. `delivery_observed` remains false
+until the Discord, Slack, or other platform adapter records upload and delivery
+evidence. Multimodal review is allowed as host-supplied observed evidence, but
+OMH core does not call a vision model or treat model availability as free.
+
 The wrapper should not ask the user to approve `omh list` merely to show the
 catalog. `omh_skill_picker/v1` carries the workflow labels, direct invocation
 text, harness names, and routing-only claim boundary. Catalog-question

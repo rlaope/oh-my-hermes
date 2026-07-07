@@ -2445,6 +2445,8 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "visual-qa",
         (
             "visual qa",
+            "web qa",
+            "web visual qa",
             "screenshot qa",
             "pixel diff",
             "layout broken",

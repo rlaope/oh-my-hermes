@@ -3663,6 +3663,122 @@ class CliTests(unittest.TestCase):
             self.assertEqual(status, 2)
             self.assertIn("exactly three colon-separated fields", stderr)
 
+    def test_web_qa_cli_records_package_capture_and_verdict_metadata(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "web-qa"]
+            capture_path = root / "desktop.png"
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "package",
+                    "--package-id",
+                    "checkout-prepared",
+                    "--target",
+                    "Checkout page",
+                    "--criterion",
+                    "layout:Text fits:No overlap:blocking",
+                    "--risk-level",
+                    "medium",
+                    "--estimated-cost-tier",
+                    "none",
+                    "--json",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            prepared_capture = json.loads(stdout)
+            self.assertEqual(prepared_capture["routing"]["route"], "prepare_capture")
+            self.assertEqual(prepared_capture["routing"]["cost_policy"], "risk_first_cost_aware_host_observed_only")
+            self.assertEqual(prepared_capture["attachment_projection"]["items"], [])
+            self.assertFalse(prepared_capture["attachment_projection"]["delivery_observed"])
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "package",
+                    "--package-id",
+                    "checkout-qa",
+                    "--target",
+                    "Checkout page",
+                    "--criterion",
+                    "layout:Text fits:No overlap:blocking",
+                    "--risk-level",
+                    "high",
+                    "--estimated-cost-tier",
+                    "low",
+                    "--json",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            prepared = json.loads(stdout)
+            self.assertEqual(prepared["schema_version"], "web_visual_qa_package/v1")
+            self.assertEqual(prepared["package_id"], "checkout-qa")
+            self.assertEqual(prepared["verdict"], "not_observed")
+            self.assertEqual(prepared["routing"]["route"], "prepare_capture")
+
+            with patch("omh.commands.web_qa.now", return_value="2026-07-07T00:00:30Z"):
+                status, stdout, stderr = run_cli(
+                    base
+                    + [
+                        "observe-capture",
+                        "--package-id",
+                        "checkout-qa",
+                        "--capture-id",
+                        "desktop",
+                        "--role",
+                        "desktop",
+                        "--path",
+                        str(capture_path),
+                        "--mime-type",
+                        "image/png",
+                        "--viewport",
+                        "desktop-1440",
+                        "--summary",
+                        "Desktop checkout viewport captured after login boundary.",
+                        "--json",
+                    ]
+                )
+
+            self.assertEqual(status, 0, stderr)
+            observed = json.loads(stdout)
+            self.assertEqual(observed["status"], "captures_observed")
+            self.assertEqual(observed["created_at"], prepared["created_at"])
+            self.assertEqual(observed["updated_at"], "2026-07-07T00:00:30Z")
+            self.assertEqual(observed["captures"][0]["capture_id"], "desktop")
+            self.assertEqual(observed["captures"][0]["captured_at"], "2026-07-07T00:00:30Z")
+            self.assertEqual(observed["attachment_projection"]["items"][0]["path_or_uri"], str(capture_path))
+            self.assertFalse(observed["attachment_projection"]["delivery_observed"])
+
+            with patch("omh.commands.web_qa.now", return_value="2026-07-07T00:00:45Z"):
+                status, stdout, stderr = run_cli(
+                    base
+                    + [
+                        "record-verdict",
+                        "--package-id",
+                        "checkout-qa",
+                        "--criteria-result",
+                        "layout:hold:desktop:operator:Desktop captured but mobile review remains:blocking",
+                        "--multimodal-review",
+                        "vision:observed:host_vision:low:medium:desktop:Host vision review checked desktop overlap",
+                        "--verdict",
+                        "hold",
+                        "--json",
+                    ]
+                )
+
+            self.assertEqual(status, 0, stderr)
+            verdict = json.loads(stdout)
+            self.assertEqual(verdict["status"], "verdict_recorded")
+            self.assertEqual(verdict["created_at"], prepared["created_at"])
+            self.assertEqual(verdict["updated_at"], "2026-07-07T00:00:45Z")
+            self.assertEqual(verdict["verdict"], "hold")
+            self.assertEqual(verdict["criteria_results"][0]["status"], "hold")
+            self.assertEqual(verdict["routing"]["route"], "request_operator_review")
+            self.assertIn("multimodal_model_called_by_omh", verdict["does_not_prove"])
+
     def test_recommend_risky_refactor_includes_cleanup_workflow(self) -> None:
         status, stdout, stderr = run_cli(["recommend", "risky", "refactor"])
 

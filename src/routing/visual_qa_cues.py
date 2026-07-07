@@ -7,6 +7,8 @@ import unicodedata
 BROWSER_VISUAL_QA_PHRASES = (
     "browser qa",
     "browser interaction qa",
+    "web qa",
+    "web visual qa",
     "click path",
     "click-path audit",
     "dead link check",
@@ -19,6 +21,8 @@ BROWSER_VISUAL_QA_PHRASES = (
 BROWSER_VISUAL_QA_COMMAND_PHRASES = (
     "browser qa",
     "browser interaction qa",
+    "web qa",
+    "web visual qa",
     "click path audit",
     "click-path audit",
     "dead link check",

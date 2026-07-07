@@ -1399,6 +1399,10 @@ class ChatRouterTests(unittest.TestCase):
                 "visual-qa",
             ),
             (
+                "Web QA the checkout page and prepare Discord screenshot attachments with visual criteria.",
+                "visual-qa",
+            ),
+            (
                 "Click path audit the new dashboard buttons before release.",
                 "visual-qa",
             ),

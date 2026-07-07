@@ -976,7 +976,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(definitions["visual-qa"].phase, "visual-qa")
         self.assertEqual(definitions["visual-qa"].quality_tier, "visual-qa-gated")
         self.assertIn("visual_qa_plan/v1", definitions["visual-qa"].expected_outputs)
+        self.assertIn("web_visual_qa_package/v1", definitions["visual-qa"].expected_outputs)
         self.assertIn("viewport_state_capture_matrix/v1", definitions["visual-qa"].expected_outputs)
+        self.assertIn("message_attachment_projection/v1 for chat attachments", definitions["visual-qa"].expected_outputs)
         self.assertIn("render_capture_manifest/v1 when observed", definitions["visual-qa"].expected_outputs)
         self.assertIn("browser_interaction_trace/v1 when observed", definitions["visual-qa"].expected_outputs)
         self.assertIn("console_network_health/v1 when observed", definitions["visual-qa"].expected_outputs)
@@ -997,11 +999,15 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("CJK", " ".join(definitions["visual-qa"].safety_rules))
         self.assertIn("console_network_health/v1", " ".join(definitions["visual-qa"].artifact_expectations))
         self.assertIn("click_path_state_trace/v1", " ".join(definitions["visual-qa"].artifact_expectations))
+        self.assertIn("web_visual_qa_package/v1", " ".join(definitions["visual-qa"].artifact_expectations))
+        self.assertIn("message_attachment_projection/v1", " ".join(definitions["visual-qa"].artifact_expectations))
         self.assertIn("accessibility_keyboard_trace/v1", " ".join(definitions["visual-qa"].artifact_expectations))
         self.assertIn("dimensionsMatch", " ".join(definitions["visual-qa"].artifact_expectations))
         self.assertIn("PASS unavailable", " ".join(definitions["visual-qa"].artifact_expectations))
         self.assertIn("visual_qa_plan/v1", harnesses["visual-qa"].expected_outputs)
+        self.assertIn("web_visual_qa_package/v1", harnesses["visual-qa"].expected_outputs)
         self.assertIn("viewport_state_capture_matrix/v1", harnesses["visual-qa"].expected_outputs)
+        self.assertIn("message_attachment_projection/v1 for chat attachments", harnesses["visual-qa"].expected_outputs)
         self.assertIn("render_capture_manifest/v1 when observed", harnesses["visual-qa"].expected_outputs)
         self.assertIn("browser_interaction_trace/v1 when observed", harnesses["visual-qa"].expected_outputs)
         self.assertIn("console_network_health/v1 when observed", harnesses["visual-qa"].expected_outputs)
@@ -1010,6 +1016,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("visual_hotspot_review/v1 when observed", harnesses["visual-qa"].expected_outputs)
         self.assertIn("motion_interaction_capture/v1 when observed", harnesses["visual-qa"].expected_outputs)
         self.assertIn("viewport_state_capture_matrix_prepared", harnesses["visual-qa"].evidence_ladder)
+        self.assertIn("web_visual_qa_package_prepared", harnesses["visual-qa"].evidence_ladder)
+        self.assertIn("message_attachment_projection_prepared", harnesses["visual-qa"].evidence_ladder)
         self.assertIn("browser_interaction_trace_observed_when_available", harnesses["visual-qa"].evidence_ladder)
         self.assertIn("console_network_health_observed_when_available", harnesses["visual-qa"].evidence_ladder)
         self.assertIn("click_path_state_trace_observed_when_available", harnesses["visual-qa"].evidence_ladder)
@@ -1022,17 +1030,22 @@ class RouterContentTests(unittest.TestCase):
             {
                 "prepare_visual_qa",
                 "show_visual_qa",
+                "show_capture_package",
+                "prepare_message_attachment_projection",
                 "record_browser_capture",
                 "record_accessibility_check",
                 "record_render_capture",
                 "record_visual_diff",
                 "record_visual_oracle_review",
+                "record_multimodal_review",
                 "record_cjk_layout_findings",
                 "record_visual_qa_verdict",
             }.issubset(set(VISIBLE_ACTIONS))
         )
         self.assertIn("visual_qa_plan/v1", templates["visual-qa"].content)
+        self.assertIn("web_visual_qa_package/v1", templates["visual-qa"].content)
         self.assertIn("viewport_state_capture_matrix/v1", templates["visual-qa"].content)
+        self.assertIn("message_attachment_projection/v1", templates["visual-qa"].content)
         self.assertIn("render_capture_manifest/v1", templates["visual-qa"].content)
         self.assertIn("browser_interaction_trace/v1", templates["visual-qa"].content)
         self.assertIn("console_network_health/v1", templates["visual-qa"].content)
@@ -2811,6 +2824,10 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("chat_response.state.workflow_explanation.not_evidence_yet", text)
         self.assertIn("chat_response.state.workflow_explanation.recommended_reply", text)
         self.assertIn("chat_response.state.workflow_explanation.primary_action_hint", text)
+        self.assertIn("web_visual_qa_package/v1", text)
+        self.assertIn("message_attachment_projection/v1", text)
+        self.assertIn("delivery_observed", text)
+        self.assertIn("multimodal model call by OMH", text)
         self.assertIn("Telegram can register the `omh` bot command menu", text)
         self.assertIn("Startup Product Triage", text)
         self.assertIn("Real-World QA Check", text)
