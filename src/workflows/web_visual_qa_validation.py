@@ -1,0 +1,135 @@
+from __future__ import annotations
+
+from .web_visual_qa_contracts import (
+    MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION,
+    SUPPORTED_IMAGE_MIME_TYPES,
+    SUPPORTED_LIFECYCLE_STATUSES,
+    SUPPORTED_REDACTION_STATUSES,
+    SUPPORTED_RESULT_STATUSES,
+    SUPPORTED_VERDICTS,
+    WEB_VISUAL_QA_PACKAGE_SCHEMA_VERSION,
+    JsonObject,
+    ids,
+    object_list,
+    strings,
+    text,
+    valid_id,
+    valid_path_or_uri,
+)
+
+
+def validate_web_visual_qa_package(record: JsonObject) -> list[str]:
+    errors: list[str] = []
+    _require_schema(record, errors)
+    criteria_ids = ids(object_list(record.get("criteria")), "criterion_id")
+    capture_ids = ids(object_list(record.get("captures")), "capture_id")
+    trace_ids = ids(object_list(record.get("interaction_traces")), "trace_id")
+    evidence_ids = capture_ids | trace_ids
+    if not criteria_ids:
+        errors.append("criteria must include at least one criterion")
+    _validate_captures(object_list(record.get("captures")), errors)
+    _validate_results(object_list(record.get("criteria_results")), criteria_ids, evidence_ids, errors)
+    _validate_reviews(object_list(record.get("multimodal_reviews")), evidence_ids, errors)
+    _validate_projection(record, errors)
+    _validate_pass(record, errors)
+    return errors
+
+
+def _validate_captures(captures: list[JsonObject], errors: list[str]) -> None:
+    seen: set[str] = set()
+    for index, capture in enumerate(captures):
+        capture_id = text(capture.get("capture_id"))
+        if not valid_id(capture_id):
+            errors.append(f"captures[{index}].capture_id must contain only letters, digits, and hyphens")
+        if capture_id in seen:
+            errors.append(f"captures[{index}].capture_id duplicates another capture")
+        seen.add(capture_id)
+        if not valid_path_or_uri(text(capture.get("path_or_uri"))):
+            errors.append(f"captures[{index}].path_or_uri must be an absolute local path or URI")
+        if text(capture.get("mime_type")) not in SUPPORTED_IMAGE_MIME_TYPES:
+            errors.append(f"captures[{index}].mime_type must be one of {', '.join(SUPPORTED_IMAGE_MIME_TYPES)}")
+        if not text(capture.get("evidence_summary")):
+            errors.append(f"captures[{index}].evidence_summary is required")
+        if text(capture.get("redaction_status")) not in SUPPORTED_REDACTION_STATUSES:
+            errors.append(f"captures[{index}].redaction_status is unsupported")
+
+
+def _validate_results(
+    results: list[JsonObject],
+    criteria_ids: set[str],
+    evidence_ids: set[str],
+    errors: list[str],
+) -> None:
+    for index, result in enumerate(results):
+        if text(result.get("criterion_id")) not in criteria_ids:
+            errors.append(f"criteria_results[{index}].criterion_id must reference criteria[].criterion_id")
+        if text(result.get("status")) not in SUPPORTED_RESULT_STATUSES:
+            errors.append(f"criteria_results[{index}].status is unsupported")
+        if not text(result.get("summary")):
+            errors.append(f"criteria_results[{index}].summary is required")
+        for ref in strings(result.get("evidence_refs")):
+            if ref not in evidence_ids:
+                errors.append(f"criteria_results[{index}].evidence_refs contains unknown package evidence ref: {ref}")
+
+
+def _validate_reviews(reviews: list[JsonObject], evidence_ids: set[str], errors: list[str]) -> None:
+    for index, review in enumerate(reviews):
+        if not valid_id(text(review.get("review_id"))):
+            errors.append(f"multimodal_reviews[{index}].review_id must contain only letters, digits, and hyphens")
+        if not text(review.get("summary")):
+            errors.append(f"multimodal_reviews[{index}].summary is required")
+        for ref in strings(review.get("evidence_refs")):
+            if ref not in evidence_ids:
+                errors.append(f"multimodal_reviews[{index}].evidence_refs contains unknown package evidence ref: {ref}")
+
+
+def _validate_projection(record: JsonObject, errors: list[str]) -> None:
+    projection = record.get("attachment_projection")
+    if not isinstance(projection, dict):
+        errors.append("attachment_projection must be an object")
+        return
+    if projection.get("schema_version") != MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION:
+        errors.append("attachment_projection.schema_version must be message_attachment_projection/v1")
+    if projection.get("delivery_observed") is not False:
+        errors.append("attachment_projection.delivery_observed must remain false until wrapper evidence exists")
+    eligible_capture_ids = {
+        text(capture.get("capture_id"))
+        for capture in object_list(record.get("captures"))
+        if text(capture.get("attachment")) == "eligible" and text(capture.get("redaction_status")) != "contains_sensitive_content"
+    }
+    for index, item in enumerate(object_list(projection.get("items"))):
+        if text(item.get("capture_id")) not in eligible_capture_ids:
+            errors.append(f"attachment_projection.items[{index}].capture_id must reference an attachment-eligible capture")
+
+
+def _validate_pass(record: JsonObject, errors: list[str]) -> None:
+    if record.get("verdict") != "pass":
+        return
+    if not object_list(record.get("captures")):
+        errors.append("PASS requires at least one observed capture")
+    blocking_criteria_ids = [
+        text(item.get("criterion_id")) for item in object_list(record.get("criteria")) if text(item.get("severity")) == "blocking"
+    ]
+    results_by_criterion = {text(item.get("criterion_id")): item for item in object_list(record.get("criteria_results"))}
+    missing_or_not_passing = [
+        criterion_id
+        for criterion_id in blocking_criteria_ids
+        if criterion_id not in results_by_criterion or results_by_criterion[criterion_id].get("status") != "pass"
+    ]
+    if not blocking_criteria_ids or missing_or_not_passing:
+        errors.append("PASS requires every blocking criterion result to pass")
+    if any(not strings(results_by_criterion[criterion_id].get("evidence_refs")) for criterion_id in blocking_criteria_ids if criterion_id in results_by_criterion):
+        errors.append("PASS requires every blocking criterion result to reference observed package evidence")
+
+
+def _require_schema(record: JsonObject, errors: list[str]) -> None:
+    if record.get("schema_version") != WEB_VISUAL_QA_PACKAGE_SCHEMA_VERSION:
+        errors.append("schema_version must be web_visual_qa_package/v1")
+    if not valid_id(text(record.get("package_id"))):
+        errors.append("package_id must contain only letters, digits, and hyphens")
+    if text(record.get("status")) not in SUPPORTED_LIFECYCLE_STATUSES:
+        errors.append(f"status must be one of {', '.join(SUPPORTED_LIFECYCLE_STATUSES)}")
+    if text(record.get("verdict")) not in SUPPORTED_VERDICTS:
+        errors.append(f"verdict must be one of {', '.join(SUPPORTED_VERDICTS)}")
+    if not text(record.get("target")):
+        errors.append("target is required")

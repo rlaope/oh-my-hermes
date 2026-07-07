@@ -131,6 +131,18 @@ class OmhPaths:
         return self.visual_observations_dir / "index.json"
 
     @property
+    def web_visual_qa_dir(self) -> Path:
+        return self.omh_home / "web-visual-qa"
+
+    @property
+    def web_visual_qa_packages_dir(self) -> Path:
+        return self.web_visual_qa_dir / "packages"
+
+    @property
+    def web_visual_qa_packages_index_path(self) -> Path:
+        return self.web_visual_qa_packages_dir / "index.json"
+
+    @property
     def memory_dir(self) -> Path:
         return self.omh_home / "memory"
 

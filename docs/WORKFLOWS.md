@@ -1589,7 +1589,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The user needs a broad visual quality rubric before generation; use `design-quality-gate`.
   - The user needs image-card prompt creation; use `img-summary`.
   - The user wants non-visual code tests, CI, or PR review only; use the coding/review workflow.
-- Strong routing signals: `visual-qa`, `visual qa`, `visual QA`, `visual quality assurance`, `visual check`, `screenshot qa`, `screenshot check`, `pixel diff`, `image diff`, `visual diff`, `render qa`, `render check`, `browser screenshot`, `browser qa`, `browser interaction qa`, `click path`, `click-path audit`, `dead link check`, `console error check`, `network failure check`, `keyboard navigation check`, `viewport check`, `responsive check`, `ui looks wrong`, `looks broken`, `layout broken`, `broken layout`, `text clipping`, `cjk clipping`, `cjk layout`, `tui check`, `terminal ui check`, `비주얼 qa`, `비주얼QA`, `시각 qa`, `시각 검증`, `화면 검증`, `스크린샷 검증`, `렌더 검증`, `픽셀 diff`, `픽셀 비교`, `화면 깨짐`, `레이아웃 깨짐`, `글자 잘림`, `한글 줄바꿈`, `터미널 ui`
+- Strong routing signals: `visual-qa`, `visual qa`, `visual QA`, `visual quality assurance`, `visual check`, `web qa`, `web visual qa`, `screenshot qa`, `screenshot check`, `pixel diff`, `image diff`, `visual diff`, `render qa`, `render check`, `browser screenshot`, `browser qa`, `browser interaction qa`, `click path`, `click-path audit`, `dead link check`, `console error check`, `network failure check`, `keyboard navigation check`, `viewport check`, `responsive check`, `ui looks wrong`, `looks broken`, `layout broken`, `broken layout`, `text clipping`, `cjk clipping`, `cjk layout`, `tui check`, `terminal ui check`, `비주얼 qa`, `비주얼QA`, `시각 qa`, `시각 검증`, `화면 검증`, `스크린샷 검증`, `렌더 검증`, `픽셀 diff`, `픽셀 비교`, `화면 깨짐`, `레이아웃 깨짐`, `글자 잘림`, `한글 줄바꿈`, `터미널 ui`
 - Good example:
   - Prompt: visual-qa 이 랜딩페이지가 모바일/데스크톱에서 깨지는지 스크린샷 기준으로 검증해줘.
   - Expected behavior: Prepare visual_qa_plan/v1, require fresh captures, record render_capture_manifest/v1 and visual_diff_evidence/v1 when observed, then issue PASS/REVISE/BLOCK.
@@ -1632,7 +1632,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - fresh render/capture evidence for completion claims
 - Expected outputs:
   - visual_qa_plan/v1
+  - web_visual_qa_package/v1
   - viewport_state_capture_matrix/v1
+  - message_attachment_projection/v1 for chat attachments
   - render_capture_manifest/v1 when observed
   - browser_interaction_trace/v1 when observed
   - console_network_health/v1 when observed
@@ -1647,7 +1649,9 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - retry_or_blocker/v1
 - Artifact expectations:
   - visual_qa_plan/v1 with pages, states, viewports, references, and freshness rule
+  - web_visual_qa_package/v1 with captures[], criteria[], criteria_results[], multimodal_reviews[], auto routing, and observed-only cost policy
   - viewport_state_capture_matrix/v1 enumerates every route/page, 375/768/1280-style viewport, scroll position, modal/tab state, and CJK-heavy region to capture
+  - message_attachment_projection/v1 maps eligible observed captures to chat attachment candidates without claiming upload or delivery
   - render_capture_manifest/v1 only from fresh screenshots, file renders, images, or terminal captures
   - browser_interaction_trace/v1 only from observed navigation, form, auth, search, modal, and critical journey runs with read-only or staging-safe boundaries recorded
   - console_network_health/v1 records observed critical console errors, failed requests, status codes, and ignored third-party noise before browser QA can pass
@@ -5865,7 +5869,9 @@ Prepare observed-only rendered visual QA gates for web, frontend, image, documen
   - fresh render/capture evidence for completion claims
 - Outputs:
   - visual_qa_plan/v1
+  - web_visual_qa_package/v1
   - viewport_state_capture_matrix/v1
+  - message_attachment_projection/v1 for chat attachments
   - render_capture_manifest/v1 when observed
   - browser_interaction_trace/v1 when observed
   - console_network_health/v1 when observed
@@ -5889,6 +5895,8 @@ Prepare observed-only rendered visual QA gates for web, frontend, image, documen
   - verdict is PASS, REVISE, or BLOCK with evidence IDs
 - Verification:
   - validate visual_qa_plan/v1
+  - validate web_visual_qa_package/v1
+  - check message_attachment_projection/v1 does not claim upload or platform delivery
   - check viewport_state_capture_matrix/v1 before PASS
   - check capture freshness after the last relevant edit
   - check render_capture_manifest/v1 before PASS
@@ -5903,6 +5911,8 @@ Prepare observed-only rendered visual QA gates for web, frontend, image, documen
   - block PASS on CJK clipping, overlap, invisible text, unusable controls, or missing critical states
 - Evidence ladder:
   - `visual_qa_scope_recorded`
+  - `web_visual_qa_package_prepared`
+  - `message_attachment_projection_prepared`
   - `viewport_state_capture_matrix_prepared`
   - `freshness_rule_recorded`
   - `render_capture_manifest_observed`
@@ -5919,17 +5929,22 @@ Prepare observed-only rendered visual QA gates for web, frontend, image, documen
 - Wrapper actions:
   - `prepare_visual_qa`
   - `show_visual_qa`
+  - `show_capture_package`
+  - `prepare_message_attachment_projection`
   - `record_render_capture`
   - `record_browser_capture`
   - `record_accessibility_check`
   - `record_visual_diff`
   - `record_visual_oracle_review`
+  - `record_multimodal_review`
   - `record_cjk_layout_findings`
   - `record_visual_qa`
   - `record_visual_qa_verdict`
   - `show_visual_status`
 - Artifact events:
   - `visual_qa_scope_recorded`
+  - `web_visual_qa_package_prepared`
+  - `message_attachment_projection_prepared`
   - `viewport_state_capture_matrix_prepared`
   - `freshness_rule_recorded`
   - `render_capture_manifest_observed`
@@ -5947,6 +5962,7 @@ Prepare observed-only rendered visual QA gates for web, frontend, image, documen
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A visual_qa_plan/v1 artifact is not rendered QA evidence.
+  - A web_visual_qa_package/v1 artifact is not browser capture, multimodal model execution, message upload, or platform delivery evidence.
   - A stale screenshot, source review, or unobserved browser command cannot support PASS.
   - A browser screenshot is not click-path, console/network, accessibility, or keyboard navigation evidence unless those observations are recorded separately.
   - An automated accessibility scan is not a full accessibility PASS without keyboard and focus-order evidence.

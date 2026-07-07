@@ -2129,6 +2129,52 @@ class WrapperContractTests(unittest.TestCase):
                 self.assertIn("image_generation_setup/v1", explanation["why_this_workflow"])
                 self.assertIn("visual QA", explanation["not_evidence_yet"])
 
+    def test_web_visual_qa_interaction_projects_capture_package_boundaries(self) -> None:
+        payload = build_chat_interaction_payload(
+            "Web QA the checkout page and prepare Discord screenshot attachments with visual criteria.",
+            source="discord",
+        )
+
+        response = payload["chat_response"]
+        state = response["state"]
+        actions = {action["id"]: action for action in response["actions"]}
+
+        self.assertEqual(payload["route"]["selected_skill"], "visual-qa")
+        self.assertEqual(payload["next_action"], "prepare_visual_qa")
+        self.assertEqual(response["kind"], "visual_qa")
+        self.assertEqual(state["artifact_schema"], "web_visual_qa_prepared_preview/v1")
+        self.assertEqual(state["package_schema"], "web_visual_qa_package/v1")
+        self.assertEqual(state["visual_qa_plan_schema"], "visual_qa_plan/v1")
+        self.assertEqual(state["capture_model"], "web_visual_qa_package.captures[]")
+        self.assertEqual(state["criteria_result_model"], "web_visual_qa_package.criteria_results[]")
+        self.assertEqual(state["multimodal_review_model"], "web_visual_qa_package.multimodal_reviews[]")
+        self.assertEqual(state["attachment_projection"]["schema_version"], "message_attachment_projection/v1")
+        self.assertFalse(state["attachment_projection"]["delivery_observed"])
+        self.assertEqual(state["attachment_projection"]["items"], [])
+        self.assertIn("platform_delivery", state["attachment_projection"]["does_not_prove"])
+        self.assertEqual(state["auto_routing"]["schema_version"], "web_visual_qa_auto_routing/v1")
+        self.assertEqual(state["auto_routing"]["route"], "prepare_capture")
+        self.assertEqual(state["auto_routing"]["cost_policy"], "risk_first_cost_aware_host_observed_only")
+        self.assertIn("model_call", state["auto_routing"]["does_not_authorize"])
+        summary = state["criteria_result_summary"]
+        self.assertEqual(summary["schema_version"], "web_visual_qa_criteria_result_summary/v1")
+        self.assertEqual(summary["result_count"], 0)
+        self.assertGreater(summary["criteria_count"], 0)
+        self.assertEqual(summary["not_observed_count"], summary["criteria_count"])
+        self.assertGreater(summary["blocking_unresolved_count"], 0)
+        self.assertTrue(state["blocking_criteria_unresolved"])
+        self.assertEqual(state["multimodal_review_policy"]["allowed_source"], "host_observed_evidence")
+        self.assertEqual(state["multimodal_review_policy"]["omh_model_call_authorized"], False)
+        self.assertIn("model called by OMH", state["evidence_not_observed"])
+        self.assertIn("platform delivery", state["evidence_not_observed"])
+        self.assertIn("show_capture_package", actions)
+        self.assertIn("prepare_message_attachment_projection", actions)
+        self.assertIn("record_browser_capture", actions)
+        self.assertIn("record_multimodal_review", actions)
+        self.assertIn("platform delivery", response["claim_boundary"])
+        self.assertNotIn("screenshot has been captured", response["body"])
+        self.assertNotIn("sent to Discord", response["body"])
+
     def test_paper_learning_interaction_uses_learning_evidence_not_coding_gates(self) -> None:
         payload = build_chat_interaction_payload("explique ce PDF de recherche simplement", source="discord")
 

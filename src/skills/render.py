@@ -23,6 +23,9 @@ from ..plugin_bundle.omh.awareness import (
 )
 
 
+WORKFLOW_REGISTRY_TRIGGER_LIMIT = 9
+
+
 @dataclass(frozen=True)
 class SkillTemplate:
     name: str
@@ -139,7 +142,7 @@ def _trigger_table(definitions: list[SkillDefinition]) -> str:
     for definition in definitions:
         if definition.name == "oh-my-hermes":
             continue
-        triggers = ", ".join(f"`{trigger}`" for trigger in definition.triggers[:7])
+        triggers = ", ".join(f"`{trigger}`" for trigger in definition.triggers[:WORKFLOW_REGISTRY_TRIGGER_LIMIT])
         lines.append(f"- `{definition.name}`: {triggers}")
     return "\n".join(lines)
 

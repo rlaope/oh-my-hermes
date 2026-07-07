@@ -2698,6 +2698,8 @@ _DEFINITIONS = [
             "visual QA",
             "visual quality assurance",
             "visual check",
+            "web qa",
+            "web visual qa",
             "screenshot qa",
             "screenshot check",
             "pixel diff",
@@ -2764,7 +2766,9 @@ _DEFINITIONS = [
         ),
         expected_outputs=(
             "visual_qa_plan/v1",
+            "web_visual_qa_package/v1",
             "viewport_state_capture_matrix/v1",
+            "message_attachment_projection/v1 for chat attachments",
             "render_capture_manifest/v1 when observed",
             "browser_interaction_trace/v1 when observed",
             "console_network_health/v1 when observed",
@@ -2780,7 +2784,9 @@ _DEFINITIONS = [
         ),
         artifact_expectations=(
             "visual_qa_plan/v1 with pages, states, viewports, references, and freshness rule",
+            "web_visual_qa_package/v1 with captures[], criteria[], criteria_results[], multimodal_reviews[], auto routing, and observed-only cost policy",
             "viewport_state_capture_matrix/v1 enumerates every route/page, 375/768/1280-style viewport, scroll position, modal/tab state, and CJK-heavy region to capture",
+            "message_attachment_projection/v1 maps eligible observed captures to chat attachment candidates without claiming upload or delivery",
             "render_capture_manifest/v1 only from fresh screenshots, file renders, images, or terminal captures",
             "browser_interaction_trace/v1 only from observed navigation, form, auth, search, modal, and critical journey runs with read-only or staging-safe boundaries recorded",
             "console_network_health/v1 records observed critical console errors, failed requests, status codes, and ignored third-party noise before browser QA can pass",
@@ -7156,7 +7162,9 @@ _HARNESSES = [
         ),
         (
             "visual_qa_plan/v1",
+            "web_visual_qa_package/v1",
             "viewport_state_capture_matrix/v1",
+            "message_attachment_projection/v1 for chat attachments",
             "render_capture_manifest/v1 when observed",
             "browser_interaction_trace/v1 when observed",
             "console_network_health/v1 when observed",
@@ -7182,6 +7190,8 @@ _HARNESSES = [
         ),
         (
             "validate visual_qa_plan/v1",
+            "validate web_visual_qa_package/v1",
+            "check message_attachment_projection/v1 does not claim upload or platform delivery",
             "check viewport_state_capture_matrix/v1 before PASS",
             "check capture freshness after the last relevant edit",
             "check render_capture_manifest/v1 before PASS",
@@ -7198,6 +7208,8 @@ _HARNESSES = [
         "If fresh captures are missing or stale, return BLOCKED_BY_MISSING_RENDER_EVIDENCE and request the smallest recapture set.",
         (
             "visual_qa_scope_recorded",
+            "web_visual_qa_package_prepared",
+            "message_attachment_projection_prepared",
             "viewport_state_capture_matrix_prepared",
             "freshness_rule_recorded",
             "render_capture_manifest_observed",
@@ -7227,6 +7239,8 @@ _HARNESSES = [
         ),
         evidence_ladder=(
             "visual_qa_scope_recorded",
+            "web_visual_qa_package_prepared",
+            "message_attachment_projection_prepared",
             "viewport_state_capture_matrix_prepared",
             "freshness_rule_recorded",
             "render_capture_manifest_observed",
@@ -7244,11 +7258,14 @@ _HARNESSES = [
         wrapper_actions=(
             "prepare_visual_qa",
             "show_visual_qa",
+            "show_capture_package",
+            "prepare_message_attachment_projection",
             "record_render_capture",
             "record_browser_capture",
             "record_accessibility_check",
             "record_visual_diff",
             "record_visual_oracle_review",
+            "record_multimodal_review",
             "record_cjk_layout_findings",
             "record_visual_qa",
             "record_visual_qa_verdict",
@@ -7256,6 +7273,7 @@ _HARNESSES = [
         ),
         overclaim_guards=(
             "A visual_qa_plan/v1 artifact is not rendered QA evidence.",
+            "A web_visual_qa_package/v1 artifact is not browser capture, multimodal model execution, message upload, or platform delivery evidence.",
             "A stale screenshot, source review, or unobserved browser command cannot support PASS.",
             "A browser screenshot is not click-path, console/network, accessibility, or keyboard navigation evidence unless those observations are recorded separately.",
             "An automated accessibility scan is not a full accessibility PASS without keyboard and focus-order evidence.",
