@@ -9,6 +9,20 @@ from _cli_harness import run_cli
 
 
 class HudCliTests(unittest.TestCase):
+    def test_status_alias_returns_hud_payload_for_operator_smoke_checks(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes"), "status", "--json"],
+                output_json=False,
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "omh_hud/v1")
+            self.assertEqual(payload["plugin"]["status"], "missing")
+
     def test_hud_prints_compact_line_without_runtime_state(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

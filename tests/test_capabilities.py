@@ -25,6 +25,15 @@ LEGACY_ROLE_ALIASES = {
 
 
 class CapabilityManifestTests(unittest.TestCase):
+    def test_capabilities_root_defaults_to_summary_for_operator_smoke_checks(self) -> None:
+        status, stdout, stderr = run_cli(["capabilities", "--json"], output_json=False)
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "omh_capability_summary/v1")
+        self.assertGreaterEqual(payload["totals"]["skills"], 1)
+
     def test_capability_snapshot_is_deterministic_and_boundary_safe(self) -> None:
         first = capability_snapshot()
         second = capability_snapshot()

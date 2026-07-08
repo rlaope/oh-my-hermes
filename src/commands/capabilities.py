@@ -90,7 +90,9 @@ def cmd_capabilities_inspect(args: argparse.Namespace) -> int:
 
 def _add_capabilities_commands(sub) -> None:
     capabilities = sub.add_parser("capabilities", help="Inspect OMH capability manifests for Hermes/plugin/wrapper use.")
-    capabilities_sub = capabilities.add_subparsers(dest="capabilities_command", required=True)
+    capabilities.add_argument("--json", action="store_true", help="Print the default machine-readable capability summary.")
+    capabilities.set_defaults(func=cmd_capabilities_summary)
+    capabilities_sub = capabilities.add_subparsers(dest="capabilities_command")
 
     export = capabilities_sub.add_parser("export", help="Export the deterministic OMH capability manifest.")
     export.add_argument("--section", choices=CAPABILITY_SECTION_CHOICES, default=None)

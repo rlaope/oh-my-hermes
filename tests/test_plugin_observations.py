@@ -9,6 +9,40 @@ from _cli_harness import run_cli
 
 
 class PluginHostObservationTests(unittest.TestCase):
+    def test_plugin_observations_accepts_json_flag_for_operator_smoke_checks(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+
+            self.assertEqual(
+                run_cli(
+                    base
+                    + [
+                        "plugin",
+                        "observe-host",
+                        "--host",
+                        "hermes-agent",
+                        "--session",
+                        "session-json-smoke",
+                        "--event",
+                        "tool_call",
+                        "--tool",
+                        "omh_status",
+                        "--evidence-ref",
+                        "plugin:tool_call:omh_status",
+                    ]
+                )[0],
+                0,
+            )
+
+            status, stdout, stderr = run_cli(base + ["plugin", "observations", "--json"], output_json=False)
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "omh_plugin_host_observations/v1")
+            self.assertEqual(payload["observations"][0]["tool"], "omh_status")
+
     def test_plugin_host_observation_records_runtime_load_without_execution_claims(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

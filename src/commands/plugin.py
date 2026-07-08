@@ -76,4 +76,5 @@ def _add_plugin_commands(sub) -> None:
 
     observations = plugin_sub.add_parser("observations", help="List recent plugin host observation records.")
     observations.add_argument("--limit", type=int, default=20)
+    observations.add_argument("--json", action="store_true", help="Accepted for consistency; observations are always JSON.")
     observations.set_defaults(func=cmd_plugin_observations)
