@@ -86,6 +86,28 @@ _COMMAND_TRIGGER_PATTERNS = {
     phrase: re.compile(rf"(?<![\w./-]){re.escape(phrase)}(?![\w./-])")
     for phrase in _COMMAND_TRIGGER_PHRASES
 }
+_TOOLBELT_READINESS_GUARD_ID = "toolbelt_readiness_before_generic_or_visual_fallback"
+_ECOSYSTEM_IDENTITY_CONNECTOR_TRIGGER_NOISE = frozenset(
+    {
+        "agentchat",
+        "agy",
+        "antigravity",
+        "clawsocial",
+        "crustocean",
+        "genai",
+        "keychain",
+        "mailbox",
+        "matrix",
+        "miniverse",
+        "oauth",
+        "oci",
+        "oracle",
+        "pairing",
+        "websocket",
+        "windy",
+        "windymail",
+    }
+)
 _RISKY_REFACTOR_GUARD_ID = "risky_refactor_before_cleanup"
 _RISKY_REFACTOR_FOLLOWUP_ONLY_SKILLS = frozenset({"ai-slop-cleaner"})
 _RISKY_REFACTOR_FOLLOWUP_SCORE_CAP = 7
@@ -1180,6 +1202,7 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
     explicit_skill = explicit_skill_invocation(query, {definition.name for definition in definitions})
     if explicit_skill and is_missed_route_feedback(normalized_query):
         explicit_skill = None
+    ecosystem_identity_connector_match = _ecosystem_identity_connector_explicit_match(normalized_query)
     scored = []
     for prepared in prepared_definitions:
         recommendation = _score_definition(
@@ -1197,6 +1220,8 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
     matches = scored
     if apply_guardrails:
         guards = active_routing_guard_rules(normalized_query, query_tokens, explicit_skill=explicit_skill)
+        if ecosystem_identity_connector_match:
+            guards = tuple(guard for guard in guards if guard.id != _TOOLBELT_READINESS_GUARD_ID)
         matches = _ensure_guardrail_candidates(matches, definitions, guards, query)
         matches = _apply_guardrail_reranking(
             matches,
@@ -1254,6 +1279,9 @@ def _score_definition(
     policy = prepared.policy
     score = 0
     matched: set[str] = set()
+    ecosystem_identity_connector_match = definition.name == "external-connector-readiness" and (
+        _ecosystem_identity_connector_explicit_match(normalized_query)
+    )
 
     if (
         definition.name == "ops-observability-card"
@@ -1337,6 +1365,8 @@ def _score_definition(
         trigger_token_matches.remove("dashboard")
     if definition.name == "codegraph-refresh" and not _codegraph_refresh_token_context(normalized_query, query_tokens):
         trigger_token_matches -= {"index", "refresh", "stale", "갱신"}
+    if definition.name == "external-connector-readiness" and not ecosystem_identity_connector_match:
+        trigger_token_matches -= _ECOSYSTEM_IDENTITY_CONNECTOR_TRIGGER_NOISE
     for token in trigger_token_matches:
         score += 3
         matched.add(f"trigger:{token}")
@@ -1348,6 +1378,9 @@ def _score_definition(
     if definition.name == "failure-signal-audit" and _failure_signal_audit_explicit_match(normalized_query):
         score += 34
         matched.add("direct:failure_signal_audit")
+    if ecosystem_identity_connector_match:
+        score += 36
+        matched.add("direct:ecosystem_identity_connector")
     if definition.name == "accessibility-audit" and _accessibility_audit_explicit_match(normalized_query):
         score += 30
         matched.add("direct:accessibility_audit")
@@ -1461,6 +1494,45 @@ def _external_connector_readiness_recommendation_applies(normalized_query: str, 
             "cost aware connector",
             "read only sql",
             "live data",
+            "peer-to-peer agent messaging",
+            "peer to peer agent messaging",
+            "websocket identity",
+            "agentchat connector",
+            "agy cli bridge",
+            "agy bridge connector",
+            "windy pairing",
+            "macos keychain oauth",
+            "oracle oci",
+            "oracle genai",
+            "miniverse bridge",
+            "crustocean platform",
+        )
+    )
+
+
+def _ecosystem_identity_connector_explicit_match(normalized_query: str) -> bool:
+    return any(
+        _phrase_match(normalized_query, phrase)
+        for phrase in (
+            "agentchat connector",
+            "agentchat peer-to-peer",
+            "peer-to-peer agent messaging",
+            "peer to peer agent messaging",
+            "websocket identity",
+            "websocket connector",
+            "clawsocial connector",
+            "social discovery connector",
+            "windy pairing",
+            "windymail mailbox",
+            "matrix chat identity",
+            "antigravity cli connector",
+            "agy cli bridge",
+            "agy bridge connector",
+            "macos keychain oauth",
+            "oracle oci connector",
+            "oracle genai connector",
+            "miniverse bridge",
+            "crustocean platform connector",
         )
     )
 

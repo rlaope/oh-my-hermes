@@ -102,6 +102,39 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         self.assertIn("data-analysis", onequery.omh_surfaces)
         self.assertIn("security-safety-review", onequery.omh_surfaces)
 
+    def test_ecosystem_bridge_candidates_have_connector_readiness_surface(self) -> None:
+        for item_id in (
+            "hermes-miniverse",
+            "reina",
+            "clawsocial-hermes-plugin",
+            "agentchat-hermes",
+            "windy-access",
+            "agy-cli-bridge",
+            "orahermes-agent",
+        ):
+            with self.subTest(item_id=item_id):
+                candidate = awesome_hermes_item(item_id)
+
+                self.assertEqual(candidate.status, "partial")
+                self.assertEqual(candidate.matched_rule_id, "ecosystem_identity_connector")
+                self.assertIn("external-connector-readiness", candidate.omh_surfaces)
+                self.assertIn("connector-operator", candidate.omh_surfaces)
+                self.assertIn("security-safety-review", candidate.omh_surfaces)
+                self.assertNotEqual(candidate.matched_rule_id, "default_external_candidate")
+
+    def test_ecosystem_bridge_rule_does_not_steal_chainlink_connector_coverage(self) -> None:
+        chainlink = awesome_hermes_item("chainlink-agent-skills")
+
+        self.assertNotEqual(chainlink.matched_rule_id, "ecosystem_identity_connector")
+        self.assertIn("external-connector-readiness", chainlink.omh_surfaces)
+
+    def test_ecosystem_bridge_rule_does_not_steal_self_contained_agentchat_skill(self) -> None:
+        skill = awesome_hermes_item("agentchat-universal-skill")
+
+        self.assertNotEqual(skill.matched_rule_id, "ecosystem_identity_connector")
+        self.assertNotIn("external-connector-readiness", skill.omh_surfaces)
+        self.assertNotIn("connector-operator", skill.omh_surfaces)
+
     def test_slash_prompt_plugin_has_prompt_import_readiness_surface(self) -> None:
         slash_prompts = awesome_hermes_item("hermes-plugin-slash-prompts")
 

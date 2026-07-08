@@ -2391,6 +2391,50 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(recommendations[0]["skill"], "external-connector-readiness")
         self.assertNotEqual(recommendations[0]["skill"], "ops-observability-card")
 
+    def test_agent_network_connector_readiness_routes_before_generic_tooling(self) -> None:
+        messages = (
+            "agentchat peer-to-peer agent messaging connector readiness with websocket identity trial",
+            "clawsocial connector readiness",
+            "windy pairing connector readiness",
+            "windymail mailbox connector readiness",
+            "matrix chat identity connector readiness",
+            "antigravity cli connector readiness",
+            "agy cli bridge connector readiness",
+            "oracle oci connector readiness",
+            "oracle genai connector readiness",
+            "miniverse bridge connector readiness",
+            "crustocean platform connector readiness",
+        )
+
+        for message in messages:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+                recommendations = recommend_skills(message, limit=3)
+
+                self.assertEqual(decision["selected_skill"], "external-connector-readiness")
+                self.assertEqual(hint["status"], "hinted")
+                self.assertEqual(hint["primary_workflow"], "external-connector-readiness")
+                self.assertEqual(hint["primary_next_action"], "prepare_external_connector_readiness")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_external_connector_readiness")
+                self.assertEqual(recommendations[0]["skill"], "external-connector-readiness")
+                self.assertNotEqual(recommendations[0]["skill"], "toolbelt-readiness")
+
+    def test_ecosystem_connector_terms_do_not_steal_generic_queries(self) -> None:
+        for message in (
+            "oracle database query optimization",
+            "windy conditions today",
+            "websocket implementation question",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                hint = awareness_route_hint(message)
+                recommendations = recommend_skills(message, limit=3)
+
+                self.assertNotEqual(decision["selected_skill"], "external-connector-readiness")
+                self.assertNotEqual(hint["primary_workflow"], "external-connector-readiness")
+                self.assertNotEqual(recommendations[0]["skill"], "external-connector-readiness")
+
     def test_physical_device_readiness_routes_before_generic_connectors(self) -> None:
         message = "snapmaker printer safety readiness with camera gate and heat command approval"
 
