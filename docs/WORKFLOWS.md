@@ -4031,6 +4031,74 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - A live information card is not provider availability, API access, live data retrieval, weather, market price, sports score, exchange-rate, time-zone, map, or place-result evidence unless observed live-info result evidence records it.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### external-connector-readiness
+
+[omh] Hermes external connector readiness workflow: decide whether a candidate plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable enough to adopt, route, or trial.
+
+- Category: `connector`
+- Phase: `connector-readiness`
+- Hermes role: `guide`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when users ask whether an external plugin, connector, API, multimodal route, or live-data tool is ready enough to adopt, route, or trial without claiming provider execution.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `external-connector-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use before adopting, enabling, or routing an external plugin/connector/API when Hermes must compare capability, auth, cost, modality, freshness, safety, fallback, and observable trial evidence.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `external-connector-readiness`, `external connector readiness`, `connector readiness matrix`, `plugin readiness matrix`, `provider readiness`, `api readiness`, `connector adoption`, `external plugin adoption`, `weather plugin readiness`, `weather connector readiness`, `wxtrain readiness`, `onequery read-only sql`, `read-only sql connector`, `sql connector readiness`, `nextcloud connector`, `microsoft workspace connector`, `microsoft graph connector`, `chainlink connector`, `solana connector`, `cost-aware connector`, `multimodal connector`, `multimodal routing`, `screenshot connector`, `audio connector`, `video connector`, `plugin auto-routing`, `connector auto-routing`, `external tool trial`, `커넥터 준비도`, `외부 커넥터 준비`, `외부 플러그인 채택`, `플러그인 준비도`, `비용 기준 커넥터`, `자동 라우팅`, `멀티모달 커넥터`, `멀티모달 라우팅`
+- Good example:
+  - Prompt: external-connector-readiness compare weather plugin and wxtrain candidates with cost, freshness, multimodal evidence, and fallback routes before adoption.
+  - Expected behavior: Produce `prepare_external_connector_readiness` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: external-connector-readiness silently enable a paid connector and claim weather, SQL, and screenshot results without observed provider evidence.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Candidate connector, target domain, read/write scope, modality needs, provider owner, fallback workflow, and stop condition are explicit.
+  - Cost, quota, credential, permission, live-data freshness, multimodal capture, safety, and compliance boundaries are marked ready, missing, risky, or not_observed.
+  - Route live read-only lookups to live-info-operator, external writes to connector-operator, datasets/SQL to data-analysis, and missing tools to toolbelt-readiness before claiming results.
+  - Provider responses, screenshots, audio/video/file captures, query outputs, message ids, and external mutations are reported only from observed trial evidence.
+- Recovery notes:
+  - If the candidate list is unknown, route to skill-scout or source-finder before readiness scoring.
+  - If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to toolbelt-readiness.
+  - If a specific provider action is already selected, route read-only live data to live-info-operator or write/mutation tasks to connector-operator.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - external_connector_readiness_card/v1
+  - connector_capability_matrix/v1
+  - auth_cost_boundary/v1
+  - live_data_freshness_policy/v1 when live data is required
+  - multimodal_routing_policy/v1 when screenshots, audio, video, or files are involved
+  - fallback_route_policy/v1
+  - connector_trial_manifest/v1 when observed
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - external_connector_readiness_card/v1 metadata-only wrapper card when prepared
+  - connector_capability_matrix/v1 with candidate, domain, read/write shape, modality, owner workflow, and fallback route
+  - auth_cost_boundary/v1 separating missing connector, missing credentials, paid/provider cost risk, quota, and user authority
+  - live_data_freshness_policy/v1 for requested recency, provider timestamp, stale-result handling, and source-quality thresholds
+  - multimodal_routing_policy/v1 for screenshot, audio, video, file, OCR, or visual QA evidence routes when needed
+  - connector_trial_manifest/v1 only when a provider response, capture id, query transcript, message id, or tool-call observation is recorded
+- Safety rules:
+  - An external connector readiness card is not connector installation, credential validation, provider access, API invocation, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence unless observed connector-trial evidence records it.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### content-operator
 
 [omh] Hermes content operator workflow: scope publish-ready writing, rewriting, summarization, translation, release-note, newsletter, customer-copy, social-copy, README-copy, and email-draft work with audience, tone, style, source, review, and hallucination gates.
@@ -7878,6 +7946,63 @@ Scope live info provider/freshness gates.
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A live info card is not provider/API access, retrieval, weather, price, score, rate, time-zone, map, or place evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### external-connector-readiness
+
+Score external plugin, connector, API, live-data, data, and multimodal candidates before adoption or routing.
+
+- Use when: Use before Hermes adopts, enables, routes, or trials an external connector so capability, auth, cost, modality, freshness, fallback, and observation requirements are explicit.
+- Quality tier: `connector-readiness-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - candidate connector or plugin
+  - target domain and owner workflow
+  - read/write and modality needs
+  - auth, cost, quota, and safety boundaries
+  - freshness, fallback, and stop condition
+- Outputs:
+  - external_connector_readiness_card/v1
+  - connector_capability_matrix/v1
+  - auth_cost_boundary/v1
+  - live_data_freshness_policy/v1 when live data is required
+  - multimodal_routing_policy/v1 when screenshots, audio, video, or files are involved
+  - fallback_route_policy/v1
+  - connector_trial_manifest/v1 when observed
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `candidate_connector_recorded`
+  - `connector_route_selected`
+  - `capability_matrix_recorded`
+  - `cost_and_credential_boundary_recorded`
+  - `freshness_and_modality_policy_recorded`
+  - `fallback_route_recorded`
+  - `connector_trial_recorded_when_observed`
+- Wrapper actions:
+  - `prepare_external_connector_readiness`
+  - `show_external_connector_readiness_card`
+  - `record_connector_capability_matrix`
+  - `record_auth_cost_boundary`
+  - `record_multimodal_routing_policy`
+  - `record_connector_trial_observation`
+  - `show_status`
+- Artifact events:
+  - `external-connector-readiness_scoped`
+  - `external-connector-readiness_card_prepared`
+  - `external-connector-readiness_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - An external connector readiness card is not connector installation, credential validation, provider/API access, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### content-operator

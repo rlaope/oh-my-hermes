@@ -764,6 +764,19 @@ _SKILL_POLICIES.update(
                 "live data is claimed."
             ),
         ),
+        "external-connector-readiness": RecommendationPolicy(
+            next_action="prepare_external_connector_readiness",
+            evidence_boundary=(
+                "An external connector readiness card is not connector installation, credential validation, provider access, "
+                "API invocation, multimodal capture, live-data retrieval, external mutation, cost authorization, "
+                "or successful trial evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare external_connector_readiness_card/v1 with connector_capability_matrix/v1, "
+                "auth_cost_boundary/v1, freshness and multimodal routing policies, fallback routes, "
+                "connector_trial_manifest/v1 slots, and a stop condition before adoption or provider results are claimed."
+            ),
+        ),
         "content-operator": RecommendationPolicy(
             next_action="prepare_content_operator_card",
             evidence_boundary=(
@@ -1243,6 +1256,12 @@ def _score_definition(
         and not media_input_operator_guard_applies(normalized_query, query_tokens)
     ):
         return None
+    if (
+        definition.name == "external-connector-readiness"
+        and explicit_skill != "external-connector-readiness"
+        and not _external_connector_readiness_recommendation_applies(normalized_query, query_tokens)
+    ):
+        return None
 
     if definition.name == explicit_skill:
         score += 12
@@ -1332,6 +1351,79 @@ def _codegraph_refresh_token_context(normalized_query: str, query_tokens: set[st
     return bool({"codegraph", "codemap", "codemaps", "code", "코드그래프", "코드맵", "코드"} & query_tokens) or _phrase_match(
         normalized_query,
         "code map",
+    )
+
+
+def _external_connector_readiness_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    strong_anchor_tokens = {
+        "adopt",
+        "adoption",
+        "api",
+        "apis",
+        "audio",
+        "auth",
+        "authentication",
+        "authorization",
+        "caldav",
+        "carddav",
+        "chainlink",
+        "connector",
+        "connectors",
+        "credential",
+        "credentials",
+        "database",
+        "fallback",
+        "file",
+        "files",
+        "freshness",
+        "graph",
+        "live-data",
+        "microsoft",
+        "multimodal",
+        "nextcloud",
+        "onequery",
+        "plugin",
+        "plugins",
+        "quota",
+        "readiness",
+        "ready",
+        "screenshot",
+        "screenshots",
+        "solana",
+        "sql",
+        "trial",
+        "trials",
+        "video",
+        "webdav",
+        "workspace",
+        "wxtrain",
+        "도입",
+        "멀티모달",
+        "비디오",
+        "스크린샷",
+        "오디오",
+        "인증",
+        "준비",
+        "준비도",
+        "캡처",
+        "캡쳐",
+        "커넥터",
+        "쿼터",
+        "파일",
+        "플러그인",
+    }
+    if query_tokens & strong_anchor_tokens:
+        return True
+    return any(
+        _phrase_match(normalized_query, phrase)
+        for phrase in (
+            "auto routing",
+            "automatic routing",
+            "자동 라우팅",
+            "cost aware connector",
+            "read only sql",
+            "live data",
+        )
     )
 
 

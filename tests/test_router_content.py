@@ -73,6 +73,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "command-operator": ("workflow_skill", True),
     "connector-operator": ("workflow_skill", True),
     "live-info-operator": ("workflow_skill", True),
+    "external-connector-readiness": ("workflow_skill", True),
     "content-operator": ("workflow_skill", True),
     "media-input-operator": ("workflow_skill", True),
     "data-analysis": ("workflow_skill", True),
@@ -483,6 +484,18 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertEqual(recommend_module._SKILL_POLICIES["deliverable-package"].next_action, "prepare_deliverable_package")
         self.assertEqual(recommend_module._SKILL_POLICIES["voice-operator"].next_action, "prepare_voice_operator_card")
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["external-connector-readiness"].next_action,
+            "prepare_external_connector_readiness",
+        )
+        self.assertIn(
+            "connector_trial_manifest/v1",
+            recommend_module._SKILL_POLICIES["external-connector-readiness"].wrapper_guidance,
+        )
+        self.assertIn(
+            "cost authorization",
+            recommend_module._SKILL_POLICIES["external-connector-readiness"].evidence_boundary,
+        )
         self.assertEqual(recommend_module._SKILL_POLICIES["toolbelt-readiness"].next_action, "prepare_toolbelt_readiness")
         self.assertEqual(
             recommend_module._SKILL_POLICIES["harness-session-inventory"].next_action,
@@ -602,6 +615,7 @@ class RouterContentTests(unittest.TestCase):
                 "command-operator",
                 "connector-operator",
                 "live-info-operator",
+                "external-connector-readiness",
                 "content-operator",
                 "media-input-operator",
                 "data-analysis",
@@ -1312,6 +1326,66 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("live_info_operator", route_rules)
         self.assertIn("live-info-operator", route_rules["live_info_operator"]["workflow"])
         self.assertIn("weather today", route_rules["live_info_operator"]["phrases"])
+
+    def test_external_connector_readiness_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("external-connector-readiness", definitions)
+        self.assertIn("external-connector-readiness", harnesses)
+        self.assertIn("external-connector-readiness", templates)
+        self.assertEqual(primary_harness_for_skill("external-connector-readiness"), "external-connector-readiness")
+        self.assertEqual(definitions["external-connector-readiness"].category, "connector")
+        self.assertEqual(definitions["external-connector-readiness"].phase, "connector-readiness")
+        self.assertEqual(definitions["external-connector-readiness"].quality_tier, "workflow-surface-gated")
+        self.assertIn(
+            "external_connector_readiness_card/v1",
+            definitions["external-connector-readiness"].expected_outputs,
+        )
+        self.assertIn("connector_capability_matrix/v1", definitions["external-connector-readiness"].expected_outputs)
+        self.assertIn("auth_cost_boundary/v1", definitions["external-connector-readiness"].expected_outputs)
+        self.assertIn(
+            "multimodal_routing_policy/v1 when screenshots, audio, video, or files are involved",
+            definitions["external-connector-readiness"].expected_outputs,
+        )
+        self.assertIn(
+            "connector_trial_manifest/v1 when observed",
+            definitions["external-connector-readiness"].expected_outputs,
+        )
+        self.assertIn("weather plugin readiness", definitions["external-connector-readiness"].triggers)
+        self.assertIn("onequery read-only sql", definitions["external-connector-readiness"].triggers)
+        self.assertIn("nextcloud connector", definitions["external-connector-readiness"].triggers)
+        self.assertIn("멀티모달 커넥터", definitions["external-connector-readiness"].triggers)
+        readiness_text = " ".join(definitions["external-connector-readiness"].safety_rules).lower()
+        self.assertIn("cost", readiness_text)
+        self.assertIn("credential", readiness_text)
+        self.assertIn("multimodal", readiness_text)
+        self.assertIn(
+            "external_connector_readiness_card/v1",
+            " ".join(definitions["external-connector-readiness"].artifact_expectations),
+        )
+        self.assertIn("connector_capability_matrix/v1", harnesses["external-connector-readiness"].expected_outputs)
+        self.assertIn("auth_cost_boundary/v1", harnesses["external-connector-readiness"].expected_outputs)
+        self.assertIn(
+            "connector_route_selected",
+            harnesses["external-connector-readiness"].evidence_ladder,
+        )
+        self.assertIn(
+            "cost_and_credential_boundary_recorded",
+            harnesses["external-connector-readiness"].evidence_ladder,
+        )
+        self.assertIn("external_connector_readiness_card/v1", templates["external-connector-readiness"].content)
+        self.assertIn("connector_trial_manifest/v1", templates["external-connector-readiness"].content)
+        self.assertIn(
+            "Preferred harness for this skill: `external-connector-readiness`",
+            templates["external-connector-readiness"].content,
+        )
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("external_connector_readiness", route_rules)
+        self.assertIn("external-connector-readiness", route_rules["external_connector_readiness"]["workflow"])
+        self.assertIn("weather plugin readiness", route_rules["external_connector_readiness"]["phrases"])
 
     def test_content_operator_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

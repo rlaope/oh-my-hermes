@@ -2379,6 +2379,18 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(metric_provider_cost[0]["skill"], "ops-observability-card")
         self.assertEqual(slo_dashboard[0]["skill"], "ops-observability-card")
 
+    def test_connector_readiness_cost_context_routes_before_ops_observability(self) -> None:
+        message = "weather plugin readiness with screenshots and cost auto routing"
+
+        decision = route_chat_message(message, source="discord")
+        recommendations = recommend_skills(message, limit=3)
+
+        self.assertEqual(decision["selected_skill"], "external-connector-readiness")
+        self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_external_connector_readiness")
+        self.assertNotIn("guard:ops_observability", decision["recommendations"][0]["matched"])
+        self.assertEqual(recommendations[0]["skill"], "external-connector-readiness")
+        self.assertNotEqual(recommendations[0]["skill"], "ops-observability-card")
+
     def test_low_signal_inventory_words_do_not_open_harness_session_inventory(self) -> None:
         for message in ("session", "inventory", "drift"):
             with self.subTest(message=message):

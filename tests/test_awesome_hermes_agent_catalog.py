@@ -73,8 +73,9 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         for item_id in ("hermes-weather-plugin", "hermes-wxtrain-plugin"):
             weather = awesome_hermes_item(item_id)
 
-            self.assertEqual(weather.status, "missing_candidate")
+            self.assertEqual(weather.status, "partial")
             self.assertEqual(weather.matched_rule_id, "domain_connectors")
+            self.assertIn("external-connector-readiness", weather.omh_surfaces)
             self.assertIn("connector-operator", weather.omh_surfaces)
             self.assertIn("live-info-operator", weather.omh_surfaces)
             self.assertNotIn("web-research", weather.omh_surfaces)
@@ -86,6 +87,20 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         self.assertEqual(analytics.matched_rule_id, "cost_analytics")
         self.assertIn("ops-observability-card", analytics.omh_surfaces)
         self.assertNotIn("voice-operator", analytics.omh_surfaces)
+
+    def test_external_connector_candidates_have_readiness_surface(self) -> None:
+        for item_id in ("hermes-nextcloud", "onequery-cli", "microsoft-workspace-skill", "chainlink-agent-skills"):
+            candidate = awesome_hermes_item(item_id)
+
+            self.assertEqual(candidate.status, "partial")
+            self.assertIn("external-connector-readiness", candidate.omh_surfaces)
+            self.assertIn("toolbelt-readiness", candidate.omh_surfaces)
+
+        onequery = awesome_hermes_item("onequery-cli")
+
+        self.assertEqual(onequery.matched_rule_id, "external_connector_readiness")
+        self.assertIn("data-analysis", onequery.omh_surfaces)
+        self.assertIn("security-safety-review", onequery.omh_surfaces)
 
     def test_plugin_filter_returns_only_plugin_section_coverage(self) -> None:
         payload = awesome_hermes_coverage_payload(subsection=PLUGIN_SUBSECTION)
