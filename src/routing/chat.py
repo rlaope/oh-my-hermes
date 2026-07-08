@@ -3991,6 +3991,8 @@ def _guarded_operator_fast_path_decision(
         return None
     if _guarded_operator_fast_path_blocked(routing_message):
         return None
+    if _ecosystem_identity_connector_fast_path_signal(routing_message):
+        return None
     if classify_task(message):
         return None
     routing_text = prepare_routing_text(routing_message)
@@ -4106,6 +4108,35 @@ def _feedback_triage_fast_path_decision(
 def _feedback_triage_fast_path_signal(text: str) -> bool:
     compact = _fast_path_compact(text)
     return any(term in text or _fast_path_compact(term) in compact for term in _FEEDBACK_TRIAGE_FAST_PATH_TERMS)
+
+
+def _ecosystem_identity_connector_fast_path_signal(message: str) -> bool:
+    text = _fast_path_text(message)
+    compact = _fast_path_compact(text)
+    return any(
+        term in text or _fast_path_compact(term) in compact
+        for term in (
+            "agentchat connector",
+            "agentchat peer-to-peer",
+            "peer-to-peer agent messaging",
+            "peer to peer agent messaging",
+            "websocket identity",
+            "websocket connector",
+            "clawsocial connector",
+            "social discovery connector",
+            "windy pairing",
+            "windymail mailbox",
+            "matrix chat identity",
+            "antigravity cli connector",
+            "agy cli bridge",
+            "agy bridge connector",
+            "macos keychain oauth",
+            "oracle oci connector",
+            "oracle genai connector",
+            "miniverse bridge",
+            "crustocean platform connector",
+        )
+    )
 
 
 def _browser_visual_qa_fast_path_signal(message: str) -> bool:

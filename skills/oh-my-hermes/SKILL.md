@@ -122,7 +122,7 @@ Record only what is observed. A task card, route, plan, `coding_delegation.json`
 Load these only when exact detail matters:
 
 - `references/operator-maintenance.md` for short `omh` maintenance command semantics.
-- `references/workflow-registry.md` for full workflow triggers and role registry.
+- `references/workflow-registry.md` for representative workflow triggers and role registry; load the specific workflow skill for the full trigger list.
 - `references/harness-registry.md` for representative harnesses and priority.
 - `references/wrapper-routing.md` for backend/plugin/chat/coding delegation contracts.
 - `references/coding-handoff-progress-reporting.md` for active progress cadence, background executor watchdogs, PR head/merge verification, and memory/context collision pitfalls.
@@ -130,7 +130,7 @@ Load these only when exact detail matters:
 
 ## Recovery
 
-- If exact route detail matters, load `references/workflow-registry.md` or the specific workflow skill before answering.
+- If exact route detail matters, load `references/workflow-registry.md` plus the specific workflow skill before answering.
 - If harness behavior matters, load `references/harness-registry.md`.
 - If wrapper/backend behavior matters, load `references/wrapper-routing.md`.
 - If delegated coding work is running or being reported, load `references/coding-handoff-progress-reporting.md`.
