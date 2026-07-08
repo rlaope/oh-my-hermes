@@ -491,7 +491,7 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - The work touches the same files or invariants in ways that need one owner.
   - The plan is not accepted, lane boundaries are unclear, or verification commands are missing.
   - The user expects Hermes to secretly execute coding lanes instead of preparing explicit selected-runtime handoffs.
-- Strong routing signals: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
+- Strong routing signals: `ultrawork`, `$ultrawork`, `ulw`, `$ulw`, `parallel work`, `parallel implementation`, `high throughput`
 - Good example:
   - Prompt: $ultrawork split the accepted docs refresh, CLI output polish, and test updates into parallel implementation lanes.
   - Expected behavior: Create disjoint lane prompts with acceptance criteria, verification commands, and review evidence requirements.

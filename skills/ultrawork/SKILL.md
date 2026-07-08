@@ -68,7 +68,7 @@ Bad example:
 
 Use when an accepted implementation plan can be split into independent, reviewable work lanes.
 
-    Strong routing signals: `ultrawork`, `$ultrawork`, `parallel work`, `parallel implementation`, `high throughput`
+    Strong routing signals: `ultrawork`, `$ultrawork`, `ulw`, `$ulw`, `parallel work`, `parallel implementation`, `high throughput`
 
 ## Catalog Metadata
 

@@ -1198,7 +1198,7 @@ _DEFINITIONS = [
     SkillDefinition(
         "ultrawork",
         "Hermes Ultrawork compatibility workflow: bounded parallel delivery guidance.",
-        ("ultrawork", "$ultrawork", "parallel work", "parallel implementation", "high throughput"),
+        ("ultrawork", "$ultrawork", "ulw", "$ulw", "parallel work", "parallel implementation", "high throughput"),
         "Use when an accepted implementation plan can be split into independent, reviewable work lanes.",
         category="execution",
         phase="parallel-delivery",

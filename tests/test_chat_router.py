@@ -15,6 +15,11 @@ from omh.chat_router import (
     routing_record_payload,
 )
 from omh.routing.intent import classify_workflow_intent
+from omh.routing.policy import (
+    _EXPLICIT_SKILL_ALIASES,
+    _PREFIXED_SKILL_ALIASES,
+    explicit_skill_invocation,
+)
 from omh.routing import chat as chat_router_impl
 from omh.routing.localization import normalized_phrase
 from omh.routing.recommend import recommend_skills
@@ -1069,6 +1074,64 @@ class ChatRouterTests(unittest.TestCase):
             self.assertIsNone(decision["workflow_route_plan"])
             public = public_route_payload(decision)
             self.assertNotIn("workflow_route_plan", public)
+
+    def test_explicit_alias_matrix_keeps_recommend_and_chat_aligned(self) -> None:
+        names = {definition.name for definition in routable_definitions()}
+        cases: list[tuple[str, str]] = []
+        for alias, selected_skill in sorted(_EXPLICIT_SKILL_ALIASES.items()):
+            cases.extend(
+                (
+                    (f"{alias} handle routing check", selected_skill),
+                    (f"use omh {alias} handle routing check", selected_skill),
+                )
+            )
+        for alias, selected_skill in sorted(_PREFIXED_SKILL_ALIASES.items()):
+            cases.extend(
+                (
+                    (f"${alias} handle routing check", selected_skill),
+                    (f"./{alias} handle routing check", selected_skill),
+                    (f"/{alias} handle routing check", selected_skill),
+                    (f"@{alias} handle routing check", selected_skill),
+                )
+            )
+        cases.extend(
+            (
+                ("$ralplan risky refactor", "ralplan"),
+                ("./loop improve first-run experience", "loop"),
+                ("/paper-learning explain this paper", "paper-learning"),
+                ("@source-finder find docs and repos", "source-finder"),
+            )
+        )
+
+        for message, selected_skill in cases:
+            with self.subTest(message=message):
+                self.assertEqual(explicit_skill_invocation(message, names), selected_skill)
+                self.assertEqual(recommend_skills(message, limit=1)[0]["skill"], selected_skill)
+                decision = route_chat_message(message, source="discord")
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], selected_skill)
+
+    def test_explicit_alias_missed_route_feedback_selects_workflow_learning(self) -> None:
+        cases = (
+            "missed route: ulw split this accepted plan into lanes",
+            "missed route: $paper-explainer should have handled this PDF",
+            "router picked the wrong workflow for source-intake",
+        )
+
+        for message in cases:
+            with self.subTest(message=message):
+                self.assertEqual(recommend_skills(message, limit=1)[0]["skill"], "workflow-learning")
+                decision = route_chat_message(message, source="discord")
+                self.assertEqual(decision["action"], "dispatch")
+                self.assertEqual(decision["selected_skill"], "workflow-learning")
+
+    def test_path_like_mid_sentence_fragments_do_not_become_explicit_invocations(self) -> None:
+        names = {definition.name for definition in routable_definitions()}
+        message = "explain ./paper-learning in this repo path"
+
+        self.assertIsNone(explicit_skill_invocation(message, names))
+        self.assertNotEqual(recommend_skills(message, limit=1)[0]["skill"], "paper-learning")
+        self.assertNotEqual(route_chat_message(message, source="discord")["selected_skill"], "paper-learning")
 
     def test_common_single_workflow_requests_skip_full_recommendation_scoring(self) -> None:
         chat_router_impl._route_chat_message_cached.cache_clear()

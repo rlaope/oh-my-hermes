@@ -18,6 +18,7 @@ _EXPLICIT_SKILL_ALIASES = {
     "paper-explainer": "paper-learning",
     "source-acquisition": "source-finder",
     "source-intake": "source-finder",
+    "ulw": "ultrawork",
 }
 _PREFIXED_SKILL_ALIASES = {
     "omh": "oh-my-hermes",
@@ -26,6 +27,7 @@ _PREFIXED_SKILL_ALIASES = {
     "paper-explainer": "paper-learning",
     "source-acquisition": "source-finder",
     "source-intake": "source-finder",
+    "ulw": "ultrawork",
 }
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
@@ -1168,6 +1170,10 @@ _WORKFLOW_LEARNING_PHRASES = (
     "why did this route",
     "missed route",
     "missed workflow",
+    "wrong route",
+    "wrong workflow",
+    "router chose the wrong workflow",
+    "router picked the wrong workflow",
     "record why this request",
     "future workflow behavior",
     "improve this workflow next time",
