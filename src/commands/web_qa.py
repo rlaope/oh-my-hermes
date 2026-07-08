@@ -4,9 +4,12 @@ import argparse
 
 from omh.installer import OmhError
 from omh.web_visual_qa import (
+    build_web_visual_qa_message_card,
     build_web_visual_qa_package,
     read_web_visual_qa_package,
     save_web_visual_qa_package,
+    validate_web_visual_qa_message_card,
+    validate_web_visual_qa_package,
     write_web_visual_qa_package,
 )
 from omh.workflows.web_visual_qa_contracts import JsonObject, now, object_list, text
@@ -78,6 +81,22 @@ def cmd_web_qa_record_verdict(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_or_summarize(args, saved)
+    return 0
+
+
+def cmd_web_qa_show(args: argparse.Namespace) -> int:
+    try:
+        current = read_web_visual_qa_package(_paths(args), args.package_id)
+        package_errors = validate_web_visual_qa_package(current)
+        if package_errors:
+            raise ValueError("; ".join(package_errors))
+        card = build_web_visual_qa_message_card(current)
+        errors = validate_web_visual_qa_message_card(card)
+        if errors:
+            raise ValueError("; ".join(errors))
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_card_or_summarize(args, card)
     return 0
 
 
@@ -168,6 +187,36 @@ def _print_or_summarize(args: argparse.Namespace, package: JsonObject) -> None:
     print("Not evidence yet: browser capture by OMH, multimodal model call by OMH, platform delivery.")
 
 
+def _print_card_or_summarize(args: argparse.Namespace, card: JsonObject) -> None:
+    if _wants_json(args):
+        _print_json(card)
+        return
+    route = card["route"] if isinstance(card.get("route"), dict) else {}
+    attachment_summary = card["attachment_summary"] if isinstance(card.get("attachment_summary"), dict) else {}
+    print("Web visual QA message card")
+    print(f"Package: {card['package_id']}")
+    print(f"Target: {card['target']}")
+    print(f"Verdict: {card['verdict']}")
+    print(f"Route: {text(route.get('label'))}")
+    print(
+        "Attachments: "
+        f"{attachment_summary.get('eligible_count', 0)} eligible, "
+        f"{attachment_summary.get('blocked_count', 0)} blocked; "
+        f"delivery {'observed' if attachment_summary.get('delivery_observed') is True else 'not observed'}"
+    )
+    criteria = [item for item in object_list(card.get("criteria"))]
+    if criteria:
+        print("Criteria:")
+        for criterion in criteria:
+            label = text(criterion.get("label")) or text(criterion.get("criterion_id")) or "criterion"
+            print(f"- {label}: {text(criterion.get('status'))} - {text(criterion.get('summary'))}")
+    boundary = text(card.get("claim_boundary"))
+    if boundary:
+        print("Boundary:")
+        print(f"  {boundary}")
+    print("Use --json for the full message-card projection.")
+
+
 def _add_web_qa_commands(sub) -> None:
     web_qa = sub.add_parser(
         "web-qa",
@@ -210,10 +259,16 @@ def _add_web_qa_commands(sub) -> None:
     verdict.add_argument("--json", action="store_true")
     verdict.set_defaults(func=cmd_web_qa_record_verdict)
 
+    show = web_qa_sub.add_parser("show", help="Show a message-card projection for a recorded package.")
+    show.add_argument("--package-id", required=True)
+    show.add_argument("--json", action="store_true")
+    show.set_defaults(func=cmd_web_qa_show)
+
 
 __all__ = [
     "_add_web_qa_commands",
     "cmd_web_qa_observe_capture",
     "cmd_web_qa_package",
     "cmd_web_qa_record_verdict",
+    "cmd_web_qa_show",
 ]

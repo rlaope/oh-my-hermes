@@ -15,6 +15,20 @@ JsonObject: TypeAlias = dict[str, JsonValue]
 WEB_VISUAL_QA_PACKAGE_SCHEMA_VERSION: Final = "web_visual_qa_package/v1"
 WEB_VISUAL_QA_PACKAGES_INDEX_SCHEMA_VERSION: Final = "omh_web_visual_qa_packages_index/v1"
 MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION: Final = "message_attachment_projection/v1"
+WEB_VISUAL_QA_MESSAGE_CARD_SCHEMA_VERSION: Final = "web_visual_qa_message_card/v1"
+WEB_VISUAL_QA_MESSAGE_ROUTE_SCHEMA_VERSION: Final = "web_visual_qa_message_route/v1"
+WEB_VISUAL_QA_CLAIM_BOUNDARY: Final = (
+    "OMH records supplied web visual QA evidence only; it does not capture browsers, call multimodal models, upload "
+    "messages, or prove delivery."
+)
+WEB_VISUAL_QA_PACKAGE_DOES_NOT_PROVE: Final = (
+    "browser_capture_performed_by_omh",
+    "multimodal_model_called_by_omh",
+    "platform_delivery_observed",
+    "accessibility_pass",
+    "complete_visual_correctness",
+)
+WEB_VISUAL_QA_MESSAGE_CARD_DOES_NOT_PROVE: Final = ("message_sent", "attachment_uploaded", "platform_delivery")
 SUPPORTED_IMAGE_MIME_TYPES: Final = ("image/png", "image/jpeg", "image/webp")
 SUPPORTED_VERDICTS: Final = ("pass", "hold", "fail", "not_observed")
 SUPPORTED_LIFECYCLE_STATUSES: Final = ("prepared", "captures_observed", "criteria_recorded", "verdict_recorded")

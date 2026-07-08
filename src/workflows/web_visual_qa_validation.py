@@ -7,15 +7,38 @@ from .web_visual_qa_contracts import (
     SUPPORTED_REDACTION_STATUSES,
     SUPPORTED_RESULT_STATUSES,
     SUPPORTED_VERDICTS,
+    WEB_VISUAL_QA_MESSAGE_CARD_DOES_NOT_PROVE,
+    WEB_VISUAL_QA_MESSAGE_CARD_SCHEMA_VERSION,
+    WEB_VISUAL_QA_MESSAGE_ROUTE_SCHEMA_VERSION,
     WEB_VISUAL_QA_PACKAGE_SCHEMA_VERSION,
     JsonObject,
+    JsonValue,
     ids,
     object_list,
+    object_value,
     strings,
     text,
     valid_id,
     valid_path_or_uri,
 )
+
+
+def validate_web_visual_qa_message_card(record: JsonObject) -> list[str]:
+    errors: list[str] = []
+    if record.get("schema_version") != WEB_VISUAL_QA_MESSAGE_CARD_SCHEMA_VERSION:
+        errors.append("schema_version must be web_visual_qa_message_card/v1")
+    if not valid_id(text(record.get("package_id"))):
+        errors.append("package_id must contain only letters, digits, and hyphens")
+    if not text(record.get("target")):
+        errors.append("target is required")
+    if not text(record.get("headline")):
+        errors.append("headline is required")
+    _validate_message_route(record.get("route"), errors)
+    _validate_card_attachment_summary(record.get("attachment_summary"), errors)
+    _validate_card_attachment_projection(record.get("attachment_projection"), errors)
+    _validate_message_blocks(object_list(record.get("message_blocks")), errors)
+    _validate_card_does_not_prove(record, errors)
+    return errors
 
 
 def validate_web_visual_qa_package(record: JsonObject) -> list[str]:
@@ -133,3 +156,68 @@ def _require_schema(record: JsonObject, errors: list[str]) -> None:
         errors.append(f"verdict must be one of {', '.join(SUPPORTED_VERDICTS)}")
     if not text(record.get("target")):
         errors.append("target is required")
+
+
+def _validate_message_route(raw_route: JsonValue | None, errors: list[str]) -> None:
+    if not isinstance(raw_route, dict):
+        errors.append("route must be an object")
+        return
+    route = object_value(raw_route)
+    if route.get("schema_version") != WEB_VISUAL_QA_MESSAGE_ROUTE_SCHEMA_VERSION:
+        errors.append("route.schema_version must be web_visual_qa_message_route/v1")
+    if not text(route.get("route")):
+        errors.append("route.route is required")
+    if not text(route.get("label")):
+        errors.append("route.label is required")
+    if not text(route.get("next_action")):
+        errors.append("route.next_action is required")
+    if not text(route.get("reason")):
+        errors.append("route.reason is required")
+
+
+def _validate_card_attachment_summary(raw_summary: JsonValue | None, errors: list[str]) -> None:
+    if not isinstance(raw_summary, dict):
+        errors.append("attachment_summary must be an object")
+        return
+    summary = object_value(raw_summary)
+    if not _non_negative_int(summary.get("eligible_count")):
+        errors.append("attachment_summary.eligible_count must be a non-negative integer")
+    if not _non_negative_int(summary.get("blocked_count")):
+        errors.append("attachment_summary.blocked_count must be a non-negative integer")
+    if summary.get("delivery_observed") is not False:
+        errors.append("attachment_summary.delivery_observed must remain false until wrapper evidence exists")
+    if summary.get("schema_version") != MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION:
+        errors.append("attachment_summary.schema_version must be message_attachment_projection/v1")
+
+
+def _validate_card_attachment_projection(raw_projection: JsonValue | None, errors: list[str]) -> None:
+    if not isinstance(raw_projection, dict):
+        errors.append("attachment_projection must be an object")
+        return
+    projection = object_value(raw_projection)
+    if projection.get("schema_version") != MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION:
+        errors.append("attachment_projection.schema_version must be message_attachment_projection/v1")
+    if projection.get("delivery_observed") is not False:
+        errors.append("attachment_projection.delivery_observed must remain false until wrapper evidence exists")
+
+
+def _validate_message_blocks(blocks: list[JsonObject], errors: list[str]) -> None:
+    if not blocks:
+        errors.append("message_blocks must include at least one block")
+        return
+    for index, block in enumerate(blocks):
+        if not text(block.get("type")):
+            errors.append(f"message_blocks[{index}].type is required")
+        if not text(block.get("text")):
+            errors.append(f"message_blocks[{index}].text is required")
+
+
+def _validate_card_does_not_prove(record: JsonObject, errors: list[str]) -> None:
+    non_proofs = set(strings(record.get("does_not_prove")))
+    for required in WEB_VISUAL_QA_MESSAGE_CARD_DOES_NOT_PROVE:
+        if required not in non_proofs:
+            errors.append(f"does_not_prove must include {required}")
+
+
+def _non_negative_int(value: JsonValue | None) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
