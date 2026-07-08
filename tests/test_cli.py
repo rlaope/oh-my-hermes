@@ -305,6 +305,9 @@ class CliTests(unittest.TestCase):
         for message in (
             "ulw split this accepted plan into lanes",
             "$ulw split docs and tests into parallel lanes",
+            "./ulw split docs and tests into parallel lanes",
+            "/ulw split docs and tests into parallel lanes",
+            "@ulw split docs and tests into parallel lanes",
             "use omh ulw split docs and tests into parallel lanes",
         ):
             with self.subTest(message=message):

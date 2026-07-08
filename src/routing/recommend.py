@@ -1174,6 +1174,7 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
         matches = _fallback_recommendations(definitions, query)
         return tuple(matches)
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))
+    matches = _prioritize_guarded_workflow_learning(matches)
     matches = _prioritize_explicit_skill(matches, explicit_skill)
     return tuple(matches)
 
@@ -1242,6 +1243,10 @@ def _score_definition(
         and not media_input_operator_guard_applies(normalized_query, query_tokens)
     ):
         return None
+
+    if definition.name == explicit_skill:
+        score += 12
+        matched.update(("explicit_invocation", f"name:{definition.name}"))
 
     for trigger_phrase in prepared.plain_trigger_phrases:
         if _phrase_match(normalized_query, trigger_phrase):
@@ -1470,6 +1475,20 @@ def _prioritize_explicit_skill(
     if selected is None:
         return recommendations
     return [selected, *[recommendation for recommendation in recommendations if recommendation.skill != explicit_skill]]
+
+
+def _prioritize_guarded_workflow_learning(recommendations: list[Recommendation]) -> list[Recommendation]:
+    selected = next(
+        (
+            recommendation
+            for recommendation in recommendations
+            if recommendation.skill == "workflow-learning" and "guard:workflow_learning" in recommendation.matched
+        ),
+        None,
+    )
+    if selected is None:
+        return recommendations
+    return [selected, *[recommendation for recommendation in recommendations if recommendation.skill != "workflow-learning"]]
 
 
 def _tokens(value: str) -> set[str]:
