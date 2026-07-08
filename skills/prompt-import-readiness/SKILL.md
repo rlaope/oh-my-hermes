@@ -1,22 +1,22 @@
 ---
-name: ops-observability-card
-description: [omh] Hermes ops observability workflow: prepare an operations command-board for wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality evidence boundaries.
+name: prompt-import-readiness
+description: [omh] Hermes prompt import readiness workflow: decide whether external CLI-agent prompt files can be safely reviewed, normalized, and offered as Hermes slash-command candidates without mutating prompts or command registries.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, observability]
-    category: observability
-    phase: telemetry-card
-    role: tracker
+    tags: [workflow, oh-my-hermes, prompt]
+    category: prompt
+    phase: prompt-import-readiness
+    role: guide
     quality_tier: workflow-surface-gated
 ---
 
-# Ops Observability Card
+# Prompt Import Readiness
 
-This is a Hermes-native `ops-observability-card` workflow skill.
+This is a Hermes-native `prompt-import-readiness` workflow skill.
 
 ## Why This Exists
 
-`ops-observability-card` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`prompt-import-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,26 +28,28 @@ This is a Hermes-native `ops-observability-card` workflow skill.
 
 Good example:
 
-- Prompt: ops-observability-card show token, cost, latency, supplied Prometheus/Grafana metrics, and missing service-quality evidence for this loop.
-- Expected behavior: Produce `prepare_ops_observability_card` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: prompt-import-readiness review Codex and Claude Code prompt folders before exposing them as Hermes slash commands with $ARGUMENTS mapping.
+- Expected behavior: Produce `prepare_prompt_import_readiness` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: ops-observability-card claim exact provider billing, healthy SLO, incident closure, or remediation completion from local estimates.
+- Prompt: prompt-import-readiness silently import every external prompt, overwrite slash commands, and claim the prompts are trusted without review.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
-- Local telemetry, provider truth, billing truth, and completion evidence are separate states.
-- Warnings name the next measurement or operator review action.
+- Prompt sources, agent family, expected file formats, argument syntax, slash-command names, trust level, and stop condition are explicit.
+- Prompt file reads, parser results, command registration, prompt mutation, slash-command activation, and dry-run execution are marked observed, missing, risky, or not_observed.
+- Route broad candidate discovery to skill-scout, prompt/tool safety to security-safety-review, missing CLIs or directories to toolbelt-readiness, and approved implementation to a selected executor handoff.
+- Imported prompts, generated command files, registry updates, and dry-run results are reported only from observed prompt-import evidence.
 
 ## Recovery Notes
 
-- If provider metrics are unavailable, report only local metadata and mark provider truth not_observed.
-- If cost or latency looks risky, surface a warning plus the next measurement rather than a completion claim.
+- If source prompt directories are unknown, route to workspace-audit or skill-scout before readiness scoring.
+- If source trust, prompt-injection risk, secrets, or destructive command content is unclear, route to security-safety-review before import.
+- If the user asks to actually copy, generate, or register prompt files, prepare an executor or workspace-file handoff and keep readiness prepared_not_observed until file evidence exists.
 
 ## OMH Context Rail
 
@@ -63,15 +65,15 @@ Bad example:
 
 ## Use When
 
-Use when automation, loops, gateway work, executor handoffs, or service operations need a safe command-board for cost, latency, token, history, failure-mode, supplied metric-provider, and service-quality visibility.
+Use before importing, normalizing, or exposing external prompt files as Hermes slash commands so source trust, formats, argument interpolation, name collisions, review status, and dry-run evidence stay explicit.
 
-    Strong routing signals: `ops-observability-card`, `observability card`, `operations command board`, `ops command board`, `service quality board`, `service quality`, `external metric provider`, `metric provider`, `prometheus metrics`, `grafana metrics`, `cost telemetry`, `latency telemetry`, `token telemetry`, `run history`, `loop telemetry`, `failure mode`, `monitor tokens`, `service health`, `slo dashboard`, `비용`, `토큰`, `지연시간`, `관측성`, `운영 지휘판`, `서비스 품질`, `메트릭`, `프로메테우스`, `그라파나`
+    Strong routing signals: `prompt-import-readiness`, `prompt import readiness`, `slash prompt import`, `slash prompts import`, `slash command prompt import`, `prompt library import`, `prompt folder import`, `prompt directory import`, `import CLI prompts`, `import agent prompts`, `CLI agent prompt files`, `OpenCode prompt import`, `Claude Code prompt import`, `Codex prompt import`, `codex prompt import`, `Gemini CLI prompt import`, `frontmatter prompt import`, `argument interpolation`, `$ARGUMENTS mapping`, `{{args}} mapping`, `$1-$9 prompt arguments`, `prompt slash command collision`, `Hermes slash prompts`, `슬래시 프롬프트 가져오기`, `프롬프트 가져오기`, `프롬프트 디렉터리 가져오기`, `프롬프트 폴더 가져오기`, `슬래시 명령 프롬프트`, `프롬프트 인자 매핑`
 
 ## Catalog Metadata
 
-Category: `observability`
-Phase: `telemetry-card`
-Hermes role: `tracker`
+Category: `prompt`
+Phase: `prompt-import-readiness`
+Hermes role: `guide`
 Quality tier: `workflow-surface-gated`
 
 Quality bar:
@@ -93,24 +95,29 @@ Required inputs:
 
 Expected outputs:
 
-- ops-observability-card/v1 card or guidance
-- external_metric_provider/v1 payload contract
-- external_metric_provider_adapter/v1 adapter contract
-- ops_service_quality_board/v1 service-quality board
-- typed service-quality downgrade gaps
+- prompt_import_readiness_card/v1
+- prompt_source_inventory/v1
+- prompt_format_matrix/v1
+- argument_interpolation_policy/v1
+- slash_command_collision_report/v1
+- prompt_trust_review/v1
+- prompt_import_manifest/v1 when observed
 - next action
 - prepared-vs-observed boundary
 
 Artifact expectations:
 
-- ops-observability-card/v1 metadata-only runtime or wrapper card when recorded
-- external_metric_provider/v1 supplied metric payload when available
-- external_metric_provider_adapter/v1 connector-ready adapter metadata when available
-- ops_service_quality_board/v1 evidence-gated service-quality board
+- prompt_import_readiness_card/v1 metadata-only wrapper card when prepared
+- prompt_source_inventory/v1 with source directory, agent family, file count, format claim, and review state
+- prompt_format_matrix/v1 separating YAML frontmatter, TOML frontmatter, raw markdown/text, and unsupported formats
+- argument_interpolation_policy/v1 for $ARGUMENTS, $1-$9, {{args}}, named placeholders, escaping, and missing argument handling
+- slash_command_collision_report/v1 with command names, aliases, existing Hermes commands, and conflict resolution policy
+- prompt_trust_review/v1 with source trust, prompt-injection risk, secret leakage risk, license/source notes, and review owner
+- prompt_import_manifest/v1 only when file reads, parsed prompts, generated slash-command candidates, or dry-run output are observed
 
 Safety rules:
 
-- An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, root-cause proof, remediation completion, performance proof, or successful workflow completion evidence.
+- A prompt import readiness card is not prompt file access, prompt parsing success, slash command registration, prompt mutation, command activation, imported prompt trust, or successful dry-run evidence unless observed prompt-import evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -121,12 +128,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `ops-observability-card`.
+Preferred harness for this skill: `prompt-import-readiness`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill ops-observability-card --harness ops-observability-card --status started
+omh runtime record --skill prompt-import-readiness --harness prompt-import-readiness --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

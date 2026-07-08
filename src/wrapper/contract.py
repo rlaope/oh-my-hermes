@@ -200,6 +200,12 @@ VISIBLE_ACTIONS = (
     "record_auth_cost_boundary",
     "record_multimodal_routing_policy",
     "record_connector_trial_observation",
+    "prepare_prompt_import_readiness",
+    "show_prompt_import_readiness_card",
+    "record_prompt_source_inventory",
+    "record_argument_interpolation_policy",
+    "record_slash_command_collision_report",
+    "record_prompt_import_observation",
     "prepare_connector_operator_card",
     "show_connector_operator_card",
     "prepare_live_info_operator_card",
@@ -844,6 +850,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
         "prepare_external_connector_readiness",
         "Check connector readiness",
     ),
+    "prepare_prompt_import_readiness": ("prepare_prompt_import_readiness", "Check prompt import"),
     "prepare_connector_operator_card": ("prepare_connector_operator_card", "Open connector card"),
     "prepare_live_info_operator_card": ("prepare_live_info_operator_card", "Open live info card"),
     "prepare_content_operator_card": ("prepare_content_operator_card", "Open content card"),
@@ -2343,6 +2350,41 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "connector invocation",
             "workflow execution",
             "external service success",
+        ],
+    },
+    "prompt-import-readiness": {
+        "kind": "prompt_import_readiness",
+        "headline": "I can check prompt imports before exposing slash commands.",
+        "body": (
+            "I will prepare the prompt import readiness card: prompt sources, agent family, file formats, argument "
+            "interpolation, slash command collisions, trust review, and dry-run evidence slots. Prompt file reads, "
+            "parser success, command registration, prompt mutation, command activation, and imported prompt trust stay observed-only."
+        ),
+        "phase": "prompt_import_readiness_prepared",
+        "next_action": "prepare_prompt_import_readiness",
+        "artifact_schema": "prompt_import_readiness_card/v1",
+        "claim_boundary_suffix": "It is not prompt file access, prompt parsing success, slash command registration, prompt mutation, command activation, imported prompt trust, or dry-run evidence.",
+        "actions": [
+            {"id": "prepare_prompt_import_readiness", "label": "Check prompt import", "style": "primary"},
+            {"id": "prepare_security_safety_review", "label": "Review safety", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_prompt_sources_and_agent_family",
+            "classify_prompt_formats",
+            "map_argument_interpolation",
+            "record_slash_command_collisions",
+            "review_prompt_trust_and_safety",
+            "record_import_manifest_only_after observed file or dry-run evidence",
+        ],
+        "evidence_not_observed": [
+            "prompt file access",
+            "prompt parsing success",
+            "slash command registration",
+            "prompt mutation",
+            "command activation",
+            "imported prompt trust",
+            "dry-run execution",
         ],
     },
     "harness-session-inventory": {

@@ -4099,6 +4099,75 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - An external connector readiness card is not connector installation, credential validation, provider access, API invocation, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence unless observed connector-trial evidence records it.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### prompt-import-readiness
+
+[omh] Hermes prompt import readiness workflow: decide whether external CLI-agent prompt files can be safely reviewed, normalized, and offered as Hermes slash-command candidates without mutating prompts or command registries.
+
+- Category: `prompt`
+- Phase: `prompt-import-readiness`
+- Hermes role: `guide`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when users ask whether external CLI-agent prompt files can be safely reviewed, normalized, and exposed as Hermes slash-command candidates without claiming prompt mutation.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `prompt-import-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use before importing, normalizing, or exposing external prompt files as Hermes slash commands so source trust, formats, argument interpolation, name collisions, review status, and dry-run evidence stay explicit.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `prompt-import-readiness`, `prompt import readiness`, `slash prompt import`, `slash prompts import`, `slash command prompt import`, `prompt library import`, `prompt folder import`, `prompt directory import`, `import CLI prompts`, `import agent prompts`, `CLI agent prompt files`, `OpenCode prompt import`, `Claude Code prompt import`, `Codex prompt import`, `codex prompt import`, `Gemini CLI prompt import`, `frontmatter prompt import`, `argument interpolation`, `$ARGUMENTS mapping`, `{{args}} mapping`, `$1-$9 prompt arguments`, `prompt slash command collision`, `Hermes slash prompts`, `슬래시 프롬프트 가져오기`, `프롬프트 가져오기`, `프롬프트 디렉터리 가져오기`, `프롬프트 폴더 가져오기`, `슬래시 명령 프롬프트`, `프롬프트 인자 매핑`
+- Good example:
+  - Prompt: prompt-import-readiness review Codex and Claude Code prompt folders before exposing them as Hermes slash commands with $ARGUMENTS mapping.
+  - Expected behavior: Produce `prepare_prompt_import_readiness` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: prompt-import-readiness silently import every external prompt, overwrite slash commands, and claim the prompts are trusted without review.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Prompt sources, agent family, expected file formats, argument syntax, slash-command names, trust level, and stop condition are explicit.
+  - Prompt file reads, parser results, command registration, prompt mutation, slash-command activation, and dry-run execution are marked observed, missing, risky, or not_observed.
+  - Route broad candidate discovery to skill-scout, prompt/tool safety to security-safety-review, missing CLIs or directories to toolbelt-readiness, and approved implementation to a selected executor handoff.
+  - Imported prompts, generated command files, registry updates, and dry-run results are reported only from observed prompt-import evidence.
+- Recovery notes:
+  - If source prompt directories are unknown, route to workspace-audit or skill-scout before readiness scoring.
+  - If source trust, prompt-injection risk, secrets, or destructive command content is unclear, route to security-safety-review before import.
+  - If the user asks to actually copy, generate, or register prompt files, prepare an executor or workspace-file handoff and keep readiness prepared_not_observed until file evidence exists.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - prompt_import_readiness_card/v1
+  - prompt_source_inventory/v1
+  - prompt_format_matrix/v1
+  - argument_interpolation_policy/v1
+  - slash_command_collision_report/v1
+  - prompt_trust_review/v1
+  - prompt_import_manifest/v1 when observed
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - prompt_import_readiness_card/v1 metadata-only wrapper card when prepared
+  - prompt_source_inventory/v1 with source directory, agent family, file count, format claim, and review state
+  - prompt_format_matrix/v1 separating YAML frontmatter, TOML frontmatter, raw markdown/text, and unsupported formats
+  - argument_interpolation_policy/v1 for $ARGUMENTS, $1-$9, {{args}}, named placeholders, escaping, and missing argument handling
+  - slash_command_collision_report/v1 with command names, aliases, existing Hermes commands, and conflict resolution policy
+  - prompt_trust_review/v1 with source trust, prompt-injection risk, secret leakage risk, license/source notes, and review owner
+  - prompt_import_manifest/v1 only when file reads, parsed prompts, generated slash-command candidates, or dry-run output are observed
+- Safety rules:
+  - A prompt import readiness card is not prompt file access, prompt parsing success, slash command registration, prompt mutation, command activation, imported prompt trust, or successful dry-run evidence unless observed prompt-import evidence records it.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### content-operator
 
 [omh] Hermes content operator workflow: scope publish-ready writing, rewriting, summarization, translation, release-note, newsletter, customer-copy, social-copy, README-copy, and email-draft work with audience, tone, style, source, review, and hallucination gates.
@@ -8003,6 +8072,62 @@ Score external plugin, connector, API, live-data, data, and multimodal candidate
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - An external connector readiness card is not connector installation, credential validation, provider/API access, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### prompt-import-readiness
+
+Score external CLI-agent prompt files before they become Hermes slash-command candidates.
+
+- Use when: Use before Hermes imports, normalizes, or exposes external prompt files so source trust, format support, argument interpolation, command collisions, and dry-run evidence are explicit.
+- Quality tier: `prompt-import-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - prompt source directory or candidate package
+  - agent family and prompt format
+  - argument interpolation syntax
+  - slash-command naming and collision policy
+  - trust, safety, and review boundary
+- Outputs:
+  - prompt_import_readiness_card/v1
+  - prompt_source_inventory/v1
+  - prompt_format_matrix/v1
+  - argument_interpolation_policy/v1
+  - slash_command_collision_report/v1
+  - prompt_trust_review/v1
+  - prompt_import_manifest/v1 when observed
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `prompt_sources_recorded`
+  - `prompt_format_matrix_recorded`
+  - `argument_interpolation_policy_recorded`
+  - `slash_command_collisions_recorded`
+  - `prompt_trust_review_recorded`
+  - `prompt_import_manifest_recorded_when_observed`
+- Wrapper actions:
+  - `prepare_prompt_import_readiness`
+  - `show_prompt_import_readiness_card`
+  - `record_prompt_source_inventory`
+  - `record_argument_interpolation_policy`
+  - `record_slash_command_collision_report`
+  - `record_prompt_import_observation`
+  - `show_status`
+- Artifact events:
+  - `prompt-import-readiness_scoped`
+  - `prompt-import-readiness_card_prepared`
+  - `prompt-import-readiness_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A prompt import readiness card is not prompt file access, parsing success, slash command registration, prompt mutation, command activation, imported prompt trust, or dry-run evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### content-operator

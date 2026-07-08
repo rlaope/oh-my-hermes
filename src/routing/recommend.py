@@ -777,6 +777,18 @@ _SKILL_POLICIES.update(
                 "connector_trial_manifest/v1 slots, and a stop condition before adoption or provider results are claimed."
             ),
         ),
+        "prompt-import-readiness": RecommendationPolicy(
+            next_action="prepare_prompt_import_readiness",
+            evidence_boundary=(
+                "A prompt import readiness card is not prompt file access, prompt parsing success, slash command "
+                "registration, prompt mutation, command activation, imported prompt trust, or successful dry-run evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare prompt_import_readiness_card/v1 with prompt_source_inventory/v1, prompt_format_matrix/v1, "
+                "argument_interpolation_policy/v1, slash_command_collision_report/v1, prompt_trust_review/v1, "
+                "prompt_import_manifest/v1 slots, and a stop condition before importing or exposing prompt commands."
+            ),
+        ),
         "content-operator": RecommendationPolicy(
             next_action="prepare_content_operator_card",
             evidence_boundary=(
@@ -1262,6 +1274,12 @@ def _score_definition(
         and not _external_connector_readiness_recommendation_applies(normalized_query, query_tokens)
     ):
         return None
+    if (
+        definition.name == "prompt-import-readiness"
+        and explicit_skill != "prompt-import-readiness"
+        and not _prompt_import_readiness_recommendation_applies(normalized_query, query_tokens)
+    ):
+        return None
 
     if definition.name == explicit_skill:
         score += 12
@@ -1423,6 +1441,65 @@ def _external_connector_readiness_recommendation_applies(normalized_query: str, 
             "cost aware connector",
             "read only sql",
             "live data",
+        )
+    )
+
+
+def _prompt_import_readiness_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    strong_anchor_tokens = {
+        "arguments",
+        "claude",
+        "cli",
+        "codex",
+        "collision",
+        "collisions",
+        "command",
+        "commands",
+        "frontmatter",
+        "gemini",
+        "import",
+        "importing",
+        "imports",
+        "interpolation",
+        "opencode",
+        "prompt",
+        "prompts",
+        "slash",
+        "toml",
+        "yaml",
+        "가져오기",
+        "명령",
+        "슬래시",
+        "인자",
+        "프롬프트",
+    }
+    if not query_tokens & strong_anchor_tokens:
+        return False
+    return any(
+        _phrase_match(normalized_query, phrase)
+        for phrase in (
+            "slash prompt",
+            "slash prompts",
+            "prompt import",
+            "prompt imports",
+            "prompt folder",
+            "prompt directory",
+            "cli prompt",
+            "cli agent prompt",
+            "opencode prompt",
+            "claude code prompt",
+            "codex prompt",
+            "gemini cli prompt",
+            "$arguments",
+            "{{args}}",
+            "$1",
+            "$2",
+            "argument interpolation",
+            "슬래시 프롬프트",
+            "프롬프트 가져오기",
+            "프롬프트 폴더",
+            "프롬프트 디렉터리",
+            "프롬프트 인자",
         )
     )
 
