@@ -9,6 +9,9 @@ from .localization import normalized_phrase, prepare_routing_text, routing_token
 from .missed_route import is_missed_route_feedback
 from .policy import (
     RoutingGuardRule,
+    SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES,
+    SKILL_SCOUT_CANDIDATE_BLOCKER_PHRASES,
+    SKILL_SCOUT_CANDIDATE_INTENT_PHRASES,
     active_routing_guard_rules,
     explicit_skill_invocation,
     is_explicit_one_off_request,
@@ -1202,6 +1205,8 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
     explicit_skill = explicit_skill_invocation(query, {definition.name for definition in definitions})
     if explicit_skill and is_missed_route_feedback(normalized_query):
         explicit_skill = None
+    if explicit_skill == "skill" and _skill_scout_candidate_alias_intent_match(normalized_query):
+        explicit_skill = None
     ecosystem_identity_connector_match = _ecosystem_identity_connector_explicit_match(normalized_query)
     scored = []
     for prepared in prepared_definitions:
@@ -1381,6 +1386,12 @@ def _score_definition(
     if ecosystem_identity_connector_match:
         score += 36
         matched.add("direct:ecosystem_identity_connector")
+    if definition.name == "skill-scout" and _skill_scout_candidate_alias_intent_match(normalized_query):
+        score += 36
+        matched.add("direct:skill_scout_candidate_alias")
+    if definition.name == "source-finder" and _explicit_phrase_match(normalized_query, "source-finder"):
+        score += 36
+        matched.add("direct:source_finder_alias")
     if definition.name == "accessibility-audit" and _accessibility_audit_explicit_match(normalized_query):
         score += 30
         matched.add("direct:accessibility_audit")
@@ -1503,6 +1514,12 @@ def _external_connector_readiness_recommendation_applies(normalized_query: str, 
             "connector auth risk",
             "connector cost auth risk",
             "cost aware connector",
+            "private crypto transaction",
+            "private cryptocurrency connector",
+            "crypto transaction plugin",
+            "monero gateway",
+            "xmr gateway",
+            "blockchain gateway",
             "read only sql",
             "live data",
             "peer-to-peer agent messaging",
@@ -1544,6 +1561,23 @@ def _ecosystem_identity_connector_explicit_match(normalized_query: str) -> bool:
             "oracle genai connector",
             "miniverse bridge",
             "crustocean platform connector",
+        )
+    )
+
+
+def _skill_scout_candidate_alias_intent_match(normalized_query: str) -> bool:
+    return (
+        any(
+            _phrase_match(normalized_query, normalized_phrase(phrase))
+            for phrase in SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES
+        )
+        and any(
+            _phrase_match(normalized_query, normalized_phrase(phrase))
+            for phrase in SKILL_SCOUT_CANDIDATE_INTENT_PHRASES
+        )
+        and not any(
+            _phrase_match(normalized_query, normalized_phrase(phrase))
+            for phrase in SKILL_SCOUT_CANDIDATE_BLOCKER_PHRASES
         )
     )
 

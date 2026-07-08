@@ -291,6 +291,41 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
                 self.assertIn(secondary_surface, candidate.omh_surfaces)
                 self.assertNotEqual(candidate.matched_rule_id, "default_skills_plugins")
 
+    def test_remaining_popular_skill_candidates_gain_domain_surfaces(self) -> None:
+        expectations = {
+            "personal-api": ("knowledge_workspace_identity", "memory-curation-review", "wiki"),
+            "humanizer-ru": ("copy_localization_quality", "content-operator", "verification-gate"),
+            "cognify-skills": (
+                "business_operations_skill_pack",
+                "external-connector-readiness",
+                "connector-operator",
+            ),
+            "bmad-module-skill-forge": ("skill_forge_generation", "skill-scout", "prompt-import-readiness"),
+            "ripley-xmr-gateway": (
+                "private_crypto_gateway",
+                "external-connector-readiness",
+                "security-safety-review",
+            ),
+            "colony-skill": (
+                "community_matching_reputation",
+                "gateway-intent-card",
+                "security-safety-review",
+            ),
+            "hermes-edu-skills": ("education_skill_library", "research-department", "media-input-operator"),
+            "hurmoz": ("localized_domain_skill_pack", "content-operator", "live-info-operator"),
+            "pingpong": ("community_matching_reputation", "gateway-intent-card", "external-connector-readiness"),
+            "wizards-of-the-ghosts": ("themed_dev_workflow_pack", "workflow-learning", "verification-gate"),
+        }
+        for item_id, (rule_id, primary_surface, secondary_surface) in expectations.items():
+            with self.subTest(item_id=item_id):
+                candidate = awesome_hermes_item(item_id)
+
+                self.assertEqual(candidate.status, "partial")
+                self.assertEqual(candidate.matched_rule_id, rule_id)
+                self.assertIn(primary_surface, candidate.omh_surfaces)
+                self.assertIn(secondary_surface, candidate.omh_surfaces)
+                self.assertNotEqual(candidate.matched_rule_id, "default_skills_plugins")
+
     def test_meta_skill_and_registry_candidates_do_not_stay_generic(self) -> None:
         expectations = {
             "hermes-skill-factory": "skill_marketplace",

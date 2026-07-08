@@ -2383,6 +2383,7 @@ class ChatRouterTests(unittest.TestCase):
         messages = (
             "weather plugin readiness with screenshots and cost auto routing",
             "Composio universal CLI skill 도입할지 비용 인증 리스크 감안해서 라우팅해줘",
+            "Monero XMR agent gateway private crypto transaction plugin readiness 봐줘",
         )
 
         for message in messages:
@@ -2395,6 +2396,18 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertNotIn("guard:ops_observability", decision["recommendations"][0]["matched"])
                 self.assertEqual(recommendations[0]["skill"], "external-connector-readiness")
                 self.assertNotEqual(recommendations[0]["skill"], "ops-observability-card")
+
+    def test_generic_crypto_mentions_do_not_open_connector_readiness(self) -> None:
+        for message in (
+            "Monero privacy model 설명해줘",
+            "XMR price 최신 정보 알려줘",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                recommendations = recommend_skills(message, limit=3)
+
+                self.assertNotEqual(decision["selected_skill"], "external-connector-readiness")
+                self.assertNotEqual(recommendations[0]["skill"], "external-connector-readiness")
 
     def test_agent_network_connector_readiness_routes_before_generic_tooling(self) -> None:
         messages = (
@@ -3384,6 +3397,11 @@ selected_workflow=ultraprocess
             "유명한 Hermes skills/plugin 찾아서 우리한테 없는 것 설치할지 비교해줘",
             "agentskills.io top skills like drawio open-design Anthropic cybersecurity review and route",
             "스킬 후보 찾아보고 만들지 결정해줘",
+            "Obsidian skills나 Defuddle 같은 vault/markdown skill 우리한테 도입할지 비교해줘",
+            "humanizer skill 도입해서 AI writing tells 제거할 수 있는지 비교해줘",
+            "cognify CRM invoicing project management agentskills pack 도입 검토해줘",
+            "skill forge로 repo/docs를 agentskills.io skill로 변환하는 후보 비교해줘",
+            "Chinese K-12 education Hermes skills photo Q&A lesson planning 도입 판단해줘",
         )
 
         for message in scout_cases:
@@ -3412,6 +3430,48 @@ selected_workflow=ultraprocess
                 self.assertEqual(decision["selected_skill"], "doctor")
                 self.assertEqual(decision["selected_harness"], primary_harness_for_skill("doctor"))
                 self.assertEqual(decision["recommendations"][0]["next_action"], "run_local_operator_check")
+
+    def test_skill_scout_candidate_aliases_rank_before_skill_management_recommendations(self) -> None:
+        for message in (
+            "Obsidian skills나 Defuddle 같은 vault/markdown skill 우리한테 도입할지 비교해줘",
+            "humanizer skill 도입해서 AI writing tells 제거할 수 있는지 비교해줘",
+            "cognify CRM invoicing project management agentskills pack 도입 검토해줘",
+            "skill forge로 repo/docs를 agentskills.io skill로 변환하는 후보 비교해줘",
+            "Chinese K-12 education Hermes skills photo Q&A lesson planning 도입 판단해줘",
+        ):
+            with self.subTest(message=message):
+                recommendations = recommend_skills(message, limit=3)
+
+                self.assertEqual(recommendations[0]["skill"], "skill-scout")
+                self.assertEqual(recommendations[0]["next_action"], "prepare_skill_scout")
+                self.assertNotEqual(recommendations[0]["skill"], "skill")
+
+    def test_skill_scout_candidate_aliases_do_not_steal_management_or_source_finding(self) -> None:
+        negative_cases = (
+            ("Defuddle source-finder find source candidates and datasets", "source-finder"),
+            ("skill list installed Defuddle skills", "skill"),
+            ("Obsidian skills latest citations source-finder로 찾아줘", "source-finder"),
+        )
+
+        for message, expected_skill in negative_cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                recommendations = recommend_skills(message, limit=3)
+
+                self.assertEqual(decision["selected_skill"], expected_skill)
+                self.assertEqual(recommendations[0]["skill"], expected_skill)
+
+    def test_skill_scout_candidate_aliases_do_not_steal_explanation_or_status_requests(self) -> None:
+        for message in (
+            "how does Cognify work?",
+            "Cognify CRM dashboard metrics status",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                recommendations = recommend_skills(message, limit=3)
+
+                self.assertNotEqual(decision["selected_skill"], "skill-scout")
+                self.assertNotEqual(recommendations[0]["skill"], "skill-scout")
 
     def test_skill_health_routes_without_stealing_setup_or_learning(self) -> None:
         health_cases = (

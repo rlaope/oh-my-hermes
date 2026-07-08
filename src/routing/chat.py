@@ -24,6 +24,9 @@ from .omh_help import is_omh_intro_question, is_omh_quickstart_question, is_omh_
 from .policy import (
     CONFIDENCE_LEVELS,
     ROUTE_ACTIONS,
+    SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES,
+    SKILL_SCOUT_CANDIDATE_BLOCKER_PHRASES,
+    SKILL_SCOUT_CANDIDATE_INTENT_PHRASES,
     active_routing_guard_rules,
     explicit_skill_invocation as explicit_skill_name,
     is_ambiguous_scores,
@@ -454,6 +457,7 @@ _SPECIFIC_CAPABILITY_ALIAS_PHRASES = (
     "hermes skills/plugin",
     "skills/plugin",
     "agentskills.io top skills",
+    *SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES,
     "유명한 hermes skills",
     "유명한 hermes skill",
     "유용한 hermes skills",
@@ -543,6 +547,7 @@ _SPECIFIC_CAPABILITY_FAST_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "hermes skills/plugin",
             "skills/plugin",
             "agentskills.io top skills",
+            *SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES,
             "existing skill",
             "fork a skill",
             "extend a skill",
@@ -1501,7 +1506,9 @@ def _route_chat_message_cached(
     candidate_confidence = str(top["confidence"])
     ambiguous = _is_ambiguous(full_recommendations)
     explicit_loop_signal = _explicit_loop_signal(routing_message, full_recommendations)
-    file_or_text_lookup = is_file_or_text_lookup_question(routing_message)
+    file_or_text_lookup = is_file_or_text_lookup_question(routing_message) and not (
+        candidate_skill == "source-finder" and "source-finder" in normalized_phrase(routing_message)
+    )
     direct_answer = _is_plain_direct_answer_question(
         routing_message,
         candidate_score=candidate_score,
@@ -3275,6 +3282,8 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
             "hermes skills/plugin",
             "skills/plugin",
             "agentskills.io top skills",
+            *SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES,
+            "markdown skill",
             "is there a skill",
             "existing skill",
             "fork a skill",
@@ -3404,6 +3413,10 @@ def _operator_surface_fast_path_decision(
         phrase = "installed skill repair"
         marker = "operator_surface_fast_path:doctor"
         reason = "Installed skill setup or repair request; run diagnostics instead of scouting new candidates."
+    if selected_skill == "skill-scout" and _has_skill_scout_candidate_alias(
+        routing_message
+    ) and not _is_skill_scout_candidate_alias_intent(routing_message):
+        return None
     if _operator_surface_guard_preempts(
         selected_skill,
         routing_message,
@@ -3490,6 +3503,8 @@ def _operator_surface_guard_preempts(
 ) -> bool:
     routing_text = prepare_routing_text(message)
     normalized_query = normalized_phrase(routing_text.scoring_text)
+    if selected_skill == "skill-scout" and _is_skill_scout_candidate_alias_intent(normalized_query):
+        return False
     query_tokens = routing_tokens(normalized_query)
     for guard in active_routing_guard_rules(normalized_query, query_tokens):
         if not guard.preferred_skills:
@@ -3500,6 +3515,20 @@ def _operator_surface_guard_preempts(
         if preferred_skill in preempting_skills:
             return True
     return False
+
+
+def _has_skill_scout_candidate_alias(query: str) -> bool:
+    normalized_query = normalized_phrase(query)
+    return any(normalized_phrase(phrase) in normalized_query for phrase in SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES)
+
+
+def _is_skill_scout_candidate_alias_intent(query: str) -> bool:
+    normalized_query = normalized_phrase(query)
+    return (
+        any(normalized_phrase(phrase) in normalized_query for phrase in SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES)
+        and any(normalized_phrase(phrase) in normalized_query for phrase in SKILL_SCOUT_CANDIDATE_INTENT_PHRASES)
+        and not any(normalized_phrase(phrase) in normalized_query for phrase in SKILL_SCOUT_CANDIDATE_BLOCKER_PHRASES)
+    )
 
 
 @lru_cache(maxsize=1)
