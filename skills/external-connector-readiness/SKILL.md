@@ -1,22 +1,22 @@
 ---
-name: command-operator
-description: [omh] Hermes command operator workflow: scope terminal, shell, CLI, package-manager, and test commands with cwd, environment, safety, and result-evidence gates.
+name: external-connector-readiness
+description: [omh] Hermes external connector readiness workflow: decide whether a candidate plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable enough to adopt, route, or trial.
 metadata:
   hermes:
-    tags: [workflow, oh-my-hermes, command]
-    category: command
-    phase: command-task
+    tags: [workflow, oh-my-hermes, connector]
+    category: connector
+    phase: connector-readiness
     role: guide
     quality_tier: workflow-surface-gated
 ---
 
-# Command Operator
+# External Connector Readiness
 
-This is a Hermes-native `command-operator` workflow skill.
+This is a Hermes-native `external-connector-readiness` workflow skill.
 
 ## Why This Exists
 
-`command-operator` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`external-connector-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,27 +28,28 @@ This is a Hermes-native `command-operator` workflow skill.
 
 Good example:
 
-- Prompt: command-operator run npm test in the project terminal and summarize the output.
-- Expected behavior: Produce `prepare_command_operator_card` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: external-connector-readiness compare weather plugin and wxtrain candidates with cost, freshness, multimodal evidence, and fallback routes before adoption.
+- Expected behavior: Produce `prepare_external_connector_readiness` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: command-operator run rm -rf without cwd, confirmation, or observation gates.
+- Prompt: external-connector-readiness silently enable a paid connector and claim weather, SQL, and screenshot results without observed provider evidence.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- Command text, working directory, environment assumptions, timeout, safety level, and stop condition are explicit.
-- Destructive, credential, network, filesystem mutation, install, deploy, and production commands are gated or marked missing.
-- Exit codes, stdout/stderr, test results, package-manager effects, and filesystem mutations are reported only from observed command evidence.
+- Candidate connector, target domain, read/write scope, modality needs, provider owner, fallback workflow, and stop condition are explicit.
+- Cost, quota, credential, permission, live-data freshness, multimodal capture, safety, and compliance boundaries are marked ready, missing, risky, or not_observed.
+- Route live read-only lookups to live-info-operator, external writes to connector-operator, datasets/SQL to data-analysis, and missing tools to toolbelt-readiness before claiming results.
+- Provider responses, screenshots, audio/video/file captures, query outputs, message ids, and external mutations are reported only from observed trial evidence.
 
 ## Recovery Notes
 
-- If command text or working directory is missing, ask for the smallest missing scope needed before preparing the command task.
-- If the command is destructive, credentialed, networked, install/deploy-oriented, or production-affecting, require an explicit confirmation gate.
-- If the user supplied failed command output and asks for root cause, route to build-failure-triage or agent-debug instead of preparing a fresh command.
+- If the candidate list is unknown, route to skill-scout or source-finder before readiness scoring.
+- If credentials, cost authority, or connector installation is missing, keep readiness blocked and route setup to toolbelt-readiness.
+- If a specific provider action is already selected, route read-only live data to live-info-operator or write/mutation tasks to connector-operator.
 
 ## OMH Context Rail
 
@@ -64,14 +65,14 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should prepare or supervise terminal/CLI command execution without claiming the command ran or succeeded.
+Use before adopting, enabling, or routing an external plugin/connector/API when Hermes must compare capability, auth, cost, modality, freshness, safety, fallback, and observable trial evidence.
 
-    Strong routing signals: `command-operator`, `command operator`, `terminal command`, `terminal task`, `shell command`, `shell task`, `cli command`, `command execution`, `run command`, `run this command`, `execute command`, `execute this command`, `run npm test`, `run tests`, `npm test`, `pnpm test`, `bun test`, `uv run`, `python -m unittest`, `pytest`, `make test`, `cargo test`, `go test`, `summarize command output`, `터미널 명령`, `터미널에서`, `셸 명령`, `쉘 명령`, `명령 실행`, `명령어 실행`, `실행 준비`, `npm test 실행`, `테스트 실행`, `결과 요약`
+    Strong routing signals: `external-connector-readiness`, `external connector readiness`, `connector readiness matrix`, `plugin readiness matrix`, `provider readiness`, `api readiness`, `connector adoption`, `external plugin adoption`, `weather plugin readiness`, `weather connector readiness`, `wxtrain readiness`, `onequery read-only sql`, `read-only sql connector`, `sql connector readiness`, `nextcloud connector`, `microsoft workspace connector`, `microsoft graph connector`, `chainlink connector`, `solana connector`, `cost-aware connector`, `multimodal connector`, `multimodal routing`, `screenshot connector`, `audio connector`, `video connector`, `plugin auto-routing`, `connector auto-routing`, `external tool trial`, `커넥터 준비도`, `외부 커넥터 준비`, `외부 플러그인 채택`, `플러그인 준비도`, `비용 기준 커넥터`, `자동 라우팅`, `멀티모달 커넥터`, `멀티모달 라우팅`
 
 ## Catalog Metadata
 
-Category: `command`
-Phase: `command-task`
+Category: `connector`
+Phase: `connector-readiness`
 Hermes role: `guide`
 Quality tier: `workflow-surface-gated`
 
@@ -94,23 +95,28 @@ Required inputs:
 
 Expected outputs:
 
-- command_task_card/v1
-- command_scope/v1
-- command_safety_gate/v1
-- command_result_manifest/v1 when observed
+- external_connector_readiness_card/v1
+- connector_capability_matrix/v1
+- auth_cost_boundary/v1
+- live_data_freshness_policy/v1 when live data is required
+- multimodal_routing_policy/v1 when screenshots, audio, video, or files are involved
+- fallback_route_policy/v1
+- connector_trial_manifest/v1 when observed
 - next action
 - prepared-vs-observed boundary
 
 Artifact expectations:
 
-- command_task_card/v1 metadata-only wrapper card when prepared
-- command_scope/v1 with command text, working directory, environment assumptions, timeout, and stop condition
-- command_safety_gate/v1 separating read-only, write/mutation, network, credential, and destructive-risk commands
-- command_result_manifest/v1 only when exit code, stdout/stderr, logs, or terminal transcript are observed
+- external_connector_readiness_card/v1 metadata-only wrapper card when prepared
+- connector_capability_matrix/v1 with candidate, domain, read/write shape, modality, owner workflow, and fallback route
+- auth_cost_boundary/v1 separating missing connector, missing credentials, paid/provider cost risk, quota, and user authority
+- live_data_freshness_policy/v1 for requested recency, provider timestamp, stale-result handling, and source-quality thresholds
+- multimodal_routing_policy/v1 for screenshot, audio, video, file, OCR, or visual QA evidence routes when needed
+- connector_trial_manifest/v1 only when a provider response, capture id, query transcript, message id, or tool-call observation is recorded
 
 Safety rules:
 
-- A command operator card is not terminal launch, shell execution, package-manager action, test run, stdout/stderr capture, exit-code success, filesystem mutation, network access, or destructive command evidence unless observed command-result evidence records it.
+- An external connector readiness card is not connector installation, credential validation, provider access, API invocation, multimodal capture, live-data retrieval, external mutation, cost authorization, or successful trial evidence unless observed connector-trial evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -121,12 +127,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `command-operator`.
+Preferred harness for this skill: `external-connector-readiness`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill command-operator --harness command-operator --status started
+omh runtime record --skill external-connector-readiness --harness external-connector-readiness --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

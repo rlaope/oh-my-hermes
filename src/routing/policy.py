@@ -2441,6 +2441,38 @@ _OPS_OBSERVABILITY_EXTERNAL_BLOCKERS = (
     "네트워크 라우팅",
     "공유기",
 )
+_OPS_OBSERVABILITY_CONNECTOR_READINESS_BLOCKERS = (
+    "external connector readiness",
+    "connector readiness",
+    "plugin readiness",
+    "provider readiness",
+    "api readiness",
+    "connector adoption",
+    "external plugin adoption",
+    "weather plugin readiness",
+    "weather connector readiness",
+    "wxtrain readiness",
+    "onequery read-only sql",
+    "read-only sql connector",
+    "sql connector readiness",
+    "nextcloud connector",
+    "microsoft workspace connector",
+    "microsoft graph connector",
+    "chainlink connector",
+    "solana connector",
+    "cost-aware connector",
+    "multimodal connector",
+    "multimodal routing",
+    "plugin auto-routing",
+    "connector auto-routing",
+    "커넥터 준비도",
+    "외부 커넥터 준비",
+    "외부 플러그인 채택",
+    "플러그인 준비도",
+    "비용 기준 커넥터",
+    "멀티모달 커넥터",
+    "멀티모달 라우팅",
+)
 _OPS_OBSERVABILITY_OPERATOR_CONTEXT = (
     "omh",
     "oh-my-hermes",
@@ -5163,6 +5195,8 @@ def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[st
 
 
 def ops_observability_external_blocked(normalized_query: str) -> bool:
+    if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_CONNECTOR_READINESS_BLOCKERS):
+        return True
     blocker_override_context = _contains_phrase(normalized_query, _OPS_OBSERVABILITY_BLOCKER_OVERRIDE_CONTEXT)
     return _contains_phrase(normalized_query, _OPS_OBSERVABILITY_EXTERNAL_BLOCKERS) and not blocker_override_context
 

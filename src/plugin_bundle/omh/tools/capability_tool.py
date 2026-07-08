@@ -195,6 +195,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "workflow-learning",
             "memory-curation-review",
             "achievements",
+            "external-connector-readiness",
             "harness-session-inventory",
             "ops-observability-card",
             "skill",
