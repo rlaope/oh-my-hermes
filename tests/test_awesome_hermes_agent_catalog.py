@@ -81,7 +81,14 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         self.assertIn("command-operator", dangerous_patterns.omh_surfaces)
 
     def test_default_rule_ids_are_emitted_for_unmatched_skill_plugins(self) -> None:
-        community_skill = awesome_hermes_item("hermes-skill-factory")
+        community_skill = coverage_for_item(
+            _synthetic_item(
+                item_id="synthetic-unmapped-community-skill",
+                section="Skills & Plugins",
+                subsection=PLUGIN_SUBSECTION,
+                summary="Small helper for unclassified agent notes.",
+            )
+        )
 
         self.assertEqual(community_skill.status, "partial")
         self.assertEqual(community_skill.rule_set_version, "awesome_hermes_agent_rules/v1")
@@ -259,6 +266,47 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         self.assertEqual(candidate.matched_rule_id, "terminal_visual_overlay")
         self.assertIn("visual-qa", candidate.omh_surfaces)
         self.assertIn("design-quality-gate", candidate.omh_surfaces)
+
+    def test_popular_agent_skill_candidates_have_specific_readiness_surfaces(self) -> None:
+        expectations = {
+            "wondelai-skills": ("cross_platform_skill_ecosystem", "skill-scout", "prompt-import-readiness"),
+            "anthropic-cybersecurity-skills": (
+                "security_skill_library",
+                "security-safety-review",
+                "agent-evaluation",
+            ),
+            "pydantic-ai-skills": ("typed_skill_runtime", "verification-gate", "toolbelt-readiness"),
+            "agentic-mcp-skill": ("mcp_skill_bridge", "external-connector-readiness", "toolbelt-readiness"),
+            "skillsdotnet": ("mcp_skill_bridge", "external-connector-readiness", "toolbelt-readiness"),
+            "longbridge": ("domain_connectors", "external-connector-readiness", "live-info-operator"),
+            "dev-gtm-claude-skills": ("growth_content_skills", "content-operator", "research-department"),
+        }
+        for item_id, (rule_id, primary_surface, secondary_surface) in expectations.items():
+            with self.subTest(item_id=item_id):
+                candidate = awesome_hermes_item(item_id)
+
+                self.assertEqual(candidate.status, "partial")
+                self.assertEqual(candidate.matched_rule_id, rule_id)
+                self.assertIn(primary_surface, candidate.omh_surfaces)
+                self.assertIn(secondary_surface, candidate.omh_surfaces)
+                self.assertNotEqual(candidate.matched_rule_id, "default_skills_plugins")
+
+    def test_meta_skill_and_registry_candidates_do_not_stay_generic(self) -> None:
+        expectations = {
+            "hermes-skill-factory": "skill_marketplace",
+            "hermes-dojo": "skill_marketplace",
+            "super-hermes": "meta_prompt_self_improvement",
+            "maestro": "dynamic_orchestration",
+            "execplan-skill": "dynamic_orchestration",
+            "hermeshub": "skill_marketplace",
+        }
+        for item_id, rule_id in expectations.items():
+            with self.subTest(item_id=item_id):
+                candidate = awesome_hermes_item(item_id)
+
+                self.assertEqual(candidate.status, "partial")
+                self.assertEqual(candidate.matched_rule_id, rule_id)
+                self.assertNotEqual(candidate.matched_rule_id, "default_skills_plugins")
 
     def test_current_awesome_hermes_inventory_has_no_unmapped_candidates(self) -> None:
         missing = [item.item.id for item in awesome_hermes_coverage(status="missing_candidate")]
