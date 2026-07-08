@@ -18,6 +18,7 @@ _EXPLICIT_SKILL_ALIASES = {
     "paper-explainer": "paper-learning",
     "source-acquisition": "source-finder",
     "source-intake": "source-finder",
+    "ulw": "ultrawork",
 }
 _PREFIXED_SKILL_ALIASES = {
     "omh": "oh-my-hermes",
@@ -26,6 +27,7 @@ _PREFIXED_SKILL_ALIASES = {
     "paper-explainer": "paper-learning",
     "source-acquisition": "source-finder",
     "source-intake": "source-finder",
+    "ulw": "ultrawork",
 }
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}

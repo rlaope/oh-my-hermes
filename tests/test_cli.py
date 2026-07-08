@@ -301,6 +301,40 @@ class CliTests(unittest.TestCase):
                 ]
                 self.assertEqual(trigger_matches, [])
 
+    def test_ulw_alias_routes_to_ultrawork(self) -> None:
+        for message in (
+            "ulw split this accepted plan into lanes",
+            "$ulw split docs and tests into parallel lanes",
+            "use omh ulw split docs and tests into parallel lanes",
+        ):
+            with self.subTest(message=message):
+                status, stdout, stderr = run_cli(["recommend", message, "--limit", "1"])
+
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                recommendations = json.loads(stdout)["recommendations"]
+                self.assertEqual(recommendations[0]["skill"], "ultrawork")
+
+        status, stdout, stderr = run_cli(
+            ["recommend", "missed route: ulw split this accepted plan into lanes", "--limit", "1"]
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        recommendations = json.loads(stdout)["recommendations"]
+        self.assertEqual(recommendations[0]["skill"], "workflow-learning")
+
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "--json", "$ulw split docs and tests into parallel lanes"],
+            output_json=False,
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["route"]["action"], "dispatch")
+        self.assertEqual(payload["route"]["selected_skill"], "ultrawork")
+
     def test_context_brief_keeps_customer_bug_reports_on_feedback_triage(self) -> None:
         cases = (
             "고객 버그 제보를 분류해줘",

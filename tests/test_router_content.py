@@ -1744,6 +1744,8 @@ class RouterContentTests(unittest.TestCase):
         )
         self.assertEqual(definitions["ultrawork"].hermes_role, "handoff-guide")
         self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "handoff-guide")
+        self.assertIn("ulw", definitions["ultrawork"].triggers)
+        self.assertIn("$ulw", definitions["ultrawork"].triggers)
         self.assertIn("selected runtime", definitions["ultrawork"].handoff_policy)
         self.assertIn("selected executor/runtime handoff", definitions["ultraprocess"].handoff_policy)
         self.assertTrue(any("source or web evidence" in item for item in definitions["ralplan"].required_inputs))

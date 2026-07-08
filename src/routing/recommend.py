@@ -1174,6 +1174,7 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
         matches = _fallback_recommendations(definitions, query)
         return tuple(matches)
     matches.sort(key=lambda recommendation: (-recommendation.score, recommendation.skill))
+    matches = _prioritize_explicit_skill(matches, explicit_skill)
     return tuple(matches)
 
 
@@ -1454,6 +1455,21 @@ def _risky_refactor_followup_boundary(recommendation: Recommendation) -> Recomme
         why=_RISKY_REFACTOR_FOLLOWUP_WHY,
         wrapper_guidance=_RISKY_REFACTOR_FOLLOWUP_GUIDANCE_PREFIX + recommendation.wrapper_guidance,
     )
+
+
+def _prioritize_explicit_skill(
+    recommendations: list[Recommendation],
+    explicit_skill: str | None,
+) -> list[Recommendation]:
+    if not explicit_skill:
+        return recommendations
+    selected = next(
+        (recommendation for recommendation in recommendations if recommendation.skill == explicit_skill),
+        None,
+    )
+    if selected is None:
+        return recommendations
+    return [selected, *[recommendation for recommendation in recommendations if recommendation.skill != explicit_skill]]
 
 
 def _tokens(value: str) -> set[str]:
