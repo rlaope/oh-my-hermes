@@ -75,6 +75,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "live-info-operator": ("workflow_skill", True),
     "external-connector-readiness": ("workflow_skill", True),
     "prompt-import-readiness": ("workflow_skill", True),
+    "physical-device-readiness": ("workflow_skill", True),
     "content-operator": ("workflow_skill", True),
     "media-input-operator": ("workflow_skill", True),
     "data-analysis": ("workflow_skill", True),
@@ -497,6 +498,18 @@ class RouterContentTests(unittest.TestCase):
             "cost authorization",
             recommend_module._SKILL_POLICIES["external-connector-readiness"].evidence_boundary,
         )
+        self.assertEqual(
+            recommend_module._SKILL_POLICIES["physical-device-readiness"].next_action,
+            "prepare_physical_device_readiness",
+        )
+        self.assertIn(
+            "device_trial_manifest/v1",
+            recommend_module._SKILL_POLICIES["physical-device-readiness"].wrapper_guidance,
+        )
+        self.assertIn(
+            "heat command",
+            recommend_module._SKILL_POLICIES["physical-device-readiness"].evidence_boundary,
+        )
         self.assertEqual(recommend_module._SKILL_POLICIES["toolbelt-readiness"].next_action, "prepare_toolbelt_readiness")
         self.assertEqual(
             recommend_module._SKILL_POLICIES["harness-session-inventory"].next_action,
@@ -618,6 +631,7 @@ class RouterContentTests(unittest.TestCase):
                 "live-info-operator",
                 "external-connector-readiness",
                 "prompt-import-readiness",
+                "physical-device-readiness",
                 "content-operator",
                 "media-input-operator",
                 "data-analysis",
@@ -1427,6 +1441,54 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("prompt_import_readiness", route_rules)
         self.assertIn("prompt-import-readiness", route_rules["prompt_import_readiness"]["workflow"])
         self.assertIn("slash prompt import", route_rules["prompt_import_readiness"]["phrases"])
+
+    def test_physical_device_readiness_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("physical-device-readiness", definitions)
+        self.assertIn("physical-device-readiness", harnesses)
+        self.assertIn("physical-device-readiness", templates)
+        self.assertEqual(primary_harness_for_skill("physical-device-readiness"), "physical-device-readiness")
+        self.assertEqual(definitions["physical-device-readiness"].category, "operations")
+        self.assertEqual(definitions["physical-device-readiness"].phase, "device-readiness")
+        self.assertEqual(definitions["physical-device-readiness"].quality_tier, "workflow-surface-gated")
+        self.assertIn(
+            "physical_device_readiness_card/v1",
+            definitions["physical-device-readiness"].expected_outputs,
+        )
+        self.assertIn("device_safety_envelope/v1", definitions["physical-device-readiness"].expected_outputs)
+        self.assertIn("operator_approval_policy/v1", definitions["physical-device-readiness"].expected_outputs)
+        self.assertIn("snapmaker printer safety", definitions["physical-device-readiness"].triggers)
+        self.assertIn("iot relay safety", definitions["physical-device-readiness"].triggers)
+        self.assertIn("물리 장비 안전", definitions["physical-device-readiness"].triggers)
+        readiness_text = " ".join(definitions["physical-device-readiness"].safety_rules).lower()
+        self.assertIn("camera", readiness_text)
+        self.assertIn("heat", readiness_text)
+        self.assertIn("physical", readiness_text)
+        self.assertIn(
+            "physical_device_readiness_card/v1",
+            " ".join(definitions["physical-device-readiness"].artifact_expectations),
+        )
+        self.assertIn("device_safety_envelope/v1", harnesses["physical-device-readiness"].expected_outputs)
+        self.assertIn("operator_approval_policy/v1", harnesses["physical-device-readiness"].expected_outputs)
+        self.assertIn("device_scope_selected", harnesses["physical-device-readiness"].evidence_ladder)
+        self.assertIn(
+            "physical_safety_boundary_recorded",
+            harnesses["physical-device-readiness"].evidence_ladder,
+        )
+        self.assertIn("physical_device_readiness_card/v1", templates["physical-device-readiness"].content)
+        self.assertIn("device_trial_manifest/v1", templates["physical-device-readiness"].content)
+        self.assertIn(
+            "Preferred harness for this skill: `physical-device-readiness`",
+            templates["physical-device-readiness"].content,
+        )
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("physical_device_readiness", route_rules)
+        self.assertIn("physical-device-readiness", route_rules["physical_device_readiness"]["workflow"])
+        self.assertIn("snapmaker printer safety", route_rules["physical_device_readiness"]["phrases"])
 
     def test_content_operator_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

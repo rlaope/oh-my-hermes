@@ -206,6 +206,12 @@ VISIBLE_ACTIONS = (
     "record_argument_interpolation_policy",
     "record_slash_command_collision_report",
     "record_prompt_import_observation",
+    "prepare_physical_device_readiness",
+    "show_physical_device_readiness_card",
+    "record_device_safety_envelope",
+    "record_sensor_camera_gate_policy",
+    "record_operator_approval_policy",
+    "record_device_trial_observation",
     "prepare_connector_operator_card",
     "show_connector_operator_card",
     "prepare_live_info_operator_card",
@@ -851,6 +857,10 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
         "Check connector readiness",
     ),
     "prepare_prompt_import_readiness": ("prepare_prompt_import_readiness", "Check prompt import"),
+    "prepare_physical_device_readiness": (
+        "prepare_physical_device_readiness",
+        "Check device readiness",
+    ),
     "prepare_connector_operator_card": ("prepare_connector_operator_card", "Open connector card"),
     "prepare_live_info_operator_card": ("prepare_live_info_operator_card", "Open live info card"),
     "prepare_content_operator_card": ("prepare_content_operator_card", "Open content card"),
@@ -2385,6 +2395,47 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "command activation",
             "imported prompt trust",
             "dry-run execution",
+        ],
+    },
+    "physical-device-readiness": {
+        "kind": "physical_device_readiness",
+        "headline": "I can check physical device workflows before hardware actions.",
+        "body": (
+            "I will prepare the physical device readiness card: device scope, actuator hazards, sensor or camera gates, "
+            "operator approval, dry-run or simulation policy, emergency stop, and device trial evidence slots. "
+            "Heat commands, relay toggles, robot movement, print starts, camera inspections, sensor readings, and "
+            "hardware trial success stay observed-only."
+        ),
+        "phase": "physical_device_readiness_prepared",
+        "next_action": "prepare_physical_device_readiness",
+        "artifact_schema": "physical_device_readiness_card/v1",
+        "claim_boundary_suffix": "It is not device discovery, pairing, sensor/camera evidence, relay actuation, robot movement, heat command, print start, emergency stop success, or hardware trial evidence.",
+        "actions": [
+            {"id": "prepare_physical_device_readiness", "label": "Check device readiness", "style": "primary"},
+            {"id": "prepare_security_safety_review", "label": "Review safety", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "record_device_scope_and_authority",
+            "inventory_hazards_and_actuators",
+            "record_sensor_camera_gate_policy",
+            "record_operator_approval_policy",
+            "record_dry_run_and_emergency_stop_policy",
+            "record_device_trial_only_after observed telemetry, capture, command, or operator evidence",
+        ],
+        "evidence_not_observed": [
+            "device discovery",
+            "network pairing",
+            "credential validation",
+            "slicer or G-code correctness",
+            "camera inspection",
+            "sensor reading",
+            "relay actuation",
+            "robot movement",
+            "heat command",
+            "print start",
+            "emergency stop success",
+            "hardware trial success",
         ],
     },
     "harness-session-inventory": {

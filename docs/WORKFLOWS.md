@@ -4168,6 +4168,77 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - A prompt import readiness card is not prompt file access, prompt parsing success, slash command registration, prompt mutation, command activation, imported prompt trust, or successful dry-run evidence unless observed prompt-import evidence records it.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
+### physical-device-readiness
+
+[omh] Hermes readiness workflow for robots, 3D printers, IoT relays, sensors, and lab hardware before hardware trials.
+
+- Category: `operations`
+- Phase: `device-readiness`
+- Hermes role: `operator`
+- Quality tier: `workflow-surface-gated`
+- Exposure: `workflow_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use when physical device workflows need a safety envelope, gates, approval, dry-run, and observed-only trial boundary.
+- Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
+- Why this exists: `physical-device-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use before preparing or adopting a workflow that could move, heat, print, actuate, unlock, or otherwise affect physical devices so safety envelope, sensor/camera gates, dry-run policy, operator approval, emergency stop, and observation requirements are explicit.
+- Do not use when:
+  - The request is already handled by a narrower explicit skill with stronger evidence.
+  - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
+  - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
+- Strong routing signals: `physical-device-readiness`, `physical device readiness`, `device safety readiness`, `physical device safety`, `hardware safety gate`, `3d printer readiness`, `3D printer safety`, `snapmaker printer safety`, `snapmaker readiness`, `moonraker klipper safety`, `camera-gated print start`, `camera gate`, `heat command approval`, `iot relay safety`, `sensor relay safety`, `robotics safety`, `robot control readiness`, `vla robot readiness`, `mushroom cultivation relay safety`, `raspberry pi relay safety`, `물리 장비 안전`, `하드웨어 안전`, `3d 프린터 안전`, `프린터 안전`, `로봇 제어 준비`, `iot 릴레이 안전`, `센서 릴레이 안전`
+- Good example:
+  - Prompt: physical-device-readiness check Snapmaker printer safety with camera gate, slicer dry-run, heat command approval, and emergency-stop evidence before printing.
+  - Expected behavior: Produce `prepare_physical_device_readiness` with required context, wrapper actions, and not-evidence boundaries.
+  - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
+- Bad example:
+  - Prompt: physical-device-readiness start the printer, heat the bed, flip relays, and claim the robot is safe without observed operator approval or device telemetry.
+  - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
+  - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
+- Quality bar:
+  - Name the user-facing workflow objective, required context, next action, and stop condition.
+  - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
+  - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- Completion checklist:
+  - Device scope, actuator and hazard classes, sensor/camera gates, operator approval, dry-run policy, emergency stop, and stop condition are explicit.
+  - Physical actions, heat commands, relay toggles, robot movement, print starts, camera inspections, and telemetry readings are marked observed, missing, risky, or not_observed.
+  - Route external APIs or provider setup to external-connector-readiness, terminal commands to command-operator, safety concerns to security-safety-review, visual/camera checks to visual-qa, and missing tools to toolbelt-readiness.
+  - Do not claim device movement, heat, print, relay, robot, camera, sensor, or emergency-stop success without observed device-trial evidence.
+- Recovery notes:
+  - If the device, workspace, actuator, or authority is unclear, keep readiness blocked until the missing safety context is named.
+  - If the user asks to execute commands, move hardware, heat a bed/nozzle, flip a relay, or start a print, route to command-operator or connector-operator and require observed operator approval before any execution claim.
+  - If camera or telemetry evidence is required but unavailable, route to visual-qa or toolbelt-readiness and keep the physical device readiness card prepared_not_observed.
+- Required inputs:
+  - user request
+  - target context
+  - delivery or status expectation
+  - known missing evidence
+- Expected outputs:
+  - physical_device_readiness_card/v1
+  - device_safety_envelope/v1
+  - hazard_and_actuator_inventory/v1
+  - sensor_camera_gate_policy/v1
+  - operator_approval_policy/v1
+  - dry_run_and_simulation_policy/v1
+  - emergency_stop_and_rollback_plan/v1
+  - device_trial_manifest/v1 when observed
+  - next action
+  - prepared-vs-observed boundary
+- Artifact expectations:
+  - physical_device_readiness_card/v1 metadata-only wrapper card when prepared
+  - device_safety_envelope/v1 with device, workspace, hazards, actuator classes, human/property risk, owner, authority, and stop condition
+  - hazard_and_actuator_inventory/v1 separating motion, heat, pressure, electrical, relay, network, credential, and environmental risks
+  - sensor_camera_gate_policy/v1 for camera/OCR, sensor telemetry, stale readings, manual inspection, and blocked/no-camera fallback
+  - operator_approval_policy/v1 with explicit human authority, confirmation moment, disallowed autonomous actions, and emergency contact or stop owner
+  - dry_run_and_simulation_policy/v1 for slicer/G-code dry-runs, command previews, mock relays, simulated robot paths, and no-hardware trial mode
+  - emergency_stop_and_rollback_plan/v1 with stop command, power/network isolation, recovery boundary, and abort condition
+  - device_trial_manifest/v1 only when real telemetry, camera capture id, dry-run output, command transcript, operator confirmation, or hardware observation is recorded
+- Safety rules:
+  - A physical device readiness card is not device discovery, network pairing, credential validation, slicer output, G-code safety, camera inspection, sensor reading, relay actuation, robot movement, heat command, print start, emergency stop test, or successful hardware trial evidence unless observed device-trial evidence records it.
+  - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+
 ### content-operator
 
 [omh] Hermes content operator workflow: scope publish-ready writing, rewriting, summarization, translation, release-note, newsletter, customer-copy, social-copy, README-copy, and email-draft work with audience, tone, style, source, review, and hallucination gates.
@@ -8128,6 +8199,64 @@ Score external CLI-agent prompt files before they become Hermes slash-command ca
 - Privacy default: `metadata_only`
 - Overclaim guards:
   - A prompt import readiness card is not prompt file access, parsing success, slash command registration, prompt mutation, command activation, imported prompt trust, or dry-run evidence.
+- Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
+
+### physical-device-readiness
+
+Score physical-device workflows before any hardware-affecting action.
+
+- Use when: Use before Hermes prepares 3D printer, robot, IoT relay, sensor, lab hardware, or other physical device workflows so safety, approval, dry-run, camera/sensor gates, and emergency stop evidence are explicit.
+- Quality tier: `physical-device-gated`
+- Quality bar:
+  - Name the workflow objective, owner, input boundary, next action, and stop condition.
+  - Represent prepared, observed, blocked, and missing evidence as separate states.
+  - Never upgrade a card, blueprint, or readiness check into external execution proof.
+- Inputs:
+  - device or hardware target
+  - actuator and hazard classes
+  - sensor/camera/telemetry gates
+  - operator approval and authority
+  - dry-run, emergency stop, rollback, and stop condition
+- Outputs:
+  - physical_device_readiness_card/v1
+  - device_safety_envelope/v1
+  - hazard_and_actuator_inventory/v1
+  - sensor_camera_gate_policy/v1
+  - operator_approval_policy/v1
+  - dry_run_and_simulation_policy/v1
+  - emergency_stop_and_rollback_plan/v1
+  - device_trial_manifest/v1 when observed
+- Stop conditions:
+  - card is prepared or a missing decision is surfaced
+  - observed evidence is separated from prepared guidance
+- Verification:
+  - validate required fields
+  - check not-evidence boundaries
+  - record only observed external actions
+- Evidence ladder:
+  - `device_scope_selected`
+  - `hazard_inventory_recorded`
+  - `physical_safety_boundary_recorded`
+  - `sensor_camera_gate_recorded`
+  - `operator_approval_policy_recorded`
+  - `dry_run_policy_recorded`
+  - `device_trial_recorded_when_observed`
+- Wrapper actions:
+  - `prepare_physical_device_readiness`
+  - `show_physical_device_readiness_card`
+  - `record_device_safety_envelope`
+  - `record_sensor_camera_gate_policy`
+  - `record_operator_approval_policy`
+  - `record_device_trial_observation`
+  - `show_status`
+- Artifact events:
+  - `physical-device-readiness_scoped`
+  - `physical-device-readiness_card_prepared`
+  - `physical-device-readiness_status_recorded`
+- Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
+- Privacy default: `metadata_only`
+- Overclaim guards:
+  - A physical device readiness card is not device discovery, pairing, sensor/camera evidence, relay actuation, robot movement, heat command, print start, emergency stop success, or hardware trial evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### content-operator
