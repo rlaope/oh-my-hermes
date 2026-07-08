@@ -53,6 +53,12 @@ from .docs import (
     cmd_harness_list,
     cmd_harness_validate,
 )
+from .ecosystem import (
+    _add_ecosystem_commands,
+    cmd_ecosystem_awesome_inspect,
+    cmd_ecosystem_awesome_list,
+    cmd_ecosystem_awesome_summary,
+)
 from .goal import (
     _add_goal_commands,
     cmd_goal_blocker,
@@ -248,6 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_capabilities_commands(sub)
     _add_conformance_commands(sub)
     _add_context_commands(sub)
+    _add_ecosystem_commands(sub)
     _add_coding_commands(sub)
     _add_codegraph_commands(sub)
     _add_hermes_commands(sub)

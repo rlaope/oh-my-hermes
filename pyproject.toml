@@ -83,5 +83,6 @@ packages = [
 "omh.wrapper" = "src/wrapper"
 
 [tool.setuptools.package-data]
+"omh.catalogs" = ["*.json"]
 "omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml"]
 "omh.plugin_bundle.omh.references" = ["*.md"]

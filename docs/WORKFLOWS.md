@@ -4744,11 +4744,13 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
   - skill_scout_query/v1
   - local_skill_candidate_inventory/v1 when observed
   - external_skill_candidate_risk_review/v1 when observed
+  - awesome_hermes_agent_coverage/v1 for upstream ecosystem comparison when requested
   - skill_adoption_decision_matrix/v1
   - skill_scout_recommendation/v1
 - Artifact expectations:
   - skill_scout_query/v1 with intended workflow, triggers, domains/tools, and search keywords
   - local_skill_candidate_inventory/v1 separating installed, bundled, marketplace, and repo-local matches when observed
+  - awesome_hermes_agent_coverage/v1 mapping upstream ecosystem entries to OMH covered, partial, or missing_candidate coverage statuses, matched OMH surfaces, rule_set_version, and matched_rule_id
   - skill_adoption_decision_matrix/v1 ranking use existing, fork or extend, and create fresh options with trust gaps
 - Safety rules:
   - A skill scout report is not skill installation, external source trust, marketplace mutation, file copy, network retrieval, credential use, implementation, review, CI, or proof that a candidate is safe to adopt.
