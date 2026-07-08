@@ -112,6 +112,17 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         self.assertIn("security-safety-review", slash_prompts.omh_surfaces)
         self.assertNotEqual(slash_prompts.matched_rule_id, "default_skills_plugins")
 
+    def test_physical_device_candidates_have_device_safety_readiness_surface(self) -> None:
+        for item_id in ("snapmaker-u1-toolkit", "mycodo-hermes-skill", "hermes-embodied"):
+            with self.subTest(item_id=item_id):
+                device_candidate = awesome_hermes_item(item_id)
+
+                self.assertEqual(device_candidate.status, "partial")
+                self.assertEqual(device_candidate.matched_rule_id, "physical_device_readiness")
+                self.assertIn("physical-device-readiness", device_candidate.omh_surfaces)
+                self.assertIn("security-safety-review", device_candidate.omh_surfaces)
+                self.assertNotEqual(device_candidate.matched_rule_id, "default_external_candidate")
+
     def test_plugin_filter_returns_only_plugin_section_coverage(self) -> None:
         payload = awesome_hermes_coverage_payload(subsection=PLUGIN_SUBSECTION)
 

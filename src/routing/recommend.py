@@ -789,6 +789,20 @@ _SKILL_POLICIES.update(
                 "prompt_import_manifest/v1 slots, and a stop condition before importing or exposing prompt commands."
             ),
         ),
+        "physical-device-readiness": RecommendationPolicy(
+            next_action="prepare_physical_device_readiness",
+            evidence_boundary=(
+                "A physical device readiness card is not device discovery, network pairing, credential validation, "
+                "slicer output, G-code safety, camera inspection, sensor reading, relay actuation, robot movement, "
+                "heat command, print start, emergency stop test, or successful hardware trial evidence."
+            ),
+            wrapper_guidance=(
+                "Prepare physical_device_readiness_card/v1 with device_safety_envelope/v1, "
+                "hazard_and_actuator_inventory/v1, sensor_camera_gate_policy/v1, operator_approval_policy/v1, "
+                "dry-run and emergency-stop policies, device_trial_manifest/v1 slots, and a stop condition before "
+                "hardware readiness or device action claims are made."
+            ),
+        ),
         "content-operator": RecommendationPolicy(
             next_action="prepare_content_operator_card",
             evidence_boundary=(
@@ -1280,6 +1294,12 @@ def _score_definition(
         and not _prompt_import_readiness_recommendation_applies(normalized_query, query_tokens)
     ):
         return None
+    if (
+        definition.name == "physical-device-readiness"
+        and explicit_skill != "physical-device-readiness"
+        and not _physical_device_readiness_recommendation_applies(normalized_query, query_tokens)
+    ):
+        return None
 
     if definition.name == explicit_skill:
         score += 12
@@ -1441,6 +1461,89 @@ def _external_connector_readiness_recommendation_applies(normalized_query: str, 
             "cost aware connector",
             "read only sql",
             "live data",
+        )
+    )
+
+
+def _physical_device_readiness_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    strong_anchor_tokens = {
+        "actuate",
+        "actuator",
+        "actuators",
+        "camera",
+        "device",
+        "devices",
+        "emergency",
+        "g-code",
+        "gcode",
+        "gate",
+        "gated",
+        "greenhouse",
+        "hardware",
+        "heat",
+        "heated",
+        "iot",
+        "klipper",
+        "moonraker",
+        "mushroom",
+        "nozzle",
+        "physical",
+        "pi",
+        "printer",
+        "printers",
+        "raspberry",
+        "relay",
+        "relays",
+        "robot",
+        "robotics",
+        "robots",
+        "safety",
+        "sensor",
+        "sensors",
+        "snapmaker",
+        "telemetry",
+        "vla",
+        "가열",
+        "로봇",
+        "릴레이",
+        "물리",
+        "센서",
+        "안전",
+        "장비",
+        "카메라",
+        "프린터",
+    }
+    if not query_tokens & strong_anchor_tokens:
+        return False
+    return any(
+        _phrase_match(normalized_query, phrase)
+        for phrase in (
+            "physical device",
+            "device safety",
+            "hardware safety",
+            "3d printer",
+            "printer safety",
+            "snapmaker printer safety",
+            "snapmaker readiness",
+            "moonraker klipper",
+            "camera gate",
+            "camera gated",
+            "camera-gated",
+            "heat command",
+            "iot relay",
+            "sensor relay",
+            "robot control",
+            "robotics safety",
+            "vla robot",
+            "mushroom cultivation",
+            "raspberry pi relay",
+            "physical-device-readiness",
+            "물리 장비",
+            "하드웨어 안전",
+            "프린터 안전",
+            "로봇 제어",
+            "iot 릴레이",
+            "센서 릴레이",
         )
     )
 

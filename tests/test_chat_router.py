@@ -2391,6 +2391,17 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(recommendations[0]["skill"], "external-connector-readiness")
         self.assertNotEqual(recommendations[0]["skill"], "ops-observability-card")
 
+    def test_physical_device_readiness_routes_before_generic_connectors(self) -> None:
+        message = "snapmaker printer safety readiness with camera gate and heat command approval"
+
+        decision = route_chat_message(message, source="discord")
+        recommendations = recommend_skills(message, limit=3)
+
+        self.assertEqual(decision["selected_skill"], "physical-device-readiness")
+        self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_physical_device_readiness")
+        self.assertEqual(recommendations[0]["skill"], "physical-device-readiness")
+        self.assertNotEqual(recommendations[0]["skill"], "external-connector-readiness")
+
     def test_prompt_import_readiness_routes_before_generic_skill_scout(self) -> None:
         message = "slash prompt import for Codex and Claude Code prompt folders with $ARGUMENTS mapping"
 

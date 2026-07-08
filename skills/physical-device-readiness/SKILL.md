@@ -1,22 +1,22 @@
 ---
-name: skill-health
-description: [omh] Skill Health workflow: prepare a metadata-only OMH skill portfolio dashboard with stale surfaces, observed failure signals, pending amendments, and top actions.
+name: physical-device-readiness
+description: [omh] Hermes readiness workflow for robots, 3D printers, IoT relays, sensors, and lab hardware before hardware trials.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, operations]
     category: operations
-    phase: skill-health
+    phase: device-readiness
     role: operator
     quality_tier: workflow-surface-gated
 ---
 
-# Skill Health
+# Physical Device Readiness
 
-This is a Hermes-native `skill-health` workflow skill.
+This is a Hermes-native `physical-device-readiness` workflow skill.
 
 ## Why This Exists
 
-`skill-health` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`physical-device-readiness` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,26 +28,28 @@ This is a Hermes-native `skill-health` workflow skill.
 
 Good example:
 
-- Prompt: skill-health show the OMH skill portfolio dashboard with stale surfaces, failure patterns, pending amendments, and top improvement actions.
-- Expected behavior: Produce `prepare_skill_health` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: physical-device-readiness check Snapmaker printer safety with camera gate, slicer dry-run, heat command approval, and emergency-stop evidence before printing.
+- Expected behavior: Produce `prepare_physical_device_readiness` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: skill-health claim every skill is working and patch the failures automatically without observed signals or review.
+- Prompt: physical-device-readiness start the printer, heat the bed, flip relays, and claim the robot is safe without observed operator approval or device telemetry.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
 ## Completion Checklist
 
-- Dashboard scope, source surfaces, stale/duplicate criteria, and stop condition are explicit.
-- Install/setup health is routed to doctor; catalog operations are routed to skill; failure retrospectives are routed to workflow-learning.
-- No skill, prompt, doc, memory, or model behavior is claimed changed until a reviewed implementation records evidence.
+- Device scope, actuator and hazard classes, sensor/camera gates, operator approval, dry-run policy, emergency stop, and stop condition are explicit.
+- Physical actions, heat commands, relay toggles, robot movement, print starts, camera inspections, and telemetry readings are marked observed, missing, risky, or not_observed.
+- Route external APIs or provider setup to external-connector-readiness, terminal commands to command-operator, safety concerns to security-safety-review, visual/camera checks to visual-qa, and missing tools to toolbelt-readiness.
+- Do not claim device movement, heat, print, relay, robot, camera, sensor, or emergency-stop success without observed device-trial evidence.
 
 ## Recovery Notes
 
-- If the request is about OMH setup, install, stale package paths, or command availability, route to doctor.
-- If the request is a missed-route or self-improvement trace, route to workflow-learning before adding health actions.
+- If the device, workspace, actuator, or authority is unclear, keep readiness blocked until the missing safety context is named.
+- If the user asks to execute commands, move hardware, heat a bed/nozzle, flip a relay, or start a print, route to command-operator or connector-operator and require observed operator approval before any execution claim.
+- If camera or telemetry evidence is required but unavailable, route to visual-qa or toolbelt-readiness and keep the physical device readiness card prepared_not_observed.
 
 ## OMH Context Rail
 
@@ -63,14 +65,14 @@ Bad example:
 
 ## Use When
 
-Use when operators need portfolio-level skill health without treating it as install repair, live execution success, or automatic skill mutation.
+Use before preparing or adopting a workflow that could move, heat, print, actuate, unlock, or otherwise affect physical devices so safety envelope, sensor/camera gates, dry-run policy, operator approval, emergency stop, and observation requirements are explicit.
 
-    Strong routing signals: `skill-health`, `skill health`, `skill portfolio health`, `skill dashboard`, `skill health dashboard`, `skill failure pattern dashboard`, `skill failure patterns`, `pending skill amendments`, `skill amendments`, `스킬 헬스`, `스킬 상태`, `스킬 대시보드`, `스킬 실패 패턴`, `스킬 개선 후보`, `스킬 보류 수정`
+    Strong routing signals: `physical-device-readiness`, `physical device readiness`, `device safety readiness`, `physical device safety`, `hardware safety gate`, `3d printer readiness`, `3D printer safety`, `snapmaker printer safety`, `snapmaker readiness`, `moonraker klipper safety`, `camera-gated print start`, `camera gate`, `heat command approval`, `iot relay safety`, `sensor relay safety`, `robotics safety`, `robot control readiness`, `vla robot readiness`, `mushroom cultivation relay safety`, `raspberry pi relay safety`, `물리 장비 안전`, `하드웨어 안전`, `3d 프린터 안전`, `프린터 안전`, `로봇 제어 준비`, `iot 릴레이 안전`, `센서 릴레이 안전`
 
 ## Catalog Metadata
 
 Category: `operations`
-Phase: `skill-health`
+Phase: `device-readiness`
 Hermes role: `operator`
 Quality tier: `workflow-surface-gated`
 
@@ -93,20 +95,31 @@ Required inputs:
 
 Expected outputs:
 
-- skill_portfolio_health_dashboard/v1
-- skill_failure_pattern_clusters/v1 when observed
-- pending_skill_amendment_review/v1
-- skill_health_action_plan/v1
+- physical_device_readiness_card/v1
+- device_safety_envelope/v1
+- hazard_and_actuator_inventory/v1
+- sensor_camera_gate_policy/v1
+- operator_approval_policy/v1
+- dry_run_and_simulation_policy/v1
+- emergency_stop_and_rollback_plan/v1
+- device_trial_manifest/v1 when observed
+- next action
+- prepared-vs-observed boundary
 
 Artifact expectations:
 
-- skill_portfolio_health_dashboard/v1 with catalog, generated, reference, harness, and capability-surface status
-- skill_failure_pattern_clusters/v1 only from supplied traces, tests, reviews, missed routes, or wrapper observations
-- skill_health_action_plan/v1 with top actions, owner lane, verification path, and non-mutation boundary
+- physical_device_readiness_card/v1 metadata-only wrapper card when prepared
+- device_safety_envelope/v1 with device, workspace, hazards, actuator classes, human/property risk, owner, authority, and stop condition
+- hazard_and_actuator_inventory/v1 separating motion, heat, pressure, electrical, relay, network, credential, and environmental risks
+- sensor_camera_gate_policy/v1 for camera/OCR, sensor telemetry, stale readings, manual inspection, and blocked/no-camera fallback
+- operator_approval_policy/v1 with explicit human authority, confirmation moment, disallowed autonomous actions, and emergency contact or stop owner
+- dry_run_and_simulation_policy/v1 for slicer/G-code dry-runs, command previews, mock relays, simulated robot paths, and no-hardware trial mode
+- emergency_stop_and_rollback_plan/v1 with stop command, power/network isolation, recovery boundary, and abort condition
+- device_trial_manifest/v1 only when real telemetry, camera capture id, dry-run output, command transcript, operator confirmation, or hardware observation is recorded
 
 Safety rules:
 
-- A skill health dashboard is not install/setup health, live skill execution success, automatic skill mutation, model training, verification, review, CI, or proof that future routing is fixed.
+- A physical device readiness card is not device discovery, network pairing, credential validation, slicer output, G-code safety, camera inspection, sensor reading, relay actuation, robot movement, heat command, print start, emergency stop test, or successful hardware trial evidence unless observed device-trial evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
@@ -117,12 +130,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `skill-health`.
+Preferred harness for this skill: `physical-device-readiness`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill skill-health --harness skill-health --status started
+omh runtime record --skill physical-device-readiness --harness physical-device-readiness --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

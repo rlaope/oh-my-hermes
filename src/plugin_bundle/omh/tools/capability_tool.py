@@ -192,6 +192,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "toolbelt-readiness",
             "external-connector-readiness",
             "prompt-import-readiness",
+            "physical-device-readiness",
             "skill-scout",
             "skill-health",
             "workflow-learning",
