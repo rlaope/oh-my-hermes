@@ -43,6 +43,7 @@ Bad example:
 
 - The visual_qa_plan/v1 lists target surfaces, references, states, viewports, locales, and freshness criteria.
 - The viewport_state_capture_matrix/v1 proves the QA did not sample only one page, viewport, or state.
+- The web_visual_qa_message_card/v1 summarizes criteria, route, cost policy, and attachment status without claiming platform delivery.
 - The render_capture_manifest/v1 is present before PASS and is newer than the last relevant edit.
 - Browser interaction traces, console/network health, click-path state traces, keyboard/accessibility traces, visual diff, hotspot review, motion capture, design-system/functional review, visual-fidelity/CJK review, and blocker status are separate fields.
 - The verdict is PASS, REVISE, or BLOCK with exact missing evidence or fix requirements.
@@ -114,6 +115,7 @@ Expected outputs:
 - web_visual_qa_package/v1
 - viewport_state_capture_matrix/v1
 - message_attachment_projection/v1 for chat attachments
+- web_visual_qa_message_card/v1 for chat message summaries
 - render_capture_manifest/v1 when observed
 - browser_interaction_trace/v1 when observed
 - console_network_health/v1 when observed
@@ -133,6 +135,7 @@ Artifact expectations:
 - web_visual_qa_package/v1 with captures[], criteria[], criteria_results[], multimodal_reviews[], auto routing, and observed-only cost policy
 - viewport_state_capture_matrix/v1 enumerates every route/page, 375/768/1280-style viewport, scroll position, modal/tab state, and CJK-heavy region to capture
 - message_attachment_projection/v1 maps eligible observed captures to chat attachment candidates without claiming upload or delivery
+- web_visual_qa_message_card/v1 projects recorded criteria, captures, routing, cost policy, and attachment hints into Discord/Slack/hosted-chat safe copy
 - render_capture_manifest/v1 only from fresh screenshots, file renders, images, or terminal captures
 - browser_interaction_trace/v1 only from observed navigation, form, auth, search, modal, and critical journey runs with read-only or staging-safe boundaries recorded
 - console_network_health/v1 records observed critical console errors, failed requests, status codes, and ignored third-party noise before browser QA can pass

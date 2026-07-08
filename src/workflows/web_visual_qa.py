@@ -11,7 +11,9 @@ from .web_visual_qa_contracts import (
     SUPPORTED_RISK_LEVELS,
     SUPPORTED_SOURCES,
     SUPPORTED_VERDICTS,
+    WEB_VISUAL_QA_CLAIM_BOUNDARY,
     WEB_VISUAL_QA_PACKAGES_INDEX_SCHEMA_VERSION,
+    WEB_VISUAL_QA_PACKAGE_DOES_NOT_PROVE,
     WEB_VISUAL_QA_PACKAGE_SCHEMA_VERSION,
     JsonObject,
     JsonValue,
@@ -90,14 +92,8 @@ def build_web_visual_qa_package(
         "attachment_projection": attachments,
         "messenger_summary": messenger_summary(result_records, canonical_verdict),
         "routing": routing,
-        "claim_boundary": "OMH records supplied web visual QA evidence only; it does not capture browsers, call multimodal models, upload messages, or prove delivery.",
-        "does_not_prove": [
-            "browser_capture_performed_by_omh",
-            "multimodal_model_called_by_omh",
-            "platform_delivery_observed",
-            "accessibility_pass",
-            "complete_visual_correctness",
-        ],
+        "claim_boundary": WEB_VISUAL_QA_CLAIM_BOUNDARY,
+        "does_not_prove": list(WEB_VISUAL_QA_PACKAGE_DOES_NOT_PROVE),
     }
 
 
