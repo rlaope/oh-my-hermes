@@ -169,7 +169,7 @@ def _harness_summary(harness: HarnessDefinition) -> str:
     )
 
 
-def _compact_harness_purpose(purpose: str, limit: int = 84) -> str:
+def _compact_harness_purpose(purpose: str, limit: int = 72) -> str:
     if len(purpose) <= limit:
         return purpose
     prefix = purpose[: limit - 3].rstrip()

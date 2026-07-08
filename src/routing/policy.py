@@ -6459,6 +6459,8 @@ def _reliability_review_context_applies(normalized_query: str, query_tokens: set
 
 
 def _executor_runtime_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _prompt_import_readiness_context_applies(normalized_query, query_tokens):
+        return False
     if _contains_phrase(normalized_query, _EXECUTOR_RUNTIME_READINESS_PHRASES):
         return True
     if _executor_readiness_check_requested(normalized_query, query_tokens):
@@ -6548,6 +6550,41 @@ def _executor_runtime_readiness_guard_applies(normalized_query: str, query_token
     if named_executor and session_action:
         return True
     return runtime_intent and named_executor and (selection or run_capability)
+
+
+def _prompt_import_readiness_context_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if not {"prompt", "prompts", "slash", "import", "arguments", "프롬프트", "슬래시", "가져오기"} & query_tokens:
+        return False
+    return _contains_phrase(
+        normalized_query,
+        (
+            "slash prompt",
+            "slash prompts",
+            "prompt import",
+            "prompt imports",
+            "prompt folder",
+            "prompt folders",
+            "prompt directory",
+            "prompt directories",
+            "cli prompt",
+            "cli prompts",
+            "cli agent prompt",
+            "opencode prompt",
+            "claude code prompt",
+            "codex prompt",
+            "gemini cli prompt",
+            "$arguments",
+            "{{args}}",
+            "argument interpolation",
+            "slash command",
+            "슬래시 프롬프트",
+            "프롬프트 가져오기",
+            "프롬프트 폴더",
+            "프롬프트 디렉터리",
+            "프롬프트 인자",
+            "슬래시 명령",
+        ),
+    )
 
 
 def _executor_readiness_check_requested(normalized_query: str, query_tokens: set[str]) -> bool:

@@ -74,6 +74,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "connector-operator": ("workflow_skill", True),
     "live-info-operator": ("workflow_skill", True),
     "external-connector-readiness": ("workflow_skill", True),
+    "prompt-import-readiness": ("workflow_skill", True),
     "content-operator": ("workflow_skill", True),
     "media-input-operator": ("workflow_skill", True),
     "data-analysis": ("workflow_skill", True),
@@ -616,6 +617,7 @@ class RouterContentTests(unittest.TestCase):
                 "connector-operator",
                 "live-info-operator",
                 "external-connector-readiness",
+                "prompt-import-readiness",
                 "content-operator",
                 "media-input-operator",
                 "data-analysis",
@@ -1386,6 +1388,45 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("external_connector_readiness", route_rules)
         self.assertIn("external-connector-readiness", route_rules["external_connector_readiness"]["workflow"])
         self.assertIn("weather plugin readiness", route_rules["external_connector_readiness"]["phrases"])
+
+    def test_prompt_import_readiness_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("prompt-import-readiness", definitions)
+        self.assertIn("prompt-import-readiness", harnesses)
+        self.assertIn("prompt-import-readiness", templates)
+        self.assertEqual(primary_harness_for_skill("prompt-import-readiness"), "prompt-import-readiness")
+        self.assertEqual(definitions["prompt-import-readiness"].category, "prompt")
+        self.assertEqual(definitions["prompt-import-readiness"].phase, "prompt-import-readiness")
+        self.assertEqual(definitions["prompt-import-readiness"].quality_tier, "workflow-surface-gated")
+        self.assertIn("prompt_import_readiness_card/v1", definitions["prompt-import-readiness"].expected_outputs)
+        self.assertIn("prompt_source_inventory/v1", definitions["prompt-import-readiness"].expected_outputs)
+        self.assertIn("argument_interpolation_policy/v1", definitions["prompt-import-readiness"].expected_outputs)
+        self.assertIn("slash prompt import", definitions["prompt-import-readiness"].triggers)
+        self.assertIn("codex prompt import", definitions["prompt-import-readiness"].triggers)
+        self.assertIn("슬래시 프롬프트 가져오기", definitions["prompt-import-readiness"].triggers)
+        readiness_text = " ".join(definitions["prompt-import-readiness"].safety_rules).lower()
+        self.assertIn("prompt mutation", readiness_text)
+        self.assertIn("slash command", readiness_text)
+        self.assertIn("trust", readiness_text)
+        self.assertIn("prompt_import_readiness_card/v1", " ".join(definitions["prompt-import-readiness"].artifact_expectations))
+        self.assertIn("prompt_source_inventory/v1", harnesses["prompt-import-readiness"].expected_outputs)
+        self.assertIn("argument_interpolation_policy/v1", harnesses["prompt-import-readiness"].expected_outputs)
+        self.assertIn("prompt_sources_recorded", harnesses["prompt-import-readiness"].evidence_ladder)
+        self.assertIn("slash_command_collisions_recorded", harnesses["prompt-import-readiness"].evidence_ladder)
+        self.assertIn("prompt_import_readiness_card/v1", templates["prompt-import-readiness"].content)
+        self.assertIn("prompt_import_manifest/v1", templates["prompt-import-readiness"].content)
+        self.assertIn(
+            "Preferred harness for this skill: `prompt-import-readiness`",
+            templates["prompt-import-readiness"].content,
+        )
+
+        route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}
+        self.assertIn("prompt_import_readiness", route_rules)
+        self.assertIn("prompt-import-readiness", route_rules["prompt_import_readiness"]["workflow"])
+        self.assertIn("slash prompt import", route_rules["prompt_import_readiness"]["phrases"])
 
     def test_content_operator_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

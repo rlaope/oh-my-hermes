@@ -102,6 +102,16 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         self.assertIn("data-analysis", onequery.omh_surfaces)
         self.assertIn("security-safety-review", onequery.omh_surfaces)
 
+    def test_slash_prompt_plugin_has_prompt_import_readiness_surface(self) -> None:
+        slash_prompts = awesome_hermes_item("hermes-plugin-slash-prompts")
+
+        self.assertEqual(slash_prompts.status, "partial")
+        self.assertEqual(slash_prompts.matched_rule_id, "prompt_import_readiness")
+        self.assertIn("prompt-import-readiness", slash_prompts.omh_surfaces)
+        self.assertIn("skill-scout", slash_prompts.omh_surfaces)
+        self.assertIn("security-safety-review", slash_prompts.omh_surfaces)
+        self.assertNotEqual(slash_prompts.matched_rule_id, "default_skills_plugins")
+
     def test_plugin_filter_returns_only_plugin_section_coverage(self) -> None:
         payload = awesome_hermes_coverage_payload(subsection=PLUGIN_SUBSECTION)
 

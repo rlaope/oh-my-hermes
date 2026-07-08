@@ -2391,6 +2391,41 @@ class ChatRouterTests(unittest.TestCase):
         self.assertEqual(recommendations[0]["skill"], "external-connector-readiness")
         self.assertNotEqual(recommendations[0]["skill"], "ops-observability-card")
 
+    def test_prompt_import_readiness_routes_before_generic_skill_scout(self) -> None:
+        message = "slash prompt import for Codex and Claude Code prompt folders with $ARGUMENTS mapping"
+
+        decision = route_chat_message(message, source="discord")
+        recommendations = recommend_skills(message, limit=3)
+
+        self.assertEqual(decision["selected_skill"], "prompt-import-readiness")
+        self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_prompt_import_readiness")
+        self.assertEqual(recommendations[0]["skill"], "prompt-import-readiness")
+        self.assertNotEqual(recommendations[0]["skill"], "skill-scout")
+
+    def test_plain_prompt_injection_review_does_not_route_to_prompt_import_readiness(self) -> None:
+        message = "prompt injection review for tool permissions"
+        decision = route_chat_message(message, source="discord")
+        recommended_skills = {recommendation["skill"] for recommendation in recommend_skills(message, limit=5)}
+
+        self.assertNotEqual(decision["selected_skill"], "prompt-import-readiness")
+        self.assertNotIn("prompt-import-readiness", recommended_skills)
+
+    def test_slash_command_security_review_does_not_route_to_prompt_import_readiness(self) -> None:
+        message = "review our slash command permissions for prompt injection"
+        decision = route_chat_message(message, source="discord")
+        recommended_skills = {recommendation["skill"] for recommendation in recommend_skills(message, limit=5)}
+
+        self.assertEqual(decision["selected_skill"], "security-safety-review")
+        self.assertNotIn("prompt-import-readiness", recommended_skills)
+
+    def test_generic_slash_command_creation_does_not_route_to_prompt_import_readiness(self) -> None:
+        message = "create a slash command for deploying the app"
+        decision = route_chat_message(message, source="discord")
+        recommended_skills = {recommendation["skill"] for recommendation in recommend_skills(message, limit=5)}
+
+        self.assertNotEqual(decision["selected_skill"], "prompt-import-readiness")
+        self.assertNotIn("prompt-import-readiness", recommended_skills)
+
     def test_low_signal_inventory_words_do_not_open_harness_session_inventory(self) -> None:
         for message in ("session", "inventory", "drift"):
             with self.subTest(message=message):
