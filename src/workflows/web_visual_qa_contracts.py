@@ -39,6 +39,7 @@ SUPPORTED_CONFIDENCE: Final = ("low", "medium", "high", "unknown")
 SUPPORTED_RISK_LEVELS: Final = ("low", "medium", "high", "critical", "unknown")
 SUPPORTED_REDACTION_STATUSES: Final = ("not_needed", "redacted", "contains_sensitive_content", "unknown")
 SUPPORTED_ATTACHMENT_STATES: Final = ("eligible", "blocked", "not_requested")
+SUPPORTED_CAPTURE_ORIGINS: Final = ("supplied_metadata", "imported_local_file")
 OBSERVED_REVIEW_STATUSES: Final = ("observed", "prepared", "not_observed")
 SUPPORTED_AUTO_ROUTES: Final = (
     "prepare_capture",
@@ -98,6 +99,7 @@ PLUGIN_REWRITE_PATTERNS: Final = (
     },
 )
 _ID_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,120}$")
+_SHA256_RE: Final = re.compile(r"^[a-f0-9]{64}$")
 _MIME_BY_SUFFIX: Final = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
 
@@ -116,6 +118,9 @@ def capture_record(item: Mapping[str, JsonValue], index: int, now: str) -> JsonO
         "evidence_summary": text(record.get("evidence_summary")),
         "redaction_status": choice(text(record.get("redaction_status")), SUPPORTED_REDACTION_STATUSES, "unknown"),
         "attachment": choice(text(record.get("attachment")), SUPPORTED_ATTACHMENT_STATES, "eligible"),
+        "capture_origin": choice(text(record.get("capture_origin")), SUPPORTED_CAPTURE_ORIGINS, "supplied_metadata"),
+        "byte_size": optional_non_negative_int(record.get("byte_size")),
+        "sha256": text(record.get("sha256")),
     }
 
 
@@ -283,6 +288,9 @@ def attachment_projection(captures: list[JsonObject]) -> JsonObject:
             "caption": f"{role or 'capture'} web QA capture",
             "alt_text": text(capture.get("evidence_summary")) or f"{role or 'web'} capture",
             "role": role,
+            "capture_origin": text(capture.get("capture_origin")),
+            "byte_size": optional_non_negative_int(capture.get("byte_size")),
+            "sha256": text(capture.get("sha256")),
             "display_order": index,
             "platform_upload_observed": False,
         })
@@ -396,6 +404,12 @@ def bool_value(value: JsonValue | None, *, default: bool) -> bool:
     return value if isinstance(value, bool) else default
 
 
+def optional_non_negative_int(value: JsonValue | None) -> int | None:
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return None
+
+
 def choice(value: str, choices: Sequence[str], fallback: str) -> str:
     return value if value in choices else fallback
 
@@ -420,6 +434,10 @@ def valid_path_or_uri(value: str) -> bool:
 
 def valid_id(value: str) -> bool:
     return bool(_ID_RE.match(value)) and "/" not in value and "\\" not in value and ".." not in value
+
+
+def valid_sha256(value: str) -> bool:
+    return bool(_SHA256_RE.match(value))
 
 
 def now() -> str:

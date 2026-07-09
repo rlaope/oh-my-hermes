@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from omh.installer import OmhError
 from omh.web_visual_qa import (
+    WebVisualQaCaptureFileImport,
     build_web_visual_qa_message_card,
     build_web_visual_qa_package,
+    import_web_visual_qa_capture_file,
     read_web_visual_qa_package,
     save_web_visual_qa_package,
     validate_web_visual_qa_message_card,
@@ -87,6 +90,35 @@ def cmd_web_qa_observe_capture(args: argparse.Namespace) -> int:
             updated_at=observed_at,
         )
         saved = save_web_visual_qa_package(_paths(args), updated)
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_or_summarize(args, saved)
+    return 0
+
+
+def cmd_web_qa_capture_file(args: argparse.Namespace) -> int:
+    try:
+        request = WebVisualQaCaptureFileImport(
+            package_id=args.package_id,
+            capture_id=args.capture_id,
+            source_path=Path(args.source_path),
+            role=args.role,
+            viewport=args.viewport,
+            summary=args.summary,
+            observer=args.observer,
+            redaction_status=_require_choice(
+                args.redaction_status,
+                SUPPORTED_REDACTION_STATUSES,
+                "--redaction-status",
+            ),
+            attachment=_require_choice(
+                args.attachment,
+                SUPPORTED_ATTACHMENT_STATES,
+                "--attachment",
+            ),
+            mime_type=args.mime_type,
+        )
+        saved = import_web_visual_qa_capture_file(_paths(args), request)
     except (OSError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_or_summarize(args, saved)
@@ -284,6 +316,23 @@ def _add_web_qa_commands(sub) -> None:
     package.add_argument("--json", action="store_true")
     package.set_defaults(func=cmd_web_qa_package)
 
+    capture_file = web_qa_sub.add_parser(
+        "capture-file",
+        help="Copy a local screenshot/image into OMH capture storage and attach it to a package.",
+    )
+    capture_file.add_argument("--package-id", required=True)
+    capture_file.add_argument("--capture-id", required=True)
+    capture_file.add_argument("--source-path", required=True)
+    capture_file.add_argument("--role", default="current")
+    capture_file.add_argument("--mime-type", default="")
+    capture_file.add_argument("--viewport", default="unspecified")
+    capture_file.add_argument("--summary", required=True)
+    capture_file.add_argument("--observer", default="wrapper_or_user")
+    capture_file.add_argument("--redaction-status", default="unknown")
+    capture_file.add_argument("--attachment", default="eligible")
+    capture_file.add_argument("--json", action="store_true")
+    capture_file.set_defaults(func=cmd_web_qa_capture_file)
+
     observe = web_qa_sub.add_parser("observe-capture", help="Add supplied screenshot/capture metadata to a package.")
     observe.add_argument("--package-id", required=True)
     observe.add_argument("--capture-id", required=True)
@@ -315,6 +364,7 @@ def _add_web_qa_commands(sub) -> None:
 __all__ = [
     "_add_web_qa_commands",
     "cmd_web_qa_observe_capture",
+    "cmd_web_qa_capture_file",
     "cmd_web_qa_package",
     "cmd_web_qa_record_verdict",
     "cmd_web_qa_show",

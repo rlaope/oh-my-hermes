@@ -128,6 +128,9 @@ def _capture_cards(package: JsonObject) -> list[JsonValue]:
             "evidence_summary": text(capture.get("evidence_summary")),
             "redaction_status": text(capture.get("redaction_status")),
             "attachment": text(capture.get("attachment")),
+            "capture_origin": text(capture.get("capture_origin")),
+            "byte_size": capture.get("byte_size"),
+            "sha256": text(capture.get("sha256")),
         }
         for capture in object_list(package.get("captures"))
     ]

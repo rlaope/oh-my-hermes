@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -309,6 +310,118 @@ class WebVisualQaMessageCardTests(unittest.TestCase):
             self.assertEqual(status, 2)
             self.assertEqual(stdout, "")
             self.assertIn("--capture-attachment must be one of eligible, blocked, not_requested", stderr)
+
+    def test_capture_file_command_imports_local_screenshot_as_managed_attachment(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "desktop.png"
+            screenshot_bytes = b"\x89PNG\r\n\x1a\nweb-qa-screenshot"
+            source_path.write_bytes(screenshot_bytes)
+            base = ["--omh-home", str(root / ".omh"), "web-qa"]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "package",
+                    "--package-id",
+                    "checkout-qa",
+                    "--target",
+                    "Checkout page",
+                    "--source",
+                    "discord",
+                    "--criterion",
+                    "layout:Layout fits:No overlap:blocking",
+                    "--json",
+                ]
+            )
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(json.loads(stdout)["status"], "prepared")
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "capture-file",
+                    "--package-id",
+                    "checkout-qa",
+                    "--capture-id",
+                    "desktop",
+                    "--source-path",
+                    str(source_path),
+                    "--role",
+                    "desktop",
+                    "--viewport",
+                    "desktop-1440",
+                    "--summary",
+                    "Desktop checkout screenshot imported from browser QA.",
+                    "--redaction-status",
+                    "not_needed",
+                    "--attachment",
+                    "eligible",
+                    "--json",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            package = json.loads(stdout)
+            capture = package["captures"][0]
+            managed_path = Path(capture["path_or_uri"])
+            self.assertTrue(managed_path.is_file())
+            self.assertEqual(managed_path.read_bytes(), screenshot_bytes)
+            self.assertEqual(capture["capture_origin"], "imported_local_file")
+            self.assertEqual(capture["byte_size"], len(screenshot_bytes))
+            self.assertEqual(capture["sha256"], hashlib.sha256(screenshot_bytes).hexdigest())
+            self.assertEqual(capture["mime_type"], "image/png")
+
+            status, stdout, stderr = run_cli(base + ["show", "--package-id", "checkout-qa", "--json"])
+
+            self.assertEqual(status, 0, stderr)
+            card = json.loads(stdout)
+            attachment = card["attachment_projection"]["items"][0]
+            self.assertEqual(attachment["path_or_uri"], str(managed_path))
+            self.assertEqual(attachment["capture_origin"], "imported_local_file")
+            self.assertEqual(card["attachment_summary"]["eligible_count"], 1)
+
+    def test_capture_file_command_rejects_non_image_bytes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "desktop.png"
+            source_path.write_text("not an image", encoding="utf-8")
+            base = ["--omh-home", str(root / ".omh"), "web-qa"]
+
+            status, _stdout, stderr = run_cli(
+                base
+                + [
+                    "package",
+                    "--package-id",
+                    "checkout-qa",
+                    "--target",
+                    "Checkout page",
+                    "--criterion",
+                    "layout:Layout fits:No overlap:blocking",
+                    "--json",
+                ]
+            )
+            self.assertEqual(status, 0, stderr)
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "capture-file",
+                    "--package-id",
+                    "checkout-qa",
+                    "--capture-id",
+                    "desktop",
+                    "--source-path",
+                    str(source_path),
+                    "--summary",
+                    "Desktop checkout screenshot.",
+                    "--json",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertEqual(stdout, "")
+            self.assertIn("--source-path must contain PNG, JPEG, or WebP image bytes", stderr)
 
     def test_show_command_rejects_stale_package_with_sensitive_attachment_projection(self) -> None:
         with TemporaryDirectory() as tmp:
