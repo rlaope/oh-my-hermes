@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
-from omh.local_store import ensure_dir
 from omh.paths import OmhPaths
 
 from .web_visual_qa import (
@@ -21,6 +21,10 @@ from .web_visual_qa_contracts import (
     text,
     valid_id,
 )
+from .web_visual_qa_validation import validate_web_visual_qa_package
+
+
+MAX_CAPTURE_FILE_BYTES = 25 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +58,9 @@ def import_web_visual_qa_capture_file(paths: OmhPaths, request: WebVisualQaCaptu
     source_path = request.source_path.expanduser()
     if not source_path.is_file():
         raise ValueError("--source-path must reference an existing local file")
+    source_size = source_path.stat().st_size
+    if source_size > MAX_CAPTURE_FILE_BYTES:
+        raise ValueError("--source-path must be 25 MiB or smaller")
     data = source_path.read_bytes()
     detected_mime = _capture_mime_from_bytes(data)
     if not detected_mime:
@@ -69,7 +76,6 @@ def import_web_visual_qa_capture_file(paths: OmhPaths, request: WebVisualQaCaptu
         paths,
         _ManagedCaptureTarget(package_id=package_id, capture_id=capture_id, mime_type=detected_mime),
     )
-    _write_capture_bytes(destination, data)
     updated = build_web_visual_qa_package(
         package_id=package_id,
         target=text(current.get("target")),
@@ -102,27 +108,49 @@ def import_web_visual_qa_capture_file(paths: OmhPaths, request: WebVisualQaCaptu
         created_at=text(current.get("created_at")),
         updated_at=observed_at,
     )
-    return save_web_visual_qa_package(paths, updated)
+    errors = validate_web_visual_qa_package(updated)
+    if errors:
+        raise ValueError("; ".join(errors))
+    _write_capture_bytes(destination, data)
+    try:
+        return save_web_visual_qa_package(paths, updated)
+    except (OSError, ValueError):
+        _remove_unreferenced_capture(paths, package_id, destination)
+        raise
 
 
 def _managed_capture_path(paths: OmhPaths, target: _ManagedCaptureTarget) -> Path:
     extension = _capture_extension(target.mime_type)
-    directory = paths.web_visual_qa_dir / "captures" / target.package_id
+    root = paths.web_visual_qa_dir / "captures"
+    if root.is_symlink():
+        raise ValueError("web visual QA capture storage must not be a symlink")
+    _ensure_private_real_directory(root)
+    root_resolved = root.resolve()
+    directory = root / target.package_id
+    if directory.is_symlink():
+        raise ValueError("web visual QA package capture storage must not be a symlink")
+    directory_resolved = directory.resolve(strict=False)
+    if directory_resolved.parent != root_resolved:
+        raise ValueError("package_id escapes web visual QA capture storage")
     destination = directory / f"{target.capture_id}{extension}"
-    root = directory.resolve()
-    resolved = destination.resolve()
-    if resolved.parent != root:
+    if destination.is_symlink():
+        raise ValueError("managed web visual QA capture path must not be a symlink")
+    resolved = destination.resolve(strict=False)
+    if resolved.parent != directory_resolved:
         raise ValueError("capture_id escapes web visual QA capture storage")
-    if resolved.exists():
+    if destination.exists():
         raise ValueError(f"managed web visual QA capture already exists: {target.capture_id}")
-    return resolved
+    return destination
 
 
 def _write_capture_bytes(path: Path, data: bytes) -> None:
-    ensure_dir(path.parent, private=True)
+    _ensure_private_real_directory(path.parent)
     tmp = path.with_name(f".{path.name}.tmp")
+    if tmp.exists() or tmp.is_symlink():
+        raise ValueError("managed web visual QA capture temp path already exists")
     try:
-        tmp.write_bytes(data)
+        with tmp.open("xb") as handle:
+            handle.write(data)
         tmp.chmod(0o600)
         tmp.replace(path)
         path.chmod(0o600)
@@ -130,6 +158,31 @@ def _write_capture_bytes(path: Path, data: bytes) -> None:
         if tmp.exists():
             tmp.unlink()
         raise
+
+
+def _ensure_private_real_directory(path: Path) -> None:
+    if path.is_symlink():
+        raise ValueError("web visual QA capture storage must not be a symlink")
+    try:
+        path.mkdir(parents=True, mode=0o700)
+    except FileExistsError:
+        pass
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError("web visual QA capture storage must be a directory")
+    path.chmod(0o700)
+
+
+def _remove_unreferenced_capture(paths: OmhPaths, package_id: str, path: Path) -> None:
+    try:
+        saved = read_web_visual_qa_package(paths, package_id)
+    except ValueError:
+        saved = {}
+    for capture in object_list(saved.get("captures")):
+        if text(capture.get("path_or_uri")) == str(path):
+            return
+    if path.exists() and not path.is_symlink():
+        with suppress(OSError):
+            path.unlink()
 
 
 def _capture_mime_from_bytes(data: bytes) -> str:
