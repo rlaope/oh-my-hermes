@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from .web_visual_qa_contracts import (
     MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION,
+    PLUGIN_REWRITE_PATTERNS,
+    SUPPORTED_AUTO_ROUTES,
+    SUPPORTED_MESSAGE_DELIVERY_STATES,
+    SUPPORTED_MULTIMODAL_STRATEGIES,
+    SUPPORTED_ROUTING_SAFETY_FLAGS,
+    SUPPORTED_SUGGESTED_ACTIONS,
     SUPPORTED_IMAGE_MIME_TYPES,
     SUPPORTED_LIFECYCLE_STATUSES,
     SUPPORTED_REDACTION_STATUSES,
@@ -165,14 +171,37 @@ def _validate_message_route(raw_route: JsonValue | None, errors: list[str]) -> N
     route = object_value(raw_route)
     if route.get("schema_version") != WEB_VISUAL_QA_MESSAGE_ROUTE_SCHEMA_VERSION:
         errors.append("route.schema_version must be web_visual_qa_message_route/v1")
-    if not text(route.get("route")):
-        errors.append("route.route is required")
+    if text(route.get("route")) not in SUPPORTED_AUTO_ROUTES:
+        errors.append("route.route is unsupported")
     if not text(route.get("label")):
         errors.append("route.label is required")
     if not text(route.get("next_action")):
         errors.append("route.next_action is required")
     if not text(route.get("reason")):
         errors.append("route.reason is required")
+    if text(route.get("multimodal_strategy")) not in SUPPORTED_MULTIMODAL_STRATEGIES:
+        errors.append("route.multimodal_strategy is unsupported")
+    if text(route.get("message_delivery")) not in SUPPORTED_MESSAGE_DELIVERY_STATES:
+        errors.append("route.message_delivery is unsupported")
+    for index, flag in enumerate(strings(route.get("safety_flags"))):
+        if flag not in SUPPORTED_ROUTING_SAFETY_FLAGS:
+            errors.append(f"route.safety_flags[{index}] is unsupported")
+    for index, action in enumerate(strings(route.get("suggested_actions"))):
+        if action not in SUPPORTED_SUGGESTED_ACTIONS:
+            errors.append(f"route.suggested_actions[{index}] is unsupported")
+    _validate_routing_basis(object_list(route.get("routing_basis")), errors)
+
+
+def _validate_routing_basis(items: list[JsonObject], errors: list[str]) -> None:
+    allowed_ids = {text(item.get("id")) for item in PLUGIN_REWRITE_PATTERNS}
+    for index, item in enumerate(items):
+        item_id = text(item.get("id"))
+        if item_id not in allowed_ids:
+            errors.append(f"route.routing_basis[{index}].id is unsupported")
+        if not strings(item.get("source_repos")):
+            errors.append(f"route.routing_basis[{index}].source_repos must list source repo ids")
+        if not text(item.get("native_rule")):
+            errors.append(f"route.routing_basis[{index}].native_rule is required")
 
 
 def _validate_card_attachment_summary(raw_summary: JsonValue | None, errors: list[str]) -> None:

@@ -12,7 +12,14 @@ from omh.web_visual_qa import (
     validate_web_visual_qa_package,
     write_web_visual_qa_package,
 )
-from omh.workflows.web_visual_qa_contracts import JsonObject, now, object_list, text
+from omh.workflows.web_visual_qa_contracts import (
+    SUPPORTED_ATTACHMENT_STATES,
+    SUPPORTED_REDACTION_STATUSES,
+    JsonObject,
+    now,
+    object_list,
+    text,
+)
 
 from .common import _paths, _print_json, _wants_json
 
@@ -26,7 +33,22 @@ def cmd_web_qa_package(args: argparse.Namespace) -> int:
             risk_level=args.risk_level,
             estimated_cost_tier=args.estimated_cost_tier,
             criteria=[_parse_criterion(value) for value in args.criterion],
-            captures=[_parse_capture(value) for value in args.capture or []],
+            captures=[
+                _parse_capture(
+                    value,
+                    redaction_status=_require_choice(
+                        args.capture_redaction_status,
+                        SUPPORTED_REDACTION_STATUSES,
+                        "--capture-redaction-status",
+                    ),
+                    attachment=_require_choice(
+                        args.capture_attachment,
+                        SUPPORTED_ATTACHMENT_STATES,
+                        "--capture-attachment",
+                    ),
+                )
+                for value in args.capture or []
+            ],
             criteria_results=[_parse_criteria_result(value) for value in args.criteria_result or []],
             multimodal_reviews=[_parse_multimodal_review(value) for value in args.multimodal_review or []],
             verdict=args.verdict,
@@ -54,7 +76,12 @@ def cmd_web_qa_observe_capture(args: argparse.Namespace) -> int:
                     "captured_at": observed_at,
                     "evidence_summary": args.summary,
                     "observer": args.observer,
-                    "redaction_status": args.redaction_status,
+                    "redaction_status": _require_choice(
+                        args.redaction_status,
+                        SUPPORTED_REDACTION_STATUSES,
+                        "--redaction-status",
+                    ),
+                    "attachment": _require_choice(args.attachment, SUPPORTED_ATTACHMENT_STATES, "--attachment"),
                 }
             ],
             updated_at=observed_at,
@@ -131,8 +158,16 @@ def _parse_criterion(value: str) -> JsonObject:
     return {"criterion_id": criterion_id, "label": label, "pass_rule": pass_rule, "severity": severity}
 
 
-def _parse_capture(value: str) -> JsonObject:
-    capture_id, role, path, mime_type, viewport, summary = _split(value, 6, "capture")
+def _parse_capture(value: str, *, redaction_status: str = "unknown", attachment: str = "eligible") -> JsonObject:
+    head = value.split(":", 5)
+    if len(head) != 6:
+        raise ValueError("--capture must contain at least 6 colon-separated fields")
+    capture_id, role, path, mime_type, viewport = [part.strip() for part in head[:5]]
+    if any(not part for part in (capture_id, role, path, mime_type, viewport)):
+        raise ValueError("--capture must contain at least 6 colon-separated fields")
+    summary = head[5].strip()
+    if not summary:
+        raise ValueError("--capture summary is required")
     return {
         "capture_id": capture_id,
         "role": role,
@@ -140,6 +175,8 @@ def _parse_capture(value: str) -> JsonObject:
         "mime_type": mime_type,
         "viewport": viewport,
         "evidence_summary": summary,
+        "redaction_status": redaction_status,
+        "attachment": attachment,
     }
 
 
@@ -173,6 +210,13 @@ def _split(value: str, count: int, label: str) -> list[str]:
     if len(parts) != count or any(not part for part in parts):
         raise ValueError(f"--{label} must contain exactly {count} colon-separated fields")
     return parts
+
+
+def _require_choice(value: str, choices: tuple[str, ...], label: str) -> str:
+    candidate = value.strip()
+    if candidate not in choices:
+        raise ValueError(f"{label} must be one of {', '.join(choices)}")
+    return candidate
 
 
 def _print_or_summarize(args: argparse.Namespace, package: JsonObject) -> None:
@@ -232,6 +276,8 @@ def _add_web_qa_commands(sub) -> None:
     package.add_argument("--estimated-cost-tier", choices=("none", "low", "medium", "high", "unknown"), default="none")
     package.add_argument("--criterion", action="append", required=True, metavar="ID:LABEL:PASS_RULE:SEVERITY")
     package.add_argument("--capture", action="append", metavar="ID:ROLE:PATH:MIME:VIEWPORT:SUMMARY")
+    package.add_argument("--capture-redaction-status", default="unknown")
+    package.add_argument("--capture-attachment", default="eligible")
     package.add_argument("--criteria-result", action="append", metavar="CRITERION:STATUS:REFS:CHECKED_BY:SUMMARY:BLOCKING")
     package.add_argument("--multimodal-review", action="append", metavar="ID:STATUS:REVIEWER:COST:CONFIDENCE:REFS:SUMMARY")
     package.add_argument("--verdict", choices=("pass", "hold", "fail", "not_observed"), default="not_observed")
@@ -248,6 +294,7 @@ def _add_web_qa_commands(sub) -> None:
     observe.add_argument("--summary", required=True)
     observe.add_argument("--observer", default="wrapper_or_user")
     observe.add_argument("--redaction-status", default="unknown")
+    observe.add_argument("--attachment", default="eligible")
     observe.add_argument("--json", action="store_true")
     observe.set_defaults(func=cmd_web_qa_observe_capture)
 

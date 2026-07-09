@@ -63,7 +63,12 @@ def _route_summary(routing: JsonObject) -> JsonObject:
         "reason": reason,
         "cost_policy": text(routing.get("cost_policy")),
         "estimated_cost_tier": text(routing.get("estimated_cost_tier")) or "unknown",
+        "multimodal_strategy": text(routing.get("multimodal_strategy")),
+        "message_delivery": text(routing.get("message_delivery")),
         "decision_inputs": decision_inputs,
+        "safety_flags": _strings(routing.get("safety_flags")),
+        "suggested_actions": _strings(routing.get("suggested_actions")),
+        "routing_basis": _routing_basis_cards(routing),
     }
 
 
@@ -71,8 +76,18 @@ def _route_copy(route: str) -> tuple[str, str, str]:
     match route:
         case "prepare_capture":
             return ("Capture needed", "record_capture", "No screenshot or visual capture evidence is recorded yet.")
+        case "redact_before_message":
+            return (
+                "Redaction required",
+                "record_redacted_capture",
+                "At least one capture is marked sensitive, so attachment and multimodal review must wait.",
+            )
         case "request_operator_review":
-            return ("Operator review required", "record_operator_review", "Risk, unresolved criteria, or low-cost review policy requires human/host review.")
+            return (
+                "Operator review required",
+                "record_operator_review",
+                "Risk, unresolved criteria, sensitivity, or cost policy requires human/host review.",
+            )
         case "use_observed_multimodal_review":
             return ("Use observed multimodal review", "record_visual_qa_verdict", "A host-supplied multimodal review exists after risk and blocking gates.")
         case "lightweight_capture_review":
@@ -158,6 +173,7 @@ def _message_blocks(
     blocks: list[JsonValue] = [
         {"type": "header", "text": headline},
         {"type": "section", "text": f"Route: {text(route.get('label'))}. Next action: {text(route.get('next_action'))}."},
+        {"type": "section", "text": _route_detail_text(route)},
         {"type": "section", "text": _criteria_text(criteria)},
         {"type": "section", "text": _attachment_text(attachment_summary)},
         {"type": "section", "text": _multimodal_text(multimodal)},
@@ -185,6 +201,39 @@ def _attachment_text(summary: JsonObject) -> str:
 
 def _multimodal_text(summary: JsonObject) -> str:
     return f"Multimodal review: {summary['observed_count']} observed of {summary['review_count']} recorded"
+
+
+def _route_detail_text(route: JsonObject) -> str:
+    details = [
+        f"Reason: {text(route.get('reason'))}",
+        f"Multimodal strategy: {text(route.get('multimodal_strategy')) or 'not specified'}",
+        f"Message delivery: {text(route.get('message_delivery')) or 'not specified'}",
+    ]
+    safety_flags = _strings(route.get("safety_flags"))
+    if safety_flags:
+        details.append(f"Safety flags: {', '.join(safety_flags)}")
+    suggested_actions = _strings(route.get("suggested_actions"))
+    if suggested_actions:
+        details.append(f"Suggested actions: {', '.join(suggested_actions)}")
+    basis = object_list(route.get("routing_basis"))
+    if basis:
+        basis_ids = [text(item.get("id")) for item in basis[:4] if text(item.get("id"))]
+        if basis_ids:
+            details.append(f"Native rewrite basis: {', '.join(basis_ids)}")
+    return "\n".join(details)
+
+
+def _routing_basis_cards(routing: JsonObject) -> list[JsonValue]:
+    cards: list[JsonValue] = []
+    for item in object_list(routing.get("routing_basis")):
+        cards.append(
+            {
+                "id": text(item.get("id")),
+                "source_repos": _strings(item.get("source_repos")),
+                "native_rule": text(item.get("native_rule")),
+            }
+        )
+    return cards
 
 
 def _does_not_prove(package: JsonObject) -> list[JsonValue]:
