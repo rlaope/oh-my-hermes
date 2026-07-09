@@ -4,6 +4,8 @@ from .web_visual_qa_contracts import (
     MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION,
     PLUGIN_REWRITE_PATTERNS,
     SUPPORTED_AUTO_ROUTES,
+    SUPPORTED_ATTACHMENT_STATES,
+    SUPPORTED_CAPTURE_ORIGINS,
     SUPPORTED_MESSAGE_DELIVERY_STATES,
     SUPPORTED_MULTIMODAL_STRATEGIES,
     SUPPORTED_ROUTING_SAFETY_FLAGS,
@@ -26,6 +28,7 @@ from .web_visual_qa_contracts import (
     text,
     valid_id,
     valid_path_or_uri,
+    valid_sha256,
 )
 
 
@@ -81,6 +84,24 @@ def _validate_captures(captures: list[JsonObject], errors: list[str]) -> None:
             errors.append(f"captures[{index}].evidence_summary is required")
         if text(capture.get("redaction_status")) not in SUPPORTED_REDACTION_STATUSES:
             errors.append(f"captures[{index}].redaction_status is unsupported")
+        attachment = text(capture.get("attachment"))
+        if attachment and attachment not in SUPPORTED_ATTACHMENT_STATES:
+            errors.append(f"captures[{index}].attachment is unsupported")
+        capture_origin = text(capture.get("capture_origin"))
+        if capture_origin and capture_origin not in SUPPORTED_CAPTURE_ORIGINS:
+            errors.append(f"captures[{index}].capture_origin is unsupported")
+        byte_size = capture.get("byte_size")
+        byte_size_is_positive_int = isinstance(byte_size, int) and not isinstance(byte_size, bool) and byte_size > 0
+        if byte_size is not None and not byte_size_is_positive_int:
+            errors.append(f"captures[{index}].byte_size must be a positive integer when supplied")
+        sha256 = text(capture.get("sha256"))
+        if sha256 and not valid_sha256(sha256):
+            errors.append(f"captures[{index}].sha256 must be a lowercase SHA-256 hex digest")
+        if capture_origin == "imported_local_file":
+            if not byte_size_is_positive_int:
+                errors.append(f"captures[{index}].byte_size is required for imported_local_file captures")
+            if not valid_sha256(sha256):
+                errors.append(f"captures[{index}].sha256 is required for imported_local_file captures")
 
 
 def _validate_results(

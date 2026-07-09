@@ -7,6 +7,10 @@ from .workflows.web_visual_qa import (
     save_web_visual_qa_package,
     write_web_visual_qa_package,
 )
+from .workflows.web_visual_qa_captures import (
+    WebVisualQaCaptureFileImport,
+    import_web_visual_qa_capture_file,
+)
 from .workflows.web_visual_qa_contracts import (
     MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION,
     WEB_VISUAL_QA_MESSAGE_CARD_SCHEMA_VERSION,
@@ -22,8 +26,10 @@ __all__ = (
     "MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION",
     "WEB_VISUAL_QA_MESSAGE_CARD_SCHEMA_VERSION",
     "WEB_VISUAL_QA_PACKAGE_SCHEMA_VERSION",
+    "WebVisualQaCaptureFileImport",
     "build_web_visual_qa_message_card",
     "build_web_visual_qa_package",
+    "import_web_visual_qa_capture_file",
     "list_web_visual_qa_packages",
     "read_web_visual_qa_package",
     "save_web_visual_qa_package",
