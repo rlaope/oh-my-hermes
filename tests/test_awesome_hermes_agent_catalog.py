@@ -379,6 +379,12 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
                 "memory-curation-review",
                 "external-connector-readiness",
             ),
+            "scope-recall": (
+                "Scope Recall Hermes memory plugin/provider with SQLite truth and LanceDB semantic search.",
+                "public_memory_provider_plugin",
+                "memory-curation-review",
+                "external-connector-readiness",
+            ),
             "mem9-hermes-plugin": (
                 "Mem9 Hermes memory plugin provider for reviewed recall and external backend readiness.",
                 "public_memory_provider_plugin",
