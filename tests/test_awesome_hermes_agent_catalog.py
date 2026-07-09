@@ -326,6 +326,125 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
                 self.assertIn(secondary_surface, candidate.omh_surfaces)
                 self.assertNotEqual(candidate.matched_rule_id, "default_skills_plugins")
 
+    def test_public_plugin_repo_items_have_specific_readiness_surfaces(self) -> None:
+        expectations = {
+            "hermes-plugins": (
+                "public_agent_orchestration_plugin",
+                "agent-board",
+                "ops-observability-card",
+            ),
+            "evey-bridge-plugin": (
+                "public_agent_orchestration_plugin",
+                "external-connector-readiness",
+                "agent-board",
+            ),
+            "hermes-curator-evolver": (
+                "public_skill_governance_plugin",
+                "skill-health",
+                "verification-gate",
+            ),
+            "yantrikdb-hermes-plugin": (
+                "public_memory_provider_plugin",
+                "memory-curation-review",
+                "external-connector-readiness",
+            ),
+        }
+        for item_id, (rule_id, primary_surface, secondary_surface) in expectations.items():
+            with self.subTest(item_id=item_id):
+                candidate = awesome_hermes_item(item_id)
+
+                self.assertEqual(candidate.status, "partial")
+                self.assertEqual(candidate.matched_rule_id, rule_id)
+                self.assertIn(primary_surface, candidate.omh_surfaces)
+                self.assertIn(secondary_surface, candidate.omh_surfaces)
+                self.assertNotIn("voice-operator", candidate.omh_surfaces)
+
+    def test_public_plugin_repo_synthetic_candidates_route_to_review_surfaces(self) -> None:
+        expectations = {
+            "hermes-example-plugins": (
+                "Reference implementations and documentation companions for hermes-agent plugin authoring.",
+                "official_plugin_reference_examples",
+                "prompt-import-readiness",
+                "verification-gate",
+            ),
+            "remnic": (
+                "Remnic Hermes plugin provides scoped memory with provenance, retrieval quality, corrections, and boundaries.",
+                "public_memory_provider_plugin",
+                "memory-curation-review",
+                "security-safety-review",
+            ),
+            "scope-recall-hermes": (
+                "Scope-aware recall Hermes memory plugin/provider with SQLite truth and LanceDB semantic search.",
+                "public_memory_provider_plugin",
+                "memory-curation-review",
+                "external-connector-readiness",
+            ),
+            "mem9-hermes-plugin": (
+                "Mem9 Hermes memory plugin provider for reviewed recall and external backend readiness.",
+                "public_memory_provider_plugin",
+                "memory-curation-review",
+                "external-connector-readiness",
+            ),
+            "hermes-brave-search-plugin": (
+                "Brave Search plugin provider for Hermes Agent web search.",
+                "public_search_provider_plugin",
+                "web-research",
+                "external-connector-readiness",
+            ),
+            "hermes-kagi-plugin": (
+                "Kagi web search and extract provider for Hermes Agent.",
+                "public_search_provider_plugin",
+                "source-finder",
+                "live-info-operator",
+            ),
+            "hermes-tweet": (
+                "Native Hermes Agent plugin for X/Twitter automation through Xquik.",
+                "public_social_automation_plugin",
+                "gateway-intent-card",
+                "connector-operator",
+            ),
+            "tokentelemetry-hermes-plugin": (
+                "TokenTelemetry launcher tab inside Hermes Dashboard with local observability for Hermes Agent.",
+                "public_observability_plugin",
+                "ops-observability-card",
+                "production-audit",
+            ),
+            "hermes-skill-view": (
+                "Hermes Skill View plugin improves runtime skill recommendation and pre-message reasoning middleware.",
+                "public_skill_governance_plugin",
+                "skill-health",
+                "agent-evaluation",
+            ),
+        }
+        for item_id, (summary, rule_id, primary_surface, secondary_surface) in expectations.items():
+            with self.subTest(item_id=item_id):
+                candidate = coverage_for_item(
+                    _synthetic_item(
+                        item_id=item_id,
+                        summary=summary,
+                        section="Skills & Plugins",
+                        subsection=PLUGIN_SUBSECTION,
+                    )
+                )
+
+                self.assertEqual(candidate.status, "partial")
+                self.assertEqual(candidate.matched_rule_id, rule_id)
+                self.assertIn(primary_surface, candidate.omh_surfaces)
+                self.assertIn(secondary_surface, candidate.omh_surfaces)
+                self.assertNotEqual(candidate.matched_rule_id, "default_skills_plugins")
+
+    def test_official_plugin_examples_rule_does_not_steal_generic_reference_docs(self) -> None:
+        generic_reference = coverage_for_item(
+            _synthetic_item(
+                item_id="python-sdk-examples",
+                summary="Reference implementations for Python SDK examples and a generic plugin authoring guide.",
+                section="Skills & Plugins",
+                subsection=PLUGIN_SUBSECTION,
+            )
+        )
+
+        self.assertNotEqual(generic_reference.matched_rule_id, "official_plugin_reference_examples")
+
     def test_meta_skill_and_registry_candidates_do_not_stay_generic(self) -> None:
         expectations = {
             "hermes-skill-factory": "skill_marketplace",

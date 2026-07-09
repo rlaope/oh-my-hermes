@@ -8,6 +8,8 @@ from ..skills.catalog import SkillDefinition, routable_definitions
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
 from .missed_route import is_missed_route_feedback
 from .policy import (
+    PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES,
+    PUBLIC_PLUGIN_CONNECTOR_READINESS_CONTEXT_PHRASES,
     RoutingGuardRule,
     SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES,
     SKILL_SCOUT_CANDIDATE_BLOCKER_PHRASES,
@@ -1225,8 +1227,11 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
     matches = scored
     if apply_guardrails:
         guards = active_routing_guard_rules(normalized_query, query_tokens, explicit_skill=explicit_skill)
-        if ecosystem_identity_connector_match:
+        public_plugin_connector_match = _public_plugin_connector_readiness_match(normalized_query)
+        if ecosystem_identity_connector_match or public_plugin_connector_match:
             guards = tuple(guard for guard in guards if guard.id != _TOOLBELT_READINESS_GUARD_ID)
+        if public_plugin_connector_match or _skill_scout_candidate_alias_intent_match(normalized_query):
+            guards = tuple(guard for guard in guards if guard.id != "ops_observability_before_generic_loop")
         matches = _ensure_guardrail_candidates(matches, definitions, guards, query)
         matches = _apply_guardrail_reranking(
             matches,
@@ -1294,6 +1299,8 @@ def _score_definition(
         and (
             ops_observability_external_blocked(normalized_query)
             or ops_observability_generic_metrics_blocked(normalized_query, query_tokens)
+            or _public_plugin_connector_readiness_match(normalized_query)
+            or _skill_scout_candidate_alias_intent_match(normalized_query)
         )
     ):
         return None
@@ -1386,6 +1393,9 @@ def _score_definition(
     if ecosystem_identity_connector_match:
         score += 36
         matched.add("direct:ecosystem_identity_connector")
+    if definition.name == "external-connector-readiness" and _public_plugin_connector_readiness_match(normalized_query):
+        score += 36
+        matched.add("direct:public_plugin_connector_readiness")
     if definition.name == "skill-scout" and _skill_scout_candidate_alias_intent_match(normalized_query):
         score += 36
         matched.add("direct:skill_scout_candidate_alias")
@@ -1536,6 +1546,31 @@ def _external_connector_readiness_recommendation_applies(normalized_query: str, 
             "crustocean platform",
         )
     )
+
+
+def _public_plugin_connector_readiness_match(normalized_query: str) -> bool:
+    if _skill_scout_candidate_alias_intent_match(normalized_query):
+        return False
+    exact_readiness = any(
+        _phrase_match(normalized_query, normalized_phrase(phrase))
+        for phrase in (
+            "memory provider readiness",
+            "search provider connector readiness",
+            "social automation connector readiness",
+            "twitter automation connector readiness",
+            "x/twitter automation connector readiness",
+            "x twitter automation connector readiness",
+        )
+    )
+    candidate = any(
+        _phrase_match(normalized_query, normalized_phrase(phrase))
+        for phrase in PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES
+    )
+    readiness_context = any(
+        _phrase_match(normalized_query, normalized_phrase(phrase))
+        for phrase in PUBLIC_PLUGIN_CONNECTOR_READINESS_CONTEXT_PHRASES
+    )
+    return exact_readiness or (candidate and readiness_context)
 
 
 def _ecosystem_identity_connector_explicit_match(normalized_query: str) -> bool:

@@ -2452,6 +2452,12 @@ _OPS_OBSERVABILITY_CONNECTOR_READINESS_BLOCKERS = (
     "weather plugin readiness",
     "weather connector readiness",
     "wxtrain readiness",
+    "memory provider readiness",
+    "search provider connector readiness",
+    "social automation connector readiness",
+    "twitter automation connector readiness",
+    "x/twitter automation connector readiness",
+    "x twitter automation connector readiness",
     "onequery read-only sql",
     "read-only sql connector",
     "sql connector readiness",
@@ -2490,6 +2496,71 @@ _OPS_OBSERVABILITY_CONNECTOR_READINESS_BLOCKERS = (
     "멀티모달 커넥터",
     "멀티모달 라우팅",
 )
+_PUBLIC_PLUGIN_CONNECTOR_READINESS_PHRASES = (
+    "memory provider readiness",
+    "search provider connector readiness",
+    "social automation connector readiness",
+    "twitter automation connector readiness",
+    "x/twitter automation connector readiness",
+    "x twitter automation connector readiness",
+)
+PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES = (
+    "hermes-example-plugins",
+    "hermes example plugins",
+    "remnic",
+    "mem9-hermes-plugin",
+    "mem9 hermes plugin",
+    "scope-recall-hermes",
+    "scope recall hermes",
+    "yantrikdb-hermes-plugin",
+    "yantrikdb hermes plugin",
+    "hermes-brave-search-plugin",
+    "hermes brave search plugin",
+    "hermes-kagi-plugin",
+    "hermes kagi plugin",
+    "tokentelemetry-hermes-plugin",
+    "tokentelemetry hermes plugin",
+    "hermes-curator-evolver",
+    "hermes curator evolver",
+    "hermes-skill-view",
+    "hermes skill view",
+    "42-evey/hermes-plugins",
+    "42 evey hermes plugins",
+    "hermes-plugins",
+    "hermes plugins",
+    "evey hermes plugins",
+    "evey-bridge-plugin",
+    "evey bridge plugin",
+    "evey-council",
+    "evey council",
+    "evey-delegate-model",
+    "evey delegate model",
+    "x-twitter-scraper",
+    "x twitter scraper",
+    "hermes-tweet",
+    "hermes tweet",
+)
+PUBLIC_PLUGIN_CONNECTOR_READINESS_CONTEXT_PHRASES = (
+    "auth",
+    "authentication",
+    "credential",
+    "connector",
+    "connector readiness",
+    "cost",
+    "provider",
+    "provider readiness",
+    "price",
+    "pricing",
+    "readiness",
+    "trial",
+    "도입",
+    "인증",
+    "리스크",
+    "비용",
+    "준비",
+    "준비도",
+    "커넥터",
+)
 SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES: tuple[str, ...] = (
     "obsidian skills",
     "defuddle",
@@ -2506,6 +2577,41 @@ SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES: tuple[str, ...] = (
     "k-12 education",
     "k 12 education",
     "hermes edu skills",
+    "hermes-example-plugins",
+    "hermes example plugins",
+    "plugin authoring",
+    "remnic",
+    "scope-recall-hermes",
+    "scope recall hermes",
+    "mem9-hermes-plugin",
+    "mem9 hermes plugin",
+    "yantrikdb-hermes-plugin",
+    "yantrikdb hermes plugin",
+    "hermes-brave-search-plugin",
+    "hermes brave search plugin",
+    "hermes-kagi-plugin",
+    "hermes kagi plugin",
+    "hermes-tweet",
+    "hermes tweet",
+    "tokentelemetry-hermes-plugin",
+    "tokentelemetry hermes plugin",
+    "hermes-curator-evolver",
+    "hermes curator evolver",
+    "hermes-skill-view",
+    "hermes skill view",
+    "42-evey/hermes-plugins",
+    "42 evey hermes plugins",
+    "hermes-plugins",
+    "hermes plugins",
+    "evey hermes plugins",
+    "evey-bridge-plugin",
+    "evey bridge plugin",
+    "evey-council",
+    "evey council",
+    "evey-delegate-model",
+    "evey delegate model",
+    "x-twitter-scraper",
+    "x twitter scraper",
 )
 SKILL_SCOUT_CANDIDATE_INTENT_PHRASES: tuple[str, ...] = (
     "adopt",
@@ -5251,7 +5357,12 @@ def _adversarial_qa_guard_applies(normalized_query: str, query_tokens: set[str])
 
 
 def _ops_observability_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    operator_context = _contains_phrase(normalized_query, _OPS_OBSERVABILITY_OPERATOR_CONTEXT)
+    if _public_plugin_connector_readiness_requested(normalized_query):
+        return False
+    operator_context = _contains_phrase(normalized_query, _OPS_OBSERVABILITY_OPERATOR_CONTEXT) or _contains_phrase(
+        normalized_query,
+        PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES,
+    )
     if ops_observability_external_blocked(normalized_query):
         return False
     if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_PHRASES):
@@ -5275,7 +5386,10 @@ def ops_observability_external_blocked(normalized_query: str) -> bool:
 
 
 def ops_observability_generic_metrics_blocked(normalized_query: str, query_tokens: set[str]) -> bool:
-    if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_OPERATOR_CONTEXT):
+    if _contains_phrase(normalized_query, _OPS_OBSERVABILITY_OPERATOR_CONTEXT) or _contains_phrase(
+        normalized_query,
+        PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES,
+    ):
         return False
     generic_metrics_only = bool(_OPS_OBSERVABILITY_GENERIC_METRIC_TOKENS & query_tokens) and not bool(
         (_OPS_OBSERVABILITY_TOKENS - _OPS_OBSERVABILITY_GENERIC_METRIC_TOKENS) & query_tokens
@@ -6143,6 +6257,8 @@ def _materials_package_guard_applies(
 
 
 def _memory_curation_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _public_plugin_connector_readiness_requested(normalized_query):
+        return False
     context = bool(_MEMORY_CURATION_CONTEXT_TOKENS & query_tokens)
     hermes_context = _contains_phrase(normalized_query, ("hermes", "헤르메스"))
     omh_context = _contains_phrase(normalized_query, ("omh", "oh-my-hermes", "oh my hermes"))
@@ -6699,6 +6815,8 @@ def _executor_readiness_check_requested(normalized_query: str, query_tokens: set
 
 
 def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _public_plugin_connector_readiness_requested(normalized_query):
+        return False
     if _harness_session_inventory_guard_applies(normalized_query, query_tokens):
         return False
     if _executor_readiness_check_requested(normalized_query, query_tokens):
@@ -6754,6 +6872,15 @@ def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[s
         ),
     )
     return tool_context and missing_or_setup
+
+
+def _public_plugin_connector_readiness_requested(normalized_query: str) -> bool:
+    if _contains_phrase(normalized_query, _PUBLIC_PLUGIN_CONNECTOR_READINESS_PHRASES):
+        return True
+    return _contains_phrase(normalized_query, PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES) and _contains_phrase(
+        normalized_query,
+        PUBLIC_PLUGIN_CONNECTOR_READINESS_CONTEXT_PHRASES,
+    )
 
 
 def _harness_session_inventory_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
