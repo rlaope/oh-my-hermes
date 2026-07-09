@@ -51,6 +51,106 @@ class WebVisualQaMessageCardTests(unittest.TestCase):
         self.assertIn("attachment_summary.schema_version must be message_attachment_projection/v1", errors)
         self.assertIn("does_not_prove must include platform_delivery", errors)
 
+    def test_message_card_validation_rejects_overclaiming_route_fields(self) -> None:
+        card = build_web_visual_qa_message_card(_reviewed_package("/tmp/desktop.png"))
+        card["route"]["message_delivery"] = "sent_to_discord"
+        card["route"]["multimodal_strategy"] = "called_omh_model"
+        card["route"]["safety_flags"] = ["uploaded_attachment"]
+        card["route"]["suggested_actions"] = ["platform_delivery_observed"]
+        card["route"]["routing_basis"] = [
+            {
+                "id": "external-plugin-runtime",
+                "source_repos": ["unknown"],
+                "native_rule": "Loaded an external plugin.",
+            }
+        ]
+
+        errors = validate_web_visual_qa_message_card(card)
+
+        self.assertIn("route.message_delivery is unsupported", errors)
+        self.assertIn("route.multimodal_strategy is unsupported", errors)
+        self.assertIn("route.safety_flags[0] is unsupported", errors)
+        self.assertIn("route.suggested_actions[0] is unsupported", errors)
+        self.assertIn("route.routing_basis[0].id is unsupported", errors)
+
+    def test_low_cost_unresolved_capture_keeps_operator_route_with_multimodal_suggestion(self) -> None:
+        package = build_web_visual_qa_package(
+            package_id="checkout-qa",
+            target="Checkout page",
+            source="discord",
+            risk_level="medium",
+            estimated_cost_tier="low",
+            criteria=[
+                {
+                    "criterion_id": "layout",
+                    "label": "Layout fits",
+                    "pass_rule": "No overlap",
+                    "severity": "blocking",
+                }
+            ],
+            captures=[
+                {
+                    "capture_id": "desktop",
+                    "role": "desktop",
+                    "path_or_uri": "/tmp/desktop.png",
+                    "mime_type": "image/png",
+                    "viewport": "desktop-1440",
+                    "evidence_summary": "Desktop checkout viewport captured.",
+                    "redaction_status": "not_needed",
+                }
+            ],
+        )
+
+        card = build_web_visual_qa_message_card(package)
+
+        self.assertEqual(package["routing"]["route"], "request_operator_review")
+        self.assertEqual(package["routing"]["multimodal_strategy"], "operator_review_before_low_cost_multimodal")
+        self.assertIn("record_host_multimodal_review", package["routing"]["suggested_actions"])
+        self.assertIn("model_call", package["routing"]["does_not_authorize"])
+        self.assertEqual(card["route"]["label"], "Operator review required")
+        self.assertEqual(card["route"]["message_delivery"], "prepare_message_card_with_attachments")
+        self.assertIn("record_host_multimodal_review", card["route"]["suggested_actions"])
+        self.assertTrue(any("Native rewrite basis" in block["text"] for block in card["message_blocks"]))
+        self.assertEqual(validate_web_visual_qa_message_card(card), [])
+
+    def test_sensitive_capture_is_blocked_from_message_attachments(self) -> None:
+        package = build_web_visual_qa_package(
+            package_id="checkout-qa",
+            target="Checkout page",
+            source="discord",
+            risk_level="low",
+            estimated_cost_tier="low",
+            criteria=[
+                {
+                    "criterion_id": "layout",
+                    "label": "Layout fits",
+                    "pass_rule": "No overlap",
+                    "severity": "blocking",
+                }
+            ],
+            captures=[
+                {
+                    "capture_id": "desktop",
+                    "role": "desktop",
+                    "path_or_uri": "/tmp/desktop.png",
+                    "mime_type": "image/png",
+                    "viewport": "desktop-1440",
+                    "evidence_summary": "Desktop checkout viewport captured with account details visible.",
+                    "redaction_status": "contains_sensitive_content",
+                }
+            ],
+        )
+
+        card = build_web_visual_qa_message_card(package)
+
+        self.assertEqual(package["routing"]["route"], "redact_before_message")
+        self.assertEqual(package["routing"]["message_delivery"], "prepare_message_card_without_attachments")
+        self.assertEqual(card["route"]["label"], "Redaction required")
+        self.assertEqual(card["attachment_summary"]["eligible_count"], 0)
+        self.assertEqual(card["attachment_summary"]["blocked_count"], 1)
+        self.assertIn("sensitive_capture_requires_redaction", card["route"]["safety_flags"])
+        self.assertEqual(validate_web_visual_qa_message_card(card), [])
+
     def test_facade_exports_only_stable_web_qa_contract_symbols(self) -> None:
         self.assertIn("build_web_visual_qa_message_card", web_visual_qa_facade.__all__)
         self.assertIn("validate_web_visual_qa_message_card", web_visual_qa_facade.__all__)
@@ -110,6 +210,105 @@ class WebVisualQaMessageCardTests(unittest.TestCase):
             self.assertIn("Attachments: 1 eligible, 0 blocked; delivery not observed", stdout)
             self.assertIn("Layout fits: hold - Desktop captured; mobile still needs review", stdout)
             self.assertIn("Boundary:", stdout)
+
+    def test_package_command_accepts_redaction_and_attachment_capture_fields(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture_path = root / "desktop.png"
+            base = ["--omh-home", str(root / ".omh"), "web-qa"]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "package",
+                    "--package-id",
+                    "checkout-qa",
+                    "--target",
+                    "Checkout page",
+                    "--source",
+                    "discord",
+                    "--risk-level",
+                    "low",
+                    "--estimated-cost-tier",
+                    "low",
+                    "--criterion",
+                    "layout:Layout fits:No overlap:blocking",
+                    "--capture",
+                    f"desktop:desktop:{capture_path}:image/png:desktop-1440:Desktop checkout viewport captured.",
+                    "--capture-redaction-status",
+                    "contains_sensitive_content",
+                    "--capture-attachment",
+                    "eligible",
+                    "--json",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            package = json.loads(stdout)
+            self.assertEqual(package["captures"][0]["redaction_status"], "contains_sensitive_content")
+            self.assertEqual(package["captures"][0]["attachment"], "eligible")
+            self.assertEqual(package["routing"]["route"], "redact_before_message")
+
+    def test_package_command_preserves_colons_and_enum_words_in_capture_summary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture_path = root / "desktop.png"
+            base = ["--omh-home", str(root / ".omh"), "web-qa"]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "package",
+                    "--package-id",
+                    "checkout-qa",
+                    "--target",
+                    "Checkout page",
+                    "--criterion",
+                    "layout:Layout fits:No overlap:blocking",
+                    "--capture",
+                    (
+                        f"desktop:desktop:{capture_path}:image/png:desktop-1440:"
+                        "Status: checkout still overlaps:redacted:eligible"
+                    ),
+                    "--json",
+                ]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            package = json.loads(stdout)
+            self.assertEqual(package["captures"][0]["evidence_summary"], "Status: checkout still overlaps:redacted:eligible")
+            self.assertEqual(package["captures"][0]["redaction_status"], "unknown")
+            self.assertEqual(package["captures"][0]["attachment"], "eligible")
+
+    def test_package_command_rejects_malformed_capture_metadata_flags(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture_path = root / "desktop.png"
+            base = ["--omh-home", str(root / ".omh"), "web-qa"]
+
+            status, stdout, stderr = run_cli(
+                base
+                + [
+                    "package",
+                    "--package-id",
+                    "checkout-qa",
+                    "--target",
+                    "Checkout page",
+                    "--criterion",
+                    "layout:Layout fits:No overlap:blocking",
+                    "--capture",
+                    f"desktop:desktop:{capture_path}:image/png:desktop-1440:Desktop checkout viewport captured.",
+                    "--capture-redaction-status",
+                    "contains_sensitive_content",
+                    "--capture-attachment",
+                    "eligble",
+                    "--json",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertEqual(stdout, "")
+            self.assertIn("--capture-attachment must be one of eligible, blocked, not_requested", stderr)
 
     def test_show_command_rejects_stale_package_with_sensitive_attachment_projection(self) -> None:
         with TemporaryDirectory() as tmp:

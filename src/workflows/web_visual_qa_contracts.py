@@ -40,6 +40,63 @@ SUPPORTED_RISK_LEVELS: Final = ("low", "medium", "high", "critical", "unknown")
 SUPPORTED_REDACTION_STATUSES: Final = ("not_needed", "redacted", "contains_sensitive_content", "unknown")
 SUPPORTED_ATTACHMENT_STATES: Final = ("eligible", "blocked", "not_requested")
 OBSERVED_REVIEW_STATUSES: Final = ("observed", "prepared", "not_observed")
+SUPPORTED_AUTO_ROUTES: Final = (
+    "prepare_capture",
+    "redact_before_message",
+    "request_operator_review",
+    "use_observed_multimodal_review",
+    "lightweight_capture_review",
+)
+SUPPORTED_MULTIMODAL_STRATEGIES: Final = (
+    "capture_first",
+    "redact_before_multimodal_or_attachment",
+    "operator_first_due_to_risk",
+    "operator_review_due_to_cost_or_unresolved_criteria",
+    "use_observed_host_multimodal_review",
+    "operator_review_before_low_cost_multimodal",
+    "prepared_review_needs_observation",
+    "text_and_capture_review_without_model_call",
+)
+SUPPORTED_MESSAGE_DELIVERY_STATES: Final = (
+    "prepare_message_card_with_attachments",
+    "prepare_message_card_without_attachments",
+)
+SUPPORTED_ROUTING_SAFETY_FLAGS: Final = (
+    "sensitive_capture_requires_redaction",
+    "high_risk_requires_operator_review",
+    "cost_requires_operator_or_text_only_review",
+    "blocking_criteria_unresolved",
+    "no_additional_safety_flag",
+)
+SUPPORTED_SUGGESTED_ACTIONS: Final = (
+    "record_capture",
+    "record_redacted_capture",
+    "record_operator_review",
+    "record_host_multimodal_review",
+    "record_visual_qa_verdict",
+)
+PLUGIN_REWRITE_PATTERNS: Final = (
+    {
+        "id": "cost_guard_before_multimodal",
+        "source_repos": ("evey-cost-guard", "evey-delegate-model"),
+        "native_rule": "Treat multimodal review as host-supplied evidence and route by risk plus estimated cost before asking for it.",
+    },
+    {
+        "id": "explicit_action_reason_for_message_delivery",
+        "source_repos": ("hermes-tweet", "evey-verification"),
+        "native_rule": "Prepare message cards and attachment projections locally; platform upload remains a separate observed action.",
+    },
+    {
+        "id": "redaction_before_recall_or_attachment",
+        "source_repos": ("mem9-hermes-plugin", "scope-recall-hermes"),
+        "native_rule": "Never attach sensitive captures until the wrapper/user supplies redacted evidence.",
+    },
+    {
+        "id": "normalized_visual_evidence",
+        "source_repos": ("hermes-brave-search-plugin", "hermes-kagi-plugin", "yantrikdb-hermes-plugin"),
+        "native_rule": "Normalize source, capture, viewport, and review metadata before generating a shareable QA card.",
+    },
+)
 _ID_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,120}$")
 _MIME_BY_SUFFIX: Final = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
@@ -110,6 +167,7 @@ def auto_routing(
     canonical_risk = choice(risk_level, SUPPORTED_RISK_LEVELS, "unknown")
     canonical_cost = choice(estimated_cost_tier, SUPPORTED_COST_TIERS, "none")
     observed_multimodal = [item for item in multimodal_reviews if item.get("status") == "observed"]
+    prepared_multimodal = [item for item in multimodal_reviews if item.get("status") == "prepared"]
     blocking_criteria_ids = [text(item.get("criterion_id")) for item in criteria if text(item.get("severity")) == "blocking"]
     results_by_criterion = {text(item.get("criterion_id")): item for item in criteria_results}
     unresolved_blocking = [
@@ -117,31 +175,85 @@ def auto_routing(
         for criterion_id in blocking_criteria_ids
         if criterion_id not in results_by_criterion or results_by_criterion[criterion_id].get("status") != "pass"
     ]
+    sensitive_capture_count = sum(
+        1 for item in captures if text(item.get("redaction_status")) == "contains_sensitive_content"
+    )
+    attachment_eligible_count = sum(
+        1
+        for item in captures
+        if text(item.get("attachment")) == "eligible"
+        and text(item.get("redaction_status")) != "contains_sensitive_content"
+    )
+    low_cost_multimodal_possible = canonical_cost in {"none", "low"}
+    suggested_actions: list[JsonValue] = []
     route = "prepare_capture"
+    multimodal_strategy = "capture_first"
     if not captures:
         route = "prepare_capture"
+        suggested_actions.append("record_capture")
+    elif sensitive_capture_count:
+        route = "redact_before_message"
+        multimodal_strategy = "redact_before_multimodal_or_attachment"
+        suggested_actions.append("record_redacted_capture")
     elif canonical_risk in {"high", "critical"}:
         route = "request_operator_review"
+        multimodal_strategy = "operator_first_due_to_risk"
+        suggested_actions.append("record_operator_review")
     elif unresolved_blocking:
         route = "request_operator_review"
+        multimodal_strategy = (
+            "operator_review_before_low_cost_multimodal"
+            if low_cost_multimodal_possible
+            else "operator_review_due_to_cost_or_unresolved_criteria"
+        )
+        suggested_actions.append("record_operator_review")
+        if low_cost_multimodal_possible:
+            suggested_actions.append("record_host_multimodal_review")
     elif observed_multimodal:
         route = "use_observed_multimodal_review"
-    elif canonical_risk in {"medium", "unknown"} and canonical_cost in {"none", "low"}:
+        multimodal_strategy = "use_observed_host_multimodal_review"
+        suggested_actions.append("record_visual_qa_verdict")
+    elif canonical_risk in {"medium", "unknown"} and low_cost_multimodal_possible:
         route = "request_operator_review"
+        multimodal_strategy = "operator_review_before_low_cost_multimodal"
+        suggested_actions.extend(("record_operator_review", "record_host_multimodal_review"))
+    elif prepared_multimodal:
+        route = "request_operator_review"
+        multimodal_strategy = "prepared_review_needs_observation"
+        suggested_actions.append("record_operator_review")
     elif captures:
         route = "lightweight_capture_review"
+        multimodal_strategy = "text_and_capture_review_without_model_call"
+        suggested_actions.append("record_visual_qa_verdict")
     return {
         "schema_version": "web_visual_qa_auto_routing/v1",
         "route": route,
         "cost_policy": "risk_first_cost_aware_host_observed_only",
         "estimated_cost_tier": canonical_cost,
+        "multimodal_strategy": multimodal_strategy,
+        "message_delivery": (
+            "prepare_message_card_with_attachments"
+            if attachment_eligible_count and not sensitive_capture_count
+            else "prepare_message_card_without_attachments"
+        ),
+        "suggested_actions": _unique_suggested_actions(suggested_actions),
         "decision_inputs": {
             "risk_level": canonical_risk,
             "capture_count": len(captures),
+            "attachment_eligible_count": attachment_eligible_count,
+            "sensitive_capture_count": sensitive_capture_count,
             "criteria_count": len(criteria),
             "blocking_unresolved_count": len(unresolved_blocking),
             "observed_multimodal_review_count": len(observed_multimodal),
+            "prepared_multimodal_review_count": len(prepared_multimodal),
         },
+        "routing_basis": [_plugin_rewrite_pattern(item) for item in PLUGIN_REWRITE_PATTERNS],
+        "safety_flags": _safety_flags(
+            captures=captures,
+            canonical_risk=canonical_risk,
+            canonical_cost=canonical_cost,
+            unresolved_blocking=unresolved_blocking,
+        ),
         "does_not_authorize": ["model_call", "browser_launch", "platform_upload"],
     }
 
@@ -181,6 +293,49 @@ def attachment_projection(captures: list[JsonObject]) -> JsonObject:
         "blocked_items": blocked_items,
         "does_not_prove": ["platform_upload", "platform_delivery"],
     }
+
+
+def _safety_flags(
+    *,
+    captures: list[JsonObject],
+    canonical_risk: str,
+    canonical_cost: str,
+    unresolved_blocking: list[str],
+) -> list[JsonValue]:
+    flags: list[JsonValue] = []
+    if any(text(item.get("redaction_status")) == "contains_sensitive_content" for item in captures):
+        flags.append("sensitive_capture_requires_redaction")
+    if canonical_risk in {"high", "critical"}:
+        flags.append("high_risk_requires_operator_review")
+    if canonical_cost in {"medium", "high", "unknown"}:
+        flags.append("cost_requires_operator_or_text_only_review")
+    if unresolved_blocking:
+        flags.append("blocking_criteria_unresolved")
+    if not flags:
+        flags.append("no_additional_safety_flag")
+    return flags
+
+
+def _plugin_rewrite_pattern(item: Mapping[str, object]) -> JsonObject:
+    raw_sources = item.get("source_repos")
+    sources = raw_sources if isinstance(raw_sources, (list, tuple)) else ()
+    return {
+        "id": text(item.get("id")),
+        "source_repos": [text(value) for value in sources if text(value)],
+        "native_rule": text(item.get("native_rule")),
+    }
+
+
+def _unique_suggested_actions(actions: list[JsonValue]) -> list[JsonValue]:
+    seen: set[str] = set()
+    output: list[JsonValue] = []
+    for action in actions:
+        action_text = text(action)
+        if action_text not in SUPPORTED_SUGGESTED_ACTIONS or action_text in seen:
+            continue
+        seen.add(action_text)
+        output.append(action_text)
+    return output
 
 
 def lifecycle_status(captures: list[JsonObject], criteria_results: list[JsonObject], verdict: str) -> str:
