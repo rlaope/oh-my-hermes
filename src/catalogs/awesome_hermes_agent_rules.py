@@ -69,6 +69,8 @@ _RULES = (
             "remnic",
             "scoped memory with provenance",
             "retrieval quality corrections and boundaries",
+            "scope-recall",
+            "scope recall",
             "scope recall hermes",
             "scope aware recall",
             "sqlite truth",
