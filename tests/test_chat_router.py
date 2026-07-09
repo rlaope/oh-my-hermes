@@ -2384,6 +2384,20 @@ class ChatRouterTests(unittest.TestCase):
             "weather plugin readiness with screenshots and cost auto routing",
             "Composio universal CLI skill 도입할지 비용 인증 리스크 감안해서 라우팅해줘",
             "Monero XMR agent gateway private crypto transaction plugin readiness 봐줘",
+            "mem9-hermes-plugin memory provider readiness 비용 인증 리스크 봐줘",
+            "hermes-kagi-plugin search provider connector readiness",
+            "hermes-tweet X/Twitter automation connector readiness",
+            "mem9-hermes-plugin memory provider trial auth cost",
+            "scope-recall-hermes memory provider trial auth cost",
+            "yantrikdb-hermes-plugin memory provider trial auth cost",
+            "hermes-kagi-plugin search provider trial auth cost",
+            "hermes-tweet social automation connector trial auth cost",
+            "hermes-plugins connector readiness",
+            "evey-bridge-plugin connector readiness",
+            "evey-council connector readiness",
+            "evey-delegate-model connector readiness",
+            "remnic connector readiness",
+            "x-twitter-scraper connector readiness",
         )
 
         for message in messages:
@@ -2396,6 +2410,26 @@ class ChatRouterTests(unittest.TestCase):
                 self.assertNotIn("guard:ops_observability", decision["recommendations"][0]["matched"])
                 self.assertEqual(recommendations[0]["skill"], "external-connector-readiness")
                 self.assertNotEqual(recommendations[0]["skill"], "ops-observability-card")
+
+    def test_public_plugin_repo_status_queries_still_route_to_ops_observability(self) -> None:
+        messages = (
+            "mem9-hermes-plugin dashboard metrics status",
+            "remnic dashboard metrics status",
+            "hermes-plugins dashboard metrics status",
+            "evey-council dashboard metrics status",
+            "evey-delegate-model dashboard metrics status",
+            "x-twitter-scraper dashboard metrics status",
+        )
+
+        for message in messages:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                recommendations = recommend_skills(message, limit=3)
+
+                self.assertEqual(decision["selected_skill"], "ops-observability-card")
+                self.assertEqual(decision["recommendations"][0]["next_action"], "prepare_ops_observability_card")
+                self.assertIn("guard:ops_observability", decision["recommendations"][0]["matched"])
+                self.assertEqual(recommendations[0]["skill"], "ops-observability-card")
 
     def test_generic_crypto_mentions_do_not_open_connector_readiness(self) -> None:
         for message in (
@@ -3438,6 +3472,13 @@ selected_workflow=ultraprocess
             "cognify CRM invoicing project management agentskills pack 도입 검토해줘",
             "skill forge로 repo/docs를 agentskills.io skill로 변환하는 후보 비교해줘",
             "Chinese K-12 education Hermes skills photo Q&A lesson planning 도입 판단해줘",
+            "remnic, scope-recall-hermes, yantrikdb-hermes-plugin memory provider 플러그인 도입 비교해줘",
+            "hermes-example-plugins 참고해서 우리 plugin authoring 후보 검토해줘",
+            "tokentelemetry-hermes-plugin 같은 observability plugin 후보 검토해줘",
+            "42-evey/hermes-plugins evey-council evey-delegate-model 도입 후보 비교해줘",
+            "hermes-plugins 도입 후보 비교해줘",
+            "evey-bridge-plugin 도입 후보 비교해줘",
+            "x-twitter-scraper compare candidate",
         ):
             with self.subTest(message=message):
                 recommendations = recommend_skills(message, limit=3)
@@ -3451,6 +3492,7 @@ selected_workflow=ultraprocess
             ("Defuddle source-finder find source candidates and datasets", "source-finder"),
             ("skill list installed Defuddle skills", "skill"),
             ("Obsidian skills latest citations source-finder로 찾아줘", "source-finder"),
+            ("hermes-kagi-plugin latest citations source-finder로 찾아줘", "source-finder"),
         )
 
         for message, expected_skill in negative_cases:
@@ -3465,6 +3507,8 @@ selected_workflow=ultraprocess
         for message in (
             "how does Cognify work?",
             "Cognify CRM dashboard metrics status",
+            "how does remnic work?",
+            "tokentelemetry-hermes-plugin dashboard metrics status",
         ):
             with self.subTest(message=message):
                 decision = route_chat_message(message, source="discord")
