@@ -167,6 +167,10 @@ class OmhPaths:
         return self.runtime_dir / "executor-readiness.json"
 
     @property
+    def dynamic_coding_workflows_dir(self) -> Path:
+        return self.omh_home / "coding" / "dynamic-workflows"
+
+    @property
     def target_registry_path(self) -> Path:
         return self.omh_home / "targets.json"
 

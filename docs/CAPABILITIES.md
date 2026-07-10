@@ -55,7 +55,7 @@ normal chat surfaces:
 | Plan and decide | Clarify goals, prepare plans, and make loop or decision paths explicit. |
 | Learn and gather | Find sources, explain papers, triage signals, and prepare source-backed briefs. |
 | Create materials and visuals | Shape files, reports, packages, and image-card prompts before generation is claimed. |
-| Delegate coding and ship | Prepare scoped handoffs for Codex, Claude Code, Hermes, or another runtime after scope is clear. |
+| Delegate coding and ship | Prepare scoped handoffs and dynamic typed target workflow charts across model, runtime, wrapper, tool, and agent surfaces after scope is clear. |
 | Operate and observe | Show setup health, automation, workflow learning, memory review, status, and repair next steps. |
 
 Capability families are the public, user-facing front door. The older lanes and
@@ -71,7 +71,7 @@ the family layer.
 | `skills` | Skill capabilities, triggers, harnesses, quality bars, handoff policy, and orchestration eligibility derived from the generated skill catalog. |
 | `hooks` | Plugin tools/hooks plus wrapper event contracts and whether each surface is only supported or actually observed. |
 | `keywords` | Explicit invocation prefixes, natural-language routing rules, locale aliases, conflict policy, and guard rules. |
-| `orchestration_patterns` | Safe workflow patterns such as clarify-then-plan, plan-execute-verify, team pipeline, worktree isolation, loop tick, and executor session handoff. |
+| `orchestration_patterns` | Safe workflow patterns such as clarify-then-plan, plan-execute-verify, team pipeline, dynamic typed target workflow, worktree isolation, loop tick, and executor session handoff. |
 | `playbooks` | Situation-level workflow maps such as request-to-handoff, feedback triage, research department, materials processing, and idea-to-deploy, including owner/action hints for the first wrapper card. |
 | `tool_requirements` | Tool/MCP requirements when derivable, plus setup guidance for the optional allowlisted OMH MCP bridge. |
 | `evidence_boundaries` | The shared prepared-vs-observed claim rule. |
@@ -81,6 +81,18 @@ the family layer.
 Capability presence means OMH can prepare guidance, status, or a handoff. It
 does not mean Hermes loaded a plugin, a worker ran, code changed, review passed,
 CI passed, or a PR was merged.
+
+`omh coding dynamic-workflow` prepares `dynamic_coding_workflow/v1` and an SVG
+`dynamic_coding_workflow_chart/v1` image attachment that names each prepared
+stage's role, target, target type, model, cost tier, and gate. The artifact is
+a workflow proposal for a wrapper or operator to show in chat; it is not target
+selection, runtime dispatch, model invocation, review, verification, CI, or
+merge evidence until matching observed records exist.
+
+Model, runtime, wrapper, tool, and agent targets are distinct. A GLM-like entry
+is a model target; a Pi-like entry is a runtime or agent surface target.
+Defaults describe dynamic planning, implementation, and review target pools
+instead of preselecting concrete models, runtime agents, tools, or wrappers.
 
 Those claims require matching local wrapper or runtime artifacts such as
 `runtime_observation/v1`.

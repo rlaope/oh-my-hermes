@@ -28,6 +28,7 @@ from ..wrapper.lifecycle import (
     start_codex_delegation_lifecycle,
 )
 from .common import _chat_input_and_metadata, _explicit_source_metadata, _paths, _print_json, _resolved_executor
+from .dynamic_workflow import _add_dynamic_workflow_command, cmd_coding_dynamic_workflow
 
 
 def cmd_coding_delegate(args: argparse.Namespace) -> int:
@@ -486,6 +487,8 @@ def _add_coding_commands(sub) -> None:
     delegate.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     delegate.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
     delegate.set_defaults(func=cmd_coding_delegate)
+
+    _add_dynamic_workflow_command(coding_sub)
 
     lifecycle = coding_sub.add_parser("lifecycle")
     lifecycle_sub = lifecycle.add_subparsers(dest="lifecycle_command", required=True)

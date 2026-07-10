@@ -3,6 +3,22 @@
 This generated reference is loaded only when exact workflow routing detail matters.
 The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery rules.
 
+## CLI Reference Surfaces
+
+These surfaces are generated command references, not installed Hermes workflow skills.
+
+### dynamic-workflow
+
+`omh coding dynamic-workflow` prepares `dynamic_coding_workflow/v1`, `workflow.json`, and `workflow-chart.svg` under `.omh/coding/dynamic-workflows/`.
+
+- Exposure: `cli_reference`
+- Install visibility: `false`
+- Docs visibility: `public_cli_reference`
+- Status: `prepared_not_observed`
+- Expected outputs: `dynamic_coding_workflow/v1` metadata-only contract and SVG chart attachment
+- Safety boundary: the generated workflow and chart are not execution, target selection, runtime dispatch, model invocation, implementation, review, CI, PR, merge-readiness, or merge evidence.
+- Privacy boundary: goals are stored as digest metadata; supported source metadata is compacted through the standard source metadata allowlist.
+
 ## Role Registry
 
 - `guide`: `oh-my-hermes`, `gateway-intent-card`, `voice-operator`, `browser-operator`, `workspace-file-operator`, `command-operator`, `connector-operator`, `live-info-operator`, `external-connector-readiness`, `prompt-import-readiness`, `content-operator`, `media-input-operator`, `data-analysis`

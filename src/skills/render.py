@@ -348,6 +348,8 @@ def _router_workflow_registry_reference(definitions: list[SkillDefinition]) -> s
 This generated reference is loaded only when exact workflow routing detail matters.
 The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery rules.
 
+{_cli_reference_surfaces_markdown()}
+
 ## Role Registry
 
 {_role_registry(definitions)}
@@ -360,6 +362,24 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 
 Routing is conservative: route only on explicit invocation, strong keyword evidence, or a clear workflow-shaped request. A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when it could mean normal conversation.
 """.rstrip() + "\n"
+
+
+def _cli_reference_surfaces_markdown() -> str:
+    return """## CLI Reference Surfaces
+
+These surfaces are generated command references, not installed Hermes workflow skills.
+
+### dynamic-workflow
+
+`omh coding dynamic-workflow` prepares `dynamic_coding_workflow/v1`, `workflow.json`, and `workflow-chart.svg` under `.omh/coding/dynamic-workflows/`.
+
+- Exposure: `cli_reference`
+- Install visibility: `false`
+- Docs visibility: `public_cli_reference`
+- Status: `prepared_not_observed`
+- Expected outputs: `dynamic_coding_workflow/v1` metadata-only contract and SVG chart attachment
+- Safety boundary: the generated workflow and chart are not execution, target selection, runtime dispatch, model invocation, implementation, review, CI, PR, merge-readiness, or merge evidence.
+- Privacy boundary: goals are stored as digest metadata; supported source metadata is compacted through the standard source metadata allowlist.""".rstrip()
 
 
 def _router_harness_registry_reference(harnesses: list[HarnessDefinition]) -> str:
@@ -762,6 +782,8 @@ def _workflow_reference_markdown_cached() -> str:
         TARGET_TOPOLOGY_REFERENCE_CONTEXT,
         MEMORY_CONTEXT_REFERENCE_CONTEXT,
         GOAL_STATUS_REFERENCE_CONTEXT,
+        "",
+        *_cli_reference_surfaces_markdown().splitlines(),
         "",
         "## Skills",
         "",

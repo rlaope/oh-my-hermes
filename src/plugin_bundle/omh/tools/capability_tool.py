@@ -137,11 +137,15 @@ STANDALONE_CAPABILITY_FAMILIES = (
         "label": "Delegate coding and ship",
         "owner_role": "handoff-guide",
         "source_lanes": ("coding_handoff",),
-        "use_for": "Scoped coding handoffs, executor choice, review, QA, CI, and merge readiness.",
+        "use_for": (
+            "Scoped coding handoffs, dynamic typed target choice across model, runtime, wrapper, tool, and agent "
+            "surfaces, review, QA, CI, and merge readiness."
+        ),
         "primary_workflows": (
             "idea-to-deploy",
             "ultraprocess",
             "executor-runtime-readiness",
+            "dynamic-workflow",
             "code-review",
             "build-failure-triage",
             "verification-gate",
@@ -159,7 +163,10 @@ STANDALONE_CAPABILITY_FAMILIES = (
         "executor_choices": ("Codex", "Claude Code", "Hermes", "generic runtime"),
         "next_action": "prepare_scoped_coding_handoff",
         "example_prompt": "Turn this issue into a PR-ready plan and hand it to implementation.",
-        "route_summary": "Choose the coding owner only after scope is concrete, then track observed evidence separately.",
+        "route_summary": (
+            "Choose model, runtime, and coding-owner targets only after scope is concrete, then track observed "
+            "evidence separately."
+        ),
         "not_evidence_until_observed": ("executor dispatch", "implementation", "review", "CI", "merge"),
     },
     {

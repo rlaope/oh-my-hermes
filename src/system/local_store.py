@@ -38,15 +38,20 @@ def can_write_dir(path: Path, *, probe_name: str = ".write-test", private: bool 
 def atomic_write_text(path: Path, text: str, *, private: bool = False) -> None:
     ensure_dir(path.parent, private=private)
     tmp = path.with_name(f".{path.name}.tmp")
+    if tmp.exists() or tmp.is_symlink():
+        raise FileExistsError(f"atomic write temp path already exists: {tmp}")
+    created_tmp = False
     try:
-        tmp.write_text(text, encoding="utf-8")
+        with tmp.open("x", encoding="utf-8") as handle:
+            created_tmp = True
+            handle.write(text)
         if private:
             tmp.chmod(0o600)
         tmp.replace(path)
         if private:
             path.chmod(0o600)
     except OSError:
-        if tmp.exists():
+        if created_tmp and tmp.exists() and not tmp.is_symlink():
             tmp.unlink()
         raise
 

@@ -82,7 +82,7 @@ separate profile pack is explicitly selected.
 ![OMH flagship command sets poster](../assets/omh-flagship-workflows-poster.png)
 
 The full skill catalog is intentionally larger than the public story. Start
-with these 10 modes; then use [WORKFLOWS.md](WORKFLOWS.md) and
+with these 11 modes; then use [WORKFLOWS.md](WORKFLOWS.md) and
 [CAPABILITIES.md](CAPABILITIES.md) for the complete reference.
 
 <!-- Intent-to-plan anchor: `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`. -->
@@ -112,6 +112,11 @@ with these 10 modes; then use [WORKFLOWS.md](WORKFLOWS.md) and
 
 - **Idea To Deploy** (`idea-to-deploy`) - prepare scoped coding work for the
   selected runtime without claiming unobserved execution.
+
+- **Dynamic Workflow** (`coding dynamic-workflow`) - prepare a dynamic typed
+  target workflow and SVG chart across model, runtime, wrapper, tool, and agent
+  surfaces, naming each stage's agent, target type, model, cost tier, and
+  evidence gate.
 
 - **Workflow Learning** (`workflow-learning`) - turn weak workflow attempts into
   traces, evals, review queues, regression cases, and patch proposals.
