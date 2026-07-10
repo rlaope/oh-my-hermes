@@ -68,7 +68,7 @@ class CapabilityManifestTests(unittest.TestCase):
         }
         generated_skills = set(installable_skill_names())
         catalog_surfaces = {definition.name for definition in builtin_definitions()}
-        conceptual_surfaces = {"request-to-handoff", "executor selection", "coding runtime handoff"}
+        conceptual_surfaces = {"request-to-handoff", "executor selection", "coding runtime handoff", "dynamic-workflow"}
 
         self.assertFalse(generated_skills - lane_skills)
         self.assertLessEqual(lane_skills - catalog_surfaces, conceptual_surfaces)
@@ -101,6 +101,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertNotIn("wiki", families["create_materials_and_visuals"]["primary_workflows"])
         self.assertIn("ultraprocess", families["delegate_coding_and_ship"]["primary_workflows"])
         self.assertIn("executor-runtime-readiness", families["delegate_coding_and_ship"]["primary_workflows"])
+        self.assertIn("dynamic-workflow", families["delegate_coding_and_ship"]["primary_workflows"])
         self.assertIn("build-failure-triage", families["delegate_coding_and_ship"]["primary_workflows"])
         self.assertIn("verification-gate", families["delegate_coding_and_ship"]["primary_workflows"])
         self.assertIn("doctor", families["operate_and_observe"]["primary_workflows"])
@@ -132,6 +133,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(projection["workflow_to_family"]["data-analysis"], "learn_and_gather")
         self.assertEqual(projection["workflow_to_family"]["ultraprocess"], "delegate_coding_and_ship")
         self.assertEqual(projection["workflow_to_family"]["executor-runtime-readiness"], "delegate_coding_and_ship")
+        self.assertEqual(projection["workflow_to_family"]["dynamic-workflow"], "delegate_coding_and_ship")
         self.assertEqual(projection["workflow_to_family"]["build-failure-triage"], "delegate_coding_and_ship")
         self.assertEqual(projection["workflow_to_family"]["verification-gate"], "delegate_coding_and_ship")
         self.assertEqual(projection["workflow_to_family"]["github-event-ops"], "operate_and_observe")
@@ -154,6 +156,7 @@ class CapabilityManifestTests(unittest.TestCase):
         self.assertEqual(family_for_workflow("wiki")["id"], "retain_knowledge")
         self.assertEqual(family_for_workflow("code-review")["id"], "delegate_coding_and_ship")
         self.assertEqual(family_for_workflow("executor-runtime-readiness")["id"], "delegate_coding_and_ship")
+        self.assertEqual(family_for_workflow("dynamic-workflow")["id"], "delegate_coding_and_ship")
         self.assertEqual(family_for_workflow("accessibility-audit")["id"], "create_materials_and_visuals")
         self.assertEqual(family_for_workflow("workflow-learning")["id"], "operate_and_observe")
         self.assertEqual(family_for_workflow("gateway-intent-card")["id"], "operate_and_observe")

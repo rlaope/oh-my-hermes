@@ -2210,6 +2210,11 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("omh_target_topology/v1", reference)
         self.assertIn("Exposure is the install contract", reference)
         self.assertIn("router-only, harness-only, and agent-context surfaces stay routable references", reference)
+        self.assertIn("## CLI Reference Surfaces", reference)
+        self.assertIn("### dynamic-workflow", reference)
+        self.assertIn("- Exposure: `cli_reference`", reference)
+        self.assertIn("- Install visibility: `false`", reference)
+        self.assertIn("`dynamic_coding_workflow/v1` metadata-only contract", reference)
         for definition in builtin_definitions():
             exposure = skill_exposure_payload(definition.name)
             self.assertIn(f"### {definition.name}", reference)

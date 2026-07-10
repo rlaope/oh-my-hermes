@@ -12,6 +12,22 @@ When wrapper metadata reports `omh_target_topology/v1`, skills bind workflow sta
 `memory_review_card/v1` is separate from `status_card/v1`; `handoff_context_pack/v1` may be attached to executor handoffs only when unresolved conflicts are absent.
 `goal_status_card/v1` and `goal_continuation/v1` are goal-execution payloads separate from generic `status_card/v1`; they must name the next action instead of merely summarizing work.
 
+## CLI Reference Surfaces
+
+These surfaces are generated command references, not installed Hermes workflow skills.
+
+### dynamic-workflow
+
+`omh coding dynamic-workflow` prepares `dynamic_coding_workflow/v1`, `workflow.json`, and `workflow-chart.svg` under `.omh/coding/dynamic-workflows/`.
+
+- Exposure: `cli_reference`
+- Install visibility: `false`
+- Docs visibility: `public_cli_reference`
+- Status: `prepared_not_observed`
+- Expected outputs: `dynamic_coding_workflow/v1` metadata-only contract and SVG chart attachment
+- Safety boundary: the generated workflow and chart are not execution, target selection, runtime dispatch, model invocation, implementation, review, CI, PR, merge-readiness, or merge evidence.
+- Privacy boundary: goals are stored as digest metadata; supported source metadata is compacted through the standard source metadata allowlist.
+
 ## Skills
 
 ### oh-my-hermes

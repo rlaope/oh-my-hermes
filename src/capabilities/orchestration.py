@@ -79,6 +79,26 @@ def orchestration_patterns() -> list[dict[str, object]]:
             tuple(f"{event}_observed" for event in HERMES_CODING_TEAM_STATUS_LADDER),
         ),
         _pattern(
+            "dynamic_runtime_workflow",
+            (
+                "Use when OMH should prepare a charted plan/critique/fan-out/review workflow across model, "
+                "runtime, wrapper, tool, and agent targets."
+            ),
+            "Do not claim any model, runtime, wrapper, tool, or agent target was selected or invoked from the prepared chart.",
+            "handoff-guide",
+            ("ralplan", "team", "ultragoal", "ultrawork", "code-review"),
+            ("choose_executor", "prepare_handoff", "show_status"),
+            actions,
+            (
+                "operator_acceptance_observed",
+                "target_selection_observed",
+                "runtime_dispatch_observed",
+                "worker_result_observed",
+                "review_observed",
+                "verification_observed",
+            ),
+        ),
+        _pattern(
             "swarm_batch",
             "Use for high-throughput batches only when lanes are independent and ownership is clear.",
             "Do not use for tightly coupled edits or unbounded scope.",
@@ -179,6 +199,14 @@ def _pattern(
 
 
 def _required_decisions(pattern_id: str) -> list[str]:
+    if pattern_id == "dynamic_runtime_workflow":
+        return [
+            "workflow_graph",
+            "typed_target_routing_policy",
+            "target_type_assignments",
+            "approval_gates",
+            "verification_gate",
+        ]
     if pattern_id in {"executor_session_handoff", "team_staged_pipeline", "hermes_coding_team_path", "swarm_batch", "worktree_isolated_workers"}:
         return ["executor_or_runtime_profile", "authority_scope", "verification_gate"]
     if pattern_id == "loop_run_once":
@@ -197,6 +225,7 @@ def _prepared_artifacts(pattern_id: str) -> list[str]:
         "research_department_workflow": ["research_department_plan/v1", "source_inbox/v1", "briefing_status/v1"],
         "materials_generation_handoff": ["material_artifact/v1"],
         "worktree_isolated_workers": ["runtime_observation/v1 when observed"],
+        "dynamic_runtime_workflow": ["dynamic_coding_workflow/v1", "dynamic_coding_workflow_chart/v1"],
     }
     return mapping.get(pattern_id, ["chat_interaction/v1", "status_card/v1"])
 

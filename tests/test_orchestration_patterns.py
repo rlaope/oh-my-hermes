@@ -25,6 +25,7 @@ class OrchestrationPatternTests(unittest.TestCase):
             "research_department_workflow",
             "executor_session_handoff",
             "hermes_coding_team_path",
+            "dynamic_runtime_workflow",
             "materials_generation_handoff",
         }:
             self.assertIn(expected, patterns)
@@ -52,3 +53,12 @@ class OrchestrationPatternTests(unittest.TestCase):
         hermes_team = patterns["hermes_coding_team_path"]
         self.assertIn("record_runtime_observation", hermes_team["wrapper_actions"])
         self.assertIn("merge_observed", hermes_team["observed_evidence_required"])
+
+        dynamic = patterns["dynamic_runtime_workflow"]
+        self.assertIn("typed_target_routing_policy", dynamic["required_decisions"])
+        self.assertIn("target_type_assignments", dynamic["required_decisions"])
+        self.assertIn("dynamic_coding_workflow_chart/v1", dynamic["prepared_artifacts"])
+        self.assertIn("target_selection_observed", dynamic["observed_evidence_required"])
+        self.assertIn("runtime_dispatch_observed", dynamic["observed_evidence_required"])
+        self.assertIn("model, runtime, wrapper, tool, and agent targets", dynamic["use_when"])
+        self.assertIn("Do not claim any model, runtime, wrapper, tool, or agent target was selected", dynamic["do_not_use_when"])

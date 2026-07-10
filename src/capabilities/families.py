@@ -12,6 +12,7 @@ CONCEPTUAL_WORKFLOW_SURFACES = {
     "request-to-handoff",
     "executor selection",
     "coding runtime handoff",
+    "dynamic-workflow",
 }
 
 _FAMILY_DEFINITIONS = (
@@ -87,11 +88,15 @@ _FAMILY_DEFINITIONS = (
         "label": "Delegate coding and ship",
         "owner_role": "handoff-guide",
         "source_lanes": ("coding_handoff",),
-        "use_for": "Scoped coding handoffs, executor choice, review, QA, CI, and merge readiness.",
+        "use_for": (
+            "Scoped coding handoffs, dynamic typed target choice across model, runtime, wrapper, tool, and agent "
+            "surfaces, review, QA, CI, and merge readiness."
+        ),
         "primary_workflows": (
             "idea-to-deploy",
             "ultraprocess",
             "executor-runtime-readiness",
+            "dynamic-workflow",
             "code-review",
             "build-failure-triage",
             "verification-gate",
@@ -104,7 +109,10 @@ _FAMILY_DEFINITIONS = (
         "next_action": "prepare_scoped_coding_handoff",
         "example_prompt": "Turn this issue into a PR-ready plan and hand it to implementation.",
         "not_evidence_until_observed": ("executor dispatch", "implementation", "review", "CI", "merge"),
-        "route_summary": "Choose the coding owner only after scope is concrete, then track observed evidence separately.",
+        "route_summary": (
+            "Choose model, runtime, and coding-owner targets only after scope is concrete, then track observed "
+            "evidence separately."
+        ),
     },
     {
         "id": "operate_and_observe",
@@ -205,6 +213,7 @@ _WORKFLOW_FAMILY_OVERRIDES = {
     "ultraqa": "delegate_coding_and_ship",
     "ai-slop-cleaner": "delegate_coding_and_ship",
     "executor-runtime-readiness": "delegate_coding_and_ship",
+    "dynamic-workflow": "delegate_coding_and_ship",
     "request-to-handoff": "delegate_coding_and_ship",
     "executor selection": "delegate_coding_and_ship",
     "coding runtime handoff": "delegate_coding_and_ship",
