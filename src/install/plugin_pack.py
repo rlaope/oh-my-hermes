@@ -12,7 +12,7 @@ from ..version import __version__
 from ..hashutil import sha256_file, sha256_text
 from ..local_store import atomic_write_json, ensure_dir, read_json_object, utc_now
 from ..paths import OmhPaths
-from ..plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
+from ..plugin_bundle.omh.metadata import PROVIDED_TOOLS, REQUIRED_HOOKS
 
 PLUGIN_NAME = "omh"
 PLUGIN_SCHEMA_VERSION = "plugin_distribution/v1"
@@ -285,7 +285,7 @@ def _register_smoke(plugin_dir: Path) -> dict[str, Any]:
             return {"import_smoke": True, "register_smoke": False, "error": "register(ctx) is missing"}
         register(ctx)
         required_tools = set(PROVIDED_TOOLS)
-        required_hooks = set(PROVIDED_HOOKS)
+        required_hooks = set(REQUIRED_HOOKS)
         missing_tools = sorted(required_tools.difference(ctx.tools))
         missing_hooks = sorted(required_hooks.difference(ctx.hooks))
         return {

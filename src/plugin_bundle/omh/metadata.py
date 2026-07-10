@@ -11,7 +11,9 @@ PROVIDED_TOOLS = (
     "omh_role",
     "omh_status",
 )
-PROVIDED_HOOKS = ("on_session_end", "pre_llm_call", "pre_tool_call")
+REQUIRED_HOOKS = ("on_session_end", "pre_llm_call", "pre_tool_call")
+OPTIONAL_HOOKS = ("pre_verify",)
+PROVIDED_HOOKS = REQUIRED_HOOKS + OPTIONAL_HOOKS
 
 TOOL_FILE_STEMS = {
     "omh_capabilities": "capability_tool",

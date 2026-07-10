@@ -25,6 +25,8 @@ Use:
 omh capabilities export --json
 omh capabilities export --section keywords --json
 omh capabilities summary --json
+omh capabilities impact
+omh capabilities impact --json
 omh capabilities list
 omh capabilities inspect ultragoal --json
 omh capabilities inspect handoff-guide --section roles --json
@@ -43,6 +45,9 @@ asking the user to approve a shell command.
 Use `action=summary` when Hermes needs to answer "what can OMH do?" or render a
 small workflow picker/card without asking the user to approve a shell catalog
 command.
+Use `action=impact` to separate locally proven route selection from guidance,
+host load, provider availability, artifact verification, and comparative
+outcome claims. The report intentionally has no aggregate capability score.
 Friendly section aliases such as `roles`, `agents`, `patterns`, `tools`, and
 `evidence` are accepted as input; JSON responses keep the canonical section
 names shown below.

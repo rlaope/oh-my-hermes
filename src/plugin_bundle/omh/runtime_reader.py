@@ -6,13 +6,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .metadata import PROVIDED_HOOKS, PROVIDED_TOOLS, TOOL_FILE_STEMS, TOOLS_REQUIRING_ROLE_CATALOG
+from .metadata import (
+    OPTIONAL_HOOKS,
+    PROVIDED_HOOKS,
+    PROVIDED_TOOLS,
+    REQUIRED_HOOKS,
+    TOOL_FILE_STEMS,
+    TOOLS_REQUIRING_ROLE_CATALOG,
+)
 
 STATUS_SCHEMA_VERSION = "omh_status/v1"
 HUD_SCHEMA_VERSION = "omh_hud/v1"
 HUD_PRESETS = {"minimal", "focused", "full"}
 HUD_REQUIRED_TOOLS = PROVIDED_TOOLS
-HUD_REQUIRED_HOOKS = PROVIDED_HOOKS
+HUD_REQUIRED_HOOKS = REQUIRED_HOOKS
+HUD_OPTIONAL_HOOKS = OPTIONAL_HOOKS
 OBSERVATION_EVENT_SCHEMA_VERSION = "omh_observation_event/v1"
 JOURNAL_EVENT_ALIASES = {
     "coding_handoff_prepared": "prepared_handoff_created",
@@ -347,7 +355,7 @@ def _plugin_summary(hermes_home: Path, state: dict[str, Any]) -> dict[str, Any]:
     capabilities = _plugin_capabilities(plugin_dir, last_distribution if isinstance(last_distribution, dict) else {})
     complete_files = bool(capabilities["files"]["plugin_yaml"] and capabilities["files"]["init_py"])
     required_tools_ready = all(capabilities["tools"].values())
-    required_hooks_ready = all(capabilities["hooks"].values())
+    required_hooks_ready = all(capabilities["hooks"].get(hook, False) for hook in HUD_REQUIRED_HOOKS)
     if installed and complete_files and required_tools_ready and required_hooks_ready:
         status = "ready"
     elif installed and complete_files:
@@ -363,6 +371,7 @@ def _plugin_summary(hermes_home: Path, state: dict[str, Any]) -> dict[str, Any]:
         "runtime_observed": False,
         "required_tools": list(HUD_REQUIRED_TOOLS),
         "required_hooks": list(HUD_REQUIRED_HOOKS),
+        "optional_hooks": list(HUD_OPTIONAL_HOOKS),
         "capabilities": capabilities,
         "stale": status == "stale",
     }
@@ -391,7 +400,7 @@ def _plugin_capabilities(plugin_dir: Path, last_distribution: dict[str, Any]) ->
     return {
         "files": files,
         "tools": _plugin_tool_capabilities(files, tool_sources),
-        "hooks": {hook: hook in hook_sources for hook in HUD_REQUIRED_HOOKS},
+        "hooks": {hook: hook in hook_sources for hook in PROVIDED_HOOKS},
         "advertised_tools": sorted(advertised_tools),
         "advertised_hooks": sorted(advertised_hooks),
     }

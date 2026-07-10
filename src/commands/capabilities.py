@@ -5,6 +5,7 @@ import argparse
 from ..capabilities.registry import capability_summary, filtered_capability_snapshot, inspect_capability, list_capabilities
 from ..capabilities.schema import CAPABILITY_SECTION_CHOICES
 from ..installer import OmhError
+from ..quality.capability_impact import build_capability_impact_report, format_capability_impact_summary
 from .common import _print_json, _wants_json
 
 
@@ -88,6 +89,15 @@ def cmd_capabilities_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_capabilities_impact(args: argparse.Namespace) -> int:
+    payload = build_capability_impact_report()
+    if _wants_json(args):
+        _print_json(payload)
+        return 0
+    print(format_capability_impact_summary(payload))
+    return 0
+
+
 def _add_capabilities_commands(sub) -> None:
     capabilities = sub.add_parser("capabilities", help="Inspect OMH capability manifests for Hermes/plugin/wrapper use.")
     capabilities.add_argument("--json", action="store_true", help="Print the default machine-readable capability summary.")
@@ -107,6 +117,13 @@ def _add_capabilities_commands(sub) -> None:
     summary = capabilities_sub.add_parser("summary", help="Summarize OMH lanes, representative skills, and playbooks.")
     summary.add_argument("--json", action="store_true", help="Print machine-readable capability summary.")
     summary.set_defaults(func=cmd_capabilities_summary)
+
+    impact = capabilities_sub.add_parser(
+        "impact",
+        help="Separate proven routing impact from host, provider, verification, and outcome claims.",
+    )
+    impact.add_argument("--json", action="store_true", help="Print the machine-readable impact report.")
+    impact.set_defaults(func=cmd_capabilities_impact)
 
     inspect = capabilities_sub.add_parser("inspect", help="Inspect one capability by id.")
     inspect.add_argument("identifier")
