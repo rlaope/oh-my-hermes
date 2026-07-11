@@ -25,7 +25,7 @@ provider or an unrun comparative benchmark.
 
 | Dimension | Current status | What the status means |
 | --- | --- | --- |
-| Route selection | `passing_local_contract` | Fixed precision and common-request coverage pass as in-repo contracts; representative cases are implementation smoke checks, not independent outcome evidence. |
+| Route selection | `passing_local_contract` | Fixed precision, common-request coverage, and representative cases all pass as in-repo contracts; representative cases remain implementation smoke checks, not independent outcome evidence. |
 | Guidance depth | `partially_proven` | Skill quality bars and evidence boundaries are inspectable; better task outcomes still need paired evaluation. |
 | Native execution availability | `requires_host_observation` | Tool and hook registration exists, but only host load and invocation records prove availability in a real Hermes session. |
 | Provider execution availability | `requires_provider_observation` | Browser, connector, image, and video providers vary by installation. |

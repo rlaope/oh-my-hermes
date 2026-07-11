@@ -2512,6 +2512,9 @@ _PUBLIC_PLUGIN_CONNECTOR_READINESS_PHRASES = (
     "x twitter automation connector readiness",
 )
 PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES = (
+    "home assistant",
+    "홈 어시스턴트",
+    "홈어시스턴트",
     "hermes-example-plugins",
     "hermes example plugins",
     "remnic",
@@ -2550,24 +2553,33 @@ PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES = (
     "hermes tweet",
 )
 PUBLIC_PLUGIN_CONNECTOR_READINESS_CONTEXT_PHRASES = (
+    "automation",
     "auth",
     "authentication",
     "credential",
     "connector",
     "connector readiness",
+    "control",
     "cost",
+    "device",
+    "integration",
     "provider",
     "provider readiness",
     "price",
     "pricing",
     "readiness",
+    "smart home",
     "trial",
+    "기기",
     "도입",
+    "스마트홈",
+    "연동",
     "인증",
     "리스크",
     "비용",
     "준비",
     "준비도",
+    "제어",
     "커넥터",
 )
 SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES: tuple[str, ...] = (

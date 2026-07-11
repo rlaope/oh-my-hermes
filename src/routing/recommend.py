@@ -1454,6 +1454,9 @@ def _codegraph_refresh_token_context(normalized_query: str, query_tokens: set[st
 
 
 def _external_connector_readiness_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _public_plugin_connector_readiness_match(normalized_query):
+        return True
+
     strong_anchor_tokens = {
         "adopt",
         "adoption",
@@ -1551,7 +1554,6 @@ def _external_connector_readiness_recommendation_applies(normalized_query: str, 
             "oracle genai",
             "miniverse bridge",
             "crustocean platform",
-            "home assistant",
             "smart home connector",
         )
     )

@@ -57,9 +57,13 @@ def build_capability_impact_report(
     representative = _representative_route_result(source=route_source)
     precision_summary = _mapping(precision.get("summary"))
     coverage_summary = _mapping(coverage.get("summary"))
+    representative_total = _int_value(representative.get("total"))
+    representative_passing = representative_total > 0 and (
+        _int_value(representative.get("passed")) == representative_total
+    )
     route_contract_passing = bool(precision_summary.get("all_passing")) and bool(
         coverage_summary.get("target_met")
-    )
+    ) and representative_passing
 
     skills = skill_capabilities()
     hooks = hook_manifest()
@@ -165,7 +169,17 @@ def format_capability_impact_summary(payload: Mapping[str, object]) -> str:
     for dimension in _mapping_rows(payload.get("dimensions")):
         lines.append(f"- {dimension.get('id', 'unknown')}: {dimension.get('status', 'unknown')}")
         lines.append(f"  Boundary: {dimension.get('boundary', '')}")
-    lines.extend(["", str(payload.get("score_policy", "")), "Use --json for the full report."])
+    lines.extend(
+        [
+            "",
+            (
+                "Observation note: Host and provider execution remain unproven until observed; "
+                "artifact verification needs a recorded result, and comparative outcomes require external evaluation."
+            ),
+            str(payload.get("score_policy", "")),
+            "Use --json for the full report.",
+        ]
+    )
     return "\n".join(lines)
 
 

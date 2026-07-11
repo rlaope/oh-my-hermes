@@ -15,6 +15,7 @@ from omh.plugin_bundle.omh import register
 from omh.capabilities.hooks import hook_manifest
 from omh.plugin_bundle.omh.hooks import verify_hooks
 from omh.plugin_bundle.omh.tools import capability_tool
+from omh.quality import capability_impact
 from omh.routing.chat import route_chat_message
 from test_plugin_distribution import FakeHermesContext
 
@@ -65,6 +66,30 @@ class RepresentativeRoutingTests(unittest.TestCase):
         route = route_chat_message("Please remove the background worker from this service")
 
         self.assertNotEqual(route["selected_skill"], "img-summary")
+
+    def test_home_assistant_common_noun_does_not_route_connector_readiness(self) -> None:
+        for message in ("Find a home assistant", "Hire a home assistant for weekly cleaning"):
+            with self.subTest(message=message):
+                route = route_chat_message(message)
+
+                self.assertNotEqual(route["selected_skill"], "external-connector-readiness")
+
+    def test_home_assistant_platform_requests_route_connector_readiness(self) -> None:
+        messages = (
+            "Home Assistant connector readiness for device control",
+            "Home Assistant smart home automation connector",
+            "홈 어시스턴트 연동 준비도 확인해줘",
+            "홈 어시스턴트 기기 제어 커넥터 준비도",
+            "홈어시스턴트 연동 준비도 확인해줘",
+            "홈어시스턴트 기기 제어 커넥터 준비도",
+            "홈어시스턴트 스마트홈 커넥터",
+        )
+
+        for message in messages:
+            with self.subTest(message=message):
+                route = route_chat_message(message)
+
+                self.assertEqual(route["selected_skill"], "external-connector-readiness")
 
 
 class PreVerifyHookTests(unittest.TestCase):
@@ -204,6 +229,32 @@ class CapabilityImpactReportTests(unittest.TestCase):
         representative = payload["route_selection"]["representative"]
         self.assertEqual(representative["passed"], representative["total"])
         self.assertGreaterEqual(representative["total"], 20)
+
+    def test_representative_route_failure_downgrades_local_contract_verdict(self) -> None:
+        failed_representative = {
+            "passed": 21,
+            "total": 22,
+            "failed": [{"id": "home-assistant", "expected": "external-connector-readiness", "observed": ""}],
+            "evidence_class": "implementation_smoke",
+        }
+
+        with patch.object(
+            capability_impact,
+            "_representative_route_result",
+            return_value=failed_representative,
+        ):
+            payload = capability_impact.build_capability_impact_report()
+
+        dimensions = {item["id"]: item for item in payload["dimensions"]}
+        self.assertEqual(payload["verdict"], "needs_attention")
+        self.assertEqual(dimensions["route_selection"]["status"], "failing_local_contract")
+
+    def test_human_report_names_unproven_observation_axes(self) -> None:
+        status, stdout, stderr = run_cli(["capabilities", "impact"], output_json=False)
+
+        self.assertEqual(status, 0, stderr)
+        self.assertIn("Host and provider execution remain unproven", stdout)
+        self.assertIn("comparative outcomes require external evaluation", stdout)
 
     def test_plugin_package_and_fallback_reports_keep_the_same_contract_shape(self) -> None:
         package_payload = capability_tool._handle_capability_action("impact", None, "")
