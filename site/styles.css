@@ -1077,16 +1077,7 @@ a.reference-link:hover,
 .reference-link img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-}
-
-.reference-grid--media .reference-link {
-  padding-bottom: 24px;
-}
-
-.reference-grid--utility {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: 16px;
+  object-fit: cover;
 }
 
 .install-section {

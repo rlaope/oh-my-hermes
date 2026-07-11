@@ -36,14 +36,6 @@
   -> 仅在实际观测后记录 runtime、provider、review、CI、merge 证据
 ```
 
-<p align="center">
-  <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
-</p>
-
-<p align="center">
-  <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="720">
-</p>
-
 [Website](https://rlaope.github.io/oh-my-hermes/) ·
 [Documentation](docs/README.md) ·
 [Installation](docs/INSTALLATION.md) ·
@@ -93,14 +85,6 @@ OMH 将 **82 个**可安装的 workflow skill 组织为6个容易理解的能力
 | **编码委派与交付** | 为 Codex、Claude Code、Hermes runtime 或选定 executor 准备明确的 handoff。 |
 | **运维与观测** | 检查设置、服务质量、发布、事故、automation、session 和 workflow learning。 |
 | **知识保留** | 构建经过审查的项目记忆，并通过 provider-neutral 边界连接外部知识系统。 |
-
-<p align="center">
-  <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="720">
-</p>
-
-<p align="center">
-  <img src="assets/omh-skill-magic-promo.png" alt="Friren Agent controlling OMH workflow skills with magic" width="720">
-</p>
 
 完整 catalog、trigger、harness 和证据规则位于
 [Workflow Reference](docs/WORKFLOWS.md)。

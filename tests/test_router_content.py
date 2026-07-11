@@ -2328,9 +2328,7 @@ class RouterContentTests(unittest.TestCase):
             Path("site/docs/executor-handoff/index.html"),
             Path("site/styles.css"),
             Path("site/assets/omh-readme-hero.png"),
-            Path("site/assets/omh-loop-engineering.png"),
             Path("site/assets/omh-img-summary-card.png"),
-            Path("site/assets/omh-flagship-workflows-poster.png"),
         ]
 
         for path in required_paths:
@@ -2398,7 +2396,7 @@ class RouterContentTests(unittest.TestCase):
                 "omh-core-workflows.png",
                 "omh-skill-magic-promo.png",
             ):
-                self.assertIn(image, localized_readme)
+                self.assertNotIn(image, localized_readme)
         self.assertIn("Most people only need three direct OMH commands", readme)
         self.assertIn("control plane for Hermes Agent", readme)
         self.assertIn("## Command Audience", agent_contract)
@@ -2424,9 +2422,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("prepared_not_observed", readme)
         self.assertIn("assets/hermes-agent-hero.png", readme)
         self.assertIn("assets/friren-agent-omh-callout.png", readme)
-        self.assertIn("assets/artengine-friren-profile-card.png", readme)
-        self.assertIn("assets/omh-core-workflows.png", readme)
-        self.assertIn("assets/omh-skill-magic-promo.png", readme)
+        self.assertNotIn("assets/artengine-friren-profile-card.png", readme)
+        self.assertNotIn("assets/omh-core-workflows.png", readme)
+        self.assertNotIn("assets/omh-skill-magic-promo.png", readme)
         self.assertIn("img.shields.io/badge/github", readme)
         self.assertNotIn("### Img Summary Skill", readme)
         self.assertNotIn("assets/omh-img-summary-card.png", readme)
@@ -2622,7 +2620,13 @@ class RouterContentTests(unittest.TestCase):
         hero = site.split('<section class="home-hero"', 1)[1].split("</section>", 1)[0]
         self.assertIn('aria-label="Top install commands"', hero)
         self.assertIn('src="assets/omh-readme-hero.png"', hero)
+        self.assertIn(
+            "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh\n"
+            "omh setup",
+            hero,
+        )
         self.assertLess(hero.index("Top install commands"), hero.index("Installation options"))
+        self.assertEqual(site.count("<img"), 1)
         self.assertIn('href="docs/">Read the docs</a>', site)
         self.assertIn("A stronger operating layer for the Hermes you already use.", site)
         self.assertIn('class="product-frame"', site)
@@ -2654,9 +2658,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("Choose a path by job.", site)
         self.assertIn("See where Hermes ends and OMH begins.", site)
         self.assertIn("Loop</span>", site)
-        self.assertIn('src="assets/omh-loop-engineering.png"', site)
-        self.assertIn('src="assets/omh-img-summary-card.png"', site)
-        self.assertIn('src="assets/omh-flagship-workflows-poster.png"', site)
+        self.assertNotIn('src="assets/omh-loop-engineering.png"', site)
+        self.assertNotIn('src="assets/omh-img-summary-card.png"', site)
+        self.assertNotIn('src="assets/omh-flagship-workflows-poster.png"', site)
         self.assertIn('href="docs/hermes-agent-architecture/"', site)
         self.assertIn('href="docs/loop/"', site)
         self.assertIn("No aggregate capability score.", site)
