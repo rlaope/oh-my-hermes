@@ -19,221 +19,125 @@
 </p>
 
 <p align="center">
-  <strong>一度入れたら、Hermes の流れはそのまま。OMH が次の一手を見えやすく、安全にします。</strong>
+  <strong>一度インストールするだけ。Hermes はそのまま、より強い運用レイヤーを追加します。</strong>
   <br>
-  <em>チャット起点のスキル、ワークフロー契約、ステータスカード、handoff を既存の Hermes 環境に自然に足します。</em>
+  <em>計画、調査、制作、コーディング handoff、運用、プロジェクト記憶を明確な証拠境界とともに提供します。</em>
 </p>
 
-**oh-my-hermes** は Hermes を置き換えるためのものではありません。
-[Hermes](https://github.com/NousResearch/hermes-agent) で普段どおり作業しながら、
-OMH がスキル、契約、ステータスカード、handoff を加え、次に何をすべきかを
-分かりやすくします。日本語、中国語、スペイン語、フランス語、ドイツ語、
-韓国語、ヒンディー語、英語でよく使われる運用リクエストは、ローカルで決定的に
-ルーティングされます。翻訳 API を呼ばずに、適切なワークフローと最初の
-チャットカードまで組み立てられます。
+**oh-my-hermes**（OMH）は、
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) への通常の依頼を、
+適切な機能、有用な次の行動、そして実際に起きたこと・まだ起きていないことの
+正直な状態へ変換します。Hermes を置き換えたり、コーディング executor を
+隠したりせず、既存の Hermes ワークフローを強化します。
 
 ```text
-Hermes で自然文のリクエストを送る
-  -> OMH が最小限で役に立つワークフロー経路をすすめる
-  -> Hermes が確認、調査、計画、報告に必要な次の証拠境界を整理する
-  -> コード中心の作業は、承認後に選ばれた runtime へ明示的に handoff する
+通常の依頼
+  -> 6つの機能ファミリーから選択
+  -> 計画、ソース brief、成果物 contract、コーディング handoff を準備
+  -> runtime、provider、review、CI、merge の証拠は観測時のみ記録
 ```
 
-> [!NOTE]
-> **Friren Agent は Art&Engine の中で OMH を改良し続けています。**
-> OMH の背景にあるスタジオの文脈は
-> [Team Art & Engineering](https://rlaope.github.io/artengine-lab/) で見られます。
->
-> <p align="center">
->   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="920">
-> </p>
->
-> <p align="center">
->   <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="920">
-> </p>
-
-<br>
+[Website](https://rlaope.github.io/oh-my-hermes/) ·
+[Documentation](docs/README.md) ·
+[Installation](docs/INSTALLATION.md) ·
+[Capabilities](docs/CAPABILITIES.md) ·
+[Capability Impact](docs/CAPABILITY_IMPACT.md)
 
 ## クイックスタート
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
-
 omh doctor
 ```
 
-Hermes skill tap のパス:
+Hermes skill tap:
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes
 hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
+通常の利用者が直接使う OMH コマンドは、基本的に3つだけです。
+
+- `omh setup`: OMH を接続または修復します。
+- `omh update`: OMH と管理対象 skill を更新します。
+- `omh doctor`: 状態を確認し、次の修復手順を示します。
+
+それ以外の作業は Hermes に自然言語で依頼します。`omh coding`、`omh
+runtime`、`omh chat`、`omh memory` などは、主に Hermes Agent、wrapper、
+コーディングエージェント、maintainer が使う control plane であり、通常の
+利用者が覚える必要のある操作ではありません。
+
+その後は Hermes にいつも通り依頼します。
+
 ```text
 Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
-[Website](https://rlaope.github.io/oh-my-hermes/) -
-[Documentation](docs/README.md) -
-[Installation](docs/INSTALLATION.md) -
-[Capabilities](docs/CAPABILITIES.md) -
-[Agent Install](INSTALL_FOR_AGENTS.md) -
-[Roles](docs/ROLES.md) -
-[Application Cases](docs/APPLICATION_CASES.md) -
-[GitHub Pages site](site/index.html)
+## OMH が追加するもの
 
-> [!NOTE]
-> **GitHub Follow**
-> OMH の更新や Hermes-native なワークフロー関連プロジェクトは
-> GitHub の [@rlaope](https://github.com/rlaope) で確認できます。
-> 背景にあるスタジオについては
-> [Team Art & Engineering](https://rlaope.github.io/artengine-lab/) をご覧ください。
+OMH は **82 個**のインストール可能な workflow skill を、理解しやすい6つの
+機能ファミリーとして提供します。
 
-<br>
-
-## 主なワークフロー
-
-<p align="center">
-  <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="920">
-</p>
-
-<p align="center">
-  <img src="assets/omh-skill-magic-promo.png" alt="Friren Agent controlling OMH workflow skills with magic" width="920">
-</p>
-
----
-
-- **Deep Interview** (`deep-interview`) - 計画に入る前に、足りない判断を
-  ひとつずつ明確にします。依頼がまだ曖昧なときに使います。
-
-- **Ralplan** (`ralplan`) - repo の事実、根拠、リスク、受け入れ条件、
-  検証コマンドを、レビューできる計画にまとめます。
-
-- **Ultragoal** (`ultragoal`) - 大きな目標を一回の回答で流さず、
-  チェックポイントと完了ゲートに結びつけて追跡します。
-
-- **Loop** (`loop`) - 調査、計画、handoff、フィードバックを繰り返し、
-  実装の方向を見つけるときに使います。
-
-- **Web Research** (`web-research`) - 市場、ドキュメント、競合、
-  実装方法、best practice を、現在の出典に基づいて調べます。
-
-- **Idea To Deploy** (`idea-to-deploy`) - Codex、Claude Code、Hermes、
-  そのほかの runtime に渡すコード作業を、範囲と証拠境界まで整理します。
-
-- **Workflow Learning** (`workflow-learning`) - 取りこぼしたルートや弱い
-  ワークフローを、trace、eval、review queue、regression case、
-  patch proposal に変えます。
-
-運用、調査、資料作成、レビュー、リリース、ワークフロー支援のための
-組み込みスキルが **47 個以上** 追加されています。全体像は
-[Workflow Reference](docs/WORKFLOWS.md) と [Capabilities](docs/CAPABILITIES.md)
-にあります。
-
-<br>
-
-## できること
-
-**すぐ使えるワークフロースキル**
-
-- interview、planning、durable goal、loop、research、coding handoff prep、
-  review、release、materials、operations 向けの Hermes スキルを導入できます。
-- 各スキルには trigger guidance、completion gate、recovery note、
-  evidence boundary が入っています。Hermes がキーワードだけで推測せず、
-  次に使うべき経路を選べるようにするためです。
-
-**プロファイルと役割の表面**
-
-- Operator、researcher、planner、handoff、review、status の役割が、
-  次のアクションの担当を安定して説明します。
-- Profile pack は chat、wrapper、coding-agent のふるまいをそろえます。
-  ただし、特定の executor を隠れた既定値にはしません。
-
-**Subagent と executor handoff**
-
-- コード中心の作業は、Codex、Claude Code、Hermes runtime、または選ばれた
-  executor へ渡せる形で準備できます。
-- Worktree と session helper により、関係ない repo 状態を混ぜずに
-  subagent 作業を開き、接続し、記録し、レビューできます。
-
-**証拠を分けて扱う運用**
-
-- Status card は plan、handoff、dispatch、result、verification、review、
-  CI、merge-readiness の証拠を分けます。
-- Runtime と plugin の観測値は標準で metadata-only です。raw prompt、
-  platform event、log を漏らさず、有用な報告を作れます。
-
-**学習ループ**
-
-- 取りこぼしたルート、弱いワークフロー、品質 gap、regression case は
-  workflow-learning trace、review queue、patch proposal につなげられます。
-- OMH は、準備済み handoff がもう実行済みであるかのようには扱いません。
-  観測された結果をもとに改善します。
-
-<br>
-
-## リクエストの流れ
-
-OMH は流れをシンプルに、見える形に保ちます。Hermes はひとつのチームモデルに
-固定されず、依頼に合う最小の役割経路を選びます。
-
-```text
-plain request
-  -> workflow lane を選ぶ
-  -> plan、source brief、handoff を準備する
-  -> evidence があるときだけ execution / review / CI を観測する
-  -> Hermes chat に次のアクションを返す
-```
-
-| リクエストの形 | よくある流れ |
+| 機能ファミリー | Hermes ができること |
 | --- | --- |
-| 短い回答または setup repair | Hermes が説明し、OMH が local state を確認して次のコマンドをすすめます。 |
-| Research または product signal | 実装前に source finder / research / brief workflow を通します。 |
-| Coding task | Codex、Claude Code、Hermes、または選ばれた runtime への scoped handoff を準備します。 |
-| Release または review question | 準備された主張と、実際の test、review、CI、merge evidence を分けて扱います。 |
+| **計画と意思決定** | 曖昧な目標を明確にし、レビュー済み計画と durable goal loop を準備します。 |
+| **学習と収集** | 情報源の探索、論文説明、データ確認、根拠付き brief を準備します。 |
+| **資料とビジュアル制作** | Web、画像、文書、スライド、PDF、ポスターを形式別の品質 gate とともに制作します。 |
+| **コーディング委任と出荷** | Codex、Claude Code、Hermes runtime、または選択した executor 向けの handoff を準備します。 |
+| **運用と観測** | セットアップ、サービス品質、リリース、障害、automation、session、workflow learning を確認します。 |
+| **知識の保持** | レビュー済みプロジェクト記憶を構築し、外部知識システムを provider-neutral な境界で接続します。 |
 
-<br>
+完全な catalog、trigger、harness、証拠ルールは
+[Workflow Reference](docs/WORKFLOWS.md) にあります。
+
+## 実務向けの設計
+
+**コマンド一覧ではなくルーター。** 英語、韓国語、日本語、中国語、
+スペイン語、フランス語、ドイツ語、ヒンディー語の依頼を翻訳 API なしで
+ローカル分類し、推奨ファミリー、skill、owner、次の行動、未観測の項目を返します。
+
+**より良いコーディング handoff。** リポジトリ制約、合意済み scope、
+worktree ガイド、ローカル skill、受け入れ条件、review、verification gate を
+選択した executor に渡します。Codex、Claude Code、Hermes、generic executor
+のどれも暗黙のデフォルトにはしません。
+
+**品質を理解する制作と provider-neutral な運用。** Web、accessibility、
+画像、report、slide、document は専用の制作・QA ガイダンスを使います。
+metric、wiki、browser、image、video、connector は明示的な外部 provider
+contract の背後に置き、接続・呼び出しをしていない provider を使ったとは主張しません。
+
+## 主張より証拠
+
+| 状態 | 意味 |
+| --- | --- |
+| Prepared | route、plan、prompt、成果物 contract、handoff の準備ができています。 |
+| Observed | wrapper または runtime が行動や結果の発生を記録しました。 |
+| Verified | 必要な test、review、実画面確認、または別の gate が通過しました。 |
+
+`prepared_not_observed` は実行、provider access、成果物生成、review、CI、
+deployment、merge readiness、merge ではありません。
 
 ## ドキュメント
 
-1. ドキュメント全体の地図: [Documentation](docs/README.md)
-2. インストール、更新、再適用、削除、installer flag: [Installation](docs/INSTALLATION.md)
-3. AI agent に貼り付けやすいインストール手順: [Agent Install](INSTALL_FOR_AGENTS.md)
-4. プロダクトの方向性と境界: [Direction](docs/DIRECTION.md)
-5. アーキテクチャと module ownership: [Architecture](docs/ARCHITECTURE.md)
-6. Hermes/plugin/wrapper 向け capability manifest: [Capabilities](docs/CAPABILITIES.md)
-7. routing、hook、実行可能性、結果品質の証拠を分離: [Capability Impact](docs/CAPABILITY_IMPACT.md)
-8. orchestration pattern contract: [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md)
-9. common oh-my runtime parity と gap: [Parity Matrix](docs/PARITY.md)
-10. 状況別 playbook: [Playbooks](docs/PLAYBOOKS.md)
-11. role surface と profile pack: [Roles](docs/ROLES.md)
-12. memory/context review と handoff pack: [Memory Context Review](docs/MEMORY_CONTEXT.md)
-13. Discord-style と plugin-native wrapper の例: [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md)
-14. harness quality contract: [Harness Quality Contract](docs/HARNESS_QUALITY.md)
-15. 代表的な workflow: [Application Cases](docs/APPLICATION_CASES.md)
-16. public website source: [GitHub Pages site](site/index.html)
-
-<br>
+- [ドキュメントマップ](docs/README.md)
+- [インストールと更新](docs/INSTALLATION.md)
+- [製品方針と境界](docs/DIRECTION.md)
+- [アーキテクチャ](docs/ARCHITECTURE.md)
+- [機能 manifest](docs/CAPABILITIES.md)
+- [Workflow reference](docs/WORKFLOWS.md)
+- [リリースと開発](docs/RELEASE.md)
 
 ## 開発
-
-開発、release smoke、product readiness、evidence bundle の詳細は
-[Release](docs/RELEASE.md) にあります。source checkout で軽く確認するなら、
-次を実行します。
 
 ```sh
 PYTHONPATH=tests uv run python -m unittest discover -s tests -v
 uv run python -m compileall -q src tests
 uv run python -m omh.cli docs workflows --check
-uv run --no-editable omh recommend "risky refactor" --limit 1 --json
+git diff --check
 ```
 
-最後のコマンドは意図的に `uv run --no-editable` を使います。source checkout が
-パッケージ済みの `omh` console script を import して実行できることを確かめる
-ためです。通常の利用では、curl installer が表示したインストール済みの `omh`
-コマンドを使ってください。
-
-OMH 1.0.2 は quality gate を通過した stable baseline です。より豊かな
-profile activation probe と artifact-backed wrapper example は roadmap と
-release docs で追跡しています。
+OMH は [Team Art & Engineering](https://rlaope.github.io/artengine-lab/) の
+オープンプロジェクトとして開発されています。更新情報は
+[@rlaope](https://github.com/rlaope) で確認できます。

@@ -5,6 +5,10 @@ feel more capable without claiming hidden Hermes runtime behavior. These are
 the deterministic skill, playbook, harness, and evidence contracts that
 wrappers and operators can inspect through `omh cases`.
 
+Users enter through the natural-language Hermes requests shown in each case.
+Any `omh chat`, `omh coding`, `omh runtime`, or `omh demo` examples are wrapper,
+agent, or maintainer inspection paths, not required user commands.
+
 ## G1-G10 Hermes Use-Case Map
 
 These are implemented OMH feature surfaces, not just example situations. Each

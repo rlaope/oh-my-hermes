@@ -19,47 +19,39 @@
 </p>
 
 <p align="center">
-  <strong>Install once. Keep your Hermes workflow. Let OMH make the next step safe.</strong>
+  <strong>Install once. Keep Hermes. Add a stronger operating layer.</strong>
   <br>
-  <em>Chat-first skills, workflow contracts, status cards, and handoffs that fit existing Hermes setups without breaking them.</em>
+  <em>Planning, research, creation, coding handoffs, operations, and project memory with explicit evidence boundaries.</em>
 </p>
 
-**oh-my-hermes** is built for that reality: install it, keep working in
-[Hermes](https://github.com/NousResearch/hermes-agent), and let the added
-skills, contracts, and status cards make the next action obvious without
-replacing your existing setup.
-Common Japanese, Chinese, Spanish, French, German, Korean, Hindi, and English operator
-requests stay local and deterministic: OMH can route them and frame the first
-chat card without calling a translation API.
+**oh-my-hermes** (OMH) turns a normal request in
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) into a clear
+capability, a useful next step, and an honest statement of what has or has not
+happened. It strengthens the Hermes workflow you already use instead of
+replacing Hermes or hiding a coding executor behind it.
 
 ```text
-user says a natural-language request in Hermes
-  -> OMH recommends the smallest useful workflow lane
-  -> Hermes clarifies, researches, plans, or reports the next evidence boundary
-  -> coding-heavy work becomes an explicit handoff to the selected runtime only when accepted
+plain request
+  -> choose one of six capability families
+  -> prepare a plan, source brief, artifact contract, or coding handoff
+  -> record runtime, provider, review, CI, and merge evidence only when observed
 ```
 
-> [!NOTE]
-> **Friren Agent is hard at work improving OMH inside Art&Engine.**
-> Explore [Team Art & Engineering](https://rlaope.github.io/artengine-lab/)
-> for the studio context behind OMH.
->
-> <p align="center">
->   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="920">
-> </p>
->
-> <p align="center">
->   <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="920">
-> </p>
-
-<br>
+[Website](https://rlaope.github.io/oh-my-hermes/) ·
+[Documentation](docs/README.md) ·
+[Installation](docs/INSTALLATION.md) ·
+[Capabilities](docs/CAPABILITIES.md) ·
+[Capability Impact](docs/CAPABILITY_IMPACT.md) ·
+[Agent Install](INSTALL_FOR_AGENTS.md) ·
+[GitHub Pages site](site/index.html)
 
 ## Quick Start
+
+Install the local command and managed skills:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
-
 omh doctor
 ```
 
@@ -70,201 +62,105 @@ hermes skills tap add rlaope/oh-my-hermes
 hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
+Most people only need three direct OMH commands:
+
+- `omh setup` to connect or repair OMH.
+- `omh update` to refresh OMH and its managed skills.
+- `omh doctor` to check health and get the next repair action.
+
+Everything else begins as a natural-language request to Hermes. Commands such
+as `omh coding`, `omh runtime`, `omh chat`, and `omh memory` are primarily a
+control plane for Hermes Agent, wrappers, coding agents, and maintainers, not a
+workflow that normal users need to memorize.
+
+Then ask Hermes normally:
+
 ```text
 Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 ```
 
-First-value packs after setup:
+## What OMH Adds
 
-- **Frontend Rescue** - make a web UI feel natural, fix fragile responsive
-  layout, and require visual QA before claiming the frontend is ready.
-- **Repo First-Win** - map a new repository and identify the safest valuable
-  PR-sized improvement.
-- **Failure-to-Fix** - classify failing CI, deploy, Pages, DCO, build, or test
-  signals and prepare the smallest verified fix path.
-- **Visual Deliverable** - turn a PR, release, report, deck, or PDF into a
-  polished shareable artifact plan.
-- **Toolbelt Readiness** - check whether local tools, MCP hosts, credentials,
-  and executor surfaces are ready before a workflow depends on them.
-- **CTO/Product Loop** - review roadmap, architecture, delivery, QA, security,
-  and ops tradeoffs before launch.
+OMH packages **82 installable workflow skills** behind six human-readable
+capability families. The family is the front door; exact skill names remain
+available when a wrapper or operator needs precise control.
 
-These packs are prepared routing and handoff guidance, not observed execution
-evidence. Browser QA, CI, deployment, publication, and merge proof still have
-to be recorded by the responsible runtime.
-
-[Website](https://rlaope.github.io/oh-my-hermes/) -
-[Documentation](docs/README.md) -
-[Installation](docs/INSTALLATION.md) -
-[Capabilities](docs/CAPABILITIES.md) -
-[Capability Impact](docs/CAPABILITY_IMPACT.md) -
-[Agent Install](INSTALL_FOR_AGENTS.md) -
-[Roles](docs/ROLES.md) -
-[Application Cases](docs/APPLICATION_CASES.md) -
-[GitHub Pages site](site/index.html)
-
-> [!NOTE]
-> **GitHub Follow**
-> Follow [@rlaope](https://github.com/rlaope) on GitHub for OMH updates and
-> related Hermes-native workflow projects.
-> Explore [Team Art & Engineering](https://rlaope.github.io/artengine-lab/)
-> for the studio behind OMH.
-
-<br>
-
-## Core Workflows
-
-<p align="center">
-  <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="920">
-</p>
-
-<p align="center">
-  <img src="assets/omh-skill-magic-promo.png" alt="Friren Agent controlling OMH workflow skills with magic" width="920">
-</p>
-
----
-
-<!-- Surface family anchors: Plan and decide; Learn and gather; Create materials and visuals; Delegate coding and ship; Operate and observe. -->
-
-- **Deep Interview** (`deep-interview`) - clarify the one missing decision
-  before planning. Use when the request is still fuzzy.
-
-- **Ralplan** (`ralplan`) - turn repo facts, sources, risks, acceptance
-  criteria, and verification commands into a reviewed plan.
-
-- **Ultragoal** (`ultragoal`) - keep an ambitious goal tied to checkpoints and
-  completion gates instead of a one-shot answer.
-
-- **Loop** (`loop`) - iterate through research, plan, handoff,
-  feedback, and repeat when the right implementation must be discovered.
-
-- **Web Research** (`web-research`) - gather current, source-backed evidence
-  for market, docs, competitor, implementation, or best-practice questions.
-
-- **Idea To Deploy** (`idea-to-deploy`) - prepare scoped coding work for Codex, Claude Code, Hermes, or another runtime without claiming execution.
-
-- **Workflow Learning** (`workflow-learning`) - turn missed routes or weak
-  workflows into traces, evals, review queues, regression cases, and patch
-  proposals.
-
-**+47** more built-in skills are included for operations, research, materials,
-review, release, and workflow-support lanes.
-
-The full skill catalog is larger. These 7 are the representative modes to
-understand first; the rest live in [Workflow Reference](docs/WORKFLOWS.md) and
-[Capabilities](docs/CAPABILITIES.md).
-
-<br>
-
-## What You Get
-
-**Ready-to-use workflow skills**
-
-- Installable Hermes skills for interview, planning, durable goals, loops,
-  research, coding handoff prep, review, release, materials, and operations.
-- Each skill carries trigger guidance, completion gates, recovery notes, and
-  evidence boundaries so Hermes can pick the next useful step instead of
-  guessing from keywords.
-
-**Profiles and role surfaces**
-
-- Operator, researcher, planner, handoff, review, and status roles give Hermes a
-  stable way to explain who owns the next action.
-- Profile packs keep chat, wrapper, and coding-agent behavior aligned without
-  making one executor the hidden default.
-
-**Subagent and executor handoffs**
-
-- Coding-heavy work can be prepared for Codex, Claude Code, Hermes runtime, or
-  another selected executor while preserving the prepared-vs-observed boundary.
-- `omh coding dynamic-workflow` can prepare a dynamic typed-target workflow and
-  SVG chart across model, runtime, wrapper, tool, and agent surfaces. The chart
-  names each planned agent, target type, model, cost tier, and evidence gate
-  before any target is selected or runtime is dispatched.
-- When Hermes itself owns the coding work, the Hermes coding harness shows the
-  builder, verifier, reviewer, docs, and PR lanes without claiming unobserved
-  execution.
-- Worktree and session helpers make it easier to open, attach, record, and
-  review subagent work without mixing unrelated repo state.
-
-**Evidence-aware operation**
-
-- Status cards separate plan, handoff, dispatch, result, verification, review,
-  CI, and merge-readiness evidence.
-- Runtime and plugin observations stay metadata-only by default, so reports can
-  be useful without leaking raw prompts, platform events, or logs.
-
-**Learning loop**
-
-- Missed routes, weak workflows, quality gaps, and regression cases can become
-  workflow-learning traces, review queues, and patch proposals.
-- **Instinct Ledger** (`instinct-ledger`) can turn repeated project lessons into
-  scoped instinct candidates, confidence scores, and project/global promotion
-  reviews.
-- The product improves through observed outcomes, not by pretending every
-  prepared handoff already executed.
-
-<br>
-
-## Request Flow
-
-OMH keeps the flow simple and visible. Hermes chooses the smallest role path that
-fits the request instead of locking setup to one team model.
-
-```text
-plain request
-  -> choose workflow lane
-  -> prepare plan, source brief, or handoff
-  -> observe execution / review / CI only when evidence exists
-  -> report next action in Hermes chat
-```
-
-| Request shape | Typical flow |
+| Capability family | What it helps Hermes do |
 | --- | --- |
-| Quick answer or setup repair | Hermes explains, OMH checks local state, then suggests the next command. |
-| Research or product signal | Source finder / research / brief workflow before implementation. |
-| Coding task | Scoped handoff to Codex, Claude Code, Hermes, or another chosen runtime. |
-| Release or review question | Separate prepared claims from observed tests, review, CI, and merge evidence. |
+| **Plan and decide** | Clarify ambiguous goals, prepare reviewed plans, and run durable goal loops. |
+| **Learn and gather** | Find sources, explain papers, inspect data, and prepare source-backed briefs. |
+| **Create materials and visuals** | Prepare websites, visual QA, images, decks, reports, documents, and deliverable packages with format-specific quality gates. |
+| **Delegate coding and ship** | Prepare scoped, skill-aware coding handoffs for Codex, Claude Code, Hermes runtime, or another selected executor. |
+| **Operate and observe** | Review setup, service quality, releases, incidents, automation, tools, sessions, and workflow learning. |
+| **Retain knowledge** | Build reviewed project memory and connect external knowledge systems through provider-neutral boundaries. |
 
-<br>
+The full generated catalog, triggers, harnesses, and evidence rules live in
+[Workflow Reference](docs/WORKFLOWS.md).
+
+## Built For Real Work
+
+**A stronger router, not a command dump.** English, Korean, Japanese, Chinese,
+Spanish, French, German, and Hindi operator requests can be classified locally
+without a translation API. OMH returns the recommended family, skill, owner,
+next action, and what is still not evidence.
+
+**Better coding handoffs.** OMH can include repository constraints, accepted
+scope, worktree guidance, locally available skills, acceptance criteria,
+review expectations, and verification gates. Codex, Claude Code, Hermes, and
+generic executors remain explicit owners rather than hidden defaults.
+
+**Quality-aware creation.** Frontend, accessibility, image, report, slide,
+document, spreadsheet, PDF, poster, and shareable-package requests use
+specialized production and QA guidance. A prepared brief is never presented as
+a generated or visually verified artifact.
+
+**Provider-neutral operations and memory.** Metric, wiki, browser, image,
+video, and connector systems sit behind explicit external-provider contracts.
+OMH can validate and analyze supplied data without pretending that a provider
+was connected or called.
+
+## Evidence Before Claims
+
+OMH separates useful preparation from observed results:
+
+| State | Meaning |
+| --- | --- |
+| Prepared | A route, plan, prompt, artifact contract, or handoff is ready. |
+| Observed | A wrapper or runtime recorded that an action or result occurred. |
+| Verified | A matching test, review, served-surface check, or other required gate passed. |
+
+`prepared_not_observed` is not execution, provider access, artifact generation,
+review, CI, deployment, merge readiness, or a merge. Capability impact is
+reported across separate dimensions rather than collapsed into one marketing
+score. See [Capability Impact](docs/CAPABILITY_IMPACT.md).
 
 ## Documentation
 
-1. Full docs map: [Documentation](docs/README.md)
-2. Install, update, reapply, uninstall, and installer flags: [Installation](docs/INSTALLATION.md)
-3. AI-agent pasteable install protocol: [Agent Install](INSTALL_FOR_AGENTS.md)
-4. Product direction and boundaries: [Direction](docs/DIRECTION.md)
-5. Architecture and module ownership: [Architecture](docs/ARCHITECTURE.md)
-6. Capability manifests for Hermes/plugin/wrapper use: [Capabilities](docs/CAPABILITIES.md)
-7. Orchestration pattern contracts: [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md)
-8. Common oh-my runtime parity and gaps: [Parity Matrix](docs/PARITY.md)
-9. Situation playbooks: [Playbooks](docs/PLAYBOOKS.md)
-10. Role surfaces and profile packs: [Roles](docs/ROLES.md)
-11. Memory/context review and handoff packs: [Memory Context Review](docs/MEMORY_CONTEXT.md)
-12. Discord-style and plugin-native wrapper examples: [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md)
-13. Harness quality contracts: [Harness Quality Contract](docs/HARNESS_QUALITY.md)
-14. Representative workflows: [Application Cases](docs/APPLICATION_CASES.md)
-15. Public website source: [GitHub Pages site](site/index.html)
-
-<br>
+- [Documentation map](docs/README.md)
+- [Installation and updates](docs/INSTALLATION.md)
+- [Product direction and boundaries](docs/DIRECTION.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Capability manifests](docs/CAPABILITIES.md)
+- [Workflow reference](docs/WORKFLOWS.md)
+- [Roles](docs/ROLES.md)
+- [Application cases](docs/APPLICATION_CASES.md)
+- [Release and development](docs/RELEASE.md)
 
 ## Development
 
-Development, release smoke, product readiness, and evidence-bundle details live
-in [Release](docs/RELEASE.md). For a quick local sanity check from a source
-checkout:
+For a source checkout:
 
 ```sh
 PYTHONPATH=tests uv run python -m unittest discover -s tests -v
 uv run python -m compileall -q src tests
 uv run python -m omh.cli docs workflows --check
-uv run --no-editable omh recommend "risky refactor" --limit 1 --json
+git diff --check
 ```
 
-The final command intentionally uses `uv run --no-editable` so the source
-checkout proves the packaged `omh` console script can import and run. Normal
-users should use the installed `omh` command printed by the curl installer.
+OMH is developed in the open as part of
+[Team Art & Engineering](https://rlaope.github.io/artengine-lab/). Follow
+[@rlaope](https://github.com/rlaope) for project updates.
 
-OMH 1.0.2 is a quality-gated stable baseline. Richer profile activation probes
-and more artifact-backed wrapper examples are tracked in the roadmap and
-release docs.
+<p align="center">
+  <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
+</p>

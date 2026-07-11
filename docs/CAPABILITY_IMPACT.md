@@ -3,6 +3,9 @@
 OMH should improve what Hermes does after setup, not merely add more files or
 commands. The impact contract therefore answers six separate questions:
 
+This report is an agent and maintainer inspection surface. Normal users can ask
+Hermes about capability or setup health without running these commands.
+
 1. Did OMH select the right workflow?
 2. Does the selected workflow carry useful quality and safety guidance?
 3. Did the Hermes host actually load the native OMH tools and hooks?
@@ -10,7 +13,7 @@ commands. The impact contract therefore answers six separate questions:
 5. Was the produced artifact checked at the surface where users consume it?
 6. Did OMH produce a better result than a comparison setup?
 
-Run the local report with:
+Agents and maintainers can run the local report with:
 
 ```sh
 omh capabilities impact

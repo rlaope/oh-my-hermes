@@ -1,13 +1,29 @@
 # Installation
 
-This guide is for users and operators who want Hermes Agent to see the OMH
+This guide is for people and operators who want Hermes Agent to see the OMH
 skill pack. Normal users should talk to Hermes through Hermes' skill and chat
-surfaces. The `omh` command is bootstrap, repair, verification, and wrapper
-backend infrastructure.
+surfaces. Their direct OMH command surface is normally limited to `omh setup`,
+`omh update`, and `omh doctor`. The broader CLI is deterministic backend
+infrastructure for Hermes Agent, wrappers, coding agents, automation, and
+maintainers.
 
 AI agents and operators who need a pasteable protocol should use the root
 [Agent Install Protocol](../INSTALL_FOR_AGENTS.md). That protocol defines what
 to run, what to report, and what is still unobserved after install.
+
+## Command Audience
+
+| Audience | Normal interaction |
+| --- | --- |
+| Person using Hermes | Ask Hermes for the result in natural language. Run `omh setup`, `omh update`, or `omh doctor` only for local maintenance. |
+| Hermes Agent or wrapper | Route requests and call structured chat, coding, runtime, memory, and evidence commands behind the conversation. |
+| Coding agent or automation | Consume prepared contracts, record observed evidence, and run scoped control-plane commands. |
+| Maintainer or advanced operator | Inspect catalogs, harnesses, release checks, fixtures, and machine-readable payloads. |
+
+Commands outside the three human defaults can still be run manually for
+integration, debugging, or maintenance. When this guide shows them, treat them
+as agent, wrapper, operator, or maintainer references rather than prerequisites
+for using OMH.
 
 ## Quick Start
 
@@ -470,6 +486,12 @@ repair or refresh the local Hermes skill registration:
 ```sh
 omh setup
 omh doctor
+```
+
+The following are agent, wrapper, or operator diagnostics. Normal users do not
+need to run them as part of setup:
+
+```sh
 omh list
 omh runtime status
 omh runtime team-readiness
@@ -501,11 +523,13 @@ returns the full check payload plus `doctor_summary/v1`. `omh list` should show
 a concise managed skill summary plus workflow lanes by default. `omh list
 --json` returns the managed manifest plus `omh_installed_skill_catalog_context/v1`
 and per-skill descriptions, routing hints, examples, and evidence boundaries.
-Human-facing maintenance and catalog commands print readable terminal summaries
-by default: `omh install`, `omh update`, `omh uninstall`, `omh apply`,
-`omh list`, `omh recommend`, `omh playbook ...`, `omh profile ...`,
-`omh probe`, and `omh snippet --output`. Use `--json` on those commands, or set
-`OMH_OUTPUT=json`, when a wrapper or automation needs the complete payload.
+The human-default commands are `omh setup`, `omh update`, and `omh doctor`.
+Several maintenance and catalog commands also print readable terminal summaries
+for advanced operators: `omh install`, `omh uninstall`, `omh apply`, `omh
+list`, `omh recommend`, `omh playbook ...`, `omh profile ...`, `omh probe`, and
+`omh snippet --output`. Readable output does not make them normal user workflow.
+Use `--json` on those commands, or set `OMH_OUTPUT=json`, when a wrapper or
+automation needs the complete payload.
 Plain chat preview commands such as `omh chat route`, `omh chat route-hint`, and
 `omh chat interact` are also summary-first for terminal users. Use `--json` on
 those commands when an adapter needs `chat_route_hint/v1`,
@@ -514,7 +538,7 @@ Short chat requests such as `omh update`, `omh setup`, `omh doctor`, `omh
 install`, and `omh list` should stay in that maintenance lane: run the requested
 command, summarize observed output, and avoid repo changes unless the user asks
 for code work separately.
-Ledger/control-plane commands such as `omh chat session`, `omh coding`,
+Agent and wrapper ledger/control-plane commands such as `omh chat session`, `omh coding`,
 `omh runtime`, `omh goal`, `omh loop`, `omh memory`, `omh state`,
 `omh harness`, `omh release`, and `omh demo` print JSON by design because they
 are wrapper contracts rather than the normal human chat surface.

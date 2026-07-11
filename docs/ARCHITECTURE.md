@@ -5,6 +5,10 @@
 The product direction is defined in `docs/DIRECTION.md`; this architecture
 document describes the current module boundaries that implement that direction.
 
+This is an agent, wrapper, and maintainer reference. The normal human surface is
+Hermes chat plus `omh setup`, `omh update`, and `omh doctor`; backend command
+groups described here are integration contracts rather than user workflow.
+
 oh-my-hermes should feel like a native Hermes workflow layer, not a pile
 of copied prompt files.
 

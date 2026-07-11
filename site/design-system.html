@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OMH design system</title>
+    <meta name="description" content="Internal visual state harness for the OMH static site design system.">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="showcase-page">
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="topbar topbar--solid" aria-label="Primary">
+      <a class="brand brand--link" href="./"><span class="brand-mark" aria-hidden="true">O</span>Oh My Hermes</a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="./">Product</a>
+        <a href="docs/">Docs</a>
+      </nav>
+    </header>
+    <main class="showcase-shell" id="content" tabindex="-1">
+      <header class="showcase-header">
+        <span class="trust-pill">Internal state harness</span>
+        <h1>OMH interface primitives</h1>
+        <p>Rendered states for responsive and accessibility verification.</p>
+      </header>
+
+      <section class="showcase-section" aria-labelledby="actions-title">
+        <h2 id="actions-title">Actions</h2>
+        <div class="showcase-row">
+          <a class="button button--primary" href="#frame">Primary action</a>
+          <a class="button button--secondary" href="#states">Secondary action</a>
+          <a class="text-link" href="docs/">Text action</a>
+          <button class="button button--secondary" type="button" disabled>Unavailable</button>
+        </div>
+      </section>
+
+      <section class="showcase-section" id="states" aria-labelledby="states-title">
+        <h2 id="states-title">Evidence states</h2>
+        <div class="showcase-row">
+          <span class="state-label state-label--ready"><i aria-hidden="true"></i>Ready</span>
+          <span class="state-label state-label--prepared"><i aria-hidden="true"></i>Prepared</span>
+          <span class="state-label state-label--observed"><i aria-hidden="true"></i>Observed</span>
+          <span class="state-label state-label--waiting"><i aria-hidden="true"></i>Not observed</span>
+        </div>
+      </section>
+
+      <section class="showcase-section" id="frame" aria-labelledby="frame-title">
+        <h2 id="frame-title">Contract workbench</h2>
+        <div class="product-frame" aria-label="OMH contract workbench example">
+          <div class="product-frame__bar">
+            <span class="product-frame__mark">OMH</span>
+            <span>local contract</span>
+            <span class="state-label state-label--ready"><i aria-hidden="true"></i>ready</span>
+          </div>
+          <div class="product-frame__body">
+            <aside class="product-frame__rail" aria-label="Capability families">
+              <span class="is-active">Plan</span>
+              <span>Research</span>
+              <span>Create</span>
+              <span>Code</span>
+              <span>Operate</span>
+              <span>Remember</span>
+            </aside>
+            <div class="product-frame__main">
+              <div class="message-intake">
+                <span>Hermes message</span>
+                <strong>I want to safely add a feature to this repo.</strong>
+              </div>
+              <div class="contract-grid">
+                <dl class="contract-list">
+                  <div><dt>route</dt><dd>request-to-handoff</dd></div>
+                  <div><dt>family</dt><dd>delegate coding and ship</dd></div>
+                  <div><dt>owner</dt><dd>selected executor</dd></div>
+                  <div><dt>next</dt><dd>present safe plan</dd></div>
+                </dl>
+                <div class="evidence-stack">
+                  <div><span class="state-label state-label--ready"><i aria-hidden="true"></i>ready</span><strong>Request classified</strong></div>
+                  <div><span class="state-label state-label--prepared"><i aria-hidden="true"></i>prepared</span><strong>Handoff contract</strong></div>
+                  <div><span class="state-label state-label--waiting"><i aria-hidden="true"></i>not observed</span><strong>Execution evidence</strong></div>
+                </div>
+              </div>
+              <p class="boundary-note">Prepared guidance is useful. It is not execution, review, CI, or merge proof.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

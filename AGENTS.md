@@ -28,6 +28,23 @@ instead of silently optimizing for Codex.
 Do not turn OMH into a hidden Hermes runtime patch, transport bot, network
 service, LLM router, or secret coding executor.
 
+## Command Audience
+
+Treat natural-language Hermes chat as the normal product surface. Most people
+should only need to run `omh setup`, `omh update`, and `omh doctor` directly.
+Removal or unusual repair commands are exceptional maintenance paths, not the
+day-to-day OMH workflow.
+
+Commands under `omh chat`, `omh coding`, `omh runtime`, `omh memory`, `omh
+loop`, `omh goal`, `omh harness`, `omh capabilities`, `omh release`, `omh
+state`, and similar control-plane groups primarily exist for Hermes Agent,
+wrappers, coding agents, automations, and maintainers. Public docs may show
+those commands as integration or operator references, but must label the
+audience explicitly and must not make normal users memorize or run them to get
+value. Describe the human action as an intent or outcome, such as asking Hermes
+to prepare coding work, while keeping the backend command in the agent-facing
+reference.
+
 ## Delivery Grain
 
 One user goal should normally produce one PR.

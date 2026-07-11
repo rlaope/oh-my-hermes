@@ -3,6 +3,9 @@
 OMH capability manifests are runtime-readable maps for Hermes, plugin tools, and
 wrapper backends. They answer one bounded question:
 
+This is an agent, wrapper, and maintainer reference. Normal users ask Hermes
+what OMH can do; they do not need to run the capability commands below.
+
 What can this installed OMH surface prepare, explain, or observe, and what is
 still not evidence?
 
@@ -59,6 +62,7 @@ normal chat surfaces:
 | --- | --- |
 | Plan and decide | Clarify goals, prepare plans, and make loop or decision paths explicit. |
 | Learn and gather | Find sources, explain papers, triage signals, and prepare source-backed briefs. |
+| Retain knowledge | Capture reviewed project knowledge and prepare provider-neutral wiki or external knowledge connections without claiming writes. |
 | Create materials and visuals | Shape files, reports, packages, and image-card prompts before generation is claimed. |
 | Delegate coding and ship | Prepare scoped handoffs and dynamic typed target workflow charts across model, runtime, wrapper, tool, and agent surfaces after scope is clear. |
 | Operate and observe | Show setup health, automation, workflow learning, memory review, status, and repair next steps. |
