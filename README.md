@@ -37,14 +37,6 @@ plain request
   -> record runtime, provider, review, CI, and merge evidence only when observed
 ```
 
-<p align="center">
-  <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
-</p>
-
-<p align="center">
-  <img src="assets/artengine-friren-profile-card.png" alt="Art&Engine profile card for Hope Kim and Friren" width="720">
-</p>
-
 [Website](https://rlaope.github.io/oh-my-hermes/) ·
 [Documentation](docs/README.md) ·
 [Installation](docs/INSTALLATION.md) ·
@@ -101,14 +93,6 @@ available when a wrapper or operator needs precise control.
 | **Delegate coding and ship** | Prepare scoped, skill-aware coding handoffs for Codex, Claude Code, Hermes runtime, or another selected executor. |
 | **Operate and observe** | Review setup, service quality, releases, incidents, automation, tools, sessions, and workflow learning. |
 | **Retain knowledge** | Build reviewed project memory and connect external knowledge systems through provider-neutral boundaries. |
-
-<p align="center">
-  <img src="assets/omh-core-workflows.png" alt="OMH Core Workflows illustration" width="720">
-</p>
-
-<p align="center">
-  <img src="assets/omh-skill-magic-promo.png" alt="Friren Agent controlling OMH workflow skills with magic" width="720">
-</p>
 
 The full generated catalog, triggers, harnesses, and evidence rules live in
 [Workflow Reference](docs/WORKFLOWS.md).
@@ -176,3 +160,7 @@ git diff --check
 OMH is developed in the open as part of
 [Team Art & Engineering](https://rlaope.github.io/artengine-lab/). Follow
 [@rlaope](https://github.com/rlaope) for project updates.
+
+<p align="center">
+  <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
+</p>
