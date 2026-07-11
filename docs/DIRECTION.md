@@ -43,6 +43,32 @@ Quality should show up as:
 
 The goal is parity of seriousness, not parity of implementation shape.
 
+## Command Audience
+
+OMH is chat-first for people and command-addressable for agents. The normal
+human shell surface is intentionally small:
+
+- `omh setup` connects OMH to Hermes and repairs managed setup.
+- `omh update` refreshes the command package and managed skills.
+- `omh doctor` checks health and explains the next repair action.
+
+After setup, the normal user workflow is to describe the desired result to
+Hermes in natural language. Users should not have to translate coding,
+research, memory, runtime, review, or release work into OMH subcommands.
+
+The broader CLI is a deterministic control plane for Hermes Agent, wrappers,
+coding agents, automations, and maintainers. Command groups such as `omh chat`,
+`omh coding`, `omh runtime`, `omh memory`, `omh loop`, `omh goal`, `omh
+harness`, `omh capabilities`, `omh release`, and `omh state` remain valuable
+because agents can call, inspect, and compose them. They are not the default
+human product surface.
+
+Public documentation must preserve this audience boundary. Put setup, update,
+doctor, and natural-language Hermes requests in user quick starts. Put other
+commands under an explicit agent, wrapper, operator, maintainer, protocol, or
+debugging label. A readable terminal command is not automatically a command
+that normal users should learn.
+
 ## Observation-First Reporting
 
 OMH should optimize for helping Hermes observe, summarize, and explain work,
@@ -78,7 +104,7 @@ names, pass/pending/fail state, durations, and links instead of raw watcher
 text.
 
 Markdown export is useful for a wiki, notes, release recap, or later review,
-but it is not a backend requirement for the first reporting slice. A
+but it is not a backend requirement for the current reporting contract. A
 deterministic markdown projection from the structured summary is enough until a
 real wiki store is intentionally designed.
 
@@ -139,7 +165,9 @@ Selected coding executors/runtimes own:
 1. Keep users command-agnostic in chat.
    Discord, Slack, and hosted wrappers should accept natural language and render
    skill, plan, status, and handoff UX without requiring users to know OMH
-   commands.
+   commands. Human-facing setup documentation should normally stop at `omh
+   setup`, `omh update`, and `omh doctor`; broader command examples belong to
+   clearly labeled agent or operator references.
 
 2. Preserve prepared versus observed boundaries.
    `prepared_not_observed` means a handoff exists. It does not mean execution,
@@ -228,10 +256,11 @@ Split into separate PRs only when:
    wrapper/backend route that creates the same Hermes-visible skill state
    through generated managed skills and `skills.external_dirs`.
 
-## First-PR Vertical Slice Rule
+## Goal-Complete Delivery Rule
 
-When a goal is broad, keep the PR coherent rather than artificially tiny. A good
-first slice should carry one user-visible capability from contract to tests:
+When a goal is broad, keep the complete target capability coherent in one PR
+rather than splitting it into artificially tiny delivery units. A goal-complete
+delivery should carry the user-visible capability from contract to tests:
 
 - document the desired chat or handoff behavior
 - encode the deterministic schema or catalog metadata

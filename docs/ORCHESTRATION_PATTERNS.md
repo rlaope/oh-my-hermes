@@ -4,6 +4,9 @@ OMH orchestration patterns describe how Hermes should shape work before any
 executor or runtime claims are made. They are metadata contracts, not hidden
 automation.
 
+This is a wrapper and maintainer reference. A normal user describes the work to
+Hermes; Hermes or its wrapper selects and inspects the orchestration pattern.
+
 Each pattern names:
 
 - when to use it
@@ -15,7 +18,7 @@ Each pattern names:
 - observed evidence required before status can advance
 - wrapper actions that can render the UX
 
-Inspect them locally:
+Agents and maintainers can inspect them locally:
 
 ```sh
 omh capabilities export --section orchestration_patterns --json

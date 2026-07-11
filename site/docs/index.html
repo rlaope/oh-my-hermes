@@ -3,437 +3,208 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>OMH Documentation</title>
-    <meta
-      name="description"
-      content="OMH documentation for installing once, keeping Hermes chat-first, and using workflow contracts without breaking existing setups."
-    >
+    <title>OMH documentation - Start from the decision</title>
+    <meta name="description" content="Documentation for installing OMH, choosing one of six capability families, wiring Hermes wrappers, preparing coding handoffs, and verifying evidence.">
+    <meta name="theme-color" content="#ffffff">
+    <meta property="og:title" content="OMH documentation">
+    <meta property="og:description" content="Start with the job, then open the contract or workflow that owns it.">
+    <link rel="canonical" href="https://rlaope.github.io/oh-my-hermes/docs/">
     <link rel="icon" href="../favicon.svg" type="image/svg+xml">
-    <meta name="theme-color" content="#155fff">
     <link rel="stylesheet" href="../styles.css">
   </head>
   <body class="docs-page">
+    <a class="skip-link" href="#content">Skip to content</a>
     <header class="topbar topbar--solid" aria-label="Primary">
-      <a class="brand brand--link" href="../">OMH</a>
+      <a class="brand brand--link" href="../"><span class="brand-mark" aria-hidden="true">O</span>Oh My Hermes</a>
       <nav class="nav" aria-label="Primary navigation">
+        <a href="../">Product</a>
         <a aria-current="page" href="./">Docs</a>
-        <a href="hermes-agent-architecture/">Hermes Deepdive</a>
-        <a
-          class="nav__icon"
-          href="https://github.com/rlaope/oh-my-hermes"
-          aria-label="Open OMH repository on GitHub"
-          title="GitHub repository"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2C6.48 2 2 6.58 2 12.22c0 4.52 2.87 8.35 6.85 9.7.5.09.68-.22.68-.49v-1.73c-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.37 9.37 0 0 1 12 6.92c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.8c0 .27.18.58.69.48A10.06 10.06 0 0 0 22 12.22C22 6.58 17.52 2 12 2Z"></path>
-          </svg>
+        <a href="hermes-agent-architecture/">Architecture</a>
+        <a class="nav__icon" href="https://github.com/rlaope/oh-my-hermes" aria-label="Open OMH on GitHub" title="GitHub repository">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.22c0 4.52 2.87 8.35 6.85 9.7.5.09.68-.22.68-.49v-1.73c-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.37 9.37 0 0 1 12 6.92c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.8c0 .27.18.58.69.48A10.06 10.06 0 0 0 22 12.22C22 6.58 17.52 2 12 2Z"></path></svg>
         </a>
       </nav>
     </header>
 
-    <main class="docs-shell">
-      <aside class="docs-toc" aria-label="Documentation sections">
-        <a href="#overview">Overview</a>
-        <a href="#flagship">Flagship workflows</a>
-        <a href="loop/">Loop</a>
-        <a href="image-gen/">Image gen</a>
-        <a href="intent-to-plan/">Intent to plan</a>
-        <a href="product-ops/">Product ops</a>
-        <a href="executor-handoff/">Executor handoff</a>
+    <main class="docs-shell" id="content" tabindex="-1">
+      <aside class="docs-toc docs-toc--desktop" aria-label="Documentation sections">
+        <a href="#start">Start</a>
+        <a href="#audience">Who runs what</a>
+        <a href="#families">Capability families</a>
         <a href="#install">Install</a>
-        <a href="#chat">Chat wrappers</a>
-        <a href="#runbook">Runbook</a>
-        <a href="#demo">Demo</a>
-        <a href="#architecture">Architecture</a>
-        <a href="hermes-agent-architecture/">Hermes Agent guide</a>
-        <a href="#playbooks">Playbooks</a>
-        <a href="#roles">Roles</a>
-        <a href="#discord-example">Chat example</a>
-        <a href="#operator-cases">Operator cases</a>
-        <a href="#contracts">Contracts</a>
-        <a href="#delegation">Delegation</a>
-        <a href="#quality">Quality gates</a>
-        <a href="#boundaries">Boundaries</a>
+        <a href="#handoff">Coding handoff</a>
+        <a href="#wrappers">Wrappers</a>
+        <a href="#memory">Memory and providers</a>
+        <a href="#evidence">Evidence</a>
+        <a href="#workflows">Workflow guides</a>
+        <a href="#references">Reference docs</a>
       </aside>
 
       <article class="docs-content">
-        <header class="docs-hero docs-hero--clean" id="overview">
-          <p class="eyebrow">OMH Documentation</p>
-          <h1>Find the safe path fast.</h1>
+        <header class="docs-hero docs-hero--clean" id="start">
+          <p class="eyebrow">OMH documentation</p>
+          <h1>Start from the decision, not the command.</h1>
           <p>
-            Install once. Keep Hermes. Make the next step safe. This page is a
-            decision map for operators, wrapper builders, and maintainers. Use
-            it to install, pick a lane, wire renderable contracts, and verify
-            what is actually observed.
+            OMH is the deterministic operating layer between a normal Hermes
+            request and a trustworthy next step. Use this map to install it,
+            choose a capability family, prepare work for the selected runtime,
+            and verify what was actually observed.
           </p>
         </header>
 
-        <nav class="docs-start-grid" aria-label="Featured documentation paths">
-          <a class="docs-start-card" href="#install">
-            <span>Start</span>
-            <strong>Install OMH</strong>
-            <em>Managed skills, doctor checks, and local command setup.</em>
-          </a>
-          <a class="docs-start-card" href="#flagship">
-            <span>Choose</span>
-            <strong>Pick a lane</strong>
-            <em>Plan, research, create, delegate, or observe.</em>
-          </a>
-          <a class="docs-start-card" href="#chat">
-            <span>Wire</span>
-            <strong>Render wrapper state</strong>
-            <em>Use chat envelopes instead of scraping prose.</em>
-          </a>
-          <a class="docs-start-card" href="#quality">
-            <span>Verify</span>
-            <strong>Check evidence gates</strong>
-            <em>Prepared state stays separate from observed proof.</em>
-          </a>
+        <nav class="docs-toc docs-toc--mobile" aria-label="Documentation sections">
+          <a href="#start">Start</a>
+          <a href="#audience">Who runs what</a>
+          <a href="#families">Capability families</a>
+          <a href="#install">Install</a>
+          <a href="#handoff">Coding handoff</a>
+          <a href="#wrappers">Wrappers</a>
+          <a href="#memory">Memory and providers</a>
+          <a href="#evidence">Evidence</a>
+          <a href="#workflows">Workflow guides</a>
+          <a href="#references">Reference docs</a>
         </nav>
 
-        <section class="docs-section docs-core-values" aria-labelledby="docs-values-title">
-          <h2 id="docs-values-title">Core values</h2>
-          <div class="docs-value-rail">
-            <article><span>01</span><strong>Install once</strong><p>Set up the local OMH surface without making users learn a new dashboard.</p></article>
-            <article><span>02</span><strong>Keep Hermes</strong><p>Hermes owns chat intake, clarification, research, planning, and narration.</p></article>
-            <article><span>03</span><strong>Smallest safe move</strong><p>Every natural request gets a visible route, role, and next action.</p></article>
-            <article><span>04</span><strong>Local contracts</strong><p>Contracts, fixtures, status, and capability data stay deterministic and inspectable.</p></article>
-            <article><span>05</span><strong>Proof boundary</strong><p>Prepared handoff is not execution evidence.</p></article>
+        <nav class="docs-start-grid" aria-label="Documentation paths">
+          <a class="docs-start-card" href="#install"><span>Start</span><strong>Install OMH</strong><em>Set up the command, managed skills, and doctor checks.</em></a>
+          <a class="docs-start-card" href="#families"><span>Choose</span><strong>Find a capability family</strong><em>Plan, research, create, code, operate, or remember.</em></a>
+          <a class="docs-start-card" href="#handoff"><span>Delegate</span><strong>Prepare coding work</strong><em>Scope the handoff for Codex, Claude Code, Hermes, or another executor.</em></a>
+          <a class="docs-start-card" href="#evidence"><span>Verify</span><strong>Inspect the claim boundary</strong><em>Separate local checks from runtime, provider, artifact, and outcome proof.</em></a>
+        </nav>
+
+        <section class="docs-section docs-two-column" id="audience">
+          <div>
+            <p class="eyebrow">Who runs what</p>
+            <h2>People ask. Agents orchestrate.</h2>
+            <p>Normal work starts as a natural-language request to Hermes. People only need the OMH shell for setup, updates, and health checks.</p>
+          </div>
+          <div class="docs-note">
+            <strong>Human default</strong>
+            <p><code>omh setup</code>, <code>omh update</code>, and <code>omh doctor</code>.</p>
+            <strong>Agent and operator control plane</strong>
+            <p><code>omh coding</code>, <code>omh runtime</code>, <code>omh chat</code>, <code>omh memory</code>, and related commands are primarily called by Hermes Agent, wrappers, coding agents, automation, and maintainers.</p>
           </div>
         </section>
 
-        <section class="docs-section docs-section--feature" id="flagship">
-          <h2>Choose a lane before a command</h2>
-          <p>
-            Start from the user's situation. Workflow names are useful only
-            after the job is clear.
-          </p>
-          <div class="docs-lane-map" aria-label="Representative OMH workflow lanes">
-            <a href="intent-to-plan/">
-              <span>Plan and decide</span>
-              <strong>Clarify or review the plan.</strong>
-              <em><code>deep-interview</code> <code>ralplan</code> <code>ultragoal</code></em>
-            </a>
-            <a href="#playbooks">
-              <span>Learn and gather</span>
-              <strong>Collect source-backed context.</strong>
-              <em><code>web-research</code> <code>paper-learning</code> <code>source-finder</code></em>
-            </a>
-            <a href="image-gen/">
-              <span>Create materials and visuals</span>
-              <strong>Turn sources into cards, reports, or visual prompts.</strong>
-              <em><code>img-summary</code> <code>visual_prompt_card/v1</code></em>
-            </a>
-            <a href="executor-handoff/">
-              <span>Delegate coding and ship</span>
-              <strong>Prepare a scoped executor handoff.</strong>
-              <em><code>idea-to-deploy</code> <code>ultraprocess</code> <code>code-review</code></em>
-            </a>
-            <a href="loop/">
-              <span>Operate and observe</span>
-              <strong>Track loops, status, and evidence gaps.</strong>
-              <em><code>loop</code> <code>workflow-learning</code> <code>instinct-ledger</code></em>
-            </a>
+        <section class="docs-section" id="families">
+          <p class="eyebrow">Six capability families</p>
+          <h2>One front door for 82 skills.</h2>
+          <p>Capability families are the public navigation layer. Skill names remain available for precise routing, compatibility, and wrapper rendering.</p>
+          <div class="docs-lane-map" aria-label="OMH capability families">
+            <a href="intent-to-plan/"><span>Plan and decide</span><strong>Clarify goals and prepare reviewed plans.</strong><em>deep-interview, ralplan, ultragoal, loop</em></a>
+            <a href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/WORKFLOWS.md#web-research"><span>Learn and gather</span><strong>Find sources, inspect data, and explain supplied material.</strong><em>web-research, paper-learning, data-analysis</em></a>
+            <a href="image-gen/"><span>Create materials and visuals</span><strong>Prepare polished artifacts with format-specific QA.</strong><em>frontend, visual-qa, img-summary, report-package</em></a>
+            <a href="executor-handoff/"><span>Delegate coding and ship</span><strong>Prepare executor-ready implementation and review work.</strong><em>idea-to-deploy, code-review, ultraprocess</em></a>
+            <a href="product-ops/"><span>Operate and observe</span><strong>Review service quality, releases, reliability, tools, and workflows.</strong><em>ops-review, deploy-and-monitor, workflow-learning</em></a>
+            <a href="#memory"><span>Retain knowledge</span><strong>Build reviewed project memory through a provider-neutral boundary.</strong><em>wiki, memory curation, knowledge connections</em></a>
           </div>
-          <a class="loop-spotlight loop-spotlight--docs" href="loop/" aria-label="Open Loop flagship documentation">
-            <div class="loop-spotlight__copy">
-              <span class="new-badge">Loop</span>
-              <h3>Repeat without pretending work already happened.</h3>
-              <p>
-                Loop turns a large goal into interview, research, plan,
-                runtime tick queue, handoff, feedback, wait, and resume.
-              </p>
-              <span class="button button--primary" aria-hidden="true">Open Loop docs</span>
-            </div>
-            <figure class="loop-image-frame loop-image-frame--spotlight">
-              <img
-                src="../assets/omh-loop-engineering.png"
-                alt="Loop poster showing a goal-driven research, plan, handoff, feedback, and repeat cycle for OMH"
-              >
-            </figure>
-          </a>
-          <a class="imagegen-spotlight imagegen-spotlight--docs" href="image-gen/" aria-label="Open Image gen documentation">
-            <div class="imagegen-spotlight__copy">
-              <span class="new-badge">Image gen</span>
-              <h3>Source-specific image cards</h3>
-              <p>
-                <code>img-summary</code> prepares visual_prompt_card/v1 for
-                meetings, reports, PRs, issues, research, and releases. A
-                connected image tool generates the image; OMH records
-                visual_observation/v1 only after that step is observed.
-              </p>
-            </div>
-            <figure class="imagegen-poster-frame">
-              <img
-                src="../assets/omh-img-summary-card.png"
-                alt="OMH img-summary poster showing visual prompt cards and observed image evidence"
-              >
-            </figure>
-          </a>
         </section>
 
         <section class="docs-section docs-two-column" id="install">
           <div>
-            <h2>Install</h2>
-            <p>
-              Use this when you need the <code>omh</code> command, managed
-              skills, doctor checks, and local wrapper contracts.
-            </p>
+            <p class="eyebrow">Install</p>
+            <h2>Two paths, one Hermes-visible result.</h2>
+            <p>Use the local installer for the command and managed setup, or use the Hermes skill tap when that surface is available.</p>
           </div>
-          <div class="command" role="region" aria-label="Bootstrap commands" tabindex="0">
-            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+          <div class="command" role="region" aria-label="Install commands" tabindex="0"><code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 omh setup
-omh doctor</code>
+omh doctor
+
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes</code></div>
+        </section>
+
+        <section class="docs-section docs-two-column" id="handoff">
+          <div>
+            <p class="eyebrow">Coding owner</p>
+            <h2>Prepare the executor, not just the prompt.</h2>
+            <p>OMH keeps coding ownership explicit and executor-neutral. A handoff can include workspace isolation, local skill discovery, acceptance criteria, review expectations, and verification gates.</p>
+          </div>
+          <div class="feature-contract">
+            <div class="handoff-flow" aria-label="Executor handoff contract">
+              <div><span>scope</span><strong>plan accepted</strong></div>
+              <div><span>context</span><strong>skills and constraints</strong></div>
+              <div><span>owner</span><strong>selected executor</strong></div>
+              <div><span>proof</span><strong>runtime observation</strong></div>
+            </div>
+            <p class="boundary-note">Prepared handoff is not execution evidence.</p>
+            <a class="text-link" href="executor-handoff/">Open executor handoff guide</a>
+          </div>
+        </section>
+
+        <section class="docs-section docs-two-column" id="wrappers">
+          <div>
+            <p class="eyebrow">Hermes Agent Integration Runbook</p>
+            <h2>Render contracts instead of scraping prose.</h2>
+            <p>Hermes owns chat intake and narration. OMH returns deterministic interaction, capability, handoff, progress, and evidence shapes for Discord, Slack, hosted chat, and plugin-native surfaces. These identifiers are for adapters, not commands a chat user must run.</p>
+          </div>
+          <div class="command" role="region" aria-label="Wrapper contract examples" tabindex="0"><code>plugin tool: omh_interact
+chat_response/v1
+coding_runtime_handoff/v1
+harness_progress/v1
+runtime_observation/v1</code></div>
+        </section>
+
+        <section class="docs-section docs-two-column" id="memory">
+          <div>
+            <p class="eyebrow">Memory and external providers</p>
+            <h2>Connect systems without making OMH depend on one vendor.</h2>
+            <p>Project memory remains reviewed and local under <code>.omh/memory/</code>. Wiki, metric, browser, image, video, and connector services sit behind explicit provider boundaries.</p>
           </div>
           <div class="docs-note">
-            <strong>Hermes-native path</strong>
-            <code>hermes skills tap add rlaope/oh-my-hermes</code>
-            <code>hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes</code>
-          </div>
-          <div class="docs-note">
-            <strong>Pinned or preview installs</strong>
-            <code>OMH_CHANNEL=stable OMH_VERSION=&lt;version&gt; sh</code>
-            <code>OMH_SOURCE_REF=main@&lt;sha&gt; sh</code>
+            <strong>Provider-neutral contracts</strong>
+            <p><code>external_metric_provider</code> accepts provider-shaped operational data for validation and analysis.</p>
+            <p>External knowledge providers can support wiki workflows while review, provenance, and recall claims stay explicit.</p>
+            <p>Registered or configured access is not proof that a provider was called.</p>
           </div>
         </section>
 
-        <section class="docs-section docs-two-column" id="chat">
-          <div>
-            <h2>Chat wrappers</h2>
-            <p>
-              Wrappers own platform auth, events, buttons, threads, edits, and
-              notifications. Hermes owns the chat experience. OMH returns the
-              renderable contract.
-            </p>
+        <section class="docs-section" id="evidence">
+          <p class="eyebrow">Capability impact</p>
+          <h2>Use the smallest check that proves the claim.</h2>
+          <p>OMH reports six dimensions independently so a strong local router cannot hide a missing host, provider, artifact check, or comparative evaluator.</p>
+          <div class="docs-value-rail">
+            <article><span>01</span><strong>Route selection</strong><p>Fixed, common-request, and representative local corpora.</p></article>
+            <article><span>02</span><strong>Guidance depth</strong><p>Inspectable skill quality bars and handoff policy.</p></article>
+            <article><span>03</span><strong>Host availability</strong><p>Requires observed plugin or runtime load.</p></article>
+            <article><span>04</span><strong>Provider availability</strong><p>Requires observed external provider evidence.</p></article>
+            <article><span>05</span><strong>Artifact verification</strong><p>Requires a recorded served-surface result.</p></article>
+            <article><span>06</span><strong>Outcome quality</strong><p>Requires blinded paired tasks and an external evaluator.</p></article>
           </div>
-          <div class="command" role="region" aria-label="Chat interaction command" tabindex="0">
-            <code>plugin tool: omh_interact
-omh chat interact --source discord "risky refactor"
-omh chat route --source discord --summary "risky refactor"</code>
-          </div>
-          <div class="docs-note docs-note--wide">
-            <strong>Wrapper rule</strong>
-            <p>
-              Render <code>chat_response/v1</code> and action state. Do not
-              ask users to memorize backend commands.
-            </p>
+          <p class="boundary-note"><strong>Agent / maintainer reference.</strong> Hermes integrations and maintainers use these commands to inspect the contract; normal users ask Hermes about capability or setup health.</p>
+          <div class="command" role="region" aria-label="Agent and maintainer capability impact commands" tabindex="0"><code>omh capabilities summary --json
+omh capabilities impact
+omh capabilities impact --json</code></div>
+        </section>
+
+        <section class="docs-section" id="workflows">
+          <p class="eyebrow">Focused guides</p>
+          <h2>Open detail only when the lane needs it.</h2>
+          <div class="reference-grid">
+            <a class="reference-link" href="loop/"><span>Loop</span><h3>Durable goal cycles</h3><p>Research, plan, handoff, feedback, wait, resume, and completion evidence.</p></a>
+            <a class="reference-link" href="intent-to-plan/"><span>Intent to plan</span><h3>Clarify before action</h3><p>Interview, planning, acceptance criteria, and reviewed next steps.</p></a>
+            <a class="reference-link" href="image-gen/"><span>Image generation</span><h3>Source-aware visual contracts</h3><p>Prompt cards, provider boundaries, and observed artifact evidence.</p></a>
+            <a class="reference-link" href="product-ops/"><span>Product operations</span><h3>Operate as a system</h3><p>Roadmap, quality, delivery, reliability, and service-level review.</p></a>
+            <a class="reference-link" href="executor-handoff/"><span>Executor handoff</span><h3>Selected coding owner</h3><p>Executor-ready scope without unobserved execution claims.</p></a>
+            <a class="reference-link" href="hermes-agent-architecture/"><span>Architecture at a glance</span><h3>Hermes and OMH boundaries</h3><p>Memory, skills, tools, gateway surfaces, and evidence.</p></a>
           </div>
         </section>
 
-        <section class="docs-section" id="runbook">
-          <h2>Hermes Agent Integration Runbook</h2>
+        <section class="docs-section" id="references">
+          <p class="eyebrow">Repository references</p>
+          <h2>Detailed contracts remain the source of truth.</h2>
           <div class="docs-grid docs-grid--tight">
-            <article class="card">
-              <h3>Hermes Agent</h3>
-              <p>Owns user-visible chat, actions, and status narration.</p>
-            </article>
-            <article class="card">
-              <h3>OMH</h3>
-              <p>Owns deterministic contracts, fixtures, handoffs, and status boundaries.</p>
-            </article>
-            <article class="card">
-              <h3>Executor</h3>
-              <p>Owns implementation evidence only after dispatch is observed.</p>
-            </article>
+            <a class="docs-start-card" href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/DIRECTION.md"><span>Product</span><strong>Direction</strong><em>Identity, ownership, and non-goals.</em></a>
+            <a class="docs-start-card" href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/CAPABILITIES.md"><span>Runtime map</span><strong>Capabilities</strong><em>Manifest sections and six families.</em></a>
+            <a class="docs-start-card" href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/WORKFLOWS.md"><span>Generated catalog</span><strong>Workflow reference</strong><em>All skills, harnesses, and metadata.</em></a>
+            <a class="docs-start-card" href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/CAPABILITY_IMPACT.md"><span>Quality</span><strong>Capability impact</strong><em>Measured and unproven claim dimensions.</em></a>
+            <a class="docs-start-card" href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/HERMES_AGENT_INTEGRATION_RUNBOOK.md"><span>Integration</span><strong>Hermes Agent runbook</strong><em>Wrapper responsibilities and evidence.</em></a>
+            <a class="docs-start-card" href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/MEMORY.md"><span>Context</span><strong>Project memory</strong><em>Reviewed local records and recall packs.</em></a>
           </div>
-          <p>
-            Source contracts: <code>docs/HERMES_AGENT_INTEGRATION_RUNBOOK.md</code>,
-            <code>examples/wrapper-golden/hermes-agent-integration.json</code>,
-            <code>examples/wrapper-golden/plugin-interact.json</code>,
-            <code>docs/ROLES.md</code>, and <code>INSTALL_FOR_AGENTS.md</code>.
-          </p>
-        </section>
-
-        <section class="docs-section docs-two-column" id="demo">
-          <div>
-            <h2>Local demo</h2>
-            <p>Use fixture-backed demos to inspect the full Hermes chat path.</p>
-          </div>
-          <div class="command" role="region" aria-label="Demo commands" tabindex="0">
-            <code>omh demo orchestration
-uv run python examples/discord-adapter-shim.py
-uv run python examples/slack-adapter-shim.py</code>
-          </div>
-        </section>
-
-        <span id="routing" aria-hidden="true"></span>
-        <section class="docs-section" id="architecture">
-          <h2>Architecture at a glance</h2>
-          <p>
-            OMH starts as installed Hermes skills. Wrapper backends consume
-            deterministic local contracts while Hermes stays responsible for
-            conversation, planning, and status narration.
-          </p>
-          <div class="architecture-article-link">
-            <strong>Hermes Agent explained</strong>
-            <p>
-              Read the bilingual visual guide to memory, skills, gateway, cron,
-              plugin surfaces, learning loops, and OMH's evidence boundary.
-            </p>
-            <a class="text-link" href="hermes-agent-architecture/">Open architecture guide</a>
-          </div>
-          <div class="architecture-map docs-architecture-map" aria-label="OMH architecture diagram">
-            <div class="arch-node arch-node--source"><span>User message</span><strong>Hermes, Discord, Slack, hosted chat</strong></div>
-            <div class="arch-arrow" aria-hidden="true">-></div>
-            <div class="arch-node arch-node--hermes"><span>Hermes Agent</span><strong>Clarify, research, plan, narrate</strong></div>
-            <div class="arch-arrow" aria-hidden="true">-></div>
-            <div class="arch-node arch-node--core"><span>OMH local contract layer</span><strong>Request-to-handoff, roles, plan, handoff, status</strong></div>
-            <div class="arch-branch" aria-hidden="true"></div>
-            <div class="arch-node arch-node--executor"><span>Selected coding executor</span><strong>Implementation after dispatch</strong></div>
-            <div class="arch-node arch-node--runtime"><span>Runtime artifacts</span><strong>Observed evidence and status cards</strong></div>
-          </div>
-        </section>
-
-        <section class="docs-section docs-two-column" id="playbooks">
-          <div>
-            <h2>Playbooks</h2>
-            <p>
-              Use playbooks when wrappers need to know which stages stay with
-              Hermes, which become executor handoffs, and which claims are not
-              evidence.
-            </p>
-          </div>
-          <div class="command" role="region" aria-label="Playbook commands" tabindex="0">
-            <code>omh playbook list
-omh playbook inspect request-to-handoff
-omh playbook recommend "I want to safely add a feature to this repo"
-omh runtime team-readiness</code>
-          </div>
-        </section>
-
-        <section class="docs-section" id="roles">
-          <h2>Role surface</h2>
-          <p>
-            Roles name responsibility for Hermes chat and wrapper UI. They do
-            not claim that a hidden worker ran.
-          </p>
-          <div class="docs-grid docs-grid--tight">
-            <article class="card"><h3>guide</h3><p>First-touch routing and route explanation.</p></article>
-            <article class="card"><h3>researcher</h3><p>Source-backed discovery and unknowns.</p></article>
-            <article class="card"><h3>planner</h3><p>Clarification, non-goals, and plan acceptance.</p></article>
-            <article class="card"><h3>handoff-guide</h3><p>Executor choice and prepared handoff payloads.</p></article>
-          </div>
-          <p>Read the full responsibility contract in <code>docs/ROLES.md</code>.</p>
-        </section>
-
-        <section class="docs-section" id="discord-example">
-          <h2>Discord-style response</h2>
-          <div class="discord-frame" aria-label="Discord-style Hermes Agent example">
-            <div class="discord-channel"># repo-planning</div>
-            <div class="discord-message">
-              <div class="avatar avatar--user">M</div>
-              <div class="message-body">
-                <div class="message-meta"><strong>maintainer-1</strong></div>
-                <p>I want to safely add a feature to this repo</p>
-              </div>
-            </div>
-            <div class="discord-message">
-              <div class="avatar avatar--bot">H</div>
-              <div class="message-body bot-response">
-                <div class="message-meta"><strong>Hermes Agent</strong> <span>BOT</span></div>
-                <div class="route-lens" aria-label="Routing summary">
-                  <span>playbook: request-to-handoff</span>
-                  <span>role: planner</span>
-                  <span>next: present_plan</span>
-                </div>
-                <h3>Planner should present the safe plan first.</h3>
-                <p>Accept or revise the plan before executor choice or handoff preparation.</p>
-                <div class="button-row" aria-label="Wrapper actions">
-                  <button type="button">Accept plan</button>
-                  <button type="button">Revise plan</button>
-                  <button type="button" disabled>Prepare handoff</button>
-                </div>
-                <p class="claim-boundary">Routing is not plan acceptance, dispatch, or execution evidence.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="docs-section" id="operator-cases">
-          <h2>Grounded operator cases</h2>
-          <p>
-            The cases lock the intended experience behind <code>omh_interact</code>,
-            <code>omh chat interact</code>, <code>omh playbook recommend</code>,
-            and <code>omh coding delegate</code>: route, plan, clarify, QA,
-            review, or prepare a handoff without overclaiming execution.
-            Dedicated cards prevent generic <code>ack</code> responses from
-            replacing the intended workflow surface.
-          </p>
-          <div class="case-grid case-grid--docs" aria-label="Grounded operator case summary">
-            <article class="case-card"><span>10/10 contract</span><h3>Payment failures and issue-to-PR requests.</h3><p>Route to <code>feedback-triage</code> or <code>ralplan</code> before coding handoff.</p></article>
-            <article class="case-card"><span>Evidence gates</span><h3>Release trust and AI coding safety audits.</h3><p>Prepared versus observed status stays explicit.</p></article>
-            <article class="case-card"><span>Direct skills</span><h3>Loop and ultraprocess invocations.</h3><p>Direct <code>./loop</code> and <code>$ultraprocess</code> routes are scored without playbook forcing.</p></article>
-          </div>
-          <p>
-            Useful checks: <code>omh demo grounded-score --summary</code>,
-            <code>omh cases demo --all --json</code>,
-            <code>omh demo chat-card-coverage --summary</code>, and
-            <code>omh release evidence-bundle --version 1.0.1 --write --json</code>.
-            The exported set uses <code>omh_use_case_demo_card/v1</code>.
-            Read the full matrix in <code>docs/APPLICATION_CASES.md</code>.
-          </p>
-        </section>
-
-        <section class="docs-section" id="contracts">
-          <h2>Contracts</h2>
-          <div class="docs-grid docs-grid--tight">
-            <article class="card"><h3>chat_interaction/v1</h3><p>Input envelope for natural messages, metadata, and thread context.</p></article>
-            <article class="card"><h3>chat_response/v1</h3><p>Wrapper-facing text, action hints, status snippets, and handoff prompts.</p></article>
-            <article class="card"><h3>status_card/v1</h3><p>Readable status for plan, dispatch, implementation, review, CI, and merge readiness.</p></article>
-            <article class="card"><h3>harness_progress/v1</h3><p>Progress ladder that advances only when required observations exist.</p></article>
-          </div>
-        </section>
-
-        <section class="docs-section" id="delegation">
-          <h2>Delegation-first coding</h2>
-          <ul class="docs-list">
-            <li>OMH does not hide a coding executor inside Hermes.</li>
-            <li>Prepared handoff means "ready to dispatch", not "work completed".</li>
-            <li>Observed implementation, review, CI, and merge readiness require explicit records.</li>
-          </ul>
-        </section>
-
-        <section class="docs-section docs-two-column" id="quality">
-          <div>
-            <h2>Quality gates</h2>
-            <p>
-              Validate workflow metadata, harness contracts, route-hint alignment,
-              and user-facing card quality before depending on the surface.
-            </p>
-          </div>
-          <div class="command" role="region" aria-label="Quality commands" tabindex="0">
-            <code>omh docs workflows --json
-omh harness list
-omh harness inspect planning
-omh harness validate
-omh demo grounded-score --summary
-omh demo chat-card-coverage --summary
-omh demo route-hint-alignment --summary
-omh demo localized-chat-copy --summary
-omh demo router-fast-path --summary
-omh demo hermes-ux-quality --summary</code>
-          </div>
-        </section>
-
-        <section class="docs-section" id="boundaries">
-          <h2>Boundaries</h2>
-          <p>
-            OMH is deterministic local tooling. It does not patch Hermes core,
-            run platform bots, call LLM APIs, create network integrations inside
-            core commands, or launch coding executors by itself.
-          </p>
         </section>
       </article>
     </main>
 
-    <footer class="footer">
-      <span>
-        OMH documentation is served directly from this site. Source docs remain in the repository
-        as the versioned source of truth.
-      </span>
-      <span>
-        Developed by <a href="https://github.com/rlaope">rlaope</a>.
-      </span>
-    </footer>
+    <footer class="footer"><span>OMH documentation starts from the user's decision and ends at the evidence boundary.</span><span><a href="../">Back to Oh My Hermes</a></span></footer>
   </body>
 </html>

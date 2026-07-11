@@ -3,379 +3,340 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>OMH - Keep Hermes chat-first</title>
-    <meta
-      name="description"
-      content="OMH keeps Hermes chat-first while turning natural requests into safe next steps, local contracts, and evidence-aware executor handoffs."
-    >
+    <title>Oh My Hermes - A stronger operating layer for Hermes</title>
+    <meta name="description" content="OMH gives Hermes deterministic routing, 82 workflow skills, executor-neutral coding handoffs, project memory, and evidence-aware operating contracts.">
+    <meta name="theme-color" content="#ffffff">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Oh My Hermes">
+    <meta property="og:description" content="Install once. Give Hermes a stronger operating layer for planning, research, creation, coding handoff, operations, and memory.">
+    <meta property="og:image" content="https://rlaope.github.io/oh-my-hermes/assets/omh-readme-hero.png">
+    <meta property="og:url" content="https://rlaope.github.io/oh-my-hermes/">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="canonical" href="https://rlaope.github.io/oh-my-hermes/">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <meta name="theme-color" content="#155fff">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body class="home-page">
+    <a class="skip-link" href="#content">Skip to content</a>
     <header class="topbar" aria-label="Primary">
-      <a class="brand brand--link" href="./">OMH</a>
+      <a class="brand brand--link" href="./"><span class="brand-mark" aria-hidden="true">O</span>Oh My Hermes</a>
       <nav class="nav" aria-label="Primary navigation">
+        <a href="#product">Product</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="#evidence">Evidence</a>
         <a href="docs/">Docs</a>
-        <a href="docs/hermes-agent-architecture/">Hermes Deepdive</a>
-        <a
-          class="nav__icon"
-          href="https://github.com/rlaope/oh-my-hermes"
-          aria-label="Open OMH repository on GitHub"
-          title="GitHub repository"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2C6.48 2 2 6.58 2 12.22c0 4.52 2.87 8.35 6.85 9.7.5.09.68-.22.68-.49v-1.73c-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.37 9.37 0 0 1 12 6.92c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.8c0 .27.18.58.69.48A10.06 10.06 0 0 0 22 12.22C22 6.58 17.52 2 12 2Z"></path>
-          </svg>
+        <a class="nav__icon" href="https://github.com/rlaope/oh-my-hermes" aria-label="Open OMH on GitHub" title="GitHub repository">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.22c0 4.52 2.87 8.35 6.85 9.7.5.09.68-.22.68-.49v-1.73c-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.37 9.37 0 0 1 12 6.92c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.8c0 .27.18.58.69.48A10.06 10.06 0 0 0 22 12.22C22 6.58 17.52 2 12 2Z"></path></svg>
         </a>
       </nav>
     </header>
 
-    <main>
-      <section class="home-hero" aria-labelledby="home-title">
-        <figure class="home-hero__visual" aria-hidden="true">
-          <img
-            src="assets/omh-readme-hero.png"
-            alt=""
-            width="1448"
-            height="1086"
-            fetchpriority="high"
-          >
-        </figure>
-        <div class="hero-install" role="region" aria-label="Top install commands" tabindex="0">
-          <div class="hero-install__bar">
-            <span></span>
-            <span></span>
-            <span></span>
-            <strong>install</strong>
-          </div>
-          <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
-omh setup</code>
-        </div>
+    <main class="home-main" id="content" tabindex="-1">
+      <section class="home-hero" id="product" aria-labelledby="home-title">
         <div class="home-hero__content">
-          <p class="home-kicker">Hermes-native workflow contracts</p>
+          <span class="trust-pill">Hermes-native orchestration</span>
           <h1 id="home-title">Oh My Hermes</h1>
-          <p class="home-tagline">Install once. Keep Hermes. Make the next step safe.</p>
+          <p class="home-tagline">A stronger operating layer for the Hermes you already use.</p>
           <p class="home-lead">
-            OMH turns a plain Hermes message into a visible route, role,
-            contract, and evidence boundary. No new dashboard. No hidden
-            executor claim.
+            OMH turns plain requests into a clear capability, a reviewed next
+            step, and an honest evidence boundary. It strengthens planning,
+            research, creation, coding handoff, operations, and project memory
+            without replacing Hermes or hiding who did the work.
           </p>
-          <div class="home-actions" role="group" aria-label="Primary actions">
-            <a class="button button--primary" href="docs/">Read the docs</a>
-            <a class="button" href="#install">Install OMH</a>
+          <div class="home-actions" aria-label="Primary actions">
+            <a class="button button--primary" href="#install">Install OMH</a>
+            <a class="button button--secondary" href="docs/">Read the docs</a>
+          </div>
+          <div class="hero-proof" aria-label="Product principles">
+            <span>Local contracts</span>
+            <span>Executor neutral</span>
+            <span>Prepared is not observed</span>
+          </div>
+        </div>
+
+        <div class="hero-workbench">
+          <div class="product-frame" aria-label="OMH request-to-handoff contract workbench">
+            <div class="product-frame__bar">
+              <span class="product-frame__mark">OMH</span>
+              <span>request-to-handoff</span>
+              <span class="state-label state-label--ready"><i aria-hidden="true"></i>ready</span>
+            </div>
+            <div class="product-frame__body">
+              <aside class="product-frame__rail" aria-label="Capability families">
+                <span class="is-active">Plan</span>
+                <span>Research</span>
+                <span>Create</span>
+                <span>Code</span>
+                <span>Operate</span>
+                <span>Remember</span>
+              </aside>
+              <div class="product-frame__main">
+                <div class="message-intake">
+                  <span>Hermes message</span>
+                  <strong>I want to safely add a feature to this repo.</strong>
+                </div>
+                <div class="contract-grid">
+                  <dl class="contract-list">
+                    <div><dt>route</dt><dd>request-to-handoff</dd></div>
+                    <div><dt>family</dt><dd>delegate coding and ship</dd></div>
+                    <div><dt>owner</dt><dd>selected executor</dd></div>
+                    <div><dt>next</dt><dd>present safe plan</dd></div>
+                  </dl>
+                  <div class="evidence-stack">
+                    <div><span class="state-label state-label--ready"><i aria-hidden="true"></i>ready</span><strong>Request classified</strong></div>
+                    <div><span class="state-label state-label--prepared"><i aria-hidden="true"></i>prepared</span><strong>Handoff contract</strong></div>
+                    <div><span class="state-label state-label--waiting"><i aria-hidden="true"></i>not observed</span><strong>Runtime evidence</strong></div>
+                  </div>
+                </div>
+                <p class="boundary-note">Prepared is not observed. Execution, review, CI, and merge need matching runtime evidence.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="home-section value-ledger" id="product" aria-labelledby="values-title">
-        <div class="section-heading">
-          <p class="home-kicker">What OMH protects</p>
-          <h2 id="values-title">The README values, made visible.</h2>
-          <p>
-            OMH is the fit layer between plain Hermes requests and trustworthy
-            work. Modern OMH is a contract system, not a command catalog.
-            Wrapper surfaces can render <code>omh_interact</code>,
-            <code>chat_response/v1</code>, and
-            <code>coding_runtime_handoff/v1</code> without overclaiming.
-          </p>
-        </div>
-        <div class="value-grid">
-          <article class="value-card value-card--primary">
-            <span>01</span>
-            <h3>Install once.</h3>
-            <p>Bootstrap managed skills, local checks, and wrapper contracts from one path.</p>
-          </article>
-          <article class="value-card">
-            <span>02</span>
-            <h3>Keep Hermes.</h3>
-            <p>Hermes remains the chat surface for intake, clarification, planning, and status narration.</p>
-          </article>
-          <article class="value-card">
-            <span>03</span>
-            <h3>Choose the smallest safe move.</h3>
-            <p>Natural requests become a lane, role, and next action before execution starts.</p>
-          </article>
-          <article class="value-card">
-            <span>04</span>
-            <h3>Stay local and deterministic.</h3>
-            <p>Contracts, capabilities, status, and fixtures are inspectable local artifacts.</p>
-          </article>
-          <article class="value-card value-card--dark">
-            <span>05</span>
-            <h3>Do not blur proof.</h3>
-            <p>Prepared handoff is useful. Observed work still needs runtime evidence.</p>
-          </article>
-        </div>
+      <section class="proof-rail" aria-label="OMH capability facts">
+        <div><strong>82</strong><span>installable workflow skills</span></div>
+        <div><strong>6</strong><span>capability families</span></div>
+        <div><strong>8</strong><span>locally routed languages</span></div>
+        <div><strong>0</strong><span>network calls in core routing</span></div>
       </section>
 
-      <section class="home-section message-board" id="playbooks">
-        <div class="message-board__copy">
-          <p class="home-kicker">Situation playbooks</p>
-          <h2>Messy requests still get a clear first move.</h2>
-          <p>
-            Users ask in normal language. OMH returns the responsible lane,
-            visible next action, and the gates that remain before coding,
-            delivery, review, or CI can be claimed. Grounded operator cases
-            keep examples like "Payment failures keep showing up" out of the
-            coding path until the product signal is understood.
-          </p>
-        </div>
-        <div class="message-demo" role="region" aria-label="Hermes request routing example">
-          <div class="message-demo__bubble">
-            <span>Hermes message</span>
-            <strong>I want to safely add a feature to this repo.</strong>
-          </div>
-          <div class="route-stack" role="group" aria-label="Route result">
-            <div><span>playbook</span><strong>request-to-handoff</strong></div>
-            <div><span>owner</span><strong>planner</strong></div>
-            <div><span>next</span><strong>present safe plan</strong></div>
-          </div>
-          <p class="claim-boundary">Prepared is not observed.</p>
-        </div>
-      </section>
-
-      <section class="home-section first-value-section" id="first-value" aria-labelledby="first-value-title">
+      <section class="home-section" id="capabilities" aria-labelledby="capabilities-title">
         <div class="section-heading section-heading--split">
           <div>
-            <p class="home-kicker">First-value packs</p>
-            <h2 id="first-value-title">Useful immediately after install.</h2>
+            <p class="home-kicker">Capability system</p>
+            <h2 id="capabilities-title">Start with the job, not the command.</h2>
           </div>
           <p>
-            OMH surfaces problem-shaped packs instead of leaving a new install
-            as an empty catalog. Each pack prepares the route, handoff, and
-            evidence boundary; prepared guidance is not observed execution
-            evidence until the selected runtime records proof.
+            OMH groups a large skill catalog into six human-readable families.
+            Hermes can recommend the smallest useful lane while keeping every
+            trigger, quality bar, provider requirement, and claim boundary inspectable.
           </p>
         </div>
-        <div class="first-value-grid" aria-label="OMH first-value packs">
-          <article class="first-value-card first-value-card--accent">
-            <span>Frontend Rescue</span>
-            <h3>Make the interface feel real.</h3>
-            <p>Natural layout, responsive repair, accessibility audit, and visual QA handoff for frontend work.</p>
-            <code>frontend + visual-qa</code>
+        <nav class="family-nav" aria-label="Capability families">
+          <a href="#route"><span>01</span><strong>Plan and decide</strong></a>
+          <a href="#route"><span>02</span><strong>Learn and gather</strong></a>
+          <a href="#create"><span>03</span><strong>Create materials and visuals</strong></a>
+          <a href="#handoff"><span>04</span><strong>Delegate coding and ship</strong></a>
+          <a href="#operate"><span>05</span><strong>Operate and observe</strong></a>
+          <a href="#operate"><span>06</span><strong>Retain knowledge</strong></a>
+        </nav>
+
+        <div class="home-section__inner">
+          <article class="capability-band" id="route">
+            <div class="capability-band__copy">
+              <p class="home-kicker">Route with context</p>
+              <h3>Normal language in. A bounded first move out.</h3>
+              <p>
+                English, Korean, Japanese, Chinese, Spanish, French, German,
+                and Hindi operator requests can be classified locally. OMH
+                returns a family, skill, owner, next action, and what still is
+                not evidence.
+              </p>
+              <ul>
+                <li>Deep interview, planning, durable goals, and research</li>
+                <li>Media, data, web, paper, and best-practice routes</li>
+                <li>Guarded intent matching to reduce common-name overroutes</li>
+              </ul>
+            </div>
+            <div class="capability-band__specimen">
+              <div class="specimen-panel">
+                <div class="specimen-panel__head"><span>route preview</span><span class="state-label state-label--ready"><i aria-hidden="true"></i>local</span></div>
+                <div class="specimen-panel__body">
+                  <div class="route-list">
+                    <div><span>request</span><strong>Review recent agent memory papers</strong><span>EN</span></div>
+                    <div><span>family</span><strong>Learn and gather</strong><span>matched</span></div>
+                    <div><span>skill</span><strong>web-research</strong><span>source-backed</span></div>
+                    <div><span>next</span><strong>prepare research brief</strong><span>not run</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </article>
-          <article class="first-value-card">
-            <span>Repo First-Win</span>
-            <h3>Find the first safe improvement.</h3>
-            <p>Repo map, risk scan, reading path, verification command, and PR-sized runway.</p>
-            <code>codebase-onboarding</code>
+
+          <article class="capability-band capability-band--reverse" id="create">
+            <div class="capability-band__copy">
+              <p class="home-kicker">Create with quality gates</p>
+              <h3>Files, visuals, reports, and interfaces get the right production lane.</h3>
+              <p>
+                OMH distinguishes source analysis from generation, and a
+                prepared visual or document brief from an observed artifact.
+                Frontend, accessibility, PDF, slide, report, and image requests
+                carry format-specific review expectations.
+              </p>
+              <ul>
+                <li>Frontend publishing plus visual and accessibility QA</li>
+                <li>Image, report, deck, document, and deliverable packages</li>
+                <li>External image, video, browser, and connector providers stay explicit</li>
+              </ul>
+            </div>
+            <div class="capability-band__specimen">
+              <div class="specimen-panel">
+                <div class="specimen-panel__head"><span>artifact contract</span><span class="state-label state-label--prepared"><i aria-hidden="true"></i>prepared</span></div>
+                <div class="specimen-panel__body">
+                  <div class="provider-list">
+                    <div><span>source</span><strong>release notes</strong><span>reviewed</span></div>
+                    <div><span>format</span><strong>visual summary card</strong><span>planned</span></div>
+                    <div><span>provider</span><strong>external image provider</strong><span>required</span></div>
+                    <div><span>verification</span><strong>rendered artifact inspection</strong><span>not observed</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </article>
-          <article class="first-value-card">
-            <span>Failure-to-Fix</span>
-            <h3>Turn a broken signal into a fix path.</h3>
-            <p>Deploy, Pages, CI, DCO, build, and test failures become a classified minimal rerun plan.</p>
-            <code>build-failure-triage</code>
+
+          <article class="capability-band" id="handoff">
+            <div class="capability-band__copy">
+              <p class="home-kicker">Coding handoff</p>
+              <h3>Use the coding environment you trust, with more context.</h3>
+              <p>
+                Codex, Claude Code, Hermes runtime, and generic executors are
+                first-class owners. OMH prepares scope, non-goals, acceptance
+                criteria, worktree guidance, available local skills, review
+                expectations, and evidence gates before dispatch is claimed.
+              </p>
+              <ul>
+                <li>Executor readiness and skill-aware prompt preparation</li>
+                <li>Dynamic typed workflows across models, tools, wrappers, and agents</li>
+                <li>Builder, verifier, reviewer, docs, and PR responsibility lanes</li>
+              </ul>
+            </div>
+            <div class="capability-band__specimen">
+              <div class="specimen-panel">
+                <div class="specimen-panel__head"><span>coding_runtime_handoff/v1</span><span>selected owner</span></div>
+                <div class="specimen-panel__body">
+                  <div class="handoff-flow" aria-label="Coding handoff stages">
+                    <div><span>scope</span><strong>accepted plan</strong></div>
+                    <div><span>workspace</span><strong>worktree recommended</strong></div>
+                    <div><span>executor</span><strong>Codex or Claude Code</strong></div>
+                    <div><span>proof</span><strong>await runtime observation</strong></div>
+                  </div>
+                  <p class="boundary-note">A prepared handoff can improve the run. It cannot prove that the run started.</p>
+                </div>
+              </div>
+            </div>
           </article>
-          <article class="first-value-card">
-            <span>Visual Deliverable</span>
-            <h3>Package work for sharing.</h3>
-            <p>PR, release, report, deck, PDF, and image-summary requests get a polished delivery plan.</p>
-            <code>img-summary</code>
-          </article>
-          <article class="first-value-card">
-            <span>Toolbelt Readiness</span>
-            <h3>Check the tools before depending on them.</h3>
-            <p>Local CLIs, MCP hosts, credentials, connectors, and executor surfaces get readiness boundaries.</p>
-            <code>toolbelt-readiness</code>
-          </article>
-          <article class="first-value-card first-value-card--dark">
-            <span>CTO/Product Loop</span>
-            <h3>Review the launch like a system.</h3>
-            <p>Roadmap, architecture, QA, security, delivery, and operations tradeoffs stay visible before release.</p>
-            <code>cto-loop</code>
+
+          <article class="capability-band capability-band--reverse" id="operate">
+            <div class="capability-band__copy">
+              <p class="home-kicker">Operate, learn, remember</p>
+              <h3>Turn work into inspectable operating context.</h3>
+              <p>
+                OMH can prepare service-quality analysis from an external
+                metric provider, review project-local memory, connect a wiki
+                provider, inspect sessions, and turn weak routes into learning
+                candidates. Provider access and outcome improvement remain
+                separate observed claims.
+              </p>
+              <ul>
+                <li>Service quality, release, reliability, and incident review</li>
+                <li>Reviewed project memory and external knowledge-provider boundaries</li>
+                <li>Workflow learning, missed-route regression, and session recovery</li>
+              </ul>
+            </div>
+            <div class="capability-band__specimen">
+              <div class="specimen-panel">
+                <div class="specimen-panel__head"><span>provider-neutral context</span><span class="state-label state-label--ready"><i aria-hidden="true"></i>contract</span></div>
+                <div class="specimen-panel__body">
+                  <div class="memory-list">
+                    <div><span>metrics</span><strong>external_metric_provider</strong><span>adapter-ready</span></div>
+                    <div><span>knowledge</span><strong>external knowledge provider</strong><span>review first</span></div>
+                    <div><span>memory</span><strong>.omh/memory approved records</strong><span>local</span></div>
+                    <div><span>learning</span><strong>trace, eval, patch proposal</strong><span>human review</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </article>
         </div>
       </section>
 
-      <section class="home-section lane-section" id="capabilities">
+      <section class="home-section" id="evidence" aria-labelledby="evidence-title">
         <div class="section-heading section-heading--split">
           <div>
-            <p class="home-kicker">Choose by situation</p>
-            <h2>Five lanes beat forty commands.</h2>
+            <p class="home-kicker">Capability impact</p>
+            <h2 id="evidence-title">Measure each claim at its own boundary.</h2>
           </div>
           <p>
-            The full catalog stays in docs. The public story starts with the
-            situation the user is in, then names the workflow only after the
-            job is clear.
+            OMH reports routing precision separately from guidance depth, host
+            availability, external providers, artifact verification, and
+            comparative outcomes. It does not hide those different claims in one score.
           </p>
         </div>
-        <div class="lane-grid" aria-label="OMH workflow family lanes">
-          <article class="lane-card">
-            <span>Plan and decide</span>
-            <h3>Clarify before action.</h3>
-            <p><code>deep-interview</code> <code>ralplan</code> <code>ultragoal</code></p>
-          </article>
-          <article class="lane-card">
-            <span>Learn and gather</span>
-            <h3>Find source-backed context.</h3>
-            <p><code>web-research</code> <code>paper-learning</code> <code>source-finder</code></p>
-          </article>
-          <article class="lane-card">
-            <span>Create materials and visuals</span>
-            <h3>Package the work.</h3>
-            <p><code>img-summary</code> <code>materials-package</code> <code>report-package</code></p>
-          </article>
-          <article class="lane-card">
-            <span>Delegate coding and ship</span>
-            <h3>Prepare executor-ready handoff.</h3>
-            <p><code>idea-to-deploy</code> <code>ultraprocess</code> <code>code-review</code></p>
-          </article>
-          <article class="lane-card">
-            <span>Operate and observe</span>
-            <h3>Track what is actually proven.</h3>
-            <p><code>loop</code> <code>workflow-learning</code> <code>instinct-ledger</code></p>
-          </article>
+        <div class="home-section__inner">
+          <div class="specimen-panel">
+            <div class="specimen-panel__head"><span>capability impact</span><span>agent / maintainer evaluation</span></div>
+            <div class="specimen-panel__body">
+              <div class="impact-list">
+                <div><span>route selection</span><strong>deterministic in-repo corpora</strong><span class="state-label state-label--ready"><i aria-hidden="true"></i>checked</span></div>
+                <div><span>guidance depth</span><strong>skill quality bars and handoff policy</strong><span class="state-label state-label--prepared"><i aria-hidden="true"></i>partial</span></div>
+                <div><span>host + provider</span><strong>requires loaded runtime or provider evidence</strong><span class="state-label state-label--waiting"><i aria-hidden="true"></i>unproven</span></div>
+                <div><span>outcome quality</span><strong>requires blinded paired evaluation</strong><span class="state-label state-label--waiting"><i aria-hidden="true"></i>not run</span></div>
+              </div>
+            </div>
+            <div class="impact-callout">
+              <div><strong>No aggregate capability score.</strong><p>Accuracy, availability, verification, and comparative quality are different questions.</p></div>
+              <a class="text-link" href="https://github.com/rlaope/oh-my-hermes/blob/main/docs/CAPABILITY_IMPACT.md">Read the impact contract</a>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section class="home-section artifact-section" id="workflows">
-        <div class="section-heading">
-          <p class="home-kicker">Workflow surfaces</p>
-          <h2>Reference pages when the lane needs detail.</h2>
+      <section class="home-section" aria-labelledby="references-title">
+        <div class="section-heading section-heading--split">
+          <div>
+            <p class="home-kicker">Go deeper</p>
+            <h2 id="references-title">Reference pages when the lane needs detail.</h2>
+          </div>
+          <p>Start with the docs map, then open a focused workflow or architecture guide.</p>
         </div>
-        <div class="artifact-showcase">
-          <a class="artifact-card artifact-card--wide" href="docs/loop/" aria-label="Open Loop workflow docs">
-            <figure>
-              <img
-                src="assets/omh-loop-engineering.png"
-                alt="Loop poster showing a goal-driven research, plan, handoff, feedback, and repeat cycle for OMH"
-              >
-            </figure>
-            <div>
+        <div class="home-section__inner">
+          <div class="reference-grid">
+            <a class="reference-link" href="docs/">
+              <span>Documentation</span>
+              <h3>Choose a path by job.</h3>
+              <p>Installation, capability families, wrapper contracts, evidence, and operations.</p>
+            </a>
+            <a class="reference-link" href="docs/hermes-agent-architecture/">
+              <span>Architecture</span>
+              <h3>See where Hermes ends and OMH begins.</h3>
+              <p>Memory, skills, tools, gateway surfaces, and the evidence boundary.</p>
+            </a>
+            <a class="reference-link" href="docs/loop/">
               <span>Loop</span>
-              <h3>Goal-driven iteration with visible stop and resume states.</h3>
-            </div>
-          </a>
-          <a class="artifact-card" href="docs/image-gen/" aria-label="Open Image gen workflow docs">
-            <figure>
-              <img
-                src="assets/omh-img-summary-card.png"
-                alt="OMH img-summary poster showing image-generation prompt cards, evidence ladder, and supported card formats"
-              >
-            </figure>
-            <div>
-              <span>Image gen</span>
-              <h3>Source-specific prompt cards for meetings, PRs, issues, releases, and research.</h3>
-            </div>
-          </a>
-          <a class="artifact-card" href="docs/intent-to-plan/" aria-label="Open intent to plan docs">
-            <figure>
-              <img
-                src="assets/omh-flagship-workflows-poster.png"
-                alt="OMH flagship command sets poster summarizing intent to plan, product ops brief, and executor handoff lanes"
-              >
-            </figure>
-            <div>
-              <span>Intent to plan</span>
-              <h3>Interview, plan, product ops, and handoff paths in one frame.</h3>
-            </div>
-          </a>
-        </div>
-      </section>
-
-      <section class="home-section truth-section" id="architecture">
-        <div class="section-heading section-heading--split">
-          <div>
-            <p class="home-kicker">Evidence boundary</p>
-            <h2>Architecture at a glance.</h2>
-          </div>
-          <p>
-            Hermes owns chat intake, clarification, research, planning, and
-            narration. OMH owns the renderable contract layer. Selected
-            executors and runtime artifacts own observed proof.
-          </p>
-        </div>
-        <div class="truth-grid" role="group" data-map="architecture-map" aria-label="Prepared versus observed lifecycle">
-          <article>
-            <span>ready</span>
-            <h3>Message classified</h3>
-            <p>Route, role, language, and first action are available.</p>
-          </article>
-          <article>
-            <span>ready</span>
-            <h3>Plan accepted</h3>
-            <p>Scope, non-goals, acceptance criteria, and verification shape are known.</p>
-          </article>
-          <article>
-            <span>prepared</span>
-            <h3>Handoff prepared</h3>
-            <p>The selected executor can receive the work, but no work is claimed yet.</p>
-          </article>
-          <article>
-            <span>observed</span>
-            <h3>Run evidence</h3>
-            <p>Runtime records carry implementation, verification, review, and CI proof.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="home-section wrapper-section" id="flow">
-        <div class="wrapper-layout">
-          <div class="section-heading">
-            <p class="home-kicker">Wrapper-ready by design</p>
-            <h2>Contracts that adapters can render without scraping prose.</h2>
-            <p>
-              Discord, Slack, hosted chat, and Hermes-native plugin surfaces
-              can render actions, disabled gates, and evidence labels from the
-              same local state. Adapter metadata can carry
-              <code>harness_progress/v1</code> when a wrapper needs the raw
-              contract.
-            </p>
-            <div class="home-actions">
-              <a class="text-link" href="docs/product-ops/">Open product ops</a>
-              <a class="text-link" href="docs/executor-handoff/">Open handoff docs</a>
-            </div>
-          </div>
-          <div class="wrapper-card" role="region" aria-label="Wrapper response example">
-            <div class="wrapper-card__header">
-              <strong>Hermes Agent</strong>
-              <span>planner</span>
-            </div>
-            <div class="route-lens">
-              <span>playbook: request-to-handoff</span>
-              <span>next: show safe plan</span>
-              <span>state: prepared, not run</span>
-            </div>
-            <h3>Present the safe plan first.</h3>
-            <p>Executor choice and handoff stay unavailable until the plan is accepted.</p>
-            <div class="button-row" role="group" aria-label="Wrapper actions">
-              <button type="button">Accept plan</button>
-              <button type="button">Revise plan</button>
-              <button type="button" disabled>Prepare handoff</button>
-            </div>
+              <h3>Run durable goals without blurring proof.</h3>
+              <p>Research, plan, handoff, feedback, wait, resume, and completion gates.</p>
+            </a>
           </div>
         </div>
       </section>
 
-      <section class="home-section install-section" id="install">
+      <section class="home-section install-section" id="install" aria-labelledby="install-title">
         <div class="install-panel">
           <div>
             <p class="home-kicker">Install</p>
-            <h2>Install</h2>
-            <p>
-              Run the local installer, then add the Hermes tap when that
-              surface is available.
-            </p>
+            <h2 id="install-title">Three commands for people. The rest belongs to the agent layer.</h2>
+            <p>Set up OMH, keep it current, and check its health. After that, ask Hermes for the work in normal language.</p>
           </div>
-          <div class="install-terminal" role="region" aria-label="Install commands" tabindex="0">
-            <code>curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
-omh setup
+          <div class="install-terminal" role="region" aria-label="Install commands" tabindex="0"><code># Install OMH once
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 
+# Human OMH commands
+omh setup
+omh update
+omh doctor
+
+# Optional Hermes-native skill tap
 hermes skills tap add rlaope/oh-my-hermes
-hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes</code>
-          </div>
+hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes</code></div>
         </div>
       </section>
     </main>
 
     <footer class="footer">
-      <span>
-        OMH keeps Hermes as the chat surface and local artifacts as the evidence boundary.
-      </span>
-      <span>
-        Developed by <a href="https://github.com/rlaope">rlaope</a>.
-      </span>
+      <span>OMH keeps Hermes chat-first and every capability claim evidence-aware.</span>
+      <span>Developed by <a href="https://github.com/rlaope">rlaope</a>.</span>
     </footer>
   </body>
 </html>

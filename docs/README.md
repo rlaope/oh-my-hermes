@@ -1,232 +1,109 @@
 # Documentation
 
-This directory is the public operating map for oh-my-hermes.
+This directory is the public operating map for oh-my-hermes. Start with the
+job you need Hermes to handle, then open the contract that owns it.
 
-Read `docs/DIRECTION.md` first when a change could affect product identity,
-wrapper behavior, planning quality, coding delegation, or public claims. Read
-`AGENTS.md` alongside it when changing code in this repository; it is the
-repo-local contract for Codex agents working here.
+OMH is a Hermes-native wrapper orchestration layer. Hermes owns chat intake,
+clarification, source-backed research, planning, and status narration. OMH
+provides deterministic local routing, generated skill guidance, wrapper
+contracts, prepared handoffs, and evidence records. The selected coding
+executor owns coding work when it leaves Hermes.
 
-## Reading Paths
+The core claim boundary is simple: `prepared_not_observed` is useful context,
+not execution, provider access, artifact generation, review, CI, deployment,
+merge readiness, or a merge.
+
+## Who Runs What
+
+People normally talk to Hermes and use only three OMH maintenance commands:
+`omh setup`, `omh update`, and `omh doctor`. Coding, research, creation,
+operations, and memory requests should begin as natural-language requests to
+Hermes.
+
+The rest of the CLI is an agent and operator control plane. `omh coding`, `omh
+runtime`, `omh chat`, `omh memory`, `omh loop`, `omh harness`, and related
+commands are primarily called by Hermes Agent, wrappers, coding agents,
+automations, or maintainers. This documentation keeps those commands available
+for precise integration and debugging, but labels them as backend or operator
+references rather than normal user steps.
+
+## Start Here
 
 | Goal | Read |
 | --- | --- |
+| Install, update, repair, or remove OMH | [Installation](INSTALLATION.md) |
 | Understand what OMH is and is not | [Direction](DIRECTION.md) |
-| Understand module boundaries and local artifacts | [Architecture](ARCHITECTURE.md) |
-| Understand Hermes Agent memory, skills, gateway, cron, plugins, and OMH's role | [Hermes Agent Architecture Guide](../site/docs/hermes-agent-architecture/index.html) |
-| Compare common oh-my runtime axes and OMH gaps | [Parity Matrix](PARITY.md) |
-| Inspect runtime-readable OMH capability manifests | [Capabilities](CAPABILITIES.md) |
-| Measure routing impact and separate unproven execution or outcome claims | [Capability Impact](CAPABILITY_IMPACT.md) |
-| Understand safe orchestration pattern contracts | [Orchestration Patterns](ORCHESTRATION_PATTERNS.md) |
-| Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
-| Capture and recall reviewed project-local memory | [Project Memory](MEMORY.md) |
-| Review stale local context and executor handoff packs | [Memory Context Review](MEMORY_CONTEXT.md) |
-| Operate a Hermes-agent wrapper safely | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
-| Install from an AI-agent protocol | [Agent Install Protocol](../INSTALL_FOR_AGENTS.md) |
-| See the first-use Hermes prompt and evidence boundary | [Installation](INSTALLATION.md#quick-start) |
-| Understand responsibility roles and operating models | [Role Surface](ROLES.md) |
-| Choose a situation-level pipeline | [Playbooks](PLAYBOOKS.md) |
-| See task cards and Discord-style wrapper responses | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md) |
-| Render workflow quality gates in wrappers | [Harness Quality Contract](HARNESS_QUALITY.md) |
-| Install Hermes-native skills or bootstrap managed skills | [Installation](INSTALLATION.md) |
-| Run deterministic backend demos, including executor-choice and selected runtime handoff status | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md#commands-used) and [fixture shims](../examples) |
-| See the G1-G10 implemented feature surfaces and demo cards | [Application Cases](APPLICATION_CASES.md) |
-| Check generated skill and harness metadata | [Workflow Reference](WORKFLOWS.md) |
+| Understand modules, artifacts, and ownership | [Architecture](ARCHITECTURE.md) |
+| Inspect the runtime-readable capability map | [Capabilities](CAPABILITIES.md) |
+| Understand measured and unproven impact claims | [Capability Impact](CAPABILITY_IMPACT.md) |
+| Browse all generated skills and harness metadata | [Workflow Reference](WORKFLOWS.md) |
+| Prepare coding work for a selected executor | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
+| Integrate OMH into a Hermes wrapper | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
+| Capture and recall reviewed project context | [Project Memory](MEMORY.md) |
+| Choose a situation-level workflow | [Playbooks](PLAYBOOKS.md) |
 | Prepare or verify a release | [Release](RELEASE.md) |
-| Track public sequencing | [Roadmap](ROADMAP.md) |
-| Review the public website source | [GitHub Pages site](../site/index.html) |
 
-## Direction Summary
+For a pasteable AI-agent install flow, use the
+[Agent Install Protocol](../INSTALL_FOR_AGENTS.md). For a visual explanation of
+Hermes memory, skills, tools, gateway surfaces, and OMH's role, see the
+[Hermes Agent Architecture Guide](../site/docs/hermes-agent-architecture/index.html).
 
-OMH is a Hermes-native wrapper orchestration layer.
+## Six Capability Families
 
-The product should make chat surfaces feel capable without hiding who did what.
-Hermes should own intake, clarification, research, business briefs, meeting
-prep, feedback triage, operating records, report packages, material packages,
-reliability reviews, app operation loops, planning, status narration, and
-handoff UX. The selected coding executor should own main coding work when work
-leaves Hermes. OMH should own the deterministic local contract between those
-worlds: generated skill guidance, playbooks, wrapper sessions, prepared handoff
-payloads, and evidence records.
+The public front door groups **82 installable skills** by user intent. Exact
+skill names remain available for deterministic routing, wrapper rendering, and
+operator control.
 
-Assume most users will try the product before reading the full docs. The public
-surface should therefore make the first install, first Hermes prompt, repair
-path, and evidence boundary obvious without forcing users into a CLI-first
-workflow.
+| Family | Typical work |
+| --- | --- |
+| **Plan and decide** | Ambiguous goals, `deep-interview`, `ralplan`, `ultragoal`, `loop`, and reviewed decision paths. |
+| **Learn and gather** | Web research, source finding, papers, data, customer signals, and source-backed briefs. |
+| **Create materials and visuals** | Frontend, accessibility, visual QA, images, decks, reports, documents, PDFs, and deliverable packages. |
+| **Delegate coding and ship** | Scoped, skill-aware handoffs to Codex, Claude Code, Hermes runtime, or another selected executor, plus review and verification gates. |
+| **Operate and observe** | Setup, service quality, reliability, releases, sessions, automation, tools, connectors, and workflow learning. |
+| **Retain knowledge** | Reviewed project memory, wiki workflows, and provider-neutral external knowledge connections. |
 
-The most important boundary is prepared versus observed evidence. A prepared
-handoff is useful, but it is not execution, review, CI, merge readiness, or a
-merge.
+Use [Capabilities](CAPABILITIES.md) for the manifest contract and
+[Workflow Reference](WORKFLOWS.md) for the generated catalog.
 
-Runtime handoffs for Hermes/OMX/OMO/OMC use `runtime_observation/v1` records
-when wrappers or operators later observe runtime start, worktree, worker,
-verification, review, CI, or merge ladder events.
+## Operating Contracts
 
-Coding handoffs also include `worktree_session_isolation/v1`. Hermes can show
-same workspace ok, worktree recommended, or worktree required before starting a
-coding session. When a wrapper or operator chooses to proceed, `omh worktree
-prepare` can create the local Git worktree and write
-`omh_worktree_observation/v1`. That record proves workspace isolation only; the
-executor session and runtime ladder still need separate observed evidence.
+- Public docs describe local deterministic behavior, not hidden runtime magic.
+- Wrapper UX should present actions, status, and evidence states without making
+  normal chat users run backend commands.
+- User quick starts should foreground natural-language Hermes requests plus
+  `omh setup`, `omh update`, and `omh doctor`; broader CLI examples require an
+  explicit agent, wrapper, operator, or maintainer label.
+- Coding-heavy requests stay executor-neutral until a coding owner is selected.
+- Wrapper sessions own chat continuity and plan decisions. Linked runtime runs
+  own dispatch, execution, verification, review, CI, and merge evidence.
+- Generated workflow docs come from `src/skills/catalog.py`; update the catalog
+  before refreshing generated references.
+- Project memory under `.omh/memory/` is reviewed OMH-local context. Recall packs
+  are not opaque Hermes memory or execution evidence.
+- External metric, knowledge, browser, image, video, and connector systems use
+  explicit provider boundaries. Configuration is not observed provider I/O.
+- Capability impact reports route selection, guidance depth, host availability,
+  provider availability, artifact verification, and outcome quality separately.
 
-Executor session buttons use `executor_session/v1` records when Hermes or a
-wrapper observes Start Codex session, Start Claude Code session, Attach coding
-session, Record completed, Record blocked, or Ask Hermes to verify. They update
-chat status without requiring normal users to type backend commands.
+## More References
 
-Operating models are optional advanced Hermes collaboration postures. They
-should not be described as installed agents or first-run setup choices unless a
-separate profile pack is explicitly selected.
+| Area | Read |
+| --- | --- |
+| Responsibility roles and profiles | [Roles](ROLES.md) |
+| Safe orchestration patterns | [Orchestration Patterns](ORCHESTRATION_PATTERNS.md) |
+| Chat cards and grounded wrapper examples | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md) |
+| Harness and quality-gate contracts | [Harness Quality Contract](HARNESS_QUALITY.md) |
+| Memory/context review and handoff packs | [Memory Context Review](MEMORY_CONTEXT.md) |
+| Common oh-my capability axes and gaps | [Parity Matrix](PARITY.md) |
+| Implemented application surfaces | [Application Cases](APPLICATION_CASES.md) |
+| Public roadmap | [Roadmap](ROADMAP.md) |
+| GitHub Pages source | [Website](../site/index.html) |
 
-## Representative Workflow Modes
+## Documentation Checks
 
-![OMH flagship command sets poster](../assets/omh-flagship-workflows-poster.png)
-
-The full skill catalog is intentionally larger than the public story. Start
-with these 11 modes; then use [WORKFLOWS.md](WORKFLOWS.md) and
-[CAPABILITIES.md](CAPABILITIES.md) for the complete reference.
-
-<!-- Intent-to-plan anchor: `deep-interview` / `ralplan` / `ultragoal` / `loop` / `ultraprocess`. -->
-
-- **Deep Interview** (`deep-interview`) - clarify the one missing decision
-  before planning.
-
-- **Ralplan** (`ralplan`) - turn facts, sources, risks, acceptance criteria,
-  and verification commands into a reviewed plan.
-
-- **Ultragoal** (`ultragoal`) - give ambitious work durable checkpoints and
-  completion gates.
-
-- **Ultra Process** (`ultraprocess`) - run one delivery cycle from research to
-  plan, implementation path, review, and docs/status sync.
-
-- **Loop** (`loop`) - iterate when the correct next implementation
-  must be discovered through bounded cycles.
-
-- **Web Research** (`web-research`) - keep current research source-backed.
-
-- **Paper Learning** (`paper-learning`) - explain a supplied paper or paper PDF
-  by level while preserving section coverage.
-
-- **Source Finder** (`source-finder`) - prepare typed source candidates before
-  research or synthesis starts.
-
-- **Idea To Deploy** (`idea-to-deploy`) - prepare scoped coding work for the
-  selected runtime without claiming unobserved execution.
-
-- **Dynamic Workflow** (`coding dynamic-workflow`) - prepare a dynamic typed
-  target workflow and SVG chart across model, runtime, wrapper, tool, and agent
-  surfaces, naming each stage's agent, target type, model, cost tier, and
-  evidence gate.
-
-- **Workflow Learning** (`workflow-learning`) - turn weak workflow attempts into
-  traces, evals, review queues, regression cases, and patch proposals.
-
-## Documentation Contracts
-
-- Public docs should describe local deterministic behavior, not hidden runtime
-  magic.
-- Chat users should remain command-agnostic. Wrapper docs should describe
-  buttons, threads, status, and handoff states rather than asking end users to
-  run shell commands.
-- Installation docs should lead with Hermes skill tap/install when available.
-  `omh setup` should be described as a bootstrap, repair, validation, and
-  wrapper/backend path that creates the same Hermes-visible skill state.
-- Operator runbooks should use document titles, not command-like names, when
-  they describe wrapper responsibilities and status evidence.
-- Demo and shim examples should stay fixture-backed, deterministic, and
-  Hermes Agent-facing unless a scoped integration explicitly opts into a
-  different runtime surface.
-- Playbook docs should describe situation-level pipelines for company work, app
-  operation loops such as idea-to-deploy / CTO loop / deploy-and-monitor,
-  operations artifacts such as operating-rhythm / report-package /
-  reliability-review, material package flows such as decks / PDFs /
-  spreadsheets / documents / HWP, and coding handoffs, plus ownership
-  boundaries, rather than becoming a second skill catalog.
-- Role docs should describe responsibility lanes, not runtime agents. A role can
-  explain the next action, but it cannot prove execution without matching
-  observed evidence.
-- Operating model docs should stay lighter than team profile pack docs. They
-  record optional routing and narration defaults only.
-- Coding-heavy requests should be described as delegated work unless there is
-  observed evidence that a coding executor actually ran.
-- Generated workflow docs should come from `src/skills/catalog.py`; update the
-  catalog before refreshing generated references.
-- Harness quality gates should stay machine-readable through
-  `harness_quality/v1` instead of being prose-only wrapper behavior.
-- Harness catalog changes should pass `omh harness validate`, and user-facing
-  harness examples should stay backed by conformance tests.
-- Release checks should include `omh release checklist --json`,
-  `omh release skill-content-smoke --json`,
-  `omh release product-readiness --version 1.0.2 --json`,
-  `omh release evidence-bundle --version 1.0.2 --write --json`,
-  `omh release hermes-smoke`, `omh release install-smoke`, and installed command
-  smoke (`omh --help`). Use `release install-smoke --live` for an isolated
-  first-time downloader check, and use `hermes-smoke --live` only from the
-  target Hermes profile when an operator wants real Hermes profile evidence.
-- Runtime and wrapper docs should preserve the separation between wrapper
-  session state and run-level evidence.
-- Worktree/session isolation docs should describe `worktree_session_isolation/v1`
-  as prepared workspace guidance and wrapper UX, and `omh worktree prepare` as
-  explicit opt-in Git worktree creation that records workspace-isolation
-  evidence only. `omh worktree bind` may describe wrapper launch/attach recipes
-  for a prepared worktree, but must not claim executor dispatch or results.
-- Workflow learning docs should state that `workflow_learning_trace/v1` records
-  are metadata-only process evidence. They can feed evals, readiness audits,
-  review-only improvement candidates, human-review queues, regression cases,
-  non-applying patch handoff proposals, and redacted exports, but they are not
-  automatic training, hidden skill patches, or proof that future behavior is
-  fixed.
-- Parity docs should map common oh-my runtime capability axes to OMH's
-  Hermes-native evidence model instead of promising hidden workers, automatic
-  worktrees, unrecorded MCP host load, arbitrary MCP tools, or plugin runtime
-  load without observation. The local MCP bridge may expose only allowlisted
-  status, recommendation, and probe tools; host/wrapper-observed load is
-  recorded as `omh_mcp_host_session/v1`.
-- Goal execution docs should describe `.omh/goals` metadata-only ledgers,
-  `goal_completion_gate/v1`, `goal_status_card/v1`, and
-  `goal_continuation/v1` as wrapper contracts that name the next action before
-  completion is claimed.
-- Material processing docs should describe `.omh/materials`
-  `material_artifact/v1` records, target-format QA ladders, generation
-  handoffs, and observed file evidence without implying OMH rendered PPTX, PDF,
-  Keynote, DOCX, XLSX, HWP, or uploaded files itself.
-- Loop docs should describe `loopability_assessment/v1`,
-  `.omh/loops` metadata-only `loop_cycle/v1` state, `loop_runtime/v1` tick
-  queues, `verification_plan` metadata, `failure_mode_summary` warnings,
-  small-loop guidance, and `loop_status_card/v1` next actions as
-  orchestration evidence only; goal completion still belongs to linked
-  `goal_ledger/v1` evidence.
-- Memory/context docs should state that OMH reviews local or wrapper-supplied
-  context only; it does not read or mutate opaque Hermes internal memory.
-- The GitHub Pages site should stay a short public entry point that links back
-  to this docs set instead of becoming a second source of truth. The
-  Hermes Agent architecture guide may use visual education copy, but claims
-  should stay grounded in inspected Hermes Agent files and OMH evidence
-  boundaries.
-
-## Update Checklist
-
-When changing docs, check whether the same claim needs to be updated in:
-
-- [README](../README.md)
-- [Direction](DIRECTION.md)
-- [Architecture](ARCHITECTURE.md)
-- [Parity Matrix](PARITY.md)
-- [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md)
-- [Memory Context Review](MEMORY_CONTEXT.md)
-- [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md)
-- [Role Surface](ROLES.md)
-- [Agent Install Protocol](../INSTALL_FOR_AGENTS.md)
-- [Playbooks](PLAYBOOKS.md)
-- [Harness Quality Contract](HARNESS_QUALITY.md)
-- [Application Cases](APPLICATION_CASES.md)
-- [Workflow Reference](WORKFLOWS.md)
-- [Research Department Example](../examples/research-department/README.md)
-- [GitHub Pages site](../site/index.html)
-- [AGENTS](../AGENTS.md)
-
-Run the focused documentation checks before calling the change complete:
+When a public claim changes, check the README, site, capabilities, direction,
+architecture, generated workflow reference, and agent contract together.
 
 ```sh
 PYTHONPATH=tests uv run python -m unittest tests/test_router_content.py -v

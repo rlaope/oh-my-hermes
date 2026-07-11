@@ -5,6 +5,10 @@
 The product charter is `docs/DIRECTION.md`. This document expands the
 delegation-first completion slice of that charter.
 
+This is an implementation and integration reference. Users ask Hermes to handle
+coding work in natural language; Hermes Agent, wrappers, and coding agents use
+the command and schema surfaces documented below.
+
 OMH should raise Hermes toward a mature workflow-layer experience without
 pretending that Hermes is the primary coding executor.
 

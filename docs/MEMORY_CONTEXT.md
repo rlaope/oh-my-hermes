@@ -6,6 +6,10 @@ and wrapper-supplied context candidates.
 
 It does not read, scrape, or mutate opaque Hermes internal memory.
 
+The human surface is the natural-language memory request and review card. CLI
+examples in this document are for Hermes Agent, wrappers, coding agents, and
+advanced operators implementing that flow.
+
 For the first-class reviewed long-term project-memory store, see
 [Project Memory](MEMORY.md). That layer captures candidates, approves or
 rejects typed records, and recalls compact reviewed memory into coding

@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="../../styles.css">
   </head>
   <body class="docs-page feature-page">
+    <a class="skip-link" href="#content">Skip to content</a>
     <header class="topbar topbar--solid" aria-label="Primary">
       <a class="brand brand--link" href="../../">OMH</a>
       <nav class="nav" aria-label="Primary navigation">
@@ -31,7 +32,7 @@
       </nav>
     </header>
 
-    <main class="feature-shell">
+    <main class="feature-shell" id="content" tabindex="-1">
       <header class="feature-hero feature-hero--loop">
         <p class="eyebrow">New flagship workflow</p>
         <span class="new-badge">New</span>
@@ -275,9 +276,9 @@
                 queue runtime steps only after the current loop goal is clear.
               </p>
               <div class="button-row">
-                <button type="button">Observe only</button>
-                <button type="button">Handoff only</button>
-                <button type="button">Execute with gates</button>
+                <span>Observe only</span>
+                <span>Handoff only</span>
+                <span>Execute with gates</span>
               </div>
               <p class="claim-boundary">A loop tick is not execution, review, CI, merge, publication, or market response evidence.</p>
             </div>

@@ -4,11 +4,14 @@ This page shows how a Discord-style Hermes Agent surface can render OMH output
 as a normal chat response. The example is generated from local fixtures so the
 contract is easy to inspect.
 
+The commands on this page are for wrapper developers and maintainers. Chat users
+interact with the rendered Hermes response and do not run these backend commands.
+
 For the operator runbook that ties these examples to state transitions,
 responsibilities, and evidence boundaries, read
 [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md).
 
-## Commands Used
+## Wrapper / Maintainer Commands Used
 
 ```sh
 uv run python examples/discord-adapter-shim.py

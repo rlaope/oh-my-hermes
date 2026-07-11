@@ -2,85 +2,100 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-06-25
-- Primary product surfaces: GitHub Pages marketing site, documentation index, workflow detail pages, README-linked public assets.
-- Evidence reviewed: `site/index.html`, `site/styles.css`, `site/docs/index.html`, `site/docs/hermes-agent-architecture/index.html`, `README.md`, `docs/DIRECTION.md`, `docs/ROADMAP.md`, `docs/CAPABILITIES.md`, `site/assets/*`, `https://omo.dev/ko`.
+- Last refreshed: 2026-07-11
+- Primary product surfaces: GitHub Pages homepage, documentation index, workflow detail pages, README-linked public assets.
+- Evidence reviewed: `site/index.html`, `site/styles.css`, every `site/docs/*/index.html`, `README.md`, `docs/DIRECTION.md`, `docs/CAPABILITIES.md`, `src/capabilities/families.py`, `src/quality/capability_impact.py`, the live `https://aside.com/` page, and the local Aside reference digest.
+- Reference intent: borrow Aside's bright product-app density, compact type, hairline bands, neutral controls, and browser-frame focal object. Do not copy its logo, product imagery, copy, or proprietary assets.
 
 ## Brand
-- Personality: precise, capable, chat-native, operator-grade, calm under pressure.
-- Trust signals: deterministic contracts, local artifacts, visible evidence boundaries, Hermes-owned chat continuity, selected executor handoff.
-- Avoid: generic CLI-product language, hidden-agent claims, oversized white card stacks, decorative gradients without product meaning, command-catalog sprawl, implying OMH runs code or platform bots by itself.
+- Personality: precise, capable, calm, inspectable, and operator-grade.
+- Trust signals: deterministic routing contracts, local artifacts, six capability families, prepared-versus-observed evidence, executor-neutral handoffs, and explicit verification boundaries.
+- Avoid: dark launch-poster composition, oversized type, stacked marketing cards, decorative gradients, hidden-agent claims, executor favoritism, and command-catalog sprawl.
 
 ## Product goals
-- Goals: make OMH understandable from the first viewport, show that Hermes remains the user-facing surface, make wrapper contracts and evidence boundaries feel tangible, keep installation and docs paths obvious, and turn the README core values into the primary site structure.
-- Non-goals: do not reposition OMH as a standalone bot, LLM router, Hermes core patch, network service, or hidden coding executor.
-- Success signals: a new visitor first sees "Oh My Hermes", then understands "Install once, keep Hermes, make the next step safe"; the site highlights capabilities, plugin/wrapper status, handoff, and evidence without command memorization; screenshots remain readable on mobile and desktop.
+- Goals: explain OMH in one viewport, show the product through a real contract workbench, make the six capability families scannable, expose the evidence boundary, and keep installation and deeper docs obvious.
+- Non-goals: do not reposition OMH as a standalone bot, Hermes core patch, network service, LLM router, or hidden coding executor.
+- Success signals: a new visitor can answer what OMH adds, what it can prepare, what still needs observed proof, and where to start in under one minute.
 
 ## Personas and jobs
-- Primary personas: Hermes users, wrapper or adapter builders, maintainers evaluating delegation-first coding flows, operators responsible for release trust.
-- User jobs: understand what OMH adds, install or inspect it, choose the right workflow lane, see what is prepared versus observed, follow docs for deeper contracts.
-- Key contexts of use: GitHub README click-through, GitHub Pages browsing, maintainer review, wrapper integration planning, product demo.
+- Primary personas: existing Hermes users, maintainers, wrapper builders, coding-agent operators, and teams evaluating Hermes-native orchestration.
+- User jobs: understand the value before installing, route a plain-language request, choose the right capability family, prepare executor-ready work, inspect proof boundaries, and find deeper contracts.
+- Key contexts of use: GitHub README, GitHub Pages, wrapper integration planning, technical evaluation, and release review.
 
 ## Information architecture
-- Primary navigation: Home, Docs, Hermes Deepdive, GitHub.
-- Core routes/screens: homepage, docs index, workflow detail pages, architecture guide.
-- Content hierarchy: brand first, README hero image and install path second, README core values third, live-feeling contract example fourth, situation lanes fifth, evidence and architecture boundaries sixth.
-- Core value spine: install once; keep Hermes chat-first; pick the smallest safe next step; keep contracts local and deterministic; never blur prepared state with observed proof.
-- Docs hierarchy: start by decision, not by command. The docs index answers "install", "choose a lane", "wire a wrapper", "verify evidence", and sends detailed reference work to deeper pages.
+- Primary navigation: Product, Capabilities, Evidence, Docs, GitHub.
+- Homepage sequence: compact hero; contract workbench; proof rail; capability-family bands; coding handoff; knowledge and operations; evidence model; install.
+- Documentation sequence: start paths; capability families; runtime and wrapper contracts; quality and evidence; deep references.
+- Detail pages: keep existing routes and content ownership, but render them through the shared compact page shell.
 
 ## Design principles
-- Principle 1: Show the product boundary as an interface, not as prose.
-- Principle 2: Lead with natural-language Hermes usage before commands.
-- Principle 3: Use short, high-contrast modules before any long reference copy.
-- Principle 4: Treat workflow names as proof labels, not as the main story.
-- Tradeoffs: keep enough narrative for trust, but compress repeated workflow lists into scannable modules and links.
+- Product before promises: the first viewport contains a working-looking OMH contract surface, not decorative art.
+- Quiet confidence: use medium weight, compact scale, white space, and thin dividers instead of oversized headings or glow.
+- Dense where useful: capability and evidence modules should resemble operator UI, with short labels and structured values.
+- One claim, one proof boundary: every capability statement names whether it is prepared, registered, locally checked, or observed.
+- Original composition: Aside is a layout and token reference only; OMH content and product surfaces remain original.
 
 ## Visual language
-- Color: preserve the existing teal, cyan, blue, and gold family, but bias the public site toward crisp black/white contrast with accent color used as evidence and routing signals.
-- Typography: large confident headings, compact labels, generous line height for explanatory copy, tabular/mono styling only for contracts and commands. Use a local humanist system stack; do not depend on external fonts.
-- Spacing/layout rhythm: full-width bands with constrained inner grids; no nested decorative cards; compact repeated items.
-- Shape/radius/elevation: 8px radius maximum for cards and tools, hairline borders, restrained shadows, glow only where it reinforces route/status states.
-- Motion: subtle hover lift, route shimmer, console scan, and focus transitions; respect reduced motion.
-- Imagery/iconography: use the README `assets/hermes-agent-hero.png` artwork as the homepage hero source, copied into `site/assets/` for GitHub Pages; avoid legacy hero variants and decorative-only art.
+- Color: `canvas` #ffffff; `soft` #f5f5f2; `soft-blue` #eef7fa; `ink` #090b0c; `muted` #62686f; `quiet` #6b7177; `line` rgba(9, 11, 12, 0.09); `accent` #147c70; `accent-soft` #e7f5f1; `observed` #2563eb; `warning` #94540f.
+- Typography: local system sans for body/UI with `Arial`, `Helvetica Neue`, and platform fallbacks; Georgia for selected display claims; system monospace for contracts. No remote font dependency.
+- Type scale: display 52/56; page title 44/48; section 38/44; subsection 26/32; card title 18/24; body 16/24; small body 14/21; label 12/16. Mobile steps down to 38/42, 34/40, and 30/36 without viewport-based scaling.
+- Spacing: 4px base unit; page gutter 24px mobile, 40px tablet, 56px desktop; sections 72px desktop and 48px mobile; compact UI uses 8px, 12px, 16px, and 24px rhythm.
+- Shape: 999px only for trust pills and primary hero actions; 8px for product frames and repeated cards; 6px for controls; structural bands stay square.
+- Elevation: hairline borders first; one restrained neutral frame shadow; no colored glow or stacked decorative shadows.
+- Motion: 150-180ms color, background, border, opacity, and transform transitions tied to real links or controls. No decorative looping animation.
+- Imagery: use existing workflow posters only in secondary reference modules. The hero focal object is a live DOM contract workbench.
 
 ## Components
-- Existing components to reuse: `topbar`, `nav`, `button`, `footer`, command blocks, poster frames, state pills, route/evidence cards.
-- New/changed components: homepage README-image hero, top hero installer terminal, full install terminal, core-value ledger, natural-message routing board, situation lane strip, truth boundary stack, docs decision map, docs value rail.
-- Variants and states: hover, focus-visible, disabled/gated, ready/pending, mobile stacked layouts, reduced motion.
-- Token/component ownership: `site/styles.css` owns static site tokens and components; HTML pages should not inline style decisions.
+- Site shell: compact sticky topbar, max-width content frame, full-width section bands, simple footer.
+- Buttons: neutral primary, quiet secondary, text link; default, hover, active, focus-visible, disabled states.
+- Trust pill: one provenance signal near the hero claim; no chip clouds.
+- Product workbench: browser-like frame with sidebar, message intake, route contract, capability family, selected executor state, and evidence ladder.
+- Proof rail: compact facts separated by hairlines, not floating cards.
+- Capability rows: full-width bands with claim, explanation, and product specimen.
+- Route and evidence primitives: state dot, key/value row, compact status label, boundary note, and command block.
+- Docs primitives: sticky local navigation, start-path rows, reference list, callout, feature hero, prose measure, and code block.
+- Showcase harness: `site/design-system.html` renders core primitives and states at mobile, tablet, and desktop widths before product-page QA.
 
 ## Accessibility
-- Target standard: WCAG 2.1 AA for contrast, focus, structure, and reduced motion.
-- Keyboard/focus behavior: all links and command regions receive visible focus outlines; interactive-looking disabled controls must use real disabled semantics or non-button spans.
-- Contrast/readability: avoid low-contrast cyan on white; dark hero overlays must keep text readable; every key statement must be understandable when skimmed without adjacent paragraphs.
-- Screen-reader semantics: keep landmark header/main/footer, aria labels for visual boards, real headings in order.
-- Reduced motion and sensory considerations: animations must pause or flatten under `prefers-reduced-motion`.
+- Target standard: WCAG 2.1 AA, with Lighthouse accessibility 100 as a verification target.
+- Keyboard: skip link first, visible focus ring, logical source order, and no interactive-looking non-interactive element.
+- Contrast: ink and muted text must pass on canvas and soft surfaces; accent is a signal, never the only carrier of state.
+- Semantics: one H1 per page, ordered headings, landmark elements, descriptive link text, explicit image dimensions, and useful alt text.
+- Motion: honor `prefers-reduced-motion`; product understanding must not depend on animation.
+- Cognitive accessibility: short paragraphs, stable labels, consistent state vocabulary, and no command knowledge required to understand the public story.
 
 ## Responsive behavior
-- Supported breakpoints/devices: mobile 360px+, tablet, laptop, desktop wide.
-- Layout adaptations: hero and grids collapse to one column; nav wraps cleanly; command text and long code terms wrap without overflow.
-- Touch/hover differences: hover effects are enhancements only; tap targets stay at least 40px high.
+- Supported viewports: 360px mobile, 768px tablet, 1280px desktop, and 1440px wide desktop.
+- Desktop: full navigation, two-column hero, complete workbench, side-by-side capability specimens.
+- Tablet: simplified navigation spacing, stacked hero copy and workbench, two-column proof and reference modules.
+- Mobile: product frame keeps a stable crop, sidebar becomes a horizontal rail, dense rows wrap without horizontal page overflow, and docs navigation becomes a compact scrollable row after the hero.
+- Touch: controls remain at least 40px high; hover is an enhancement only.
 
 ## Interaction states
-- Loading: static site does not expose loading states.
-- Empty: not applicable for homepage; docs can link to broader documentation.
-- Error: not applicable for homepage.
-- Success: ready/status pills and green evidence states communicate completion.
-- Disabled: gated actions use muted visual language and clear labels without claiming availability.
-- Offline/slow network, if applicable: local CSS and committed assets should render without external font or script dependencies.
+- Loading: not applicable to the static site; never show fake progress.
+- Empty: workbench specimens use explicit `not observed` or `not connected` states rather than blank panels.
+- Error: documentation examples state the missing evidence/provider instead of implying failure recovery happened.
+- Success: observed states use icon, label, and text together.
+- Disabled: prepared actions that require acceptance use real disabled semantics in specimens.
+- Offline: all CSS, HTML, icons, and images are local; no external script or font is required.
 
 ## Content voice
-- Tone: direct, confident, evidence-backed, product-operator language.
-- Terminology: prefer "Hermes chat", "wrapper contract", "prepared versus observed", "selected executor", "local artifacts", "capability manifest".
-- Microcopy rules: avoid unexplained command lists in primary copy; keep the hero install block to `curl | sh` and `omh setup`; keep the full install block readable with Hermes tap/install commands preserved below the local installer; pair workflow names with the job they perform; never claim execution, review, CI, delivery, or plugin load unless observed; keep default public copy in English.
+- Tone: direct, concrete, calm, and technically honest.
+- Headline rule: use literal product or capability names; place benefits in supporting copy.
+- Terminology: Hermes-native orchestration, capability family, local contract, selected executor, prepared handoff, observed evidence, external provider, reviewed project memory.
+- Claims: never turn registration, routing, preparation, or guidance into execution, review, CI, merge, publication, or outcome proof.
+- README: stay short enough to scan; installation, six families, evidence boundary, and deeper links are the primary content.
 
 ## Implementation constraints
-- Framework/styling system: static HTML and CSS under `site/`; no frontend build step.
-- Design-token constraints: update CSS custom properties before introducing one-off colors.
-- Performance constraints: keep assets committed and reuse existing images; avoid JavaScript unless a behavior cannot work accessibly in CSS.
-- Compatibility constraints: GitHub Pages static hosting; docs pages share `site/styles.css`.
-- Test/screenshot expectations: run static generation/check commands when available, HTML/CSS sanity checks, and responsive screenshot smoke tests for desktop and mobile.
+- Framework: static HTML and CSS under `site/`; no JavaScript or frontend build dependency.
+- Token ownership: `site/styles.css` owns all public tokens and reusable primitives; pages do not use inline styles.
+- Performance: zero script payload, explicit image dimensions, local assets, content visibility for long offscreen sections when safe.
+- Compatibility: GitHub Pages static hosting and current evergreen browsers.
+- Verification: HTML/link sanity, docs generation check, targeted repository tests, real-browser desktop/tablet/mobile screenshots, keyboard flow, console inspection, and Lighthouse when the available Chrome/CDP path supports it.
+
+## Accepted debt
+- Existing poster images retain their current raster formats until a separate asset-optimization goal can regenerate equivalent responsive formats.
+- The long bilingual Hermes architecture article remains content-heavy; this redesign normalizes its shell and typography without rewriting its source-backed article.
 
 ## Open questions
-- [ ] Whether the public homepage should include live release status from tags or remain static copy / maintainer / low impact.
-- [ ] Whether future docs pages should adopt the same darker homepage system or stay more document-like / maintainer / medium impact.
+- None blocking this redesign.

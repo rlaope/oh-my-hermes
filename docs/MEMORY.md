@@ -52,7 +52,16 @@ omh setup --memory-mode off
 
 Setup only records OMH-local policy. It does not mutate Hermes memory.
 
-## CLI Flow
+## Human Workflow
+
+Normal users ask Hermes to remember, review, forget, or recall project context.
+Hermes Agent or its wrapper translates that intent into the reviewed OMH memory
+contract. Users do not need to memorize the commands below.
+
+## Agent / Wrapper CLI Flow
+
+The following commands are integration and advanced-operator references for the
+backend flow.
 
 Capture a candidate:
 
