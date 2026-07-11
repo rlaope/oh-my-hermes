@@ -1,10 +1,32 @@
 from __future__ import annotations
 
 import json
+from typing import Protocol, TypedDict
 
 from ..awareness import awareness_lane_examples, awareness_primer_payload
 from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
 from ..metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
+from .capability_impact import standalone_capability_impact_report
+
+
+class _SummaryBuilder(Protocol):
+    def __call__(self) -> dict[str, object]: ...
+
+
+class _SectionBuilder(Protocol):
+    def __call__(self, section: str | None = None) -> dict[str, object]: ...
+
+
+class _Inspector(Protocol):
+    def __call__(self, identifier: str, section: str | None = None) -> dict[str, object]: ...
+
+
+class _PackageRegistry(TypedDict):
+    capability_impact_report: _SummaryBuilder | None
+    capability_summary: _SummaryBuilder
+    filtered_capability_snapshot: _SectionBuilder
+    inspect_capability: _Inspector
+    list_capabilities: _SectionBuilder
 
 STANDALONE_CAPABILITY_SECTIONS = (
     "omh_awareness",
@@ -253,7 +275,7 @@ OMH_CAPABILITIES_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["summary", "export", "list", "inspect"],
+                "enum": ["summary", "export", "list", "inspect", "impact"],
                 "description": "Capability action to perform.",
             },
             "section": {
@@ -270,7 +292,7 @@ OMH_CAPABILITIES_SCHEMA = {
 }
 
 
-def omh_capabilities_handler(args: dict, **kwargs) -> str:
+def omh_capabilities_handler(args: dict[str, object], **kwargs: object) -> str:
     observation = observe_plugin_tool_call("omh_capabilities", args, kwargs)
     action = str(args.get("action", "export") or "export")
     section = str(args.get("section", "") or "") or None
@@ -283,7 +305,7 @@ def omh_capabilities_handler(args: dict, **kwargs) -> str:
 
 def _handle_capability_action(action: str, section: str | None, capability_id: str) -> dict[str, object]:
     registry = _load_package_registry()
-    if registry:
+    if registry is not None:
         if action == "summary":
             return registry["capability_summary"]()
         if action == "export":
@@ -292,6 +314,9 @@ def _handle_capability_action(action: str, section: str | None, capability_id: s
             return registry["list_capabilities"](section)
         if action == "inspect":
             return registry["inspect_capability"](capability_id, section=section)
+        if action == "impact":
+            impact_report = registry["capability_impact_report"]
+            return impact_report() if impact_report is not None else standalone_capability_impact_report()
         return {"error": f"unknown action: {action}"}
     if action == "summary":
         return _standalone_capability_summary()
@@ -301,15 +326,26 @@ def _handle_capability_action(action: str, section: str | None, capability_id: s
         return _standalone_capability_list(section)
     if action == "inspect":
         return _standalone_capability_inspect(capability_id, section)
+    if action == "impact":
+        return standalone_capability_impact_report()
     return {"error": f"unknown action: {action}"}
 
 
-def _load_package_registry() -> dict[str, object]:
+def _load_package_registry() -> _PackageRegistry | None:
     try:
         from omh.capabilities.registry import capability_summary, filtered_capability_snapshot, inspect_capability, list_capabilities
-    except ImportError:
-        return {}
+    except ModuleNotFoundError as exc:
+        if exc.name in {"omh", "omh.capabilities", "omh.capabilities.registry"}:
+            return None
+        raise
+    try:
+        from omh.quality.capability_impact import build_capability_impact_report
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"omh.quality", "omh.quality.capability_impact"}:
+            raise
+        build_capability_impact_report = None
     return {
+        "capability_impact_report": build_capability_impact_report,
         "capability_summary": capability_summary,
         "filtered_capability_snapshot": filtered_capability_snapshot,
         "inspect_capability": inspect_capability,
@@ -796,6 +832,8 @@ def _standalone_hook_payload_fields(name: str) -> list[str]:
         return ["tool_name", "tool_family_hint", "omh_generic_tool_checkpoint", "claim_boundary", "redacted"]
     if name == "on_session_end":
         return ["session_summary", "metadata_only"]
+    if name == "pre_verify":
+        return ["coding", "attempt", "changed_path_count", "changed_path_categories", "action", "message", "redacted"]
     return []
 
 

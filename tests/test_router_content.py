@@ -2335,6 +2335,11 @@ class RouterContentTests(unittest.TestCase):
             self.assertTrue(path.exists(), f"{path} should be present")
 
         readme = Path("README.md").read_text(encoding="utf-8")
+        localized_readmes = {
+            "ko": Path("README.ko.md").read_text(encoding="utf-8"),
+            "ja": Path("README.ja.md").read_text(encoding="utf-8"),
+            "zh": Path("README.zh.md").read_text(encoding="utf-8"),
+        }
         docs_readme = Path("docs/README.md").read_text(encoding="utf-8")
         install_for_agents = Path("INSTALL_FOR_AGENTS.md").read_text(encoding="utf-8")
         installation = Path("docs/INSTALLATION.md").read_text(encoding="utf-8")
@@ -2382,6 +2387,9 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`workflow-learning`", readme)
         self.assertIn("`instinct-ledger`", readme)
         self.assertIn("**+47** more built-in skills", readme)
+        self.assertIn("**47개 이상**", localized_readmes["ko"])
+        self.assertIn("**47 個以上**", localized_readmes["ja"])
+        self.assertIn("**47 个以上**", localized_readmes["zh"])
         self.assertIn("Plan and decide", readme)
         self.assertIn("Learn and gather", readme)
         self.assertIn("Create materials and visuals", readme)

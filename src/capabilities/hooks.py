@@ -56,6 +56,7 @@ def hook_manifest() -> dict[str, object]:
             "src/plugin_bundle/omh/awareness.py",
             "src/plugin_bundle/omh/plugin.yaml",
             "src/plugin_bundle/omh/__init__.py",
+            "src/plugin_bundle/omh/hooks/verify_hooks.py",
             "src/wrapper/contract.py",
             "src/wrapper/native_commands.py",
         ],
@@ -95,4 +96,6 @@ def _hook_payload_fields(name: str) -> list[str]:
         return ["tool_name", "tool_family_hint", "omh_generic_tool_checkpoint", "claim_boundary", "redacted"]
     if name == "on_session_end":
         return ["session_summary", "metadata_only"]
+    if name == "pre_verify":
+        return ["coding", "attempt", "changed_path_count", "changed_path_categories", "action", "message", "redacted"]
     return []

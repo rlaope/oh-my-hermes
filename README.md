@@ -97,6 +97,7 @@ to be recorded by the responsible runtime.
 [Documentation](docs/README.md) -
 [Installation](docs/INSTALLATION.md) -
 [Capabilities](docs/CAPABILITIES.md) -
+[Capability Impact](docs/CAPABILITY_IMPACT.md) -
 [Agent Install](INSTALL_FOR_AGENTS.md) -
 [Roles](docs/ROLES.md) -
 [Application Cases](docs/APPLICATION_CASES.md) -

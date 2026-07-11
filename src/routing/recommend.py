@@ -307,7 +307,14 @@ _HARNESS_SESSION_INVENTORY_INTENT_PHRASES = (
     "control pane inventory",
     "codex session inventory",
     "claude code session inventory",
+    "find previous coding session",
+    "recover coding session",
+    "previous codex coding session",
+    "coding session recall",
     "세션 인벤토리",
+    "지난 코딩 세션",
+    "코딩 세션 복구",
+    "세션 기억 복구",
     "하네스 드리프트",
     "mcp 인벤토리",
     "mcp 설정 드리프트",
@@ -1447,6 +1454,9 @@ def _codegraph_refresh_token_context(normalized_query: str, query_tokens: set[st
 
 
 def _external_connector_readiness_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _public_plugin_connector_readiness_match(normalized_query):
+        return True
+
     strong_anchor_tokens = {
         "adopt",
         "adoption",
@@ -1544,6 +1554,7 @@ def _external_connector_readiness_recommendation_applies(normalized_query: str, 
             "oracle genai",
             "miniverse bridge",
             "crustocean platform",
+            "smart home connector",
         )
     )
 
@@ -1968,7 +1979,10 @@ def _build_failure_triage_fixed_or_pass_verification_context(normalized_query: s
 
 
 def _harness_session_inventory_recommendation_applies(normalized_query: str, query_tokens: set[str]) -> bool:
-    if any(_explicit_phrase_match(normalized_query, phrase) for phrase in _HARNESS_SESSION_INVENTORY_INTENT_PHRASES):
+    if any(
+        _explicit_phrase_match(normalized_query, normalized_phrase(phrase))
+        for phrase in _HARNESS_SESSION_INVENTORY_INTENT_PHRASES
+    ):
         return True
     has_inventory_intent = bool(query_tokens & _HARNESS_SESSION_INVENTORY_INTENT_TOKENS)
     has_harness_context = bool(query_tokens & _HARNESS_SESSION_INVENTORY_CONTEXT_TOKENS)

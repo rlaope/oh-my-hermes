@@ -16,3 +16,4 @@ provides_hooks:
   - on_session_end
   - pre_llm_call
   - pre_tool_call
+  - pre_verify

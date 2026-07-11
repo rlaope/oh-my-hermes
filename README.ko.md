@@ -124,7 +124,7 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
   trace, eval, review queue, regression case, patch proposal로 바꿉니다.
 
 운영, 조사, 자료 제작, 리뷰, 릴리스, 워크플로 지원을 위한 내장 스킬이
-**41개 이상** 더 포함되어 있습니다. 전체 목록은
+**47개 이상** 더 포함되어 있습니다. 전체 목록은
 [Workflow Reference](docs/WORKFLOWS.md)와 [Capabilities](docs/CAPABILITIES.md)에
 있습니다.
 
@@ -200,15 +200,16 @@ plain request
 4. 제품 방향과 경계: [Direction](docs/DIRECTION.md)
 5. 아키텍처와 module ownership: [Architecture](docs/ARCHITECTURE.md)
 6. Hermes/plugin/wrapper용 capability manifest: [Capabilities](docs/CAPABILITIES.md)
-7. orchestration pattern contract: [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md)
-8. common oh-my runtime parity와 gap: [Parity Matrix](docs/PARITY.md)
-9. 상황별 playbook: [Playbooks](docs/PLAYBOOKS.md)
-10. role surface와 profile pack: [Roles](docs/ROLES.md)
-11. memory/context review와 handoff pack: [Memory Context Review](docs/MEMORY_CONTEXT.md)
-12. Discord-style 및 plugin-native wrapper 예시: [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md)
-13. harness quality contract: [Harness Quality Contract](docs/HARNESS_QUALITY.md)
-14. 대표 workflow: [Application Cases](docs/APPLICATION_CASES.md)
-15. public website source: [GitHub Pages site](site/index.html)
+7. 라우팅, 훅, 실행 가능성, 결과 품질의 증거 분리: [Capability Impact](docs/CAPABILITY_IMPACT.md)
+8. orchestration pattern contract: [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md)
+9. common oh-my runtime parity와 gap: [Parity Matrix](docs/PARITY.md)
+10. 상황별 playbook: [Playbooks](docs/PLAYBOOKS.md)
+11. role surface와 profile pack: [Roles](docs/ROLES.md)
+12. memory/context review와 handoff pack: [Memory Context Review](docs/MEMORY_CONTEXT.md)
+13. Discord-style 및 plugin-native wrapper 예시: [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md)
+14. harness quality contract: [Harness Quality Contract](docs/HARNESS_QUALITY.md)
+15. 대표 workflow: [Application Cases](docs/APPLICATION_CASES.md)
+16. public website source: [GitHub Pages site](site/index.html)
 
 <br>
 

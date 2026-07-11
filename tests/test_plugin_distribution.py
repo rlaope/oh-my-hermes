@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tomllib
 import unittest
+from types import ModuleType
 from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -198,7 +199,10 @@ print(json.dumps(observed, ensure_ascii=False))
                     "omh_status",
                 ],
             )
-            self.assertEqual(plugin["registered_hooks"], ["on_session_end", "pre_llm_call", "pre_tool_call"])
+            self.assertEqual(
+                plugin["registered_hooks"],
+                ["on_session_end", "pre_llm_call", "pre_tool_call", "pre_verify"],
+            )
 
             inspection = inspect_plugin_bundle(resolve_paths(omh_home, hermes_home))
             self.assertTrue(inspection["plugin_distribution_ready"])
@@ -209,6 +213,48 @@ print(json.dumps(observed, ensure_ascii=False))
             checks = {check["name"]: check for check in json.loads(doctor_stdout)["checks"]}
             self.assertTrue(checks["plugin_import_smoke"]["ok"])
             self.assertTrue(checks["plugin_register_smoke"]["ok"])
+
+    def test_setup_smoke_accepts_host_without_optional_pre_verify_hook(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            hermes_cli = ModuleType("hermes_cli")
+            hermes_plugins = ModuleType("hermes_cli.plugins")
+            setattr(hermes_cli, "plugins", hermes_plugins)
+            setattr(
+                hermes_plugins,
+                "VALID_HOOKS",
+                {"on_session_end", "pre_llm_call", "pre_tool_call"},
+            )
+
+            with mock.patch.dict(
+                sys.modules,
+                {"hermes_cli": hermes_cli, "hermes_cli.plugins": hermes_plugins},
+            ):
+                status, stdout, stderr = run_cli(
+                    [
+                        "--omh-home",
+                        str(omh_home),
+                        "--hermes-home",
+                        str(hermes_home),
+                        "setup",
+                        "--with-plugin",
+                    ]
+                )
+                inspection = inspect_plugin_bundle(resolve_paths(omh_home, hermes_home))
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            plugin = json.loads(stdout)["plugin_distribution"]
+            self.assertEqual(
+                plugin["registered_hooks"],
+                ["on_session_end", "pre_llm_call", "pre_tool_call"],
+            )
+            self.assertTrue(plugin["register_smoke"])
+            self.assertEqual(plugin.get("missing_registered_hooks", []), [])
+
+            self.assertTrue(inspection["plugin_distribution_ready"])
 
     def test_setup_with_plugin_dry_run_writes_nothing(self) -> None:
         with TemporaryDirectory() as tmp:

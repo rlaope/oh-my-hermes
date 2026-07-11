@@ -653,6 +653,11 @@ _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS = _normalized_token_set(
         "asset",
         "assets",
         "processing",
+        "worker",
+        "workers",
+        "service",
+        "process",
+        "daemon",
         "파이썬",
         "python",
         "script",
@@ -726,6 +731,8 @@ _VISUAL_SUMMARY_PHRASES = (
     "visual summary",
     "visual prompt card",
     "image card",
+    "edit this image",
+    "image edit",
     "image summary card",
     "summary image",
     "summary card",
@@ -2505,6 +2512,9 @@ _PUBLIC_PLUGIN_CONNECTOR_READINESS_PHRASES = (
     "x twitter automation connector readiness",
 )
 PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES = (
+    "home assistant",
+    "홈 어시스턴트",
+    "홈어시스턴트",
     "hermes-example-plugins",
     "hermes example plugins",
     "remnic",
@@ -2543,24 +2553,33 @@ PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES = (
     "hermes tweet",
 )
 PUBLIC_PLUGIN_CONNECTOR_READINESS_CONTEXT_PHRASES = (
+    "automation",
     "auth",
     "authentication",
     "credential",
     "connector",
     "connector readiness",
+    "control",
     "cost",
+    "device",
+    "integration",
     "provider",
     "provider readiness",
     "price",
     "pricing",
     "readiness",
+    "smart home",
     "trial",
+    "기기",
     "도입",
+    "스마트홈",
+    "연동",
     "인증",
     "리스크",
     "비용",
     "준비",
     "준비도",
+    "제어",
     "커넥터",
 )
 SKILL_SCOUT_CANDIDATE_ALIAS_PHRASES: tuple[str, ...] = (
@@ -6096,6 +6115,19 @@ def _coding_handoff_status_guard_applies(
 ) -> bool:
     if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
         return False
+    if _contains_phrase(
+        normalized_query,
+        (
+            "find previous coding session",
+            "recover coding session",
+            "previous codex coding session",
+            "coding session recall",
+            "지난 코딩 세션",
+            "코딩 세션 복구",
+            "세션 기억 복구",
+        ),
+    ):
+        return False
     if _executor_readiness_check_requested(normalized_query, query_tokens):
         return False
     if _coding_session_status_only_guard_applies(normalized_query, query_tokens):
@@ -6262,6 +6294,10 @@ def _materials_package_guard_applies(
 
 def _memory_curation_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _public_plugin_connector_readiness_requested(normalized_query):
+        return False
+    literature_review = _contains_phrase(normalized_query, ("literature review", "문헌 검토", "논문들 검토"))
+    paper_context = bool({"paper", "papers", "논문"} & query_tokens)
+    if literature_review and paper_context:
         return False
     context = bool(_MEMORY_CURATION_CONTEXT_TOKENS & query_tokens)
     hermes_context = _contains_phrase(normalized_query, ("hermes", "헤르메스"))
@@ -7110,6 +7146,12 @@ def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str])
         return False
     explicit_visual_phrase = _contains_phrase(normalized_query, _VISUAL_SUMMARY_PHRASES)
     if explicit_visual_phrase:
+        return True
+    if (
+        _VISUAL_SUMMARY_MODALITY_TOKENS & query_tokens
+        and not _VISUAL_SUMMARY_NON_VISUAL_WORK_TOKENS & query_tokens
+        and _contains_phrase(normalized_query, ("remove the background", "background removal"))
+    ):
         return True
     if (
         _missed_omh_workflow_context_applies(normalized_query)

@@ -16,6 +16,7 @@ repo-local contract for Codex agents working here.
 | Understand Hermes Agent memory, skills, gateway, cron, plugins, and OMH's role | [Hermes Agent Architecture Guide](../site/docs/hermes-agent-architecture/index.html) |
 | Compare common oh-my runtime axes and OMH gaps | [Parity Matrix](PARITY.md) |
 | Inspect runtime-readable OMH capability manifests | [Capabilities](CAPABILITIES.md) |
+| Measure routing impact and separate unproven execution or outcome claims | [Capability Impact](CAPABILITY_IMPACT.md) |
 | Understand safe orchestration pattern contracts | [Orchestration Patterns](ORCHESTRATION_PATTERNS.md) |
 | Understand chat wrapper UX, sessions, and handoffs | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
 | Capture and recall reviewed project-local memory | [Project Memory](MEMORY.md) |

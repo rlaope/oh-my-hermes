@@ -123,7 +123,7 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
 - **Workflow Learning** (`workflow-learning`) - 把漏掉的路由或较弱的工作流
   转成 trace、eval、review queue、regression case 和 patch proposal。
 
-除这些代表性模式外，还包含 **41 个以上** 面向运维、调研、材料制作、审查、
+除这些代表性模式外，还包含 **47 个以上** 面向运维、调研、材料制作、审查、
 发布和工作流支持的内置技能。完整目录见
 [Workflow Reference](docs/WORKFLOWS.md) 和 [Capabilities](docs/CAPABILITIES.md)。
 
@@ -197,15 +197,16 @@ plain request
 4. 产品方向和边界: [Direction](docs/DIRECTION.md)
 5. 架构与 module ownership: [Architecture](docs/ARCHITECTURE.md)
 6. Hermes/plugin/wrapper 使用的 capability manifests: [Capabilities](docs/CAPABILITIES.md)
-7. orchestration pattern contracts: [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md)
-8. common oh-my runtime parity 和 gap: [Parity Matrix](docs/PARITY.md)
-9. 场景 playbook: [Playbooks](docs/PLAYBOOKS.md)
-10. role surfaces 与 profile packs: [Roles](docs/ROLES.md)
-11. memory/context review 与 handoff packs: [Memory Context Review](docs/MEMORY_CONTEXT.md)
-12. Discord-style 与 plugin-native wrapper 示例: [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md)
-13. harness quality contract: [Harness Quality Contract](docs/HARNESS_QUALITY.md)
-14. 代表性 workflow: [Application Cases](docs/APPLICATION_CASES.md)
-15. public website source: [GitHub Pages site](site/index.html)
+7. 区分 routing、hook、执行可用性与结果质量的证据: [Capability Impact](docs/CAPABILITY_IMPACT.md)
+8. orchestration pattern contracts: [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md)
+9. common oh-my runtime parity 和 gap: [Parity Matrix](docs/PARITY.md)
+10. 场景 playbook: [Playbooks](docs/PLAYBOOKS.md)
+11. role surfaces 与 profile packs: [Roles](docs/ROLES.md)
+12. memory/context review 与 handoff packs: [Memory Context Review](docs/MEMORY_CONTEXT.md)
+13. Discord-style 与 plugin-native wrapper 示例: [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md)
+14. harness quality contract: [Harness Quality Contract](docs/HARNESS_QUALITY.md)
+15. 代表性 workflow: [Application Cases](docs/APPLICATION_CASES.md)
+16. public website source: [GitHub Pages site](site/index.html)
 
 <br>
 

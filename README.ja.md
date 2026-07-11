@@ -127,7 +127,7 @@ Use OMH request-to-handoff for: I want to safely add a feature to this repo.
   patch proposal に変えます。
 
 運用、調査、資料作成、レビュー、リリース、ワークフロー支援のための
-組み込みスキルが **41 個以上** あります。全体像は
+組み込みスキルが **47 個以上** 追加されています。全体像は
 [Workflow Reference](docs/WORKFLOWS.md) と [Capabilities](docs/CAPABILITIES.md)
 にあります。
 
@@ -203,15 +203,16 @@ plain request
 4. プロダクトの方向性と境界: [Direction](docs/DIRECTION.md)
 5. アーキテクチャと module ownership: [Architecture](docs/ARCHITECTURE.md)
 6. Hermes/plugin/wrapper 向け capability manifest: [Capabilities](docs/CAPABILITIES.md)
-7. orchestration pattern contract: [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md)
-8. common oh-my runtime parity と gap: [Parity Matrix](docs/PARITY.md)
-9. 状況別 playbook: [Playbooks](docs/PLAYBOOKS.md)
-10. role surface と profile pack: [Roles](docs/ROLES.md)
-11. memory/context review と handoff pack: [Memory Context Review](docs/MEMORY_CONTEXT.md)
-12. Discord-style と plugin-native wrapper の例: [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md)
-13. harness quality contract: [Harness Quality Contract](docs/HARNESS_QUALITY.md)
-14. 代表的な workflow: [Application Cases](docs/APPLICATION_CASES.md)
-15. public website source: [GitHub Pages site](site/index.html)
+7. routing、hook、実行可能性、結果品質の証拠を分離: [Capability Impact](docs/CAPABILITY_IMPACT.md)
+8. orchestration pattern contract: [Orchestration Patterns](docs/ORCHESTRATION_PATTERNS.md)
+9. common oh-my runtime parity と gap: [Parity Matrix](docs/PARITY.md)
+10. 状況別 playbook: [Playbooks](docs/PLAYBOOKS.md)
+11. role surface と profile pack: [Roles](docs/ROLES.md)
+12. memory/context review と handoff pack: [Memory Context Review](docs/MEMORY_CONTEXT.md)
+13. Discord-style と plugin-native wrapper の例: [Chat Wrapper Examples](docs/CHAT_WRAPPER_EXAMPLES.md)
+14. harness quality contract: [Harness Quality Contract](docs/HARNESS_QUALITY.md)
+15. 代表的な workflow: [Application Cases](docs/APPLICATION_CASES.md)
+16. public website source: [GitHub Pages site](site/index.html)
 
 <br>
 

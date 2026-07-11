@@ -1,6 +1,30 @@
 from __future__ import annotations
 
+from importlib import import_module
+
 _TOOLSET = "omh"
+
+
+def _host_supports_hook(hook_name: str) -> bool:
+    try:
+        hermes_plugins = import_module("hermes_cli.plugins")
+    except ModuleNotFoundError as exc:
+        if exc.name in {"hermes_cli", "hermes_cli.plugins"}:
+            return True
+        raise
+    valid_hooks = getattr(hermes_plugins, "VALID_HOOKS", None)
+    if not isinstance(valid_hooks, (list, tuple, set, frozenset)):
+        return True
+    return hook_name in valid_hooks
+
+
+def _register_optional_hook(ctx, hook_name: str, callback: object) -> None:
+    if not _host_supports_hook(hook_name):
+        return
+    try:
+        ctx.register_hook(hook_name, callback)
+    except ValueError:
+        return
 
 
 def register(ctx):
@@ -8,6 +32,7 @@ def register(ctx):
     from .hooks.llm_hooks import pre_llm_call
     from .hooks.session_hooks import on_session_end
     from .hooks.tool_hooks import pre_tool_call
+    from .hooks.verify_hooks import pre_verify
     from .tools.capability_tool import OMH_CAPABILITIES_SCHEMA, omh_capabilities_handler
     from .tools.chat_tool import OMH_INTERACT_SCHEMA, omh_interact_handler
     from .tools.context_tool import OMH_CONTEXT_SCHEMA, omh_context_handler
@@ -84,3 +109,4 @@ def register(ctx):
     ctx.register_hook("on_session_end", on_session_end)
     ctx.register_hook("pre_llm_call", pre_llm_call)
     ctx.register_hook("pre_tool_call", pre_tool_call)
+    _register_optional_hook(ctx, "pre_verify", pre_verify)
