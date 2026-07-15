@@ -42,7 +42,7 @@ Bad example:
 
 - Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.
 - Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.
-- Relationship findings stay association-only unless temporal order, confounders, comparison or identification strategy, selection/missingness, mechanism, and sensitivity evidence support a causal claim.
+- Causal claims require observed identification evidence.
 - Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.
 
 ## Recovery Notes
@@ -98,7 +98,7 @@ Expected outputs:
 - data_analysis_task_card/v1
 - dataset_scope/v1
 - analysis_method_plan/v1
-- operations_data_harness/v1 when relationship or causal framing is needed
+- operations_data_harness/v1
 - analysis_result_summary/v1 when observed
 - next action
 - prepared-vs-observed boundary
@@ -108,7 +108,7 @@ Artifact expectations:
 - data_analysis_task_card/v1 metadata-only wrapper card when prepared
 - dataset_scope/v1 with source, row/record scope, columns or schema, filters, and stop condition
 - analysis_method_plan/v1 naming summary, anomaly, trend, segment, schema, or log-pattern methods
-- operations_data_harness/v1 separating structured/unstructured collection, join assumptions, association-only findings, and causal identification requirements
+- operations_data_harness/v1 for relationship and causal boundaries
 - analysis_result_summary/v1 only from observed data, calculations, query output, or supplied evidence
 
 Safety rules:

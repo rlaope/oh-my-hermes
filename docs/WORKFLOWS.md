@@ -4423,7 +4423,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Completion checklist:
   - Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.
   - Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.
-  - Relationship findings stay association-only unless temporal order, confounders, comparison or identification strategy, selection/missingness, mechanism, and sensitivity evidence support a causal claim.
+  - Causal claims require observed identification evidence.
   - Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.
 - Recovery notes:
   - If the data itself is missing, ask for the smallest dataset sample, schema, or query output needed.
@@ -4438,7 +4438,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - data_analysis_task_card/v1
   - dataset_scope/v1
   - analysis_method_plan/v1
-  - operations_data_harness/v1 when relationship or causal framing is needed
+  - operations_data_harness/v1
   - analysis_result_summary/v1 when observed
   - next action
   - prepared-vs-observed boundary
@@ -4446,7 +4446,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - data_analysis_task_card/v1 metadata-only wrapper card when prepared
   - dataset_scope/v1 with source, row/record scope, columns or schema, filters, and stop condition
   - analysis_method_plan/v1 naming summary, anomaly, trend, segment, schema, or log-pattern methods
-  - operations_data_harness/v1 separating structured/unstructured collection, join assumptions, association-only findings, and causal identification requirements
+  - operations_data_harness/v1 for relationship and causal boundaries
   - analysis_result_summary/v1 only from observed data, calculations, query output, or supplied evidence
 - Safety rules:
   - A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, hallucination-safe numeric evidence, association, or causality unless observed data and method evidence records it.
@@ -8392,20 +8392,20 @@ Scope audio, video, YouTube, OCR, screenshot text, receipt image, transcript, ti
 
 ### data-analysis
 
-Scope supplied structured, unstructured, or mixed data analysis as safe task cards with provenance, schema/corpus, relationship, and causal-claim boundaries.
+Scope supplied data analysis with provenance and causal-claim boundaries.
 
-- Use when: Use when Hermes should prepare or supervise data summary, anomaly, trend, segment, schema, log-pattern, relationship, or causal-question analysis without unsupported numeric or causal claims.
+- Use when: Use for safe summary, anomaly, relationship, or causal-question analysis.
 - Quality tier: `data-analysis-gated`
 - Quality bar:
   - Name the workflow objective, owner, input boundary, next action, and stop condition.
   - Represent prepared, observed, blocked, and missing evidence as separate states.
   - Never upgrade a card, blueprint, or readiness check into external execution proof.
 - Inputs:
-  - dataset or corpus source
-  - row/record or corpus scope
+  - data source
+  - scope
   - schema or extraction method
   - analysis question
-  - relationship claim boundary
+  - claim boundary
   - method and stop condition
 - Outputs:
   - data_analysis_task_card/v1

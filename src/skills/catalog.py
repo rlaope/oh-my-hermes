@@ -5778,7 +5778,7 @@ _FEATURE_SURFACE_SKILLS = (
             "data_analysis_task_card/v1",
             "dataset_scope/v1",
             "analysis_method_plan/v1",
-            "operations_data_harness/v1 when relationship or causal framing is needed",
+            "operations_data_harness/v1",
             "analysis_result_summary/v1 when observed",
             "next action",
             "prepared-vs-observed boundary",
@@ -5787,13 +5787,13 @@ _FEATURE_SURFACE_SKILLS = (
             "data_analysis_task_card/v1 metadata-only wrapper card when prepared",
             "dataset_scope/v1 with source, row/record scope, columns or schema, filters, and stop condition",
             "analysis_method_plan/v1 naming summary, anomaly, trend, segment, schema, or log-pattern methods",
-            "operations_data_harness/v1 separating structured/unstructured collection, join assumptions, association-only findings, and causal identification requirements",
+            "operations_data_harness/v1 for relationship and causal boundaries",
             "analysis_result_summary/v1 only from observed data, calculations, query output, or supplied evidence",
         ),
         final_checklist=(
             "Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.",
             "Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.",
-            "Relationship findings stay association-only unless temporal order, confounders, comparison or identification strategy, selection/missingness, mechanism, and sensitivity evidence support a causal claim.",
+            "Causal claims require observed identification evidence.",
             "Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.",
         ),
         recovery_notes=(
@@ -9288,9 +9288,9 @@ _FEATURE_SURFACE_HARNESSES = (
     ),
     _feature_surface_harness(
         "data-analysis",
-        "Scope supplied structured, unstructured, or mixed data analysis as safe task cards with provenance, schema/corpus, relationship, and causal-claim boundaries.",
-        "Use when Hermes should prepare or supervise data summary, anomaly, trend, segment, schema, log-pattern, relationship, or causal-question analysis without unsupported numeric or causal claims.",
-        ("dataset or corpus source", "row/record or corpus scope", "schema or extraction method", "analysis question", "relationship claim boundary", "method and stop condition"),
+        "Scope supplied data analysis with provenance and causal-claim boundaries.",
+        "Use for safe summary, anomaly, relationship, or causal-question analysis.",
+        ("data source", "scope", "schema or extraction method", "analysis question", "claim boundary", "method and stop condition"),
         (
             "data_analysis_task_card/v1",
             "dataset_scope/v1",
