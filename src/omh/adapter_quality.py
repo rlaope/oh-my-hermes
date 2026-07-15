@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from pathlib import Path
 
+from .adapter_quality_codec import canonical as _canonical
+from .adapter_quality_codec import fingerprint as _fingerprint
+from .adapter_quality_codec import semantic as _semantic
 from .local_store import atomic_write_json, ensure_dir, read_json_object_result, utc_now
 from .paths import OmhPaths
 
@@ -123,7 +124,7 @@ def link_adapter_quality_session(
         _identifier(observation_id, "observation_id")
     if renderer_target:
         _choice(renderer_target, "renderer_target", {"discord", "slack", "telegram"})
-    record = {"schema_version": "adapter_quality_session_link/v1", "session_id": session_id, "subject_id": subject_id, "surface_kind": surface_kind, "source_revision": source_revision, "selected_quality_observation_id": observation_id, "renderer_target": renderer_target, "status": "prepared_not_observed" if not observation_id else "observed"}
+    record = {"schema_version": "adapter_quality_session_link/v1", "session_id": session_id, "subject_id": subject_id, "surface_kind": surface_kind, "source_revision": source_revision, "selected_quality_observation_id": observation_id, "renderer_target": renderer_target, "status": "prepared_not_observed"}
     path = _record_path(paths, "links", session_id)
     ensure_dir(path.parent, private=True)
     atomic_write_json(path, record, private=True)
@@ -138,7 +139,7 @@ def quality_session_control(paths: OmhPaths, session_id: str) -> dict[str, objec
     if not observation_id:
         return {"status": "linked_no_observation", "link": record, "actions": [{"id": "request_adapter_quality_observation", "enabled": True, "owner": "adapter"}]}
     observation, observation_error = read_json_object_result(_record_path(paths, "observations", observation_id))
-    if observation_error or observation is None or str(observation.get("source_revision", "")) != str(record.get("source_revision", "")):
+    if observation_error or observation is None or any(str(observation.get(key, "")) != str(record.get(key, "")) for key in ("subject_id", "surface_kind", "source_revision")):
         return {"status": "stale", "link": record, "actions": [{"id": "request_adapter_quality_observation", "enabled": True, "owner": "adapter"}]}
     return {"status": "quality_observed", "link": record, "quality_summary": {"state": observation.get("overall_evidence_state", "partial_observed")}, "actions": [{"id": "show_quality_evidence", "enabled": True, "owner": "adapter"}, {"id": "prepare_channel_quality_delivery", "enabled": True, "owner": "adapter"}]}
 
@@ -162,8 +163,10 @@ def prepare_adapter_quality_delivery(paths: OmhPaths, *, session_id: str, card: 
     existing, error = read_json_object_result(path)
     if error:
         raise ValueError(f"invalid existing preparation: {error}")
-    if existing and _canonical(existing) != _canonical(record):
-        raise ValueError("delivery preparation already exists with different content")
+    if existing:
+        if _semantic(existing, {"prepared_at"}) != _semantic(record, {"prepared_at"}):
+            raise ValueError("delivery preparation already exists with different content")
+        return existing
     ensure_dir(path.parent, private=True)
     atomic_write_json(path, record, private=True)
     return record
@@ -205,6 +208,13 @@ def record_adapter_quality_delivery(
         "observation_status": "observed",
     }
     path = _record_path(paths, "deliveries", str(record["observation_id"]))
+    existing, error = read_json_object_result(path)
+    if error:
+        raise ValueError(f"invalid existing delivery: {error}")
+    if existing:
+        if _semantic(existing, {"observed_at"}) != _semantic(record, {"observed_at"}):
+            raise ValueError("delivery observation already exists with different content")
+        return existing
     ensure_dir(path.parent, private=True)
     atomic_write_json(path, record, private=True)
     return record
@@ -241,14 +251,6 @@ def _state(signals: list[dict[str, object]], checks: list[dict[str, object]], la
 def _record_path(paths: OmhPaths, kind: str, record_id: str) -> Path:
     _identifier(record_id, "record_id")
     return paths.omh_home / "adapter-quality" / kind / f"{record_id}.json"
-
-
-def _fingerprint(value: dict[str, object]) -> str:
-    return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
-
-
-def _canonical(value: dict[str, object]) -> str:
-    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
 def _identifier(value: str, field: str) -> str:

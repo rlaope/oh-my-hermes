@@ -78,10 +78,31 @@ class AdapterQualityTests(unittest.TestCase):
             self.assertEqual(quality_session_control(paths, "ws-quality")["status"], "linked_no_observation")
             observation = write_adapter_quality_observation(paths, build_adapter_quality_observation(observation_id="web-quality", subject_id="checkout", surface_kind="web", adapter_id="hermes-adapter", source_revision="build-42", checks=[], layout_checks=[], metrics=[]))
             self.assertEqual(observation["overall_evidence_state"], "partial_observed")
-            link_adapter_quality_session(paths, session_id="ws-quality", subject_id="checkout", surface_kind="web", source_revision="build-42", observation_id="web-quality")
+            linked = link_adapter_quality_session(paths, session_id="ws-quality", subject_id="checkout", surface_kind="web", source_revision="build-42", observation_id="web-quality")
+            self.assertEqual(linked["status"], "prepared_not_observed")
             self.assertEqual(quality_session_control(paths, "ws-quality")["status"], "quality_observed")
             link_adapter_quality_session(paths, session_id="ws-quality", subject_id="checkout", surface_kind="web", source_revision="build-43", observation_id="web-quality")
             self.assertEqual(quality_session_control(paths, "ws-quality")["status"], "stale")
+
+    def test_session_control_rejects_cross_subject_or_surface_observation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_adapter_quality_observation(paths, build_adapter_quality_observation(observation_id="orders-quality", subject_id="orders", surface_kind="desktop", adapter_id="hermes-adapter", source_revision="build-42", checks=[], layout_checks=[], metrics=[]))
+            link_adapter_quality_session(paths, session_id="ws-quality", subject_id="checkout", surface_kind="web", source_revision="build-42", observation_id="orders-quality")
+            self.assertEqual(quality_session_control(paths, "ws-quality")["status"], "stale")
+
+    def test_delivery_and_preparation_retries_are_idempotent(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            observation = build_adapter_quality_observation(observation_id="web-quality", subject_id="checkout", surface_kind="web", adapter_id="hermes-adapter", source_revision="build-42", checks=[], layout_checks=[], metrics=[])
+            card = build_adapter_quality_delivery_card(observation, renderer_target="discord")
+            first = prepare_adapter_quality_delivery(paths, session_id="ws-quality", card=card)
+            second = prepare_adapter_quality_delivery(paths, session_id="ws-quality", card=card)
+            self.assertEqual(first, second)
+            delivered = record_adapter_quality_delivery(paths, preparation=first, adapter="discord-adapter", delivery_result="delivered", external_message_ref="discord:message-1")
+            self.assertEqual(delivered, record_adapter_quality_delivery(paths, preparation=first, adapter="discord-adapter", delivery_result="delivered", external_message_ref="discord:message-1"))
+            with self.assertRaises(ValueError):
+                record_adapter_quality_delivery(paths, preparation=first, adapter="discord-adapter", delivery_result="failed")
         with self.assertRaises(ValueError):
             build_adapter_quality_observation(
                 observation_id="bad-metric",
