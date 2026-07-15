@@ -38,6 +38,8 @@ from .executor_capability_snapshots import (
     executor_capability_snapshot_path,
     read_matching_executor_capability_snapshot,
 )
+from .product_family_templates import product_family_template
+from .project_governance import discover_project_governance, governance_handoff_attachment
 from ..executor_readiness import (
     executor_readiness_contract,
     executor_readiness_for_selection,
@@ -240,6 +242,9 @@ def build_coding_delegation_payload(
     prefer_direct_coding_handoff: bool = True,
     force_coding_handoff: bool = False,
     capability_snapshot_directory: Path | None = None,
+    project_root: str | Path | None = None,
+    governance_default: str = "not_applicable",
+    product_family: str | None = None,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -250,6 +255,8 @@ def build_coding_delegation_payload(
         raise ValueError(f"unsupported coding delegate executor: {executor_target}")
     if limit < 1:
         raise ValueError("coding delegate --limit must be at least 1")
+    governance = discover_project_governance(project_root, decision=governance_default) if project_root else None
+    family_template = product_family_template(product_family) if product_family else None
 
     full_recommendations = recommend_skills(message, limit=max(limit, 5), apply_guardrails=False)
     full_recommendations = _prioritize_preferred_workflow(
@@ -340,6 +347,7 @@ def build_coding_delegation_payload(
         payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["prompt_handoff"], context_pack)
         _attach_memory_recall_pack(payload["prompt_handoff"], memory_recall_pack)
+    _attach_governance_and_family(payload, governance, family_template)
     _bind_persisted_executor_capability_snapshot(payload, capability_snapshot_directory)
     payload["harness_quality"] = _public_harness_quality(
         harness,
@@ -372,6 +380,21 @@ def build_coding_delegation_payload(
     if agentic_playbook:
         payload["agentic_playbook"] = agentic_playbook
     return payload
+
+
+def _attach_governance_and_family(
+    payload: dict[str, object],
+    governance: dict[str, object] | None,
+    family_template: dict[str, object] | None,
+) -> None:
+    attachment = governance_handoff_attachment(governance) if governance else {}
+    for key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
+        handoff = payload.get(key)
+        if not isinstance(handoff, dict):
+            continue
+        handoff.update(attachment)
+        if family_template:
+            handoff["product_family_template"] = family_template
 
 
 def build_coding_delegation_event_payload(

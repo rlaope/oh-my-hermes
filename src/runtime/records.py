@@ -35,6 +35,8 @@ from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSI
 from ..isolation import ISOLATION_SCHEMA_VERSION
 from ..local_store import utc_now
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack, validate_project_memory_recall_pack
+from ..coding.product_family_templates import validate_product_family_template
+from ..coding.project_governance import validate_project_governance_blocked, validate_project_governance_profile
 from ..routing.route_plan import compact_workflow_route_plan
 
 
@@ -223,6 +225,9 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "context_pack",
     "context_pack_blocked",
     "memory_recall_pack",
+    "project_governance_profile",
+    "project_governance_blocked",
+    "product_family_template",
 )
 CODING_PROMPT_HANDOFF_KEYS = (
     "schema_version",
@@ -251,6 +256,9 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "context_pack",
     "context_pack_blocked",
     "memory_recall_pack",
+    "project_governance_profile",
+    "project_governance_blocked",
+    "product_family_template",
 )
 CODING_RUNTIME_HANDOFF_KEYS = (
     "schema_version",
@@ -286,6 +294,9 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "context_pack",
     "context_pack_blocked",
     "memory_recall_pack",
+    "project_governance_profile",
+    "project_governance_blocked",
+    "product_family_template",
 )
 CODING_PROMPT_HANDOFF_INVOCATION_KEYS = (
     "mode",
@@ -1012,6 +1023,7 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
     memory_recall_pack = _compact_memory_recall_pack(value.get("memory_recall_pack"))
     if memory_recall_pack:
         compact["memory_recall_pack"] = memory_recall_pack
+    _compact_governance_and_family(value, compact)
     return compact
 
 
@@ -1070,6 +1082,7 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
     memory_recall_pack = _compact_memory_recall_pack(value.get("memory_recall_pack"))
     if memory_recall_pack:
         compact["memory_recall_pack"] = memory_recall_pack
+    _compact_governance_and_family(value, compact)
     return compact
 
 
@@ -1137,7 +1150,20 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     hermes_harness = _compact_hermes_coding_harness(value.get("hermes_coding_harness"))
     if hermes_harness:
         compact["hermes_coding_harness"] = hermes_harness
+    _compact_governance_and_family(value, compact)
     return compact
+
+
+def _compact_governance_and_family(value: dict[str, Any], compact: dict[str, Any]) -> None:
+    profile = value.get("project_governance_profile")
+    if isinstance(profile, dict) and not validate_project_governance_profile(profile):
+        compact["project_governance_profile"] = profile
+    blocked = value.get("project_governance_blocked")
+    if isinstance(blocked, dict) and not validate_project_governance_blocked(blocked):
+        compact["project_governance_blocked"] = blocked
+    template = value.get("product_family_template")
+    if isinstance(template, dict) and not validate_product_family_template(template):
+        compact["product_family_template"] = template
 
 
 def _compact_executor_readiness(value: Any) -> dict[str, Any]:
@@ -2375,6 +2401,7 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
         )
     errors.extend(validate_isolation_plan(handoff.get("isolation_plan"), "coding_delegation executor_handoff isolation_plan"))
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation executor_handoff"))
+    errors.extend(validate_optional_governance_and_family(handoff, "coding_delegation executor_handoff"))
     return errors
 
 
@@ -2769,6 +2796,7 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
         )
     errors.extend(validate_isolation_plan(handoff.get("isolation_plan"), "coding_delegation runtime_handoff isolation_plan"))
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation runtime_handoff"))
+    errors.extend(validate_optional_governance_and_family(handoff, "coding_delegation runtime_handoff"))
     return errors
 
 
@@ -2972,6 +3000,22 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
         )
     errors.extend(validate_isolation_plan(handoff.get("isolation_plan"), "coding_delegation prompt_handoff isolation_plan"))
     errors.extend(validate_handoff_context_pack_fields(handoff, "coding_delegation prompt_handoff"))
+    errors.extend(validate_optional_governance_and_family(handoff, "coding_delegation prompt_handoff"))
+    return errors
+
+
+def validate_optional_governance_and_family(handoff: dict[str, Any], label: str) -> list[str]:
+    errors: list[str] = []
+    profile = handoff.get("project_governance_profile")
+    blocked = handoff.get("project_governance_blocked")
+    if profile is not None and blocked is not None:
+        errors.append(f"{label} cannot contain both governance profile and blocked marker")
+    if profile is not None:
+        errors.extend(validate_project_governance_profile(profile))
+    if blocked is not None:
+        errors.extend(validate_project_governance_blocked(blocked))
+    if "product_family_template" in handoff:
+        errors.extend(validate_product_family_template(handoff["product_family_template"]))
     return errors
 
 
