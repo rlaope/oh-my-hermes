@@ -17,6 +17,7 @@ from .workflows.web_visual_qa_contracts import (
     WEB_VISUAL_QA_PACKAGE_SCHEMA_VERSION,
 )
 from .workflows.web_visual_qa_message_card import build_web_visual_qa_message_card
+from .workflows.web_visual_qa_message_card import build_web_visual_qa_channel_delivery_card
 from .workflows.web_visual_qa_validation import (
     validate_web_visual_qa_message_card,
     validate_web_visual_qa_package,
@@ -28,6 +29,7 @@ __all__ = (
     "WEB_VISUAL_QA_PACKAGE_SCHEMA_VERSION",
     "WebVisualQaCaptureFileImport",
     "build_web_visual_qa_message_card",
+    "build_web_visual_qa_channel_delivery_card",
     "build_web_visual_qa_package",
     "import_web_visual_qa_capture_file",
     "list_web_visual_qa_packages",

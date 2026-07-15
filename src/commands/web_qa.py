@@ -6,6 +6,7 @@ from pathlib import Path
 from omh.installer import OmhError
 from omh.web_visual_qa import (
     WebVisualQaCaptureFileImport,
+    build_web_visual_qa_channel_delivery_card,
     build_web_visual_qa_message_card,
     build_web_visual_qa_package,
     import_web_visual_qa_capture_file,
@@ -149,10 +150,13 @@ def cmd_web_qa_show(args: argparse.Namespace) -> int:
         package_errors = validate_web_visual_qa_package(current)
         if package_errors:
             raise ValueError("; ".join(package_errors))
-        card = build_web_visual_qa_message_card(current)
-        errors = validate_web_visual_qa_message_card(card)
-        if errors:
-            raise ValueError("; ".join(errors))
+        if args.renderer_target:
+            card = build_web_visual_qa_channel_delivery_card(current, renderer_target=args.renderer_target)
+        else:
+            card = build_web_visual_qa_message_card(current)
+            errors = validate_web_visual_qa_message_card(card)
+            if errors:
+                raise ValueError("; ".join(errors))
     except (OSError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_card_or_summarize(args, card)
@@ -267,6 +271,16 @@ def _print_card_or_summarize(args: argparse.Namespace, card: JsonObject) -> None
     if _wants_json(args):
         _print_json(card)
         return
+    if card.get("schema_version") == "web_visual_qa_channel_delivery/v1":
+        print("Web visual QA channel delivery card")
+        print(f"Renderer: {card['renderer_target']}")
+        print(f"Package: {card['package_id']}")
+        print(f"Target: {card['target']}")
+        print(f"Attachments: {len(object_list(card.get('attachments')))} prepared")
+        print(f"Blocked captures: {len(object_list(card.get('blocked_captures')))}")
+        print("Delivery: not observed; adapter upload is required.")
+        print("Use --json for the full channel-delivery projection.")
+        return
     route = card["route"] if isinstance(card.get("route"), dict) else {}
     attachment_summary = card["attachment_summary"] if isinstance(card.get("attachment_summary"), dict) else {}
     print("Web visual QA message card")
@@ -357,6 +371,7 @@ def _add_web_qa_commands(sub) -> None:
 
     show = web_qa_sub.add_parser("show", help="Show a message-card projection for a recorded package.")
     show.add_argument("--package-id", required=True)
+    show.add_argument("--renderer-target", choices=("discord", "slack", "telegram"))
     show.add_argument("--json", action="store_true")
     show.set_defaults(func=cmd_web_qa_show)
 

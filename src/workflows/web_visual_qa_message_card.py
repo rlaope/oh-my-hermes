@@ -5,12 +5,57 @@ from .web_visual_qa_contracts import (
     WEB_VISUAL_QA_MESSAGE_CARD_DOES_NOT_PROVE,
     WEB_VISUAL_QA_MESSAGE_CARD_SCHEMA_VERSION,
     WEB_VISUAL_QA_MESSAGE_ROUTE_SCHEMA_VERSION,
+    WEB_VISUAL_QA_CHANNEL_DELIVERY_SCHEMA_VERSION,
+    SUPPORTED_RENDERER_TARGETS,
     JsonObject,
     JsonValue,
     object_list,
     object_value,
     text,
 )
+
+
+def build_web_visual_qa_channel_delivery_card(package: JsonObject, *, renderer_target: str) -> JsonObject:
+    if renderer_target not in SUPPORTED_RENDERER_TARGETS:
+        raise ValueError("renderer_target must be discord, slack, or telegram")
+    projection = object_value(package.get("attachment_projection"))
+    captures_by_id = {text(capture.get("capture_id")): capture for capture in object_list(package.get("captures"))}
+    attachments = [
+        {
+            "capture_id": text(item.get("capture_id")),
+            "alt_text": "Web QA screenshot",
+            "display_order": item.get("display_order"),
+        }
+        for item in object_list(projection.get("items"))
+        if text(object_value(captures_by_id.get(text(item.get("capture_id")))).get("redaction_status")) in {"not_needed", "redacted"}
+    ]
+    blocked_captures = [
+        {
+            "capture_id": text(item.get("capture_id")),
+            "reason": text(item.get("reason")),
+        }
+        for item in object_list(projection.get("blocked_items"))
+    ]
+    blocked_ids = {text(item.get("capture_id")) for item in blocked_captures}
+    for item in object_list(projection.get("items")):
+        capture_id = text(item.get("capture_id"))
+        redaction_status = text(object_value(captures_by_id.get(capture_id)).get("redaction_status"))
+        if redaction_status not in {"not_needed", "redacted"} and capture_id not in blocked_ids:
+            blocked_captures.append({"capture_id": capture_id, "reason": "redaction_not_confirmed"})
+    return {
+        "schema_version": WEB_VISUAL_QA_CHANNEL_DELIVERY_SCHEMA_VERSION,
+        "renderer_target": renderer_target,
+        "source": text(package.get("source")) or "generic",
+        "package_id": text(package.get("package_id")),
+        "target": text(package.get("target")),
+        "status": "prepared_not_observed",
+        "delivery_observed": False,
+        "attachments": attachments,
+        "blocked_captures": blocked_captures,
+        "adapter_action": "adapter_upload_and_record_delivery_observation",
+        "does_not_prove": ["message_sent", "attachment_uploaded", "platform_delivery"],
+        "claim_boundary": "This is a redacted prepared card. The channel adapter owns upload and observed delivery evidence.",
+    }
 
 
 def build_web_visual_qa_message_card(package: JsonObject) -> JsonObject:
