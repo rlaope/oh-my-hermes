@@ -22,6 +22,7 @@ from ..coding.hermes_harness import (
     compact_hermes_coding_harness as _compact_hermes_coding_harness,
     validate_hermes_coding_harness as _validate_hermes_coding_harness,
 )
+from ..coding.executor_capability_snapshots import validate_executor_capability_snapshot
 from ..executors import (
     DISPATCH_POLICIES,
     EXECUTOR_PROFILES,
@@ -200,6 +201,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "codex_skill",
     "codex_invocation",
     "executor_local_capability_strategy",
+    "executor_capability_snapshot",
     "status",
     "recording_contract",
     "dispatch_contract",
@@ -229,6 +231,7 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "dispatchable",
     "invocation",
     "executor_local_capability_strategy",
+    "executor_capability_snapshot",
     "status",
     "recording_contract",
     "dispatch_contract",
@@ -257,6 +260,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "dispatchable",
     "invocation",
     "executor_local_capability_strategy",
+    "executor_capability_snapshot",
     "status",
     "recording_contract",
     "dispatch_contract",
@@ -944,6 +948,10 @@ def _optional_string(value: Any) -> str | None:
     return text if text else None
 
 
+def _compact_executor_capability_snapshot(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
 def _compact_executor_handoff(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or not value:
         return {}
@@ -976,6 +984,9 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
     strategy = _compact_optional_executor_local_capability_strategy(value)
     if strategy:
         compact["executor_local_capability_strategy"] = strategy
+    snapshot = _compact_executor_capability_snapshot(value.get("executor_capability_snapshot"))
+    if snapshot:
+        compact["executor_capability_snapshot"] = snapshot
     capability_report = _compact_local_capability_report_contract(value.get("local_capability_report_contract", {}))
     if capability_report:
         compact["local_capability_report_contract"] = capability_report
@@ -1028,6 +1039,9 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
     strategy = _compact_optional_executor_local_capability_strategy(value)
     if strategy:
         compact["executor_local_capability_strategy"] = strategy
+    snapshot = _compact_executor_capability_snapshot(value.get("executor_capability_snapshot"))
+    if snapshot:
+        compact["executor_capability_snapshot"] = snapshot
     capability_report = _compact_local_capability_report_contract(value.get("local_capability_report_contract", {}))
     if capability_report:
         compact["local_capability_report_contract"] = capability_report
@@ -1089,6 +1103,9 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     strategy = _compact_optional_executor_local_capability_strategy(value)
     if strategy:
         compact["executor_local_capability_strategy"] = strategy
+    snapshot = _compact_executor_capability_snapshot(value.get("executor_capability_snapshot"))
+    if snapshot:
+        compact["executor_capability_snapshot"] = snapshot
     capability_report = _compact_local_capability_report_contract(value.get("local_capability_report_contract", {}))
     if capability_report:
         compact["local_capability_report_contract"] = capability_report
@@ -2282,6 +2299,13 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
         )
     )
     errors.extend(
+        validate_optional_executor_capability_snapshot(
+            handoff,
+            "coding_delegation executor_handoff executor_capability_snapshot",
+            expected_executor="codex",
+        )
+    )
+    errors.extend(
         validate_optional_task_prompt_contract(
             handoff,
             "coding_delegation executor_handoff task_prompt_contract",
@@ -2500,6 +2524,23 @@ def validate_optional_executor_local_capability_strategy(
     )
 
 
+def validate_optional_executor_capability_snapshot(
+    handoff: dict[str, Any],
+    label: str,
+    *,
+    expected_executor: str,
+) -> list[str]:
+    if "executor_capability_snapshot" not in handoff:
+        return []
+    snapshot = handoff["executor_capability_snapshot"]
+    if not isinstance(snapshot, dict):
+        return [f"{label} must be an object"]
+    errors = validate_executor_capability_snapshot(snapshot)
+    if snapshot.get("executor") != expected_executor:
+        errors.append(f"{label} executor must match selected executor profile")
+    return errors
+
+
 def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
     errors: list[str] = []
     _require(isinstance(handoff, dict), errors, "coding_delegation runtime_handoff must be an object")
@@ -2565,6 +2606,13 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
             handoff,
             "coding_delegation runtime_handoff executor_local_capability_strategy",
             expected_profile=str(handoff.get("selected_executor_profile", "")),
+        )
+    )
+    errors.extend(
+        validate_optional_executor_capability_snapshot(
+            handoff,
+            "coding_delegation runtime_handoff executor_capability_snapshot",
+            expected_executor=str(handoff.get("selected_executor_profile", "")),
         )
     )
     errors.extend(
@@ -2862,6 +2910,13 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
             handoff,
             "coding_delegation prompt_handoff executor_local_capability_strategy",
             expected_profile=str(handoff.get("selected_executor_profile", "")),
+        )
+    )
+    errors.extend(
+        validate_optional_executor_capability_snapshot(
+            handoff,
+            "coding_delegation prompt_handoff executor_capability_snapshot",
+            expected_executor=str(handoff.get("selected_executor_profile", "")),
         )
     )
     errors.extend(

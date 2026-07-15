@@ -45,6 +45,11 @@ plain request
 [Agent Install](INSTALL_FOR_AGENTS.md) ·
 [GitHub Pages site](site/index.html)
 
+> [!NOTE]
+> <p align="center">
+>   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
+> </p>
+
 ## Quick Start
 
 Install the local command and managed skills:
@@ -160,7 +165,3 @@ git diff --check
 OMH is developed in the open as part of
 [Team Art & Engineering](https://rlaope.github.io/artengine-lab/). Follow
 [@rlaope](https://github.com/rlaope) for project updates.
-
-<p align="center">
-  <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
-</p>

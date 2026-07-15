@@ -19,9 +19,32 @@ from omh.dynamic_workflow import (
     write_dynamic_coding_workflow,
 )
 from omh.paths import resolve_paths
+from omh.coding.executor_capability_snapshots import build_executor_capability_snapshot, write_executor_capability_snapshot
 
 
 class DynamicWorkflowTests(unittest.TestCase):
+    def test_persisted_matching_snapshot_is_bound_to_dynamic_stage(self) -> None:
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "snapshots"
+            snapshot = build_executor_capability_snapshot(
+                executor="codex",
+                capabilities={"parallel_agents": {"status": "host_observed", "scope": {"surface": "local"}, "evidence_ref": "probe:codex", "observed_at": "2026-07-15T00:00:00Z"}},
+            )
+            write_executor_capability_snapshot(directory / "codex.json", snapshot)
+            workflow = build_dynamic_coding_workflow(
+                "Implement parser", planners=["codex"], capability_snapshot_directory=directory
+            )
+        codex_stage = next(stage for stage in workflow["stages"] if stage["target"] == "codex")
+        self.assertEqual(codex_stage["executor_capability_snapshot"], snapshot)
+
+    def test_unsafe_dynamic_target_skips_snapshot_binding(self) -> None:
+        with TemporaryDirectory() as tmp:
+            workflow = build_dynamic_coding_workflow(
+                "Implement parser", planners=["../untrusted"], capability_snapshot_directory=Path(tmp)
+            )
+        stage = next(stage for stage in workflow["stages"] if stage["target"] == "../untrusted")
+        self.assertEqual(stage["executor_capability_snapshot"]["capabilities"]["parallel_agents"]["status"], "unknown")
+
     def test_default_workflow_prepares_dynamic_target_plan_without_claiming_execution(self) -> None:
         workflow = build_dynamic_coding_workflow("Build the dynamic coding orchestration feature")
 
@@ -47,6 +70,15 @@ class DynamicWorkflowTests(unittest.TestCase):
         self.assertEqual(workflow["goal"]["summary_kind"], "digest_reference")
         self.assertFalse(workflow["goal"]["raw_prompt_stored"])
         self.assertEqual(workflow["target_selection"]["selection_unit"], "typed_orchestration_target")
+
+        for stage in workflow["stages"]:
+            snapshot = stage["executor_capability_snapshot"]
+            self.assertEqual(snapshot["schema_version"], "executor_capability_snapshot/v1")
+            self.assertEqual(snapshot["executor"], stage["target"])
+            self.assertTrue(
+                all(capability["status"] == "unknown" for capability in snapshot["capabilities"].values())
+            )
+            self.assertNotIn("host_observed", json.dumps(snapshot))
 
     def test_workflow_goal_payload_stores_digest_not_prompt_text(self) -> None:
         workflow = build_dynamic_coding_workflow(

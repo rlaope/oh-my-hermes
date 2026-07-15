@@ -7,6 +7,13 @@ import sys
 from pathlib import Path
 
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload, coding_delegation_record_payload
+from ..coding.executor_capability_snapshots import (
+    ExecutorCapabilitySnapshotError,
+    build_executor_capability_snapshot,
+    read_executor_capability_snapshot,
+    validate_executor_capability_snapshot,
+    write_executor_capability_snapshot,
+)
 from ..executor_readiness import EXECUTOR_READINESS_PROFILES, probe_executor_readiness
 from ..hermes_planning import (
     build_plan_handoff_context_pack,
@@ -15,6 +22,7 @@ from ..hermes_planning import (
 )
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..installer import OmhError
+from ..local_store import read_json_object
 from ..memory import memory_recall_pack_for_handoff, read_handoff_context_pack_file
 from ..routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 from ..routing.localization import normalized_phrase, routing_tokens
@@ -29,6 +37,13 @@ from ..wrapper.lifecycle import (
 )
 from .common import _chat_input_and_metadata, _explicit_source_metadata, _paths, _print_json, _resolved_executor
 from .dynamic_workflow import _add_dynamic_workflow_command, cmd_coding_dynamic_workflow
+
+
+_CAPABILITY_SNAPSHOT_CLAIM_BOUNDARY = (
+    "Executor capability snapshots are metadata-only host observations. They are not execution evidence, "
+    "verification, review, CI, merge-readiness, or merge evidence."
+)
+_CAPABILITY_SNAPSHOT_EXECUTOR_TARGETS = tuple(target for target in CODING_EXECUTOR_TARGETS if target != "choose")
 
 
 def cmd_coding_delegate(args: argparse.Namespace) -> int:
@@ -77,6 +92,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             context_pack=context_pack,
             memory_recall_pack=memory_recall_pack,
             plan_artifact=plan_artifact,
+            capability_snapshot_directory=paths.omh_home / "coding" / "executor-capability-snapshots",
         )
         if plan_artifact:
             _apply_plan_handoff_source(payload)
@@ -432,6 +448,102 @@ def cmd_coding_executor_readiness(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_coding_capability_snapshot_prepare(args: argparse.Namespace) -> int:
+    try:
+        _print_json(_build_capability_snapshot(args))
+    except (ExecutorCapabilitySnapshotError, OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_coding_capability_snapshot_record(args: argparse.Namespace) -> int:
+    try:
+        snapshot = _build_capability_snapshot(args)
+        path = _capability_snapshot_path(args)
+        persisted = write_executor_capability_snapshot(path, snapshot)
+    except (ExecutorCapabilitySnapshotError, OSError, json.JSONDecodeError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "snapshot": persisted,
+            "snapshot_path": str(path),
+            "claim_boundary": _CAPABILITY_SNAPSHOT_CLAIM_BOUNDARY,
+        }
+    )
+    return 0
+
+
+def cmd_coding_capability_snapshot_inspect(args: argparse.Namespace) -> int:
+    try:
+        path = _capability_snapshot_path(args)
+        snapshot = read_executor_capability_snapshot(path)
+        if snapshot is None:
+            raise ValueError(f"executor capability snapshot not found: {path}")
+        if snapshot.get("executor") != args.executor:
+            raise ValueError(f"executor capability snapshot executor does not match --executor {args.executor}")
+    except (ExecutorCapabilitySnapshotError, OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "snapshot": snapshot,
+            "snapshot_path": str(path),
+            "claim_boundary": _CAPABILITY_SNAPSHOT_CLAIM_BOUNDARY,
+        }
+    )
+    return 0
+
+
+def cmd_coding_capability_snapshot_validate(args: argparse.Namespace) -> int:
+    try:
+        path = _capability_snapshot_path(args)
+        snapshot = read_json_object(path)
+        if snapshot is None:
+            raise ValueError(f"executor capability snapshot not found: {path}")
+        errors = validate_executor_capability_snapshot(snapshot)
+        if snapshot.get("executor") != args.executor:
+            errors.append(f"snapshot executor does not match --executor {args.executor}")
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(
+        {
+            "valid": not errors,
+            "errors": errors,
+            "snapshot_path": str(path),
+            "claim_boundary": _CAPABILITY_SNAPSHOT_CLAIM_BOUNDARY,
+        }
+    )
+    return 0 if not errors else 1
+
+
+def _build_capability_snapshot(args: argparse.Namespace) -> dict[str, object]:
+    raw = _read_capability_snapshot_json(args.capabilities_json)
+    capabilities: dict[str, dict[str, object]] = {}
+    for name, value in raw.items():
+        if not isinstance(value, dict):
+            raise ValueError("--capabilities-json values must be objects")
+        capabilities[name] = value
+    return build_executor_capability_snapshot(
+        executor=args.executor,
+        capabilities=capabilities,
+        recorded_at=args.recorded_at or None,
+    )
+
+
+def _read_capability_snapshot_json(path_text: str) -> dict[str, object]:
+    raw = sys.stdin.read() if path_text == "-" else Path(path_text).expanduser().read_text(encoding="utf-8")
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError("--capabilities-json must contain a JSON object")
+    return value
+
+
+def _capability_snapshot_path(args: argparse.Namespace) -> Path:
+    explicit_path = getattr(args, "snapshot_path", "")
+    if explicit_path:
+        return Path(explicit_path).expanduser()
+    return _paths(args).omh_home / "coding" / "executor-capability-snapshots" / f"{args.executor}.json"
+
+
 def _add_coding_commands(sub) -> None:
     coding = sub.add_parser("coding", help="Prepare executor-neutral or tracked coding handoff artifacts.")
     coding_sub = coding.add_subparsers(dest="coding_command", required=True)
@@ -489,6 +601,7 @@ def _add_coding_commands(sub) -> None:
     delegate.set_defaults(func=cmd_coding_delegate)
 
     _add_dynamic_workflow_command(coding_sub)
+    _add_capability_snapshot_commands(coding_sub)
 
     lifecycle = coding_sub.add_parser("lifecycle")
     lifecycle_sub = lifecycle.add_subparsers(dest="lifecycle_command", required=True)
@@ -554,3 +667,53 @@ def _add_coding_commands(sub) -> None:
     readiness.add_argument("--force", action="store_true", help="Run the probe even if a first-use result is already cached.")
     readiness.add_argument("--dry-run", action="store_true", help="Return the probe contract without running or caching it.")
     readiness.set_defaults(func=cmd_coding_executor_readiness)
+
+
+def _add_capability_snapshot_commands(coding_sub) -> None:
+    snapshots = coding_sub.add_parser(
+        "capability-snapshot",
+        help="Prepare, persist, inspect, or validate metadata-only executor capability snapshots.",
+    )
+    snapshot_sub = snapshots.add_subparsers(dest="capability_snapshot_command", required=True)
+
+    prepare = snapshot_sub.add_parser("prepare", help="Build a capability snapshot without writing it.")
+    _add_capability_snapshot_build_arguments(prepare)
+    prepare.set_defaults(func=cmd_coding_capability_snapshot_prepare)
+
+    record = snapshot_sub.add_parser("record", help="Persist a capability snapshot under .omh or an explicit local path.")
+    _add_capability_snapshot_build_arguments(record)
+    record.add_argument("--path", dest="snapshot_path", default="", help="Optional local output path for this snapshot.")
+    record.set_defaults(func=cmd_coding_capability_snapshot_record)
+
+    inspect = snapshot_sub.add_parser("inspect", help="Read one locally persisted capability snapshot.")
+    _add_capability_snapshot_read_arguments(inspect)
+    inspect.set_defaults(func=cmd_coding_capability_snapshot_inspect)
+
+    validate = snapshot_sub.add_parser("validate", help="Validate one locally persisted capability snapshot.")
+    _add_capability_snapshot_read_arguments(validate)
+    validate.set_defaults(func=cmd_coding_capability_snapshot_validate)
+
+
+def _add_capability_snapshot_build_arguments(parser) -> None:
+    parser.add_argument(
+        "--executor",
+        choices=_CAPABILITY_SNAPSHOT_EXECUTOR_TARGETS,
+        required=True,
+        help="Selected coding executor profile.",
+    )
+    parser.add_argument(
+        "--capabilities-json",
+        required=True,
+        help="Path to a metadata-only JSON object keyed by supported capability name, or '-' for stdin.",
+    )
+    parser.add_argument("--recorded-at", default="", help="Optional ISO-8601 timestamp; defaults to the local record time.")
+
+
+def _add_capability_snapshot_read_arguments(parser) -> None:
+    parser.add_argument(
+        "--executor",
+        choices=_CAPABILITY_SNAPSHOT_EXECUTOR_TARGETS,
+        required=True,
+        help="Selected coding executor profile.",
+    )
+    parser.add_argument("--path", dest="snapshot_path", default="", help="Optional local snapshot path to inspect or validate.")

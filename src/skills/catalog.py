@@ -6786,6 +6786,7 @@ _HARNESSES = [
         quality_bar=(
             "Clarify scope before edits when target behavior, files, or verification are missing.",
             "Attach acceptance criteria, verification expectations, and review expectations to the prepared handoff.",
+            "Carry executor_capability_snapshot/v1 only as metadata-only context; host_observed requires bounded scope and evidence.",
             "Report coding progress from lifecycle evidence, not from the existence of a prepared prompt.",
         ),
         evidence_ladder=(
@@ -6815,6 +6816,7 @@ _HARNESSES = [
         ),
         overclaim_guards=(
             "A prepared coding_delegation.json is not implementation evidence.",
+            "A host_observed capability snapshot proves only bounded host capability evidence, not dispatch, execution, review, CI, or merge evidence.",
             "Executor completion is not review, CI, merge-readiness, or merge evidence.",
         ),
     ),

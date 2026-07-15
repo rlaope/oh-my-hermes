@@ -19,6 +19,7 @@ from ..executor_progress import (
 )
 from ..executors import CODING_EXECUTOR_TARGETS, executor_label
 from ..coding.hermes_harness import build_hermes_coding_harness
+from ..coding.executor_capability_snapshots import validate_executor_capability_snapshot
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, utc_now
 from ..paths import OmhPaths
 from ..runtime.artifacts import (
@@ -136,6 +137,9 @@ def build_executor_session_status(
             "result, verification, review, CI, or merge unless the matching observed evidence is recorded."
         ),
     }
+    capability_snapshot = _executor_capability_snapshot(paths, session)
+    if capability_snapshot:
+        status["executor_capability_snapshot"] = capability_snapshot
     hermes_harness = build_hermes_coding_harness(
         session=session,
         runtime_handoff=session.get("runtime_handoff") if isinstance(session.get("runtime_handoff"), dict) else {},
@@ -551,6 +555,9 @@ def enhance_chat_response_with_executor_session(
         "result": executor_status.get("result", ""),
         "verification": executor_status.get("verification", ""),
     }
+    capability_snapshot = executor_status.get("executor_capability_snapshot")
+    if isinstance(capability_snapshot, dict) and capability_snapshot:
+        session_status["executor_capability_snapshot"] = capability_snapshot
     codex_session = executor_status.get("codex_session")
     if isinstance(codex_session, dict) and codex_session:
         session_status["codex_session"] = codex_session
@@ -594,6 +601,11 @@ def enhance_status_card_with_executor_session(
 ) -> dict[str, object]:
     updated = dict(status_card)
     updated["executor_session_status"] = _executor_status_summary(executor_status)
+    capability_snapshot = executor_status.get("executor_capability_snapshot")
+    if isinstance(capability_snapshot, dict) and capability_snapshot:
+        updated["executor_capability_snapshot"] = capability_snapshot
+    else:
+        updated.pop("executor_capability_snapshot", None)
     updated["workspace_isolation"] = executor_status.get("workspace_isolation", {})
     for key in (
         "codex_session",
@@ -686,6 +698,29 @@ def _default_executor_session(session: dict[str, Any]) -> dict[str, Any]:
         "summary": "",
         "claim_boundary": _claim_boundary(),
     }
+
+
+def _executor_capability_snapshot(paths: OmhPaths, session: dict[str, Any]) -> dict[str, object]:
+    handoff = _session_handoff(paths, session)
+    snapshot = handoff.get("executor_capability_snapshot") if isinstance(handoff, dict) else None
+    if not isinstance(snapshot, dict) or validate_executor_capability_snapshot(snapshot):
+        return {}
+    if str(snapshot.get("executor", "")) != str(session.get("selected_executor_profile", "")):
+        return {}
+    return snapshot
+
+
+def _session_handoff(paths: OmhPaths, session: dict[str, Any]) -> dict[str, Any]:
+    for key in ("prompt_handoff", "runtime_handoff"):
+        handoff = session.get(key)
+        if isinstance(handoff, dict) and handoff:
+            return handoff
+    run_id = str(session.get("current_run_id", ""))
+    if not run_id:
+        return {}
+    coding = read_json_object(paths.runtime_runs_dir / run_id / "coding_delegation.json")
+    handoff = coding.get("executor_handoff") if isinstance(coding, dict) else None
+    return handoff if isinstance(handoff, dict) else {}
 
 
 def _default_isolation_status() -> dict[str, object]:

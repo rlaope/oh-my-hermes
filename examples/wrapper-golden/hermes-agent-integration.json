@@ -1,5 +1,11 @@
 {
   "schema_version": "hermes_agent_integration_examples/v1",
+  "executor_capability_snapshot_contract": {
+    "schema_version": "executor_capability_snapshot/v1",
+    "privacy_default": "metadata_only",
+    "statuses": ["prepared", "host_observed", "unavailable", "unknown"],
+    "claim_boundary": "Host-observed capability metadata is not executor dispatch, execution, review, CI, or merge evidence."
+  },
   "description": "Contract examples for Hermes Agent surfaces consuming OMH outputs.",
   "runbook": "docs/HERMES_AGENT_INTEGRATION_RUNBOOK.md",
   "hermes_surface_contract": {
@@ -131,7 +137,8 @@
         "evidence_contract",
         "prompt_template",
         "non_goals",
-        "harness_quality"
+        "harness_quality",
+        "executor_capability_snapshot"
       ],
       "renderable_fields": [
         "executor_target",
@@ -142,7 +149,8 @@
         "acceptance_criteria",
         "verification",
         "report_contract.required_fields",
-        "review.required"
+        "review.required",
+        "executor_capability_snapshot.capabilities"
       ]
     }
   ],

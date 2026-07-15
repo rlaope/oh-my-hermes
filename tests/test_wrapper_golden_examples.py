@@ -153,6 +153,10 @@ class WrapperGoldenExampleTests(unittest.TestCase):
         self.assertIn("chat rendering", payload["hermes_surface_contract"]["hermes_surface_owns"])
         self.assertIn("Hermes core patching", payload["hermes_surface_contract"]["non_goals"])
         self.assertIn("hidden executor launch", payload["hermes_surface_contract"]["non_goals"])
+        snapshot_contract = payload["executor_capability_snapshot_contract"]
+        self.assertEqual(snapshot_contract["schema_version"], "executor_capability_snapshot/v1")
+        self.assertEqual(snapshot_contract["privacy_default"], "metadata_only")
+        self.assertIn("host_observed", snapshot_contract["statuses"])
 
         contracts = {item["schema_version"]: item for item in payload["consumed_contracts"]}
         self.assertEqual(
@@ -174,6 +178,7 @@ class WrapperGoldenExampleTests(unittest.TestCase):
         self.assertIn("{message}", live_handoff["codex_invocation"]["dispatch_text_template"])
         self.assertNotIn("recommended_workflow", contracts["coding_executor_handoff/v1"]["required_fields"])
         self.assertNotIn("verification_expectations", contracts["coding_executor_handoff/v1"]["required_fields"])
+        self.assertIn("executor_capability_snapshot.capabilities", contracts["coding_executor_handoff/v1"]["renderable_fields"])
 
         transitions = payload["state_transitions"]
         source_scenarios = {item["source_scenario"] for item in transitions}

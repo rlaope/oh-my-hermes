@@ -26,6 +26,88 @@ from omh.wrapper.localized_copy import detect_copy_locale
 
 
 class CliTests(unittest.TestCase):
+    def test_coding_capability_snapshot_control_plane_is_metadata_only(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            capabilities_path = root / "capabilities.json"
+            capabilities_path.write_text(
+                json.dumps(
+                    {
+                        "parallel_agents": {
+                            "status": "host_observed",
+                            "scope": {"host": "local", "surface": "native_subagents"},
+                            "evidence_ref": "host-probe:codex-subagents",
+                            "observed_at": "2026-07-15T00:00:00Z",
+                        },
+                        "visual_qa": {"status": "unknown"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            prepare = [
+                "coding",
+                "capability-snapshot",
+                "prepare",
+                "--executor",
+                "codex",
+                "--capabilities-json",
+                str(capabilities_path),
+                "--recorded-at",
+                "2026-07-15T00:00:01Z",
+            ]
+            status, stdout, stderr = run_cli(base + prepare)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            prepared = json.loads(stdout)
+            self.assertEqual(prepared["schema_version"], "executor_capability_snapshot/v1")
+            self.assertEqual(prepared["executor"], "codex")
+            self.assertEqual(prepared["capabilities"]["parallel_agents"]["status"], "host_observed")
+            self.assertNotIn("execution", prepared)
+            self.assertNotIn("verification", prepared)
+
+            status, stdout, stderr = run_cli(base + prepare[:2] + ["record"] + prepare[3:])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            recorded = json.loads(stdout)
+            snapshot_path = Path(recorded["snapshot_path"])
+            self.assertTrue(snapshot_path.is_file())
+            self.assertEqual(recorded["snapshot"]["schema_version"], "executor_capability_snapshot/v1")
+            self.assertIn("not execution evidence", recorded["claim_boundary"])
+
+            status, stdout, stderr = run_cli(
+                base + ["coding", "capability-snapshot", "inspect", "--executor", "codex"]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertEqual(json.loads(stdout)["snapshot"], recorded["snapshot"])
+
+            status, stdout, stderr = run_cli(
+                base + ["coding", "capability-snapshot", "validate", "--executor", "codex"]
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            validation = json.loads(stdout)
+            self.assertTrue(validation["valid"])
+            self.assertEqual(validation["errors"], [])
+
+            invalid = dict(recorded["snapshot"])
+            invalid["execution"] = "not allowed"
+            snapshot_path.write_text(json.dumps(invalid), encoding="utf-8")
+
+            status, stdout, stderr = run_cli(
+                base + ["coding", "capability-snapshot", "validate", "--executor", "codex"]
+            )
+
+            self.assertEqual(status, 1, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("snapshot.execution is forbidden metadata", json.loads(stdout)["errors"])
+
     def test_no_arg_cli_shows_welcome_instead_of_error(self) -> None:
         status, stdout, stderr = run_cli([], output_json=False)
 
@@ -7135,6 +7217,42 @@ class CliTests(unittest.TestCase):
         self.assertIn("send_to_codex", handoff["harness_quality"]["wrapper_actions"])
         self.assertNotIn(hostile, json.dumps(handoff))
         self.assertNotIn(hostile, json.dumps(payload))
+
+    def test_recorded_capability_snapshot_binds_to_matching_executor_handoff(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp) / ".omh"
+            source = Path(tmp) / "capabilities.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "parallel_agents": {
+                            "status": "host_observed",
+                            "scope": {"surface": "local"},
+                            "evidence_ref": "probe:subagents",
+                            "observed_at": "2026-07-15T00:00:00Z",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            status, _, stderr = run_cli(
+                ["--omh-home", str(home), "coding", "capability-snapshot", "record", "--executor", "codex", "--capabilities-json", str(source)]
+            )
+            self.assertEqual((status, stderr), (0, ""))
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(home), "coding", "delegate", "--executor", "codex", "refactor", "src/omh/parser.py"]
+            )
+            self.assertEqual((status, stderr), (0, ""))
+            handoff = json.loads(stdout)["executor_handoff"]
+            self.assertEqual(
+                handoff["executor_capability_snapshot"]["capabilities"]["parallel_agents"]["evidence_ref"],
+                "probe:subagents",
+            )
+            status, _, stderr = run_cli(
+                ["--omh-home", str(home), "coding", "capability-snapshot", "inspect", "--executor", "claude-code", "--path", str(home / "coding" / "executor-capability-snapshots" / "codex.json")]
+            )
+            self.assertNotEqual(status, 0)
+            self.assertIn("does not match", stderr)
 
     def test_coding_delegate_codex_executor_include_message_expands_stdout_only(self) -> None:
         status, stdout, stderr = run_cli(["coding", "delegate", "--executor", "codex", "--include-message", "risky", "refactor"])
