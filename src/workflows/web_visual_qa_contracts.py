@@ -17,6 +17,7 @@ WEB_VISUAL_QA_PACKAGES_INDEX_SCHEMA_VERSION: Final = "omh_web_visual_qa_packages
 MESSAGE_ATTACHMENT_PROJECTION_SCHEMA_VERSION: Final = "message_attachment_projection/v1"
 WEB_VISUAL_QA_MESSAGE_CARD_SCHEMA_VERSION: Final = "web_visual_qa_message_card/v1"
 WEB_VISUAL_QA_MESSAGE_ROUTE_SCHEMA_VERSION: Final = "web_visual_qa_message_route/v1"
+WEB_VISUAL_QA_CHANNEL_DELIVERY_SCHEMA_VERSION: Final = "web_visual_qa_channel_delivery/v1"
 WEB_VISUAL_QA_CLAIM_BOUNDARY: Final = (
     "OMH records supplied web visual QA evidence only; it does not capture browsers, call multimodal models, upload "
     "messages, or prove delivery."
@@ -34,6 +35,7 @@ SUPPORTED_VERDICTS: Final = ("pass", "hold", "fail", "not_observed")
 SUPPORTED_LIFECYCLE_STATUSES: Final = ("prepared", "captures_observed", "criteria_recorded", "verdict_recorded")
 SUPPORTED_RESULT_STATUSES: Final = ("pass", "hold", "fail", "not_observed")
 SUPPORTED_SOURCES: Final = ("discord", "slack", "hermes", "generic")
+SUPPORTED_RENDERER_TARGETS: Final = ("discord", "slack", "telegram")
 SUPPORTED_COST_TIERS: Final = ("none", "low", "medium", "high", "unknown")
 SUPPORTED_CONFIDENCE: Final = ("low", "medium", "high", "unknown")
 SUPPORTED_RISK_LEVELS: Final = ("low", "medium", "high", "critical", "unknown")
