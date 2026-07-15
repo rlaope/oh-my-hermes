@@ -5726,7 +5726,7 @@ _FEATURE_SURFACE_SKILLS = (
     ),
     _feature_surface_skill(
         "data-analysis",
-        "Hermes data analysis workflow: scope supplied structured or unstructured data analysis with provenance, relationship, causal-claim, and hallucination guards.",
+        "Hermes data analysis workflow: scope supplied data with provenance, causal-claim, and hallucination guards.",
         (
             "data-analysis",
             "data analysis",
@@ -5767,7 +5767,7 @@ _FEATURE_SURFACE_SKILLS = (
             "인과 분석",
             "인과관계",
         ),
-        "Use when Hermes should prepare or supervise supplied structured, unstructured, or mixed data analysis, including relationship and causal-question framing, without claiming unsupported numeric findings or causality.",
+        "Use when Hermes should prepare supplied structured, unstructured, or mixed data analysis without unsupported numeric or causal claims.",
         category="analysis",
         phase="data-task",
         next_action="prepare_data_analysis_card",

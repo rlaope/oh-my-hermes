@@ -4389,7 +4389,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### data-analysis
 
-[omh] Hermes data analysis workflow: scope supplied structured or unstructured data analysis with provenance, relationship, causal-claim, and hallucination guards.
+[omh] Hermes data analysis workflow: scope supplied data with provenance, causal-claim, and hallucination guards.
 
 - Category: `analysis`
 - Phase: `data-task`
@@ -4402,7 +4402,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Preferred usage: Use as an installed Hermes workflow skill when users ask to analyze supplied CSV, JSON, logs, tables, or metric-like data with schema, method, and hallucination guards.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `data-analysis` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use when Hermes should prepare or supervise supplied structured, unstructured, or mixed data analysis, including relationship and causal-question framing, without claiming unsupported numeric findings or causality.
+- Use when: Use when Hermes should prepare supplied structured, unstructured, or mixed data analysis without unsupported numeric or causal claims.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
