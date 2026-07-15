@@ -1415,6 +1415,7 @@ class WrapperContractTests(unittest.TestCase):
                 "what should I do next with OMH setup?",
                 "omh 상태랑 다음 액션 알려줘",
                 "OMH 설치됐는데 이제 뭐해?",
+                "OMH 설치했는데 Hermes에게 뭐라고 말하면 돼?",
                 "설치 후 첫 실행이 헷갈려",
                 "처음 설치한 사람이 뭘 해야 하는지 모르겠어",
                 "is OMH installed correctly?",
@@ -1447,6 +1448,11 @@ class WrapperContractTests(unittest.TestCase):
                     self.assertEqual(state["quickstart_card"]["schema_version"], "omh_quickstart_card/v1")
                     self.assertEqual(state["quickstart_card"]["source"], "discord")
                     self.assertEqual(len(state["quickstart_card"]["first_value_packs"]), 6)
+                    starters = state["quickstart_card"]["natural_language_starters"]
+                    self.assertGreaterEqual(len(starters), 7)
+                    self.assertEqual(starters[0]["selection_basis"], "common_request_coverage")
+                    self.assertEqual(starters[0]["expected_route_action"], "dispatch")
+                    self.assertEqual(starters[0]["expected_workflow"], "feedback-triage")
                     self.assertEqual(
                         state["quickstart_card"]["first_value_packs"][0]["label"],
                         "Frontend Rescue",

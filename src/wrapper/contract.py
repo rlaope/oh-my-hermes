@@ -5388,6 +5388,7 @@ def build_chat_response_from_omh_quickstart(
     roadmap = _nested(card, "capability_gap_roadmap")
     next_actions = _roadmap_next_actions(roadmap, limit=3)
     packs = card.get("first_value_packs", [])
+    starters = card.get("natural_language_starters", [])
     pack_lines: list[str] = []
     if isinstance(packs, list):
         for pack in packs[:3]:
@@ -5397,6 +5398,16 @@ def build_chat_response_from_omh_quickstart(
             outcome = str(pack.get("outcome", "")).strip()
             if label and outcome:
                 pack_lines.append(f"- {label}: {outcome}")
+
+    starter_lines: list[str] = []
+    if isinstance(starters, list):
+        for starter in starters[:3]:
+            if not isinstance(starter, dict):
+                continue
+            label = str(starter.get("label", "")).strip()
+            prompt = str(starter.get("prompt", "")).strip()
+            if label and prompt:
+                starter_lines.append(f"- {label}: {prompt}")
 
     body_lines = [
         (
@@ -5410,7 +5421,9 @@ def build_chat_response_from_omh_quickstart(
         f"- Wrapper usage: {str(wrapper_usage.get('status', 'missing')).replace('_', ' ')}.",
         "",
         "Next in Hermes:",
-        f"- {first_prompt}" if first_prompt else "- Ask Hermes what you want to do with OMH.",
+        "- Say what you want in normal language; OMH will show the selected workflow and next action.",
+        *(["", "Natural-language starters:", *starter_lines] if starter_lines else []),
+        *(["", "Optional explicit workflow prompt:", f"- {first_prompt}"] if first_prompt else []),
         *(["", "High-value things to try:", *pack_lines] if pack_lines else []),
         "- Open the workflow picker with ./omh when you want to choose manually.",
         "- Use Show detailed status only when setup or registration looks wrong.",

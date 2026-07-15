@@ -81,8 +81,16 @@ workflow that normal users need to memorize.
 Then ask Hermes normally:
 
 ```text
-Use OMH request-to-handoff for: I want to safely add a feature to this repo.
+I want to safely add a feature to this repo.
 ```
+
+You do not need to name a skill. OMH uses the request to show the selected
+workflow and next action; `omh quickstart` also offers validated natural-language
+starters for planning, coding, research, visual QA, media, operations, and
+knowledge work.
+
+If a wrapper or operator needs an explicit workflow selection, it can still
+send `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
 
 ## What OMH Adds
 

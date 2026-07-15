@@ -1266,6 +1266,31 @@ class CliTests(unittest.TestCase):
             self.assertIn("request-to-handoff", payload["chat_prompts"][0]["expected_workflow"])
             self.assertTrue(any(action["id"] == "record_wrapper_usage" for action in payload["wrapper_actions"]))
 
+            starters = payload["natural_language_starters"]
+            starter_families = {starter["family"] for starter in starters}
+            self.assertEqual(
+                starter_families,
+                {
+                    "plan_and_clarify",
+                    "coding_and_delivery",
+                    "research_and_sources",
+                    "materials_and_frontend",
+                    "media_and_inputs",
+                    "ops_and_quality",
+                    "knowledge_and_learning",
+                    "runtime_tools",
+                    "direct_and_catalog",
+                },
+            )
+            for starter in starters:
+                with self.subTest(starter=starter["id"]):
+                    self.assertEqual(starter["selection_basis"], "common_request_coverage")
+                    self.assertIn(starter["expected_route_action"], {"dispatch", "fallback"})
+                    self.assertTrue(starter["prompt"])
+                    self.assertTrue(starter["expected_workflow"])
+                    self.assertTrue(starter["next_action"])
+                    self.assertIn("not", starter["claim_boundary"])
+
     def test_setup_recovers_bare_null_external_dirs_shape(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
