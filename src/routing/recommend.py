@@ -867,11 +867,12 @@ _SKILL_POLICIES.update(
             next_action="prepare_data_analysis_card",
             evidence_boundary=(
                 "A data analysis card is not file extraction, query execution, chart generation, statistical proof, "
-                "data correctness, or hallucination-safe numeric evidence."
+                "data correctness, numeric evidence, association, or causality."
             ),
             wrapper_guidance=(
-                "Prepare data_analysis_task_card/v1 with dataset scope, columns or schema, analysis question, "
-                "method plan, result-evidence slots, and a stop condition before numeric findings are claimed."
+                "Prepare data_analysis_task_card/v1 with dataset or corpus scope, schema or extraction method, "
+                "relationship-claim boundary, method plan, result-evidence slots, and a stop condition before "
+                "numeric, association, or causal findings are claimed."
             ),
         ),
         "toolbelt-readiness": RecommendationPolicy(

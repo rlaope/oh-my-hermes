@@ -31,6 +31,11 @@ from ..operations import (
     validate_operations_store,
     write_operation_artifact,
 )
+from ..operations_data import (
+    OPERATIONS_ANALYSIS_MODES,
+    OPERATIONS_DATA_SHAPES,
+    build_operations_data_harness,
+)
 from ..research_department import (
     build_research_department_plan,
     list_research_department_plans,
@@ -87,6 +92,14 @@ def cmd_ops_write(args: argparse.Namespace) -> int:
             },
         }
     )
+    return 0
+
+
+def cmd_ops_data_harness(args: argparse.Namespace) -> int:
+    try:
+        _print_json(build_operations_data_harness(data_shape=args.data_shape, analysis_mode=args.analysis_mode))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
     return 0
 
 
@@ -445,6 +458,14 @@ def _add_artifact_args(parser: argparse.ArgumentParser, *, surface: str, default
 def _add_ops_commands(sub) -> None:
     ops = sub.add_parser("ops", help="Create, inspect, validate, and export local operations artifacts.")
     ops_sub = ops.add_subparsers(dest="ops_command", required=True)
+
+    data_harness = ops_sub.add_parser(
+        "data-harness",
+        help="Prepare metadata-only operational data collection and relationship-analysis guardrails.",
+    )
+    data_harness.add_argument("--data-shape", choices=OPERATIONS_DATA_SHAPES, required=True)
+    data_harness.add_argument("--analysis-mode", choices=OPERATIONS_ANALYSIS_MODES, required=True)
+    data_harness.set_defaults(func=cmd_ops_data_harness)
 
     rhythm = ops_sub.add_parser("rhythm", help="Create an operating rhythm artifact such as a meeting or retro record.")
     _add_artifact_args(rhythm, surface="operating-rhythm", default_kind="meeting")

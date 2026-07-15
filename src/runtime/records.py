@@ -36,6 +36,7 @@ from ..isolation import ISOLATION_SCHEMA_VERSION
 from ..local_store import utc_now
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack, validate_project_memory_recall_pack
 from ..coding.product_family_templates import validate_product_family_template
+from ..coding.product_quality_harnesses import validate_product_quality_harness
 from ..coding.project_governance import validate_project_governance_blocked, validate_project_governance_profile
 from ..routing.route_plan import compact_workflow_route_plan
 
@@ -228,6 +229,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "project_governance_profile",
     "project_governance_blocked",
     "product_family_template",
+    "product_quality_harness",
 )
 CODING_PROMPT_HANDOFF_KEYS = (
     "schema_version",
@@ -259,6 +261,7 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "project_governance_profile",
     "project_governance_blocked",
     "product_family_template",
+    "product_quality_harness",
 )
 CODING_RUNTIME_HANDOFF_KEYS = (
     "schema_version",
@@ -297,6 +300,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "project_governance_profile",
     "project_governance_blocked",
     "product_family_template",
+    "product_quality_harness",
 )
 CODING_PROMPT_HANDOFF_INVOCATION_KEYS = (
     "mode",
@@ -1164,6 +1168,9 @@ def _compact_governance_and_family(value: dict[str, Any], compact: dict[str, Any
     template = value.get("product_family_template")
     if isinstance(template, dict) and not validate_product_family_template(template):
         compact["product_family_template"] = template
+    quality_harness = value.get("product_quality_harness")
+    if isinstance(quality_harness, dict) and not validate_product_quality_harness(quality_harness):
+        compact["product_quality_harness"] = quality_harness
 
 
 def _compact_executor_readiness(value: Any) -> dict[str, Any]:
@@ -3016,6 +3023,8 @@ def validate_optional_governance_and_family(handoff: dict[str, Any], label: str)
         errors.extend(validate_project_governance_blocked(blocked))
     if "product_family_template" in handoff:
         errors.extend(validate_product_family_template(handoff["product_family_template"]))
+    if "product_quality_harness" in handoff:
+        errors.extend(validate_product_quality_harness(handoff["product_quality_harness"]))
     return errors
 
 
