@@ -3294,6 +3294,7 @@ def _build_chat_interaction_payload_uncached(
             )
             if paths
             else None,
+            capability_snapshot_directory=(paths.omh_home / "coding" / "executor-capability-snapshots") if paths else None,
         )
         delegation["executor_resolution"] = executor_resolution
         base["delegation"] = delegation
@@ -3455,6 +3456,7 @@ def _attach_coding_owner_handoff(
         )
         if paths
         else None,
+        capability_snapshot_directory=(paths.omh_home / "coding" / "executor-capability-snapshots") if paths else None,
     )
     delegation["executor_resolution"] = executor_resolution
     delegation["route_context"] = {

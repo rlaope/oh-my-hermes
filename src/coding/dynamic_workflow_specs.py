@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Final, Sequence
 
 from .dynamic_workflow_contracts import PREPARED_NOT_OBSERVED
+from .executor_capability_snapshots import KNOWN_CAPABILITY_NAMES, build_executor_capability_snapshot
 
 DEFAULT_PLANNERS: Final[tuple[str, ...]] = ("planning-model-pool:auto:Planning model pool:adaptive:model",)
 DEFAULT_CRITICS: Final[tuple[str, ...]] = ("critique-model-pool:auto:Critique model pool:adaptive:model",)
@@ -98,6 +99,10 @@ class AgentSpec:
             "cost_tier": self.cost_tier,
             "gate": gate,
             "status": PREPARED_NOT_OBSERVED,
+            "executor_capability_snapshot": build_executor_capability_snapshot(
+                executor=self.target,
+                capabilities={name: {"status": "unknown"} for name in sorted(KNOWN_CAPABILITY_NAMES)},
+            ),
             "order": order,
         }
 

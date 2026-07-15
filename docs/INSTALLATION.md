@@ -788,6 +788,34 @@ operator whether to choose a different coding agent, configure PATH, continue in
 Hermes, or use a prompt/runtime handoff. Do not treat this probe as proof that
 the coding agent ran.
 
+Agent and wrapper operators can record a bounded local capability observation
+separately when the host has actually exposed it. This is a control-plane
+artifact, not a normal user command and not a substitute for executor, review,
+CI, or merge evidence:
+
+```sh
+cat > capability-observation.json <<'JSON'
+{
+  "parallel_agents": {
+    "status": "host_observed",
+    "scope": {"host": "local", "surface": "native_subagents"},
+    "evidence_ref": "host-probe:codex-subagents",
+    "observed_at": "2026-07-15T00:00:00Z"
+  },
+  "visual_qa": {"status": "unknown"}
+}
+JSON
+
+omh coding capability-snapshot record --executor codex --capabilities-json capability-observation.json
+omh coding capability-snapshot inspect --executor codex
+omh coding capability-snapshot validate --executor codex
+```
+
+`executor_capability_snapshot/v1` stores only bounded capability status,
+scope, and evidence references under `.omh/coding/executor-capability-snapshots/`.
+It does not select an executor, dispatch work, or claim implementation,
+verification, review, CI, merge-readiness, or merge happened.
+
 Review stale local context before a handoff:
 
 ```sh

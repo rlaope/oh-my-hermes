@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 import json
+from pathlib import Path
 from typing import Mapping, Sequence
 
 from ..ingress import compact_source_metadata
@@ -25,6 +26,11 @@ from .dynamic_workflow_specs import (
     agent_specs,
     parse_agent_spec,
 )
+from .executor_capability_snapshots import (
+    ExecutorCapabilitySnapshotError,
+    executor_capability_snapshot_path,
+    read_matching_executor_capability_snapshot,
+)
 
 
 def build_dynamic_coding_workflow(
@@ -37,6 +43,7 @@ def build_dynamic_coding_workflow(
     reviewers: Sequence[str] | None = None,
     reporter: str | None = None,
     source_metadata: Mapping[str, object] | None = None,
+    capability_snapshot_directory: Path | None = None,
 ) -> dict[str, object]:
     normalized_goal = " ".join(goal.split())
     if not normalized_goal:
@@ -50,6 +57,7 @@ def build_dynamic_coding_workflow(
     reporter_spec = parse_agent_spec(reporter or DEFAULT_REPORTER)
 
     stages = _build_stages(planner_specs, critic_specs, implementer_specs, reviewer_specs, reporter_spec)
+    _bind_persisted_executor_capability_snapshots(stages, capability_snapshot_directory)
     edges = _build_edges(stages)
     workflow_id = _workflow_id(normalized_goal, stages, edges, source=source, source_metadata=metadata)
     alt_text = "Dynamic coding workflow chart with typed orchestration target assignments."
@@ -136,6 +144,22 @@ def build_dynamic_coding_workflow(
     if metadata:
         payload["source_metadata"] = metadata
     return payload
+
+
+def _bind_persisted_executor_capability_snapshots(stages: list[dict[str, object]], directory: Path | None) -> None:
+    if directory is None:
+        return
+    for stage in stages:
+        target = stage.get("target")
+        if not isinstance(target, str) or not target:
+            continue
+        try:
+            path = executor_capability_snapshot_path(directory, target)
+        except ExecutorCapabilitySnapshotError:
+            continue
+        snapshot = read_matching_executor_capability_snapshot(path, expected_executor=target)
+        if snapshot is not None:
+            stage["executor_capability_snapshot"] = snapshot
 
 
 def _build_stages(

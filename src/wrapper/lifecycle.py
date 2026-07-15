@@ -56,6 +56,7 @@ def start_codex_delegation_lifecycle(
         executor_target="codex",
         context_pack=context_pack,
         memory_recall_pack=memory_recall_pack,
+        capability_snapshot_directory=paths.omh_home / "coding" / "executor-capability-snapshots",
     )
     delegation = payload.get("delegation")
     if not isinstance(delegation, dict):

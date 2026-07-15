@@ -26,6 +26,7 @@ def cmd_coding_dynamic_workflow(args: argparse.Namespace) -> int:
             reviewers=args.reviewer,
             reporter=args.reporter,
             source_metadata=source_metadata,
+            capability_snapshot_directory=_paths(args).omh_home / "coding" / "executor-capability-snapshots",
         )
         if args.write:
             payload = write_dynamic_coding_workflow(_paths(args), payload)

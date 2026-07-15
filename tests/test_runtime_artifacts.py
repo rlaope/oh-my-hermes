@@ -312,6 +312,7 @@ class RuntimeArtifactTests(unittest.TestCase):
         ):
             legacy = deepcopy(handoff)
             del legacy["executor_local_capability_strategy"]
+            del legacy["executor_capability_snapshot"]
             del legacy["task_prompt_contract"]
             if "local_capability_report_contract" in legacy:
                 del legacy["local_capability_report_contract"]
@@ -319,6 +320,30 @@ class RuntimeArtifactTests(unittest.TestCase):
                 del legacy["session_observation_contract"]
 
             self.assertEqual(validator(legacy), [])
+
+    def test_v1_handoff_validators_reject_invalid_capability_snapshots_when_present(self) -> None:
+        executor = build_coding_delegation_payload("risky refactor", executor_target="codex")["executor_handoff"]
+        prompt = build_coding_delegation_payload("risky refactor", executor_target="claude-code")["prompt_handoff"]
+        runtime = build_coding_delegation_payload("risky refactor", executor_target="omx-runtime")["runtime_handoff"]
+
+        for handoff, validator in (
+            (executor, validate_coding_executor_handoff),
+            (prompt, validate_coding_prompt_handoff),
+            (runtime, validate_coding_runtime_handoff),
+        ):
+            invalid_shape = deepcopy(handoff)
+            invalid_shape["executor_capability_snapshot"] = None
+            self.assertIn("executor_capability_snapshot must be an object", json.dumps(validator(invalid_shape)))
+
+            mismatched_executor = deepcopy(handoff)
+            mismatched_executor["executor_capability_snapshot"]["executor"] = "wrong-profile"
+            self.assertIn("executor must match selected executor profile", json.dumps(validator(mismatched_executor)))
+
+            unobserved_claim = deepcopy(handoff)
+            unobserved_claim["executor_capability_snapshot"]["capabilities"]["parallel_agents"] = {
+                "status": "host_observed"
+            }
+            self.assertIn("host_observed capability requires", json.dumps(validator(unobserved_claim)))
 
     def test_write_coding_delegation_preserves_legacy_executor_handoff_without_local_capability_strategy(self) -> None:
         with TemporaryDirectory() as tmp:

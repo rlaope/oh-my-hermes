@@ -356,6 +356,7 @@ def _prepare_prompt_only_session_handoff(
             executor_target=executor_target,
             session_id=str(session["session_id"]),
         ),
+        capability_snapshot_directory=paths.omh_home / "coding" / "executor-capability-snapshots",
     )
     prompt_handoff = payload.get("prompt_handoff")
     if not isinstance(prompt_handoff, dict):
@@ -433,6 +434,7 @@ def _prepare_runtime_session_handoff(
             executor_target=executor_target,
             session_id=str(session["session_id"]),
         ),
+        capability_snapshot_directory=paths.omh_home / "coding" / "executor-capability-snapshots",
     )
     runtime_handoff = payload.get("runtime_handoff")
     if not isinstance(runtime_handoff, dict):

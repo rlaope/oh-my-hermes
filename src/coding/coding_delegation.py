@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import hashlib
+from pathlib import Path
 import re
 from typing import Any
 
@@ -31,6 +32,12 @@ from ..executors import (
     runtime_templates_for_profile,
 )
 from .hermes_harness import build_hermes_coding_harness
+from .executor_capability_snapshots import (
+    KNOWN_CAPABILITY_NAMES,
+    build_executor_capability_snapshot,
+    executor_capability_snapshot_path,
+    read_matching_executor_capability_snapshot,
+)
 from ..executor_readiness import (
     executor_readiness_contract,
     executor_readiness_for_selection,
@@ -232,6 +239,7 @@ def build_coding_delegation_payload(
     preferred_workflow_score: int | None = None,
     prefer_direct_coding_handoff: bool = True,
     force_coding_handoff: bool = False,
+    capability_snapshot_directory: Path | None = None,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -332,6 +340,7 @@ def build_coding_delegation_payload(
         payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["prompt_handoff"], context_pack)
         _attach_memory_recall_pack(payload["prompt_handoff"], memory_recall_pack)
+    _bind_persisted_executor_capability_snapshot(payload, capability_snapshot_directory)
     payload["harness_quality"] = _public_harness_quality(
         harness,
         action=delegation.action,
@@ -634,6 +643,7 @@ def _executor_handoff(
             "wrapper_note": "Replace {message} only at dispatch time; do not persist the raw task in OMH artifacts.",
         },
         "executor_local_capability_strategy": _executor_local_capability_strategy("codex"),
+        "executor_capability_snapshot": _prepared_executor_capability_snapshot("codex"),
         "status": "prepared_not_observed",
         "recording_contract": "prepared_not_observed",
         "dispatch_contract": "wrapper_dispatches_to_codex; omh_does_not_execute_codex",
@@ -726,6 +736,7 @@ def _prompt_handoff(
         "dispatch_contract": "prompt_only_no_dispatch",
         "executor_readiness": executor_readiness_contract(profile),
         "executor_local_capability_strategy": _executor_local_capability_strategy(profile),
+        "executor_capability_snapshot": _prepared_executor_capability_snapshot(profile),
         "task_prompt_contract": _task_prompt_contract(profile),
         "local_capability_report_contract": _local_capability_report_contract(profile),
         "prompt_template": _prompt_only_template(delegation, profile=profile, label=label),
@@ -790,6 +801,7 @@ def _runtime_handoff(
         "dispatch_contract": "wrapper_or_user_starts_runtime; omh_does_not_execute_runtime",
         "executor_readiness": executor_readiness_contract(profile),
         "executor_local_capability_strategy": _executor_local_capability_strategy(profile),
+        "executor_capability_snapshot": _prepared_executor_capability_snapshot(profile),
         "task_prompt_contract": _task_prompt_contract(profile),
         "local_capability_report_contract": _local_capability_report_contract(profile),
         "prompt_template": _runtime_prompt_template(delegation, profile=profile, label=label),
@@ -1014,6 +1026,29 @@ def _executor_local_capability_strategy(profile: str) -> dict[str, object]:
             "capabilities exist, were loaded, or were executed."
         ),
     }
+
+
+def _prepared_executor_capability_snapshot(profile: str) -> dict[str, object]:
+    capabilities = {name: {"status": "unknown"} for name in sorted(KNOWN_CAPABILITY_NAMES)}
+    capabilities["worktree_isolation"] = {"status": "prepared"}
+    return build_executor_capability_snapshot(executor=profile, capabilities=capabilities)
+
+
+def _bind_persisted_executor_capability_snapshot(payload: dict[str, object], directory: Path | None) -> None:
+    if directory is None:
+        return
+    selected = payload.get("selected_executor_profile")
+    if not isinstance(selected, str) or not selected:
+        return
+    snapshot = read_matching_executor_capability_snapshot(
+        executor_capability_snapshot_path(directory, selected), expected_executor=selected
+    )
+    if snapshot is None:
+        return
+    for handoff_key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
+        handoff = payload.get(handoff_key)
+        if isinstance(handoff, dict) and handoff.get("executor_target") == selected:
+            handoff["executor_capability_snapshot"] = snapshot
 
 
 def _local_capability_fallback(profile: str) -> str:
