@@ -1840,11 +1840,14 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
     dry_run = bool(payload.get("dry_run", False))
     label = "update" if command == "update" else "install"
     title = tr(language, "install_preview_complete", label=label) if dry_run else tr(language, "install_complete", label=label)
+    source = str(payload.get("source", "builtin"))
+    source_label = tr(language, "source_builtin") if source == "builtin" else source
     print("")
     print(_color(title, "1;36", use_color))
+    if label == "update":
+        _print_update_release_card(payload, source_label=source_label, language=language, use_color=use_color)
     print(_color(tr(language, "summary"), "1;32", use_color))
     print(f"  {tr(language, 'skills_line', count=len(skills), path=payload.get('skills_dir', ''))}")
-    source = str(payload.get("source", "builtin"))
     release_update = payload.get("release_update", {})
     command_package = payload.get("command_package", {})
     if isinstance(command_package, dict):
@@ -1854,7 +1857,6 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
             print(_color(f"  {tr(language, 'command_package_update_line', change=change)}", "1;32", use_color))
         elif label == "update" and source == "builtin" and not dry_run:
             print(_color(f"  {tr(language, 'command_package_not_updated_line')}", "1;33", use_color))
-    source_label = tr(language, "source_builtin") if source == "builtin" else source
     print(f"  {tr(language, 'source', source=source_label)}")
     channel = str(payload.get("release_channel", "")).strip()
     package_url = str(payload.get("release_package_url", "")).strip()
@@ -1889,6 +1891,62 @@ def _print_install_summary(payload: dict[str, object], *, command: str, language
     else:
         print(f"  {tr(language, 'install_next')}")
     print(f"  {tr(language, 'machine_readable')}")
+
+
+def _print_update_release_card(
+    payload: dict[str, object], *, source_label: str, language: str, use_color: bool
+) -> None:
+    release_update = payload.get("release_update", {})
+    if not isinstance(release_update, dict):
+        release_update = {}
+    previous = release_update.get("previous", {})
+    if not isinstance(previous, dict):
+        previous = {}
+    current = release_update.get("current", {})
+    if not isinstance(current, dict):
+        current = {}
+    skills = payload.get("skills", [])
+    workflow_count = len(skills) if isinstance(skills, list) else 0
+    dry_run = bool(payload.get("dry_run", False))
+    command_package = payload.get("command_package", {})
+    command_updated = isinstance(command_package, dict) and bool(command_package.get("updated"))
+    command_key = (
+        "update_card_command_preview"
+        if dry_run
+        else "update_card_command_updated"
+        if command_updated
+        else "update_card_command_unchanged"
+    )
+    previous_release = _release_card_identity(previous, language=language)
+    current_release = _release_card_identity(current, language=language)
+    current_label = "update_card_available_release" if dry_run else "update_card_installed_release"
+    notes_label = "update_card_release_preview" if dry_run else "update_card_release_notes"
+    workflows_label = "update_card_workflows_to_refresh" if dry_run else "update_card_workflows_refreshed"
+    title = tr(language, "update_card_title")
+
+    print(_color("╔═══════════════════════════════════════════════════════════╗", "1;34", use_color))
+    print(_color(f"║{title:^59}║", "1;34", use_color))
+    print(_color("╚═══════════════════════════════════════════════════════════╝", "1;34", use_color))
+    print(f"  {tr(language, 'update_card_previous_release', release=previous_release)}")
+    print(f"  {tr(language, current_label, release=current_release)}")
+    print(f"  {tr(language, 'update_card_install_method', source=source_label)}")
+    print("")
+    print(f"  {tr(language, notes_label)}")
+    print(f"    - {tr(language, workflows_label, count=workflow_count)}")
+    print(f"    - {tr(language, command_key)}")
+    if previous_release != current_release:
+        print(f"    - {tr(language, 'release_version_change', change=f'{previous_release} -> {current_release}')}")
+    print("")
+
+
+def _release_card_identity(release: dict[str, object], *, language: str) -> str:
+    version = _string_value(release.get("release_version") or release.get("version"))
+    if version:
+        return version
+    source_ref = _string_value(release.get("release_source_ref") or release.get("source_ref"))
+    if source_ref:
+        return source_ref
+    return tr(language, "update_card_release_not_recorded")
 
 
 def _command_package_display_change(payload: dict[str, object], release_update: dict[str, object]) -> str:
