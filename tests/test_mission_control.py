@@ -10,6 +10,7 @@ from _local_package import load_local_package
 load_local_package()
 from omh.coding_lifecycle import record_codex_dispatch, record_codex_result, record_codex_verification
 from omh.mission_control import build_mission_control
+from omh.adapter_quality import link_adapter_quality_session
 from omh.paths import resolve_paths
 from omh.runtime_artifacts import write_ci_record, write_merge_record, write_review_record, write_runtime_observation
 from omh.wrapper_sessions import (
@@ -21,6 +22,17 @@ from omh.wrapper_sessions import (
 
 
 class MissionControlTests(unittest.TestCase):
+    def test_quality_controls_are_additive_and_do_not_promote_coding_claims(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            started = create_or_resume_wrapper_session(paths, "inspect checkout layout", source="discord")
+            session_id = str(started["session"]["session_id"])
+            link_adapter_quality_session(paths, session_id=session_id, subject_id="checkout", surface_kind="web", source_revision="build-42")
+            mission_control = build_mission_control(paths, session_id)
+
+        self.assertEqual(mission_control["adapter_quality"]["status"], "linked_no_observation")
+        self.assertEqual(mission_control["quality_evidence"]["claim_state"], "handoff_prepared")
+
     def test_prepared_handoff_reports_next_safe_action_without_execution_claim(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

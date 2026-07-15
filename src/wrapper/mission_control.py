@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..adapter_quality import quality_session_control
 from ..conformance.checker import check_runtime_run
 from ..paths import OmhPaths
 from .sessions import build_wrapper_session_status, read_wrapper_session
@@ -42,6 +43,7 @@ def build_mission_control(paths: OmhPaths, session_id: str) -> dict[str, object]
         "journey": {"state": journey_state},
         "execution": _execution(runtime_status, runtime_observation),
         "capability_observation": _capability_observation(session_status),
+        "adapter_quality": quality_session_control(paths, session_id),
         "recovery": recovery,
         "quality_evidence": quality_evidence,
         "merge_decision": _merge_decision(quality_evidence, next_action),
