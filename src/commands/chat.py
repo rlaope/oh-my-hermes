@@ -15,6 +15,7 @@ from ..codex_progress import (
 from ..coding_delegation import CODING_EXECUTOR_TARGETS
 from ..ingress import CHAT_SOURCES, extract_message_text
 from ..installer import OmhError
+from ..mission_control import build_mission_control
 from ..memory import read_handoff_context_pack_file
 from ..routing.action_copy import next_action_label
 from ..routing.chat import CONFIDENCE_LEVELS, public_route_payload, route_chat_message, routing_record_payload
@@ -661,6 +662,14 @@ def cmd_chat_session_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_chat_session_mission_control(args: argparse.Namespace) -> int:
+    try:
+        _print_json(build_mission_control(_paths(args), args.session_id))
+    except FileNotFoundError as exc:
+        raise OmhError(f"wrapper session not found: {args.session_id}") from exc
+    return 0
+
+
 def cmd_chat_session_open_executor(args: argparse.Namespace) -> int:
     try:
         codex_progress = _codex_progress_from_args(args)
@@ -1156,6 +1165,13 @@ def _add_chat_commands(sub) -> None:
     session_status = session_sub.add_parser("status")
     session_status.add_argument("session_id")
     session_status.set_defaults(func=cmd_chat_session_status)
+
+    mission_control = session_sub.add_parser(
+        "mission-control",
+        help="Show the executor-neutral task journey, recovery safety, and merge-evidence boundary for one session.",
+    )
+    mission_control.add_argument("session_id")
+    mission_control.set_defaults(func=cmd_chat_session_mission_control)
 
     session_open_executor = session_sub.add_parser("open-executor")
     session_open_executor.add_argument("session_id")
