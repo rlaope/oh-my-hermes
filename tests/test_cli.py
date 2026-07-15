@@ -10250,6 +10250,109 @@ class CliTests(unittest.TestCase):
             self.assertIn("Release state: updated", stdout)
             self.assertIn("OMH command: 1.0.2 -> 1.0.2 (updated)", stdout)
 
+    def test_update_human_summary_shows_a_release_card_from_recorded_metadata(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+
+            self.assertEqual(
+                run_cli(
+                    [
+                        "--omh-home",
+                        str(omh_home),
+                        "install",
+                        "--channel",
+                        "stable",
+                        "--version",
+                        "1.0.1",
+                        "--source-ref",
+                        "v1.0.1",
+                        "--command-package-updated",
+                    ]
+                )[0],
+                0,
+            )
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--channel",
+                    "stable",
+                    "--version",
+                    "1.0.2",
+                    "--source-ref",
+                    "v1.0.2",
+                    "--command-package-updated",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(stderr, "")
+            self.assertIn("Oh-My-Hermes Update", stdout)
+            self.assertIn("Previous release: 1.0.1", stdout)
+            self.assertIn("Installed release: 1.0.2", stdout)
+            self.assertIn("Install method: installed command package (builtin)", stdout)
+            self.assertIn("Release notes:", stdout)
+            self.assertIn("- Workflows refreshed:", stdout)
+            self.assertIn("- Command package: updated", stdout)
+
+    def test_update_dry_run_release_card_does_not_claim_the_target_is_installed(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--dry-run",
+                    "--channel",
+                    "stable",
+                    "--version",
+                    "1.0.2",
+                    "--source-ref",
+                    "v1.0.2",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertIn("Available release: 1.0.2", stdout)
+            self.assertIn("Release preview:", stdout)
+            self.assertIn("- Workflows to refresh:", stdout)
+            self.assertNotIn("Installed release:", stdout)
+            self.assertNotIn("- Workflows refreshed:", stdout)
+
+    def test_update_release_card_localizes_its_title(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "update",
+                    "--language",
+                    "ko",
+                    "--channel",
+                    "stable",
+                    "--version",
+                    "1.0.2",
+                    "--source-ref",
+                    "v1.0.2",
+                    "--command-package-updated",
+                ],
+                output_json=False,
+            )
+
+            self.assertEqual(status, 0, stderr)
+            self.assertIn("Oh-My-Hermes 업데이트", stdout)
+
     def test_direct_update_source_ref_metadata_does_not_claim_command_package_update(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
