@@ -23,9 +23,75 @@ from omh.routing.intent import classify_omh_quality_intent
 from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
 from omh.skills.catalog import builtin_harnesses, installable_skill_names
 from omh.wrapper.localized_copy import detect_copy_locale
+from omh.wrapper_sessions import (
+    create_or_resume_wrapper_session,
+    prepare_wrapper_session_handoff,
+    record_plan_decision,
+    select_wrapper_session_executor,
+)
 
 
 class CliTests(unittest.TestCase):
+    def test_chat_session_mission_control_projects_prepared_handoff(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes")
+            started = create_or_resume_wrapper_session(paths, "safely add a feature to this repo", source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            prepare_wrapper_session_handoff(paths, session_id, "safely add a feature to this repo")
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(paths.omh_home),
+                    "--hermes-home",
+                    str(paths.hermes_home),
+                    "chat",
+                    "session",
+                    "mission-control",
+                    session_id,
+                ]
+            )
+
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["schema_version"], "mission_control/v1")
+        self.assertEqual(payload["journey"]["state"], "handoff_prepared")
+        self.assertEqual(payload["next_action"], "dispatch_to_executor")
+        self.assertFalse(payload["execution"]["observed"])
+
+    def test_chat_session_mission_control_reports_dangling_run_without_hiding_session(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes")
+            started = create_or_resume_wrapper_session(paths, "safely add a feature to this repo", source="discord")
+            session_id = str(started["session"]["session_id"])
+            record_plan_decision(paths, session_id, "accept")
+            select_wrapper_session_executor(paths, session_id, "codex")
+            prepared = prepare_wrapper_session_handoff(paths, session_id, "safely add a feature to this repo")
+            run_id = str(prepared["session"]["current_run_id"])
+            (paths.runtime_runs_dir / run_id / "run.json").unlink()
+
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(paths.omh_home),
+                    "--hermes-home",
+                    str(paths.hermes_home),
+                    "chat",
+                    "session",
+                    "mission-control",
+                    session_id,
+                ]
+            )
+
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["journey"]["state"], "invalid_linkage")
+        self.assertEqual(payload["next_action"], "repair_linked_runtime_record")
+
     def test_coding_capability_snapshot_control_plane_is_metadata_only(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
