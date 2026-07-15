@@ -24,6 +24,8 @@ from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadat
 from ..installer import OmhError
 from ..local_store import read_json_object
 from ..memory import memory_recall_pack_for_handoff, read_handoff_context_pack_file
+from ..coding.product_family_templates import PRODUCT_FAMILIES, product_family_template
+from ..coding.project_governance import discover_project_governance
 from ..routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 from ..routing.localization import normalized_phrase, routing_tokens
 from ..runtime.artifacts import append_journal_observation, create_prepared_coding_delegation_run, write_coding_delegation
@@ -93,6 +95,9 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             memory_recall_pack=memory_recall_pack,
             plan_artifact=plan_artifact,
             capability_snapshot_directory=paths.omh_home / "coding" / "executor-capability-snapshots",
+            project_root=args.project_root or None,
+            governance_default=args.governance_default,
+            product_family=args.product_family or None,
         )
         if plan_artifact:
             _apply_plan_handoff_source(payload)
@@ -544,6 +549,22 @@ def _capability_snapshot_path(args: argparse.Namespace) -> Path:
     return _paths(args).omh_home / "coding" / "executor-capability-snapshots" / f"{args.executor}.json"
 
 
+def cmd_coding_governance_discover(args: argparse.Namespace) -> int:
+    try:
+        _print_json(discover_project_governance(args.project_root, decision=args.governance_default))
+    except (OSError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_coding_templates_show(args: argparse.Namespace) -> int:
+    try:
+        _print_json(product_family_template(args.family))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def _add_coding_commands(sub) -> None:
     coding = sub.add_parser("coding", help="Prepare executor-neutral or tracked coding handoff artifacts.")
     coding_sub = coding.add_subparsers(dest="coding_command", required=True)
@@ -598,7 +619,28 @@ def _add_coding_commands(sub) -> None:
     delegate.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     delegate.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     delegate.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")
+    delegate.add_argument("--project-root", default="", help="Explicit project root for read-only governance discovery.")
+    delegate.add_argument(
+        "--governance-default",
+        choices=("not_applicable", "accept", "decline"),
+        default="not_applicable",
+        help="Explicit advisory-default decision for a project without discovered governance.",
+    )
+    delegate.add_argument("--product-family", choices=PRODUCT_FAMILIES, default="", help="Optional prepared product-family template.")
     delegate.set_defaults(func=cmd_coding_delegate)
+
+    governance = coding_sub.add_parser("governance", help="Discover explicit-root project governance for prepared handoffs.")
+    governance_sub = governance.add_subparsers(dest="governance_command", required=True)
+    discover = governance_sub.add_parser("discover")
+    discover.add_argument("--project-root", required=True, help="Explicit project root to inspect read-only.")
+    discover.add_argument("--governance-default", choices=("not_applicable", "accept", "decline"), default="not_applicable")
+    discover.set_defaults(func=cmd_coding_governance_discover)
+
+    templates = coding_sub.add_parser("templates", help="Show prepared product-family coding templates.")
+    templates_sub = templates.add_subparsers(dest="templates_command", required=True)
+    show_template = templates_sub.add_parser("show")
+    show_template.add_argument("--family", choices=PRODUCT_FAMILIES, required=True)
+    show_template.set_defaults(func=cmd_coding_templates_show)
 
     _add_dynamic_workflow_command(coding_sub)
     _add_capability_snapshot_commands(coding_sub)
