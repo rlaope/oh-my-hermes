@@ -39,6 +39,7 @@ from .executor_capability_snapshots import (
     read_matching_executor_capability_snapshot,
 )
 from .product_family_templates import product_family_template
+from .product_quality_harnesses import product_quality_harness
 from .project_governance import discover_project_governance, governance_handoff_attachment
 from ..executor_readiness import (
     executor_readiness_contract,
@@ -257,6 +258,7 @@ def build_coding_delegation_payload(
         raise ValueError("coding delegate --limit must be at least 1")
     governance = discover_project_governance(project_root, decision=governance_default) if project_root else None
     family_template = product_family_template(product_family) if product_family else None
+    quality_harness = product_quality_harness(product_family) if product_family else None
 
     full_recommendations = recommend_skills(message, limit=max(limit, 5), apply_guardrails=False)
     full_recommendations = _prioritize_preferred_workflow(
@@ -347,7 +349,7 @@ def build_coding_delegation_payload(
         payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["prompt_handoff"], context_pack)
         _attach_memory_recall_pack(payload["prompt_handoff"], memory_recall_pack)
-    _attach_governance_and_family(payload, governance, family_template)
+    _attach_governance_and_family(payload, governance, family_template, quality_harness)
     _bind_persisted_executor_capability_snapshot(payload, capability_snapshot_directory)
     payload["harness_quality"] = _public_harness_quality(
         harness,
@@ -386,6 +388,7 @@ def _attach_governance_and_family(
     payload: dict[str, object],
     governance: dict[str, object] | None,
     family_template: dict[str, object] | None,
+    quality_harness: dict[str, object] | None,
 ) -> None:
     attachment = governance_handoff_attachment(governance) if governance else {}
     for key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
@@ -395,6 +398,8 @@ def _attach_governance_and_family(
         handoff.update(attachment)
         if family_template:
             handoff["product_family_template"] = family_template
+        if quality_harness:
+            handoff["product_quality_harness"] = quality_harness
 
 
 def build_coding_delegation_event_payload(

@@ -2302,14 +2302,14 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         "kind": "data_analysis",
         "headline": "I can prepare the data analysis without claiming results.",
         "body": (
-            "I will prepare the data analysis task card: dataset source and scope, columns or schema, analysis "
-            "question, method plan, result-evidence slots, and stop condition. File extraction, query execution, "
-            "chart generation, statistical proof, and numeric findings stay observed-only."
+            "I will prepare the data analysis task card: dataset or corpus source and scope, schema or extraction "
+            "method, relationship-claim boundary, analysis plan, result-evidence slots, and stop condition. File "
+            "extraction, query execution, chart generation, numeric findings, and causal claims stay observed-only."
         ),
         "phase": "data_analysis_prepared",
         "next_action": "prepare_data_analysis_card",
         "artifact_schema": "data_analysis_task_card/v1",
-        "claim_boundary_suffix": "It is not file extraction, query execution, chart generation, statistical proof, data correctness, or numeric finding evidence.",
+        "claim_boundary_suffix": "It is not file extraction, query execution, chart generation, statistical proof, data correctness, numeric finding, association, or causal evidence.",
         "actions": [
             {"id": "prepare_data_analysis_card", "label": "Open analysis card", "style": "primary"},
             {"id": "record_dataset_scope", "label": "Record scope", "style": "secondary"},
@@ -2317,7 +2317,8 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         ],
         "recommended_flow": [
             "record_dataset_source_and_scope",
-            "record_columns_or_schema",
+            "record_schema_corpus_or_extraction_method",
+            "record_relationship_claim_boundary",
             "choose_analysis_method",
             "record_results_only after data or query evidence exists",
         ],

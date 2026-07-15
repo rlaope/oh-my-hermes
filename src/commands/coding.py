@@ -25,6 +25,7 @@ from ..installer import OmhError
 from ..local_store import read_json_object
 from ..memory import memory_recall_pack_for_handoff, read_handoff_context_pack_file
 from ..coding.product_family_templates import PRODUCT_FAMILIES, product_family_template
+from ..coding.product_quality_harnesses import product_quality_harness
 from ..coding.project_governance import discover_project_governance
 from ..routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 from ..routing.localization import normalized_phrase, routing_tokens
@@ -565,6 +566,14 @@ def cmd_coding_templates_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_coding_quality_harness_show(args: argparse.Namespace) -> int:
+    try:
+        _print_json(product_quality_harness(args.family))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def _add_coding_commands(sub) -> None:
     coding = sub.add_parser("coding", help="Prepare executor-neutral or tracked coding handoff artifacts.")
     coding_sub = coding.add_subparsers(dest="coding_command", required=True)
@@ -641,6 +650,12 @@ def _add_coding_commands(sub) -> None:
     show_template = templates_sub.add_parser("show")
     show_template.add_argument("--family", choices=PRODUCT_FAMILIES, required=True)
     show_template.set_defaults(func=cmd_coding_templates_show)
+
+    quality_harness = coding_sub.add_parser("quality-harness", help="Show prepared product-family quality harness guidance.")
+    quality_harness_sub = quality_harness.add_subparsers(dest="quality_harness_command", required=True)
+    show_quality_harness = quality_harness_sub.add_parser("show")
+    show_quality_harness.add_argument("--family", choices=PRODUCT_FAMILIES, required=True)
+    show_quality_harness.set_defaults(func=cmd_coding_quality_harness_show)
 
     _add_dynamic_workflow_command(coding_sub)
     _add_capability_snapshot_commands(coding_sub)

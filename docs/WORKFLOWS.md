@@ -4389,7 +4389,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### data-analysis
 
-[omh] Hermes data analysis workflow: scope supplied CSV, JSON, log, table, or metric-like data analysis with schema, method, and hallucination guards.
+[omh] Hermes data analysis workflow: scope supplied data with provenance, causal-claim, and hallucination guards.
 
 - Category: `analysis`
 - Phase: `data-task`
@@ -4402,12 +4402,12 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Preferred usage: Use as an installed Hermes workflow skill when users ask to analyze supplied CSV, JSON, logs, tables, or metric-like data with schema, method, and hallucination guards.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
 - Why this exists: `data-analysis` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use when Hermes should prepare or supervise analysis of supplied tabular, JSON, or log data, including chart or executive summaries from observed data, without claiming unsupported numeric findings.
+- Use when: Use when Hermes should prepare supplied structured, unstructured, or mixed data analysis without unsupported numeric or causal claims.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `data-analysis`, `data analysis`, `dataset analysis`, `csv analysis`, `json analysis`, `log analysis`, `table analysis`, `analyze csv`, `analyze this csv`, `analyze json`, `analyze logs`, `summarize anomalies`, `anomaly analysis`, `trend analysis`, `segment analysis`, `column analysis`, `schema check`, `table to chart`, `chart with an executive summary`, `spreadsheet delta analysis`, `cohort analysis`, `retention analysis`, `데이터 분석`, `csv 분석`, `json 분석`, `로그 분석`, `이상치 분석`, `추세 분석`, `오류 패턴`, `컬럼 분석`, `전환율 델타`, `차트 요약`
+- Strong routing signals: `data-analysis`, `data analysis`, `dataset analysis`, `csv analysis`, `json analysis`, `log analysis`, `table analysis`, `analyze csv`, `analyze this csv`, `analyze json`, `analyze logs`, `summarize anomalies`, `anomaly analysis`, `trend analysis`, `segment analysis`, `column analysis`, `schema check`, `table to chart`, `chart with an executive summary`, `spreadsheet delta analysis`, `cohort analysis`, `retention analysis`, `correlation analysis`, `causal analysis`, `causality check`, `데이터 분석`, `csv 분석`, `json 분석`, `로그 분석`, `이상치 분석`, `추세 분석`, `오류 패턴`, `컬럼 분석`, `전환율 델타`, `차트 요약`, `상관관계 분석`, `인과 분석`, `인과관계`
 - Good example:
   - Prompt: data-analysis analyze this CSV and summarize anomalies by segment.
   - Expected behavior: Produce `prepare_data_analysis_card` with required context, wrapper actions, and not-evidence boundaries.
@@ -4421,8 +4421,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
 - Completion checklist:
-  - Dataset source, record scope, columns or schema, analysis question, method, and stop condition are explicit.
+  - Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.
   - Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.
+  - Causal claims require observed identification evidence.
   - Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.
 - Recovery notes:
   - If the data itself is missing, ask for the smallest dataset sample, schema, or query output needed.
@@ -4437,6 +4438,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - data_analysis_task_card/v1
   - dataset_scope/v1
   - analysis_method_plan/v1
+  - operations_data_harness/v1
   - analysis_result_summary/v1 when observed
   - next action
   - prepared-vs-observed boundary
@@ -4444,9 +4446,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - data_analysis_task_card/v1 metadata-only wrapper card when prepared
   - dataset_scope/v1 with source, row/record scope, columns or schema, filters, and stop condition
   - analysis_method_plan/v1 naming summary, anomaly, trend, segment, schema, or log-pattern methods
+  - operations_data_harness/v1 for relationship and causal boundaries
   - analysis_result_summary/v1 only from observed data, calculations, query output, or supplied evidence
 - Safety rules:
-  - A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, or hallucination-safe numeric evidence unless observed data and method evidence records it.
+  - A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, hallucination-safe numeric evidence, association, or causality unless observed data and method evidence records it.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ### toolbelt-readiness
@@ -8389,24 +8392,26 @@ Scope audio, video, YouTube, OCR, screenshot text, receipt image, transcript, ti
 
 ### data-analysis
 
-Scope supplied CSV, JSON, log, table, or metric-like data analysis as safe task cards with schema, method, and evidence boundaries.
+Scope supplied data analysis with provenance and causal-claim boundaries.
 
-- Use when: Use when Hermes should prepare or supervise data summary, anomaly, trend, segment, schema, or log-pattern analysis without unsupported numeric claims.
+- Use when: Use for safe summary, anomaly, relationship, or causal-question analysis.
 - Quality tier: `data-analysis-gated`
 - Quality bar:
   - Name the workflow objective, owner, input boundary, next action, and stop condition.
   - Represent prepared, observed, blocked, and missing evidence as separate states.
   - Never upgrade a card, blueprint, or readiness check into external execution proof.
 - Inputs:
-  - dataset source or sample
-  - row/record scope
-  - columns or schema
+  - data source
+  - scope
+  - schema or extraction method
   - analysis question
+  - claim boundary
   - method and stop condition
 - Outputs:
   - data_analysis_task_card/v1
   - dataset_scope/v1
   - analysis_method_plan/v1
+  - operations_data_harness/v1 when relationship or causal framing is needed
   - analysis_result_summary/v1 when observed
 - Stop conditions:
   - card is prepared or a missing decision is surfaced
@@ -8420,6 +8425,8 @@ Scope supplied CSV, JSON, log, table, or metric-like data analysis as safe task 
   - `schema_or_columns_recorded`
   - `analysis_question_recorded`
   - `analysis_method_selected`
+  - `relationship_claim_boundary_recorded`
+  - `causal_identification_requirements_recorded_when_requested`
   - `result_evidence_recorded_when_observed`
 - Wrapper actions:
   - `prepare_data_analysis_card`
@@ -8434,7 +8441,7 @@ Scope supplied CSV, JSON, log, table, or metric-like data analysis as safe task 
 - Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
 - Privacy default: `metadata_only`
 - Overclaim guards:
-  - A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, or hallucination-safe numeric evidence.
+  - A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, numeric evidence, association, or causality; a correlation such as temperature and revenue does not establish cause without observed identification evidence.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
 ### toolbelt-readiness

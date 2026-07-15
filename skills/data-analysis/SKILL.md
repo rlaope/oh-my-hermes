@@ -1,6 +1,6 @@
 ---
 name: data-analysis
-description: [omh] Hermes data analysis workflow: scope supplied CSV, JSON, log, table, or metric-like data analysis with schema, method, and hallucination guards.
+description: [omh] Hermes data analysis workflow: scope supplied data with provenance, causal-claim, and hallucination guards.
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, analysis]
@@ -40,8 +40,9 @@ Bad example:
 
 ## Completion Checklist
 
-- Dataset source, record scope, columns or schema, analysis question, method, and stop condition are explicit.
+- Dataset or corpus source, record scope, schema or extraction method, join assumptions, analysis question, method, and stop condition are explicit.
 - Numeric claims, anomalies, trends, segments, and log patterns are reported only from observed data or supplied evidence.
+- Causal claims require observed identification evidence.
 - Source acquisition, file conversion, report generation, and code fixes are routed to the narrower workflow when stronger.
 
 ## Recovery Notes
@@ -64,9 +65,9 @@ Bad example:
 
 ## Use When
 
-Use when Hermes should prepare or supervise analysis of supplied tabular, JSON, or log data, including chart or executive summaries from observed data, without claiming unsupported numeric findings.
+Use when Hermes should prepare supplied structured, unstructured, or mixed data analysis without unsupported numeric or causal claims.
 
-    Strong routing signals: `data-analysis`, `data analysis`, `dataset analysis`, `csv analysis`, `json analysis`, `log analysis`, `table analysis`, `analyze csv`, `analyze this csv`, `analyze json`, `analyze logs`, `summarize anomalies`, `anomaly analysis`, `trend analysis`, `segment analysis`, `column analysis`, `schema check`, `table to chart`, `chart with an executive summary`, `spreadsheet delta analysis`, `cohort analysis`, `retention analysis`, `데이터 분석`, `csv 분석`, `json 분석`, `로그 분석`, `이상치 분석`, `추세 분석`, `오류 패턴`, `컬럼 분석`, `전환율 델타`, `차트 요약`
+    Strong routing signals: `data-analysis`, `data analysis`, `dataset analysis`, `csv analysis`, `json analysis`, `log analysis`, `table analysis`, `analyze csv`, `analyze this csv`, `analyze json`, `analyze logs`, `summarize anomalies`, `anomaly analysis`, `trend analysis`, `segment analysis`, `column analysis`, `schema check`, `table to chart`, `chart with an executive summary`, `spreadsheet delta analysis`, `cohort analysis`, `retention analysis`, `correlation analysis`, `causal analysis`, `causality check`, `데이터 분석`, `csv 분석`, `json 분석`, `로그 분석`, `이상치 분석`, `추세 분석`, `오류 패턴`, `컬럼 분석`, `전환율 델타`, `차트 요약`, `상관관계 분석`, `인과 분석`, `인과관계`
 
 ## Catalog Metadata
 
@@ -97,6 +98,7 @@ Expected outputs:
 - data_analysis_task_card/v1
 - dataset_scope/v1
 - analysis_method_plan/v1
+- operations_data_harness/v1
 - analysis_result_summary/v1 when observed
 - next action
 - prepared-vs-observed boundary
@@ -106,11 +108,12 @@ Artifact expectations:
 - data_analysis_task_card/v1 metadata-only wrapper card when prepared
 - dataset_scope/v1 with source, row/record scope, columns or schema, filters, and stop condition
 - analysis_method_plan/v1 naming summary, anomaly, trend, segment, schema, or log-pattern methods
+- operations_data_harness/v1 for relationship and causal boundaries
 - analysis_result_summary/v1 only from observed data, calculations, query output, or supplied evidence
 
 Safety rules:
 
-- A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, or hallucination-safe numeric evidence unless observed data and method evidence records it.
+- A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, hallucination-safe numeric evidence, association, or causality unless observed data and method evidence records it.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
 ## Harness Discipline
