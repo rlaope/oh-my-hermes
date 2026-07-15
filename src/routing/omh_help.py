@@ -218,6 +218,7 @@ def is_omh_quickstart_question(message: str) -> bool:
         "이제 뭐",
         "뭘 해야",
         "뭐 해야",
+        "뭐라고 말",
         "헷갈",
         "모르겠",
         "설치됐",

@@ -41,7 +41,13 @@ First-run expectation:
 1. `omh setup` installs the managed skills and records safe defaults.
 2. `omh doctor` checks local registration and points to the next repair action.
 3. You restart or reload Hermes Agent.
-4. You ask Hermes: `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
+4. You ask Hermes normally, for example: `I want to safely add a feature to this repo.`
+
+You do not need to know or name a workflow. The quickstart card offers
+representative natural-language starters from the locally tested request corpus
+and tells the wrapper which workflow and next action each starter should expose.
+An adapter that needs an explicit workflow can still use
+`Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
 
 First-value packs are the stronger first-use paths once setup is done:
 

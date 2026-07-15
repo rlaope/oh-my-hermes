@@ -5,6 +5,7 @@ from ..capabilities.families import capability_family_cards
 from ..doctor import doctor_ok, recommended_next_action, run_doctor
 from ..paths import OmhPaths
 from ..probe import probe_capabilities
+from .natural_language_starters import natural_language_starters
 
 QUICKSTART_CARD_SCHEMA_VERSION = "omh_quickstart_card/v1"
 
@@ -165,10 +166,11 @@ def build_quickstart_card(paths: OmhPaths, *, source: str = "hermes") -> dict[st
         "first_five_minutes": [
             "Restart or reload Hermes Agent after setup.",
             "Ask Hermes what OMH can do, or paste a plain request and let Hermes route it.",
-            "For coding work, ask for request-to-handoff after the scope is clear.",
+            "For coding work, describe the outcome and constraints; Hermes can prepare a handoff after the scope is clear.",
         ],
         "first_value_packs": first_value_packs(),
         "first_use_family_cards": capability_family_cards(),
+        "natural_language_starters": natural_language_starters(),
         "chat_prompts": [
             {
                 "label": "safe feature work",

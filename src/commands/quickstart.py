@@ -62,7 +62,11 @@ def _print_quickstart_card(card: dict[str, object]) -> None:
         suffix = f" ({workflows})" if workflows else ""
         print(f"  - {label}: {outcome}{suffix}")
 
-    print(_color("Try one prompt", "1;32", use_color))
+    print(_color("Natural-language starters", "1;32", use_color))
+    for starter in _dict_list(card.get("natural_language_starters", []))[:4]:
+        print(f"  - {starter.get('label', 'starter')}: {starter.get('prompt', '')}")
+
+    print(_color("Optional explicit prompts", "1;32", use_color))
     for prompt in _dict_list(card.get("chat_prompts", []))[:3]:
         print(f"  - {prompt.get('label', 'prompt')}: {prompt.get('prompt', '')}")
 
