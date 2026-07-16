@@ -326,6 +326,23 @@ class RouterContentTests(unittest.TestCase):
                     self.assertNotIn("installable", payload["projections"])
                     self.assertTrue(payload["compatibility_alias"])
 
+    def test_quality_evidence_reference_is_not_a_chat_routing_target(self) -> None:
+        routable_names = {definition.name for definition in routable_definitions()}
+        self.assertNotIn("quality-evidence-loop", routable_names)
+        exposure = skill_exposure_payload("quality-evidence-loop")
+        self.assertEqual(exposure["exposure"], "workflow_reference")
+        self.assertEqual(exposure["projections"], ["workflow_reference"])
+        self.assertFalse(exposure["install_visibility"])
+
+        for message in ("quality-evidence-loop prepare QA scenarios", "quality evidence"):
+            with self.subTest(message=message):
+                decision = chat_module.route_chat_message(message, source="discord")
+                self.assertNotEqual(decision["selected_skill"], "quality-evidence-loop")
+                self.assertNotIn(
+                    "quality-evidence-loop",
+                    {recommendation["skill"] for recommendation in decision["recommendations"]},
+                )
+
     def test_feature_surface_exposure_contract_is_explicit_for_every_generated_surface(self) -> None:
         feature_surface_names = {
             definition.name

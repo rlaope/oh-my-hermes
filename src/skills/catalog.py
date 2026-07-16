@@ -6438,11 +6438,79 @@ _FEATURE_SURFACE_SKILLS = (
 )
 
 
+_DEFINITIONS.append(
+    SkillDefinition(
+        "quality-evidence-loop",
+        "Prepare QA scenarios, independent review requirements, and source-bound quality evidence assessments.",
+        (
+            "quality-evidence-loop",
+            "quality evidence loop",
+            "quality evidence",
+            "QA scenarios review claims",
+            "source-bound assessment",
+            "품질 증거",
+        ),
+        "Use for an agent-facing quality loop that turns QA scenarios, independent review, and claims into inspectable source-bound evidence requirements.",
+        category="verification",
+        phase="quality-evidence-loop",
+        hermes_role="reviewer",
+        delegation_boundary="retained-catalog-intent",
+        handoff_policy="Keep scenario design, review independence, and evidence-boundary narration in Hermes; prepare a selected executor handoff only when concrete coding work is accepted.",
+        required_inputs=("repository, commit, and tree identity", "task title and executor target", "QA scenarios", "independent review requirements", "claim requirements"),
+        expected_outputs=("quality_evidence_package/v1", "quality_evidence_assessment/v1", "source-bound next action", "prepared-versus-observed boundary"),
+        artifact_expectations=("prepared_not_observed quality evidence package", "optional source-bound observations supplied by an OMH observer", "deterministic assessment with dimension reason codes"),
+        safety_rules=(
+            "Do not treat quality evidence preparation as test execution, review, CI, PR, merge-readiness, or merge evidence.",
+            "Require source identity matching and independent review provenance before marking dimensions satisfied.",
+            "Keep supplied_unverified observations distinct from omh_observed_record evidence.",
+        ),
+        quality_tier="evidence-gated",
+        quality_bar=(
+            "Route QA scenarios, independent review, and claim coverage through one source-bound package.",
+            "Assess only deterministic evidence consistency; never dispatch a runtime or execute tests.",
+            "Report unknown or unsatisfied dimensions and the smallest next observation action.",
+        ),
+        why_this_exists="Quality work needs an inspectable preparation and assessment loop without letting a prepared package masquerade as executed QA or review.",
+        do_not_use_when=(
+            "The request is only a direct answer or plan with no quality evidence requirements.",
+            "The user needs implementation, test execution, review, CI, or merge actions; route those to the selected executor/runtime owner.",
+        ),
+        good_example=SkillExample(
+            prompt="quality-evidence-loop prepare QA scenarios and independent review requirements for this source revision.",
+            expected="Create a quality_evidence_package/v1 and assess only source-bound observations that are explicitly supplied.",
+            why="The request needs deterministic quality gates while preserving the prepared-versus-observed boundary.",
+        ),
+        bad_example=SkillExample(
+            prompt="quality-evidence-loop run the tests and say the PR is ready.",
+            expected="Prepare requirements and report that execution, review, CI, and merge readiness remain unobserved.",
+            why="Preparation cannot create external execution or merge evidence.",
+        ),
+        final_checklist=(
+            "The package source identity matches repository, commit, and tree inputs.",
+            "QA scenarios, review requirements, and claim requirements have stable IDs.",
+            "Assessment output names each dimension and keeps prepared_not_observed explicit.",
+            "No output claims that tests, review, CI, or merge ran without observed records.",
+        ),
+        recovery_notes=(
+            "If package inputs are malformed, fail closed with deterministic validation errors.",
+            "If observations are absent or supplied_unverified, report unknown and request source-bound observations.",
+        ),
+    )
+)
+
 _DEFINITIONS.extend(_FEATURE_SURFACE_SKILLS)
 
 
 _DEFAULT_SURFACE_PROJECTIONS = ("routable", "installable", "workflow_reference", "capability")
 _SURFACE_EXPOSURES = (
+    SurfaceExposure(
+        "quality-evidence-loop",
+        "workflow_reference",
+        ("workflow_reference",),
+        False,
+        "operator_reference",
+        "Use as agent-facing catalog guidance for QA scenarios, independent review, and source-bound assessment; invoke the quality-evidence CLI only as a backend/operator control plane.",
+    ),
     SurfaceExposure(
         "source-finder",
         "workflow_skill",

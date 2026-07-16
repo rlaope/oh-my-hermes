@@ -42,6 +42,7 @@ from .visual_qa_cues import (
     contains_cue_phrase,
 )
 from ..learning_candidate import build_learning_candidate_card
+from ..quality.skill_governance import build_skill_governance_policy, resolve_skill_governance
 from ..surfaces.evidence_copy import not_evidence_action_suffix, not_evidence_reply_suffix
 from ..skills.catalog import SkillDefinition, primary_harness_for_skill, routable_definitions
 
@@ -1317,6 +1318,7 @@ def route_chat_message(
     source: str = "generic",
     limit: int = 3,
     min_confidence: str = "high",
+    skill_policy: dict[str, object] | None = None,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -1328,7 +1330,8 @@ def route_chat_message(
     if min_confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
 
-    return _clone_jsonish(_route_chat_message_cached(message, source, limit, min_confidence))
+    route = _clone_jsonish(_route_chat_message_cached(message, source, limit, min_confidence))
+    return _apply_skill_governance(route, skill_policy)
 
 
 def public_chat_route_payload(
@@ -1338,6 +1341,7 @@ def public_chat_route_payload(
     limit: int = 3,
     min_confidence: str = "high",
     include_message: bool = False,
+    skill_policy: dict[str, object] | None = None,
 ) -> dict[str, object]:
     message = message.strip()
     if not message:
@@ -1348,6 +1352,17 @@ def public_chat_route_payload(
         raise ValueError("chat route --limit must be at least 1")
     if min_confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"unsupported chat route confidence threshold: {min_confidence}")
+    if skill_policy is not None:
+        return public_route_payload(
+            route_chat_message(
+                message,
+                source=source,
+                limit=limit,
+                min_confidence=min_confidence,
+                skill_policy=skill_policy,
+            ),
+            include_message=include_message,
+        )
     return _copy_public_route_payload(
         _public_chat_route_payload_cached(
             message,
@@ -2005,6 +2020,45 @@ def _explicit_skill_fast_path_decision(
 def _has_explicit_invocation_prefix(message: str) -> bool:
     first = message.strip().split(maxsplit=1)[0].strip(":,").lower()
     return first.startswith(("$", "/", "./", "@"))
+
+
+def _apply_skill_governance(
+    route: dict[str, object],
+    skill_policy: dict[str, object] | None,
+) -> dict[str, object]:
+    """Apply OMH policy at the dispatch boundary; native skills stay advisory."""
+    if route["action"] != "dispatch":
+        return route
+    selected_skill = str(route["selected_skill"])
+    policy = skill_policy or build_skill_governance_policy(
+        builtin_omh={"skills": [selected_skill]},
+    )
+    governance = resolve_skill_governance(policy)
+    route["skill_governance"] = governance
+    route["native_skill_recommendations"] = list(governance["native_recommendations"])
+    governed_skills = governance["selected_skills"]
+    if governance["status"] != "resolved" or not governed_skills:
+        return _fail_closed_skill_governance(route)
+    governed_skill = str(governed_skills[0])
+    try:
+        definition = _skill_definition_by_name(governed_skill)
+    except RuntimeError:
+        return _fail_closed_skill_governance(route)
+    route["selected_skill"] = definition.name
+    route["selected_harness"] = primary_harness_for_skill(definition.name)
+    if definition.name != selected_skill:
+        route["reason"] = f"{route['reason']} OMH skill policy selected `{definition.name}`."
+    return route
+
+
+def _fail_closed_skill_governance(route: dict[str, object]) -> dict[str, object]:
+    """Keep an invalid policy from selecting an arbitrary or native skill."""
+    definition = _router_skill_definition()
+    route["action"] = "clarify"
+    route["selected_skill"] = definition.name
+    route["selected_harness"] = primary_harness_for_skill(definition.name)
+    route["reason"] = f"{route['reason']} OMH skill policy could not select an installed workflow."
+    return route
 
 
 def _catalog_fast_path_decision(
@@ -4657,8 +4711,15 @@ def route_chat_event(
     source: str = "generic",
     limit: int = 3,
     min_confidence: str = "high",
+    skill_policy: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    return route_chat_message(extract_message_text(event), source=source, limit=limit, min_confidence=min_confidence)
+    return route_chat_message(
+        extract_message_text(event),
+        source=source,
+        limit=limit,
+        min_confidence=min_confidence,
+        skill_policy=skill_policy,
+    )
 
 
 def public_route_payload(decision: dict[str, object], *, include_message: bool = False) -> dict[str, object]:

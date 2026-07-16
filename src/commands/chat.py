@@ -58,8 +58,15 @@ def cmd_chat_route(args: argparse.Namespace) -> int:
         raise OmhError("--summary and --json cannot be used together")
     message = _chat_message(args)
     try:
-        decision = route_chat_message(message, source=args.source, limit=args.limit, min_confidence=args.min_confidence)
-    except ValueError as exc:
+        policy = _chat_route_skill_policy(args)
+        decision = route_chat_message(
+            message,
+            source=args.source,
+            limit=args.limit,
+            min_confidence=args.min_confidence,
+            skill_policy=policy,
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     payload = {"route": public_route_payload(decision, include_message=args.include_message)}
     if args.record:
@@ -98,6 +105,20 @@ def cmd_chat_route(args: argparse.Namespace) -> int:
     else:
         _print_chat_route_summary(payload)
     return 0
+
+
+def _chat_route_skill_policy(args: argparse.Namespace) -> dict[str, object] | None:
+    inline = getattr(args, "skill_policy_json", None)
+    path = getattr(args, "skill_policy_file", None)
+    if inline is not None and path is not None:
+        raise ValueError("skill policy accepts either inline JSON or a file, not both")
+    if inline is None and path is None:
+        return None
+    raw = inline if inline is not None else Path(path).expanduser().read_text(encoding="utf-8")
+    policy = json.loads(raw)
+    if not isinstance(policy, dict):
+        raise ValueError("skill policy JSON must be an object")
+    return policy
 
 
 def cmd_chat_route_hint(args: argparse.Namespace) -> int:
@@ -148,6 +169,7 @@ def cmd_chat_interact(args: argparse.Namespace) -> int:
                 source_metadata=source_metadata,
                 target_notice=_target_notice(args, source_metadata),
                 paths=_paths(args),
+                skill_policy=_chat_route_skill_policy(args),
             )
     except FileNotFoundError as exc:
         raise OmhError(f"runtime run not found: {args.run_id}") from exc
@@ -939,6 +961,14 @@ def _add_chat_commands(sub) -> None:
     )
     route.add_argument("--limit", type=int, default=3, help="Maximum catalog recommendations to include.")
     route.add_argument(
+        "--skill-policy-json",
+        help="Agent-facing OMH-first skill governance policy JSON; native Hermes skills remain recommendations.",
+    )
+    route.add_argument(
+        "--skill-policy-file",
+        help="Path to an agent-facing OMH-first skill governance policy JSON object.",
+    )
+    route.add_argument(
         "--min-confidence",
         choices=CONFIDENCE_LEVELS,
         default="high",
@@ -1024,6 +1054,14 @@ def _add_chat_commands(sub) -> None:
         choices=CONFIDENCE_LEVELS,
         default="high",
         help="Minimum confidence for automatic workflow dispatch.",
+    )
+    interact.add_argument(
+        "--skill-policy-json",
+        help="Agent-facing OMH-first skill governance policy JSON; native Hermes skills remain recommendations.",
+    )
+    interact.add_argument(
+        "--skill-policy-file",
+        help="Path to an agent-facing OMH-first skill governance policy JSON object.",
     )
     interact.add_argument(
         "--executor",

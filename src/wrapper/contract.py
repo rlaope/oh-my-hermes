@@ -2677,6 +2677,7 @@ def build_chat_interaction_payload(
     source_metadata: dict[str, str] | None = None,
     target_notice: dict[str, object] | None = None,
     paths: OmhPaths | None = None,
+    skill_policy: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if source not in CHAT_SOURCES:
         raise ValueError(f"unsupported chat interaction source: {source}")
@@ -2692,6 +2693,7 @@ def build_chat_interaction_payload(
         source_metadata=source_metadata,
         target_notice=target_notice,
         paths=paths,
+        skill_policy=skill_policy,
     ):
         return _copy_chat_interaction_payload(
             _build_chat_interaction_payload_cached(
@@ -2715,6 +2717,7 @@ def build_chat_interaction_payload(
         source_metadata=source_metadata,
         target_notice=target_notice,
         paths=paths,
+        skill_policy=skill_policy,
     )
 
 
@@ -2725,6 +2728,7 @@ def _can_use_chat_interaction_cache(
     source_metadata: dict[str, str] | None,
     target_notice: dict[str, object] | None,
     paths: OmhPaths | None,
+    skill_policy: dict[str, object] | None,
 ) -> bool:
     return (
         isinstance(event_or_message, str)
@@ -2732,6 +2736,7 @@ def _can_use_chat_interaction_cache(
         and source_metadata is None
         and target_notice is None
         and paths is None
+        and skill_policy is None
     )
 
 
@@ -3179,6 +3184,7 @@ def _build_chat_interaction_payload_cached(
         source_metadata=None,
         target_notice=None,
         paths=None,
+        skill_policy=None,
     )
 
 
@@ -3194,6 +3200,7 @@ def _build_chat_interaction_payload_uncached(
     source_metadata: dict[str, str] | None,
     target_notice: dict[str, object] | None,
     paths: OmhPaths | None,
+    skill_policy: dict[str, object] | None,
 ) -> dict[str, object]:
     message = extract_message_text(event_or_message)
     metadata = _source_metadata(event_or_message, source_metadata)
@@ -3203,6 +3210,7 @@ def _build_chat_interaction_payload_uncached(
         limit=limit,
         min_confidence=min_confidence,
         include_message=include_message,
+        skill_policy=skill_policy,
     )
     resolved_mode = _resolve_mode(mode, route_payload, message=message)
     base = _base_interaction(message, source=source, source_metadata=metadata, mode=resolved_mode, include_message=include_message)

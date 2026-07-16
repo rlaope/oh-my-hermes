@@ -58,6 +58,7 @@ from omh.skills.catalog import (
     catalog_intent_delegation_skill_names,
     coding_skills_for_intent,
     explicit_memory_context_skill_names,
+    installable_skill_definitions,
     memory_context_policy_for_skill,
     retained_delegation_skill_names,
 )
@@ -176,7 +177,7 @@ class EfficiencyContractTests(unittest.TestCase):
             if isinstance(lane, dict)
             for skill in lane.get("skills", [])
         }
-        installable_skills = {definition.name for definition in builtin_definitions()}
+        installable_skills = {definition.name for definition in installable_skill_definitions()}
 
         self.assertFalse(installable_skills - lane_skills)
         retained_lane = next(lane for lane in payload["lanes"] if lane["id"] == "retained_knowledge")
@@ -223,7 +224,9 @@ class EfficiencyContractTests(unittest.TestCase):
             self.assertIn("evidence", card["first_response_shape"])
 
     def test_workflow_context_cards_cover_installable_workflow_families(self) -> None:
-        workflow_skills = {definition.name for definition in builtin_definitions()} - {"oh-my-hermes", "cancel"}
+        workflow_skills = {
+            definition.name for definition in installable_skill_definitions()
+        } - {"oh-my-hermes", "cancel"}
         unmapped = sorted(name for name in workflow_skills if not workflow_context_card_for_workflow(name))
 
         self.assertEqual(unmapped, [])

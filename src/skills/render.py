@@ -198,6 +198,8 @@ def _harness_registry(harnesses: list[HarnessDefinition]) -> str:
 def _role_registry(definitions: list[SkillDefinition]) -> str:
     grouped: dict[str, list[str]] = {}
     for definition in definitions:
+        if not skill_exposure_payload(definition.name)["install_visibility"]:
+            continue
         grouped.setdefault(definition.hermes_role, []).append(definition.name)
     lines = [
         f"- `{role}`: {', '.join(f'`{name}`' for name in names)}"
@@ -343,6 +345,11 @@ def _router_reference_templates_cached() -> tuple[SkillReferenceTemplate, ...]:
 
 
 def _router_workflow_registry_reference(definitions: list[SkillDefinition]) -> str:
+    installed_definitions = [
+        definition
+        for definition in definitions
+        if skill_exposure_payload(definition.name)["install_visibility"]
+    ]
     return f"""# OMH Workflow Registry
 
 This generated reference is loaded only when exact workflow routing detail matters.
@@ -352,13 +359,13 @@ The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery 
 
 ## Role Registry
 
-{_role_registry(definitions)}
+{_role_registry(installed_definitions)}
 
 ## Automatic Routing Registry
 
 When Hermes exposes installed skill descriptions to the model, use this registry as the routing map:
 
-{_trigger_table(definitions)}
+{_trigger_table(installed_definitions)}
 
 Routing is conservative: route only on explicit invocation, strong keyword evidence, or a clear workflow-shaped request. A bare common word such as `team`, `ask`, `wiki`, or `review` is not enough when it could mean normal conversation.
 """.rstrip() + "\n"
@@ -683,7 +690,7 @@ Load these only when exact detail matters:
 - If evidence or target topology is disputed, load `references/evidence-boundaries.md`.
 - If the right skill was not loaded, call `skills_list` or `skill_view`.
 - If a slash command exists, use the explicit slash skill such as `/ralph`.
-- If a skill name collides, ask the user whether to use the Hermes-native skill or the oh-my-hermes adapted skill.
+- If a skill name collides, keep the OMH-selected policy in control and present the Hermes-native skill only as an explicit recommendation; do not let a native candidate override routing.
 """
     return SkillTemplate("oh-my-hermes", _frontmatter("oh-my-hermes", DESCRIPTIONS["oh-my-hermes"]) + "\n" + body)
 
