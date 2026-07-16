@@ -34,6 +34,10 @@ RUNTIME_VOCABULARY = {
     "one-cycle delivery": "one-cycle delivery",
     "one cycle delivery": "one-cycle delivery",
     "coding-agent": "coding-agent",
+    "coding agent": "coding-agent",
+    "coding agents": "coding-agent",
+    "코딩에이전트": "coding-agent",
+    "코딩 에이전트": "coding-agent",
 }
 META_OR_FEEDBACK_INTENTS = frozenset({"meta_discussion", "feedback_signal"})
 
@@ -82,6 +86,10 @@ _FEEDBACK_CUES = (
     "misrouted",
     "missed route",
     "skipped omh",
+    "did not use omh",
+    "didn't use omh",
+    "not use omh",
+    "omh was not used",
     "route this wrong",
     "routing is wrong",
     "왜",
@@ -89,6 +97,11 @@ _FEEDBACK_CUES = (
     "잘못",
     "오해",
     "안 썼",
+    "안썼",
+    "쓴거같진",
+    "쓴 것 같진",
+    "쓰지 않았",
+    "쓰지 않은",
     "누락",
 )
 _PLANNING_CUES = (
