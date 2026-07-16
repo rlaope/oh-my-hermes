@@ -669,14 +669,20 @@ def _diagnostic_omh_evaluation_context(normalized: str, compact: str) -> bool:
 def _without_diagnostic_status_lines(normalized: str) -> str:
     kept: list[str] = []
     diagnostic_line_markers = _normalized_cues(_DIAGNOSTIC_STATUS_LINE_MARKERS)
+    in_diagnostic_block = False
     for line in normalized.splitlines() or [normalized]:
         stripped = line.strip()
         if not stripped:
             continue
         if stripped.startswith("[omh"):
+            in_diagnostic_block = True
             stripped = re.sub(r"^\[omh(?:\s+awareness|\s+route\s+hint)?\]\s*", "", stripped).strip()
             if not stripped:
                 continue
+        if in_diagnostic_block and _diagnostic_block_payload_line(stripped, diagnostic_line_markers):
+            continue
+        if in_diagnostic_block:
+            in_diagnostic_block = False
         if stripped.startswith(("native bridge status context", "evidence boundary", "latest runtime run")):
             continue
         if any(normalized_marker in stripped for _marker, normalized_marker in diagnostic_line_markers):
@@ -691,6 +697,33 @@ def _without_diagnostic_status_lines(normalized: str) -> str:
             continue
         kept.append(stripped)
     return "\n".join(kept)
+
+
+def _diagnostic_block_payload_line(stripped: str, diagnostic_line_markers: tuple[tuple[str, str], ...]) -> bool:
+    if not stripped:
+        return True
+    if stripped.startswith("-"):
+        return True
+    if any(normalized_marker in stripped for _marker, normalized_marker in diagnostic_line_markers):
+        return True
+    diagnostic_prefixes = (
+        "adjacent_workflows=",
+        "boundary:",
+        "evidence boundary:",
+        "expand only when needed",
+        "for planning, research",
+        "intent=",
+        "latest runtime run:",
+        "native bridge status context",
+        "not_evidence_yet=",
+        "omh is hermes-native workflow guidance",
+        "prepared omh routing",
+        "selected=",
+        "use message-specific route hints",
+        "use omh_hud",
+        "v1.",
+    )
+    return stripped.startswith(diagnostic_prefixes)
 
 
 @lru_cache(maxsize=4096)

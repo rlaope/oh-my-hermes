@@ -52,6 +52,44 @@ merge_observed=false
 
 
 class ChatRouterTests(unittest.TestCase):
+    def test_router_contract_scrubs_pasted_omh_status_blocks_across_surfaces(self) -> None:
+        message = """라우터 강화 플랜짜볼래
+
+[OMH Awareness]
+OMH is Hermes-native workflow guidance, not hidden execution or a transport/runtime patch.
+For planning, research, files, visuals, automation, coding, review, status, or loops, consider OMH before generic tools.
+Boundary: Prepared OMH routing, cards, handoffs, or artifacts are not observed execution evidence.
+
+[OMH Route Hint]
+intent=unknown; selected=ultraprocess; confidence=medium
+adjacent_workflows=ralplan, code-review, agent-ops-review.
+- selected=ultraprocess; lane=coding_handoff; next_action_label=prepare one cycle delivery.
+Boundary: OMH route hints are local deterministic prompt context only.
+
+[omh] v1.0.2 | plugin:ready | target:single | coding-agent:idle(codex)
+Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
+- 20260625T090917585910Z-loop-goal-loop-8b5bec: workflow=loop, phase=runtime, execution_observed=True.
+"""
+
+        recommendations = recommend_skills(message, limit=3)
+        route = route_chat_message(message, source="discord")
+
+        self.assertEqual(recommendations[0]["skill"], "workflow-learning")
+        self.assertIn("guard:workflow_learning", recommendations[0]["matched"])
+        self.assertNotIn("ultraprocess", [recommendation["skill"] for recommendation in recommendations[:2]])
+        self.assertEqual(route["selected_skill"], "workflow-learning")
+        self.assertEqual(route["action"], "dispatch")
+
+    def test_router_contract_keeps_missed_route_feedback_above_domain_feedback(self) -> None:
+        message = "wrong route: payment failure feedback should have gone to OMH workflow learning"
+
+        recommendations = recommend_skills(message, limit=3)
+        route = route_chat_message(message, source="discord")
+
+        self.assertEqual(recommendations[0]["skill"], "workflow-learning")
+        self.assertEqual(route["selected_skill"], "workflow-learning")
+        self.assertEqual(route["recommendations"][0]["next_action"], "record_missed_route")
+
     def test_high_confidence_chat_dispatches_to_workflow(self) -> None:
         decision = route_chat_message("risky refactor", source="discord")
 
