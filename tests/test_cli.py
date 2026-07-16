@@ -17,7 +17,8 @@ from omh.commands import setup as setup_commands
 from omh.commands.main import build_parser
 from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.capabilities.families import CONCEPTUAL_WORKFLOW_SURFACES, capability_family_projection
-from omh.config_adapter import external_dirs
+from omh.config_adapter import ensure_external_dir, external_dirs
+from omh.maintenance.doctor import _skill_shadowing_check
 from omh.paths import resolve_paths
 from omh.routing.intent import classify_omh_quality_intent
 from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates
@@ -1416,6 +1417,94 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(checks["command_path"]["severity"], "warning")
             self.assertFalse(checks["command_path"]["observed"])
             self.assertIn("absolute command path", payload["recommended_next_action"])
+
+    def test_doctor_warns_about_potential_external_skill_name_collisions_without_claiming_runtime_precedence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes")
+            base = ["--omh-home", str(paths.omh_home), "--hermes-home", str(paths.hermes_home)]
+
+            status, _stdout, stderr = run_cli(base + ["setup", "--no-interactive"], output_json=False)
+            self.assertEqual(status, 0, stderr)
+
+            foreign_skills = root / "foreign-skills"
+            foreign_skills.mkdir()
+            config = paths.hermes_config_path.read_text(encoding="utf-8")
+            configured = ensure_external_dir(config, foreign_skills)
+            paths.hermes_config_path.write_text(configured.text, encoding="utf-8")
+
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["doctor", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            clean_payload = json.loads(stdout)
+            clean_checks = {check["name"]: check for check in clean_payload["checks"]}
+            self.assertTrue(clean_payload["ok"])
+            self.assertEqual(clean_checks["skill_shadowing"]["severity"], "ok")
+            self.assertTrue(clean_checks["skill_shadowing"]["observed"])
+
+            collision_name = installable_skill_names()[0]
+            (foreign_skills / collision_name).mkdir(parents=True)
+            (foreign_skills / f"{collision_name}.txt").write_text("not a skill directory", encoding="utf-8")
+            (foreign_skills / f"{collision_name}-different-case").mkdir()
+            (foreign_skills / "nested" / collision_name).mkdir(parents=True)
+            (foreign_skills / f"{collision_name}-link").symlink_to(foreign_skills / collision_name, target_is_directory=True)
+            alias_config = ensure_external_dir(paths.hermes_config_path.read_text(encoding="utf-8"), foreign_skills / ".." / "foreign-skills")
+            paths.hermes_config_path.write_text(alias_config.text, encoding="utf-8")
+
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["doctor"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertIn("skill_shadowing:", stdout)
+            self.assertIn(collision_name, stdout)
+            self.assertIn("Hermes runtime precedence is not observed", stdout)
+
+            with patch("omh.command_path.shutil.which", return_value="/usr/local/bin/omh"):
+                status, stdout, stderr = run_cli(base + ["doctor", "--json"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            payload = json.loads(stdout)
+            checks = {check["name"]: check for check in payload["checks"]}
+            collision = checks["skill_shadowing"]
+            self.assertTrue(payload["ok"])
+            self.assertEqual(collision["severity"], "warning")
+            self.assertTrue(collision["ok"])
+            self.assertTrue(collision["observed"])
+            self.assertEqual(collision["message"].count(collision_name), 1)
+            self.assertIn("Hermes runtime precedence is not observed", collision["message"])
+            groups = {group["name"]: group for group in payload["summary"]["groups"]}
+            self.assertEqual(groups["hermes_registration"]["status"], "warning")
+
+    def test_doctor_reports_unreadable_external_skill_directory_as_an_advisory_warning(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes")
+            foreign_skills = root / "foreign-skills"
+            foreign_skills.mkdir()
+
+            with patch("omh.maintenance.doctor.Path.iterdir", side_effect=OSError("permission denied")):
+                check = _skill_shadowing_check(paths, [str(foreign_skills)])
+
+        self.assertTrue(check.ok)
+        self.assertEqual(check.severity, "warning")
+        self.assertTrue(check.observed)
+        self.assertIn("scan incomplete", check.message)
+        self.assertIn("unreadable external directory", check.message)
+        self.assertIn("Hermes runtime precedence is not observed", check.message)
+
+    def test_doctor_reports_external_skill_path_resolution_failure_as_an_advisory_warning(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(root / ".omh", root / ".hermes")
+
+            with patch("omh.maintenance.doctor.Path.resolve", side_effect=RuntimeError("symlink loop")):
+                check = _skill_shadowing_check(paths, [str(root / "foreign-skills")])
+
+        self.assertTrue(check.ok)
+        self.assertEqual(check.severity, "warning")
+        self.assertIn("scan incomplete", check.message)
+        self.assertIn("symlink loop", check.message)
 
     def test_operator_catalog_commands_default_to_human_summary_with_json_escape_hatch(self) -> None:
         cases = (

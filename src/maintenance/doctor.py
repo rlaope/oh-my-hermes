@@ -117,6 +117,7 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
     checks.append(Check("hermes_config", paths.hermes_config_path.exists(), f"{paths.hermes_config_path}"))
     external_registered = str(paths.skills_dir) in dirs
     checks.append(Check("external_dir", external_registered, f"{paths.skills_dir} in skills.external_dirs"))
+    checks.append(_skill_shadowing_check(paths, dirs))
     checks.append(
         Check(
             "runtime_context",
@@ -272,6 +273,67 @@ def run_doctor(paths: OmhPaths) -> list[Check]:
             )
         )
     return checks
+
+
+def _skill_shadowing_check(paths: OmhPaths, configured_dirs: list[str]) -> Check:
+    """Report immediate foreign skill-directory name collisions without loading them."""
+    foreign_dirs: list[Path] = []
+    seen_dirs: set[Path] = set()
+    unreadable: list[str] = []
+    try:
+        managed_dir = paths.skills_dir.expanduser().resolve(strict=False)
+    except (OSError, RuntimeError) as error:
+        managed_dir = None
+        unreadable.append(f"managed skill directory {paths.skills_dir}: {error}")
+    for raw_dir in configured_dirs:
+        try:
+            candidate = Path(raw_dir).expanduser().resolve(strict=False)
+        except (OSError, RuntimeError) as error:
+            unreadable.append(f"{raw_dir}: {error}")
+            continue
+        if candidate == managed_dir or candidate in seen_dirs:
+            continue
+        seen_dirs.add(candidate)
+        foreign_dirs.append(candidate)
+
+    collisions: list[str] = []
+    core_skill_names = frozenset(CORE_SKILLS)
+    for foreign_dir in foreign_dirs:
+        try:
+            children = list(foreign_dir.iterdir())
+        except OSError as error:
+            unreadable.append(f"{foreign_dir}: {error}")
+            continue
+        names = sorted(
+            child.name
+            for child in children
+            if not child.is_symlink() and child.is_dir() and child.name in core_skill_names
+        )
+        if names:
+            collisions.append(f"{foreign_dir}: {', '.join(names)}")
+
+    boundary = "This is a local configured-directory scan only; Hermes runtime precedence is not observed."
+    if unreadable or collisions:
+        details = [
+            *collisions,
+            *[f"scan incomplete: unreadable external directory {item}" for item in unreadable],
+        ]
+        return Check(
+            "skill_shadowing",
+            True,
+            f"potential OMH core skill-name collision or unreadable external directory: {'; '.join(details)}. {boundary}",
+            severity="warning",
+            remediation="Review configured external skill directories and rename, remove, or repair the reported entries before relying on their skill names.",
+            next_action="Resolve the reported external skill directory entries, then rerun `omh doctor`; Hermes runtime precedence still requires separate observation.",
+        )
+    return Check(
+        "skill_shadowing",
+        True,
+        (
+            f"no potential OMH core skill-name collisions across {len(foreign_dirs)} foreign configured skill "
+            f"{'directory' if len(foreign_dirs) == 1 else 'directories'}. {boundary}"
+        ),
+    )
 
 
 def doctor_ok(checks: list[Check]) -> bool:
