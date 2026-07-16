@@ -284,6 +284,11 @@ _WORKFLOW_LEARNING_FAST_PATH_ACTION_TERMS = (
     "틀렸",
     "안 썼",
     "안쓴",
+    "쓴거같진",
+    "쓴 것 같진",
+    "쓰지 않았",
+    "우선순위",
+    "문제",
     "모르",
     "못 보",
     "빠져",
@@ -1398,6 +1403,14 @@ def _route_chat_message_cached(
     )
     if fast_explicit_skill_decision is not None:
         return fast_explicit_skill_decision.to_dict()
+    fast_workflow_learning_decision = _workflow_learning_feedback_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_workflow_learning_decision is not None:
+        return fast_workflow_learning_decision.to_dict()
     fast_catalog_decision = _catalog_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1430,14 +1443,6 @@ def _route_chat_message_cached(
     )
     if fast_operator_surface_decision is not None:
         return fast_operator_surface_decision.to_dict()
-    fast_workflow_learning_decision = _workflow_learning_feedback_fast_path_decision(
-        message,
-        routing_message=routing_message,
-        source=source,
-        min_confidence=min_confidence,
-    )
-    if fast_workflow_learning_decision is not None:
-        return fast_workflow_learning_decision.to_dict()
     fast_feedback_triage_decision = _feedback_triage_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1500,6 +1505,8 @@ def _route_chat_message_cached(
             full_recommendations = _prioritize_recommendation(full_recommendations, visual_qa_match)
     recommendations = tuple(full_recommendations[:limit])
     top = full_recommendations[0]
+    if catalog_question and _learning_feedback_recommendation(top):
+        catalog_question = False
     candidate_skill = str(top["skill"])
     candidate_harness = primary_harness_for_skill(candidate_skill)
     candidate_score = _int_value(top["score"])
@@ -4285,11 +4292,11 @@ def _workflow_learning_feedback_fast_path_decision(
 ) -> ChatRouteDecision | None:
     if _has_explicit_invocation_prefix(routing_message):
         return None
-    if is_skill_catalog_question(routing_message):
+    fast_text = _fast_path_text(routing_message)
+    if is_skill_catalog_question(routing_message) and not _workflow_learning_fast_path_signal(fast_text):
         return None
     if _is_fast_plain_direct_answer_question(routing_message):
         return None
-    fast_text = _fast_path_text(routing_message)
     if any(blocker in fast_text for blocker in _LEARNING_CANDIDATE_FAST_PATH_BLOCKERS):
         return None
     if not _workflow_learning_fast_path_signal(fast_text):
@@ -4316,6 +4323,9 @@ def _workflow_learning_feedback_fast_path_decision(
             route_next_action = str(task_card.get("recommended_next_action", route_next_action))
         if route_next_action and route_next_action != str(recommendation.get("next_action", "")):
             recommendation = {**recommendation, "next_action": route_next_action}
+        matched = _string_list(recommendation.get("matched", []))
+        if "guard:workflow_learning" not in matched:
+            recommendation = {**recommendation, "matched": ["guard:workflow_learning", *matched]}
     else:
         if not short_feedback:
             return None
@@ -4996,6 +5006,12 @@ def _recommendation_for_skill(
         if str(item.get("skill", "")) == skill:
             return item
     return None
+
+
+def _learning_feedback_recommendation(recommendation: dict[str, object]) -> bool:
+    return str(recommendation.get("skill", "")) == "workflow-learning" and "guard:workflow_learning" in _string_list(
+        recommendation.get("matched", [])
+    )
 
 
 def _clarification(action: str, candidate_skill: str, candidate_confidence: str, threshold: str, reason: str = "") -> str:

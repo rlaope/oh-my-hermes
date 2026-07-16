@@ -90,6 +90,24 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         self.assertEqual(route["selected_skill"], "workflow-learning")
         self.assertEqual(route["recommendations"][0]["next_action"], "record_missed_route")
 
+    def test_router_contract_treats_omh_skill_priority_feedback_as_workflow_learning(self) -> None:
+        message = (
+            "그거 어떤 코딩에이전트로 돌렸어? 스킬 보니까 oh my hermes스킬을 쓴거같진않던데, "
+            "자체 메모리 업데이트보다는 우리 oh my hermes자체가 우선순위가 제일 높도록, "
+            "hermes-agent스킬들을 부리도록 해야하는데 이거 자체도 문제야 쉽게 이럼 되겟지하고처리하면 안돼"
+        )
+
+        recommendations = recommend_skills(message, limit=5)
+        route = route_chat_message(message, source="discord", limit=5)
+        route_hint = awareness_route_hint(message)
+
+        self.assertEqual(recommendations[0]["skill"], "workflow-learning")
+        self.assertIn("guard:workflow_learning", recommendations[0]["matched"])
+        self.assertEqual(route["selected_skill"], "workflow-learning")
+        self.assertNotEqual(route["recommendations"][0]["skill"], "memory-curation-review")
+        self.assertEqual(route_hint["selected_workflow"], "workflow-learning")
+        self.assertEqual(route_hint["primary_next_action"], "record_missed_route")
+
     def test_high_confidence_chat_dispatches_to_workflow(self) -> None:
         decision = route_chat_message("risky refactor", source="discord")
 
