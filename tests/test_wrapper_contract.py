@@ -47,6 +47,23 @@ class WrapperContractTests(unittest.TestCase):
         self.assertEqual(payload["redaction_policy"], "stdout_includes_message")
         self.assertEqual(payload["plan"]["plan"]["task_statement"], message)
 
+    def test_interaction_applies_omh_skill_policy_before_native_recommendations(self) -> None:
+        policy = {
+            "schema_version": "skill_governance_policy/v1",
+            "project": {"skills": ["code-review"]},
+            "native_hermes": {"skills": ["native-browser"]},
+        }
+
+        payload = build_chat_interaction_payload(
+            "plan a product change",
+            source="discord",
+            skill_policy=policy,
+        )
+
+        self.assertEqual(payload["route"]["selected_skill"], "code-review")
+        self.assertEqual(payload["route"]["native_skill_recommendations"], ["native-browser"])
+        self.assertNotEqual(payload["route"]["selected_skill"], "native-browser")
+
     def test_event_metadata_is_canonical_and_thread_key_is_stable(self) -> None:
         event = {
             "event": {

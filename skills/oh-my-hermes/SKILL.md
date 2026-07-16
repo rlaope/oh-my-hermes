@@ -138,4 +138,4 @@ Load these only when exact detail matters:
 - If evidence or target topology is disputed, load `references/evidence-boundaries.md`.
 - If the right skill was not loaded, call `skills_list` or `skill_view`.
 - If a slash command exists, use the explicit slash skill such as `/ralph`.
-- If a skill name collides, ask the user whether to use the Hermes-native skill or the oh-my-hermes adapted skill.
+- If a skill name collides, keep the OMH-selected policy in control and present the Hermes-native skill only as an explicit recommendation; do not let a native candidate override routing.

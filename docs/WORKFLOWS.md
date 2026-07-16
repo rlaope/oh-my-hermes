@@ -3350,6 +3350,66 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Do not imply hidden Hermes runtime behavior.
   - Use the smallest verification that can prove the claim.
 
+### quality-evidence-loop
+
+[omh] Prepare QA scenarios, independent review requirements, and source-bound quality evidence assessments.
+
+- Category: `verification`
+- Phase: `quality-evidence-loop`
+- Hermes role: `reviewer`
+- Quality tier: `evidence-gated`
+- Exposure: `workflow_reference`
+- Install visibility: `false`
+- Docs visibility: `operator_reference`
+- Compatibility alias: `false`
+- Preferred usage: Use as agent-facing catalog guidance for QA scenarios, independent review, and source-bound assessment; invoke the quality-evidence CLI only as a backend/operator control plane.
+- Handoff policy: Keep scenario design, review independence, and evidence-boundary narration in Hermes; prepare a selected executor handoff only when concrete coding work is accepted.
+- Why this exists: Quality work needs an inspectable preparation and assessment loop without letting a prepared package masquerade as executed QA or review.
+- Use when: Use for an agent-facing quality loop that turns QA scenarios, independent review, and claims into inspectable source-bound evidence requirements.
+- Do not use when:
+  - The request is only a direct answer or plan with no quality evidence requirements.
+  - The user needs implementation, test execution, review, CI, or merge actions; route those to the selected executor/runtime owner.
+- Strong routing signals: `quality-evidence-loop`, `quality evidence loop`, `quality evidence`, `QA scenarios review claims`, `source-bound assessment`, `품질 증거`
+- Good example:
+  - Prompt: quality-evidence-loop prepare QA scenarios and independent review requirements for this source revision.
+  - Expected behavior: Create a quality_evidence_package/v1 and assess only source-bound observations that are explicitly supplied.
+  - Why: The request needs deterministic quality gates while preserving the prepared-versus-observed boundary.
+- Bad example:
+  - Prompt: quality-evidence-loop run the tests and say the PR is ready.
+  - Expected behavior: Prepare requirements and report that execution, review, CI, and merge readiness remain unobserved.
+  - Why: Preparation cannot create external execution or merge evidence.
+- Quality bar:
+  - Route QA scenarios, independent review, and claim coverage through one source-bound package.
+  - Assess only deterministic evidence consistency; never dispatch a runtime or execute tests.
+  - Report unknown or unsatisfied dimensions and the smallest next observation action.
+- Completion checklist:
+  - The package source identity matches repository, commit, and tree inputs.
+  - QA scenarios, review requirements, and claim requirements have stable IDs.
+  - Assessment output names each dimension and keeps prepared_not_observed explicit.
+  - No output claims that tests, review, CI, or merge ran without observed records.
+- Recovery notes:
+  - If package inputs are malformed, fail closed with deterministic validation errors.
+  - If observations are absent or supplied_unverified, report unknown and request source-bound observations.
+- Required inputs:
+  - repository, commit, and tree identity
+  - task title and executor target
+  - QA scenarios
+  - independent review requirements
+  - claim requirements
+- Expected outputs:
+  - quality_evidence_package/v1
+  - quality_evidence_assessment/v1
+  - source-bound next action
+  - prepared-versus-observed boundary
+- Artifact expectations:
+  - prepared_not_observed quality evidence package
+  - optional source-bound observations supplied by an OMH observer
+  - deterministic assessment with dimension reason codes
+- Safety rules:
+  - Do not treat quality evidence preparation as test execution, review, CI, PR, merge-readiness, or merge evidence.
+  - Require source identity matching and independent review provenance before marking dimensions satisfied.
+  - Keep supplied_unverified observations distinct from omh_observed_record evidence.
+
 ### github-event-ops
 
 [omh] Hermes GitHub event operations workflow: route PR, issue, CI, and review webhook events into triage, review, or fix handoff cards.
