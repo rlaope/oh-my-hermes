@@ -565,7 +565,7 @@ def _doctor_operator_summary(checks: list[object]) -> dict[str, object]:
             _doctor_group("command", check_dicts, ("command_path",)),
             _doctor_group("managed_skills", check_dicts, ("manifest", "manifest_skills_dir", "local_modifications", "skills_dir", "skill:")),
             _doctor_group("runtime", check_dicts, ("runtime_artifacts", "workflow_state", "runtime_state")),
-            _doctor_group("hermes_registration", check_dicts, ("hermes_config", "external_dir", "runtime_context")),
+            _doctor_group("hermes_registration", check_dicts, ("hermes_config", "external_dir", "skill_shadowing", "runtime_context")),
             _doctor_group("targets", check_dicts, ("target_registry", "target_topology")),
             _doctor_group("optional_surfaces", check_dicts, ("plugin_", "team_profile_packs")),
         ],
@@ -1722,7 +1722,7 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
     if isinstance(state_log, dict) and state_log.get("path") and state_log.get("entry"):
         print(f"  {tr(language, 'state_log', path=state_log.get('path'), entry=state_log.get('entry'))}")
     for check in checks:
-        if not isinstance(check, dict) or check.get("ok"):
+        if not isinstance(check, dict) or (check.get("ok") and check.get("severity") != "warning"):
             continue
         name = check.get("name", "unknown")
         message = check.get("message", "")
