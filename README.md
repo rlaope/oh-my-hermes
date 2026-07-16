@@ -30,6 +30,11 @@ capability, a useful next step, and an honest statement of what has or has not
 happened. It strengthens the Hermes workflow you already use instead of
 replacing Hermes or hiding a coding executor behind it.
 
+OMH is the operating layer above individual Hermes-native skills: it frames the
+problem, selects the workflow and evidence gates, and uses native skills as
+capabilities within that governed path rather than as competing top-level
+owners.
+
 ```text
 plain request
   -> choose one of six capability families
@@ -49,6 +54,8 @@ plain request
 > <p align="center">
 >   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
 > </p>
+
+<br>
 
 ## Quick Start
 
@@ -92,6 +99,8 @@ knowledge work.
 If a wrapper or operator needs an explicit workflow selection, it can still
 send `Use OMH request-to-handoff for: I want to safely add a feature to this repo.`
 
+<br>
+
 ## What OMH Adds
 
 OMH packages **82 installable workflow skills** behind six human-readable
@@ -109,6 +118,8 @@ available when a wrapper or operator needs precise control.
 
 The full generated catalog, triggers, harnesses, and evidence rules live in
 [Workflow Reference](docs/WORKFLOWS.md).
+
+<br>
 
 ## Built For Real Work
 
@@ -132,6 +143,8 @@ video, and connector systems sit behind explicit external-provider contracts.
 OMH can validate and analyze supplied data without pretending that a provider
 was connected or called.
 
+<br>
+
 ## Evidence Before Claims
 
 OMH separates useful preparation from observed results:
@@ -147,6 +160,8 @@ review, CI, deployment, merge readiness, or a merge. Capability impact is
 reported across separate dimensions rather than collapsed into one marketing
 score. See [Capability Impact](docs/CAPABILITY_IMPACT.md).
 
+<br>
+
 ## Documentation
 
 - [Documentation map](docs/README.md)
@@ -158,6 +173,8 @@ score. See [Capability Impact](docs/CAPABILITY_IMPACT.md).
 - [Roles](docs/ROLES.md)
 - [Application cases](docs/APPLICATION_CASES.md)
 - [Release and development](docs/RELEASE.md)
+
+<br>
 
 ## Development
 

@@ -620,6 +620,15 @@ Compact lane map:
 - Operations and evidence gates: `workspace-audit`, `production-audit`, `verification-gate`, `agent-evaluation`, `rules-distill`, `agent-ops-review`, `harness-session-inventory`, `ops-observability-card`, `instinct-ledger`, `workflow-learning`.
 - Coding handoff and review: `idea-to-deploy`, `code-review`, `ultraprocess`, `team`, `ultrawork`, `ultraqa`.
 
+## OMH Orchestration Posture
+
+Treat OMH as the operating layer above individual Hermes-native skills. For a workflow-shaped request, first frame the problem, success criteria, constraints, risks, and evidence needed; then select the smallest OMH workflow and harness that can coordinate the work. Hermes-native skills, tools, and subagents are capabilities used inside that OMH-selected workflow, not competing top-level owners.
+
+- On an unfamiliar or first-use pattern, briefly recommend the OMH-led route: explain that OMH can structure the problem, select the needed skills, and keep evidence boundaries clear. A user may confirm with a natural reply such as “yes, do it”, but safe local framing, research preparation, and planning do not wait for ceremonial confirmation.
+- After repeated accepted local patterns for the same user and workflow, continue OMH-led exploration, problem framing, skill composition, and prepared planning automatically. Keep the current workflow, next action, and prepared-versus-observed boundary visible.
+- Never let that autonomy bypass existing confirmation gates for destructive changes, credentials, external writes, deployment, or executor dispatch. Do not claim that a native skill, subagent, review, CI, or merge ran unless matching observation exists.
+- If a native Hermes capability is relevant, present it as an optional subordinate capability under the selected OMH workflow. OMH policy remains responsible for selecting and governing the workflow.
+
 ## Priority Rules
 
 1. Exact or near-exact OMH maintenance commands (`omh update`, `omh setup`, `omh doctor`, `omh uninstall`, `omh install`, `omh list`, and Korean equivalents such as `omh 업데이트해줘`, `omh 닥터 돌려줘`, `omh 삭제해줘`, `omh 셋업해줘`) route as `operator_maintenance_command`. Run the requested command, report observed output, and avoid repo mutation unless the user separately asks for code changes.
