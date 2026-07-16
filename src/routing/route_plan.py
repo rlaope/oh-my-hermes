@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from ..skills.catalog import routable_definitions
+from ..quality.specialist_work import build_specialist_work_quality_contract
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
 
 
@@ -282,7 +283,7 @@ def _build_workflow_route_plan_cached(
     if len(stages) < 2:
         return None
     steps = [steps_by_stage[stage].to_dict(index + 1) for index, stage in enumerate(stages)]
-    return {
+    plan = {
         "schema_version": SCHEMA_VERSION,
         "mode": "multi_workflow",
         "primary_skill": selected_skill,
@@ -291,6 +292,12 @@ def _build_workflow_route_plan_cached(
         "next_action": f"start_with_{steps[0]['skill']}",
         "claim_boundary": CLAIM_BOUNDARY,
     }
+    plan["specialist_work_quality"] = build_specialist_work_quality_contract(
+        selected_skill,
+        phase=_specialist_phase_for_stage(_SKILL_STAGE.get(selected_skill, "planning")),
+        route_plan=plan,
+    )
+    return plan
 
 
 def _clone_workflow_route_plan(value: dict[str, object] | None) -> dict[str, object] | None:
@@ -322,6 +329,9 @@ def _clone_workflow_route_plan(value: dict[str, object] | None) -> dict[str, obj
             for index, step in enumerate(steps)
             if isinstance(step, dict)
         ]
+    specialist_work_quality = value.get("specialist_work_quality")
+    if isinstance(specialist_work_quality, dict):
+        cloned["specialist_work_quality"] = _clone_specialist_work_quality(specialist_work_quality)
     return cloned
 
 
@@ -356,7 +366,7 @@ def compact_workflow_route_plan(value: object) -> dict[str, object] | None:
     if not compact_steps:
         return None
     stages = [str(item.get("stage", "")) for item in compact_steps if str(item.get("stage", ""))]
-    return {
+    result = {
         "schema_version": SCHEMA_VERSION,
         "mode": str(value.get("mode", "multi_workflow")),
         "primary_skill": str(value.get("primary_skill", "")),
@@ -365,6 +375,53 @@ def compact_workflow_route_plan(value: object) -> dict[str, object] | None:
         "next_action": str(value.get("next_action", "")),
         "claim_boundary": CLAIM_BOUNDARY,
     }
+    specialist_work_quality = value.get("specialist_work_quality")
+    if isinstance(specialist_work_quality, dict):
+        result["specialist_work_quality"] = _compact_specialist_work_quality(specialist_work_quality)
+    return result
+
+
+def _specialist_phase_for_stage(stage: str) -> str:
+    return {"deliver": "implementation", "plan": "planning", "verify": "verification"}.get(stage, stage)
+
+
+def _clone_specialist_work_quality(value: dict[str, object]) -> dict[str, object]:
+    return {
+        "schema_version": str(value.get("schema_version", "specialist_work_quality/v1")),
+        "status": str(value.get("status", "prepared_not_observed")),
+        "specialist": dict(value.get("specialist", {})) if isinstance(value.get("specialist"), dict) else {},
+        "specialist_recommendation": dict(value.get("specialist_recommendation", {})) if isinstance(value.get("specialist_recommendation"), dict) else None,
+        "skill_application": dict(value.get("skill_application", {})) if isinstance(value.get("skill_application"), dict) else {},
+        "goal": dict(value.get("goal", {})) if isinstance(value.get("goal"), dict) else {},
+        "stages": [dict(item) for item in value.get("stages", []) if isinstance(item, dict)] if isinstance(value.get("stages"), list) else [],
+        "critique_protocol": dict(value.get("critique_protocol", {})) if isinstance(value.get("critique_protocol"), dict) else {},
+        "repeat_validation": dict(value.get("repeat_validation", {})) if isinstance(value.get("repeat_validation"), dict) else {},
+        "progress": dict(value.get("progress", {})) if isinstance(value.get("progress"), dict) else {},
+        "evidence_binding": dict(value.get("evidence_binding", {})) if isinstance(value.get("evidence_binding"), dict) else {},
+        "claim_integrity": dict(value.get("claim_integrity", {})) if isinstance(value.get("claim_integrity"), dict) else {},
+        "claim_boundary": str(value.get("claim_boundary", "")),
+    }
+
+
+def _compact_specialist_work_quality(value: dict[str, object]) -> dict[str, object]:
+    specialist = value.get("specialist")
+    progress = value.get("progress")
+    integrity = value.get("claim_integrity")
+    return {
+        "schema_version": str(value.get("schema_version", "specialist_work_quality/v1")),
+        "status": str(value.get("status", "prepared_not_observed")),
+        "specialist_id": str(specialist.get("id", "")) if isinstance(specialist, dict) else "",
+        "selected_skill": str(_mapping_value(value, "skill_application", "selected_skill")),
+        "prepared_coverage_percent": int(progress.get("prepared_coverage_percent", 0)) if isinstance(progress, dict) else 0,
+        "observed_goal_achievement_percent": int(progress.get("observed_goal_achievement_percent", 0)) if isinstance(progress, dict) else 0,
+        "claim_integrity_state": str(integrity.get("state", "unverified")) if isinstance(integrity, dict) else "unverified",
+        "claim_boundary": str(value.get("claim_boundary", "")),
+    }
+
+
+def _mapping_value(value: dict[str, object], key: str, nested_key: str) -> object:
+    nested = value.get(key)
+    return nested.get(nested_key, "") if isinstance(nested, dict) else ""
 
 
 def _iter_recommendation_dicts(recommendations: object) -> Iterator[dict[str, object]]:

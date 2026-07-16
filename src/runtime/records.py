@@ -32,6 +32,7 @@ from ..executors import (
     WORK_OWNER_MODES,
 )
 from ..harness_quality import HARNESS_QUALITY_KEYS, HARNESS_QUALITY_SCHEMA_VERSION
+from ..quality.specialist_work_validation import validate_prepared_specialist_work_quality
 from ..isolation import ISOLATION_SCHEMA_VERSION
 from ..local_store import utc_now
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack, validate_project_memory_recall_pack
@@ -230,6 +231,7 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "project_governance_blocked",
     "product_family_template",
     "product_quality_harness",
+    "specialist_work_quality",
 )
 CODING_PROMPT_HANDOFF_KEYS = (
     "schema_version",
@@ -262,6 +264,7 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "project_governance_blocked",
     "product_family_template",
     "product_quality_harness",
+    "specialist_work_quality",
 )
 CODING_RUNTIME_HANDOFF_KEYS = (
     "schema_version",
@@ -301,6 +304,7 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "project_governance_blocked",
     "product_family_template",
     "product_quality_harness",
+    "specialist_work_quality",
 )
 CODING_PROMPT_HANDOFF_INVOCATION_KEYS = (
     "mode",
@@ -2277,6 +2281,12 @@ def validate_optional_codex_session_observation_contract(
     return validate_optional_session_observation_contract(handoff, label, expected_profile="codex")
 
 
+def _validate_optional_specialist_work_quality(handoff: dict[str, Any], label: str) -> list[str]:
+    if "specialist_work_quality" not in handoff:
+        return []
+    return [f"{label} {error}" for error in validate_prepared_specialist_work_quality(handoff["specialist_work_quality"])]
+
+
 def validate_coding_executor_handoff(handoff: Any) -> list[str]:
     errors: list[str] = []
     _require(isinstance(handoff, dict), errors, "coding_delegation executor_handoff must be an object")
@@ -2358,6 +2368,7 @@ def validate_coding_executor_handoff(handoff: Any) -> list[str]:
             expected_profile="codex",
         )
     )
+    errors.extend(_validate_optional_specialist_work_quality(handoff, "coding_delegation executor_handoff"))
     brief = handoff.get("execution_brief")
     _require(isinstance(brief, dict), errors, "coding_delegation executor_handoff execution_brief must be an object")
     if isinstance(brief, dict):
@@ -2599,6 +2610,7 @@ def validate_coding_runtime_handoff(handoff: Any) -> list[str]:
         errors,
         "coding_delegation runtime_handoff dispatch_contract is invalid",
     )
+    errors.extend(_validate_optional_specialist_work_quality(handoff, "coding_delegation runtime_handoff"))
     _require("{message}" in str(handoff.get("prompt_template", "")), errors, "coding_delegation runtime_handoff prompt_template must keep {message} placeholder")
     forbidden = ("codex_skill", "codex_invocation", "executor_handoff", "prompt_handoff", "session_observation_contract", "run_id")
     for key in forbidden:
@@ -2976,6 +2988,7 @@ def validate_coding_prompt_handoff(handoff: Any) -> list[str]:
             expected_profile=str(handoff.get("selected_executor_profile", "")),
         )
     )
+    errors.extend(_validate_optional_specialist_work_quality(handoff, "coding_delegation prompt_handoff"))
     for key in ("scope", "non_goals", "acceptance_criteria", "verification"):
         _require(isinstance(handoff.get(key), list), errors, f"coding_delegation prompt_handoff {key} must be a list")
         if isinstance(handoff.get(key), list):

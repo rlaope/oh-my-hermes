@@ -48,6 +48,7 @@ from ..executor_readiness import (
 )
 from .agentic_playbook import maybe_build_agentic_playbook
 from ..harness_quality import with_wrapper_actions
+from ..quality.specialist_work import build_specialist_work_quality_contract
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..isolation import build_isolation_plan
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack, validate_project_memory_recall_pack
@@ -349,6 +350,13 @@ def build_coding_delegation_payload(
         payload["prompt_handoff"] = _prompt_handoff(selection.selected_executor_profile, delegation, isolation_plan=isolation_plan)
         _attach_context_pack(payload["prompt_handoff"], context_pack)
         _attach_memory_recall_pack(payload["prompt_handoff"], memory_recall_pack)
+    specialist_work_quality = build_specialist_work_quality_contract(
+        delegation.recommended_workflow,
+        phase="implementation" if delegation.action == "delegate" else "planning",
+        acceptance_criteria=delegation.acceptance_criteria,
+    )
+    payload["specialist_work_quality"] = specialist_work_quality
+    _attach_specialist_work_quality(payload, specialist_work_quality)
     _attach_governance_and_family(payload, governance, family_template, quality_harness)
     _bind_persisted_executor_capability_snapshot(payload, capability_snapshot_directory)
     payload["harness_quality"] = _public_harness_quality(
@@ -400,6 +408,14 @@ def _attach_governance_and_family(
             handoff["product_family_template"] = family_template
         if quality_harness:
             handoff["product_quality_harness"] = quality_harness
+
+
+def _attach_specialist_work_quality(payload: dict[str, object], contract: dict[str, object]) -> None:
+    """Attach one prepared-only quality contract to whichever executor handoff exists."""
+    for key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
+        handoff = payload.get(key)
+        if isinstance(handoff, dict):
+            handoff["specialist_work_quality"] = contract
 
 
 def build_coding_delegation_event_payload(

@@ -6,6 +6,12 @@ Use roles inside the flagship `request-to-handoff` path:
 
 `plain request -> responsible role -> plan/status/handoff action -> observed evidence boundary`
 
+## Skills, Specialists, Roles, Harnesses, and Executors
+
+These terms have separate jobs. A **skill** is a reusable workflow entry point. A **specialist** is a prepared task-phase expertise profile that selects eligible skills, critique checkpoints, repeat-validation expectations, and claim-integrity rules. A **role** is the human-readable responsibility label used in chat. A **harness** is the quality and evidence contract. An **executor** is the selected runtime owner that may actually perform work.
+
+A specialist is not another command for normal users and is not a hidden agent. Its prepared coverage percentage measures whether the work plan contains the required stages; its observed goal-achievement percentage remains zero until matching current evidence is recorded. Prepared coverage, self-reports, stale evidence, or evidence bound to another goal/skill/plan cannot raise observed achievement.
+
 ## OMH Role Context
 
 Use this role as OMH workflow-layer responsibility context: route the user's request to the nearest skill, name adjacent OMH workflows when the work crosses lanes, and keep status/evidence boundaries visible.
