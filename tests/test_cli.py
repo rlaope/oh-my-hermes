@@ -486,6 +486,64 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["route"]["action"], "dispatch")
         self.assertEqual(payload["route"]["selected_skill"], "ultrawork")
 
+    def test_router_contract_cli_surfaces_ignore_pasted_status_footer(self) -> None:
+        message = """라우터 강화 플랜짜볼래
+
+[OMH Awareness]
+OMH is Hermes-native workflow guidance, not hidden execution or a transport/runtime patch.
+For planning, research, files, visuals, automation, coding, review, status, or loops, consider OMH before generic tools.
+Boundary: Prepared OMH routing, cards, handoffs, or artifacts are not observed execution evidence.
+
+[OMH Route Hint]
+intent=unknown; selected=ultraprocess; confidence=medium
+adjacent_workflows=ralplan, code-review, agent-ops-review.
+- selected=ultraprocess; lane=coding_handoff; next_action_label=prepare one cycle delivery.
+Boundary: OMH route hints are local deterministic prompt context only.
+
+[omh] v1.0.2 | plugin:ready | target:single | coding-agent:idle(codex)
+Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
+- 20260625T090917585910Z-loop-goal-loop-8b5bec: workflow=loop, phase=runtime, execution_observed=True.
+"""
+
+        status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        recommendations = json.loads(stdout)["recommendations"]
+        self.assertEqual(recommendations[0]["skill"], "workflow-learning")
+        self.assertNotIn("ultraprocess", [recommendation["skill"] for recommendation in recommendations[:2]])
+
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "--json", message],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["route"]["selected_skill"], "workflow-learning")
+        self.assertEqual(payload["next_action"], "audit_learning_readiness")
+
+    def test_router_contract_cli_missed_route_overrides_domain_feedback(self) -> None:
+        message = "wrong route: payment failure feedback should have gone to OMH workflow learning"
+
+        status, stdout, stderr = run_cli(["recommend", message, "--limit", "3"])
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertEqual(json.loads(stdout)["recommendations"][0]["skill"], "workflow-learning")
+
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "--json", message],
+            output_json=False,
+        )
+
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertEqual(payload["route"]["selected_skill"], "workflow-learning")
+        self.assertEqual(payload["next_action"], "record_missed_route")
+
     def test_context_brief_keeps_customer_bug_reports_on_feedback_triage(self) -> None:
         cases = (
             "고객 버그 제보를 분류해줘",

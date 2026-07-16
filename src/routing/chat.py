@@ -1430,6 +1430,14 @@ def _route_chat_message_cached(
     )
     if fast_operator_surface_decision is not None:
         return fast_operator_surface_decision.to_dict()
+    fast_workflow_learning_decision = _workflow_learning_feedback_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_workflow_learning_decision is not None:
+        return fast_workflow_learning_decision.to_dict()
     fast_feedback_triage_decision = _feedback_triage_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1446,14 +1454,6 @@ def _route_chat_message_cached(
     )
     if fast_product_shaping_decision is not None:
         return fast_product_shaping_decision.to_dict()
-    fast_workflow_learning_decision = _workflow_learning_feedback_fast_path_decision(
-        message,
-        routing_message=routing_message,
-        source=source,
-        min_confidence=min_confidence,
-    )
-    if fast_workflow_learning_decision is not None:
-        return fast_workflow_learning_decision.to_dict()
     fast_guarded_operator_decision = _guarded_operator_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -4310,7 +4310,12 @@ def _workflow_learning_feedback_fast_path_decision(
         reason = str(task_card.get("routing_reason", recommendation.get("why", "")))
         score = _int_value(task_card.get("score", recommendation.get("score", 12)))
         confidence = str(task_card.get("confidence", recommendation.get("confidence", "high")))
-        route_next_action = str(task_card.get("recommended_next_action", route_next_action))
+        if is_missed_route_feedback(routing_message):
+            route_next_action = "record_missed_route"
+        else:
+            route_next_action = str(task_card.get("recommended_next_action", route_next_action))
+        if route_next_action and route_next_action != str(recommendation.get("next_action", "")):
+            recommendation = {**recommendation, "next_action": route_next_action}
     else:
         if not short_feedback:
             return None
@@ -4359,6 +4364,8 @@ def _workflow_learning_fast_path_signal(text: str) -> bool:
     compact = _fast_path_compact(text)
     if not text:
         return False
+    if _explicit_missed_route_learning_request(text):
+        return True
     has_learning_subject = any(
         term in text or _fast_path_compact(term) in compact for term in _WORKFLOW_LEARNING_FAST_PATH_TERMS
     )
@@ -4367,6 +4374,27 @@ def _workflow_learning_fast_path_signal(text: str) -> bool:
     return any(
         term in text or _fast_path_compact(term) in compact for term in _WORKFLOW_LEARNING_FAST_PATH_ACTION_TERMS
     )
+
+
+def _explicit_missed_route_learning_request(text: str) -> bool:
+    if not is_missed_route_feedback(text):
+        return False
+    compact = _fast_path_compact(text)
+    explicit_markers = (
+        "missed route",
+        "missed workflow",
+        "wrong route",
+        "wrong workflow",
+        "route went wrong",
+        "routing went wrong",
+        "workflow learning",
+        "workflow-learning",
+        "record this as workflow learning",
+        "라우팅 잘못",
+        "라우터가 잘못",
+        "워크플로 잘못",
+    )
+    return any(marker in text or _fast_path_compact(marker) in compact for marker in explicit_markers)
 
 
 def _workflow_learning_fast_path_next_action(message: str) -> str:

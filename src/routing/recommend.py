@@ -5,6 +5,7 @@ from functools import lru_cache
 import re
 
 from ..skills.catalog import SkillDefinition, routable_definitions
+from .intent import scrub_diagnostic_status_text
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
 from .missed_route import is_missed_route_feedback
 from .policy import (
@@ -1207,12 +1208,13 @@ def recommendation_for_definition(
 
 @lru_cache(maxsize=2048)
 def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recommendation, ...]:
-    routing_text = prepare_routing_text(_strip_path_like_fragments(query))
+    routing_query = scrub_diagnostic_status_text(query)
+    routing_text = prepare_routing_text(_strip_path_like_fragments(routing_query))
     normalized_query = normalized_phrase(routing_text.scoring_text)
     query_tokens = _tokens(normalized_query)
     prepared_definitions = _prepared_routable_definitions()
     definitions = [prepared.definition for prepared in prepared_definitions]
-    explicit_skill = explicit_skill_invocation(query, {definition.name for definition in definitions})
+    explicit_skill = explicit_skill_invocation(routing_query, {definition.name for definition in definitions})
     if explicit_skill and is_missed_route_feedback(normalized_query):
         explicit_skill = None
     if explicit_skill == "skill" and _skill_scout_candidate_alias_intent_match(normalized_query):
@@ -1224,7 +1226,7 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
             prepared,
             normalized_query,
             query_tokens,
-            query,
+            routing_query,
             routing_text.locale_matches,
             explicit_skill=explicit_skill,
         )
