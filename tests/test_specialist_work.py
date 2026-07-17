@@ -51,6 +51,21 @@ class SpecialistWorkTests(unittest.TestCase):
         self.assertIsNone(recommend_specialist("visual-qa", task_phase="implementation"))
         self.assertIsNone(recommend_specialist("not-an-installed-skill", task_phase="implementation"))
 
+    def test_discovery_research_profile_covers_ai_usability_evidence_boundaries(self) -> None:
+        recommendation = recommend_specialist("web-research", task_phase="research")
+
+        assert recommendation is not None
+        specialist = recommendation["specialist"]
+        self.assertEqual(recommendation["status"], "prepared_not_observed")
+        self.assertEqual(specialist["id"], "discovery-research")
+        self.assertEqual(specialist["runtime_claim"], "prepared_profile_not_runtime_agent")
+        self.assertIn("target user or task when usability matters", specialist["required_context"])
+        self.assertIn("usability dimension when applicable", specialist["required_context"])
+        self.assertIn("generalizability limits when applicable", specialist["quality_checks"])
+        boundary = specialist["evidence_boundary"].lower()
+        for forbidden in ("worker dispatch", "tool execution", "implementation", "review", "ci", "merge"):
+            self.assertIn(forbidden, boundary)
+
     def test_foreign_stale_or_self_attested_evidence_cannot_raise_observed_progress(self) -> None:
         contract = build_specialist_work_quality_contract(
             "ultragoal",

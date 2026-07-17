@@ -561,7 +561,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
 - Handoff policy: Run as a Hermes-side research lane when web access is available; summarize evidence before any coding handoff and never treat research as implementation.
 - Why this exists: `web-research` exists to make Hermes a careful source-backed research operator: it routes web/current-source requests to evidence gathering, keeps retrieval gaps visible, and prevents search plans from being reported as observed facts.
-- Use when: Use when the user needs current web evidence, links, citations, source diversity, or source comparison before planning or handoff.
+- Use when: Use for current web evidence, links, citations, source diversity, or comparison before planning or handoff, including AI-agent usability research.
 - Do not use when:
   - The user asks for a full plan-to-PR delivery cycle; use `ultraprocess` or a planning workflow after research instead.
   - The request is purely local repo inspection with no external, current, citation, or source-comparison need.
@@ -580,6 +580,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Use official or primary sources first when current or external facts matter, then add source diversity when the topic is contested.
   - Separate direct evidence, citation links, retrieval dates, inference, confidence, and residual uncertainty.
   - Name retrieval gaps when Hermes or the wrapper cannot access the web.
+  - For AI or usability research, separate target-user/task assumptions, measured or reported usability dimensions, and generalizability limits from the evidence.
   - Summarize research before any coding handoff; research is not implementation evidence.
 - Completion checklist:
   - The research question, source boundaries, recency assumptions, and confidence level are named.
@@ -590,6 +591,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If evidence is thin or one-sided, lower confidence and ask for a narrower source boundary.
 - Required inputs:
   - research question
+  - target user/task if usability matters
+  - usability/quality dimension if applicable
   - source boundaries
   - freshness, jurisdiction, or version constraints
 - Expected outputs:

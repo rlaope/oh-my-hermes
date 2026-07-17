@@ -3820,6 +3820,56 @@ selected_workflow=ultraprocess
         generic_status = route_chat_message("What is the current status?", source="discord")
         self.assertNotEqual(generic_status["selected_skill"], "web-research")
 
+    def test_ai_usability_research_fast_path_requires_all_cues_and_preserves_precedence(self) -> None:
+        positives = (
+            "AI agent usability research with current sources",
+            "AI 에이전트 사용성 최신 근거를 웹 리서치로 조사해줘",
+        )
+        for message in positives:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                self.assertEqual(decision["selected_skill"], "web-research")
+                self.assertEqual(decision["selected_harness"], "research")
+                self.assertEqual(decision["confidence"], "high")
+                matched = decision["recommendations"][0]["matched"]
+                self.assertIn("operator_surface_fast_path:ai_usability_research", matched)
+                self.assertNotIn("operator_surface_fast_path:research", matched)
+
+        for message in (
+            "AI agent usability",
+            "AI agent current sources",
+            "usability current sources",
+            "AI agent latest evidence Linux",
+            "AI agent latest evidence luxury",
+        ):
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                self.assertNotIn("operator_surface_fast_path:ai_usability_research", decision["recommendations"][0]["matched"])
+
+        collisions = (
+            ("AI agent usability research with current sources and find paper PDF datasets", "source-finder", "guard:source_finder"),
+            ("AI agent usability research with current sources research every morning with a briefing", "research-department", "guard:research_department"),
+            ("AI agent usability research with current sources and make a PR", "ultraprocess", "guard:delivery_cycle_before_research_only"),
+            ("AI agent usability research with current sources and explain this paper PDF", "paper-learning", "guard:paper_learning"),
+            ("AI agent usability research with current sources keep researching until gap closed", "autoresearch-goal", "guard:durable_research_goal"),
+            ("AI agent usability research with current sources create a research brief", "research-brief", "guard:research_brief"),
+            ("AI agent usability current sources and attach a PDF report to Slack", "deliverable-package", "guard:deliverable_package"),
+            ("AI agent usability current sources and prepare an image card", "img-summary", "guard:img_summary"),
+            ("current sources and find paper PDF datasets", "source-finder", "guard:source_finder"),
+            ("current sources research every morning with a briefing", "research-department", "guard:research_department"),
+            ("current sources and make a PR", "ultraprocess", "guard:delivery_cycle_before_research_only"),
+        )
+        for message, skill, marker in collisions:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                self.assertEqual(decision["selected_skill"], skill)
+                self.assertIn(marker, decision["recommendations"][0]["matched"])
+
+        for message in ("find paper PDF datasets", "research every morning with a briefing", "make a PR", "explain this paper PDF", "keep researching until gap closed", "create a research brief"):
+            with self.subTest(message=message):
+                decision = route_chat_message(f"$web-research AI agent usability research with current sources and {message}", source="discord")
+                self.assertEqual(decision["selected_skill"], "web-research")
+
     def test_delivery_cycle_chat_beats_research_department_for_pr_requests(self) -> None:
         cases = (
             "daily research plan implement and open a PR",
