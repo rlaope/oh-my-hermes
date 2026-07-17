@@ -33,6 +33,54 @@ from omh.wrapper_sessions import (
 
 
 class CliTests(unittest.TestCase):
+    def test_ops_product_evidence_loop_is_pure_and_does_not_create_omh_state(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(root / ".hermes")]
+            command = [
+                "ops",
+                "product-evidence-loop",
+                "--decision-scope-id",
+                "scope_0123456789abcdef",
+                "--proposed-next-decision",
+                "experiment",
+                "--research-availability",
+                "reference_supplied",
+                "--research-reference-id",
+                "ref_0123456789abcdef",
+                "--research-provenance",
+                "hermes_reference",
+            ]
+
+            status, stdout, stderr = run_cli(base + command)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertFalse(omh_home.exists())
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "product_evidence_loop/v1")
+            self.assertEqual(payload["status"], "prepared_not_observed")
+            self.assertEqual(payload["proposed_next_decision"], "experiment")
+            self.assertNotIn("store", payload)
+            self.assertNotIn("runtime", payload)
+
+    def test_ops_product_evidence_loop_rejects_uncoupled_source_metadata(self) -> None:
+        status, _stdout, stderr = run_cli(
+            [
+                "ops",
+                "product-evidence-loop",
+                "--decision-scope-id",
+                "scope_0123456789abcdef",
+                "--proposed-next-decision",
+                "research",
+                "--feedback-availability",
+                "reference_supplied",
+            ]
+        )
+
+        self.assertNotEqual(status, 0)
+        self.assertIn("feedback reference_id", stderr)
+
     def test_chat_session_mission_control_projects_prepared_handoff(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

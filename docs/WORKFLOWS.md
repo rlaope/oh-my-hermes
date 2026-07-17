@@ -600,6 +600,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - links or citations
   - source-quality notes
   - confidence and residual uncertainty
+  - product_evidence_loop/v1
 - Artifact expectations:
   - research notes with source URLs, retrieval dates, and source-quality notes when the wrapper captures them
 - Safety rules:
@@ -607,6 +608,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Check source diversity and conflicts before summarizing contested or unstable topics.
   - Separate quoted evidence from inference.
   - State retrieval limits, dates, and missing-source gaps for unstable facts.
+  - product_evidence_loop/v1 is prepared-only opaque references, not observed evidence or execution.
 
 ### source-finder
 
@@ -1019,12 +1021,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - clusters
   - severity or opportunity ranking
   - next workflow recommendation
+  - product_evidence_loop/v1
 - Artifact expectations:
   - feedback triage record when a wrapper captures it
 - Safety rules:
   - Do not turn feedback into a roadmap, implementation plan, or coding handoff by default.
   - Separate bug signal, feature ask, severity, opportunity, and missing evidence.
   - Route code changes only after explicit user intent or accepted planning evidence.
+  - product_evidence_loop/v1 is prepared-only opaque references, not observed evidence or execution.
 
 ### ops-review
 
@@ -4502,6 +4506,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - dataset_scope/v1
   - analysis_method_plan/v1
   - operations_data_harness/v1
+  - product_evidence_loop/v1
   - analysis_result_summary/v1 when observed
   - next action
   - prepared-vs-observed boundary
@@ -4510,6 +4515,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - dataset_scope/v1 with source, row/record scope, columns or schema, filters, and stop condition
   - analysis_method_plan/v1 naming summary, anomaly, trend, segment, schema, or log-pattern methods
   - operations_data_harness/v1 for relationship and causal boundaries
+  - product_evidence_loop/v1 for prepared opaque data reference metadata
   - analysis_result_summary/v1 only from observed data, calculations, query output, or supplied evidence
 - Safety rules:
   - A data analysis card is not file extraction, query execution, chart generation, statistical proof, data correctness, hallucination-safe numeric evidence, association, or causality unless observed data and method evidence records it.

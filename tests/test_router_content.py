@@ -1237,6 +1237,16 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("data-analysis", route_rules["data_analysis"]["workflow"])
         self.assertIn("csv analysis", route_rules["data_analysis"]["phrases"])
 
+    def test_cross_skill_product_evidence_card_stays_guidance_only(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+
+        for name in ("web-research", "feedback-triage", "data-analysis"):
+            with self.subTest(skill=name):
+                self.assertIn("product_evidence_loop/v1", " ".join(definitions[name].expected_outputs))
+                self.assertIn("prepared", " ".join(definitions[name].safety_rules).lower())
+
+        self.assertNotIn("product-evidence-loop", definitions)
+
     def test_office_file_material_cues_stay_shared_across_surfaces(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
         route_rules = {str(rule["id"]): rule for rule in _ROUTE_HINT_RULES}

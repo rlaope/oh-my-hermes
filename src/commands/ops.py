@@ -36,6 +36,12 @@ from ..operations_data import (
     OPERATIONS_DATA_SHAPES,
     build_operations_data_harness,
 )
+from ..product_evidence_loop import (
+    PRODUCT_EVIDENCE_LOOP_DECISIONS,
+    REFERENCE_AVAILABILITIES,
+    REFERENCE_PROVENANCES,
+    build_product_evidence_loop,
+)
 from ..research_department import (
     build_research_department_plan,
     list_research_department_plans,
@@ -98,6 +104,31 @@ def cmd_ops_write(args: argparse.Namespace) -> int:
 def cmd_ops_data_harness(args: argparse.Namespace) -> int:
     try:
         _print_json(build_operations_data_harness(data_shape=args.data_shape, analysis_mode=args.analysis_mode))
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_ops_product_evidence_loop(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            build_product_evidence_loop(
+                decision_scope_id=args.decision_scope_id,
+                proposed_next_decision=args.proposed_next_decision,
+                research_availability=args.research_availability,
+                research_reference_id=args.research_reference_id,
+                research_provenance=args.research_provenance,
+                feedback_availability=args.feedback_availability,
+                feedback_reference_id=args.feedback_reference_id,
+                feedback_provenance=args.feedback_provenance,
+                supplied_data_availability=args.supplied_data_availability,
+                supplied_data_reference_id=args.supplied_data_reference_id,
+                supplied_data_provenance=args.supplied_data_provenance,
+                causal_identification_availability=args.causal_identification_availability,
+                causal_identification_reference_id=args.causal_identification_reference_id,
+                causal_identification_provenance=args.causal_identification_provenance,
+            )
+        )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     return 0
@@ -466,6 +497,29 @@ def _add_ops_commands(sub) -> None:
     data_harness.add_argument("--data-shape", choices=OPERATIONS_DATA_SHAPES, required=True)
     data_harness.add_argument("--analysis-mode", choices=OPERATIONS_ANALYSIS_MODES, required=True)
     data_harness.set_defaults(func=cmd_ops_data_harness)
+
+    product_evidence_loop = ops_sub.add_parser(
+        "product-evidence-loop",
+        help="Prepare a metadata-only product evidence card without retrieving sources or accepting a decision.",
+    )
+    product_evidence_loop.add_argument("--decision-scope-id", required=True)
+    product_evidence_loop.add_argument("--proposed-next-decision", choices=PRODUCT_EVIDENCE_LOOP_DECISIONS, required=True)
+    for prefix in ("research", "feedback", "supplied-data", "causal-identification"):
+        destination = prefix.replace("-", "_")
+        product_evidence_loop.add_argument(
+            f"--{prefix}-availability",
+            choices=REFERENCE_AVAILABILITIES,
+            default="not_supplied",
+            dest=f"{destination}_availability",
+        )
+        product_evidence_loop.add_argument(f"--{prefix}-reference-id", default="", dest=f"{destination}_reference_id")
+        product_evidence_loop.add_argument(
+            f"--{prefix}-provenance",
+            choices=("",) + REFERENCE_PROVENANCES,
+            default="",
+            dest=f"{destination}_provenance",
+        )
+    product_evidence_loop.set_defaults(func=cmd_ops_product_evidence_loop)
 
     rhythm = ops_sub.add_parser("rhythm", help="Create an operating rhythm artifact such as a meeting or retro record.")
     _add_artifact_args(rhythm, surface="operating-rhythm", default_kind="meeting")
