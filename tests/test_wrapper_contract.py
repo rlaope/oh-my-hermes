@@ -11,6 +11,7 @@ load_local_package()
 from omh.context_safety import CONTEXT_ARTIFACT_REF_SCHEMA_VERSION
 from omh.paths import OmhPaths, resolve_paths
 from omh.profiles.setup import write_setup_profile
+from omh.runtime.records import build_wrapper_session_record
 from omh.wrapper_contract import (
     build_chat_interaction_payload,
     build_chat_response_from_status,
@@ -21,9 +22,75 @@ from omh.wrapper_contract import (
 from omh.wrapper.localized_copy import detect_copy_locale
 from omh.wrapper.native_commands import build_native_command_surface, render_native_command_response
 from omh.wrapper.route_hints import build_chat_route_hint_payload
+from omh.wrapper.orchestration_guidance import build_omh_orchestration_guidance
 
 
 class WrapperContractTests(unittest.TestCase):
+    def test_omh_orchestration_guidance_is_optional_for_first_use(self) -> None:
+        route = {
+            "selected_skill": "ralplan",
+            "selected_harness": "planning",
+            "native_skill_recommendations": ["native-browser"],
+        }
+
+        guidance = build_omh_orchestration_guidance(
+            route,
+            source_metadata={"user_ref": "u1"},
+            paths=None,
+        )
+
+        self.assertEqual(guidance["mode"], "guided_first_use")
+        self.assertFalse(guidance["confirmation"]["required"])
+        self.assertEqual(guidance["native_skill_governance"]["candidate_skills"], ["native-browser"])
+        self.assertFalse(guidance["native_skill_governance"]["can_override_omh"])
+
+    def test_omh_orchestration_guidance_becomes_autonomous_after_repeated_acceptance(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            for index in range(2):
+                session_path = paths.runtime_wrapper_sessions_dir / f"ws-{index}" / "session.json"
+                session_path.parent.mkdir(parents=True)
+                session_path.write_text(json.dumps(build_wrapper_session_record({
+                    "session_id": f"ws-{index}",
+                    "thread_key": f"discord:channel:{index}",
+                    "source": "discord",
+                    "source_metadata": {"user_ref": "u1"},
+                    "message_sha256": "0" * 64,
+                    "message_length": 1,
+                    "status": "plan_accepted",
+                    "decision": "plan_accepted",
+                    "route": {"selected_skill": "ralplan", "selected_harness": "planning", "action": "dispatch", "confidence": "high", "score": 12},
+                })), encoding="utf-8")
+
+            guidance = build_omh_orchestration_guidance(
+                {"selected_skill": "ralplan", "selected_harness": "planning"},
+                source_metadata={"user_ref": "u1"},
+                paths=paths,
+            )
+
+        self.assertEqual(guidance["mode"], "autonomous_pattern")
+        self.assertEqual(guidance["next_action"], "continue_omh_orchestration")
+        self.assertEqual(guidance["accepted_pattern_count"], 2)
+
+    def test_omh_orchestration_guidance_rejects_forged_or_cancelled_session_records(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            for index, session in enumerate((
+                {"status": "plan_accepted", "source_metadata": {"user_ref": "u1"}, "route": {"selected_skill": "ralplan"}},
+                {"status": "cancelled", "decision": "plan_cancelled", "source_metadata": {"user_ref": "u1"}, "route": {"selected_skill": "ralplan"}},
+            )):
+                session_path = paths.runtime_wrapper_sessions_dir / f"forged-{index}" / "session.json"
+                session_path.parent.mkdir(parents=True)
+                session_path.write_text(json.dumps(session), encoding="utf-8")
+
+            guidance = build_omh_orchestration_guidance(
+                {"selected_skill": "ralplan", "selected_harness": "planning"},
+                source_metadata={"user_ref": "u1"},
+                paths=paths,
+            )
+
+        self.assertEqual(guidance["mode"], "guided_first_use")
+        self.assertEqual(guidance["accepted_pattern_count"], 0)
     def test_chat_interaction_omits_raw_message_by_default(self) -> None:
         message = "risky refactor with private-token-123"
 

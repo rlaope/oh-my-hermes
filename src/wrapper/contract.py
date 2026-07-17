@@ -47,6 +47,7 @@ from .localized_copy import (
     skill_picker_body as localized_skill_picker_body,
     skill_picker_headline,
 )
+from .orchestration_guidance import build_omh_orchestration_guidance
 
 
 CHAT_INTERACTION_SCHEMA_VERSION = "chat_interaction/v1"
@@ -3212,14 +3213,19 @@ def _build_chat_interaction_payload_uncached(
         include_message=include_message,
         skill_policy=skill_policy,
     )
+    orchestration_guidance = build_omh_orchestration_guidance(
+        route_payload,
+        source_metadata=metadata,
+        paths=paths,
+    )
     resolved_mode = _resolve_mode(mode, route_payload, message=message)
     base = _base_interaction(message, source=source, source_metadata=metadata, mode=resolved_mode, include_message=include_message)
-    if (
-        _is_generic_skill_catalog_route(message, route_payload)
-        and _route_recommendation_next_action(route_payload) != "show_command_preview"
-    ):
+    is_catalog_question = _is_generic_skill_catalog_route(message, route_payload)
+    if is_catalog_question and _route_recommendation_next_action(route_payload) != "show_command_preview":
         route_payload = _catalog_question_route_payload(route_payload)
     base["route"] = route_payload
+    if not _is_omh_intro_question(message) and not is_catalog_question:
+        base["omh_orchestration_guidance"] = orchestration_guidance
     if isinstance(route_payload.get("task_card"), dict):
         base["task_card"] = route_payload["task_card"]
     learning_candidate_card = build_learning_candidate_card(
