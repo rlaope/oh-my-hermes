@@ -35,6 +35,7 @@ from omh.skills.catalog import (
     SkillDefinition,
     catalog_intent_delegation_skill_names,
     harness_quality_contract,
+    installable_skill_names,
     primary_harness_for_skill,
     retained_delegation_skill_names,
 )
@@ -637,6 +638,7 @@ class RouterContentTests(unittest.TestCase):
                 "report-package",
                 "materials-package",
                 "img-summary",
+                "design-orchestration",
                 "design-quality-gate",
                 "frontend",
                 "accessibility-audit",
@@ -917,6 +919,24 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("better than ordinary output", templates["design-quality-gate"].content)
         self.assertIn("visual_qa_evidence/v1", templates["design-quality-gate"].content)
         self.assertIn("Preferred harness for this skill: `design-quality-gate`", templates["design-quality-gate"].content)
+
+    def test_design_orchestration_contract_surfaces_stay_in_sync(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        harnesses = {harness.name: harness for harness in builtin_harnesses()}
+        templates = {template.name: template for template in builtin_skill_templates()}
+
+        self.assertIn("design-orchestration", definitions)
+        self.assertIn("design-orchestration", harnesses)
+        self.assertIn("design-orchestration", templates)
+        self.assertEqual(primary_harness_for_skill("design-orchestration"), "design-orchestration")
+        self.assertEqual(definitions["design-orchestration"].category, "materials")
+        self.assertIn("design_orchestration/v1", definitions["design-orchestration"].expected_outputs)
+        self.assertIn("executor-neutral", definitions["design-orchestration"].handoff_policy)
+        self.assertEqual(recommend_module._SKILL_POLICIES["design-orchestration"].next_action, "prepare_design_orchestration")
+        self.assertIn("prepared", recommend_module._SKILL_POLICIES["design-orchestration"].evidence_boundary)
+        self.assertIn("design-orchestration", installable_skill_names())
+        self.assertIn("design_orchestration/v1", templates["design-orchestration"].content)
+        self.assertIn("Preferred harness for this skill: `design-orchestration`", templates["design-orchestration"].content)
 
     def test_frontend_contract_surfaces_stay_in_sync(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}

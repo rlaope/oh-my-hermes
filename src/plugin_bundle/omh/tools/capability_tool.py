@@ -148,6 +148,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "img-summary",
             "content-operator",
             "media-input-operator",
+            "design-orchestration",
         ),
         "next_action": "prepare_material_or_visual_card",
         "example_prompt": "Make a PR summary card for reviewers.",

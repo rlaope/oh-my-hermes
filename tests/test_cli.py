@@ -33,6 +33,99 @@ from omh.wrapper_sessions import (
 
 
 class CliTests(unittest.TestCase):
+    def test_ops_design_orchestration_is_pure_and_prepared(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            omh_home.mkdir()
+            sentinel = omh_home / "sentinel.txt"
+            sentinel.write_text("preserve", encoding="utf-8")
+            command = [
+                "--omh-home",
+                str(omh_home),
+                "--hermes-home",
+                str(root / ".hermes"),
+                "ops",
+                "design-orchestration",
+                "--surface",
+                "application_shell",
+                "--audience",
+                "operator",
+                "--primary-task",
+                "manage",
+                "--platform",
+                "web",
+                "--mode",
+                "redesign",
+                "--context-reference",
+                "design_system:design_ref_0123456789abcdef:project_local",
+                "--hierarchy",
+                "task_first",
+                "--palette",
+                "restrained_neutral",
+                "--typography",
+                "system_sans",
+                "--layout",
+                "split_panel",
+                "--signature-element",
+                "evidence_rail",
+                "--avoid-pattern",
+                "generic_glass",
+            ]
+
+            status, stdout, stderr = run_cli(command)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
+            self.assertEqual(sorted(path.name for path in omh_home.iterdir()), ["sentinel.txt"])
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "design_orchestration/v1")
+            self.assertEqual(payload["status"], "prepared_not_observed")
+            self.assertEqual(payload["required_visual_evidence"]["visual_verdict"], "not_observed")
+
+    def test_ops_design_orchestration_rejects_raw_intent_and_context_reference(self) -> None:
+        base = [
+            "ops",
+            "design-orchestration",
+            "--surface",
+            "application_shell",
+            "--audience",
+            "operator",
+            "--primary-task",
+            "manage",
+            "--platform",
+            "web",
+            "--mode",
+            "redesign",
+            "--context-reference",
+            "private-brief:design_ref_0123456789abcdef:project_local",
+            "--hierarchy",
+            "task_first",
+            "--palette",
+            "restrained_neutral",
+            "--typography",
+            "system_sans",
+            "--layout",
+            "split_panel",
+            "--signature-element",
+            "evidence_rail",
+            "--avoid-pattern",
+            "generic_glass",
+        ]
+
+        status, stdout, stderr = run_cli(base)
+
+        self.assertEqual(status, 2)
+        self.assertEqual(stdout, "")
+        self.assertIn("context reference kind is invalid", stderr)
+
+        raw_surface = [*base]
+        raw_surface[raw_surface.index("application_shell")] = "make this premium"
+
+        with self.assertRaises(SystemExit) as raised:
+            run_cli(raw_surface)
+        self.assertEqual(raised.exception.code, 2)
+
     def test_ops_product_evidence_loop_is_pure_and_does_not_create_omh_state(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
