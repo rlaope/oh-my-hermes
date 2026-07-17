@@ -63,7 +63,7 @@ Bad example:
 
 ## Use When
 
-Use when the user needs current web evidence, links, citations, source diversity, or source comparison before planning or handoff.
+Use for current web evidence, links, citations, source diversity, or comparison before planning or handoff, including AI-agent usability research.
 
     Strong routing signals: `web-research`, `web research`, `web search`, `search the web`, `internet search`, `latest`, `fresh sources`, `current sources`, `current web evidence`, `source-backed research`, `source search`, `find sources`, `find citations`, `citation check`, `evidence scan`, `source diversity`, `retrieval gap`, `look up`, `lookup`, `investigate`, `research plan`, `웹서치`, `웹 서치`, `웹 검색`, `인터넷 검색`, `검색해줘`, `검색해서`, `최신 자료`, `최신 출처`, `자료 찾아`, `조사`, `근거`, `출처`, `고객 피드백`, `literature review`, `research literature`, `review recent papers`, `문헌 검토`, `논문들 검토`
 
@@ -80,6 +80,7 @@ Quality bar:
 - Use official or primary sources first when current or external facts matter, then add source diversity when the topic is contested.
 - Separate direct evidence, citation links, retrieval dates, inference, confidence, and residual uncertainty.
 - Name retrieval gaps when Hermes or the wrapper cannot access the web.
+- For AI or usability research, separate target-user/task assumptions, measured or reported usability dimensions, and generalizability limits from the evidence.
 - Summarize research before any coding handoff; research is not implementation evidence.
 
 Handoff policy:
@@ -89,6 +90,8 @@ Run as a Hermes-side research lane when web access is available; summarize evide
 Required inputs:
 
 - research question
+- target user/task if usability matters
+- usability/quality dimension if applicable
 - source boundaries
 - freshness, jurisdiction, or version constraints
 

@@ -3434,6 +3434,12 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
     ),
 )
 
+_AI_USABILITY_RESEARCH_CUE_GROUPS = (
+    ("ai agent", "ai agents", "agentic", "ai 에이전트", "에이전트"),
+    ("usability", "user experience", "ux", "onboarding", "사용성", "사용자 경험", "온보딩"),
+    ("current sources", "latest evidence", "source-backed", "web research", "최신 근거", "최신 자료", "출처", "웹 리서치"),
+)
+
 
 def _operator_surface_fast_path_decision(
     message: str,
@@ -3448,7 +3454,9 @@ def _operator_surface_fast_path_decision(
         return None
     if not allow_explicit_skill and explicit_skill_invocation(routing_message):
         return None
-    match = _operator_surface_fast_path_match(routing_message, only_skill=only_skill)
+    match = _ai_usability_research_fast_path_match(routing_message) if only_skill is None else None
+    if match is None:
+        match = _operator_surface_fast_path_match(routing_message, only_skill=only_skill)
     if match is None:
         return None
     selected_skill, phrase, marker, reason = match
@@ -3478,12 +3486,19 @@ def _operator_surface_fast_path_decision(
         routing_message
     ) and not _is_skill_scout_candidate_alias_intent(routing_message):
         return None
-    if _operator_surface_guard_preempts(
+    preempting_skills = _web_research_preempting_skills(routing_message) if selected_skill == "web-research" else ("source-finder", "toolbelt-readiness")
+    preempting_guard = _operator_surface_preempting_guard(
         selected_skill,
         routing_message,
-        preempting_skills=("source-finder", "toolbelt-readiness"),
-    ):
-        return None
+        preempting_skills=preempting_skills,
+    )
+    if preempting_guard is not None:
+        return _routing_guard_fast_path_decision(
+            preempting_guard,
+            message=message,
+            source=source,
+            min_confidence=min_confidence,
+        )
     selected_harness = primary_harness_for_skill(selected_skill)
     definition = _skill_definition_by_name(selected_skill)
     extra_markers = _operator_surface_extra_markers(selected_skill, phrase)
@@ -3539,6 +3554,34 @@ def _operator_surface_fast_path_decision(
     )
 
 
+def _ai_usability_research_fast_path_match(message: str) -> tuple[str, str, str, str] | None:
+    text = _fast_path_text(message)
+    compact = _fast_path_compact(text)
+    tokens = routing_tokens(text)
+    if not all(any(_ai_usability_research_cue_matches(cue, text, compact, tokens) for cue in cues) for cues in _AI_USABILITY_RESEARCH_CUE_GROUPS):
+        return None
+    return (
+        "web-research",
+        "ai usability research",
+        "operator_surface_fast_path:ai_usability_research",
+        "Clear AI-agent usability research request; start Hermes-owned source-backed research with usability limits visible.",
+    )
+
+
+def _ai_usability_research_cue_matches(cue: str, text: str, compact: str, tokens: set[str]) -> bool:
+    normalized = _fast_path_text(cue)
+    return normalized in tokens if normalized == "ux" else normalized in text or _fast_path_compact(normalized) in compact
+
+
+def _web_research_preempting_skills(message: str) -> tuple[str, ...]:
+    routing_text = prepare_routing_text(message)
+    return tuple(
+        guard.preferred_skills[0]
+        for guard in active_routing_guard_rules(normalized_phrase(routing_text.scoring_text), routing_tokens(normalized_phrase(routing_text.scoring_text)))
+        if guard.preferred_skills and guard.preferred_skills[0] != "web-research"
+    )
+
+
 def _operator_surface_fast_path_match(
     message: str,
     *,
@@ -3556,26 +3599,26 @@ def _operator_surface_fast_path_match(
     return None
 
 
-def _operator_surface_guard_preempts(
+def _operator_surface_preempting_guard(
     selected_skill: str,
     message: str,
     *,
     preempting_skills: tuple[str, ...],
-) -> bool:
+) -> Any | None:
     routing_text = prepare_routing_text(message)
     normalized_query = normalized_phrase(routing_text.scoring_text)
     if selected_skill == "skill-scout" and _is_skill_scout_candidate_alias_intent(normalized_query):
-        return False
+        return None
     query_tokens = routing_tokens(normalized_query)
     for guard in active_routing_guard_rules(normalized_query, query_tokens):
         if not guard.preferred_skills:
             continue
         preferred_skill = guard.preferred_skills[0]
         if preferred_skill == selected_skill:
-            return False
+            continue
         if preferred_skill in preempting_skills:
-            return True
-    return False
+            return guard
+    return None
 
 
 def _has_skill_scout_candidate_alias(query: str) -> bool:
@@ -4139,9 +4182,24 @@ def _guarded_operator_fast_path_decision(
     guard = _preferred_guarded_operator_fast_path_guard(guards, routing_message)
     if guard is None or not guard.preferred_skills:
         return None
-    selected_skill = guard.preferred_skills[0]
-    if selected_skill == "feedback-triage" and _feedback_triage_fast_path_blocked(routing_message):
+    if guard.preferred_skills[0] == "feedback-triage" and _feedback_triage_fast_path_blocked(routing_message):
         return None
+    return _routing_guard_fast_path_decision(
+        guard,
+        message=message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+
+
+def _routing_guard_fast_path_decision(
+    guard: Any,
+    *,
+    message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision:
+    selected_skill = guard.preferred_skills[0]
     definition = _skill_definition_by_name(selected_skill)
     selected_harness = primary_harness_for_skill(selected_skill)
     matched = (guard.matched_label, f"guard_fast_path:{guard.id}")
