@@ -101,6 +101,7 @@ Expected outputs:
 - links or citations
 - source-quality notes
 - confidence and residual uncertainty
+- product_evidence_loop/v1
 
 Artifact expectations:
 
@@ -112,6 +113,7 @@ Safety rules:
 - Check source diversity and conflicts before summarizing contested or unstable topics.
 - Separate quoted evidence from inference.
 - State retrieval limits, dates, and missing-source gaps for unstable facts.
+- product_evidence_loop/v1 is prepared-only opaque references, not observed evidence or execution.
 
 ## Harness Discipline
 

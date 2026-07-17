@@ -99,6 +99,7 @@ Expected outputs:
 - dataset_scope/v1
 - analysis_method_plan/v1
 - operations_data_harness/v1
+- product_evidence_loop/v1
 - analysis_result_summary/v1 when observed
 - next action
 - prepared-vs-observed boundary
@@ -109,6 +110,7 @@ Artifact expectations:
 - dataset_scope/v1 with source, row/record scope, columns or schema, filters, and stop condition
 - analysis_method_plan/v1 naming summary, anomaly, trend, segment, schema, or log-pattern methods
 - operations_data_harness/v1 for relationship and causal boundaries
+- product_evidence_loop/v1 for prepared opaque data reference metadata
 - analysis_result_summary/v1 only from observed data, calculations, query output, or supplied evidence
 
 Safety rules:

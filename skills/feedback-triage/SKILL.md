@@ -95,6 +95,7 @@ Expected outputs:
 - clusters
 - severity or opportunity ranking
 - next workflow recommendation
+- product_evidence_loop/v1
 
 Artifact expectations:
 
@@ -105,6 +106,7 @@ Safety rules:
 - Do not turn feedback into a roadmap, implementation plan, or coding handoff by default.
 - Separate bug signal, feature ask, severity, opportunity, and missing evidence.
 - Route code changes only after explicit user intent or accepted planning evidence.
+- product_evidence_loop/v1 is prepared-only opaque references, not observed evidence or execution.
 
 ## Harness Discipline
 
