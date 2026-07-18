@@ -809,6 +809,7 @@ LANE_CROSS_LANE_EXAMPLES = {
     ],
     "materials_and_visuals": [
         "meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence",
+        "broad design request -> design-orchestration -> named specialist lanes -> executor selection -> observed visual evidence",
         "release notes or customer copy -> content-operator -> source, audience, tone, review, and output slots",
         "frontend request -> frontend -> visual-qa -> observed render evidence",
         "WCAG concern -> accessibility-audit -> focus, screen-reader, target, contrast, and reflow evidence",
@@ -890,6 +891,7 @@ WORKFLOW_CONTEXT_CARDS = (
         "user_signal": "deck, PDF, spreadsheet, document, HWP, report, website, frontend layout, accessibility audit, visual QA, poster, image card, or shareable summary",
         "omh_pattern": "shape the deliverable contract, prepare prompts/package/design/frontend/accessibility/visual-QA metadata, then record generation and QA only when observed",
         "representative_workflows": (
+            "design-orchestration",
             "design-quality-gate",
             "frontend",
             "accessibility-audit",
@@ -1000,6 +1002,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "report-package": "materials_and_visuals",
     "deliverable-package": "materials_and_visuals",
     "img-summary": "materials_and_visuals",
+    "design-orchestration": "materials_and_visuals",
     "design-quality-gate": "materials_and_visuals",
     "frontend": "materials_and_visuals",
     "accessibility-audit": "materials_and_visuals",
@@ -4657,6 +4660,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "id": "materials_and_visuals",
             "label": "Materials and visual summaries",
             "skills": [
+                "design-orchestration",
                 "design-quality-gate",
                 "frontend",
                 "accessibility-audit",

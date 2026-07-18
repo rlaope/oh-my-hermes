@@ -428,6 +428,17 @@ _SKILL_POLICIES = {
             "content and layout QA, downstream generation route, and observed-only visual QA requirements."
         ),
     ),
+    "design-orchestration": RecommendationPolicy(
+        next_action="prepare_design_orchestration",
+        evidence_boundary=(
+            "A prepared design orchestration contract is not executor selection, implementation, browser rendering, accessibility PASS, "
+            "visual QA, review, CI, deployment, or merge evidence until matching observations exist."
+        ),
+        wrapper_guidance=(
+            "Prepare design_orchestration/v1 with bounded intent, opaque context references, deliberate direction, existing-lane composition, "
+            "executor_selection_required, and visual_verdict not_observed. Route narrowed work to design-quality-gate, frontend, accessibility-audit, or visual-qa."
+        ),
+    ),
     "frontend": RecommendationPolicy(
         next_action="prepare_frontend_handoff",
         evidence_boundary=(

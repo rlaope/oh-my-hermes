@@ -2352,6 +2352,89 @@ _DEFINITIONS = [
         ),
     ),
     SkillDefinition(
+        "design-orchestration",
+        "Hermes design orchestration workflow: prepare a bounded design direction, existing-lane composition, and executor-neutral handoff.",
+        (
+            "design-orchestration",
+            "design orchestration",
+            "design ownership",
+            "handle this product design",
+            "take on the design",
+            "디자인 맡겨",
+            "디자인 맡겨줘",
+            "디자인 전체 맡겨",
+            "프로덕트 디자인 맡겨",
+        ),
+        "Use when Hermes should take broad ownership of a design problem before a narrower quality, frontend, accessibility, or visual-QA lane is known.",
+        category="materials",
+        phase="design-orchestration",
+        hermes_role="retained-cognition",
+        delegation_boundary="retained-catalog-intent",
+        handoff_policy=(
+            "Keep design intent, opaque project context references, deliberate direction, and existing-lane composition in Hermes; "
+            "prepare an executor-neutral handoff only. The selected executor owns implementation, while existing visual-QA and web-QA paths own observed rendered evidence."
+        ),
+        required_inputs=(
+            "bounded target surface, audience, and primary task",
+            "at least one opaque project, user, or Hermes context reference",
+            "direction vocabulary and avoid-pattern selection",
+            "executor selection and observed visual evidence remain pending",
+        ),
+        expected_outputs=(
+            "design_orchestration/v1",
+            "design intent and opaque context-reference boundary",
+            "prepared direction vocabulary",
+            "downstream composition: design-quality-gate, frontend, accessibility-audit, visual-qa",
+            "executor-neutral handoff with executor_selection_required",
+            "visual evidence requirements with visual_verdict not_observed",
+        ),
+        artifact_expectations=(
+            "design_orchestration/v1 with prepared_not_observed status",
+            "no raw project source, prompt, asset, path, or URL retention",
+            "no executor target, dispatch, implementation, render, QA PASS, review, CI, deployment, or merge claim",
+        ),
+        safety_rules=(
+            "Preserve the existing direct owners: design-quality-gate for premium multi-format quality, frontend for web implementation/design-system work, accessibility-audit for semantic access review, and visual-qa for fresh rendered verdicts.",
+            "Do not use a prepared direction to claim code, screenshots, browser QA, accessibility PASS, review, CI, deployment, or merge.",
+            "Keep free-form briefs in Hermes conversation context; persist only closed vocabulary and opaque reference metadata in the deterministic artifact.",
+            "Do not call Claude Design, Figma, Open Design, an image provider, browser, network service, daemon, or executor from OMH core.",
+        ),
+        quality_tier="design-orchestration-gated",
+        quality_bar=(
+            "Make the design job, context boundary, direction, downstream lane ownership, and visual evidence requirements readable before handoff.",
+            "Reject generic default drift by naming hierarchy, palette, typography, layout, signature element, and avoid patterns deliberately.",
+            "Require the selected executor and fresh visual evidence separately before any implementation or quality completion claim.",
+        ),
+        why_this_exists=(
+            "`design-orchestration` lets Hermes users say that they want design handled without making them manually compose four specialist lanes or confusing preparation with completed visual work."
+        ),
+        do_not_use_when=(
+            "The request is directly about premium multi-format quality or publishing; use `design-quality-gate`.",
+            "The request is directly about frontend implementation, layout, responsive behavior, or a design system; use `frontend`.",
+            "The request is directly about WCAG, keyboard, screen-reader, or semantic accessibility; use `accessibility-audit`.",
+            "The request is directly about screenshots, visual regression, pixel diff, rendered layout, or a verdict; use `visual-qa`.",
+        ),
+        good_example=SkillExample(
+            prompt="디자인 맡겨줘. 기존 프로젝트 맥락을 먼저 보고, 방향과 구현·검증의 다음 단계를 잡아줘.",
+            expected="Prepare design_orchestration/v1 with opaque context references, deliberate direction, existing-lane composition, executor_selection_required, and not_observed visual evidence requirements.",
+            why="The request delegates broad design ownership while leaving implementation and observed QA to the appropriate owners.",
+        ),
+        bad_example=SkillExample(
+            prompt="design-orchestration already rendered and visually passed the new page.",
+            expected="Keep rendering and visual PASS not_observed; route the required capture and verdict work to visual-qa.",
+            why="A prepared orchestration contract cannot create implementation or rendered evidence.",
+        ),
+        final_checklist=(
+            "The bounded intent, opaque context references, direction vocabulary, and avoid patterns are explicit.",
+            "The four downstream lanes retain their direct ownership and the executor is still selection-required.",
+            "The visual evidence contract keeps visual_verdict not_observed until fresh captures are recorded by the visual-QA owner.",
+        ),
+        recovery_notes=(
+            "If only a raw brief exists, let Hermes retain it in chat and create an opaque user-supplied reference instead of storing the brief.",
+            "If the request narrows to implementation, accessibility, or rendered QA, route to the existing specialist rather than expanding this orchestration surface.",
+        ),
+    ),
+    SkillDefinition(
         "design-quality-gate",
         "Hermes Design Quality Gate workflow: enforce superior content, design, layout, publishing, and visual QA gates.",
         (
@@ -6520,6 +6603,14 @@ _DEFINITIONS.extend(_FEATURE_SURFACE_SKILLS)
 _DEFAULT_SURFACE_PROJECTIONS = ("routable", "installable", "workflow_reference", "capability")
 _SURFACE_EXPOSURES = (
     SurfaceExposure(
+        "design-orchestration",
+        "workflow_skill",
+        ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
+        True,
+        "primary_workflow_skill",
+        "Use as an installed Hermes workflow skill for broad design ownership before handing a narrowed concern to design-quality-gate, frontend, accessibility-audit, or visual-qa.",
+    ),
+    SurfaceExposure(
         "quality-evidence-loop",
         "workflow_reference",
         ("workflow_reference",),
@@ -8964,6 +9055,17 @@ _HARNESSES = [
 
 _FEATURE_SURFACE_HARNESSES = (
     _feature_surface_harness(
+        "design-orchestration",
+        "Direction.",
+        "Use for design.",
+        ("intent", "context"),
+        ("design_orchestration/v1",),
+        quality_tier="design-gated",
+        evidence_ladder=("intent", "direction", "visual_when_available"),
+        wrapper_actions=("prepare_design_orchestration", "choose_executor", "prepare_visual_qa"),
+        overclaim_guard="Not implementation or visual-QA evidence.",
+    ),
+    _feature_surface_harness(
         "github-event-ops",
         "Route GitHub PR, issue, CI, and review events into triage, review, labeling, or fix-handoff guidance.",
         "Use when a GitHub event payload or copied event summary should become a Hermes workflow card.",
@@ -9770,6 +9872,7 @@ _PRIMARY_HARNESSES = {
     "materials-package": "materials-package",
     "img-summary": "img-summary",
     "design-quality-gate": "design-quality-gate",
+    "design-orchestration": "design-orchestration",
     "frontend": "frontend",
     "accessibility-audit": "accessibility-audit",
     "visual-qa": "visual-qa",

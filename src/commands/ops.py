@@ -42,6 +42,20 @@ from ..product_evidence_loop import (
     REFERENCE_PROVENANCES,
     build_product_evidence_loop,
 )
+from ..design_orchestration import (
+    DESIGN_AUDIENCES,
+    DESIGN_AVOID_PATTERNS,
+    DESIGN_HIERARCHIES,
+    DESIGN_LAYOUTS,
+    DESIGN_MODES,
+    DESIGN_PALETTES,
+    DESIGN_PLATFORMS,
+    DESIGN_PRIMARY_TASKS,
+    DESIGN_SIGNATURE_ELEMENTS,
+    DESIGN_SURFACES,
+    DESIGN_TYPOGRAPHIES,
+    build_design_orchestration,
+)
 from ..research_department import (
     build_research_department_plan,
     list_research_department_plans,
@@ -127,6 +141,36 @@ def cmd_ops_product_evidence_loop(args: argparse.Namespace) -> int:
                 causal_identification_availability=args.causal_identification_availability,
                 causal_identification_reference_id=args.causal_identification_reference_id,
                 causal_identification_provenance=args.causal_identification_provenance,
+            )
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
+def _context_reference_descriptor(value: str) -> tuple[str, str, str]:
+    parts = value.split(":")
+    if len(parts) != 3:
+        raise ValueError("context_reference must be reference_kind:reference_id:provenance")
+    return (parts[0], parts[1], parts[2])
+
+
+def cmd_ops_design_orchestration(args: argparse.Namespace) -> int:
+    try:
+        _print_json(
+            build_design_orchestration(
+                surface=args.surface,
+                audience=args.audience,
+                primary_task=args.primary_task,
+                platform=args.platform,
+                mode=args.mode,
+                context_references=tuple(_context_reference_descriptor(value) for value in args.context_reference),
+                hierarchy=args.hierarchy,
+                palette=args.palette,
+                typography=args.typography,
+                layout=args.layout,
+                signature_element=args.signature_element,
+                avoid_patterns=tuple(args.avoid_pattern),
             )
         )
     except ValueError as exc:
@@ -520,6 +564,24 @@ def _add_ops_commands(sub) -> None:
             dest=f"{destination}_provenance",
         )
     product_evidence_loop.set_defaults(func=cmd_ops_product_evidence_loop)
+
+    design_orchestration = ops_sub.add_parser(
+        "design-orchestration",
+        help="Prepare a metadata-only executor-neutral design orchestration contract.",
+    )
+    design_orchestration.add_argument("--surface", choices=DESIGN_SURFACES, required=True)
+    design_orchestration.add_argument("--audience", choices=DESIGN_AUDIENCES, required=True)
+    design_orchestration.add_argument("--primary-task", choices=DESIGN_PRIMARY_TASKS, required=True)
+    design_orchestration.add_argument("--platform", choices=DESIGN_PLATFORMS, required=True)
+    design_orchestration.add_argument("--mode", choices=DESIGN_MODES, required=True)
+    design_orchestration.add_argument("--context-reference", action="append", required=True)
+    design_orchestration.add_argument("--hierarchy", choices=DESIGN_HIERARCHIES, required=True)
+    design_orchestration.add_argument("--palette", choices=DESIGN_PALETTES, required=True)
+    design_orchestration.add_argument("--typography", choices=DESIGN_TYPOGRAPHIES, required=True)
+    design_orchestration.add_argument("--layout", choices=DESIGN_LAYOUTS, required=True)
+    design_orchestration.add_argument("--signature-element", choices=DESIGN_SIGNATURE_ELEMENTS, required=True)
+    design_orchestration.add_argument("--avoid-pattern", action="append", choices=DESIGN_AVOID_PATTERNS, required=True)
+    design_orchestration.set_defaults(func=cmd_ops_design_orchestration)
 
     rhythm = ops_sub.add_parser("rhythm", help="Create an operating rhythm artifact such as a meeting or retro record.")
     _add_artifact_args(rhythm, surface="operating-rhythm", default_kind="meeting")

@@ -24,7 +24,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - `guide`: `oh-my-hermes`, `gateway-intent-card`, `voice-operator`, `browser-operator`, `workspace-file-operator`, `command-operator`, `connector-operator`, `live-info-operator`, `external-connector-readiness`, `prompt-import-readiness`, `content-operator`, `media-input-operator`, `data-analysis`
 - `handoff-guide`: `ralph`, `ultragoal`, `ultraprocess`, `team`, `ultrawork`, `ai-slop-cleaner`, `executor-runtime-readiness`
 - `memory-keeper`: `rules-distill`, `wiki`, `memory-curation-review`
-- `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `design-quality-gate`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`, `physical-device-readiness`, `agent-debug`, `skill-scout`, `skill-health`
+- `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `design-orchestration`, `design-quality-gate`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`, `physical-device-readiness`, `agent-debug`, `skill-scout`, `skill-health`
 - `planner`: `loop`, `deep-interview`, `codebase-onboarding`, `codegraph-refresh`, `plan`, `ralplan`
 - `researcher`: `web-research`, `source-finder`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `accessibility-audit`, `build-failure-triage`, `production-audit`, `verification-gate`, `security-safety-review`, `ultraqa`, `code-review`, `ask`, `failure-signal-audit`
@@ -55,6 +55,7 @@ When Hermes exposes installed skill descriptions to the model, use this registry
 - `report-package`: `report-package`, `report package`, `weekly report`, `monthly report`, `executive report`, `exec brief`, `leadership deck`, `status package`, `ppt outline`
 - `materials-package`: `materials-package`, `material package`, `materials package`, `document package`, `deck file`, `binary export`, `file export`, `render qa`, `layout qa`
 - `img-summary`: `img-summary`, `img summary`, `visual prompt card`, `image card`, `image generation`, `image edit`, `edit this image`, `remove the background`, `background removal`
+- `design-orchestration`: `design-orchestration`, `design orchestration`, `design ownership`, `handle this product design`, `take on the design`, `디자인 맡겨`, `디자인 맡겨줘`, `디자인 전체 맡겨`, `프로덕트 디자인 맡겨`
 - `design-quality-gate`: `design-quality-gate`, `design quality gate`, `ui ux pro max`, `design pro max`, `frontend pro max`, `visual qa pro`, `premium design`, `high quality design`, `beautiful website`
 - `frontend`: `frontend`, `front-end`, `front end`, `frontend skill`, `web ui`, `ui ux`, `ui/ux`, `landing page`, `web app layout`
 - `accessibility-audit`: `accessibility-audit`, `accessibility audit`, `a11y audit`, `a11y architect`, `wcag audit`, `wcag 2.2`, `wcag 2.2 aa`, `accessibility pass`, `accessibility check`

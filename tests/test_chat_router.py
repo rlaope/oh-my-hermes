@@ -52,6 +52,22 @@ merge_observed=false
 
 
 class ChatRouterTests(unittest.TestCase):
+    def test_design_orchestration_routes_broad_ownership_without_stealing_specialists(self) -> None:
+        cases = (
+            ("디자인 맡겨줘", "design-orchestration"),
+            ("handle this product design", "design-orchestration"),
+            ("design 맡겨줘, WCAG audit", "accessibility-audit"),
+            ("design 맡겨줘, screenshot pixel QA", "visual-qa"),
+            ("design 맡겨줘, frontend implementation", "frontend"),
+            ("design 맡겨줘, premium publishing quality", "design-quality-gate"),
+            ("$frontend design 맡겨줘", "frontend"),
+        )
+
+        for message, expected_skill in cases:
+            with self.subTest(message=message):
+                decision = route_chat_message(message, source="discord")
+                self.assertEqual(decision["selected_skill"], expected_skill)
+
     def test_router_contract_scrubs_pasted_omh_status_blocks_across_surfaces(self) -> None:
         message = """라우터 강화 플랜짜볼래
 
