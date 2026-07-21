@@ -10,7 +10,7 @@ from ..ingress import CHAT_SOURCES, compact_source_metadata, extract_message_tex
 from ..routing.chat import CONFIDENCE_LEVELS
 from ..executors import CODING_EXECUTOR_TARGETS, executor_selection_for_target
 from .lifecycle import report_codex_delegation_lifecycle, start_codex_delegation_lifecycle
-from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, read_jsonl_objects, utc_now
+from ..local_store import atomic_write_json, ensure_dir, ensure_file, file_lock, read_json_object, read_jsonl_objects, utc_now
 from ..memory import memory_recall_pack_for_handoff
 from ..paths import OmhPaths
 from ..runtime.records import (
@@ -615,7 +615,9 @@ def read_wrapper_session(paths: OmhPaths, session_id: str) -> dict[str, Any] | N
 
 def write_wrapper_session(paths: OmhPaths, session: dict[str, Any]) -> dict[str, Any]:
     record = build_wrapper_session_record(session)
-    atomic_write_json(_session_dir(paths, str(record["session_id"])) / "session.json", record, private=True)
+    session_path = _session_dir(paths, str(record["session_id"])) / "session.json"
+    with file_lock(session_path, private=True):
+        atomic_write_json(session_path, record, private=True)
     return record
 
 

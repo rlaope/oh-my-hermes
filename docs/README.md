@@ -92,6 +92,7 @@ Use [Capabilities](CAPABILITIES.md) for the manifest contract and
 | --- | --- |
 | Responsibility roles and profiles | [Roles](ROLES.md) |
 | Safe orchestration patterns | [Orchestration Patterns](ORCHESTRATION_PATTERNS.md) |
+| Shared state, locking, and upstream-native coordination for concurrent agents | [Multi-Agent Operations](MULTI_AGENT_OPERATIONS.md) |
 | Chat cards and grounded wrapper examples | [Chat Wrapper Examples](CHAT_WRAPPER_EXAMPLES.md) |
 | Harness and quality-gate contracts | [Harness Quality Contract](HARNESS_QUALITY.md) |
 | Memory/context review and handoff packs | [Memory Context Review](MEMORY_CONTEXT.md) |

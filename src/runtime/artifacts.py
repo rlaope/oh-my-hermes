@@ -15,6 +15,7 @@ from ..local_store import (
     atomic_write_json,
     ensure_dir,
     ensure_file,
+    file_lock,
     read_json_object,
     read_json_object_result,
     read_jsonl_objects,
@@ -109,16 +110,23 @@ def read_state_error(paths: OmhPaths) -> str | None:
 
 
 def update_state(paths: OmhPaths, patch: dict[str, Any]) -> dict[str, Any]:
-    current, state_error = read_state_result(paths)
-    current = current or {"schema_version": SCHEMA_VERSION}
-    merged = {**current, **patch, "schema_version": SCHEMA_VERSION, "updated_at": utc_now()}
-    if state_error:
-        merged["previous_state_error"] = state_error
+    def _merge() -> dict[str, Any]:
+        current, state_error = read_state_result(paths)
+        current = current or {"schema_version": SCHEMA_VERSION}
+        merged = {**current, **patch, "schema_version": SCHEMA_VERSION, "updated_at": utc_now()}
+        if state_error:
+            merged["previous_state_error"] = state_error
+        return merged
+
     try:
-        atomic_write_json(paths.runtime_state_path, merged, private=True)
+        with file_lock(paths.runtime_state_path, private=True):
+            merged = _merge()
+            atomic_write_json(paths.runtime_state_path, merged, private=True)
+            return merged
     except OSError as exc:
+        merged = _merge()
         merged["state_write_error"] = str(exc)
-    return merged
+        return merged
 
 
 def create_run(paths: OmhPaths, metadata: dict[str, Any]) -> dict[str, Any]:

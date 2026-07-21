@@ -50,3 +50,15 @@ worktree exists until a wrapper or operator records a matching runtime
 observation.
 
 This keeps Hermes helpful in chat without pretending to be a hidden executor.
+
+## Multiple Agents, One Home
+
+The patterns above describe a single OMH home coordinating one lane of
+work at a time. When more than one agent, wrapper process, or coding
+executor is actually running concurrently against the same `~/.omh` and
+`~/.hermes` directories, read
+[Multi-Agent Operations](MULTI_AGENT_OPERATIONS.md) for the shared-state
+ownership model, the Hermes `config.yaml` capability boundary, why
+`multi_agent_targets` topology is advisory narration rather than
+enforcement, and which upstream-native primitives (Kanban, `delegate_task`,
+profiles) OMH prefers to hand work off to instead of reimplementing.

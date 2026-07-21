@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config_adapter import ensure_external_dir, read_config, write_config
-from ..local_store import atomic_write_json, read_json_object_result, utc_now
+from ..local_store import atomic_write_json, file_lock, read_json_object_result, utc_now
 from ..paths import OmhPaths, expand_path
 
 
@@ -70,8 +70,12 @@ def record_target_observation(
         if change.changed:
             write_config(config_path, change.text)
             config_changed = True
-    next_registry = _merge_registry(registry, target)
-    atomic_write_json(paths.target_registry_path, next_registry, private=True)
+    with file_lock(paths.target_registry_path, private=True):
+        registry, error = read_target_registry_result(paths)
+        if error:
+            registry = None
+        next_registry = _merge_registry(registry, target)
+        atomic_write_json(paths.target_registry_path, next_registry, private=True)
     return _observation_payload(paths, registry, error, target, dry_run=False, persisted=True, config_changed=config_changed)
 
 

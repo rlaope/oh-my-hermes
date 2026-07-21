@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from ..local_store import atomic_write_json, ensure_dir, read_json_object, read_json_object_result, utc_now
+from ..local_store import atomic_write_json, ensure_dir, file_lock, read_json_object, read_json_object_result, utc_now
 from ..paths import OmhPaths
 from ..profiles.setup import read_setup_profile
 from ..targets import summarize_target_registry
@@ -1673,23 +1673,24 @@ def _read_scope_file(path: Path, scope: dict[str, str]) -> dict[str, Any]:
 
 def _write_memory_index(paths: OmhPaths) -> None:
     ensure_dir(paths.memory_dir, private=True)
-    scopes = [str(path.relative_to(paths.memory_dir)) for path in _memory_scope_paths(paths)]
-    candidates = [str(path.relative_to(paths.memory_dir)) for path in _safe_memory_files(paths, _memory_candidates_dir(paths))]
-    records = [str(path.relative_to(paths.memory_dir)) for path in _safe_memory_files(paths, _memory_records_dir(paths))]
-    reviews = [str(path.relative_to(paths.memory_dir)) for path in _safe_memory_files(paths, _memory_reviews_dir(paths))]
-    atomic_write_json(
-        paths.memory_index_path,
-        {
-            "schema_version": MEMORY_INDEX_SCHEMA_VERSION,
-            "updated_at": utc_now(),
-            "scope_files": sorted(scopes),
-            "candidate_files": sorted(candidates),
-            "record_files": sorted(records),
-            "review_files": sorted(reviews),
-            "claim_boundary": "OMH local memory only; this index is not Hermes internal memory.",
-        },
-        private=True,
-    )
+    with file_lock(paths.memory_index_path, private=True):
+        scopes = [str(path.relative_to(paths.memory_dir)) for path in _memory_scope_paths(paths)]
+        candidates = [str(path.relative_to(paths.memory_dir)) for path in _safe_memory_files(paths, _memory_candidates_dir(paths))]
+        records = [str(path.relative_to(paths.memory_dir)) for path in _safe_memory_files(paths, _memory_records_dir(paths))]
+        reviews = [str(path.relative_to(paths.memory_dir)) for path in _safe_memory_files(paths, _memory_reviews_dir(paths))]
+        atomic_write_json(
+            paths.memory_index_path,
+            {
+                "schema_version": MEMORY_INDEX_SCHEMA_VERSION,
+                "updated_at": utc_now(),
+                "scope_files": sorted(scopes),
+                "candidate_files": sorted(candidates),
+                "record_files": sorted(records),
+                "review_files": sorted(reviews),
+                "claim_boundary": "OMH local memory only; this index is not Hermes internal memory.",
+            },
+            private=True,
+        )
 
 
 def _safe_memory_files(paths: OmhPaths, directory: Path) -> list[Path]:

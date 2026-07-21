@@ -364,22 +364,24 @@ class DynamicWorkflowTests(unittest.TestCase):
             self.assertEqual(chart_path.stat().st_mode & 0o777, 0o600)
             self.assertEqual(workflow_path.parent.stat().st_mode & 0o777, 0o700)
 
-    def test_writer_does_not_leave_chart_when_workflow_json_write_is_blocked(self) -> None:
+    def test_writer_does_not_leave_workflow_json_when_chart_write_is_blocked(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             paths = resolve_paths(root / ".omh", root / ".hermes")
             workflow = build_dynamic_coding_workflow("Prepare a dynamic workflow atomically")
             workflow_dir = paths.dynamic_coding_workflows_dir / str(workflow["workflow_id"])
             workflow_dir.mkdir(parents=True)
-            (workflow_dir / ".workflow.json.tmp").write_text("blocked", encoding="utf-8")
+            blocker = workflow_dir / "workflow-chart.svg"
+            blocker.mkdir()
+            (blocker / "keep").write_text("x", encoding="utf-8")
 
-            with self.assertRaisesRegex(FileExistsError, "atomic write temp path already exists"):
+            with self.assertRaises(OSError):
                 write_dynamic_coding_workflow(paths, workflow)
 
-            self.assertFalse((workflow_dir / "workflow-chart.svg").exists())
+            self.assertTrue(blocker.is_dir())
             self.assertFalse((workflow_dir / "workflow.json").exists())
 
-    def test_writer_rejects_preexisting_temp_symlink_escape(self) -> None:
+    def test_writer_does_not_follow_preexisting_temp_symlink(self) -> None:
         for filename, outside_name in (
             (".workflow-chart.svg.tmp", "outside-chart.svg"),
             (".workflow.json.tmp", "outside-workflow.json"),
@@ -396,10 +398,10 @@ class DynamicWorkflowTests(unittest.TestCase):
                 except (NotImplementedError, OSError) as exc:
                     self.skipTest(f"symlink creation unavailable: {exc}")
 
-                with self.assertRaisesRegex(FileExistsError, "atomic write temp path already exists"):
-                    write_dynamic_coding_workflow(paths, workflow)
+                write_dynamic_coding_workflow(paths, workflow)
 
                 self.assertFalse(outside.exists())
+                self.assertTrue((workflow_dir / "workflow.json").exists())
 
 
 if __name__ == "__main__":
