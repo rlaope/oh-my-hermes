@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import errno
 import json
+import os
+import secrets
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterator
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 
 def utc_now() -> str:
@@ -37,9 +47,7 @@ def can_write_dir(path: Path, *, probe_name: str = ".write-test", private: bool 
 
 def atomic_write_text(path: Path, text: str, *, private: bool = False) -> None:
     ensure_dir(path.parent, private=private)
-    tmp = path.with_name(f".{path.name}.tmp")
-    if tmp.exists() or tmp.is_symlink():
-        raise FileExistsError(f"atomic write temp path already exists: {tmp}")
+    tmp = path.with_name(f".{path.name}.{os.getpid()}-{secrets.token_hex(8)}.tmp")
     created_tmp = False
     try:
         with tmp.open("x", encoding="utf-8") as handle:
@@ -98,3 +106,61 @@ def read_jsonl_objects(path: Path) -> tuple[list[dict[str, Any]], list[str]]:
             continue
         records.append(record)
     return records, errors
+
+
+class FileLockTimeout(TimeoutError):
+    """Raised when an advisory file lock cannot be acquired within the timeout."""
+
+
+@contextmanager
+def file_lock(
+    path: Path,
+    *,
+    timeout_seconds: float = 10.0,
+    poll_interval: float = 0.05,
+    private: bool = False,
+) -> Iterator[dict[str, Any]]:
+    lock_path = path.with_name(f".{path.name}.lock")
+    ensure_dir(lock_path.parent, private=private)
+    if fcntl is None:
+        yield {"locked": False, "reason": "fcntl_unavailable"}
+        return
+    ensure_file(lock_path, private=private)
+    deadline = time.monotonic() + max(timeout_seconds, 0.0)
+    handle = lock_path.open("a+")
+    try:
+        while True:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError as exc:
+                if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                    raise
+                if time.monotonic() >= deadline:
+                    raise FileLockTimeout(f"could not acquire lock on {path} within {timeout_seconds}s") from exc
+                time.sleep(poll_interval)
+        try:
+            yield {"locked": True, "reason": ""}
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
+def locked_json_update(
+    path: Path,
+    mutate_fn: Callable[[dict[str, Any]], dict[str, Any] | None],
+    *,
+    default: dict[str, Any] | None = None,
+    private: bool = False,
+    timeout_seconds: float = 10.0,
+) -> dict[str, Any]:
+    with file_lock(path, timeout_seconds=timeout_seconds, private=private):
+        current, _ = read_json_object_result(path)
+        if current is None:
+            current = dict(default) if default is not None else {}
+        updated = mutate_fn(current)
+        if updated is None:
+            updated = current
+        atomic_write_json(path, updated, private=private)
+        return updated

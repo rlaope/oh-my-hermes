@@ -35,9 +35,21 @@ class HermesReadinessCliTests(unittest.TestCase):
         self.assertEqual(surfaces["sessions_index"]["status"], "available")
         self.assertEqual(surfaces["state_db"]["status"], "available")
         self.assertEqual(surfaces["source_checkout"]["status"], "available")
+        self.assertEqual(surfaces["kanban_db"]["status"], "available")
+        self.assertEqual(surfaces["skill_bundles"]["status"], "available")
+        self.assertEqual(surfaces["pending_skills"]["status"], "available")
+        self.assertEqual(surfaces["memories_dir"]["status"], "available")
         self.assertEqual(payload["summary"]["missing_required_surfaces"], 0)
         self.assertEqual(payload["summary"]["observed_native_state_surfaces"], 2)
         self.assertIn("not proof that Hermes loaded OMH", payload["claim_boundary"])
+        self.assertEqual(payload["official_basis"]["checked_at"], "2026-07-21")
+        stable_surfaces_text = " ".join(payload["official_basis"]["stable_surfaces"])
+        self.assertIn("kanban.db", stable_surfaces_text)
+        self.assertIn("skill-bundles", stable_surfaces_text)
+        self.assertIn("pending/skills", stable_surfaces_text)
+        self.assertIn("memories", stable_surfaces_text)
+        self.assertIn("auth.json", stable_surfaces_text)
+        self.assertIn("SOUL.md", stable_surfaces_text)
 
     def test_reinforcement_covers_memory_learning_loop_wiki_runtime_and_subagents(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -59,6 +71,7 @@ class HermesReadinessCliTests(unittest.TestCase):
             {
                 "memory_management",
                 "self_improvement",
+                "skill_quality_review",
                 "loop_control",
                 "wiki_external_knowledge",
                 "runtime_observation",
@@ -108,6 +121,10 @@ def _write_ready_fixture(omh_home: Path, hermes_home: Path) -> None:
     checkout = hermes_home / "hermes-agent"
     checkout.mkdir()
     (checkout / "README.md").write_text("# Hermes Agent\n", encoding="utf-8")
+    (hermes_home / "kanban.db").write_text("", encoding="utf-8")
+    (hermes_home / "skill-bundles").mkdir()
+    (hermes_home / "pending" / "skills").mkdir(parents=True)
+    (hermes_home / "memories").mkdir()
     (hermes_home / "config.yaml").write_text(
         f"skills:\n  external_dirs:\n    - {omh_home / 'skills'}\n",
         encoding="utf-8",

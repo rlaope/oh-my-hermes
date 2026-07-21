@@ -19,6 +19,48 @@ questions:
 - Which owner is responsible for each stage?
 - Which status claims are backed by observed evidence, and which are not?
 
+## Upstream Basis
+
+OMH's model of upstream Hermes Agent (`omh hermes readiness`,
+`omh hermes retained-context`) is refreshed against a manually checked basis,
+not a live network probe. Current basis: Hermes Agent v0.19.0 "Quicksilver"
+(released 2026-07-20), checked 2026-07-21. Upstream ships majors on roughly a
+2-week cadence, so treat this basis as a snapshot and re-check
+`src/workflows/hermes_readiness_catalog.py` `official_basis()` periodically.
+
+Concrete deltas an operator or wrapper should account for at this basis:
+
+- **Smart approvals (LLM-based command review) are now the default** in
+  v0.19.0. A wrapper or operator that assumed a plain prompt-per-command
+  approval flow should model LLM-reviewed command approval instead;
+  `approvals.deny` globs still hard-block regardless of smart-approval state.
+- **`delegate_task` background subagents and the Kanban board are
+  upstream-native multi-agent primitives.** `delegate_task` calls are
+  background-by-default with handles and live `tail -f` transcripts; the
+  Kanban board (`kanban.db`, `kanban_*` toolset) is a durable, multi-profile
+  work queue with orchestrator auto-decomposition, swarm topology,
+  worktree-per-task, and per-task model overrides. OMH should prepare
+  handoffs onto these surfaces rather than reimplement a competing work
+  queue or subagent scheduler.
+- **Desktop Projects and the Kanban board manage git worktrees natively.**
+  OMH's own worktree isolation guidance (see
+  [Orchestration Patterns](ORCHESTRATION_PATTERNS.md) and
+  [Multi-Agent Operations](MULTI_AGENT_OPERATIONS.md)) is prepared guidance
+  only; it can collide with worktrees Hermes itself is already managing for
+  the same task, so treat "a worktree should exist here" as advisory, not a
+  claim that OMH owns worktree lifecycle.
+- **`/goal` completion contracts (evidence-based done)** are upstream's own
+  analogue of OMH's verification/evidence loops. Prefer aligning OMH
+  verification narration with `/goal` semantics rather than inventing a
+  parallel completion vocabulary.
+- **Session export formats** (Markdown, Quarto, HTML, prompt-only, and
+  Hugging-Face-ready trace) are the stable transcript-extraction surface as
+  of v0.19.0; prefer them over scraping `~/.hermes/sessions/` directly.
+
+This section is executor-neutral: the same guidance applies whether the
+coding executor behind a handoff is Codex, Claude Code, Hermes's own runtime,
+or another selected executor.
+
 ## Product Boundary
 
 | Owner | Owns | Does not own |
