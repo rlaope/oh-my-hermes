@@ -117,8 +117,13 @@ def _default_fixture(source: str) -> Path:
         "slack": "slack-risky-refactor.json",
         "telegram": "telegram-command-preview.json",
     }
-    filename = filename_by_source.get(source, "discord-safe-feature.json")
-    return Path(__file__).resolve().parent / "wrapper-events" / filename
+    if source not in filename_by_source:
+        raise ValueError(
+            f"no default wrapper-events fixture is mapped for source={source!r}; "
+            "pass an explicit event_json path instead of silently falling back to a "
+            "different source's fixture"
+        )
+    return Path(__file__).resolve().parent / "wrapper-events" / filename_by_source[source]
 
 
 def _read_json(path: Path) -> dict[str, Any]:

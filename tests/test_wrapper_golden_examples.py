@@ -443,6 +443,164 @@ class WrapperGoldenExampleTests(unittest.TestCase):
                 self.assertIn("not executor dispatch", plugin["claim_boundary"])
                 self.assertNotIn(raw_message, result.stdout)
 
+    def test_telegram_status_ladder_golden_examples_cover_required_scenarios(self) -> None:
+        payload = json.loads(Path("examples/wrapper-golden/telegram-status-ladder.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], "wrapper_golden_examples/v1")
+        scenarios = {item["scenario"]: item for item in payload["scenarios"]}
+
+        telegram_required = {
+            "clarify_needed",
+            "plan_presented",
+            "deep_interview_blocked_plan",
+            "handoff_prepared",
+            "dispatched_executor_not_observed",
+            "review_pending",
+            "status_card_review_pending",
+            "ci_pending",
+            "ci_failed",
+            "merge_ready",
+            "merged",
+            "contradictory_merge_ready_without_ci",
+        }
+        self.assertEqual(set(scenarios), telegram_required)
+
+        for item in payload["scenarios"]:
+            response = item["expected_response"]
+            self.assertEqual(item["source"], "telegram")
+            self.assertEqual(response["schema_version"], "chat_response/v1")
+            self.assertTrue(item["claim_boundary"])
+            self.assertTrue(item["observed_evidence"])
+            self.assertTrue(item["not_evidence"])
+            self.assertTrue(response["headline"])
+            self.assertTrue(response["body"])
+            self.assertIsInstance(response["action_ids"], list)
+            self.assertNotIn("omh ", json.dumps(item).lower())
+            self.assertNotIn("token", json.dumps(item).lower())
+
+            rendering = item["expected_messenger_rendering"]
+            self.assertEqual(rendering["schema_version"], "omh_messenger_rendering/v1")
+            self.assertIn("markdown_table", rendering["avoid_blocks"])
+            self.assertEqual(rendering["chunking"]["max_recommended_chars"], 1800)
+            self.assertTrue(rendering["platform_hints"]["telegram"])
+
+            if "expected_status_card" in item:
+                card = item["expected_status_card"]
+                self.assertEqual(card["schema_version"], "status_card/v1")
+                self.assertIsInstance(card["steps"], list)
+                self.assertTrue(all({"id", "state"} <= set(step) for step in card["steps"]))
+            if "expected_deep_interview" in item:
+                interview = item["expected_deep_interview"]
+                self.assertEqual(interview["schema_version"], "deep_interview_contract/v1")
+                self.assertTrue(interview["required"])
+                self.assertEqual(interview["question_style"], "one_question")
+
+    def test_telegram_hermes_surface_shims_render_fixture_events(self) -> None:
+        cases = (
+            (
+                "examples/wrapper-events/telegram-safe-feature.json",
+                "I want to safely add a feature to this repo",
+            ),
+            (
+                "examples/wrapper-events/telegram-risky-refactor.json",
+                "risky refactor with review",
+            ),
+        )
+
+        for fixture, raw_message in cases:
+            with self.subTest(fixture=fixture):
+                result = subprocess.run(
+                    [sys.executable, "examples/telegram-adapter-shim.py", fixture],
+                    cwd=Path.cwd(),
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(result.returncode, 0)
+                payload = json.loads(result.stdout)
+                self.assertEqual(payload["schema_version"], "wrapper_adapter_shim/v1")
+                self.assertEqual(payload["source"], "telegram")
+                self.assertEqual(payload["redaction_policy"], "metadata_only")
+                self.assertEqual(payload["response"]["kind"], "plan")
+                self.assertTrue(payload["response"]["headline"])
+                self.assertTrue(payload["response"]["headline"].startswith("[omh] "))
+                self.assertEqual(payload["usage_trace"]["schema_version"], "omh_usage_trace/v1")
+                self.assertEqual(payload["messenger_rendering"]["schema_version"], "omh_messenger_rendering/v1")
+                self.assertIn("markdown_table", payload["messenger_rendering"]["avoid_blocks"])
+                self.assertIn("not execution evidence", payload["response"]["claim_boundary"])
+                self.assertIn("accept_plan", {action["id"] for action in payload["actions"]})
+                self.assertIn("executor_result", payload["not_evidence_until_observed"])
+                self.assertNotIn(raw_message, result.stdout)
+
+    def test_telegram_route_hint_shim_renders_workflow_hint_card(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "examples/telegram-adapter-shim.py",
+                "--route-hint",
+                "examples/wrapper-events/telegram-route-hint.json",
+            ],
+            cwd=Path.cwd(),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        raw_message = "make an image explaining the cron feature"
+
+        self.assertEqual(payload["schema_version"], "wrapper_adapter_shim/v1")
+        self.assertEqual(payload["source"], "telegram")
+        self.assertEqual(payload["mode"], "route_hint")
+        self.assertEqual(payload["redaction_policy"], "metadata_only")
+        self.assertEqual(payload["response"]["kind"], "workflow_route_hint")
+        self.assertEqual(payload["route_hint"]["primary_workflow"], "img-summary")
+        self.assertEqual(payload["messenger_rendering"]["schema_version"], "messenger_route_hint_rendering/v1")
+        self.assertIn("workflow_execution", payload["not_evidence_until_observed"])
+        self.assertNotIn(raw_message, result.stdout)
+
+    def test_unmapped_source_fails_loudly_instead_of_silently_loading_discord_fixture(self) -> None:
+        examples_dir = str(Path("examples").resolve())
+        added_to_path = examples_dir not in sys.path
+        if added_to_path:
+            sys.path.insert(0, examples_dir)
+        try:
+            import wrapper_shim_common
+
+            with self.assertRaises(ValueError):
+                wrapper_shim_common._default_fixture("whatsapp")
+            with self.assertRaises(ValueError):
+                wrapper_shim_common._default_fixture("signal")
+            with self.assertRaises(ValueError):
+                wrapper_shim_common.run_shim("whatsapp", [])
+        finally:
+            if added_to_path:
+                sys.path.remove(examples_dir)
+
+    def test_messenger_rendering_chunking_guidance_covers_long_telegram_bodies(self) -> None:
+        from omh.wrapper.contract import messenger_rendering_contract
+
+        long_body = " ".join(["Progress update paragraph with several evidence-bearing clauses."] * 30)
+        self.assertGreater(len(long_body), 1800)
+
+        rendering = messenger_rendering_contract(
+            visible_prefix="[omh] status",
+            first_line="Status update",
+            body=long_body,
+            claim_boundary="Execution evidence only; not review or CI evidence.",
+        )
+
+        self.assertEqual(rendering["schema_version"], "omh_messenger_rendering/v1")
+        self.assertEqual(
+            rendering["platform_hints"]["telegram"],
+            "Start the response with the visible prefix, keep sections short, and avoid table layouts.",
+        )
+        self.assertLess(rendering["chunking"]["max_recommended_chars"], len(long_body))
+        self.assertIn("paragraphs", rendering["chunking"]["split_on"])
+
     def _source_harness_quality(self, item: dict[str, object]) -> dict[str, object]:
         source = item["source_payload"]
         if source == "coding_delegation/v1.harness_quality":

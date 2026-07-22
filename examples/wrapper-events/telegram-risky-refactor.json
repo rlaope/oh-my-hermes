@@ -1,0 +1,14 @@
+{
+  "update_id": "telegram-risky-refactor-001",
+  "message": {
+    "message_id": "telegram-message-risky-refactor-001",
+    "date": "1781878800",
+    "chat": {
+      "id": "repo-maintenance"
+    },
+    "from": {
+      "id": "maintainer-1"
+    },
+    "text": "risky refactor with review"
+  }
+}
