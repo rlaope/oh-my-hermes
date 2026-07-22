@@ -43,6 +43,12 @@ First-run expectation:
 3. You restart or reload Hermes Agent.
 4. You ask Hermes normally, for example: `I want to safely add a feature to this repo.`
 
+By default, `omh setup` installs the **core** skill profile: the doctor health
+floor plus the chat/plan/status/handoff essentials a messenger-first user needs
+for a first session, not every packaged skill. Pass `--full` to install every
+skill in the catalog; see [Skill Profiles: Core vs Full](#skill-profiles-core-vs-full)
+for why the smaller default exists and how to opt in.
+
 You do not need to know or name a workflow. The quickstart card offers
 representative natural-language starters from the locally tested request corpus
 and tells the wrapper which workflow and next action each starter should expose.
@@ -1099,6 +1105,55 @@ omh doctor
 Then restart Hermes Agent.
 
 ## Install Options
+
+### Skill Profiles: Core vs Full
+
+`omh setup`, `omh install`, and `omh update` install one of two skill
+profiles:
+
+- **`core` (default).** Installs the doctor health floor (the router plus the
+  `doctor`, `skill`, `cancel`, and `agent-ops-review` operator skills OMH needs
+  to describe, diagnose, manage, and stop itself) plus the workflow skills a
+  messenger-first user needs for a first chat/plan/status/handoff session
+  (`plan` for planning and coding handoff, `gateway-intent-card` for chat
+  delivery/status-update policy, `executor-runtime-readiness` for handoff
+  readiness, and `ops-observability-card` for status questions). Everything
+  else in the catalog stays opt-in.
+- **`full`.** Installs every packaged skill (~89 skills, growing over time).
+  Pass `--full` to opt in:
+
+```sh
+omh setup --full
+omh install --full
+omh update --full
+```
+
+Every skill OMH installs is skill guidance that Hermes carries into its
+routing context on every turn, not just when that workflow is used. A `core`
+install keeps that per-turn context weight bounded to the essentials; a `full`
+install trades that weight for having every workflow's guidance available
+immediately, with no `full` -> `core` skill left unpresented. Choose `full`
+when a workspace already knows it will use the wider catalog (specialist
+review, research, or ops workflows beyond the messenger-first core); otherwise
+`core` is the smaller, faster default.
+
+Machine-readable install output makes this checkable: `install_skill_pack`
+always records `skill_profile` (`"core"` or `"full"`) in the install/setup
+result and in `~/.omh/manifest.json`, and a `full` install additionally
+includes a `context_cost_warning` (`omh_skill_profile_context_cost_warning/v1`)
+with the installed skill count, the core-profile skill count, and the extra
+skill count so a wrapper or CI check can flag an unintentional `full` install
+without parsing prose:
+
+```sh
+omh install --full --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["context_cost_warning"])'
+```
+
+A `core` install still passes `omh doctor` because the core profile installs
+a superset of the doctor health-floor skills; `--full` never removes skills
+that a later `--force` reinstall does not also write, so switching from
+`full` back to a default `core` install does not delete previously installed
+skill files on disk.
 
 Record the optional MCP bridge preference during setup:
 
