@@ -44,14 +44,14 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
 
         self.assertEqual(summary["schema_version"], "awesome_hermes_agent_coverage/v1")
         self.assertEqual(summary["source_repo"], SOURCE_REPO)
-        self.assertEqual(summary["source_commit"], "e1e6d7b42d54ffbddf3503e72cf25ff59451e2d1")
-        self.assertEqual(summary["item_count"], 188)
-        self.assertEqual(summary["plugin_count"], 26)
-        self.assertEqual(summary["status_counts"], {"covered": 1, "partial": 187})
+        self.assertEqual(summary["source_commit"], "67ac9d079bc9a2074084d4dbd537f7158b08f4eb")
+        self.assertEqual(summary["item_count"], 201)
+        self.assertEqual(summary["plugin_count"], 33)
+        self.assertEqual(summary["status_counts"], {"covered": 1, "partial": 200})
 
         coverage = awesome_hermes_coverage()
-        self.assertEqual(len({item.item.id for item in coverage}), 188)
-        self.assertEqual(sum(1 for item in coverage if item.item.subsection == PLUGIN_SUBSECTION), 26)
+        self.assertEqual(len({item.item.id for item in coverage}), 201)
+        self.assertEqual(sum(1 for item in coverage if item.item.subsection == PLUGIN_SUBSECTION), 33)
 
     def test_plugin_coverage_maps_high_value_gaps_to_existing_omh_surfaces(self) -> None:
         web_search = awesome_hermes_item("hermes-web-search-plus")
@@ -246,7 +246,6 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
             "hermes-genesis": ("domain_research_analysis", "research-department", "agent-evaluation"),
             "hermes-legal": ("domain_research_analysis", "security-safety-review", "data-analysis"),
             "mercury": ("domain_research_analysis", "data-analysis", "external-connector-readiness"),
-            "hermes-research-agent": ("research_agent_readiness", "research-department", "source-finder"),
             "hermes-agent-camel": ("safety_training_derivatives", "security-safety-review", "verification-gate"),
             "hermes-skill-distillation": ("safety_training_derivatives", "agent-evaluation", "workflow-learning"),
         }
@@ -295,11 +294,6 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         expectations = {
             "personal-api": ("knowledge_workspace_identity", "memory-curation-review", "wiki"),
             "humanizer-ru": ("copy_localization_quality", "content-operator", "verification-gate"),
-            "cognify-skills": (
-                "business_operations_skill_pack",
-                "external-connector-readiness",
-                "connector-operator",
-            ),
             "bmad-module-skill-forge": ("skill_forge_generation", "skill-scout", "prompt-import-readiness"),
             "ripley-xmr-gateway": (
                 "private_crypto_gateway",
@@ -311,7 +305,6 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
                 "gateway-intent-card",
                 "security-safety-review",
             ),
-            "hermes-edu-skills": ("education_skill_library", "research-department", "media-input-operator"),
             "hurmoz": ("localized_domain_skill_pack", "content-operator", "live-info-operator"),
             "pingpong": ("community_matching_reputation", "gateway-intent-card", "external-connector-readiness"),
             "wizards-of-the-ghosts": ("themed_dev_workflow_pack", "workflow-learning", "verification-gate"),
@@ -325,6 +318,48 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
                 self.assertIn(primary_surface, candidate.omh_surfaces)
                 self.assertIn(secondary_surface, candidate.omh_surfaces)
                 self.assertNotEqual(candidate.matched_rule_id, "default_skills_plugins")
+
+    def test_self_hosted_domain_application_candidates_route_to_review_surfaces(self) -> None:
+        for item_id in ("openinvest", "erpclaw"):
+            with self.subTest(item_id=item_id):
+                candidate = awesome_hermes_item(item_id)
+
+                self.assertEqual(candidate.status, "partial")
+                self.assertEqual(candidate.matched_rule_id, "self_hosted_domain_application")
+                self.assertIn("external-connector-readiness", candidate.omh_surfaces)
+                self.assertIn("security-safety-review", candidate.omh_surfaces)
+                self.assertNotEqual(candidate.matched_rule_id, "default_external_candidate")
+
+    def test_domain_rules_without_current_items_remain_reachable_via_terms(self) -> None:
+        # research_agent_readiness, business_operations_skill_pack, and education_skill_library
+        # no longer match any shipped catalog item after the 2026-07-17 upstream refresh removed
+        # hermes-research-agent, cognify-skills, and hermes-edu-skills. The rules are retained
+        # (removal is out of scope) and stay exercised through their matching terms.
+        expectations = {
+            "research_agent_readiness": (
+                "Autonomous LLM research agent for literature review, hypothesis generation, and experiment design.",
+                "research-department",
+                "source-finder",
+            ),
+            "business_operations_skill_pack": (
+                "Business operations skills covering CRM invoicing and project management.",
+                "external-connector-readiness",
+                "connector-operator",
+            ),
+            "education_skill_library": (
+                "Chinese K-12 education skills with textbook sync, exam prep, photo Q&A, and lesson planning.",
+                "research-department",
+                "media-input-operator",
+            ),
+        }
+        for rule_id, (summary, primary_surface, secondary_surface) in expectations.items():
+            with self.subTest(rule_id=rule_id):
+                candidate = coverage_for_item(_synthetic_item(item_id=f"synthetic-{rule_id}", summary=summary))
+
+                self.assertEqual(candidate.status, "partial")
+                self.assertEqual(candidate.matched_rule_id, rule_id)
+                self.assertIn(primary_surface, candidate.omh_surfaces)
+                self.assertIn(secondary_surface, candidate.omh_surfaces)
 
     def test_public_plugin_repo_items_have_specific_readiness_surfaces(self) -> None:
         expectations = {
@@ -477,7 +512,7 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         payload = awesome_hermes_coverage_payload(subsection=PLUGIN_SUBSECTION)
 
         self.assertEqual(payload["schema_version"], "awesome_hermes_agent_coverage/v1")
-        self.assertEqual(payload["item_count"], 26)
+        self.assertEqual(payload["item_count"], 33)
         items = payload["items"]
         self.assertIsInstance(items, list)
         self.assertTrue(items)
@@ -501,8 +536,8 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
         summary = json.loads(stdout)
-        self.assertEqual(summary["item_count"], 188)
-        self.assertEqual(summary["plugin_count"], 26)
+        self.assertEqual(summary["item_count"], 201)
+        self.assertEqual(summary["plugin_count"], 33)
 
         status, stdout, stderr = run_cli(
             ["ecosystem", "awesome-hermes", "list", "--subsection", PLUGIN_SUBSECTION, "--json"]
@@ -511,9 +546,9 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
         listing = json.loads(stdout)
-        self.assertEqual(listing["item_count"], 26)
-        self.assertEqual(listing["summary"]["item_count"], 26)
-        self.assertEqual(listing["catalog_summary"]["item_count"], 188)
+        self.assertEqual(listing["item_count"], 33)
+        self.assertEqual(listing["summary"]["item_count"], 33)
+        self.assertEqual(listing["catalog_summary"]["item_count"], 201)
         self.assertEqual(listing["items"][0]["subsection"], PLUGIN_SUBSECTION)
         self.assertIn("rule_set_version", listing["items"][0])
         self.assertIn("matched_rule_id", listing["items"][0])

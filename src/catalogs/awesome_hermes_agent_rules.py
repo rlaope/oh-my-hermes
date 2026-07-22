@@ -782,6 +782,26 @@ _RULES = (
         "OMH can prepare cost-aware external connector readiness and live-info routing gates; provider calls and domain results remain observed external evidence.",
         "domain_connectors",
     ),
+    CoverageRule(
+        (
+            "self hosted investment research",
+            "llm committee",
+            "self hosted erp core",
+            "erp core with accounting",
+            "agent action layer",
+        ),
+        "partial",
+        "medium",
+        (
+            "skill-scout",
+            "external-connector-readiness",
+            "toolbelt-readiness",
+            "security-safety-review",
+            "agent-evaluation",
+        ),
+        "OMH can review self-hosted domain applications that expose agentskills.io, MCP, or skill interfaces for connector scope, credential handling, data safety, and observed trial evidence; running the application, its accounting or investment output, and any agent action layer remain observed-only.",
+        "self_hosted_domain_application",
+    ),
 )
 
 
