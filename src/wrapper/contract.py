@@ -59,6 +59,9 @@ CONTEXT_PRIMER_SCHEMA_VERSION = "omh_context_primer/v1"
 USAGE_TRACE_SCHEMA_VERSION = "omh_usage_trace/v1"
 WORKFLOW_EXPLANATION_SCHEMA_VERSION = "omh_workflow_explanation/v1"
 MESSENGER_RENDERING_SCHEMA_VERSION = "omh_messenger_rendering/v1"
+DELIVERY_OBLIGATION_SCHEMA_VERSION = "wrapper_delivery_obligation/v1"
+DELIVERY_OBLIGATION_TRIGGERS = ("handoff_ci_pass", "loop_iteration_complete")
+DELIVERY_OBLIGATION_STATE = "prepared_not_delivered"
 RENDER_PROFILE_LIMITED_MARKDOWN = "limited_markdown"
 RENDER_PROFILE_RICH_MARKDOWN = "rich_markdown"
 RENDER_PROFILES = (RENDER_PROFILE_LIMITED_MARKDOWN, RENDER_PROFILE_RICH_MARKDOWN)
@@ -6808,6 +6811,76 @@ def messenger_rendering_contract(
         "body_preview": _short_text(body_text, limit=180),
         "claim_boundary": claim_boundary,
     }
+
+
+def build_wrapper_delivery_obligation(
+    *,
+    origin_thread_key: str,
+    trigger: str,
+    evidence_refs: object = None,
+    claim_boundary: str = "",
+) -> dict[str, object]:
+    """Build a prepared-not-delivered push/delivery obligation contract.
+
+    OMH has no live proactive/push path today: this contract only records that a
+    "tell me in the thread when it is done" obligation has been *prepared*, never
+    that OMH delivered a message. The obligation is pinned at
+    ``prepared_not_delivered`` and carries a
+    ``not_delivered_until_wrapper_observed`` marker, so no field can imply OMH
+    sent anything until a wrapper observes and records an actual delivery in a
+    future gated follow-up. The shape is executor-neutral (codex, claude-code,
+    and hermes produce an identical payload) and surface-neutral (valid for
+    discord, slack, and telegram origins).
+
+    Concept-aligned with the upstream v0.19.0 delivery-obligation ledger, but
+    named for OMH locally; no upstream wire field names are mirrored.
+    """
+    if trigger not in DELIVERY_OBLIGATION_TRIGGERS:
+        raise ValueError(f"unsupported delivery obligation trigger: {trigger!r}")
+    refs = _delivery_obligation_evidence_refs(evidence_refs)
+    boundary = claim_boundary.strip() or _default_delivery_obligation_claim_boundary()
+    return {
+        "schema_version": DELIVERY_OBLIGATION_SCHEMA_VERSION,
+        "origin_thread_key": str(origin_thread_key),
+        "trigger": trigger,
+        "obligation_state": DELIVERY_OBLIGATION_STATE,
+        "not_delivered_until_wrapper_observed": True,
+        "evidence_policy": "metadata_only",
+        "evidence_refs": refs,
+        "observed_evidence": _delivery_obligation_observed_evidence(trigger),
+        "not_evidence": [
+            "delivered message",
+            "thread reply sent",
+            "user notified",
+            "wrapper-observed delivery",
+        ],
+        "claim_boundary": boundary,
+    }
+
+
+def _delivery_obligation_evidence_refs(value: object) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    refs: list[str] = []
+    for item in value:
+        ref = _short_text(str(item).strip(), limit=180)
+        if ref and ref not in refs:
+            refs.append(ref)
+    return refs
+
+
+def _delivery_obligation_observed_evidence(trigger: str) -> list[str]:
+    if trigger == "handoff_ci_pass":
+        return ["handoff CI pass observed (metadata ref)"]
+    return ["loop iteration completion observed (metadata ref)"]
+
+
+def _default_delivery_obligation_claim_boundary() -> str:
+    return (
+        "A delivery obligation is prepared, not delivered: OMH has not sent any "
+        "message and delivery stays unobserved until a wrapper records an actual "
+        "delivery in the origin thread."
+    )
 
 
 def render_profile_for_source(source: str, source_metadata: dict[str, object] | None = None) -> str:

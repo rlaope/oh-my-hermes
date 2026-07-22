@@ -1,0 +1,93 @@
+{
+  "schema_version": "wrapper_delivery_obligation_golden_examples/v1",
+  "description": "Deterministic examples of the wrapper_delivery_obligation/v1 contract: a prepared-not-delivered push obligation (\"tell me in the thread when it is done\") across discord, slack, and telegram origins. OMH has no live proactive/push path; every obligation is pinned at prepared_not_delivered and nothing here implies OMH sent a message. Concept-aligned with the upstream v0.19.0 delivery-obligation ledger, named locally.",
+  "obligation_state_invariant": "prepared_not_delivered",
+  "no_live_trigger_wiring": true,
+  "future_trigger_hook_sites": {
+    "handoff_ci_pass": "src/runtime/artifacts.py:279 write_ci_record (ci_recorded event at src/runtime/artifacts.py:285); command caller src/commands/runtime.py:224",
+    "loop_iteration_complete": "src/workflows/goal_loop.py:556 record_loop_feedback (cycle appended at src/workflows/goal_loop.py:597); command caller src/commands/loop.py:137"
+  },
+  "scenarios": [
+    {
+      "scenario": "discord_push_obligation_ci_pass",
+      "source": "discord",
+      "trigger": "handoff_ci_pass",
+      "expected_obligation": {
+        "schema_version": "wrapper_delivery_obligation/v1",
+        "origin_thread_key": "discord:guild:chan:thread-1",
+        "trigger": "handoff_ci_pass",
+        "obligation_state": "prepared_not_delivered",
+        "not_delivered_until_wrapper_observed": true,
+        "evidence_policy": "metadata_only",
+        "evidence_refs": [
+          "ci_recorded:run-abc",
+          "status:passed"
+        ]
+      },
+      "claim_boundary": "A delivery obligation is prepared, not delivered: OMH has not sent any message and delivery stays unobserved until a wrapper records an actual delivery in the origin thread.",
+      "observed_evidence": [
+        "handoff CI pass observed (metadata ref)"
+      ],
+      "not_evidence": [
+        "delivered message",
+        "thread reply sent",
+        "user notified",
+        "wrapper-observed delivery"
+      ]
+    },
+    {
+      "scenario": "slack_push_obligation_loop_iteration",
+      "source": "slack",
+      "trigger": "loop_iteration_complete",
+      "expected_obligation": {
+        "schema_version": "wrapper_delivery_obligation/v1",
+        "origin_thread_key": "slack:team:chan:ts-1700000000.000100",
+        "trigger": "loop_iteration_complete",
+        "obligation_state": "prepared_not_delivered",
+        "not_delivered_until_wrapper_observed": true,
+        "evidence_policy": "metadata_only",
+        "evidence_refs": [
+          "loop:loop-xyz",
+          "cycle:cycle-7"
+        ]
+      },
+      "claim_boundary": "A delivery obligation is prepared, not delivered: OMH has not sent any message and delivery stays unobserved until a wrapper records an actual delivery in the origin thread.",
+      "observed_evidence": [
+        "loop iteration completion observed (metadata ref)"
+      ],
+      "not_evidence": [
+        "delivered message",
+        "thread reply sent",
+        "user notified",
+        "wrapper-observed delivery"
+      ]
+    },
+    {
+      "scenario": "telegram_push_obligation_ci_pass",
+      "source": "telegram",
+      "trigger": "handoff_ci_pass",
+      "expected_obligation": {
+        "schema_version": "wrapper_delivery_obligation/v1",
+        "origin_thread_key": "telegram:chat:-1001:thread-42",
+        "trigger": "handoff_ci_pass",
+        "obligation_state": "prepared_not_delivered",
+        "not_delivered_until_wrapper_observed": true,
+        "evidence_policy": "metadata_only",
+        "evidence_refs": [
+          "ci_recorded:run-def",
+          "status:passed"
+        ]
+      },
+      "claim_boundary": "A delivery obligation is prepared, not delivered: OMH has not sent any message and delivery stays unobserved until a wrapper records an actual delivery in the origin thread.",
+      "observed_evidence": [
+        "handoff CI pass observed (metadata ref)"
+      ],
+      "not_evidence": [
+        "delivered message",
+        "thread reply sent",
+        "user notified",
+        "wrapper-observed delivery"
+      ]
+    }
+  ]
+}
