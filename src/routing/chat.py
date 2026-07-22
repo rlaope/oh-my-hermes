@@ -32,6 +32,7 @@ from .policy import (
     is_ambiguous_scores,
     meets_confidence_threshold,
 )
+from .policy import _doctor_health_guard_applies
 from .recommend import recommendation_for_definition, recommend_skills
 from .route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from .task_cards import classify_task, task_card_recommendation
@@ -1779,7 +1780,13 @@ def _omh_help_fast_path_decision(
             wrapper_guidance="Render the OMH quickstart card with the smallest useful next action.",
             score=12,
         )
-    if is_omh_status_question(routing_message) and not _is_specific_capability_question_shape(routing_message):
+    if (
+        is_omh_status_question(routing_message)
+        and not _is_specific_capability_question_shape(routing_message)
+        and not _doctor_health_guard_applies(
+            normalized_phrase(routing_message), routing_tokens(normalized_phrase(routing_message))
+        )
+    ):
         return _router_help_decision(
             message,
             source=source,
@@ -2366,7 +2373,46 @@ def _agent_ops_status_fast_path_match(message: str) -> str | None:
     compact = re.sub(r"[\s\?\!\.,;:~…？]+", "", value.strip().lower())
     if compact in _AGENT_OPS_STATUS_FAST_PATH_COMPACT_PHRASES:
         return compact
+    if _agent_ops_status_freeform_match(value):
+        return "agent_ops_status_freeform"
     return None
+
+
+_AGENT_OPS_STATUS_FREEFORM_BLOCKERS = (
+    "만들",
+    "구현",
+    "짜줘",
+    "고쳐",
+    "리팩",
+    "연결",
+    "연동",
+    "readiness",
+    "build a",
+    "create a",
+    "write a",
+    "generate a",
+)
+_AGENT_OPS_STATUS_KO_ASKS = (
+    "상태",
+    "뭐해",
+    "뭐하",
+    "놀고있",
+    "노는",
+    "일하고있",
+    "진행",
+)
+
+
+def _agent_ops_status_freeform_match(value: str) -> bool:
+    lowered = re.sub(r"\s+", " ", value.strip().lower())
+    compact = re.sub(r"\s+", "", lowered)
+    if any(block in lowered for block in _AGENT_OPS_STATUS_FREEFORM_BLOCKERS):
+        return False
+    if "에이전트" in compact and any(ask in compact for ask in _AGENT_OPS_STATUS_KO_ASKS):
+        return True
+    has_status = any(marker in lowered for marker in ("still running", "quick status", "status update"))
+    has_context = any(marker in lowered for marker in ("your side", "on your", "anything", "you doing", "agent"))
+    return has_status and has_context
 
 
 _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
@@ -5201,6 +5247,8 @@ def _is_plain_direct_answer_question(message: str, *, candidate_score: int) -> b
         return True
     if _is_plain_conversational_turn(direct_text):
         return True
+    if _is_plain_simple_answerable_request(text, direct_text):
+        return True
     if _is_direct_answer_concept_question(text, direct_text):
         return True
     if _is_plain_text_transform_question(text, direct_text):
@@ -5222,6 +5270,8 @@ def _is_fast_plain_direct_answer_question(message: str) -> bool:
     if _is_plain_setup_how_to_question(direct_text):
         return True
     if _is_plain_conversational_turn(direct_text):
+        return True
+    if _is_plain_simple_answerable_request(text, direct_text):
         return True
     if _is_direct_answer_concept_question(text, direct_text):
         return True
@@ -5262,7 +5312,76 @@ def _is_plain_setup_how_to_question(text: str) -> bool:
 
 def _is_plain_conversational_turn(text: str) -> bool:
     compact = text.strip(" \t\r\n.!?。！？")
-    return compact in _DIRECT_ANSWER_ACKNOWLEDGEMENTS or text in _DIRECT_ANSWER_CONTEXT_QUESTIONS
+    if compact in _DIRECT_ANSWER_ACKNOWLEDGEMENTS or text in _DIRECT_ANSWER_CONTEXT_QUESTIONS:
+        return True
+    return _is_short_thanks_acknowledgement(text)
+
+
+_SHORT_THANKS_TOKENS = ("고마워", "감사", "thanks", "thank you", "땡큐")
+_SHORT_THANKS_REQUEST_BLOCKERS = (
+    "해줘",
+    "해주",
+    "부탁",
+    "please",
+    "알려",
+    "만들",
+    "고쳐",
+    "번역",
+    "확인",
+    "봐줘",
+    "돌려",
+    "해봐",
+)
+
+
+def _is_short_thanks_acknowledgement(text: str) -> bool:
+    normalized = text.strip()
+    if "?" in normalized or "？" in normalized:
+        return False
+    compact = normalized.strip(" \t\r\n.!?。！？")
+    if len(compact) > 15:
+        return False
+    if not any(token in normalized for token in _SHORT_THANKS_TOKENS):
+        return False
+    if any(verb in normalized for verb in _SHORT_THANKS_REQUEST_BLOCKERS):
+        return False
+    return True
+
+
+_DIRECT_ANSWER_REGEX_STARTERS = (
+    "write a regex",
+    "write a regular expression",
+    "write me a regex",
+    "give me a regex",
+    "정규식 짜",
+    "정규식 작성",
+    "정규표현식 짜",
+    "정규표현식 작성",
+)
+_DIRECT_ANSWER_TIME_MARKERS = (
+    "몇시",
+    "몇 시",
+    "what time is it",
+    "현재 시간",
+    "현재 시각",
+    "지금 시간",
+    "지금 시각",
+)
+
+
+def _is_plain_regex_snippet_request(direct_text: str) -> bool:
+    return any(direct_text.startswith(starter) for starter in _DIRECT_ANSWER_REGEX_STARTERS)
+
+
+def _is_plain_time_question(text: str) -> bool:
+    compact = text.strip()
+    if len(compact) > 20:
+        return False
+    return any(marker in compact for marker in _DIRECT_ANSWER_TIME_MARKERS)
+
+
+def _is_plain_simple_answerable_request(text: str, direct_text: str) -> bool:
+    return _is_plain_regex_snippet_request(direct_text) or _is_plain_time_question(text)
 
 
 def _is_plain_error_or_log_help_question(text: str, direct_text: str) -> bool:
@@ -5290,7 +5409,18 @@ def _is_plain_text_transform_question(text: str, direct_text: str) -> bool:
         return True
     if any(subject in direct_text for subject in _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_SUBJECTS):
         return any(action in direct_text for action in _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_ACTIONS)
+    if _contains_quoted_segment(text) and any(
+        action in direct_text for action in _DIRECT_ANSWER_KOREAN_TEXT_TRANSFORM_ACTIONS
+    ):
+        return True
     return False
+
+
+_QUOTED_SEGMENT_RE = re.compile(r"['\"“”‘’`]([^'\"“”‘’`]{2,})['\"“”‘’`]")
+
+
+def _contains_quoted_segment(text: str) -> bool:
+    return bool(_QUOTED_SEGMENT_RE.search(text))
 
 
 def _is_single_word_translation_request(direct_text: str) -> bool:
