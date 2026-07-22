@@ -306,7 +306,7 @@ def omh_reinforcement() -> list[ReinforcementSurface]:
                 "isolated subagents, branch sessions, coding executor handoffs, delegate_task background "
                 "subagents, kanban.db durable multi-agent board (worktree-per-task, per-task model overrides)"
             ),
-            "omh_commands": ["omh runtime team-readiness", "omh coding delegate", "omh worktree prepare"],
+            "omh_commands": ["omh runtime team-readiness", "omh coding delegate", "omh worktree bind"],
             "mapping_state": "mapped",
             "claim_boundary": boundary,
         },

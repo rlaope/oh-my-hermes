@@ -595,10 +595,11 @@ surface for that axis; live runtime actions still need separate observed
 evidence. The worktree row includes
 `worktree_session_isolation/v1` wrapper guidance when coding handoffs need same
 workspace, recommended worktree, or required worktree status before opening a
-coding agent. If a wrapper or operator chooses the explicit backend action,
-`omh worktree prepare` can create the local Git worktree and record
-`omh_worktree_observation/v1`; that still proves workspace isolation only, not
-executor dispatch or implementation.
+coding agent. Worktree creation is deferred to native tooling — upstream Hermes
+manages worktrees (Kanban worktree-per-task since v0.15.0, Desktop Projects
+since v0.18.0) or you run `git worktree add` — and OMH records
+`omh_worktree_observation/v1` for the resulting worktree; that still proves
+workspace isolation only, not executor dispatch or implementation.
 
 Use `omh probe --roadmap` when the question is "what should I do next?" rather
 than "what does OMH support?" It returns
@@ -989,8 +990,9 @@ Before calling the bot integration ready, verify these points:
 - Coding handoffs include `worktree_session_isolation/v1` so wrappers can show
   Prepare worktree before opening an executor when risk or parallelism calls for
   isolation. The plan remains `prepared_not_observed` until a wrapper invokes
-  or observes the workspace action. `omh worktree prepare --repo <repo> --task
-  "<task>"` is the explicit local backend action for creating the Git worktree;
+  or observes the workspace action. Worktree creation is deferred to native
+  Hermes tooling (Kanban worktree-per-task, Desktop Projects) or a manual `git
+  worktree add`; once the worktree exists,
   `omh worktree bind --path <worktree> --executor codex --session <session-id>`
   returns the safe wrapper recipe for opening or attaching the selected coding
   agent from that worktree. Linked runtime ladders still require separate

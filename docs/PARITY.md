@@ -43,7 +43,7 @@ implementation or claim runtime behavior it did not observe.
 | Specialist role/profile system | Available | Skill catalog metadata, operating models, optional visible profile packs, wrapper role narration, plugin `omh_role`, and `[omh-role:name]` context injection. | Observed role execution still requires wrapper or runtime evidence; role context is not a hidden live agent. |
 | Bounded evidence probe | Available | Plugin `omh_gather_evidence` runs shell-free allowlisted local probes such as doctor, harness validation, docs checks, unittest, compileall, and whitespace checks. | It is not a general shell, executor dispatch, PR review, CI, merge, or live Hermes plugin-load signal. |
 | Team, swarm, and worker protocol | Available | `team`, `ultrawork`, `omh runtime team-readiness`, runtime handoff payloads, worker-protocol guidance, wrapper sessions, and runtime observations. | Live worker launch and pane/session management still require the selected host runtime to act and record observations. |
-| Worktree and project-session isolation | Available | `worktree_session_isolation/v1` plans in coding handoffs, wrapper Prepare worktree actions, `omh worktree prepare/list/bind`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation. | OMH creates local Git worktrees only through the explicit opt-in backend command; binding recipes show how wrappers can open or attach host sessions but do not auto-launch executors or claim runtime evidence. |
+| Worktree and project-session isolation | Available | `worktree_session_isolation/v1` plans in coding handoffs, wrapper Prepare worktree actions, `omh worktree list/bind`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation. | OMH defers worktree creation to native Hermes tooling (Kanban worktree-per-task v0.15.0, Desktop Projects v0.18.0) or manual `git worktree add`; it observes the resulting worktree, and binding recipes show how wrappers can open or attach host sessions but do not auto-launch executors or claim runtime evidence. |
 | HUD, status, and session observability | Available | `omh hud`, plugin `omh_interact`/`omh_recommend`/`omh_probe`/`omh_hud`/`omh_status`, wrapper sessions, runtime runs, roadmap cards, and status cards. | Live host HUD rendering depends on Hermes/plugin support; plugin chat/session output is metadata/status, not execution evidence. |
 | MCP and tool bridge | Available | `omh setup --with-mcp --mcp-host ...`, `omh mcp manifest`, `omh mcp config-recipe`, `omh mcp serve`, `omh mcp observe-host`, and `omh probe` preference/server/runtime/host-session/host-config separation. | OMH can write supported local host config entries, but it does not independently inspect live host sessions; the host or wrapper must record load/session evidence. |
 | Loop and autopilot workflow | Available | `loop`, `ultraprocess`, `ralplan`, `ultragoal`, loop queue ticks, verification tiers, and failure-mode cards. | Scheduling, connector I/O, worktree creation, and subagent execution remain prepared or delegated until observed. |
@@ -70,11 +70,12 @@ implementation or claim runtime behavior it did not observe.
 - `worktree_session_isolation/v1`, which gives coding handoffs and wrapper
   status cards a concrete same-workspace/worktree-recommended/worktree-required
   contract before any executor is opened.
-- `omh worktree prepare` and `omh worktree list`, which let wrappers or
-  operators explicitly create a local Git worktree and record
-  `omh_worktree_observation/v1` workspace-isolation evidence. That evidence is
-  still not executor dispatch, implementation, review, CI, merge-readiness, or
-  merge evidence.
+- `omh worktree list`, which lets wrappers or operators read the
+  `omh_worktree_observation/v1` workspace-isolation evidence recorded for a
+  worktree that native Hermes tooling (Kanban worktree-per-task, Desktop
+  Projects) or a manual `git worktree add` created. That evidence is still not
+  executor dispatch, implementation, review, CI, merge-readiness, or merge
+  evidence.
 - `omh worktree bind`, which returns `worktree_executor_binding/v1` so wrappers
   can render Open in Codex, Open in Claude Code, Attach session, and runtime
   observation record actions for a prepared worktree without launching the

@@ -1,144 +1,97 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from _cli_harness import run_cli
 
+from omh.commands.main import build_parser
+from omh.paths import expand_path, resolve_paths
+from omh.coding.worktree_creator import _append_worktree_record, _observation_record
 
-class WorktreeCreatorTests(unittest.TestCase):
-    def test_worktree_prepare_dry_run_does_not_create_path(self) -> None:
+
+def _seed_observed_worktree(home: Path, target: Path, *, branch: str = "omh/seeded") -> None:
+    """Record an observed worktree in the local ledger without OMH creating it.
+
+    Worktree creation is deferred to native Hermes/Git tooling; tests seed the
+    observation ledger directly through the retained observation helpers so the
+    binding and listing surfaces have observed evidence to read.
+    """
+
+    target.mkdir(parents=True, exist_ok=True)
+    resolved = str(expand_path(target))
+    record = _observation_record(
+        {
+            "status": "created",
+            "observed": True,
+            "created": True,
+            "repo_root": str(expand_path(home)),
+            "branch": branch,
+            "worktree_path": resolved,
+            "from_ref": "HEAD",
+            "evidence_refs": [f"git-worktree:{resolved}", f"git-branch:{branch}"],
+        }
+    )
+    _append_worktree_record(resolve_paths(str(home)), record)
+
+
+class WorktreeParserTests(unittest.TestCase):
+    def test_worktree_prepare_subcommand_is_absent(self) -> None:
+        parser = build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["worktree", "prepare", "--repo", "."])
+
+    def test_worktree_list_and_bind_subcommands_remain(self) -> None:
+        parser = build_parser()
+        list_args = parser.parse_args(["worktree", "list"])
+        self.assertEqual(list_args.worktree_command, "list")
+        bind_args = parser.parse_args(
+            ["worktree", "bind", "--path", ".worktrees/x", "--executor", "codex"]
+        )
+        self.assertEqual(bind_args.worktree_command, "bind")
+
+    def test_prepare_git_worktree_is_not_importable(self) -> None:
+        import omh.worktree_creator as worktree_creator
+
+        self.assertFalse(hasattr(worktree_creator, "prepare_git_worktree"))
+
+    def test_no_source_module_imports_prepare_git_worktree(self) -> None:
+        src_root = Path(__file__).resolve().parents[1] / "src"
+        offenders = [
+            str(path.relative_to(src_root))
+            for path in src_root.rglob("*.py")
+            if "prepare_git_worktree" in path.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(offenders, [])
+
+
+class WorktreeObservationTests(unittest.TestCase):
+    def test_worktree_list_returns_observed_records(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            repo = _init_repo(root / "repo")
-            target = root / "worktrees" / "dry"
-
-            status, stdout, stderr = run_cli(
-                [
-                    "--omh-home",
-                    str(root / ".omh"),
-                    "worktree",
-                    "prepare",
-                    "--repo",
-                    str(repo),
-                    "--task",
-                    "risky refactor",
-                    "--path",
-                    str(target),
-                    "--dry-run",
-                ]
-            )
-
-            self.assertEqual(stderr, "")
-            self.assertEqual(status, 0)
-            payload = json.loads(stdout)["worktree"]
-            self.assertEqual(payload["schema_version"], "omh_worktree_prepare/v1")
-            self.assertEqual(payload["status"], "dry_run")
-            self.assertFalse(payload["observed"])
-            self.assertFalse(target.exists())
-            self.assertIn("git", payload["command"][0])
-            self.assertEqual(payload["runtime_observation_followup"]["event_type"], "worktree_creation")
-
-    def test_worktree_prepare_creates_git_worktree_and_records_ledger(self) -> None:
-        with TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            repo = _init_repo(root / "repo")
-            target = root / "worktrees" / "risky"
             home = root / ".omh"
-
-            status, stdout, stderr = run_cli(
-                [
-                    "--omh-home",
-                    str(home),
-                    "worktree",
-                    "prepare",
-                    "--repo",
-                    str(repo),
-                    "--task",
-                    "risky refactor",
-                    "--branch",
-                    "omh/risky-refactor-test",
-                    "--path",
-                    str(target),
-                ]
-            )
-
-            self.assertEqual(stderr, "")
-            self.assertEqual(status, 0, stdout)
-            payload = json.loads(stdout)["worktree"]
-            self.assertEqual(payload["status"], "created")
-            self.assertTrue(payload["observed"])
-            self.assertTrue(payload["created"])
-            self.assertTrue((target / ".git").exists() or (target / ".git").is_file())
-            self.assertIn(f"git-worktree:{target.resolve()}", payload["evidence_refs"])
-            self.assertIn("not executor dispatch", payload["claim_boundary"])
-            self.assertIn("omh runtime observe", payload["runtime_observation_followup"]["record_with"])
-            worktree_list = _git(repo, "worktree", "list", "--porcelain")
-            self.assertIn(str(target), worktree_list.stdout)
+            target = root / "worktrees" / "listed"
+            _seed_observed_worktree(home, target)
 
             status, stdout, stderr = run_cli(["--omh-home", str(home), "worktree", "list", "--limit", "1"])
+
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
-            records = json.loads(stdout)["records"]
+            payload = json.loads(stdout)
+            self.assertEqual(payload["schema_version"], "omh_worktree_observations/v1")
+            records = payload["records"]
             self.assertEqual(records[0]["schema_version"], "omh_worktree_observation/v1")
             self.assertTrue(records[0]["created"])
-
-    def test_worktree_prepare_blocks_dirty_source_by_default(self) -> None:
-        with TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            repo = _init_repo(root / "repo")
-            (repo / "dirty.txt").write_text("dirty\n", encoding="utf-8")
-
-            status, stdout, stderr = run_cli(
-                [
-                    "--omh-home",
-                    str(root / ".omh"),
-                    "worktree",
-                    "prepare",
-                    "--repo",
-                    str(repo),
-                    "--task",
-                    "risky refactor",
-                    "--path",
-                    str(root / "worktrees" / "blocked"),
-                ]
-            )
-
-            self.assertEqual(stderr, "")
-            self.assertEqual(status, 1)
-            payload = json.loads(stdout)["worktree"]
-            self.assertEqual(payload["status"], "blocked")
-            self.assertEqual(payload["reason"], "source_dirty")
-            self.assertFalse(payload["created"])
+            self.assertEqual(records[0]["worktree_path"], str(target.resolve()))
 
     def test_worktree_bind_builds_codex_launch_recipe_for_observed_worktree(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            repo = _init_repo(root / "repo")
-            target = root / "worktrees" / "codex-bind"
             home = root / ".omh"
-
-            prepare_status, _, prepare_stderr = run_cli(
-                [
-                    "--omh-home",
-                    str(home),
-                    "worktree",
-                    "prepare",
-                    "--repo",
-                    str(repo),
-                    "--task",
-                    "codex binding",
-                    "--branch",
-                    "omh/codex-binding-test",
-                    "--path",
-                    str(target),
-                ]
-            )
-            self.assertEqual(prepare_stderr, "")
-            self.assertEqual(prepare_status, 0)
+            target = root / "worktrees" / "codex-bind"
+            _seed_observed_worktree(home, target, branch="omh/codex-binding-test")
 
             status, stdout, stderr = run_cli(
                 [
@@ -207,33 +160,15 @@ class WorktreeCreatorTests(unittest.TestCase):
             self.assertFalse(payload["worktree"]["exists"])
             self.assertFalse(payload["wrapper_actions"][0]["enabled"])
             self.assertEqual(payload["next_action"], "prepare_worktree_before_opening_executor")
+            self.assertIn("git worktree add", payload["wrapper_actions"][0]["disabled_reason"])
             self.assertIn("not proof of execution", payload["launch"]["claim_boundary"])
 
     def test_worktree_bind_runtime_profile_adds_runtime_observation_recipe(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            repo = _init_repo(root / "repo")
-            target = root / "worktrees" / "runtime-bind"
             home = root / ".omh"
-
-            prepare_status, _, prepare_stderr = run_cli(
-                [
-                    "--omh-home",
-                    str(home),
-                    "worktree",
-                    "prepare",
-                    "--repo",
-                    str(repo),
-                    "--task",
-                    "runtime binding",
-                    "--branch",
-                    "omh/runtime-binding-test",
-                    "--path",
-                    str(target),
-                ]
-            )
-            self.assertEqual(prepare_stderr, "")
-            self.assertEqual(prepare_status, 0)
+            target = root / "worktrees" / "runtime-bind"
+            _seed_observed_worktree(home, target, branch="omh/runtime-binding-test")
 
             status, stdout, stderr = run_cli(
                 [
@@ -261,28 +196,6 @@ class WorktreeCreatorTests(unittest.TestCase):
             self.assertIn("omh runtime observe --session session-3", actions["record_worktree_runtime_observation"]["backend_command"])
             self.assertIn("--event worktree_creation", actions["record_worktree_runtime_observation"]["backend_command"])
             self.assertIn("prompt_only", str(payload["launch"]["resolved_command_templates"]))
-
-
-def _init_repo(path: Path) -> Path:
-    path.mkdir(parents=True)
-    _git(path, "init")
-    (path / "README.md").write_text("# temp\n", encoding="utf-8")
-    _git(path, "add", "README.md")
-    _git(path, "-c", "user.name=OMH Test", "-c", "user.email=omh@example.com", "commit", "-m", "init")
-    return path
-
-
-def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(
-        ["git", "-C", str(cwd), *args],
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if completed.returncode != 0:
-        raise AssertionError(completed.stderr or completed.stdout)
-    return completed
 
 
 if __name__ == "__main__":

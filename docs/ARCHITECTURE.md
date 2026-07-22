@@ -471,9 +471,12 @@ worktrees were started. All coding handoff modes also include
 `worktree_session_isolation/v1`, which tells wrappers whether the current
 workspace is acceptable, an isolated worktree is recommended, or an isolated
 worktree is required before opening an executor. That record stores a compact
-snapshot of the generated workspace policy. When a wrapper or operator chooses
-the explicit workspace action, `omh worktree prepare` creates a local Git
-worktree and records `omh_worktree_observation/v1`; that observation is
+snapshot of the generated workspace policy. Worktree creation itself is deferred
+to native tooling — upstream Hermes manages worktrees for you (Kanban
+worktree-per-task since v0.15.0, Desktop Projects since v0.18.0), or you can run
+`git worktree add` manually — so OMH no longer creates worktrees and cannot
+collide with the one Hermes is already managing for a task. When a worktree
+exists, OMH records `omh_worktree_observation/v1`; that observation is
 workspace-isolation evidence only. `omh worktree bind` can then return a
 wrapper recipe for opening or attaching Codex, Claude Code, Hermes, or another
 runtime from that worktree; the recipe is still not executor dispatch or result
@@ -610,10 +613,10 @@ through `omh runtime team-readiness`: OMH can show the worker protocol, runtime
 templates, wrapper actions, installed skill visibility, and observed
 `runtime_observation/v1` ledger status. That readiness is still not worker
 launch, pane/session creation, worker result, review, CI, or merge evidence.
-Worktree isolation is available only for the explicit
-`omh worktree prepare/list/bind` backend and its local
-`omh_worktree_observation/v1` ledger plus wrapper binding recipes; it does not
-auto-launch an executor. MCP host load and plugin runtime events likewise
+Worktree isolation is observation-only: the `omh worktree list/bind` backend
+reads its local `omh_worktree_observation/v1` ledger and returns wrapper binding
+recipes for a worktree that native Hermes/Git tooling created; it neither
+creates worktrees nor auto-launches an executor. MCP host load and plugin runtime events likewise
 belong to Hermes, the selected executor, or another observed integration until
 the matching ledger records exist.
 

@@ -202,7 +202,8 @@ def _binding_actions(
     preferred_command_template_id: str,
 ) -> list[dict[str, Any]]:
     disabled_reason = (
-        "Worktree path is missing; run omh worktree prepare first."
+        "Worktree path is missing; prepare it with your native tooling "
+        "(Hermes Kanban worktree-per-task, Desktop Projects, or `git worktree add`) first."
         if status == "blocked_missing_worktree"
         else ""
     )

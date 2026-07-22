@@ -175,7 +175,7 @@ from .visual import _add_visual_commands, cmd_visual_observe, cmd_visual_prompt_
 from .adapter_quality import _add_adapter_quality_commands
 from .quality_evidence import _add_quality_evidence_commands
 from .web_qa import _add_web_qa_commands, cmd_web_qa_observe_capture, cmd_web_qa_package, cmd_web_qa_record_verdict
-from .worktree import cmd_worktree_bind, cmd_worktree_list, cmd_worktree_prepare, _add_worktree_commands
+from .worktree import cmd_worktree_bind, cmd_worktree_list, _add_worktree_commands
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -221,7 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  omh materials list\n"
             "  omh img-summary prompt-card --kind github_pr --visual-format auto --section summary:What_changed:Safer_setup_copy\n"
             "  omh img-summary prompt-card --kind report --aspect-ratio long_scroll --section summary:Executive_summary:Weekly_metrics_changed\n"
-            "  omh worktree prepare --repo . --task \"risky refactor\" --dry-run\n"
+            "  omh worktree list\n"
             "  omh worktree bind --path .worktrees/risky-refactor --executor codex --session <session-id>\n"
             "  omh runtime status\n"
             "  omh runtime team-readiness\n\n"
@@ -340,7 +340,7 @@ Useful operator commands:
   omh ops list           List local operations artifacts
   omh materials list     List material-processing artifacts
   omh img-summary prompt-card Prepare image-generation-ready summary cards
-  omh worktree prepare --repo . --task "risky refactor" --dry-run
+  omh worktree list      List observed worktree isolation records
   omh worktree bind --path .worktrees/risky-refactor --executor codex --session <session-id>
   omh runtime status     Show local evidence artifacts
 
