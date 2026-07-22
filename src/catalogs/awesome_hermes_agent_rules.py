@@ -391,7 +391,7 @@ _RULES = (
         "partial",
         "high",
         ("team", "ultragoal", "ultrawork", "agent-board", "harness-session-inventory"),
-        "OMH covers planning, handoff, board, and evidence boundaries, but does not import external worker runtimes.",
+        "OMH defers multi-agent orchestration to native Kanban (v0.13.x durable board; v0.15.0 orchestrator auto-decomposition, swarm topology, worktree-per-task, per-task model overrides) and delegate_task (v0.18.0 background fan-out; v0.19.0 live subagent transcripts), while OMH supplies prepared handoffs and observed evidence around them.",
         "dynamic_orchestration",
     ),
     CoverageRule(
