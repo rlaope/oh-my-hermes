@@ -2742,7 +2742,7 @@ _OPERATOR_SURFACE_FAST_PATH_RULES: tuple[tuple[str, tuple[str, ...], str, str], 
         "Clear PR/CI event request; prepare GitHub event ops without scoring every workflow.",
     ),
     (
-        "memory-curation-review",
+        "memory-sync",
         (
             "hermes remembers incorrectly",
             "hermes remembered incorrectly",
@@ -3678,7 +3678,7 @@ def _operator_surface_extra_markers(skill: str, phrase: str) -> tuple[str, ...]:
         return ("guard:doctor_health", "guard_fast_path:doctor_health_before_skill_catalog")
     if skill == "github-event-ops":
         return ("guard:github_event_ops",)
-    if skill == "memory-curation-review":
+    if skill == "memory-sync":
         return ("guard:memory_curation", "guard_fast_path:memory_curation_before_generic_clarification")
     if skill == "executor-runtime-readiness":
         return ("guard:executor_runtime_readiness",)

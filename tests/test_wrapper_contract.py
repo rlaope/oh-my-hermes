@@ -833,12 +833,12 @@ class WrapperContractTests(unittest.TestCase):
         card = payload["learning_candidate_card"]
 
         self.assertEqual(payload["mode"], "route")
-        self.assertEqual(payload["next_action"], "prepare_memory_curation_review")
+        self.assertEqual(payload["next_action"], "prepare_memory_sync")
         self.assertEqual(response["kind"], "learning_candidate")
         self.assertEqual(card["persistence_target"], "memory_candidate")
         self.assertNotIn("learn_prompt", card)
         self.assertNotIn("copy_learn_prompt", actions)
-        self.assertIn("prepare_memory_curation_review", actions)
+        self.assertIn("prepare_memory_sync", actions)
         self.assertIn("memory curation review", response["body"])
 
     def test_learning_candidate_scope_does_not_treat_agent_ref_as_executor_runtime(self) -> None:
@@ -1323,11 +1323,11 @@ class WrapperContractTests(unittest.TestCase):
             ),
             (
                 "Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘",
-                "memory-curation-review",
+                "memory-sync",
                 "memory_curation",
                 "I can review memory and context before anything is changed.",
                 "approved memory write",
-                "prepare_memory_curation_review",
+                "prepare_memory_sync",
             ),
             (
                 "route Discord Slack Telegram threads with delivery policy",
@@ -1479,7 +1479,7 @@ class WrapperContractTests(unittest.TestCase):
                     self.assertFalse(actions["prepare_coding_handoff"]["enabled"])
                 if workflow == "research-department":
                     self.assertTrue(actions["run_hermes_research"]["enabled"])
-                if workflow == "memory-curation-review":
+                if workflow == "memory-sync":
                     self.assertTrue(actions["show_memory_status"]["enabled"])
                 if workflow in {"gateway-intent-card", "toolbelt-readiness", "automation-blueprint"}:
                     self.assertIn("prepare_toolbelt_readiness", actions)
@@ -2392,7 +2392,7 @@ class WrapperContractTests(unittest.TestCase):
         cases = (
             ("does OMH support scheduled automation?", "automation-blueprint", "prepare_scheduled_ops_blueprint"),
             ("can OMH help with MCP setup?", "toolbelt-readiness", "prepare_toolbelt_readiness"),
-            ("does OMH support memory cleanup?", "memory-curation-review", "prepare_memory_curation_review"),
+            ("does OMH support memory cleanup?", "memory-sync", "prepare_memory_sync"),
             ("does OMH support voice commands?", "voice-operator", "prepare_voice_operator_card"),
             ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops", "prepare_github_event_ops_card"),
             ("what can OMH do for research brief?", "research-brief", "run_hermes_research"),
@@ -2414,7 +2414,7 @@ class WrapperContractTests(unittest.TestCase):
                 actions = payload["chat_response"]["actions"]
                 action_ids = [str(action["id"]) for action in actions]
                 self.assertEqual(action_ids[0], next_action)
-                self.assertIn("show_status" if selected_workflow != "memory-curation-review" else "show_memory_status", action_ids)
+                self.assertIn("show_status" if selected_workflow != "memory-sync" else "show_memory_status", action_ids)
                 self.assertEqual(actions[0]["style"], "primary")
                 self.assertEqual(
                     payload["chat_response"]["state"]["workflow_explanation"]["selected_workflow"],
@@ -2455,8 +2455,8 @@ class WrapperContractTests(unittest.TestCase):
             ),
             (
                 "Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘",
-                "memory-curation-review",
-                "prepare_memory_curation_review",
+                "memory-sync",
+                "prepare_memory_sync",
                 "memory_curation",
             ),
             (
@@ -2548,8 +2548,8 @@ class WrapperContractTests(unittest.TestCase):
             ),
             (
                 "does OMH support memory cleanup?",
-                "memory-curation-review",
-                "prepare_memory_curation_review",
+                "memory-sync",
+                "prepare_memory_sync",
                 "approve/reject/update",
                 "memory_curation",
             ),

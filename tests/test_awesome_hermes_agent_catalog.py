@@ -292,7 +292,7 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
 
     def test_remaining_popular_skill_candidates_gain_domain_surfaces(self) -> None:
         expectations = {
-            "personal-api": ("knowledge_workspace_identity", "memory-curation-review", "wiki"),
+            "personal-api": ("knowledge_workspace_identity", "memory-sync", "wiki"),
             "humanizer-ru": ("copy_localization_quality", "content-operator", "verification-gate"),
             "bmad-module-skill-forge": ("skill_forge_generation", "skill-scout", "prompt-import-readiness"),
             "ripley-xmr-gateway": (
@@ -380,7 +380,7 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
             ),
             "yantrikdb-hermes-plugin": (
                 "public_memory_provider_plugin",
-                "memory-curation-review",
+                "memory-sync",
                 "external-connector-readiness",
             ),
         }
@@ -405,25 +405,25 @@ class AwesomeHermesAgentCatalogTests(unittest.TestCase):
             "remnic": (
                 "Remnic Hermes plugin provides scoped memory with provenance, retrieval quality, corrections, and boundaries.",
                 "public_memory_provider_plugin",
-                "memory-curation-review",
+                "memory-sync",
                 "security-safety-review",
             ),
             "scope-recall-hermes": (
                 "Scope-aware recall Hermes memory plugin/provider with SQLite truth and LanceDB semantic search.",
                 "public_memory_provider_plugin",
-                "memory-curation-review",
+                "memory-sync",
                 "external-connector-readiness",
             ),
             "scope-recall": (
                 "Scope Recall Hermes memory plugin/provider with SQLite truth and LanceDB semantic search.",
                 "public_memory_provider_plugin",
-                "memory-curation-review",
+                "memory-sync",
                 "external-connector-readiness",
             ),
             "mem9-hermes-plugin": (
                 "Mem9 Hermes memory plugin provider for reviewed recall and external backend readiness.",
                 "public_memory_provider_plugin",
-                "memory-curation-review",
+                "memory-sync",
                 "external-connector-readiness",
             ),
             "hermes-brave-search-plugin": (

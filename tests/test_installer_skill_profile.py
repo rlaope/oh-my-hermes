@@ -11,8 +11,11 @@ from _local_package import load_local_package
 load_local_package()
 
 from _cli_harness import run_cli
+from omh.core.errors import OmhError
+from omh.hashutil import sha256_file
 from omh.installer import install_skill_pack
 from omh.maintenance.doctor import run_doctor
+from omh.manifest import read_manifest, write_manifest
 from omh.paths import resolve_paths
 from omh.skill_pack import CORE_PROFILE_SKILLS, CORE_SKILLS, builtin_skill_templates
 
@@ -98,6 +101,82 @@ class InstallerSkillProfileTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             payload = json.loads(stdout)
             self.assertTrue(payload["ok"])
+
+    def test_installer_prunes_orphaned_managed_skill(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths)
+
+            # Simulate a managed skill that the catalog no longer ships: write a
+            # dir + record it in the manifest with a matching (unmodified) sha.
+            orphan_dir = paths.skills_dir / "legacy-orphan-skill"
+            orphan_file = orphan_dir / "SKILL.md"
+            orphan_dir.mkdir(parents=True, exist_ok=True)
+            orphan_file.write_text("# legacy orphan skill\n", encoding="utf-8")
+
+            manifest = read_manifest(paths.manifest_path)
+            assert manifest is not None
+            manifest["skills"].append(
+                {
+                    "name": "legacy-orphan-skill",
+                    "path": "legacy-orphan-skill/SKILL.md",
+                    "sha256": sha256_file(orphan_file),
+                    "source": "builtin",
+                }
+            )
+            write_manifest(paths.manifest_path, manifest)
+
+            result = install_skill_pack(paths)
+            self.assertIn("legacy-orphan-skill", result["pruned_skills"])
+            self.assertFalse(orphan_dir.exists())
+
+    def test_installer_preserves_modified_orphan_without_force(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths)
+
+            orphan_dir = paths.skills_dir / "legacy-orphan-skill"
+            orphan_file = orphan_dir / "SKILL.md"
+            orphan_dir.mkdir(parents=True, exist_ok=True)
+            orphan_file.write_text("# user-edited legacy orphan\n", encoding="utf-8")
+
+            manifest = read_manifest(paths.manifest_path)
+            assert manifest is not None
+            # Record a sha that does NOT match the on-disk file, marking it as a
+            # user-modified orphan. Without --force the installer refuses to touch it.
+            manifest["skills"].append(
+                {
+                    "name": "legacy-orphan-skill",
+                    "path": "legacy-orphan-skill/SKILL.md",
+                    "sha256": "0" * 64,
+                    "source": "builtin",
+                }
+            )
+            write_manifest(paths.manifest_path, manifest)
+
+            with self.assertRaises(OmhError):
+                install_skill_pack(paths)
+            self.assertTrue(orphan_dir.exists())
+
+    def test_installer_full_to_core_preserves_catalog_skills(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            full_names = {template.name for template in builtin_skill_templates()}
+            install_skill_pack(paths, profile="full")
+
+            full_only_names = full_names - set(CORE_PROFILE_SKILLS)
+            self.assertTrue(full_only_names)
+            for name in full_only_names:
+                self.assertTrue((paths.skills_dir / name / "SKILL.md").exists(), name)
+
+            result = install_skill_pack(paths, profile="core", force=True)
+
+            # The catalog-basis prune must never shed sha-unmodified full-only skills
+            # on a full->core downgrade reinstall.
+            self.assertEqual(result["pruned_skills"], [])
+            for name in full_only_names:
+                self.assertTrue((paths.skills_dir / name / "SKILL.md").exists(), name)
 
 
 if __name__ == "__main__":

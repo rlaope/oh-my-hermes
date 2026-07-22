@@ -3590,7 +3590,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - An agent board card is not proof that another Hermes agent accepted, executed, heartbeat-ed, or completed work unless target-specific evidence exists.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
 
-### memory-curation-review
+### memory-sync
 
 [omh] Hermes memory curation workflow: review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.
 
@@ -3604,25 +3604,26 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Compatibility alias: `false`
 - Preferred usage: Use as an installed Hermes workflow skill when the user asks to review stale, duplicate, or conflicting memory and skill context.
 - Handoff policy: Keep this as Hermes-facing orchestration guidance first. Prepare executor, connector, gateway, or host-runtime handoff only when the user accepts that next step and observed evidence can be recorded.
-- Why this exists: `memory-curation-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
-- Use when: Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.
+- Why this exists: `memory-sync` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+- Use when: Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup. 캡: MEMORY.md ~2,200자 / USER.md ~1,375자.
 - Do not use when:
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `기억하는 맥락`, `현재 hermes가 기억하는 맥락`, `현재 헤르메스가 기억하는 맥락`, `헤르메스가 기억하는 맥락`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `메모리 업데이트`, `메모리 검사`, `메모리 점검`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `맥락 피드백`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
+- Strong routing signals: `memory-sync`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `기억하는 맥락`, `현재 hermes가 기억하는 맥락`, `현재 헤르메스가 기억하는 맥락`, `헤르메스가 기억하는 맥락`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `메모리 업데이트`, `메모리 검사`, `메모리 점검`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `맥락 피드백`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
 - Good example:
-  - Prompt: memory-curation-review inspect stale project memories and ask me what to keep.
-  - Expected behavior: Produce `prepare_memory_curation_review` with required context, wrapper actions, and not-evidence boundaries.
+  - Prompt: memory-sync inspect stale project memories and ask me what to keep.
+  - Expected behavior: Produce `prepare_memory_sync` with required context, wrapper actions, and not-evidence boundaries.
   - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 - Bad example:
-  - Prompt: memory-curation-review silently delete all conflicting memories.
+  - Prompt: memory-sync silently delete all conflicting memories.
   - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
   - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 - Quality bar:
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+  - 출처를 추정하거나 지어내지 않는다; 근거 없는 클레임은 의심 항목으로만 제시한다.
 - Completion checklist:
   - Confirm the workflow target, evidence boundary, and stop condition are named.
   - Report which outputs are prepared, observed, blocked, or missing.
@@ -3636,14 +3637,16 @@ These surfaces are generated command references, not installed Hermes workflow s
   - delivery or status expectation
   - known missing evidence
 - Expected outputs:
-  - memory-curation-review/v1 card or guidance
+  - memory-sync/v1 card or guidance
   - next action
   - prepared-vs-observed boundary
 - Artifact expectations:
-  - memory-curation-review/v1 metadata-only runtime or wrapper card when recorded
+  - memory-sync/v1 metadata-only runtime or wrapper card when recorded
 - Safety rules:
   - A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence until an approved write is observed.
   - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+  - 각 클레임은 원문 그대로 인용한다; 세션에 실제 근거가 있을 때만 출처를 언급한다.
+  - 승인 전에는 어떤 파일도 수정하지 않는다; 승인 후 1회 일괄 쓰기로만 반영한다.
 
 ### gateway-intent-card
 
@@ -7790,7 +7793,7 @@ Coordinate multi-Hermes-agent or profile work as board cards with task, handoff,
   - A board state is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists.
 - Fallback: If a required target, credential, runtime, or observation is missing, show a blocker or confirmation action instead of claiming completion.
 
-### memory-curation-review
+### memory-sync
 
 Review stale, conflicting, duplicate, or risky memory and skill guidance with explicit approve/reject/update actions.
 
@@ -7829,9 +7832,9 @@ Review stale, conflicting, duplicate, or risky memory and skill guidance with ex
   - `record_memory_write`
   - `show_status`
 - Artifact events:
-  - `memory-curation-review_scoped`
-  - `memory-curation-review_card_prepared`
-  - `memory-curation-review_status_recorded`
+  - `memory-sync_scoped`
+  - `memory-sync_card_prepared`
+  - `memory-sync_status_recorded`
 - Delegation expectation: Record this harness as Hermes-retained orchestration; external runtime/platform/file/memory/connector evidence requires a separate observed artifact.
 - Privacy default: `metadata_only`
 - Overclaim guards:

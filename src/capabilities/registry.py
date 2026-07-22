@@ -55,7 +55,7 @@ LANE_PLAYBOOK_IDS = {
     "automation_and_status": (
         "scheduled-ops-blueprint",
         "agent-board",
-        "memory-curation-review",
+        "memory-sync",
         "toolbelt-readiness",
         "ops-observability-card",
     ),

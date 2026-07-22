@@ -118,7 +118,7 @@ prepared handoffs, and observed evidence:
   - Memory and wiki context review
   - Stale, duplicate, or conflicting context candidates
   - Human-approved context pack preparation
-- Primary skills: `wiki`, `memory-curation-review`
+- Primary skills: `wiki`, `memory-sync`
 - Primary harnesses: `knowledge`, `memory-context-review`
 - Wrapper actions: `ask_followup`, `show_status`, `prepare_handoff`
 - Evidence boundary: A memory keeper role can prepare context changes; it is not proof that Hermes internal memory, USER.md, MEMORY.md, wiki, or skill files were changed.

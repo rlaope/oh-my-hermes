@@ -4412,9 +4412,9 @@ MATERIALS_PACKAGE_GUARD = RoutingGuardRule(
 )
 MEMORY_CURATION_GUARD = RoutingGuardRule(
     id="memory_curation_before_generic_clarification",
-    rule="Hermes memory/context cleanup requests should route to memory-curation-review before generic clarification.",
+    rule="Hermes memory/context cleanup requests should route to memory-sync before generic clarification.",
     matched_label="guard:memory_curation",
-    preferred_skills=("memory-curation-review",),
+    preferred_skills=("memory-sync",),
     score_boost=28,
     why="Matched guard/trigger metadata; stale or conflicting Hermes context should become a human-approved memory curation review.",
     activation_status="active",

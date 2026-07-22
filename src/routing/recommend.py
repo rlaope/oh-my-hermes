@@ -726,8 +726,8 @@ _SKILL_POLICIES.update(
             evidence_boundary="An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed.",
             wrapper_guidance="Show task, handoff, heartbeat, blocker, and completion states per target/thread; require target-specific evidence before advancing.",
         ),
-        "memory-curation-review": RecommendationPolicy(
-            next_action="prepare_memory_curation_review",
+        "memory-sync": RecommendationPolicy(
+            next_action="prepare_memory_sync",
             evidence_boundary="A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence.",
             wrapper_guidance="Present stale/conflicting/duplicate memory candidates with approve/reject/update actions; write only after observed approval.",
         ),

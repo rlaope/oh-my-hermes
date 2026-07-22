@@ -25,7 +25,7 @@ Role selection is prepared guidance only. It is not worker dispatch, tool execut
 ## Primary Skills
 
 - `wiki`
-- `memory-curation-review`
+- `memory-sync`
 
 ## Primary Harnesses
 

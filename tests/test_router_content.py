@@ -61,7 +61,7 @@ FEATURE_SURFACE_EXPOSURES = {
     "automation-blueprint": ("workflow_skill", True),
     "github-event-ops": ("workflow_skill", True),
     "agent-board": ("workflow_skill", True),
-    "memory-curation-review": ("workflow_skill", True),
+    "memory-sync": ("workflow_skill", True),
     "gateway-intent-card": ("workflow_skill", True),
     "executor-runtime-readiness": ("workflow_skill", True),
     "deliverable-package": ("workflow_skill", True),
@@ -300,7 +300,7 @@ class RouterContentTests(unittest.TestCase):
             "plan",
             "ralplan",
             "code-review",
-            "memory-curation-review",
+            "memory-sync",
             "deliverable-package",
         }:
             self.assertIn(expected, names)
@@ -494,8 +494,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(recommend_module._SKILL_POLICIES["github-event-ops"].next_action, "prepare_github_event_ops_card")
         self.assertEqual(recommend_module._SKILL_POLICIES["agent-board"].next_action, "prepare_agent_board_card")
         self.assertEqual(
-            recommend_module._SKILL_POLICIES["memory-curation-review"].next_action,
-            "prepare_memory_curation_review",
+            recommend_module._SKILL_POLICIES["memory-sync"].next_action,
+            "prepare_memory_sync",
         )
         self.assertEqual(recommend_module._SKILL_POLICIES["gateway-intent-card"].next_action, "prepare_gateway_intent_card")
         self.assertEqual(
@@ -675,7 +675,7 @@ class RouterContentTests(unittest.TestCase):
                 "docs-specialist",
                 "github-event-ops",
                 "agent-board",
-                "memory-curation-review",
+                "memory-sync",
                 "gateway-intent-card",
                 "executor-runtime-readiness",
                 "deliverable-package",

@@ -1,5 +1,5 @@
 ---
-name: memory-curation-review
+name: memory-sync
 description: [omh] Hermes memory curation workflow: review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.
 metadata:
   hermes:
@@ -10,13 +10,13 @@ metadata:
     quality_tier: workflow-surface-gated
 ---
 
-# Memory Curation Review
+# Memory Sync
 
-This is a Hermes-native `memory-curation-review` workflow skill.
+This is a Hermes-native `memory-sync` workflow skill.
 
 ## Why This Exists
 
-`memory-curation-review` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
+`memory-sync` exists so Hermes users can ask for this workflow in chat and receive a structured, evidence-bounded OMH operating surface instead of ad hoc narration.
 
 ## Do Not Use When
 
@@ -28,13 +28,13 @@ This is a Hermes-native `memory-curation-review` workflow skill.
 
 Good example:
 
-- Prompt: memory-curation-review inspect stale project memories and ask me what to keep.
-- Expected behavior: Produce `prepare_memory_curation_review` with required context, wrapper actions, and not-evidence boundaries.
+- Prompt: memory-sync inspect stale project memories and ask me what to keep.
+- Expected behavior: Produce `prepare_memory_sync` with required context, wrapper actions, and not-evidence boundaries.
 - Why: The prompt names a real workflow surface that Hermes can orchestrate without hiding execution.
 
 Bad example:
 
-- Prompt: memory-curation-review silently delete all conflicting memories.
+- Prompt: memory-sync silently delete all conflicting memories.
 - Expected behavior: Report the missing observed evidence or authority instead of claiming the external step happened.
 - Why: Prepared OMH guidance is not platform, runtime, connector, file, memory, or delivery evidence.
 
@@ -61,11 +61,26 @@ Bad example:
 - Normal users talk to Hermes; OMH CLI is infra.
 - Boundary: Prepared OMH routing, cards, handoffs, or artifacts are not observed execution, image generation, delivery, review, CI, merge-readiness, or merge evidence.
 
+## Interview Protocol
+
+- **클레임 추출** — `~/.hermes/memories/USER.md`·`MEMORY.md`를 클레임으로 분해하고, 각 클레임은 원문 그대로 인용한다.
+- **출처** — 출처를 추정하거나 지어내지 않는다; 세션에 실제 근거가 있을 때만 출처를 언급한다.
+- **우선순위** — 모순 > 과일반화("파이썬 한 번 개발"→"파이썬 선호") > 오래됨.
+- **턴 구성** — 4–5턴 × 턴당 2–3개 의심 클레임을 묶고, 전수가 아닌 의심 우선으로 메신저 친화 짧은 포맷을 쓴다.
+- **분기** — 예=유지 / 아니요=삭제 / 수정 지시=수정.
+- **마지막 턴** — 변경 요약 diff을 제시한다(유지 n / 삭제 n / 수정 n + 수정 전후).
+- **쓰기 게이트** — 승인 전에는 어떤 파일도 수정하지 않는다; 승인 후 1회 일괄 쓰기로만 반영한다.
+- **캡** — MEMORY.md ~2,200자 / USER.md ~1,375자를 넘기지 않는다.
+
+## Boundary
+
+A memory-sync review is not MEMORY.md or USER.md modification evidence until an approved write is observed. Hermes itself reads and writes these files; OMH runtime never writes `~/.hermes` (DIRECTION Rule 5).
+
 ## Use When
 
-Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.
+Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup. 캡: MEMORY.md ~2,200자 / USER.md ~1,375자.
 
-    Strong routing signals: `memory-curation-review`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `기억하는 맥락`, `현재 hermes가 기억하는 맥락`, `현재 헤르메스가 기억하는 맥락`, `헤르메스가 기억하는 맥락`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `메모리 업데이트`, `메모리 검사`, `메모리 점검`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `맥락 피드백`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
+    Strong routing signals: `memory-sync`, `memory curation`, `memory review`, `memory inspect`, `memory check`, `memory update`, `context cleanup`, `curate memory`, `stale memory`, `hermes remembers`, `conflicting memory`, `duplicate skill`, `MEMORY.md`, `USER.md`, `기억하고 있는`, `기억하고 있는 프로젝트 맥락`, `기억하는 맥락`, `현재 hermes가 기억하는 맥락`, `현재 헤르메스가 기억하는 맥락`, `헤르메스가 기억하는 맥락`, `오래된 맥락`, `오래된 기억`, `기억 점검`, `기억 정리`, `메모리 업데이트`, `메모리 검사`, `메모리 점검`, `메모리 정리`, `맥락 점검`, `맥락 정리`, `맥락 피드백`, `등록된 맥락`, `헤르메스 기억`, `중복 스킬`
 
 ## Catalog Metadata
 
@@ -79,6 +94,7 @@ Quality bar:
 - Name the user-facing workflow objective, required context, next action, and stop condition.
 - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
 - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+- 출처를 추정하거나 지어내지 않는다; 근거 없는 클레임은 의심 항목으로만 제시한다.
 
 Handoff policy:
 
@@ -93,18 +109,20 @@ Required inputs:
 
 Expected outputs:
 
-- memory-curation-review/v1 card or guidance
+- memory-sync/v1 card or guidance
 - next action
 - prepared-vs-observed boundary
 
 Artifact expectations:
 
-- memory-curation-review/v1 metadata-only runtime or wrapper card when recorded
+- memory-sync/v1 metadata-only runtime or wrapper card when recorded
 
 Safety rules:
 
 - A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence until an approved write is observed.
 - Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.
+- 각 클레임은 원문 그대로 인용한다; 세션에 실제 근거가 있을 때만 출처를 언급한다.
+- 승인 전에는 어떤 파일도 수정하지 않는다; 승인 후 1회 일괄 쓰기로만 반영한다.
 
 ## Harness Discipline
 
@@ -114,12 +132,12 @@ Safety rules:
 
 ## Runtime Evidence
 
-Preferred harness for this skill: `memory-curation-review`.
+Preferred harness for this skill: `memory-sync`.
 
 When local shell access or a bot wrapper is available, record metadata-only evidence:
 
 ```sh
-omh runtime record --skill memory-curation-review --harness memory-curation-review --status started
+omh runtime record --skill memory-sync --harness memory-sync --status started
 omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
 ```
 

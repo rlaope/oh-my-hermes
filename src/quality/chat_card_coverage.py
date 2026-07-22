@@ -41,12 +41,12 @@ CHAT_CARD_COVERAGE_CASES: tuple[ChatCardCoverageCase, ...] = (
         "prepare_agent_board_card",
     ),
     ChatCardCoverageCase(
-        "memory-curation-review",
+        "memory-sync",
         "Memory curation review",
         "Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘",
-        "memory-curation-review",
+        "memory-sync",
         "memory_curation",
-        "prepare_memory_curation_review",
+        "prepare_memory_sync",
     ),
     ChatCardCoverageCase(
         "gateway-intent-card",

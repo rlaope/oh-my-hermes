@@ -2121,7 +2121,7 @@ _SURFACE_PLAYBOOKS = (
         evidence_boundary="Board cards are not proof that another Hermes target accepted, worked, heartbeat-ed, or completed.",
     ),
     _surface_playbook(
-        "memory-curation-review",
+        "memory-sync",
         "Memory curation review",
         "Review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.",
         "Use when accumulated Hermes memory or skill guidance needs human-approved cleanup.",
@@ -2140,7 +2140,7 @@ _SURFACE_PLAYBOOKS = (
             "헤르메스가 기억하는 내용",
             "메모리",
         ),
-        owner="memory-curation-review",
+        owner="memory-sync",
         contract="memory_curation_review/v1",
         pipeline=("collect_candidates", "rank_conflicts", "prepare_review", "record_approved_write"),
         first_action="collect_candidates",

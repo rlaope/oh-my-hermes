@@ -308,8 +308,8 @@ class WorkflowLearningTests(unittest.TestCase):
             (
                 "Please remember I prefer Korean polite replies.",
                 "memory_candidate",
-                "memory-curation-review",
-                "prepare_memory_curation_review",
+                "memory-sync",
+                "prepare_memory_sync",
                 "user_preference",
             ),
             (
@@ -441,8 +441,8 @@ class WorkflowLearningTests(unittest.TestCase):
 
             self.assertEqual(reviewed["status"], "changed")
             self.assertEqual(reviewed["destination_review"]["current_destination"], "memory_candidate")
-            self.assertEqual(reviewed["destination_review"]["target_workflow"], "memory-curation-review")
-            self.assertEqual(reviewed["destination_review"]["next_action"], "prepare_memory_curation_review")
+            self.assertEqual(reviewed["destination_review"]["target_workflow"], "memory-sync")
+            self.assertEqual(reviewed["destination_review"]["next_action"], "prepare_memory_sync")
             self.assertEqual(reviewed["review_gate"]["decision"], "change_destination")
             self.assertIn("review_note_sha256", reviewed["review_gate"])
             self.assertIn("review_note_length", reviewed["review_gate"])

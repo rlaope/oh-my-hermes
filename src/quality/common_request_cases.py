@@ -523,9 +523,9 @@ COMMON_REQUEST_COVERAGE_CASES: tuple[CommonRequestCoverageCase, ...] = (
         "Memory curation review",
         "Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘",
         "dispatch",
-        "memory-curation-review",
+        "memory-sync",
         "memory_curation",
-        "prepare_memory_curation_review",
+        "prepare_memory_sync",
     ),
     CommonRequestCoverageCase(
         "workflow-learning",

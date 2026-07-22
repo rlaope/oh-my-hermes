@@ -97,13 +97,54 @@ def install_skill_pack(
         _write_skill(paths.skills_dir, template, force=force, managed=managed)
     for template in reference_templates:
         _write_skill_reference(paths.skills_dir, template, force=force, managed=managed)
+    pruned_skills = _prune_orphaned_skills(
+        paths.skills_dir,
+        manifest,
+        {template.name for template in all_templates},
+        force=force,
+    )
     records = skill_records(paths.skills_dir, source)
     manifest_data = new_manifest(source, paths.skills_dir, records)
     manifest_data["skill_profile"] = profile
     if context_cost_warning is not None:
         manifest_data["context_cost_warning"] = context_cost_warning
+    manifest_data["pruned_skills"] = pruned_skills
     write_manifest(paths.manifest_path, manifest_data)
     return manifest_data
+
+
+def _prune_orphaned_skills(
+    skills_dir: Path,
+    manifest: dict | None,
+    catalog_names: set[str],
+    *,
+    force: bool,
+) -> list[str]:
+    """Remove managed skill dirs recorded in the prior manifest that the full catalog no longer ships.
+
+    ``catalog_names`` must be the FULL ``builtin_skill_templates()`` catalog, never the
+    profile-filtered install set, so a full->core reinstall does not shed full-only skills.
+    A dir is pruned only when it is (a) recorded in the prior manifest, (b) absent from the
+    full catalog, and (c) sha-unmodified vs. the manifest; user-modified dirs are kept unless
+    ``force``. Removed directory names are returned so the caller can surface them.
+    """
+    if not manifest:
+        return []
+    modified = set(local_modifications(manifest, skills_dir))
+    removed: list[str] = []
+    for record in manifest.get("skills", []):
+        name = record.get("name")
+        rel = record.get("path")
+        if not name or not rel or name in catalog_names:
+            continue
+        if str(rel) in modified and not force:
+            continue
+        target_dir = skills_dir / name
+        if not target_dir.is_dir() or target_dir.is_symlink():
+            continue
+        shutil.rmtree(target_dir)
+        removed.append(name)
+    return removed
 
 
 def _context_cost_warning(*, core_count: int, full_count: int) -> dict:

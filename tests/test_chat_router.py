@@ -120,7 +120,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         self.assertEqual(recommendations[0]["skill"], "workflow-learning")
         self.assertIn("guard:workflow_learning", recommendations[0]["matched"])
         self.assertEqual(route["selected_skill"], "workflow-learning")
-        self.assertNotEqual(route["recommendations"][0]["skill"], "memory-curation-review")
+        self.assertNotEqual(route["recommendations"][0]["skill"], "memory-sync")
         self.assertEqual(route_hint["selected_workflow"], "workflow-learning")
         self.assertEqual(route_hint["primary_next_action"], "record_missed_route")
 
@@ -1786,8 +1786,8 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             source="discord",
             limit=5,
         )
-        self.assertEqual(memory["selected_skill"], "memory-curation-review")
-        self.assertEqual(memory["selected_harness"], "memory-curation-review")
+        self.assertEqual(memory["selected_skill"], "memory-sync")
+        self.assertEqual(memory["selected_harness"], "memory-sync")
         self.assertIn("guard:memory_curation", memory["recommendations"][0]["matched"])
 
     def test_route_quality_pass_handles_real_chat_misroutes(self) -> None:
@@ -1814,7 +1814,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             ),
             (
                 "record stale memories and ask me what to keep",
-                "memory-curation-review",
+                "memory-sync",
                 "guard:memory_curation",
             ),
             (
@@ -1904,12 +1904,12 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             ),
             (
                 "메모리가 너무 쌓였는데 정리해줘",
-                "memory-curation-review",
+                "memory-sync",
                 "guard:memory_curation",
             ),
             (
                 "내 기억에 뭐 저장돼있는지 검토해줘",
-                "memory-curation-review",
+                "memory-sync",
                 "guard:memory_curation",
             ),
             (
@@ -2342,8 +2342,8 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             ("FAL_KEY 없으면 어떻게 해?", "toolbelt-readiness", "prepare_toolbelt_readiness", "guard:toolbelt_readiness"),
             (
                 "메모리 점검해줘",
-                "memory-curation-review",
-                "prepare_memory_curation_review",
+                "memory-sync",
+                "prepare_memory_sync",
                 "guard:memory_curation",
             ),
             (
@@ -3271,10 +3271,10 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         card = decision["learning_candidate_card"]
 
         self.assertEqual(decision["action"], "dispatch")
-        self.assertEqual(decision["selected_skill"], "memory-curation-review")
+        self.assertEqual(decision["selected_skill"], "memory-sync")
         self.assertEqual(card["persistence_target"], "memory_candidate")
-        self.assertEqual(card["primary_action"], "prepare_memory_curation_review")
-        self.assertEqual(card["review"]["review_workflow"], "memory-curation-review")
+        self.assertEqual(card["primary_action"], "prepare_memory_sync")
+        self.assertEqual(card["review"]["review_workflow"], "memory-sync")
         self.assertNotIn("learn_prompt", card)
         self.assertIn("Durable user preference", card["summary"])
 
@@ -3304,9 +3304,9 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         card = decision["learning_candidate_card"]
         serialized = json.dumps(card)
 
-        self.assertEqual(decision["selected_skill"], "memory-curation-review")
+        self.assertEqual(decision["selected_skill"], "memory-sync")
         self.assertEqual(card["persistence_target"], "review_first")
-        self.assertEqual(card["primary_action"], "prepare_memory_curation_review")
+        self.assertEqual(card["primary_action"], "prepare_memory_sync")
         self.assertIn("channel_or_thread_ref", card["sanitization"]["transient_identifier_categories"])
         self.assertIn("pull_request_number", card["sanitization"]["transient_identifier_categories"])
         self.assertNotIn("#ops", serialized)
@@ -3477,7 +3477,7 @@ selected_workflow=ultraprocess
         cases = (
             ("does OMH support scheduled automation?", "automation-blueprint"),
             ("can OMH help with MCP setup?", "toolbelt-readiness"),
-            ("does OMH support memory cleanup?", "memory-curation-review"),
+            ("does OMH support memory cleanup?", "memory-sync"),
             ("does OMH support voice commands?", "voice-operator"),
             ("does OMH support skill candidate scouting?", "skill-scout"),
             ("does OMH support skill health dashboards?", "skill-health"),
@@ -4042,8 +4042,8 @@ selected_workflow=ultraprocess
                 decision = route_chat_message(message, source="discord")
 
                 self.assertEqual(decision["action"], "dispatch")
-                self.assertEqual(decision["selected_skill"], "memory-curation-review")
-                self.assertEqual(decision["selected_harness"], "memory-curation-review")
+                self.assertEqual(decision["selected_skill"], "memory-sync")
+                self.assertEqual(decision["selected_harness"], "memory-sync")
                 self.assertEqual(decision["confidence"], "high")
 
         cross_channel = route_chat_message(
@@ -4052,8 +4052,8 @@ selected_workflow=ultraprocess
         )
 
         self.assertEqual(cross_channel["action"], "dispatch")
-        self.assertEqual(cross_channel["selected_skill"], "memory-curation-review")
-        self.assertEqual(cross_channel["selected_harness"], "memory-curation-review")
+        self.assertEqual(cross_channel["selected_skill"], "memory-sync")
+        self.assertEqual(cross_channel["selected_harness"], "memory-sync")
         self.assertEqual(cross_channel["confidence"], "high")
 
     def test_event_text_extraction_supports_discord_slack_and_generic_shapes(self) -> None:
