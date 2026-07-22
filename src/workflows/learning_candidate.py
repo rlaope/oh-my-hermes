@@ -258,7 +258,7 @@ def build_learning_candidate_card(
         },
         "review": {
             "required": persistence_target in {"memory_candidate", "review_first"},
-            "review_workflow": "memory-curation-review" if persistence_target in {"memory_candidate", "review_first"} else "",
+            "review_workflow": "memory-sync" if persistence_target in {"memory_candidate", "review_first"} else "",
             "human_gate": "review_before_persistence",
         },
         "claim_boundary": (
@@ -439,7 +439,7 @@ def validate_learning_candidate_card(card: dict[str, Any]) -> list[str]:
 
 def _recommended_workflow(target: str) -> str:
     if target in {"memory_candidate", "review_first"}:
-        return "memory-curation-review"
+        return "memory-sync"
     if target == "session_only":
         return "oh-my-hermes"
     return "workflow-learning"
@@ -449,7 +449,7 @@ def _primary_action(target: str) -> str:
     if target == "skill_candidate":
         return "copy_learn_prompt"
     if target in {"memory_candidate", "review_first"}:
-        return "prepare_memory_curation_review"
+        return "prepare_memory_sync"
     return "show_learning_candidate"
 
 
@@ -458,7 +458,7 @@ def _available_actions(target: str) -> list[str]:
     if target == "skill_candidate":
         actions.insert(0, "copy_learn_prompt")
     if target in {"memory_candidate", "review_first"}:
-        actions.insert(0, "prepare_memory_curation_review")
+        actions.insert(0, "prepare_memory_sync")
         actions.append("show_memory_status")
     return actions
 

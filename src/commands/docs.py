@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from ..catalogs.roles import roles_reference_markdown
 from ..installer import OmhError
 from ..local_store import atomic_write_text
 from ..skill_pack import builtin_harnesses, builtin_skill_reference_templates, builtin_skill_templates
@@ -33,6 +34,26 @@ def cmd_docs_workflows(args: argparse.Namespace) -> int:
             stale = ", ".join(tap_skills["missing"] + tap_skills["stale"] + tap_skills["extra"])
             raise OmhError(f"tap skills are stale: {stale}")
         _print_json({"ok": True, "checked": str(output), "tap_skills": tap_skills})
+        return 0
+    if args.output:
+        atomic_write_text(output, content)
+        _print_json({"written": str(output)})
+        return 0
+    print(content.rstrip())
+    return 0
+
+
+def cmd_docs_roles(args: argparse.Namespace) -> int:
+    content = roles_reference_markdown()
+    output = Path(args.output).expanduser().resolve() if args.output else Path("docs/ROLES.md").resolve()
+    if args.check:
+        try:
+            current = output.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise OmhError(f"role docs check failed: {exc}") from exc
+        if current != content:
+            raise OmhError(f"role docs are stale: {output}")
+        _print_json({"ok": True, "checked": str(output)})
         return 0
     if args.output:
         atomic_write_text(output, content)
@@ -100,6 +121,11 @@ def _add_docs_commands(sub) -> None:
     docs_workflows.add_argument("--check", action="store_true")
     docs_workflows.add_argument("--json", action="store_true", help="Print machine-readable workflow and harness catalog metadata.")
     docs_workflows.set_defaults(func=cmd_docs_workflows)
+
+    docs_roles = docs_sub.add_parser("roles")
+    docs_roles.add_argument("--output", default=None)
+    docs_roles.add_argument("--check", action="store_true")
+    docs_roles.set_defaults(func=cmd_docs_roles)
 
 
 def _add_harness_commands(sub) -> None:

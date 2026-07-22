@@ -663,7 +663,7 @@ _CODING_INTENT_BY_SKILL.update(
     {
         "github-event-ops": "planning",
         "agent-board": "planning",
-        "memory-curation-review": "planning",
+        "memory-sync": "planning",
         "gateway-intent-card": "planning",
         "executor-runtime-readiness": "planning",
         "deliverable-package": "planning",
@@ -710,6 +710,8 @@ def _feature_surface_skill(
     artifact_expectations: tuple[str, ...] | None = None,
     final_checklist: tuple[str, ...] | None = None,
     recovery_notes: tuple[str, ...] | None = None,
+    extra_safety_rules: tuple[str, ...] = (),
+    extra_quality_bar: tuple[str, ...] = (),
 ) -> SkillDefinition:
     return SkillDefinition(
         name,
@@ -732,12 +734,14 @@ def _feature_surface_skill(
         safety_rules=(
             boundary,
             "Do not claim connector, gateway, runtime, file generation, memory mutation, or host automation evidence from prepared guidance.",
+            *extra_safety_rules,
         ),
         quality_tier="workflow-surface-gated",
         quality_bar=(
             "Name the user-facing workflow objective, required context, next action, and stop condition.",
             "Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.",
             "Expose missing tools, credentials, targets, or observations as user-visible gaps.",
+            *extra_quality_bar,
         ),
         why_this_exists=(
             f"`{name}` exists so Hermes users can ask for this workflow in chat and receive a structured, "
@@ -4754,10 +4758,10 @@ _FEATURE_SURFACE_SKILLS = (
         bad_prompt="agent-board mark the other agent complete without an observed heartbeat or result.",
     ),
     _feature_surface_skill(
-        "memory-curation-review",
+        "memory-sync",
         "Hermes memory curation workflow: review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.",
         (
-            "memory-curation-review",
+            "memory-sync",
             "memory curation",
             "memory review",
             "memory inspect",
@@ -4792,13 +4796,20 @@ _FEATURE_SURFACE_SKILLS = (
             "헤르메스 기억",
             "중복 스킬",
         ),
-        "Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup.",
+        "Use when Hermes memory, USER/MEMORY files, or accumulated skill guidance needs human-approved cleanup. 캡: MEMORY.md ~2,200자 / USER.md ~1,375자.",
         category="memory",
         phase="curation-review",
-        next_action="prepare_memory_curation_review",
+        next_action="prepare_memory_sync",
         boundary="A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence until an approved write is observed.",
-        good_prompt="memory-curation-review inspect stale project memories and ask me what to keep.",
-        bad_prompt="memory-curation-review silently delete all conflicting memories.",
+        good_prompt="memory-sync inspect stale project memories and ask me what to keep.",
+        bad_prompt="memory-sync silently delete all conflicting memories.",
+        extra_safety_rules=(
+            "각 클레임은 원문 그대로 인용한다; 세션에 실제 근거가 있을 때만 출처를 언급한다.",
+            "승인 전에는 어떤 파일도 수정하지 않는다; 승인 후 1회 일괄 쓰기로만 반영한다.",
+        ),
+        extra_quality_bar=(
+            "출처를 추정하거나 지어내지 않는다; 근거 없는 클레임은 의심 항목으로만 제시한다.",
+        ),
     ),
     _feature_surface_skill(
         "gateway-intent-card",
@@ -6659,7 +6670,7 @@ _SURFACE_EXPOSURES = (
         "Use as an installed Hermes workflow skill when users ask to coordinate multiple Hermes agents, subagents, roles, handoffs, blockers, heartbeats, or board-shaped collaboration without claiming other agents accepted or completed work.",
     ),
     SurfaceExposure(
-        "memory-curation-review",
+        "memory-sync",
         "workflow_skill",
         ("routable", "installable", "playbook", "harness", "workflow_reference", "capability"),
         True,
@@ -9088,7 +9099,7 @@ _FEATURE_SURFACE_HARNESSES = (
         overclaim_guard="A board state is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists.",
     ),
     _feature_surface_harness(
-        "memory-curation-review",
+        "memory-sync",
         "Review stale, conflicting, duplicate, or risky memory and skill guidance with explicit approve/reject/update actions.",
         "Use when accumulated memory, USER/MEMORY files, or skill notes need human-approved cleanup.",
         ("memory source summary", "candidate memories or skills", "staleness/conflict signal", "review owner"),
@@ -9914,7 +9925,7 @@ _PRIMARY_HARNESSES.update(
     {
         "github-event-ops": "github-event-ops",
         "agent-board": "agent-board",
-        "memory-curation-review": "memory-curation-review",
+        "memory-sync": "memory-sync",
         "gateway-intent-card": "gateway-intent-card",
         "executor-runtime-readiness": "executor-runtime-readiness",
         "deliverable-package": "deliverable-package",

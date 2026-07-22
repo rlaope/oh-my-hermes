@@ -221,27 +221,27 @@ class RoutingPrecisionTests(unittest.TestCase):
         )
         self.assertEqual(
             interventions["korean-memory-pile-cleanup"]["observed"]["route_workflow"],
-            "memory-curation-review",
+            "memory-sync",
         )
         self.assertEqual(
             interventions["korean-memory-pile-cleanup"]["observed"]["next_action"],
-            "prepare_memory_curation_review",
+            "prepare_memory_sync",
         )
         self.assertEqual(
             interventions["korean-memory-stored-context"]["observed"]["route_workflow"],
-            "memory-curation-review",
+            "memory-sync",
         )
         self.assertEqual(
             interventions["korean-memory-stored-context"]["observed"]["next_action"],
-            "prepare_memory_curation_review",
+            "prepare_memory_sync",
         )
         self.assertEqual(
             interventions["korean-hermes-wrong-memory"]["observed"]["route_workflow"],
-            "memory-curation-review",
+            "memory-sync",
         )
         self.assertEqual(
             interventions["korean-hermes-wrong-memory"]["observed"]["next_action"],
-            "prepare_memory_curation_review",
+            "prepare_memory_sync",
         )
         self.assertEqual(interventions["workflow-learning"]["observed"]["route_workflow"], "workflow-learning")
         self.assertEqual(

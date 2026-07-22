@@ -704,6 +704,88 @@ Load these only when exact detail matters:
     return SkillTemplate("oh-my-hermes", _frontmatter("oh-my-hermes", DESCRIPTIONS["oh-my-hermes"]) + "\n" + body)
 
 
+def memory_sync_skill() -> SkillTemplate:
+    name = "memory-sync"
+    definition = _definitions_by_name()[name]
+    title = name.replace("-", " ").title()
+    triggers = ", ".join(f"`{trigger}`" for trigger in definition.triggers)
+    primary_harness = primary_harness_for_skill(name)
+    body = f"""# {title}
+
+This is a Hermes-native `{name}` workflow skill.
+
+{_quality_rubric_sections(definition)}
+
+{awareness_workflow_context_markdown(name)}
+
+## Interview Protocol
+
+- **클레임 추출** — `~/.hermes/memories/USER.md`·`MEMORY.md`를 클레임으로 분해하고, 각 클레임은 원문 그대로 인용한다.
+- **출처** — 출처를 추정하거나 지어내지 않는다; 세션에 실제 근거가 있을 때만 출처를 언급한다.
+- **우선순위** — 모순 > 과일반화("파이썬 한 번 개발"→"파이썬 선호") > 오래됨.
+- **턴 구성** — 4–5턴 × 턴당 2–3개 의심 클레임을 묶고, 전수가 아닌 의심 우선으로 메신저 친화 짧은 포맷을 쓴다.
+- **분기** — 예=유지 / 아니요=삭제 / 수정 지시=수정.
+- **마지막 턴** — 변경 요약 diff을 제시한다(유지 n / 삭제 n / 수정 n + 수정 전후).
+- **쓰기 게이트** — 승인 전에는 어떤 파일도 수정하지 않는다; 승인 후 1회 일괄 쓰기로만 반영한다.
+- **캡** — MEMORY.md ~2,200자 / USER.md ~1,375자를 넘기지 않는다.
+
+## Boundary
+
+A memory-sync review is not MEMORY.md or USER.md modification evidence until an approved write is observed. Hermes itself reads and writes these files; OMH runtime never writes `~/.hermes` (DIRECTION Rule 5).
+
+## Use When
+
+{definition.use_when}
+
+    Strong routing signals: {triggers}
+
+## Catalog Metadata
+
+{_skill_metadata_block(definition)}
+
+## Harness Discipline
+
+- Start from the representative harness registry in `oh-my-hermes` when the workflow needs coding, research, planning, goal execution, architecture, critique, QA, or documentation lanes.
+- Prefer richer evidence and clearer stop conditions over adding more workflow names.
+- Use specialist lanes only when they change the quality of the answer or verification.
+
+## Runtime Evidence
+
+Preferred harness for this skill: `{primary_harness}`.
+
+When local shell access or a bot wrapper is available, record metadata-only evidence:
+
+```sh
+omh runtime record --skill {name} --harness {primary_harness} --status started
+omh runtime delegate --run <run-id> --requested --not-observed --result not_observed
+```
+
+Record observed delegation results when Hermes or the wrapper exposes them. If delegation is unavailable, keep the result explicit as `not_available` or `not_observed`.
+
+## Hermes Compatibility Contract
+
+- Preserve the workflow intent, stop conditions, and verification discipline.
+- Use Hermes-native tools, file operations, and subagent/delegation features when available.
+- Do not require runtime tools, role prompts, or overlays that Hermes Agent does not expose.
+{_target_topology_skill_contract_bullets()}
+{_memory_context_skill_contract_bullets(definition)}
+- When a runtime-specific mechanism appears in imported instructions, translate it to a Hermes-native artifact:
+  - goal tools -> `.omh/goals/` ledgers, `goal_completion_gate/v1`, `goal_status_card/v1`, `goal_continuation/v1`, or explicit checklists with named next actions,
+  - question renderers -> one concise question in the current Hermes interface,
+  - native subagents -> Hermes delegation when available, otherwise sequential lanes,
+  - shell bridge commands -> optional bridge mode only.
+
+## Execution Rules
+
+1. Load supporting context with `skills_list` / `skill_view` when needed.
+2. State the workflow target, constraints, validation evidence, and stop condition.
+3. Keep progress evidence-backed.
+4. Verify with the smallest relevant test or inspection before claiming completion.
+5. If Hermes cannot provide a required runtime capability, say so and use the fallback above.
+"""
+    return SkillTemplate(name, _frontmatter(name, definition.description) + "\n" + body)
+
+
 def workflow_skill(name: str) -> SkillTemplate:
     definition = _definitions_by_name()[name]
     title = name.replace("-", " ").title()

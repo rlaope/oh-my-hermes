@@ -1,101 +1,99 @@
 {
-  "schema_version": "omh_use_case_demo_collection/v1",
-  "count": 10,
+  "boundary": "Use-case demo cards are wrapper rendering artifacts. They prove OMH can shape a Hermes-facing card for the scenario; they are not runtime, connector, delivery, file, memory, or execution evidence.",
   "cards": [
     {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G1",
-      "id": "natural-automation-blueprint",
-      "title": "Natural-language scheduled automation",
-      "route": {
-        "primary_skill": "automation-blueprint",
-        "playbook": "scheduled-ops-blueprint",
-        "harness": "scheduled-ops-blueprint",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_scheduled_ops_blueprint",
-        "next_action_label": "preparing a scheduled-ops blueprint"
-      },
-      "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH automation-blueprint for: Every morning, research competitor updates and send a digest only if something changed.",
-        "direct_skill_invocation": "$automation-blueprint Every morning, research competitor updates and send a digest only if something changed.",
-        "headline": "[omh] Natural-language scheduled automation",
-        "body_lines": [
-          "Turn a plain recurring request into a Hermes cron/automation blueprint with delivery target and confirmation card.",
-          "Route: automation-blueprint -> preparing a scheduled-ops blueprint.",
-          "Hermes can shape recurring work without pretending cron, source retrieval, or delivery already happened."
-        ],
-        "status_line": "prepared_not_observed | automation-blueprint | preparing a scheduled-ops blueprint"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
-        "headline": "[omh] Natural-language scheduled automation",
-        "summary": "Hermes can shape recurring work without pretending cron, source retrieval, or delivery already happened.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Turn a plain recurring request into a Hermes cron/automation blueprint with delivery target and confirmation card."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "automation-blueprint skill: schedule intent, skill list, delivery target, silence policy, and confirmation/status card."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "A scheduled ops blueprint is not host cron creation, Hermes automation enablement, gateway delivery, source retrieval, or no-agent execution evidence."
-          }
-        ],
-        "chips": [
-          "G1",
-          "automation-blueprint",
-          "workflow_skill",
-          "prepare_scheduled_ops_blueprint"
-        ]
-      },
       "actions": [
         {
           "id": "prepare_scheduled_ops_blueprint",
-          "label": "Prepare a scheduled-ops blueprint",
           "kind": "hermes_prompt",
+          "label": "Prepare a scheduled-ops blueprint",
           "style": "primary",
           "value": "Use OMH automation-blueprint for: Every morning, research competitor updates and send a digest only if something changed."
         },
         {
           "id": "inspect_playbook",
-          "label": "Inspect playbook",
           "kind": "operator_command",
+          "label": "Inspect playbook",
           "style": "secondary",
           "value": "omh playbook inspect scheduled-ops-blueprint --json"
         },
         {
           "id": "inspect_harness",
-          "label": "Inspect harness",
           "kind": "operator_command",
+          "label": "Inspect harness",
           "style": "secondary",
           "value": "omh harness inspect scheduled-ops-blueprint --json"
         },
         {
           "id": "show_boundary",
-          "label": "Show evidence boundary",
           "kind": "static_boundary",
+          "label": "Show evidence boundary",
           "style": "secondary",
           "value": "A scheduled ops blueprint is not host cron creation, Hermes automation enablement, gateway delivery, source retrieval, or no-agent execution evidence."
         }
       ],
-      "operator_commands": [
-        "omh cases inspect G1 --json",
-        "omh playbook inspect scheduled-ops-blueprint --json",
-        "omh harness inspect scheduled-ops-blueprint --json"
-      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "Loop had automation metadata, but the Hermes cron-ready blueprint surface was the only partially implemented member of this pack.",
+        "direct_skill_invocation": "$automation-blueprint Every morning, research competitor updates and send a digest only if something changed.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "A scheduled ops blueprint is not host cron creation, Hermes automation enablement, gateway delivery, source retrieval, or no-agent execution evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "automation-blueprint skill: schedule intent, skill list, delivery target, silence policy, and confirmation/status card.",
+        "goal": "G1",
+        "harness": "scheduled-ops-blueprint",
+        "hermes_chat_prompt": "Use OMH automation-blueprint for: Every morning, research competitor updates and send a digest only if something changed.",
+        "hermes_use_case": "Turn a plain recurring request into a Hermes cron/automation blueprint with delivery target and confirmation card.",
+        "id": "natural-automation-blueprint",
+        "install_visibility": true,
+        "keywords": [
+          "cron",
+          "automation",
+          "every morning",
+          "daily",
+          "digest",
+          "slack",
+          "discord",
+          "telegram",
+          "\ub9e4\uc77c",
+          "\uc815\uae30",
+          "\uc790\ub3d9\ud654"
+        ],
+        "next_action": "prepare_scheduled_ops_blueprint",
+        "next_action_label": "preparing a scheduled-ops blueprint",
+        "playbook": "scheduled-ops-blueprint",
+        "preferred_usage": "Use as an installed Hermes workflow skill when the user asks for recurring automation or scheduled ops planning.",
+        "primary_skill": "automation-blueprint",
+        "priority": 1,
+        "projections": [
+          "routable",
+          "installable",
+          "playbook",
+          "harness",
+          "workflow_reference",
+          "capability"
+        ],
+        "proof_surfaces": [
+          "omh ops blueprint",
+          "omh playbook inspect scheduled-ops-blueprint",
+          "omh harness inspect scheduled-ops-blueprint"
+        ],
+        "title": "Natural-language scheduled automation",
+        "user_value": "Hermes can shape recurring work without pretending cron, source retrieval, or delivery already happened."
+      },
+      "chat_surface": {
+        "body_lines": [
+          "Turn a plain recurring request into a Hermes cron/automation blueprint with delivery target and confirmation card.",
+          "Route: automation-blueprint -> preparing a scheduled-ops blueprint.",
+          "Hermes can shape recurring work without pretending cron, source retrieval, or delivery already happened."
+        ],
+        "direct_skill_invocation": "$automation-blueprint Every morning, research competitor updates and send a digest only if something changed.",
+        "headline": "[omh] Natural-language scheduled automation",
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | automation-blueprint | preparing a scheduled-ops blueprint",
+        "suggested_user_prompt": "Use OMH automation-blueprint for: Every morning, research competitor updates and send a digest only if something changed."
+      },
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "A scheduled ops blueprint is not host cron creation, Hermes automation enablement, gateway delivery, source retrieval, or no-agent execution evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -109,43 +107,122 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G1",
-        "priority": 1,
-        "id": "natural-automation-blueprint",
-        "title": "Natural-language scheduled automation",
-        "hermes_use_case": "Turn a plain recurring request into a Hermes cron/automation blueprint with delivery target and confirmation card.",
-        "current_gap": "Loop had automation metadata, but the Hermes cron-ready blueprint surface was the only partially implemented member of this pack.",
-        "primary_skill": "automation-blueprint",
-        "playbook": "scheduled-ops-blueprint",
-        "harness": "scheduled-ops-blueprint",
-        "feature_surface": "automation-blueprint skill: schedule intent, skill list, delivery target, silence policy, and confirmation/status card.",
-        "direct_skill_invocation": "$automation-blueprint Every morning, research competitor updates and send a digest only if something changed.",
-        "hermes_chat_prompt": "Use OMH automation-blueprint for: Every morning, research competitor updates and send a digest only if something changed.",
-        "next_action": "prepare_scheduled_ops_blueprint",
-        "user_value": "Hermes can shape recurring work without pretending cron, source retrieval, or delivery already happened.",
-        "evidence_boundary": "A scheduled ops blueprint is not host cron creation, Hermes automation enablement, gateway delivery, source retrieval, or no-agent execution evidence.",
-        "proof_surfaces": [
-          "omh ops blueprint",
-          "omh playbook inspect scheduled-ops-blueprint",
-          "omh harness inspect scheduled-ops-blueprint"
-        ],
-        "keywords": [
-          "cron",
-          "automation",
-          "every morning",
-          "daily",
-          "digest",
-          "slack",
-          "discord",
-          "telegram",
-          "매일",
-          "정기",
-          "자동화"
-        ],
+      "goal": "G1",
+      "id": "natural-automation-blueprint",
+      "operator_commands": [
+        "omh cases inspect G1 --json",
+        "omh playbook inspect scheduled-ops-blueprint --json",
+        "omh harness inspect scheduled-ops-blueprint --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "scheduled-ops-blueprint",
+        "install_visibility": true,
+        "next_action": "prepare_scheduled_ops_blueprint",
+        "next_action_label": "preparing a scheduled-ops blueprint",
+        "playbook": "scheduled-ops-blueprint",
+        "primary_skill": "automation-blueprint"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "Natural-language scheduled automation",
+      "wrapper_card": {
+        "chips": [
+          "G1",
+          "automation-blueprint",
+          "workflow_skill",
+          "prepare_scheduled_ops_blueprint"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] Natural-language scheduled automation",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Turn a plain recurring request into a Hermes cron/automation blueprint with delivery target and confirmation card.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "automation-blueprint skill: schedule intent, skill list, delivery target, silence policy, and confirmation/status card.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "A scheduled ops blueprint is not host cron creation, Hermes automation enablement, gateway delivery, source retrieval, or no-agent execution evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Hermes can shape recurring work without pretending cron, source retrieval, or delivery already happened."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_github_event_ops_card",
+          "kind": "hermes_prompt",
+          "label": "Prepare a GitHub event operations card",
+          "style": "primary",
+          "value": "Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff."
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect github-event-ops --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect github-event-ops --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "A GitHub event ops card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH had handoff/status strength, but GitHub event recipes were not first-class.",
+        "direct_skill_invocation": "$github-event-ops PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "A GitHub event ops card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "github-event-ops workflow skill: PR/issue/CI event classification with label/review/fix-handoff actions.",
+        "goal": "G2",
+        "harness": "github-event-ops",
+        "hermes_chat_prompt": "Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
+        "hermes_use_case": "Route PR opened, CI failed, issue opened, and review events into review, triage, labeling, or fix-handoff cards.",
+        "id": "github-event-ops",
+        "install_visibility": true,
+        "keywords": [
+          "github",
+          "webhook",
+          "pr opened",
+          "ci failed",
+          "issue opened",
+          "label",
+          "review",
+          "\uae43\ud5c8\ube0c",
+          "\uc774\uc288",
+          "ci"
+        ],
+        "next_action": "prepare_github_event_ops_card",
+        "next_action_label": "preparing a GitHub event operations card",
+        "playbook": "github-event-ops",
+        "preferred_usage": "Use as an installed Hermes workflow skill when users ask how to triage GitHub PR, issue, review, webhook, or CI events into label, review, or fix-handoff actions without claiming GitHub mutation.",
+        "primary_skill": "github-event-ops",
+        "priority": 2,
         "projections": [
           "routable",
           "installable",
@@ -154,107 +231,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when the user asks for recurring automation or scheduled ops planning.",
-        "compatibility_alias": false,
-        "next_action_label": "preparing a scheduled-ops blueprint"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G2",
-      "id": "github-event-ops",
-      "title": "GitHub PR/Issue event operations",
-      "route": {
-        "primary_skill": "github-event-ops",
-        "playbook": "github-event-ops",
-        "harness": "github-event-ops",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_github_event_ops_card",
-        "next_action_label": "preparing a GitHub event operations card"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect github-event-ops",
+          "omh harness inspect github-event-ops"
+        ],
+        "title": "GitHub PR/Issue event operations",
+        "user_value": "Maintainers can paste or receive GitHub events and get a safe next action without claiming a bot mutated GitHub."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
-        "direct_skill_invocation": "$github-event-ops PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
-        "headline": "[omh] GitHub PR/Issue event operations",
         "body_lines": [
           "Route PR opened, CI failed, issue opened, and review events into review, triage, labeling, or fix-handoff cards.",
           "Route: github-event-ops -> preparing a GitHub event operations card.",
           "Maintainers can paste or receive GitHub events and get a safe next action without claiming a bot mutated GitHub."
         ],
-        "status_line": "prepared_not_observed | github-event-ops | preparing a GitHub event operations card"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$github-event-ops PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
         "headline": "[omh] GitHub PR/Issue event operations",
-        "summary": "Maintainers can paste or receive GitHub events and get a safe next action without claiming a bot mutated GitHub.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Route PR opened, CI failed, issue opened, and review events into review, triage, labeling, or fix-handoff cards."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "github-event-ops workflow skill: PR/issue/CI event classification with label/review/fix-handoff actions."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "A GitHub event ops card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence."
-          }
-        ],
-        "chips": [
-          "G2",
-          "github-event-ops",
-          "workflow_skill",
-          "prepare_github_event_ops_card"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | github-event-ops | preparing a GitHub event operations card",
+        "suggested_user_prompt": "Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff."
       },
-      "actions": [
-        {
-          "id": "prepare_github_event_ops_card",
-          "label": "Prepare a GitHub event operations card",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff."
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect github-event-ops --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect github-event-ops --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "A GitHub event ops card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G2 --json",
-        "omh playbook inspect github-event-ops --json",
-        "omh harness inspect github-event-ops --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "A GitHub event ops card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -268,42 +265,121 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G2",
-        "priority": 2,
-        "id": "github-event-ops",
-        "title": "GitHub PR/Issue event operations",
-        "hermes_use_case": "Route PR opened, CI failed, issue opened, and review events into review, triage, labeling, or fix-handoff cards.",
-        "current_gap": "OMH had handoff/status strength, but GitHub event recipes were not first-class.",
-        "primary_skill": "github-event-ops",
-        "playbook": "github-event-ops",
-        "harness": "github-event-ops",
-        "feature_surface": "github-event-ops workflow skill: PR/issue/CI event classification with label/review/fix-handoff actions.",
-        "direct_skill_invocation": "$github-event-ops PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
-        "hermes_chat_prompt": "Use OMH github-event-ops for: PR opened with failing CI; decide whether to review, label, or prepare a fix handoff.",
-        "next_action": "prepare_github_event_ops_card",
-        "user_value": "Maintainers can paste or receive GitHub events and get a safe next action without claiming a bot mutated GitHub.",
-        "evidence_boundary": "A GitHub event ops card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect github-event-ops",
-          "omh harness inspect github-event-ops"
-        ],
-        "keywords": [
-          "github",
-          "webhook",
-          "pr opened",
-          "ci failed",
-          "issue opened",
-          "label",
-          "review",
-          "깃허브",
-          "이슈",
-          "ci"
-        ],
+      "goal": "G2",
+      "id": "github-event-ops",
+      "operator_commands": [
+        "omh cases inspect G2 --json",
+        "omh playbook inspect github-event-ops --json",
+        "omh harness inspect github-event-ops --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "github-event-ops",
+        "install_visibility": true,
+        "next_action": "prepare_github_event_ops_card",
+        "next_action_label": "preparing a GitHub event operations card",
+        "playbook": "github-event-ops",
+        "primary_skill": "github-event-ops"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "GitHub PR/Issue event operations",
+      "wrapper_card": {
+        "chips": [
+          "G2",
+          "github-event-ops",
+          "workflow_skill",
+          "prepare_github_event_ops_card"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] GitHub PR/Issue event operations",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Route PR opened, CI failed, issue opened, and review events into review, triage, labeling, or fix-handoff cards.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "github-event-ops workflow skill: PR/issue/CI event classification with label/review/fix-handoff actions.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "A GitHub event ops card is not webhook delivery, GitHub API mutation, label application, review completion, CI rerun, or fix execution evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Maintainers can paste or receive GitHub events and get a safe next action without claiming a bot mutated GitHub."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_agent_board_card",
+          "kind": "hermes_prompt",
+          "label": "Prepare an agent board card",
+          "style": "primary",
+          "value": "Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist."
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect agent-board --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect agent-board --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH had target topology and team profiles, but not a Hermes board contract.",
+        "direct_skill_invocation": "$agent-board Coordinate CTO, PM, QA, and release agents on this launch checklist.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists.",
+        "exposure": "workflow_skill",
+        "feature_surface": "agent-board workflow skill: task/handoff/heartbeat/block/complete cards connected to OMH status.",
+        "goal": "G3",
+        "harness": "agent-board",
+        "hermes_chat_prompt": "Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist.",
+        "hermes_use_case": "Let multiple Hermes profiles or agents collaborate through task, handoff, heartbeat, blocker, and completion states.",
+        "id": "agent-board",
+        "install_visibility": true,
+        "keywords": [
+          "agent board",
+          "kanban",
+          "multi agent",
+          "heartbeat",
+          "blocker",
+          "handoff",
+          "profile",
+          "\uce78\ubc18",
+          "\uc5ec\ub7ec \uc5d0\uc774\uc804\ud2b8"
+        ],
+        "next_action": "prepare_agent_board_card",
+        "next_action_label": "preparing an agent board card",
+        "playbook": "agent-board",
+        "preferred_usage": "Use as an installed Hermes workflow skill when users ask to coordinate multiple Hermes agents, subagents, roles, handoffs, blockers, heartbeats, or board-shaped collaboration without claiming other agents accepted or completed work.",
+        "primary_skill": "agent-board",
+        "priority": 3,
         "projections": [
           "routable",
           "installable",
@@ -312,107 +388,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when users ask how to triage GitHub PR, issue, review, webhook, or CI events into label, review, or fix-handoff actions without claiming GitHub mutation.",
-        "compatibility_alias": false,
-        "next_action_label": "preparing a GitHub event operations card"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G3",
-      "id": "agent-board",
-      "title": "Multi-agent Kanban board",
-      "route": {
-        "primary_skill": "agent-board",
-        "playbook": "agent-board",
-        "harness": "agent-board",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_agent_board_card",
-        "next_action_label": "preparing an agent board card"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect agent-board",
+          "omh harness inspect agent-board"
+        ],
+        "title": "Multi-agent Kanban board",
+        "user_value": "Teams see who owns each lane and which states are only prepared versus observed."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist.",
-        "direct_skill_invocation": "$agent-board Coordinate CTO, PM, QA, and release agents on this launch checklist.",
-        "headline": "[omh] Multi-agent Kanban board",
         "body_lines": [
           "Let multiple Hermes profiles or agents collaborate through task, handoff, heartbeat, blocker, and completion states.",
           "Route: agent-board -> preparing an agent board card.",
           "Teams see who owns each lane and which states are only prepared versus observed."
         ],
-        "status_line": "prepared_not_observed | agent-board | preparing an agent board card"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$agent-board Coordinate CTO, PM, QA, and release agents on this launch checklist.",
         "headline": "[omh] Multi-agent Kanban board",
-        "summary": "Teams see who owns each lane and which states are only prepared versus observed.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Let multiple Hermes profiles or agents collaborate through task, handoff, heartbeat, blocker, and completion states."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "agent-board workflow skill: task/handoff/heartbeat/block/complete cards connected to OMH status."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists."
-          }
-        ],
-        "chips": [
-          "G3",
-          "agent-board",
-          "workflow_skill",
-          "prepare_agent_board_card"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | agent-board | preparing an agent board card",
+        "suggested_user_prompt": "Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist."
       },
-      "actions": [
-        {
-          "id": "prepare_agent_board_card",
-          "label": "Prepare an agent board card",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist."
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect agent-board --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect agent-board --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G3 --json",
-        "omh playbook inspect agent-board --json",
-        "omh harness inspect agent-board --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -426,41 +422,122 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G3",
-        "priority": 3,
-        "id": "agent-board",
-        "title": "Multi-agent Kanban board",
-        "hermes_use_case": "Let multiple Hermes profiles or agents collaborate through task, handoff, heartbeat, blocker, and completion states.",
-        "current_gap": "OMH had target topology and team profiles, but not a Hermes board contract.",
-        "primary_skill": "agent-board",
-        "playbook": "agent-board",
-        "harness": "agent-board",
-        "feature_surface": "agent-board workflow skill: task/handoff/heartbeat/block/complete cards connected to OMH status.",
-        "direct_skill_invocation": "$agent-board Coordinate CTO, PM, QA, and release agents on this launch checklist.",
-        "hermes_chat_prompt": "Use OMH agent-board for: Coordinate CTO, PM, QA, and release agents on this launch checklist.",
-        "next_action": "prepare_agent_board_card",
-        "user_value": "Teams see who owns each lane and which states are only prepared versus observed.",
-        "evidence_boundary": "An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect agent-board",
-          "omh harness inspect agent-board"
-        ],
-        "keywords": [
-          "agent board",
-          "kanban",
-          "multi agent",
-          "heartbeat",
-          "blocker",
-          "handoff",
-          "profile",
-          "칸반",
-          "여러 에이전트"
-        ],
+      "goal": "G3",
+      "id": "agent-board",
+      "operator_commands": [
+        "omh cases inspect G3 --json",
+        "omh playbook inspect agent-board --json",
+        "omh harness inspect agent-board --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "agent-board",
+        "install_visibility": true,
+        "next_action": "prepare_agent_board_card",
+        "next_action_label": "preparing an agent board card",
+        "playbook": "agent-board",
+        "primary_skill": "agent-board"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "Multi-agent Kanban board",
+      "wrapper_card": {
+        "chips": [
+          "G3",
+          "agent-board",
+          "workflow_skill",
+          "prepare_agent_board_card"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] Multi-agent Kanban board",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Let multiple Hermes profiles or agents collaborate through task, handoff, heartbeat, blocker, and completion states.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "agent-board workflow skill: task/handoff/heartbeat/block/complete cards connected to OMH status.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed unless target-specific evidence exists.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Teams see who owns each lane and which states are only prepared versus observed."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_memory_sync",
+          "kind": "hermes_prompt",
+          "label": "Prepare a memory curation review",
+          "style": "primary",
+          "value": "Use OMH memory-sync for: Inspect stale project memories and ask me what to keep."
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect memory-sync --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect memory-sync --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH had memory inspect, but not a deep Hermes MEMORY.md/USER.md/curator flow.",
+        "direct_skill_invocation": "$memory-sync Inspect stale project memories and ask me what to keep.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "memory-sync skill: candidate cleanup list, conflict detection, and human approval gates.",
+        "goal": "G4",
+        "harness": "memory-sync",
+        "hermes_chat_prompt": "Use OMH memory-sync for: Inspect stale project memories and ask me what to keep.",
+        "hermes_use_case": "Review stale memories, conflicting facts, and duplicate skills with approve/reject/update actions.",
+        "id": "memory-sync",
+        "install_visibility": true,
+        "keywords": [
+          "memory",
+          "curation",
+          "stale",
+          "conflict",
+          "duplicate",
+          "MEMORY.md",
+          "USER.md",
+          "\uae30\uc5b5",
+          "\uba54\ubaa8\ub9ac",
+          "\uc911\ubcf5"
+        ],
+        "next_action": "prepare_memory_sync",
+        "next_action_label": "preparing a memory curation review",
+        "playbook": "memory-sync",
+        "preferred_usage": "Use as an installed Hermes workflow skill when the user asks to review stale, duplicate, or conflicting memory and skill context.",
+        "primary_skill": "memory-sync",
+        "priority": 4,
         "projections": [
           "routable",
           "installable",
@@ -469,107 +546,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when users ask to coordinate multiple Hermes agents, subagents, roles, handoffs, blockers, heartbeats, or board-shaped collaboration without claiming other agents accepted or completed work.",
-        "compatibility_alias": false,
-        "next_action_label": "preparing an agent board card"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G4",
-      "id": "memory-curation-review",
-      "title": "Memory and skill curation review",
-      "route": {
-        "primary_skill": "memory-curation-review",
-        "playbook": "memory-curation-review",
-        "harness": "memory-curation-review",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_memory_curation_review",
-        "next_action_label": "preparing a memory curation review"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect memory-sync",
+          "omh harness inspect memory-sync"
+        ],
+        "title": "Memory and skill curation review",
+        "user_value": "Users can clean memory and skill drift without a silent destructive edit."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH memory-curation-review for: Inspect stale project memories and ask me what to keep.",
-        "direct_skill_invocation": "$memory-curation-review Inspect stale project memories and ask me what to keep.",
-        "headline": "[omh] Memory and skill curation review",
         "body_lines": [
           "Review stale memories, conflicting facts, and duplicate skills with approve/reject/update actions.",
-          "Route: memory-curation-review -> preparing a memory curation review.",
+          "Route: memory-sync -> preparing a memory curation review.",
           "Users can clean memory and skill drift without a silent destructive edit."
         ],
-        "status_line": "prepared_not_observed | memory-curation-review | preparing a memory curation review"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$memory-sync Inspect stale project memories and ask me what to keep.",
         "headline": "[omh] Memory and skill curation review",
-        "summary": "Users can clean memory and skill drift without a silent destructive edit.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Review stale memories, conflicting facts, and duplicate skills with approve/reject/update actions."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "memory-curation-review skill: candidate cleanup list, conflict detection, and human approval gates."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence."
-          }
-        ],
-        "chips": [
-          "G4",
-          "memory-curation-review",
-          "workflow_skill",
-          "prepare_memory_curation_review"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | memory-sync | preparing a memory curation review",
+        "suggested_user_prompt": "Use OMH memory-sync for: Inspect stale project memories and ask me what to keep."
       },
-      "actions": [
-        {
-          "id": "prepare_memory_curation_review",
-          "label": "Prepare a memory curation review",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH memory-curation-review for: Inspect stale project memories and ask me what to keep."
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect memory-curation-review --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect memory-curation-review --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G4 --json",
-        "omh playbook inspect memory-curation-review --json",
-        "omh harness inspect memory-curation-review --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -583,42 +580,123 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G4",
-        "priority": 4,
-        "id": "memory-curation-review",
-        "title": "Memory and skill curation review",
-        "hermes_use_case": "Review stale memories, conflicting facts, and duplicate skills with approve/reject/update actions.",
-        "current_gap": "OMH had memory inspect, but not a deep Hermes MEMORY.md/USER.md/curator flow.",
-        "primary_skill": "memory-curation-review",
-        "playbook": "memory-curation-review",
-        "harness": "memory-curation-review",
-        "feature_surface": "memory-curation-review skill: candidate cleanup list, conflict detection, and human approval gates.",
-        "direct_skill_invocation": "$memory-curation-review Inspect stale project memories and ask me what to keep.",
-        "hermes_chat_prompt": "Use OMH memory-curation-review for: Inspect stale project memories and ask me what to keep.",
-        "next_action": "prepare_memory_curation_review",
-        "user_value": "Users can clean memory and skill drift without a silent destructive edit.",
-        "evidence_boundary": "A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect memory-curation-review",
-          "omh harness inspect memory-curation-review"
-        ],
-        "keywords": [
-          "memory",
-          "curation",
-          "stale",
-          "conflict",
-          "duplicate",
-          "MEMORY.md",
-          "USER.md",
-          "기억",
-          "메모리",
-          "중복"
-        ],
+      "goal": "G4",
+      "id": "memory-sync",
+      "operator_commands": [
+        "omh cases inspect G4 --json",
+        "omh playbook inspect memory-sync --json",
+        "omh harness inspect memory-sync --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "memory-sync",
+        "install_visibility": true,
+        "next_action": "prepare_memory_sync",
+        "next_action_label": "preparing a memory curation review",
+        "playbook": "memory-sync",
+        "primary_skill": "memory-sync"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "Memory and skill curation review",
+      "wrapper_card": {
+        "chips": [
+          "G4",
+          "memory-sync",
+          "workflow_skill",
+          "prepare_memory_sync"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] Memory and skill curation review",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Review stale memories, conflicting facts, and duplicate skills with approve/reject/update actions.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "memory-sync skill: candidate cleanup list, conflict detection, and human approval gates.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "A memory curation review is not Hermes internal memory, MEMORY.md, USER.md, or skill-file modification evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Users can clean memory and skill drift without a silent destructive edit."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_gateway_intent_card",
+          "kind": "hermes_prompt",
+          "label": "Prepare a gateway intent card",
+          "style": "primary",
+          "value": "Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed."
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect gateway-intent-card --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect gateway-intent-card --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH had wrapper contracts, but gateway-native target and delivery models were shallow.",
+        "direct_skill_invocation": "$gateway-intent-card Route this Discord thread update silently unless action is needed.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "gateway-intent-card workflow skill: origin, thread, delivery, silence, attachment, and status-update policy.",
+        "goal": "G5",
+        "harness": "gateway-intent-card",
+        "hermes_chat_prompt": "Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed.",
+        "hermes_use_case": "Normalize Discord, Slack, Telegram, and other gateway sessions into origin/thread/delivery/silent/attachment/status-update policy.",
+        "id": "gateway-intent-card",
+        "install_visibility": true,
+        "keywords": [
+          "gateway",
+          "discord",
+          "slack",
+          "telegram",
+          "thread",
+          "delivery",
+          "attachment",
+          "silent",
+          "\uac8c\uc774\ud2b8\uc6e8\uc774",
+          "\ub514\uc2a4\ucf54\ub4dc",
+          "\uc2ac\ub799"
+        ],
+        "next_action": "prepare_gateway_intent_card",
+        "next_action_label": "preparing a gateway intent card",
+        "playbook": "gateway-intent-card",
+        "preferred_usage": "Use as an installed Hermes workflow skill when users ask to route, notify, post, or package Discord, Slack, Telegram, webhook, thread, attachment, or silent/status-update gateway intent without claiming delivery.",
+        "primary_skill": "gateway-intent-card",
+        "priority": 5,
         "projections": [
           "routable",
           "installable",
@@ -627,107 +705,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when the user asks to review stale, duplicate, or conflicting memory and skill context.",
-        "compatibility_alias": false,
-        "next_action_label": "preparing a memory curation review"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G5",
-      "id": "gateway-intent-card",
-      "title": "Gateway-native intent card",
-      "route": {
-        "primary_skill": "gateway-intent-card",
-        "playbook": "gateway-intent-card",
-        "harness": "gateway-intent-card",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_gateway_intent_card",
-        "next_action_label": "preparing a gateway intent card"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect gateway-intent-card",
+          "omh harness inspect gateway-intent-card"
+        ],
+        "title": "Gateway-native intent card",
+        "user_value": "Gateway builders get a platform-neutral card Hermes can use without hardcoding a bot SDK into OMH."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed.",
-        "direct_skill_invocation": "$gateway-intent-card Route this Discord thread update silently unless action is needed.",
-        "headline": "[omh] Gateway-native intent card",
         "body_lines": [
           "Normalize Discord, Slack, Telegram, and other gateway sessions into origin/thread/delivery/silent/attachment/status-update policy.",
           "Route: gateway-intent-card -> preparing a gateway intent card.",
           "Gateway builders get a platform-neutral card Hermes can use without hardcoding a bot SDK into OMH."
         ],
-        "status_line": "prepared_not_observed | gateway-intent-card | preparing a gateway intent card"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$gateway-intent-card Route this Discord thread update silently unless action is needed.",
         "headline": "[omh] Gateway-native intent card",
-        "summary": "Gateway builders get a platform-neutral card Hermes can use without hardcoding a bot SDK into OMH.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Normalize Discord, Slack, Telegram, and other gateway sessions into origin/thread/delivery/silent/attachment/status-update policy."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "gateway-intent-card workflow skill: origin, thread, delivery, silence, attachment, and status-update policy."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence."
-          }
-        ],
-        "chips": [
-          "G5",
-          "gateway-intent-card",
-          "workflow_skill",
-          "prepare_gateway_intent_card"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | gateway-intent-card | preparing a gateway intent card",
+        "suggested_user_prompt": "Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed."
       },
-      "actions": [
-        {
-          "id": "prepare_gateway_intent_card",
-          "label": "Prepare a gateway intent card",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed."
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect gateway-intent-card --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect gateway-intent-card --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G5 --json",
-        "omh playbook inspect gateway-intent-card --json",
-        "omh harness inspect gateway-intent-card --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -741,43 +739,123 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G5",
-        "priority": 5,
-        "id": "gateway-intent-card",
-        "title": "Gateway-native intent card",
-        "hermes_use_case": "Normalize Discord, Slack, Telegram, and other gateway sessions into origin/thread/delivery/silent/attachment/status-update policy.",
-        "current_gap": "OMH had wrapper contracts, but gateway-native target and delivery models were shallow.",
-        "primary_skill": "gateway-intent-card",
-        "playbook": "gateway-intent-card",
-        "harness": "gateway-intent-card",
-        "feature_surface": "gateway-intent-card workflow skill: origin, thread, delivery, silence, attachment, and status-update policy.",
-        "direct_skill_invocation": "$gateway-intent-card Route this Discord thread update silently unless action is needed.",
-        "hermes_chat_prompt": "Use OMH gateway-intent-card for: Route this Discord thread update silently unless action is needed.",
-        "next_action": "prepare_gateway_intent_card",
-        "user_value": "Gateway builders get a platform-neutral card Hermes can use without hardcoding a bot SDK into OMH.",
-        "evidence_boundary": "A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect gateway-intent-card",
-          "omh harness inspect gateway-intent-card"
-        ],
-        "keywords": [
-          "gateway",
-          "discord",
-          "slack",
-          "telegram",
-          "thread",
-          "delivery",
-          "attachment",
-          "silent",
-          "게이트웨이",
-          "디스코드",
-          "슬랙"
-        ],
+      "goal": "G5",
+      "id": "gateway-intent-card",
+      "operator_commands": [
+        "omh cases inspect G5 --json",
+        "omh playbook inspect gateway-intent-card --json",
+        "omh harness inspect gateway-intent-card --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "gateway-intent-card",
+        "install_visibility": true,
+        "next_action": "prepare_gateway_intent_card",
+        "next_action_label": "preparing a gateway intent card",
+        "playbook": "gateway-intent-card",
+        "primary_skill": "gateway-intent-card"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "Gateway-native intent card",
+      "wrapper_card": {
+        "chips": [
+          "G5",
+          "gateway-intent-card",
+          "workflow_skill",
+          "prepare_gateway_intent_card"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] Gateway-native intent card",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Normalize Discord, Slack, Telegram, and other gateway sessions into origin/thread/delivery/silent/attachment/status-update policy.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "gateway-intent-card workflow skill: origin, thread, delivery, silence, attachment, and status-update policy.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "A gateway intent card is not platform login, message send, thread mutation, attachment upload, or delivery evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Gateway builders get a platform-neutral card Hermes can use without hardcoding a bot SDK into OMH."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_executor_runtime_readiness",
+          "kind": "hermes_prompt",
+          "label": "Check coding-agent readiness",
+          "style": "primary",
+          "value": "Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?"
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect executor-runtime-readiness --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect executor-runtime-readiness --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH had executor-neutral handoff, but runtime migration readiness was weak.",
+        "direct_skill_invocation": "$executor-runtime-readiness Can this task run in Codex, Claude Code, or Hermes coding?",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "executor-runtime-readiness workflow skill: runtime matrix, missing tools, worktree posture, and handoff mode.",
+        "goal": "G6",
+        "harness": "executor-runtime-readiness",
+        "hermes_chat_prompt": "Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?",
+        "hermes_use_case": "Show whether Codex, Claude Code, Hermes coding, or an oh-my runtime has the tools, credentials, and handoff mode needed.",
+        "id": "executor-runtime-readiness",
+        "install_visibility": true,
+        "keywords": [
+          "codex",
+          "claude code",
+          "runtime",
+          "executor",
+          "missing tools",
+          "handoff mode",
+          "omx",
+          "omc",
+          "omo",
+          "\ucf54\ub371\uc2a4",
+          "\ud074\ub85c\ub4dc"
+        ],
+        "next_action": "prepare_executor_runtime_readiness",
+        "next_action_label": "checking coding-agent readiness",
+        "playbook": "executor-runtime-readiness",
+        "preferred_usage": "Use as an installed Hermes workflow skill when users ask whether Codex, Claude Code, Hermes coding, or another runtime has the tools, credentials, worktree posture, and handoff mode needed before dispatch.",
+        "primary_skill": "executor-runtime-readiness",
+        "priority": 6,
         "projections": [
           "routable",
           "installable",
@@ -786,107 +864,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when users ask to route, notify, post, or package Discord, Slack, Telegram, webhook, thread, attachment, or silent/status-update gateway intent without claiming delivery.",
-        "compatibility_alias": false,
-        "next_action_label": "preparing a gateway intent card"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G6",
-      "id": "executor-runtime-readiness",
-      "title": "Executor runtime readiness",
-      "route": {
-        "primary_skill": "executor-runtime-readiness",
-        "playbook": "executor-runtime-readiness",
-        "harness": "executor-runtime-readiness",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_executor_runtime_readiness",
-        "next_action_label": "checking coding-agent readiness"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect executor-runtime-readiness",
+          "omh harness inspect executor-runtime-readiness"
+        ],
+        "title": "Executor runtime readiness",
+        "user_value": "Users can choose Codex, Claude Code, Hermes, or plugin runtimes without guessing hidden capabilities."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?",
-        "direct_skill_invocation": "$executor-runtime-readiness Can this task run in Codex, Claude Code, or Hermes coding?",
-        "headline": "[omh] Executor runtime readiness",
         "body_lines": [
           "Show whether Codex, Claude Code, Hermes coding, or an oh-my runtime has the tools, credentials, and handoff mode needed.",
           "Route: executor-runtime-readiness -> checking coding-agent readiness.",
           "Users can choose Codex, Claude Code, Hermes, or plugin runtimes without guessing hidden capabilities."
         ],
-        "status_line": "prepared_not_observed | executor-runtime-readiness | checking coding-agent readiness"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$executor-runtime-readiness Can this task run in Codex, Claude Code, or Hermes coding?",
         "headline": "[omh] Executor runtime readiness",
-        "summary": "Users can choose Codex, Claude Code, Hermes, or plugin runtimes without guessing hidden capabilities.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Show whether Codex, Claude Code, Hermes coding, or an oh-my runtime has the tools, credentials, and handoff mode needed."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "executor-runtime-readiness workflow skill: runtime matrix, missing tools, worktree posture, and handoff mode."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence."
-          }
-        ],
-        "chips": [
-          "G6",
-          "executor-runtime-readiness",
-          "workflow_skill",
-          "prepare_executor_runtime_readiness"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | executor-runtime-readiness | checking coding-agent readiness",
+        "suggested_user_prompt": "Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?"
       },
-      "actions": [
-        {
-          "id": "prepare_executor_runtime_readiness",
-          "label": "Check coding-agent readiness",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?"
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect executor-runtime-readiness --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect executor-runtime-readiness --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G6 --json",
-        "omh playbook inspect executor-runtime-readiness --json",
-        "omh harness inspect executor-runtime-readiness --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -900,43 +898,124 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G6",
-        "priority": 6,
-        "id": "executor-runtime-readiness",
-        "title": "Executor runtime readiness",
-        "hermes_use_case": "Show whether Codex, Claude Code, Hermes coding, or an oh-my runtime has the tools, credentials, and handoff mode needed.",
-        "current_gap": "OMH had executor-neutral handoff, but runtime migration readiness was weak.",
-        "primary_skill": "executor-runtime-readiness",
-        "playbook": "executor-runtime-readiness",
-        "harness": "executor-runtime-readiness",
-        "feature_surface": "executor-runtime-readiness workflow skill: runtime matrix, missing tools, worktree posture, and handoff mode.",
-        "direct_skill_invocation": "$executor-runtime-readiness Can this task run in Codex, Claude Code, or Hermes coding?",
-        "hermes_chat_prompt": "Use OMH executor-runtime-readiness for: Can this task run in Codex, Claude Code, or Hermes coding?",
-        "next_action": "prepare_executor_runtime_readiness",
-        "user_value": "Users can choose Codex, Claude Code, Hermes, or plugin runtimes without guessing hidden capabilities.",
-        "evidence_boundary": "Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect executor-runtime-readiness",
-          "omh harness inspect executor-runtime-readiness"
-        ],
-        "keywords": [
-          "codex",
-          "claude code",
-          "runtime",
-          "executor",
-          "missing tools",
-          "handoff mode",
-          "omx",
-          "omc",
-          "omo",
-          "코덱스",
-          "클로드"
-        ],
+      "goal": "G6",
+      "id": "executor-runtime-readiness",
+      "operator_commands": [
+        "omh cases inspect G6 --json",
+        "omh playbook inspect executor-runtime-readiness --json",
+        "omh harness inspect executor-runtime-readiness --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "executor-runtime-readiness",
+        "install_visibility": true,
+        "next_action": "prepare_executor_runtime_readiness",
+        "next_action_label": "checking coding-agent readiness",
+        "playbook": "executor-runtime-readiness",
+        "primary_skill": "executor-runtime-readiness"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "Executor runtime readiness",
+      "wrapper_card": {
+        "chips": [
+          "G6",
+          "executor-runtime-readiness",
+          "workflow_skill",
+          "prepare_executor_runtime_readiness"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] Executor runtime readiness",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Show whether Codex, Claude Code, Hermes coding, or an oh-my runtime has the tools, credentials, and handoff mode needed.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "executor-runtime-readiness workflow skill: runtime matrix, missing tools, worktree posture, and handoff mode.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "Runtime readiness is not executor dispatch, plugin load, tool invocation, code execution, review, CI, or merge evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Users can choose Codex, Claude Code, Hermes, or plugin runtimes without guessing hidden capabilities."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_deliverable_package",
+          "kind": "hermes_prompt",
+          "label": "Prepare a deliverable package",
+          "style": "primary",
+          "value": "Use OMH deliverable-package for: Turn this research into PPT and PDF with attachment status."
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect deliverable-package --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect deliverable-package --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH had materials-package, but not a Hermes deliverable attachment UX lane.",
+        "direct_skill_invocation": "$deliverable-package Turn this research into PPT and PDF with attachment status.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "deliverable-package skill: file deliverable plan and prepared/generated/attached status card.",
+        "goal": "G7",
+        "harness": "deliverable-package",
+        "hermes_chat_prompt": "Use OMH deliverable-package for: Turn this research into PPT and PDF with attachment status.",
+        "hermes_use_case": "Track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared/generated/QA/attached states.",
+        "id": "deliverable-package",
+        "install_visibility": true,
+        "keywords": [
+          "deliverable",
+          "file",
+          "attachment",
+          "ppt",
+          "pdf",
+          "xlsx",
+          "docx",
+          "hwp",
+          "keynote",
+          "\uc790\ub8cc",
+          "\ucca8\ubd80",
+          "\ud30c\uc77c"
+        ],
+        "next_action": "prepare_deliverable_package",
+        "next_action_label": "preparing a deliverable package",
+        "playbook": "deliverable-package",
+        "preferred_usage": "Use as an installed Hermes workflow skill when the user asks for file deliverable packaging and attachment lifecycle status.",
+        "primary_skill": "deliverable-package",
+        "priority": 7,
         "projections": [
           "routable",
           "installable",
@@ -945,107 +1024,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when users ask whether Codex, Claude Code, Hermes coding, or another runtime has the tools, credentials, worktree posture, and handoff mode needed before dispatch.",
-        "compatibility_alias": false,
-        "next_action_label": "checking coding-agent readiness"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G7",
-      "id": "deliverable-package",
-      "title": "Deliverable file package",
-      "route": {
-        "primary_skill": "deliverable-package",
-        "playbook": "deliverable-package",
-        "harness": "deliverable-package",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_deliverable_package",
-        "next_action_label": "preparing a deliverable package"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect deliverable-package",
+          "omh harness inspect deliverable-package"
+        ],
+        "title": "Deliverable file package",
+        "user_value": "Users can ask for files in chat and see exactly whether they are planned, generated, QAed, approved, or attached."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH deliverable-package for: Turn this research into PPT and PDF with attachment status.",
-        "direct_skill_invocation": "$deliverable-package Turn this research into PPT and PDF with attachment status.",
-        "headline": "[omh] Deliverable file package",
         "body_lines": [
           "Track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared/generated/QA/attached states.",
           "Route: deliverable-package -> preparing a deliverable package.",
           "Users can ask for files in chat and see exactly whether they are planned, generated, QAed, approved, or attached."
         ],
-        "status_line": "prepared_not_observed | deliverable-package | preparing a deliverable package"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$deliverable-package Turn this research into PPT and PDF with attachment status.",
         "headline": "[omh] Deliverable file package",
-        "summary": "Users can ask for files in chat and see exactly whether they are planned, generated, QAed, approved, or attached.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared/generated/QA/attached states."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "deliverable-package skill: file deliverable plan and prepared/generated/attached status card."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence."
-          }
-        ],
-        "chips": [
-          "G7",
-          "deliverable-package",
-          "workflow_skill",
-          "prepare_deliverable_package"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | deliverable-package | preparing a deliverable package",
+        "suggested_user_prompt": "Use OMH deliverable-package for: Turn this research into PPT and PDF with attachment status."
       },
-      "actions": [
-        {
-          "id": "prepare_deliverable_package",
-          "label": "Prepare a deliverable package",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH deliverable-package for: Turn this research into PPT and PDF with attachment status."
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect deliverable-package --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect deliverable-package --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G7 --json",
-        "omh playbook inspect deliverable-package --json",
-        "omh harness inspect deliverable-package --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -1059,44 +1058,121 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G7",
-        "priority": 7,
-        "id": "deliverable-package",
-        "title": "Deliverable file package",
-        "hermes_use_case": "Track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared/generated/QA/attached states.",
-        "current_gap": "OMH had materials-package, but not a Hermes deliverable attachment UX lane.",
-        "primary_skill": "deliverable-package",
-        "playbook": "deliverable-package",
-        "harness": "deliverable-package",
-        "feature_surface": "deliverable-package skill: file deliverable plan and prepared/generated/attached status card.",
-        "direct_skill_invocation": "$deliverable-package Turn this research into PPT and PDF with attachment status.",
-        "hermes_chat_prompt": "Use OMH deliverable-package for: Turn this research into PPT and PDF with attachment status.",
-        "next_action": "prepare_deliverable_package",
-        "user_value": "Users can ask for files in chat and see exactly whether they are planned, generated, QAed, approved, or attached.",
-        "evidence_boundary": "A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect deliverable-package",
-          "omh harness inspect deliverable-package"
-        ],
-        "keywords": [
-          "deliverable",
-          "file",
-          "attachment",
-          "ppt",
-          "pdf",
-          "xlsx",
-          "docx",
-          "hwp",
-          "keynote",
-          "자료",
-          "첨부",
-          "파일"
-        ],
+      "goal": "G7",
+      "id": "deliverable-package",
+      "operator_commands": [
+        "omh cases inspect G7 --json",
+        "omh playbook inspect deliverable-package --json",
+        "omh harness inspect deliverable-package --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "deliverable-package",
+        "install_visibility": true,
+        "next_action": "prepare_deliverable_package",
+        "next_action_label": "preparing a deliverable package",
+        "playbook": "deliverable-package",
+        "primary_skill": "deliverable-package"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "Deliverable file package",
+      "wrapper_card": {
+        "chips": [
+          "G7",
+          "deliverable-package",
+          "workflow_skill",
+          "prepare_deliverable_package"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] Deliverable file package",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared/generated/QA/attached states.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "deliverable-package skill: file deliverable plan and prepared/generated/attached status card.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "A deliverable package card is not binary generation, render QA, formula recalculation, approval, upload, attachment, or delivery evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Users can ask for files in chat and see exactly whether they are planned, generated, QAed, approved, or attached."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_voice_operator_card",
+          "kind": "hermes_prompt",
+          "label": "Prepare a voice-operator card",
+          "style": "primary",
+          "value": "Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile."
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect voice-operator --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect voice-operator --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH had setup language UX, but no voice-first workflow guidance.",
+        "direct_skill_invocation": "$voice-operator 'release before lunch, check risky parts' from mobile.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "voice-operator workflow skill: short voice/mobile command normalization, ambiguity check, and safe confirmation card.",
+        "goal": "G8",
+        "harness": "voice-operator",
+        "hermes_chat_prompt": "Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile.",
+        "hermes_use_case": "Convert terse voice/mobile commands into clarify, plan, status, handoff, or confirmation actions.",
+        "id": "voice-operator",
+        "install_visibility": true,
+        "keywords": [
+          "voice",
+          "mobile",
+          "accessibility",
+          "short command",
+          "spoken",
+          "hands free",
+          "\uc74c\uc131",
+          "\ubaa8\ubc14\uc77c",
+          "\uc811\uadfc\uc131"
+        ],
+        "next_action": "prepare_voice_operator_card",
+        "next_action_label": "preparing a voice-operator card",
+        "playbook": "voice-operator",
+        "preferred_usage": "Use as an installed Hermes workflow skill when voice, mobile, dictated, or short commands need normalization, ambiguity checks, and safe confirmation before selecting a concrete workflow.",
+        "primary_skill": "voice-operator",
+        "priority": 8,
         "projections": [
           "routable",
           "installable",
@@ -1105,107 +1181,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when the user asks for file deliverable packaging and attachment lifecycle status.",
-        "compatibility_alias": false,
-        "next_action_label": "preparing a deliverable package"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G8",
-      "id": "voice-operator",
-      "title": "Voice and mobile operator",
-      "route": {
-        "primary_skill": "voice-operator",
-        "playbook": "voice-operator",
-        "harness": "voice-operator",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_voice_operator_card",
-        "next_action_label": "preparing a voice-operator card"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect voice-operator",
+          "omh harness inspect voice-operator"
+        ],
+        "title": "Voice and mobile operator",
+        "user_value": "Voice and mobile users get concise, safe routing instead of long CLI-like responses."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile.",
-        "direct_skill_invocation": "$voice-operator 'release before lunch, check risky parts' from mobile.",
-        "headline": "[omh] Voice and mobile operator",
         "body_lines": [
           "Convert terse voice/mobile commands into clarify, plan, status, handoff, or confirmation actions.",
           "Route: voice-operator -> preparing a voice-operator card.",
           "Voice and mobile users get concise, safe routing instead of long CLI-like responses."
         ],
-        "status_line": "prepared_not_observed | voice-operator | preparing a voice-operator card"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$voice-operator 'release before lunch, check risky parts' from mobile.",
         "headline": "[omh] Voice and mobile operator",
-        "summary": "Voice and mobile users get concise, safe routing instead of long CLI-like responses.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Convert terse voice/mobile commands into clarify, plan, status, handoff, or confirmation actions."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "voice-operator workflow skill: short voice/mobile command normalization, ambiguity check, and safe confirmation card."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence."
-          }
-        ],
-        "chips": [
-          "G8",
-          "voice-operator",
-          "workflow_skill",
-          "prepare_voice_operator_card"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | voice-operator | preparing a voice-operator card",
+        "suggested_user_prompt": "Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile."
       },
-      "actions": [
-        {
-          "id": "prepare_voice_operator_card",
-          "label": "Prepare a voice-operator card",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile."
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect voice-operator --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect voice-operator --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G8 --json",
-        "omh playbook inspect voice-operator --json",
-        "omh harness inspect voice-operator --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -1219,41 +1215,122 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G8",
-        "priority": 8,
-        "id": "voice-operator",
-        "title": "Voice and mobile operator",
-        "hermes_use_case": "Convert terse voice/mobile commands into clarify, plan, status, handoff, or confirmation actions.",
-        "current_gap": "OMH had setup language UX, but no voice-first workflow guidance.",
-        "primary_skill": "voice-operator",
-        "playbook": "voice-operator",
-        "harness": "voice-operator",
-        "feature_surface": "voice-operator workflow skill: short voice/mobile command normalization, ambiguity check, and safe confirmation card.",
-        "direct_skill_invocation": "$voice-operator 'release before lunch, check risky parts' from mobile.",
-        "hermes_chat_prompt": "Use OMH voice-operator for: 'release before lunch, check risky parts' from mobile.",
-        "next_action": "prepare_voice_operator_card",
-        "user_value": "Voice and mobile users get concise, safe routing instead of long CLI-like responses.",
-        "evidence_boundary": "A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect voice-operator",
-          "omh harness inspect voice-operator"
-        ],
-        "keywords": [
-          "voice",
-          "mobile",
-          "accessibility",
-          "short command",
-          "spoken",
-          "hands free",
-          "음성",
-          "모바일",
-          "접근성"
-        ],
+      "goal": "G8",
+      "id": "voice-operator",
+      "operator_commands": [
+        "omh cases inspect G8 --json",
+        "omh playbook inspect voice-operator --json",
+        "omh harness inspect voice-operator --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "voice-operator",
+        "install_visibility": true,
+        "next_action": "prepare_voice_operator_card",
+        "next_action_label": "preparing a voice-operator card",
+        "playbook": "voice-operator",
+        "primary_skill": "voice-operator"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "Voice and mobile operator",
+      "wrapper_card": {
+        "chips": [
+          "G8",
+          "voice-operator",
+          "workflow_skill",
+          "prepare_voice_operator_card"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] Voice and mobile operator",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Convert terse voice/mobile commands into clarify, plan, status, handoff, or confirmation actions.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "voice-operator workflow skill: short voice/mobile command normalization, ambiguity check, and safe confirmation card.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "A voice operator card is not speech recognition proof, mobile notification delivery, platform action, or accepted execution evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Voice and mobile users get concise, safe routing instead of long CLI-like responses."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_toolbelt_readiness",
+          "kind": "hermes_prompt",
+          "label": "Check toolbelt readiness",
+          "style": "primary",
+          "value": "Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?"
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect toolbelt-readiness --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect toolbelt-readiness --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH setup had MCP preference, but workflow-specific MCP/tool recommendation and verification was weak.",
+        "direct_skill_invocation": "$toolbelt-readiness What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "toolbelt-readiness workflow skill: workflow tool requirements, installed/missing/credential matrix, and next setup action.",
+        "goal": "G9",
+        "harness": "toolbelt-readiness",
+        "hermes_chat_prompt": "Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
+        "hermes_use_case": "Check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.",
+        "id": "toolbelt-readiness",
+        "install_visibility": true,
+        "keywords": [
+          "mcp",
+          "toolbelt",
+          "tools",
+          "connector",
+          "credential",
+          "cli",
+          "api",
+          "missing tool",
+          "\ucee4\ub125\ud130",
+          "\uc678\ubd80 \ub3c4\uad6c"
+        ],
+        "next_action": "prepare_toolbelt_readiness",
+        "next_action_label": "checking toolbelt readiness",
+        "playbook": "toolbelt-readiness",
+        "preferred_usage": "Use as an installed Hermes workflow skill when users ask which plugins, MCP servers, CLIs, APIs, credentials, or external connectors a workflow needs before it can run.",
+        "primary_skill": "toolbelt-readiness",
+        "priority": 9,
         "projections": [
           "routable",
           "installable",
@@ -1262,107 +1339,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when voice, mobile, dictated, or short commands need normalization, ambiguity checks, and safe confirmation before selecting a concrete workflow.",
-        "compatibility_alias": false,
-        "next_action_label": "preparing a voice-operator card"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G9",
-      "id": "toolbelt-readiness",
-      "title": "MCP and external toolbelt readiness",
-      "route": {
-        "primary_skill": "toolbelt-readiness",
-        "playbook": "toolbelt-readiness",
-        "harness": "toolbelt-readiness",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_toolbelt_readiness",
-        "next_action_label": "checking toolbelt readiness"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect toolbelt-readiness",
+          "omh harness inspect toolbelt-readiness"
+        ],
+        "title": "MCP and external toolbelt readiness",
+        "user_value": "Users see missing MCP/CLI/API pieces before an automation or handoff overclaims readiness."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
-        "direct_skill_invocation": "$toolbelt-readiness What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
-        "headline": "[omh] MCP and external toolbelt readiness",
         "body_lines": [
           "Check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.",
           "Route: toolbelt-readiness -> checking toolbelt readiness.",
           "Users see missing MCP/CLI/API pieces before an automation or handoff overclaims readiness."
         ],
-        "status_line": "prepared_not_observed | toolbelt-readiness | checking toolbelt readiness"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$toolbelt-readiness What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
         "headline": "[omh] MCP and external toolbelt readiness",
-        "summary": "Users see missing MCP/CLI/API pieces before an automation or handoff overclaims readiness.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "toolbelt-readiness workflow skill: workflow tool requirements, installed/missing/credential matrix, and next setup action."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence."
-          }
-        ],
-        "chips": [
-          "G9",
-          "toolbelt-readiness",
-          "workflow_skill",
-          "prepare_toolbelt_readiness"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | toolbelt-readiness | checking toolbelt readiness",
+        "suggested_user_prompt": "Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?"
       },
-      "actions": [
-        {
-          "id": "prepare_toolbelt_readiness",
-          "label": "Check toolbelt readiness",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?"
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect toolbelt-readiness --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect toolbelt-readiness --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G9 --json",
-        "omh playbook inspect toolbelt-readiness --json",
-        "omh harness inspect toolbelt-readiness --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -1376,42 +1373,128 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G9",
-        "priority": 9,
-        "id": "toolbelt-readiness",
-        "title": "MCP and external toolbelt readiness",
-        "hermes_use_case": "Check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.",
-        "current_gap": "OMH setup had MCP preference, but workflow-specific MCP/tool recommendation and verification was weak.",
-        "primary_skill": "toolbelt-readiness",
-        "playbook": "toolbelt-readiness",
-        "harness": "toolbelt-readiness",
-        "feature_surface": "toolbelt-readiness workflow skill: workflow tool requirements, installed/missing/credential matrix, and next setup action.",
-        "direct_skill_invocation": "$toolbelt-readiness What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
-        "hermes_chat_prompt": "Use OMH toolbelt-readiness for: What MCP or CLI tools do I need for weekly Linear and GitHub triage?",
-        "next_action": "prepare_toolbelt_readiness",
-        "user_value": "Users see missing MCP/CLI/API pieces before an automation or handoff overclaims readiness.",
-        "evidence_boundary": "A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect toolbelt-readiness",
-          "omh harness inspect toolbelt-readiness"
-        ],
-        "keywords": [
-          "mcp",
-          "toolbelt",
-          "tools",
-          "connector",
-          "credential",
-          "cli",
-          "api",
-          "missing tool",
-          "커넥터",
-          "외부 도구"
-        ],
+      "goal": "G9",
+      "id": "toolbelt-readiness",
+      "operator_commands": [
+        "omh cases inspect G9 --json",
+        "omh playbook inspect toolbelt-readiness --json",
+        "omh harness inspect toolbelt-readiness --json"
+      ],
+      "route": {
+        "compatibility_alias": false,
         "exposure": "workflow_skill",
+        "harness": "toolbelt-readiness",
+        "install_visibility": true,
+        "next_action": "prepare_toolbelt_readiness",
+        "next_action_label": "checking toolbelt readiness",
+        "playbook": "toolbelt-readiness",
+        "primary_skill": "toolbelt-readiness"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "MCP and external toolbelt readiness",
+      "wrapper_card": {
+        "chips": [
+          "G9",
+          "toolbelt-readiness",
+          "workflow_skill",
+          "prepare_toolbelt_readiness"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] MCP and external toolbelt readiness",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "toolbelt-readiness workflow skill: workflow tool requirements, installed/missing/credential matrix, and next setup action.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "A toolbelt readiness card is not MCP server installation, credential validation, API access, connector invocation, or successful workflow execution evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Users see missing MCP/CLI/API pieces before an automation or handoff overclaims readiness."
+      }
+    },
+    {
+      "actions": [
+        {
+          "id": "prepare_ops_observability_card",
+          "kind": "hermes_prompt",
+          "label": "Prepare an ops observability card",
+          "style": "primary",
+          "value": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop."
+        },
+        {
+          "id": "inspect_playbook",
+          "kind": "operator_command",
+          "label": "Inspect playbook",
+          "style": "secondary",
+          "value": "omh playbook inspect ops-observability-card --json"
+        },
+        {
+          "id": "inspect_harness",
+          "kind": "operator_command",
+          "label": "Inspect harness",
+          "style": "secondary",
+          "value": "omh harness inspect ops-observability-card --json"
+        },
+        {
+          "id": "show_boundary",
+          "kind": "static_boundary",
+          "label": "Show evidence boundary",
+          "style": "secondary",
+          "value": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence."
+        }
+      ],
+      "case": {
+        "compatibility_alias": false,
+        "current_gap": "OMH evidence boundaries were strong, but runtime cost/latency telemetry and provider-neutral service-quality contracts were weak.",
+        "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
+        "docs_visibility": "primary_workflow_skill",
+        "evidence_boundary": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.",
+        "exposure": "workflow_skill",
+        "feature_surface": "ops-observability-card workflow surface: wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality command-board.",
+        "goal": "G10",
+        "harness": "ops-observability-card",
+        "hermes_chat_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
+        "hermes_use_case": "Keep automation, loop, and service operations from failing silently by showing token/cost/latency/run-history/failure-mode telemetry, supplied metric-provider payloads, and service-quality downgrade gaps.",
+        "id": "ops-observability-card",
+        "install_visibility": true,
+        "keywords": [
+          "observability",
+          "service quality",
+          "metric provider",
+          "prometheus",
+          "grafana",
+          "cost",
+          "latency",
+          "token",
+          "run history",
+          "telemetry",
+          "failure mode",
+          "\ube44\uc6a9",
+          "\ud1a0\ud070",
+          "\uad00\uce21\uc131",
+          "\uc11c\ube44\uc2a4 \ud488\uc9c8",
+          "\uc6b4\uc601 \uc9c0\ud718\ud310"
+        ],
+        "next_action": "prepare_ops_observability_card",
+        "next_action_label": "preparing an ops observability card",
+        "playbook": "ops-observability-card",
+        "preferred_usage": "Use as an installed Hermes workflow skill when operators need an evidence-bounded command-board for telemetry, supplied metric-provider payloads, and service-quality gaps.",
+        "primary_skill": "ops-observability-card",
+        "priority": 10,
         "projections": [
           "routable",
           "installable",
@@ -1420,107 +1503,27 @@
           "workflow_reference",
           "capability"
         ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when users ask which plugins, MCP servers, CLIs, APIs, credentials, or external connectors a workflow needs before it can run.",
-        "compatibility_alias": false,
-        "next_action_label": "checking toolbelt readiness"
-      }
-    },
-    {
-      "schema_version": "omh_use_case_demo_card/v1",
-      "goal": "G10",
-      "id": "ops-observability-card",
-      "title": "Ops command-board and service quality card",
-      "route": {
-        "primary_skill": "ops-observability-card",
-        "playbook": "ops-observability-card",
-        "harness": "ops-observability-card",
-        "exposure": "workflow_skill",
-        "install_visibility": true,
-        "compatibility_alias": false,
-        "next_action": "prepare_ops_observability_card",
-        "next_action_label": "preparing an ops observability card"
+        "proof_surfaces": [
+          "omh recommend",
+          "omh playbook inspect ops-observability-card",
+          "omh harness inspect ops-observability-card"
+        ],
+        "title": "Ops command-board and service quality card",
+        "user_value": "Operators can see health/cost/service-quality signals without confusing supplied exports with live provider truth or completion evidence."
       },
       "chat_surface": {
-        "source": "hermes_agent_chat",
-        "suggested_user_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
-        "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
-        "headline": "[omh] Ops command-board and service quality card",
         "body_lines": [
           "Keep automation, loop, and service operations from failing silently by showing token/cost/latency/run-history/failure-mode telemetry, supplied metric-provider payloads, and service-quality downgrade gaps.",
           "Route: ops-observability-card -> preparing an ops observability card.",
           "Operators can see health/cost/service-quality signals without confusing supplied exports with live provider truth or completion evidence."
         ],
-        "status_line": "prepared_not_observed | ops-observability-card | preparing an ops observability card"
-      },
-      "wrapper_card": {
-        "component": "omh_use_case_card",
-        "render_profile": "chat_first",
-        "status": "prepared_not_observed",
+        "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
         "headline": "[omh] Ops command-board and service quality card",
-        "summary": "Operators can see health/cost/service-quality signals without confusing supplied exports with live provider truth or completion evidence.",
-        "sections": [
-          {
-            "id": "why_this_route",
-            "title": "Why this workflow",
-            "body": "Keep automation, loop, and service operations from failing silently by showing token/cost/latency/run-history/failure-mode telemetry, supplied metric-provider payloads, and service-quality downgrade gaps."
-          },
-          {
-            "id": "what_omh_prepares",
-            "title": "What OMH prepares",
-            "body": "ops-observability-card workflow surface: wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality command-board."
-          },
-          {
-            "id": "evidence_boundary",
-            "title": "What is not evidence yet",
-            "body": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence."
-          }
-        ],
-        "chips": [
-          "G10",
-          "ops-observability-card",
-          "workflow_skill",
-          "prepare_ops_observability_card"
-        ]
+        "source": "hermes_agent_chat",
+        "status_line": "prepared_not_observed | ops-observability-card | preparing an ops observability card",
+        "suggested_user_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop."
       },
-      "actions": [
-        {
-          "id": "prepare_ops_observability_card",
-          "label": "Prepare an ops observability card",
-          "kind": "hermes_prompt",
-          "style": "primary",
-          "value": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop."
-        },
-        {
-          "id": "inspect_playbook",
-          "label": "Inspect playbook",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh playbook inspect ops-observability-card --json"
-        },
-        {
-          "id": "inspect_harness",
-          "label": "Inspect harness",
-          "kind": "operator_command",
-          "style": "secondary",
-          "value": "omh harness inspect ops-observability-card --json"
-        },
-        {
-          "id": "show_boundary",
-          "label": "Show evidence boundary",
-          "kind": "static_boundary",
-          "style": "secondary",
-          "value": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence."
-        }
-      ],
-      "operator_commands": [
-        "omh cases inspect G10 --json",
-        "omh playbook inspect ops-observability-card --json",
-        "omh harness inspect ops-observability-card --json"
-      ],
       "evidence": {
-        "state": "prepared_not_observed",
         "claim_boundary": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.",
         "not_evidence_until_observed": [
           "runtime_execution",
@@ -1534,63 +1537,60 @@
           "review",
           "ci",
           "merge"
-        ]
+        ],
+        "state": "prepared_not_observed"
       },
-      "case": {
-        "goal": "G10",
-        "priority": 10,
-        "id": "ops-observability-card",
-        "title": "Ops command-board and service quality card",
-        "hermes_use_case": "Keep automation, loop, and service operations from failing silently by showing token/cost/latency/run-history/failure-mode telemetry, supplied metric-provider payloads, and service-quality downgrade gaps.",
-        "current_gap": "OMH evidence boundaries were strong, but runtime cost/latency telemetry and provider-neutral service-quality contracts were weak.",
-        "primary_skill": "ops-observability-card",
-        "playbook": "ops-observability-card",
-        "harness": "ops-observability-card",
-        "feature_surface": "ops-observability-card workflow surface: wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality command-board.",
-        "direct_skill_invocation": "$ops-observability-card Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
-        "hermes_chat_prompt": "Use OMH ops-observability-card for: Show token, cost, latency, supplied metrics, and service-quality gaps for this loop.",
-        "next_action": "prepare_ops_observability_card",
-        "user_value": "Operators can see health/cost/service-quality signals without confusing supplied exports with live provider truth or completion evidence.",
-        "evidence_boundary": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.",
-        "proof_surfaces": [
-          "omh recommend",
-          "omh playbook inspect ops-observability-card",
-          "omh harness inspect ops-observability-card"
-        ],
-        "keywords": [
-          "observability",
-          "service quality",
-          "metric provider",
-          "prometheus",
-          "grafana",
-          "cost",
-          "latency",
-          "token",
-          "run history",
-          "telemetry",
-          "failure mode",
-          "비용",
-          "토큰",
-          "관측성",
-          "서비스 품질",
-          "운영 지휘판"
-        ],
-        "exposure": "workflow_skill",
-        "projections": [
-          "routable",
-          "installable",
-          "playbook",
-          "harness",
-          "workflow_reference",
-          "capability"
-        ],
-        "install_visibility": true,
-        "docs_visibility": "primary_workflow_skill",
-        "preferred_usage": "Use as an installed Hermes workflow skill when operators need an evidence-bounded command-board for telemetry, supplied metric-provider payloads, and service-quality gaps.",
+      "goal": "G10",
+      "id": "ops-observability-card",
+      "operator_commands": [
+        "omh cases inspect G10 --json",
+        "omh playbook inspect ops-observability-card --json",
+        "omh harness inspect ops-observability-card --json"
+      ],
+      "route": {
         "compatibility_alias": false,
-        "next_action_label": "preparing an ops observability card"
+        "exposure": "workflow_skill",
+        "harness": "ops-observability-card",
+        "install_visibility": true,
+        "next_action": "prepare_ops_observability_card",
+        "next_action_label": "preparing an ops observability card",
+        "playbook": "ops-observability-card",
+        "primary_skill": "ops-observability-card"
+      },
+      "schema_version": "omh_use_case_demo_card/v1",
+      "title": "Ops command-board and service quality card",
+      "wrapper_card": {
+        "chips": [
+          "G10",
+          "ops-observability-card",
+          "workflow_skill",
+          "prepare_ops_observability_card"
+        ],
+        "component": "omh_use_case_card",
+        "headline": "[omh] Ops command-board and service quality card",
+        "render_profile": "chat_first",
+        "sections": [
+          {
+            "body": "Keep automation, loop, and service operations from failing silently by showing token/cost/latency/run-history/failure-mode telemetry, supplied metric-provider payloads, and service-quality downgrade gaps.",
+            "id": "why_this_route",
+            "title": "Why this workflow"
+          },
+          {
+            "body": "ops-observability-card workflow surface: wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality command-board.",
+            "id": "what_omh_prepares",
+            "title": "What OMH prepares"
+          },
+          {
+            "body": "An ops observability card is not billing truth, provider quota truth, live metric-provider access, complete tracing, SLO pass, incident closure, remediation completion, performance proof, or workflow completion evidence.",
+            "id": "evidence_boundary",
+            "title": "What is not evidence yet"
+          }
+        ],
+        "status": "prepared_not_observed",
+        "summary": "Operators can see health/cost/service-quality signals without confusing supplied exports with live provider truth or completion evidence."
       }
     }
   ],
-  "boundary": "Use-case demo cards are wrapper rendering artifacts. They prove OMH can shape a Hermes-facing card for the scenario; they are not runtime, connector, delivery, file, memory, or execution evidence."
+  "count": 10,
+  "schema_version": "omh_use_case_demo_collection/v1"
 }

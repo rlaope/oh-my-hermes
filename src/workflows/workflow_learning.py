@@ -530,7 +530,7 @@ def build_self_improvement_store_routing(
         "next_action": str(classification["next_action"]),
         "wrapper_actions": [
             "review_self_improvement_store_route",
-            "prepare_memory_curation_review",
+            "prepare_memory_sync",
             "review_improvement",
             "prepare_wiki_guidance",
             "record_workflow_learning_trace",

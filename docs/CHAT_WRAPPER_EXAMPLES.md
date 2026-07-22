@@ -385,7 +385,7 @@ support memory cleanup?", "does OMH support voice commands?", or "OMH로 GitHub
 issue webhook 처리 가능해?" should open the matching workflow card directly.
 The first visible action should be the matching workflow action, such as
 `prepare_scheduled_ops_blueprint`, `prepare_toolbelt_readiness`,
-`prepare_memory_curation_review`, `prepare_voice_operator_card`, or
+`prepare_memory_sync`, `prepare_voice_operator_card`, or
 `prepare_github_event_ops_card`, followed by a status action. Selection remains
 routing intent only; host automation, credentials, memory updates, platform
 actions, and webhook effects stay unobserved until separate evidence is
@@ -876,7 +876,7 @@ operator
 Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘
 
 Hermes Agent  BOT
-[omh] memory-curation-review - I can review memory and context before anything is changed.
+[omh] memory-sync - I can review memory and context before anything is changed.
 
 I will prepare a memory curation review: stale facts, duplicate notes,
 conflicting context, source scope, target/thread ownership, and

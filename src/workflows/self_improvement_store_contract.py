@@ -8,9 +8,9 @@ from .workflow_learning_errors import WorkflowLearningError
 SELF_IMPROVEMENT_STORE_ROUTING_SCHEMA_VERSION: Final = "self_improvement_store_routing/v1"
 SELF_IMPROVEMENT_DESTINATION_DETAILS: Final = {
     "memory_candidate": {
-        "target_workflow": "memory-curation-review",
+        "target_workflow": "memory-sync",
         "target_record_type": "project_memory_candidate",
-        "next_action": "prepare_memory_curation_review",
+        "next_action": "prepare_memory_sync",
         "confidence": "high",
     },
     "skill_update_candidate": {
@@ -44,7 +44,7 @@ SELF_IMPROVEMENT_DESTINATION_DETAILS: Final = {
         "confidence": "high",
     },
     "manual_review_candidate": {
-        "target_workflow": "memory-curation-review",
+        "target_workflow": "memory-sync",
         "target_record_type": "store_review_question",
         "next_action": "review_self_improvement_store_route",
         "confidence": "needs_review",

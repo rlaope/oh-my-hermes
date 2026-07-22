@@ -418,7 +418,7 @@ def staged_gap_map() -> list[dict[str, str]]:
         {
             "gap": "memory_curation",
             "stage": "implemented",
-            "scope": "memory-curation-review playbook and memory inspect/apply flows support approve/reject/update cleanup",
+            "scope": "memory-sync playbook and memory inspect/apply flows support approve/reject/update cleanup",
         },
         {
             "gap": "gateway_delivery_intent",

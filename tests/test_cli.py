@@ -1158,7 +1158,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertTrue(reviewed["recorded"])
             self.assertEqual(reviewed_route["status"], "changed")
             self.assertEqual(reviewed_route["destination_review"]["current_destination"], "memory_candidate")
-            self.assertEqual(reviewed_route["destination_review"]["next_action"], "prepare_memory_curation_review")
+            self.assertEqual(reviewed_route["destination_review"]["next_action"], "prepare_memory_sync")
             self.assertIn("review_note_sha256", reviewed_route["review_gate"])
             self.assertFalse(reviewed_route["review_gate"]["review_note_stored"])
             self.assertFalse(reviewed_route["writes_observed"])
@@ -1827,7 +1827,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                 "automation-blueprint",
                 "github-event-ops",
                 "agent-board",
-                "memory-curation-review",
+                "memory-sync",
                 "gateway-intent-card",
                 "executor-runtime-readiness",
                 "deliverable-package",
@@ -2009,7 +2009,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             ("Every morning send a competitor digest to Slack only if changed", "G1", "automation-blueprint"),
             ("PR opened with failing CI and needs review label or fix handoff", "G2", "github-event-ops"),
             ("Coordinate multiple Hermes profiles on a Kanban board with blockers", "G3", "agent-board"),
-            ("Review stale MEMORY.md facts and duplicate skills before cleanup", "G4", "memory-curation-review"),
+            ("Review stale MEMORY.md facts and duplicate skills before cleanup", "G4", "memory-sync"),
             ("Discord gateway thread should send silent attachment status updates", "G5", "gateway-intent-card"),
             ("Can this run in Codex Claude Code or Hermes coding with missing tools", "G6", "executor-runtime-readiness"),
             ("Prepare a PPT PDF XLSX deliverable and show attachment status", "G7", "deliverable-package"),
@@ -5671,7 +5671,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         cases = (
             ("does OMH support scheduled automation?", "automation-blueprint", "prepare_scheduled_ops_blueprint"),
             ("can OMH help with MCP setup?", "toolbelt-readiness", "prepare_toolbelt_readiness"),
-            ("does OMH support memory cleanup?", "memory-curation-review", "prepare_memory_curation_review"),
+            ("does OMH support memory cleanup?", "memory-sync", "prepare_memory_sync"),
             ("does OMH support voice commands?", "voice-operator", "prepare_voice_operator_card"),
             ("OMH로 GitHub issue webhook 처리 가능해?", "github-event-ops", "prepare_github_event_ops_card"),
         )
@@ -6185,14 +6185,14 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             ("./loop make this project a 10k star OSS", "loop", "loop", "start_loop_cycle"),
             ("현재 repo 설치 후 10분 안에 가치 못 느끼는 이유를 줄여가며 개선해줘", "loop", "loop", "choose_permission_profile"),
             ("research the repo, plan, implement, code-review, sync docs, and prepare a PR", "ultraprocess", "handoff", "choose_executor"),
-            ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
-            ("Hermes가 기억하는 내용 한번 점검하자", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
-            ("내가 말한 memory가 잘못 저장된 것 같아 정리해줘", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
+            ("Hermes가 기억하는 맥락을 점검하고 정리해줘", "memory-sync", "memory_curation", "prepare_memory_sync"),
+            ("Hermes가 기억하는 내용 한번 점검하자", "memory-sync", "memory_curation", "prepare_memory_sync"),
+            ("내가 말한 memory가 잘못 저장된 것 같아 정리해줘", "memory-sync", "memory_curation", "prepare_memory_sync"),
             ("GitHub issue 들어온 걸 PR 만들 수 있게 정리해줘", "github-event-ops", "github_event_ops", "prepare_github_event_ops_card"),
             ("새 이슈 들어오면 라벨링하고 PR 준비해줘", "github-event-ops", "github_event_ops", "prepare_github_event_ops_card"),
             ("리서치 요청했는데 OMH를 안 썼어", "web-research", "web_research", "run_hermes_research"),
             ("회의록 요약을 부탁했는데 OMH 안 쓰고 일반 답변했어", "operating-rhythm", "operating_rhythm", "prepare_operating_record"),
-            ("Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘", "memory-curation-review", "memory_curation", "prepare_memory_curation_review"),
+            ("Hermes가 기억하고 있는 프로젝트 맥락이 오래된 것 같아 정리해줘", "memory-sync", "memory_curation", "prepare_memory_sync"),
             ("PPT 만들어줘", "materials-package", "materials_package", "prepare_material_package"),
             ("이 회의록을 발표자료로 만들어줘", "materials-package", "materials_package", "prepare_material_package"),
             ("첨부한 엑셀을 월간 보고서 PDF랑 PPT로 만들 수 있게 정리해줘", "materials-package", "materials_package", "prepare_material_package"),
@@ -7317,7 +7317,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         )
         self.assertEqual(
             direct["korean-hermes-memory-review"]["observed"]["playbook"]["id"],
-            "memory-curation-review",
+            "memory-sync",
         )
         self.assertEqual(direct["korean-user-qa-scenario"]["observed"]["playbook"]["id"], "release-readiness-review")
         self.assertEqual(direct["korean-loop-cost-latency"]["observed"]["playbook"]["id"], "ops-observability-card")
@@ -7373,7 +7373,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         cases = {case["id"]: case for case in payload["cases"]}
         self.assertEqual(cases["automation-blueprint"]["observed"]["kind"], "automation_blueprint")
         self.assertEqual(cases["agent-board"]["observed"]["kind"], "agent_board")
-        self.assertEqual(cases["memory-curation-review"]["observed"]["kind"], "memory_curation")
+        self.assertEqual(cases["memory-sync"]["observed"]["kind"], "memory_curation")
         self.assertEqual(cases["gateway-intent-card"]["observed"]["kind"], "gateway_intent")
         self.assertEqual(cases["deliverable-package"]["observed"]["kind"], "deliverable_package")
         self.assertEqual(cases["voice-operator"]["observed"]["kind"], "voice_operator")

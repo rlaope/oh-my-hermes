@@ -226,7 +226,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "skill-scout",
             "skill-health",
             "workflow-learning",
-            "memory-curation-review",
+            "memory-sync",
             "achievements",
             "harness-session-inventory",
             "ops-observability-card",
