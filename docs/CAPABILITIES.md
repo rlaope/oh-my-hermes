@@ -109,9 +109,11 @@ Those claims require matching local wrapper or runtime artifacts such as
 Workspace-isolation guidance uses `worktree_session_isolation/v1`. It can tell a
 wrapper to keep the same workspace, recommend a worktree, or require a worktree
 before opening a coding agent. It is still prepared guidance until a wrapper or
-operator invokes or observes the workspace action. `omh worktree prepare` is the
-explicit opt-in backend that can create a local Git worktree and record
-`omh_worktree_observation/v1`. `omh worktree bind` can then return
+operator invokes or observes the workspace action. Worktree creation is deferred
+to native tooling — upstream Hermes manages worktrees (Kanban worktree-per-task
+since v0.15.0, Desktop Projects since v0.18.0) or you can run `git worktree add`
+— and OMH records `omh_worktree_observation/v1` for the resulting worktree.
+`omh worktree bind` can then return
 `worktree_executor_binding/v1` so a wrapper can show open/attach/record actions
 for the selected coding agent. Those records prove workspace isolation and
 session-start guidance only, not executor dispatch, implementation, review, CI,

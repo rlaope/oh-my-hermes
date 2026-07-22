@@ -86,10 +86,14 @@ The same boundary applies to worktree isolation guidance: `build_isolation_plan`
 prevent two agents editing the same workspace, and — per the
 [Upstream Basis](HERMES_AGENT_INTEGRATION_RUNBOOK.md#upstream-basis) note in
 the integration runbook — it can collide with a worktree Hermes's own Kanban
-board or Desktop Projects is already managing for the same task. Read
-prepared isolation guidance as a recommendation to check for an existing
-upstream-managed worktree before creating a new one, not as proof one does
-or does not exist.
+board or Desktop Projects is already managing for the same task. Because of that
+collision risk, OMH no longer creates worktrees: worktree preparation is
+deferred to native tooling (Hermes Kanban worktree-per-task since v0.15.0,
+Desktop Projects since v0.18.0, or a manual `git worktree add`). OMH only
+*observes* an existing worktree (`omh worktree list`) and binds a coding handoff
+to it (`omh worktree bind`). Read prepared isolation guidance as a recommendation
+to reuse or create a worktree with upstream-native tooling, not as proof one
+does or does not exist.
 
 ## Prefer Upstream-Native Coordination Primitives
 

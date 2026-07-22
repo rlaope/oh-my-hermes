@@ -152,11 +152,11 @@ def _worktree_creator_capability() -> Capability:
     return Capability(
         "worktree_creator",
         "available",
-        "omh worktree prepare; omh worktree list; omh worktree bind",
+        "omh worktree list; omh worktree bind",
         (
-            "OMH can explicitly create local Git worktrees, record omh_worktree_observation/v1 "
-            "workspace-isolation evidence, and return wrapper binding recipes for opening or attaching "
-            "the selected coding agent without launching it"
+            "OMH observes worktree isolation, records omh_worktree_observation/v1 workspace-isolation "
+            "evidence, and returns wrapper binding recipes for opening or attaching the selected coding "
+            "agent without launching it; worktree creation is deferred to native Hermes/Git tooling"
         ),
     )
 

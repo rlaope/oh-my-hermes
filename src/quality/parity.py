@@ -102,11 +102,11 @@ PARITY_CAPABILITIES: tuple[ParityCapability, ...] = (
         id="worktree_isolation",
         title="Worktree and project-session isolation",
         common_pattern="Use isolated workspaces so parallel agents can work without stepping on each other's files.",
-        omh_surface="`worktree_session_isolation/v1` plans inside coding handoffs, wrapper Prepare worktree actions, `omh worktree prepare/list/bind`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation.",
+        omh_surface="`worktree_session_isolation/v1` plans inside coding handoffs, wrapper Prepare worktree actions, `omh worktree list/bind`, executor-session status cards, loop queue metadata, and runtime observations for worktree creation.",
         status="available",
         evidence=("src/coding/isolation.py", "src/coding/worktree_creator.py", "src/commands/worktree.py", "src/wrapper/executor_sessions.py", "tests/test_worktree_creator.py"),
-        missing_piece="OMH can explicitly create a local Git worktree and return binding recipes, but it does not auto-launch executors or claim host agent sessions without wrapper/runtime evidence.",
-        v1_decision="Make worktree mutation explicit and opt-in: the wrapper may show Prepare worktree, create it through the backend, then bind the selected coding agent with a recipe.",
+        missing_piece="OMH observes worktree isolation and returns binding recipes, but it defers worktree creation to native Hermes/Git tooling and does not auto-launch executors or claim host agent sessions without wrapper/runtime evidence.",
+        v1_decision="Defer worktree creation to Hermes-native tooling (Kanban worktree-per-task, Desktop Projects) or git: the wrapper may show Prepare worktree guidance, then bind the selected coding agent to the resulting worktree with a recipe.",
         user_value="Teams see when same workspace is acceptable, when an isolated worktree is recommended, and how to open or attach the chosen coding agent from that worktree.",
         claim_boundary=(
             "A worktree plan is not a created worktree; an OMH-created worktree is "
