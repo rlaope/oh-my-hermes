@@ -5,6 +5,7 @@ import re
 
 from .localization import normalized_phrase, routing_tokens
 from .intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
+from .policy import _doctor_health_guard_applies
 
 
 TASK_CARD_SCHEMA_VERSION = "omh_task_card/v1"
@@ -324,6 +325,8 @@ def task_card_recommendation(card: dict[str, object]) -> dict[str, object]:
 
 def _maintenance_command(normalized: str, compact: str, tokens: set[str]) -> str | None:
     if not _maintenance_surface_hit(normalized, compact, tokens):
+        return None
+    if _doctor_health_guard_applies(normalized, routing_tokens(normalized)):
         return None
     for command, aliases in _MAINTENANCE_COMMAND_ALIASES.items():
         if (

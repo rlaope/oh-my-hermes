@@ -290,7 +290,7 @@ GROUNDED_SCENARIOS: tuple[GroundedScenario, ...] = (
         "workflow-learning",
         "workflow_learning",
         "audit_learning_readiness",
-        "clarify",
+        "fallback",
         False,
         expected_playbook="workflow-learning",
     ),

@@ -114,6 +114,33 @@ _ECOSYSTEM_IDENTITY_CONNECTOR_TRIGGER_NOISE = frozenset(
         "windymail",
     }
 )
+_GENERIC_TRIGGER_TOKENS = frozenset(
+    normalized_phrase(token)
+    for token in (
+        "같이",
+        "것",
+        "지금",
+        "하고",
+        "작업",
+        "자연스럽게",
+        "좀",
+        "이거",
+        "그거",
+        "요즘",
+        "한번",
+        "내",
+        "정보",
+        "계속",
+        "상태",
+        "write",
+        "status",
+        "running",
+        "natural",
+        "naturally",
+        "make",
+        "check",
+    )
+)
 _RISKY_REFACTOR_GUARD_ID = "risky_refactor_before_cleanup"
 _RISKY_REFACTOR_FOLLOWUP_ONLY_SKILLS = frozenset({"ai-slop-cleaner"})
 _RISKY_REFACTOR_FOLLOWUP_SCORE_CAP = 7
@@ -1400,6 +1427,8 @@ def _score_definition(
         trigger_token_matches -= {"index", "refresh", "stale", "갱신"}
     if definition.name == "external-connector-readiness" and not ecosystem_identity_connector_match:
         trigger_token_matches -= _ECOSYSTEM_IDENTITY_CONNECTOR_TRIGGER_NOISE
+    if not matched and not (trigger_token_matches - _GENERIC_TRIGGER_TOKENS):
+        trigger_token_matches -= _GENERIC_TRIGGER_TOKENS
     for token in trigger_token_matches:
         score += 3
         matched.add(f"trigger:{token}")

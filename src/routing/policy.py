@@ -5159,6 +5159,8 @@ def _feedback_before_coding_guard_applies(
     *,
     direct_coding_task_applies: bool | None = None,
 ) -> bool:
+    if _explicit_executor_delegation_requested(normalized_query, query_tokens):
+        return False
     if _contains_phrase(normalized_query, BROWSER_VISUAL_QA_PHRASES) and not _contains_phrase(
         normalized_query,
         CUSTOMER_SYMPTOM_REPORT_PHRASES,
@@ -6591,6 +6593,17 @@ def _doctor_health_guard_applies(normalized_query: str, query_tokens: set[str]) 
             "상태",
         }
         & query_tokens
+    ) or _contains_phrase(
+        normalized_query,
+        (
+            "설치",
+            "셋업",
+            "업데이트",
+            "닥터",
+            "스킬",
+            "등록",
+            "상태",
+        ),
     )
     confusion = _contains_phrase(
         normalized_query,
@@ -6717,7 +6730,34 @@ def _reliability_review_context_applies(normalized_query: str, query_tokens: set
     return reliability and review
 
 
+def _explicit_executor_delegation_requested(normalized_query: str, query_tokens: set[str]) -> bool:
+    named_executor = _contains_phrase(
+        normalized_query,
+        ("codex", "코덱스", "claude code", "클로드", "claude"),
+    )
+    if not named_executor:
+        return False
+    return _contains_phrase(
+        normalized_query,
+        (
+            "한테 시켜",
+            "에게 시켜",
+            "시켜서",
+            "시켜줘",
+            "have codex",
+            "tell codex",
+            "tell claude",
+            "delegate to",
+            "hand this to",
+            "let codex",
+            "let claude",
+        ),
+    )
+
+
 def _executor_runtime_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _explicit_executor_delegation_requested(normalized_query, query_tokens):
+        return True
     if _prompt_import_readiness_context_applies(normalized_query, query_tokens):
         return False
     if _contains_phrase(normalized_query, _EXECUTOR_RUNTIME_READINESS_PHRASES):
