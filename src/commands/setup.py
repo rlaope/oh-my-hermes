@@ -24,6 +24,7 @@ from ..capabilities.registry import capability_summary
 from ..capabilities.skills import skill_capabilities
 from ..config_adapter import ensure_external_dir, external_dirs, read_config, remove_external_dir, write_config
 from ..doctor import DEFAULT_DOCTOR_NEXT_ACTION, doctor_ok, recommended_next_action, run_doctor
+from ..maintenance.doctor import run_doctor_advisories
 from ..executors import CODING_EXECUTOR_TARGETS
 from ..hashutil import sha256_file
 from ..installer import OmhError, install_skill_pack, uninstall_skill_pack
@@ -869,12 +870,14 @@ def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
             },
         )
         state_log = {"path": str(paths.runtime_state_path), "entry": "last_doctor"}
+    advisories = run_doctor_advisories(paths)
     return {
         "ok": doctor_ok(checks),
         "checks": [check.__dict__ for check in checks],
         "summary": summary,
         "state_log": state_log,
         "recommended_next_action": next_action,
+        "advisories": advisories.to_dict(),
         "language": _resolve_language(args),
     }
 
@@ -1730,12 +1733,42 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
         print(f"  - {name}: {message}")
         if remediation:
             print(f"    {tr(language, 'doctor_fix')}: {remediation}")
+    _print_doctor_advice(payload, use_color=use_color)
     next_action = str(payload.get("recommended_next_action", "")).strip()
     print(_color(tr(language, "next"), "1;32", use_color))
     if next_action:
         print(f"  {_doctor_human_next_action(next_action, language=language)}")
     print(f"  {tr(language, 'doctor_boundary')}")
     print(f"  {tr(language, 'machine_readable')}")
+
+
+def _print_doctor_advice(payload: dict[str, object], *, use_color: bool) -> None:
+    """Render the read-only Advice lane, separate from doctor checks.
+
+    Advice never affects the doctor status or exit code; it is a default-on,
+    plain-text section that surfaces the ``hermes_config_advice`` advisory lane.
+    """
+    advisories = payload.get("advisories", {})
+    if not isinstance(advisories, dict):
+        return
+    entries = advisories.get("entries", [])
+    if not isinstance(entries, list):
+        return
+    actionable = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("status") == "advice"
+    ]
+    if not actionable:
+        return
+    print(_color("Advice (read-only; does not affect doctor status)", "1;36", use_color))
+    for entry in actionable:
+        check_id = entry.get("check_id", "unknown")
+        observed = entry.get("observed", "")
+        remediation = entry.get("remediation", "")
+        print(f"  - {check_id}: {observed}")
+        if remediation:
+            print(f"    Suggestion: {remediation}")
 
 
 def _doctor_human_next_action(next_action: str, *, language: str) -> str:
