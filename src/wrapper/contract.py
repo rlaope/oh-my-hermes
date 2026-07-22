@@ -34,6 +34,8 @@ from ..skills.catalog import installable_skill_definitions, primary_harness_for_
 from ..setup_profiles import read_setup_profile
 from ..surfaces.evidence_copy import not_evidence_action_suffix, not_evidence_reply_suffix
 from ..visual_summary import image_generation_setup_fallback
+from ..workflows.goal_ledger import goal_message_states_acceptance_criteria
+from ..workflows.goal_quality_coaching import is_goal_classified_message
 from ..workflows.web_visual_qa_projection import build_prepared_web_visual_qa_chat_state
 from .hermes_runtime import (
     hermes_coding_team_body,
@@ -62,6 +64,7 @@ MESSENGER_RENDERING_SCHEMA_VERSION = "omh_messenger_rendering/v1"
 DELIVERY_OBLIGATION_SCHEMA_VERSION = "wrapper_delivery_obligation/v1"
 DELIVERY_OBLIGATION_TRIGGERS = ("handoff_ci_pass", "loop_iteration_complete")
 DELIVERY_OBLIGATION_STATE = "prepared_not_delivered"
+GOAL_QUALITY_COACHING_CARD_SCHEMA_VERSION = "goal_quality_coaching_card/v1"
 RENDER_PROFILE_LIMITED_MARKDOWN = "limited_markdown"
 RENDER_PROFILE_RICH_MARKDOWN = "rich_markdown"
 RENDER_PROFILES = (RENDER_PROFILE_LIMITED_MARKDOWN, RENDER_PROFILE_RICH_MARKDOWN)
@@ -107,6 +110,7 @@ VISIBLE_ACTIONS = (
     "assess_loopability",
     "convert_to_loop_goal",
     "route_direct_task",
+    "state_goal_success_criteria",
     "start_ultraprocess",
     "start_loop",
     "run_loop_tick",
@@ -3250,6 +3254,9 @@ def _build_chat_interaction_payload_uncached(
     if learning_candidate_card:
         base["learning_candidate_card"] = learning_candidate_card
         route_payload["learning_candidate_card"] = learning_candidate_card
+    goal_quality_coaching_card = build_goal_quality_coaching_card(message)
+    if goal_quality_coaching_card:
+        base["goal_quality_coaching_card"] = goal_quality_coaching_card
 
     if _is_omh_intro_question(message) and resolved_mode in {"route", "plan", "clarify"}:
         base["mode"] = "route"
@@ -5644,6 +5651,54 @@ def _base_interaction(
     return payload
 
 
+def build_goal_quality_coaching_card(message: str, *, locale: str | None = None) -> dict[str, object] | None:
+    """Build a plain-language coaching card for a goal-classified chat message that
+    has no stated success/acceptance criteria, or return None when coaching does
+    not apply.
+
+    Classification reuses `workflows.goal_quality_coaching.is_goal_classified_message`
+    (itself built on the same loopability classifier OMH's /loop routing uses) and
+    criteria detection reuses `workflows.goal_ledger.goal_message_states_acceptance_criteria`
+    (the same criteria validation goal ledgers rely on). Neither is re-implemented here.
+    """
+    if not is_goal_classified_message(message):
+        return None
+    if goal_message_states_acceptance_criteria(message):
+        return None
+    copy = chat_copy("goal_quality_coaching", locale=locale or detect_copy_locale(message))
+    return {
+        "schema_version": GOAL_QUALITY_COACHING_CARD_SCHEMA_VERSION,
+        "kind": "goal_quality_coaching",
+        "headline": copy.headline,
+        "body": copy.body,
+        "next_action": "state_goal_success_criteria",
+        "claim_boundary": (
+            "This is coaching copy about stating success criteria; it is not a goal ledger, "
+            "completion gate, or execution evidence."
+        ),
+    }
+
+
+def _chat_response_with_goal_quality_coaching(
+    response: dict[str, object], card: dict[str, object]
+) -> dict[str, object]:
+    updated = dict(response)
+    state = dict(_nested(updated, "state"))
+    state["goal_quality_coaching_card"] = card
+    updated["state"] = state
+    body = str(updated.get("body", ""))
+    coaching_body = str(card.get("body", ""))
+    if coaching_body and coaching_body not in body:
+        updated["body"] = f"{body} {coaching_body}".strip()
+    raw_actions = updated.get("actions", [])
+    actions = [action for action in raw_actions if isinstance(action, dict)] if isinstance(raw_actions, list) else []
+    action_ids = {str(action.get("id", "")) for action in actions}
+    if "state_goal_success_criteria" not in action_ids:
+        actions.append(_action("state_goal_success_criteria", "State success criteria", "secondary"))
+    updated["actions"] = actions
+    return updated
+
+
 def _finish_interaction(payload: dict[str, object], target_notice: dict[str, object] | None) -> dict[str, object]:
     if target_notice:
         payload["target_notice"] = target_notice
@@ -5655,6 +5710,9 @@ def _finish_interaction(payload: dict[str, object], target_notice: dict[str, obj
         response = _chat_response_with_route_explanation(response, _nested(payload, "route"))
         if target_notice:
             response = _chat_response_with_target_notice(response, target_notice)
+        goal_quality_coaching_card = payload.get("goal_quality_coaching_card")
+        if isinstance(goal_quality_coaching_card, dict):
+            response = _chat_response_with_goal_quality_coaching(response, goal_quality_coaching_card)
         agentic_playbook = payload.get("agentic_playbook")
         if isinstance(agentic_playbook, dict):
             response = chat_response_with_agentic_playbook(response, agentic_playbook)

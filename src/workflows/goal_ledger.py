@@ -111,6 +111,50 @@ def _criteria_objects(criteria: Iterable[str | dict[str, Any]]) -> list[dict[str
     return result
 
 
+_STATED_CRITERIA_MARKER_RE = re.compile(
+    r"(?:done when|success (?:is|means)|complete when|completion means|"
+    r"acceptance criteria|success criteria|completion criteria|definition of done|"
+    r"완료\s*조건|성공\s*기준|완료\s*기준|끝나는\s*조건)"
+    r"\s*(?:is|means|[:\-])?\s*(.+)",
+    re.IGNORECASE,
+)
+
+
+def extract_stated_acceptance_criteria(text: str) -> list[str]:
+    """Pull user-stated success/acceptance-criteria phrases out of free chat text.
+
+    This only recognizes explicit "done when ...", "success is/means ...",
+    "acceptance criteria: ...", "완료 조건: ..." style markers. Other surfaces
+    (chat coaching, etc.) should call this -- or `goal_message_states_acceptance_criteria`
+    below -- instead of re-implementing what counts as a stated criterion.
+    """
+    candidates: list[str] = []
+    for line in re.split(r"[\r\n]+|(?<=[.!?])\s+", str(text)):
+        match = _STATED_CRITERIA_MARKER_RE.search(line)
+        if not match:
+            continue
+        candidate = match.group(1).strip(" .,:;-")
+        if candidate:
+            candidates.append(candidate)
+    return candidates
+
+
+def goal_message_states_acceptance_criteria(text: str) -> bool:
+    """True when free chat text already states at least one valid acceptance criterion.
+
+    Reuses `_criteria_objects` -- the same validation goal ledgers rely on --
+    so "what counts as a criterion" has exactly one definition in this codebase.
+    """
+    candidates = extract_stated_acceptance_criteria(text)
+    if not candidates:
+        return False
+    try:
+        _criteria_objects(candidates)
+    except ValueError:
+        return False
+    return True
+
+
 def _evidence_refs(values: Iterable[str] | None) -> list[str]:
     return [_safe_summary(str(value), limit=320) for value in values or [] if str(value).strip()]
 
