@@ -1,0 +1,385 @@
+{
+  "schema_version": "wrapper_golden_examples/v1",
+  "description": "Telegram-sourced Hermes Agent surface examples mirroring the status-ladder scenarios so the Telegram bridge has the same claim-boundary discipline as Discord and Slack, including telegram-appropriate messenger_rendering platform hints.",
+  "scenarios": [
+    {
+      "scenario": "clarify_needed",
+      "source": "telegram",
+      "input_kind": "natural_language",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "clarification",
+        "headline": "[omh] clarification - I need one clarification before routing this.",
+        "body": "The request is not specific enough for a safe workflow handoff.",
+        "action_ids": ["answer:clarify", "cancel"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "No execution has started.",
+      "observed_evidence": [
+        "source metadata",
+        "message hash",
+        "clarification request"
+      ],
+      "not_evidence": [
+        "approved plan",
+        "executor dispatch",
+        "executor result"
+      ]
+    },
+    {
+      "scenario": "plan_presented",
+      "source": "telegram",
+      "input_kind": "natural_language",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "plan",
+        "headline": "[omh] plan - I drafted a plan for this request.",
+        "body": "The user can accept or revise the plan before any handoff is prepared.",
+        "action_ids": ["accept_plan", "revise_plan"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "A draft plan is not execution evidence.",
+      "observed_evidence": [
+        "draft plan",
+        "selected workflow",
+        "wrapper actions"
+      ],
+      "not_evidence": [
+        "plan acceptance",
+        "prepared handoff",
+        "executor dispatch"
+      ]
+    },
+    {
+      "scenario": "deep_interview_blocked_plan",
+      "source": "telegram",
+      "input_kind": "natural_language",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "clarification",
+        "headline": "[omh] deep-interview - I need one answer before I can plan this.",
+        "body": "The user sees one blocking question instead of a guessed plan.",
+        "action_ids": ["answer:clarify", "cancel"]
+      },
+      "expected_deep_interview": {
+        "schema_version": "deep_interview_contract/v1",
+        "required": true,
+        "question_style": "one_question",
+        "missing_decisions": ["target outcome", "success criteria", "scope boundary"],
+        "after_answer_next_action": "rerun_hermes_plan"
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "No plan or execution is approved.",
+      "observed_evidence": [
+        "missing decision list",
+        "one-question prompt",
+        "rerun-plan next action"
+      ],
+      "not_evidence": [
+        "approved plan",
+        "executor dispatch"
+      ]
+    },
+    {
+      "scenario": "handoff_prepared",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "handoff",
+        "headline": "[omh] handoff - A coding-agent handoff is ready.",
+        "body": "The handoff is prepared, but executor dispatch is not observed yet.",
+        "action_ids": ["send_to_executor", "show_status"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "Prepared handoff is not execution evidence.",
+      "observed_evidence": [
+        "prepared handoff payload",
+        "linked run id",
+        "status card handoff step"
+      ],
+      "not_evidence": [
+        "executor dispatch",
+        "executor result",
+        "verification"
+      ]
+    },
+    {
+      "scenario": "dispatched_executor_not_observed",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "[omh] status - The handoff was dispatched.",
+        "body": "Executor completion is not observed yet.",
+        "action_ids": ["show_status"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "Dispatch is not completion evidence.",
+      "observed_evidence": [
+        "dispatch observed",
+        "linked run id"
+      ],
+      "not_evidence": [
+        "executor completion",
+        "verification",
+        "review"
+      ]
+    },
+    {
+      "scenario": "review_pending",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "[omh] status - Executor completion needs review evidence.",
+        "body": "Review evidence is required before completion is reported.",
+        "action_ids": ["show_status"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "Execution is observed; review is not.",
+      "observed_evidence": [
+        "executor result",
+        "verification evidence"
+      ],
+      "not_evidence": [
+        "review passed",
+        "CI passed",
+        "merge readiness"
+      ]
+    },
+    {
+      "scenario": "status_card_review_pending",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "[omh] status - Executor completion needs review evidence.",
+        "body": "The wrapper can render a platform-neutral progress card without parsing prose.",
+        "action_ids": ["show_status"]
+      },
+      "expected_status_card": {
+        "schema_version": "status_card/v1",
+        "severity": "attention",
+        "steps": [
+          {"id": "handoff", "state": "complete"},
+          {"id": "execution", "state": "complete"},
+          {"id": "verification", "state": "complete"},
+          {"id": "review", "state": "pending"},
+          {"id": "ci", "state": "pending"},
+          {"id": "merge_ready", "state": "pending"},
+          {"id": "merged", "state": "pending"}
+        ]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "Execution and verification are not review evidence.",
+      "observed_evidence": [
+        "status_card/v1",
+        "execution complete step",
+        "verification complete step"
+      ],
+      "not_evidence": [
+        "review passed",
+        "merge readiness",
+        "merged"
+      ]
+    },
+    {
+      "scenario": "ci_pending",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "[omh] status - Review passed; CI evidence is still missing.",
+        "body": "Merge readiness is not reported until CI evidence is observed.",
+        "action_ids": ["show_status"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "Review is not CI evidence.",
+      "observed_evidence": [
+        "review passed"
+      ],
+      "not_evidence": [
+        "CI passed",
+        "merge readiness",
+        "merged"
+      ]
+    },
+    {
+      "scenario": "ci_failed",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "blocker",
+        "headline": "[omh] status - CI is blocking completion.",
+        "body": "The failing or blocked CI checks are surfaced instead of claiming merge readiness.",
+        "action_ids": ["show_status"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "Failed CI is not merge-ready.",
+      "observed_evidence": [
+        "failing CI checks",
+        "blocked status card"
+      ],
+      "not_evidence": [
+        "merge readiness",
+        "merged"
+      ]
+    },
+    {
+      "scenario": "merge_ready",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "[omh] status - This is ready to merge.",
+        "body": "Execution, verification, review, CI, and merge-readiness evidence are observed.",
+        "action_ids": ["show_status"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "Ready to merge is not the same as merged.",
+      "observed_evidence": [
+        "execution evidence",
+        "verification evidence",
+        "review evidence",
+        "CI evidence",
+        "merge-readiness evidence"
+      ],
+      "not_evidence": [
+        "merged"
+      ]
+    },
+    {
+      "scenario": "merged",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "[omh] status - This has been merged.",
+        "body": "Merge evidence is observed in the runtime ledger.",
+        "action_ids": ["show_status"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "Merged status is backed by runtime ledger evidence.",
+      "observed_evidence": [
+        "runtime ledger merge evidence"
+      ],
+      "not_evidence": [
+        "unobserved follow-up work"
+      ]
+    },
+    {
+      "scenario": "contradictory_merge_ready_without_ci",
+      "source": "telegram",
+      "input_kind": "linked_run_status",
+      "expected_response": {
+        "schema_version": "chat_response/v1",
+        "kind": "status",
+        "headline": "[omh] status - Review passed; CI evidence is still missing.",
+        "body": "A later merge-ready artifact cannot override the missing CI gate.",
+        "action_ids": ["show_status"]
+      },
+      "expected_messenger_rendering": {
+        "schema_version": "omh_messenger_rendering/v1",
+        "avoid_blocks": ["markdown_table", "wide_table", "large_unbroken_block"],
+        "chunking": {"max_recommended_chars": 1800, "split_on": ["headings", "bullets", "paragraphs"]},
+        "platform_hints": {
+          "telegram": "Start the response with the visible prefix, keep sections short, and avoid table layouts."
+        }
+      },
+      "claim_boundary": "The upstream CI blocker is shown instead of merge-ready.",
+      "observed_evidence": [
+        "review passed",
+        "missing CI evidence"
+      ],
+      "not_evidence": [
+        "merge readiness",
+        "merged"
+      ]
+    }
+  ]
+}

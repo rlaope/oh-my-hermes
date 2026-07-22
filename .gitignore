@@ -36,3 +36,9 @@ uv.lock
 .idea/
 .vscode/
 *.swp
+
+# QA/screenshot scratch artifacts
+.playwright-mcp/
+omh-qa-*.png
+omh-qa-*-snapshot.md
+*-1440.png

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .advisory import AdvisoryReport, run_config_advisories
 from ..command_path import inspect_omh_command_path
 from ..config_adapter import external_dirs, read_config
 from ..hashutil import sha256_file
@@ -334,6 +335,16 @@ def _skill_shadowing_check(paths: OmhPaths, configured_dirs: list[str]) -> Check
             f"{'directory' if len(foreign_dirs) == 1 else 'directories'}. {boundary}"
         ),
     )
+
+
+def run_doctor_advisories(paths: OmhPaths) -> AdvisoryReport:
+    """Read-only Hermes config advisory lane.
+
+    Deliberately SEPARATE from ``run_doctor``: advisory entries are never
+    appended to the ``list[Check]`` consumed by ``doctor_ok()`` or
+    ``recommended_next_action()``, so they cannot change the doctor exit code.
+    """
+    return run_config_advisories(paths.hermes_home)
 
 
 def doctor_ok(checks: list[Check]) -> bool:

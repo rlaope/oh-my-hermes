@@ -1,0 +1,14 @@
+{
+  "update_id": "telegram-safe-feature-001",
+  "message": {
+    "message_id": "telegram-message-safe-feature-001",
+    "date": "1781792400",
+    "chat": {
+      "id": "repo-planning"
+    },
+    "from": {
+      "id": "maintainer-1"
+    },
+    "text": "I want to safely add a feature to this repo"
+  }
+}

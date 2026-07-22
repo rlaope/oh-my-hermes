@@ -391,7 +391,7 @@ _RULES = (
         "partial",
         "high",
         ("team", "ultragoal", "ultrawork", "agent-board", "harness-session-inventory"),
-        "OMH covers planning, handoff, board, and evidence boundaries, but does not import external worker runtimes.",
+        "OMH defers multi-agent orchestration to native Kanban (v0.13.x durable board; v0.15.0 orchestrator auto-decomposition, swarm topology, worktree-per-task, per-task model overrides) and delegate_task (v0.18.0 background fan-out; v0.19.0 live subagent transcripts), while OMH supplies prepared handoffs and observed evidence around them.",
         "dynamic_orchestration",
     ),
     CoverageRule(
@@ -781,6 +781,26 @@ _RULES = (
         ),
         "OMH can prepare cost-aware external connector readiness and live-info routing gates; provider calls and domain results remain observed external evidence.",
         "domain_connectors",
+    ),
+    CoverageRule(
+        (
+            "self hosted investment research",
+            "llm committee",
+            "self hosted erp core",
+            "erp core with accounting",
+            "agent action layer",
+        ),
+        "partial",
+        "medium",
+        (
+            "skill-scout",
+            "external-connector-readiness",
+            "toolbelt-readiness",
+            "security-safety-review",
+            "agent-evaluation",
+        ),
+        "OMH can review self-hosted domain applications that expose agentskills.io, MCP, or skill interfaces for connector scope, credential handling, data safety, and observed trial evidence; running the application, its accounting or investment output, and any agent action layer remain observed-only.",
+        "self_hosted_domain_application",
     ),
 )
 

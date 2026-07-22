@@ -1,0 +1,14 @@
+{
+  "update_id": "telegram-route-hint-001",
+  "message": {
+    "message_id": "telegram-message-route-hint-001",
+    "date": "1781965200",
+    "chat": {
+      "id": "design-share"
+    },
+    "from": {
+      "id": "maintainer-1"
+    },
+    "text": "make an image explaining the cron feature"
+  }
+}
