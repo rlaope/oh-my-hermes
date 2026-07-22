@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from omh.local_store import atomic_write_json, ensure_dir, read_json_object_result
-from omh.paths import OmhPaths
+from omh.system.local_store import atomic_write_json, ensure_dir, read_json_object_result
+from omh.system.paths import OmhPaths
 
 from .web_visual_qa_contracts import (
     SUPPORTED_COST_TIERS,
