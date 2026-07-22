@@ -10142,5 +10142,34 @@ def explicit_memory_context_skill_names() -> tuple[str, ...]:
     return _EXPLICIT_MEMORY_CONTEXT_SKILLS
 
 
-CORE_SKILLS = list(installable_skill_names())
+# The doctor health floor: skills OMH needs on disk to describe, diagnose, manage,
+# and stop itself. This is intentionally small and independent of
+# `installable_skill_names()` (the full catalog) so a health check does not force
+# every packaged skill onto disk just to pass `omh doctor`.
+CORE_SKILLS = (
+    "oh-my-hermes",
+    "doctor",
+    "skill",
+    "cancel",
+    "agent-ops-review",
+)
+
+# The default install profile: the doctor health floor above, plus the workflow
+# skills a messenger-first user needs for the chat/plan/status/handoff flows that
+# make up a first session (planning with a coding handoff, gateway status-update
+# and delivery policy for chat channels, executor runtime readiness before a
+# handoff, and an ops observability card for status questions). Everything else
+# in the catalog is opt-in via a `full` install so a default install does not add
+# every packaged skill's context weight to every turn.
+CORE_PROFILE_SKILLS = tuple(
+    dict.fromkeys(
+        CORE_SKILLS
+        + (
+            "plan",
+            "gateway-intent-card",
+            "executor-runtime-readiness",
+            "ops-observability-card",
+        )
+    )
+)
 DESCRIPTIONS = {definition.name: definition.description for definition in _DEFINITIONS}

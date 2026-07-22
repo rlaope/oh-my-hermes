@@ -74,6 +74,12 @@ hermes skills tap add rlaope/oh-my-hermes
 hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes
 ```
 
+`omh setup` installs a **core** skill profile by default: the doctor health
+floor plus the chat/plan/status/handoff essentials, not every packaged skill.
+Pass `omh setup --full` to install the complete catalog instead; see
+[Skill Profiles: Core vs Full](docs/INSTALLATION.md#skill-profiles-core-vs-full)
+for the context-cost rationale.
+
 Most people only need three direct OMH commands:
 
 - `omh setup` to connect or repair OMH.

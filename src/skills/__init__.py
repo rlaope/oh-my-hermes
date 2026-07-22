@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .catalog import (
+    CORE_PROFILE_SKILLS,
     CORE_SKILLS,
     DESCRIPTIONS,
     HarnessDefinition,
@@ -24,6 +25,7 @@ from .packaging import builtin_skill_reference_templates, builtin_skill_template
 from .render import SkillReferenceTemplate, SkillTemplate, router_skill, workflow_reference_payload, workflow_skill
 
 __all__ = [
+    "CORE_PROFILE_SKILLS",
     "CORE_SKILLS",
     "DESCRIPTIONS",
     "HarnessDefinition",

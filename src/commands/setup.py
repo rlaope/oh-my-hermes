@@ -100,7 +100,15 @@ def _install_result(args: argparse.Namespace) -> dict[str, object]:
     source = str(source_dir) if source_dir else "builtin"
     source_ref = _release_source_ref(args, release)
     previous_release = _previous_release_update_state(paths)
-    result = install_skill_pack(paths, source=source, source_dir=source_dir, force=args.force, dry_run=args.dry_run)
+    skill_profile = "full" if getattr(args, "full", False) else "core"
+    result = install_skill_pack(
+        paths,
+        source=source,
+        source_dir=source_dir,
+        force=args.force,
+        dry_run=args.dry_run,
+        profile=skill_profile,
+    )
     result.update(
         {
             "operation": operation,
@@ -2755,6 +2763,16 @@ def _add_common_install_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--language", default=None, help=f"Human output language for setup/install/update ({', '.join(LANGUAGE_CODES)}).")
     p.add_argument("--force", action="store_true")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--full",
+        action="store_true",
+        help=(
+            "Install every packaged skill instead of the smaller core default "
+            "(chat/plan/status/handoff essentials plus the doctor health floor); "
+            "the result records a context-cost warning because every extra skill "
+            "adds per-turn context weight."
+        ),
+    )
 
 
 def _add_top_level_commands(sub) -> None:

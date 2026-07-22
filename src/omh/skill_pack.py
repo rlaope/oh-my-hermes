@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .skills import (
+    CORE_PROFILE_SKILLS,
     CORE_SKILLS,
     DESCRIPTIONS,
     HarnessDefinition,
@@ -29,6 +30,7 @@ from .skills import (
 )
 
 __all__ = [
+    "CORE_PROFILE_SKILLS",
     "CORE_SKILLS",
     "DESCRIPTIONS",
     "HarnessDefinition",

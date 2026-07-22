@@ -11,7 +11,17 @@ from ..local_store import atomic_write_text, read_json_object_result
 from ..manifest import local_modifications, new_manifest, read_manifest, skill_records, write_manifest
 from ..paths import OmhPaths
 from ..profiles.team import TEAM_PROFILE_SCHEMA_VERSION
-from ..skill_pack import SkillReferenceTemplate, SkillTemplate, builtin_skill_reference_templates, builtin_skill_templates
+from ..skill_pack import (
+    CORE_PROFILE_SKILLS,
+    SkillReferenceTemplate,
+    SkillTemplate,
+    builtin_skill_reference_templates,
+    builtin_skill_templates,
+)
+
+SKILL_PROFILES = ("core", "full")
+DEFAULT_SKILL_PROFILE = "core"
+CONTEXT_COST_WARNING_SCHEMA_VERSION = "omh_skill_profile_context_cost_warning/v1"
 
 
 def _write_skill(skills_dir: Path, template: SkillTemplate, force: bool = False, managed: bool = False) -> None:
@@ -45,20 +55,42 @@ def install_skill_pack(
     source_dir: Path | None = None,
     force: bool = False,
     dry_run: bool = False,
+    profile: str = DEFAULT_SKILL_PROFILE,
 ) -> dict:
-    templates = convert_from_dir(source_dir) if source_dir else builtin_skill_templates()
+    if profile not in SKILL_PROFILES:
+        raise OmhError(f"unknown skill profile {profile!r}; choose one of {', '.join(SKILL_PROFILES)}")
+    all_templates = convert_from_dir(source_dir) if source_dir else builtin_skill_templates()
     reference_templates = [] if source_dir else builtin_skill_reference_templates()
+    # Profile filtering only applies to the packaged builtin catalog: an explicit
+    # `source_dir` is a caller-scoped skill set, not the curated core/full catalog,
+    # so every skill it names is installed regardless of `profile`.
+    if source_dir or profile == "full":
+        templates = all_templates
+    else:
+        templates = [template for template in all_templates if template.name in CORE_PROFILE_SKILLS]
+        reference_templates = [
+            template for template in reference_templates if template.skill_name in CORE_PROFILE_SKILLS
+        ]
     manifest = read_manifest(paths.manifest_path)
     modified = local_modifications(manifest, paths.skills_dir)
     if modified and not force:
         raise OmhError("local modifications detected; rerun with --force or resolve: " + ", ".join(modified))
+    context_cost_warning = (
+        _context_cost_warning(core_count=len(CORE_PROFILE_SKILLS), full_count=len(builtin_skill_templates()))
+        if profile == "full"
+        else None
+    )
     if dry_run:
-        return {
+        result = {
             "dry_run": True,
             "skills_dir": str(paths.skills_dir),
             "skills": [template.name for template in templates],
             "source": source,
+            "skill_profile": profile,
         }
+        if context_cost_warning is not None:
+            result["context_cost_warning"] = context_cost_warning
+        return result
     paths.skills_dir.mkdir(parents=True, exist_ok=True)
     managed = manifest is not None
     for template in templates:
@@ -67,8 +99,27 @@ def install_skill_pack(
         _write_skill_reference(paths.skills_dir, template, force=force, managed=managed)
     records = skill_records(paths.skills_dir, source)
     manifest_data = new_manifest(source, paths.skills_dir, records)
+    manifest_data["skill_profile"] = profile
+    if context_cost_warning is not None:
+        manifest_data["context_cost_warning"] = context_cost_warning
     write_manifest(paths.manifest_path, manifest_data)
     return manifest_data
+
+
+def _context_cost_warning(*, core_count: int, full_count: int) -> dict:
+    extra_count = max(full_count - core_count, 0)
+    return {
+        "schema_version": CONTEXT_COST_WARNING_SCHEMA_VERSION,
+        "profile": "full",
+        "installed_skill_count": full_count,
+        "core_profile_skill_count": core_count,
+        "extra_skill_count": extra_count,
+        "message": (
+            f"full profile installs all {full_count} packaged skills, {extra_count} more than the "
+            f"{core_count}-skill core default; every installed skill adds per-turn context weight to "
+            "every Hermes request, so prefer core unless this workspace genuinely needs the complete catalog."
+        ),
+    }
 
 
 def uninstall_skill_pack(
