@@ -448,6 +448,27 @@ _CARD_COPY: dict[str, dict[str, ChatCopy]] = {
         "fr": ChatCopy(headline="Je dois comprendre l'objectif avant la route.", body="Dites en une phrase le résultat voulu et je choisirai le bon workflow."),
         "de": ChatCopy(headline="Vor dem Routing muss ich das Ziel verstehen.", body="Sag mir das gewünschte Ergebnis in einem Satz; ich wähle den passenden workflow."),
     },
+    "goal_quality_coaching": {
+        "en": ChatCopy(
+            headline="This goal does not have a finish line yet.",
+            body=(
+                "An open-ended goal like this has no completion test, so an automated completion "
+                "judge can keep going until it hits its turn ceiling (the default is 20 turns) "
+                "without ever confirming it is actually done. Tell me what \"done\" means -- for "
+                "example \"done when the tests pass\" or \"done when new users can sign up in under "
+                "a minute\" -- and I will use that as the success criteria."
+            ),
+        ),
+        "ko": ChatCopy(
+            headline="이 목표에는 아직 끝나는 기준이 없습니다.",
+            body=(
+                "이렇게 열린 목표는 완료를 판단할 기준이 없어서, 완료 여부를 자동으로 판단하는 "
+                "심사가 정해진 턴 수(기본값 20턴)까지 계속 반복될 수 있습니다. "
+                "\"테스트가 통과하면 완료\"처럼 \"완료\"가 무엇을 뜻하는지 알려주시면 "
+                "그것을 성공 기준으로 쓰겠습니다."
+            ),
+        ),
+    },
 }
 
 

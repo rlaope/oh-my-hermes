@@ -1,0 +1,36 @@
+{
+  "schema_version": "goal_quality_coaching_golden_examples/v1",
+  "description": "Plain-language coaching card shown when a goal-classified chat message has no stated success/acceptance criteria. Kept in a dedicated file (not status-ladder.json) because status-ladder.json's test asserts an exact scenario set.",
+  "scenarios": [
+    {
+      "scenario": "goal_without_success_criteria",
+      "source": "slack",
+      "message": "improve the onboarding experience",
+      "expected_goal_quality_coaching_card": {
+        "schema_version": "goal_quality_coaching_card/v1",
+        "kind": "goal_quality_coaching",
+        "headline": "This goal does not have a finish line yet.",
+        "next_action": "state_goal_success_criteria"
+      },
+      "claim_boundary": "This is coaching copy about stating success criteria; it is not a goal ledger, completion gate, or execution evidence.",
+      "not_evidence": [
+        "goal ledger",
+        "completion gate",
+        "acceptance criteria satisfied",
+        "goal completion"
+      ]
+    },
+    {
+      "scenario": "goal_with_success_criteria_has_no_coaching_card",
+      "source": "slack",
+      "message": "improve the onboarding experience. done when new users complete signup in under 2 minutes.",
+      "expected_goal_quality_coaching_card": null
+    },
+    {
+      "scenario": "non_goal_chat_has_no_coaching_card",
+      "source": "slack",
+      "message": "please fix the typo in README",
+      "expected_goal_quality_coaching_card": null
+    }
+  ]
+}
