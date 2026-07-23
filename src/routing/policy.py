@@ -5994,7 +5994,41 @@ def is_explicit_one_off_request(normalized_query: str, query_tokens: set[str]) -
     return bool(_ONE_OFF_TOKENS & query_tokens) or _contains_phrase(normalized_query, _ONE_OFF_PHRASES)
 
 
+_HERMES_SETUP_GUIDE_PHRASES = (
+    "model-setup",
+    "set up my models",
+    "set up my model",
+    "configure my models",
+    "configure model provider",
+    "model provider setup",
+    "모델 설정",
+    "모델 프로바이더 설정",
+    "websearch-setup",
+    "web search setup",
+    "make web search cheaper",
+    "reduce web search cost",
+    "web search cheaper",
+    "웹 검색 설정",
+    "웹 검색 싸게",
+    "웹 검색 비용",
+    "morning-brief",
+    "morning brief",
+    "모닝 브리핑",
+    "아침 브리핑",
+    "parallel-tools",
+    "parallel tools",
+    "병렬 도구",
+    "병렬 툴",
+)
+
+
+def _hermes_setup_guide_requested(normalized_query: str) -> bool:
+    return _contains_phrase(normalized_query, _HERMES_SETUP_GUIDE_PHRASES)
+
+
 def _web_research_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _hermes_setup_guide_requested(normalized_query):
+        return False
     if _scheduled_ops_blueprint_guard_applies(normalized_query, query_tokens):
         return False
     if _delivery_cycle_terms(normalized_query, query_tokens):
@@ -6925,6 +6959,8 @@ def _executor_readiness_check_requested(normalized_query: str, query_tokens: set
 
 
 def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _hermes_setup_guide_requested(normalized_query):
+        return False
     if _public_plugin_connector_readiness_requested(normalized_query):
         return False
     if _harness_session_inventory_guard_applies(normalized_query, query_tokens):

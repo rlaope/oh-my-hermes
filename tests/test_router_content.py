@@ -33,6 +33,7 @@ from omh.quality.grounded_score import GROUNDED_SCENARIOS
 from omh.runtime.records import validate_harness_quality
 from omh.skills.catalog import (
     SkillDefinition,
+    _HERMES_SETUP_FIVE_STEP_BAR,
     catalog_intent_delegation_skill_names,
     harness_quality_contract,
     installable_skill_names,
@@ -611,6 +612,80 @@ class RouterContentTests(unittest.TestCase):
                 }
                 missing = {name: fragments for name, fragments in missing.items() if fragments}
                 self.assertEqual(missing, {})
+
+    def test_hermes_setup_skills_share_five_step_contract_and_skip_semantics(self) -> None:
+        hermes_setup_skill_names = (
+            "model-setup",
+            "parallel-tools",
+            "websearch-setup",
+            "morning-brief",
+        )
+        additional_fragments = {
+            "morning-brief": (
+                "never enable Send permission",
+                "pasted by the user",
+                "never stored",
+            ),
+            "websearch-setup": (
+                "scraper API key",
+                "auxiliary web-extract model",
+            ),
+        }
+        templates = {template.name: template.content for template in builtin_skill_templates()}
+
+        for name in hermes_setup_skill_names:
+            with self.subTest(skill=name):
+                self.assertIn(name, templates, f"{name} should be a rendered Hermes setup skill")
+                content = templates[name]
+
+                position = -1
+                for step in _HERMES_SETUP_FIVE_STEP_BAR:
+                    found = content.find(step)
+                    self.assertGreater(
+                        found,
+                        position,
+                        f"{name}: five-step bar item {step!r} missing or out of order in rendered content",
+                    )
+                    position = found
+
+                self.assertIn(
+                    "not applicable", content, f"{name}: missing skip-semantics literal 'not applicable'"
+                )
+
+                for fragment in additional_fragments.get(name, ()):
+                    self.assertIn(fragment, content, f"{name}: missing required fragment {fragment!r}")
+
+    def test_hermes_setup_skills_avoid_stale_vendor_and_pricing_literals(self) -> None:
+        hermes_setup_skill_names = (
+            "model-setup",
+            "parallel-tools",
+            "websearch-setup",
+            "morning-brief",
+        )
+        banned_patterns = (
+            r"GPT-?\d",
+            r"\bGrok\b",
+            r"\bKimi\b",
+            r"\bGemini\b",
+            r"Claude (Opus|Sonnet|Haiku|Fable)",
+            r"\bv\d+\.\d+",
+            r"\$\d",
+            r"\bFirecrawl\b",
+            r"\bZapier\b",
+            r"\bOpenRouter\b",
+        )
+        templates = {template.name: template.content for template in builtin_skill_templates()}
+
+        for name in hermes_setup_skill_names:
+            content = templates.get(name, "")
+            for pattern in banned_patterns:
+                with self.subTest(skill=name, pattern=pattern):
+                    match = re.search(pattern, content, flags=re.IGNORECASE)
+                    self.assertIsNone(
+                        match,
+                        f"{name}: stale literal {match.group(0) if match else ''!r} "
+                        f"matched banned pattern {pattern!r}",
+                    )
 
     def test_router_renders_representative_harness_registry(self) -> None:
         references = {

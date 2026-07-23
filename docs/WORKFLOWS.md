@@ -3420,6 +3420,234 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Do not imply hidden Hermes runtime behavior.
   - Use the smallest verification that can prove the claim.
 
+### model-setup
+
+[omh] Hermes Model Setup workflow: diagnose role-slot model configuration, guide provider connection, and apply changes only after diff approval.
+
+- Category: `hermes-setup`
+- Phase: `setup`
+- Hermes role: `guide`
+- Quality tier: `hermes-setup-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Run diagnosis and guidance directly in Hermes for role-slot model setup. Diagnosis only reads the existing Hermes config, `.env` keys, and installed version; it never writes anything on its own. Show the exact diff for any config or `.env` change and write it only after the user explicitly approves that diff. Secret values such as tokens and API keys are pasted by the user directly in chat and are never stored, logged, or echoed back beyond the immediate diff confirmation. Delegate to a selected coding executor only if the user needs a change outside chat-driven config edits.
+- Why this exists: `model-setup` exists to turn role-slot model configuration into a guided, read-before-write walkthrough instead of an unreviewed config edit.
+- Use when: Use when the user wants Hermes to check or configure role-slot model assignments (main, realtime-search, design), connect a model provider, or switch the session model, following the shared prerequisite-check, diagnose, guide, diff-approved apply, and verify contract.
+- Do not use when:
+  - The user is asking which model Hermes currently is, not asking to change or connect one.
+  - The request needs a repository code change rather than a local Hermes config or `.env` edit.
+  - No role slot, provider, or session-switch intent is named yet.
+- Strong routing signals: `model-setup`, `hermes model setup`, `set up my models`, `set up my model`, `configure my models`, `configure model provider`, `connect my model provider`, `set up model role slots`, `switch my session model`, `모델 설정 도와줘`, `모델 설정`, `모델 연결`, `모델 프로바이더 설정`, `모델 슬롯 설정`
+- Good example:
+  - Prompt: Help me set up my models — I want to connect a new provider for the main role slot.
+  - Expected behavior: Check the provider prerequisite, read-only diagnose the current main-slot assignment, guide account/token setup, show the config diff, and apply only after approval.
+  - Why: The request is role-slot model configuration and needs the shared setup contract.
+- Bad example:
+  - Prompt: model-setup: what model are you running right now?
+  - Expected behavior: Answer the identity question directly instead of starting a setup walkthrough.
+  - Why: A status question is not a configuration request and should not trigger a write-capable guide.
+- Quality bar:
+  - Prerequisite check: confirm the subscription, account, or capability the step needs exists before continuing; mark unmet prerequisites "not applicable" and skip them explicitly.
+  - Read-only diagnose: read the current Hermes config, `.env` keys, and installed version without writing anything.
+  - Guide: walk the user through any account creation, OAuth, or token issuance they must complete themselves.
+  - Diff-approved apply: show the exact config or `.env` diff and write only after the user explicitly approves it.
+  - Verify: re-read the updated config and report a completion checklist covering every applicable item.
+  - Treat each role slot (main, realtime-search, design) as an independent prerequisite/diagnose/apply unit instead of one combined change.
+- Completion checklist:
+  - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
+  - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
+  - Every touched role slot was diagnosed, guided, diff-approved, and re-verified before being reported complete.
+- Recovery notes:
+  - If a provider prerequisite is unmet, mark that role slot "not applicable" and continue with the remaining slots.
+  - If the diagnosed config cannot be read, report the read failure and stop before proposing a diff.
+  - If the user rejects a shown diff, keep the prior config as verified state and ask what to change.
+- Required inputs:
+  - current Hermes config file path
+  - target role slot (main, realtime-search, or design)
+  - provider account or API credential status
+- Expected outputs:
+  - read-only diagnosis of current role-slot model assignments
+  - diff-approved config write for the requested role slot
+  - verification checklist confirming the applied slot change
+- Artifact expectations:
+  - setup verification note when the wrapper captures it
+- Safety rules:
+  - Do not name or assume a specific model, provider tier, or price; ask the user which provider and role slot they want and read the current assignment instead of guessing.
+  - Keep prerequisite check, diagnosis, guidance, apply, and verify as separate, explicit steps.
+
+### parallel-tools
+
+[omh] Hermes Parallel Tools workflow: check version currency and parallel-tool capability status, then apply an update only after diff approval.
+
+- Category: `hermes-setup`
+- Phase: `setup`
+- Hermes role: `guide`
+- Quality tier: `hermes-setup-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Run diagnosis and reporting directly in Hermes for parallel-tool capability. Diagnosis only reads the existing Hermes config, `.env` keys, and installed version; it never writes anything on its own. Show the exact diff for any config or `.env` change and write it only after the user explicitly approves that diff. Secret values such as tokens and API keys are pasted by the user directly in chat and are never stored, logged, or echoed back beyond the immediate diff confirmation. Delegate to a selected coding executor only if the user needs a change outside a local version/config check.
+- Why this exists: `parallel-tools` exists to give a quick, read-first answer to whether parallel tool calls are current and enabled, with an update path only when currency is actually missing.
+- Use when: Use when the user wants Hermes to check whether parallel tool calls are current and enabled, run a version-currency check, or report capability status, following the shared prerequisite-check, diagnose, guide, diff-approved apply, and verify contract.
+- Do not use when:
+  - The user wants a general Hermes update unrelated to parallel-tool capability.
+  - No version or capability question has been asked yet.
+  - The request needs a repository code change rather than a local version check.
+- Strong routing signals: `parallel-tools`, `parallel tools`, `hermes parallel tools setup`, `update hermes for parallel tools`, `check parallel tool support`, `enable parallel tool calls`, `verify parallel tools capability`, `check hermes version for parallel tools`, `헤르메스 업데이트 확인해줘`, `병렬 도구 설정`, `병렬 툴 확인`, `헤르메스 병렬 도구`
+- Good example:
+  - Prompt: update hermes for parallel tools — can you check if I'm on a current enough version?
+  - Expected behavior: Read the installed version and capability status, report whether parallel tools are current, and hand back a user-runnable update command if not.
+  - Why: The request is a version-currency and capability check, the core of this skill.
+- Bad example:
+  - Prompt: parallel-tools: update your memory with what we discussed.
+  - Expected behavior: Route to a memory workflow instead of a version-currency check.
+  - Why: Memory update is unrelated to parallel-tool capability or Hermes version.
+- Quality bar:
+  - Prerequisite check: confirm the subscription, account, or capability the step needs exists before continuing; mark unmet prerequisites "not applicable" and skip them explicitly.
+  - Read-only diagnose: read the current Hermes config, `.env` keys, and installed version without writing anything.
+  - Guide: walk the user through any account creation, OAuth, or token issuance they must complete themselves.
+  - Diff-approved apply: show the exact config or `.env` diff and write only after the user explicitly approves it.
+  - Verify: re-read the updated config and report a completion checklist covering every applicable item.
+  - This is mostly a verify-only walkthrough: prefer reporting capability status over proposing a config change when parallel tools are already current.
+- Completion checklist:
+  - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
+  - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
+  - The reported capability status matches an observed read, not an assumed default.
+- Recovery notes:
+  - If the installed version cannot be read, report the read failure and stop before recommending an update.
+  - If the update command is unavailable for the user's install path, name the blocker instead of guessing a fix.
+- Required inputs:
+  - installed Hermes version
+  - current parallel-tool capability status
+- Expected outputs:
+  - read-only diagnosis of the installed version and parallel-tool capability status
+  - a user-runnable update command to check or restore version currency
+  - a capability status report naming which parallel-tool features are active
+- Artifact expectations:
+  - capability status note when the wrapper captures it
+- Safety rules:
+  - Do not name a specific version number, release date, or product tier; read and report the installed version instead of assuming one.
+  - Report the update command for the user to run themselves rather than claiming Hermes restarted or reloaded on its own.
+
+### websearch-setup
+
+[omh] Hermes Web Search Setup workflow: diagnose scraper and auxiliary extract-model configuration, guide account setup, and apply each change as its own diff approval.
+
+- Category: `hermes-setup`
+- Phase: `setup`
+- Hermes role: `guide`
+- Quality tier: `hermes-setup-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Run diagnosis and guidance directly in Hermes for web search setup. Diagnosis only reads the existing Hermes config, `.env` keys, and installed version; it never writes anything on its own. Show the exact diff for any config or `.env` change and write it only after the user explicitly approves that diff. Secret values such as tokens and API keys are pasted by the user directly in chat and are never stored, logged, or echoed back beyond the immediate diff confirmation. Delegate to a selected coding executor only if the user needs a change outside chat-driven config or `.env` edits.
+- Why this exists: `websearch-setup` exists to make web search cost and routing configurable through two clearly separated, diff-approved steps instead of one opaque edit.
+- Use when: Use when the user wants to reduce web search cost or configure web search by setting up a scraper API key or an auxiliary web-extract model routing block, following the shared prerequisite-check, diagnose, guide, diff-approved apply, and verify contract.
+- Do not use when:
+  - The user wants Hermes to run a web search now, not configure how web search is set up.
+  - No scraper key or auxiliary extract-model intent has been named yet.
+  - The request needs a repository code change rather than a local `.env` or routing edit.
+- Strong routing signals: `websearch-setup`, `web search setup`, `make web search cheaper`, `set up web search`, `configure web search`, `reduce web search cost`, `connect scraper api key`, `set up auxiliary web-extract model`, `웹 검색 싸게 만들어줘`, `웹 검색 설정`, `웹서치 설정`, `웹 검색 비용 줄이기`
+- Good example:
+  - Prompt: make web search cheaper — I have a scraper account I want to use, and I want an auxiliary model handling extraction.
+  - Expected behavior: Diagnose the current `.env` and routing state, guide the scraper API key setup as one diff approval, then the auxiliary web-extract model routing as a second, separate diff approval.
+  - Why: The request needs the two independently-approved writes this skill exists to keep separate.
+- Bad example:
+  - Prompt: websearch-setup: search the web for the latest news.
+  - Expected behavior: Run or route to the search request directly instead of starting a setup walkthrough.
+  - Why: A live search request is not a configuration request.
+- Quality bar:
+  - Prerequisite check: confirm the subscription, account, or capability the step needs exists before continuing; mark unmet prerequisites "not applicable" and skip them explicitly.
+  - Read-only diagnose: read the current Hermes config, `.env` keys, and installed version without writing anything.
+  - Guide: walk the user through any account creation, OAuth, or token issuance they must complete themselves.
+  - Diff-approved apply: show the exact config or `.env` diff and write only after the user explicitly approves it.
+  - Verify: re-read the updated config and report a completion checklist covering every applicable item.
+  - Show the scraper API key diff as one diff approval and the auxiliary web-extract model routing diff as a second, separate diff approval; never merge them.
+- Completion checklist:
+  - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
+  - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
+  - The scraper API key write and the auxiliary web-extract model write were verified as two separate, independently-approved changes.
+- Recovery notes:
+  - If the scraper provider prerequisite is unmet, mark that step "not applicable" and continue with the auxiliary model routing step alone.
+  - If either diff is rejected, keep the other step's state independent and do not roll both back together.
+- Required inputs:
+  - scraper API key issued by the user's chosen web-extraction provider
+  - target auxiliary web-extract model role slot
+- Expected outputs:
+  - read-only diagnosis of the current scraper `.env` key and auxiliary web-extract model routing state
+  - a diff-approved `.env` write adding the scraper API key, approved on its own
+  - a diff-approved routing block change assigning the auxiliary web-extract model, approved separately from the key write
+  - verification checklist confirming both writes were applied
+- Artifact expectations:
+  - setup verification note when the wrapper captures it
+- Safety rules:
+  - Never combine the scraper API key `.env` write and the auxiliary web-extract model routing write into a single apply step; each gets its own diff and its own approval.
+  - Do not name a specific scraper product, extract-model provider, or price; ask the user which provider they hold an account with and read the current config instead of assuming one.
+
+### morning-brief
+
+[omh] Hermes Morning Brief setup workflow: diagnose mail and calendar MCP connection, guide read/draft-only access, and apply changes only after diff approval.
+
+- Category: `hermes-setup`
+- Phase: `setup`
+- Hermes role: `guide`
+- Quality tier: `hermes-setup-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Run diagnosis and guidance directly in Hermes for the mail/calendar connection. Diagnosis only reads the existing Hermes config, `.env` keys, and installed version; it never writes anything on its own. Show the exact diff for any config or `.env` change and write it only after the user explicitly approves that diff. Secret values such as tokens and API keys are pasted by the user directly in chat and are never stored, logged, or echoed back beyond the immediate diff confirmation. Delegate to a selected coding executor only if the user needs a change outside chat-driven MCP config edits.
+- Why this exists: `morning-brief` exists to connect mail and calendar access for an on-demand brief while keeping the connection strictly read and draft-only and the user's credentials unstored.
+- Use when: Use when the user wants Hermes to connect mail and calendar access for an on-demand morning brief, following the shared prerequisite-check, diagnose, guide, diff-approved apply, and verify contract.
+- Do not use when:
+  - The user wants Hermes to check their email or calendar right now rather than set up the connection.
+  - The connection is already configured and the user only wants today's brief, not a setup walkthrough.
+  - The request needs a repository code change rather than a local MCP config edit.
+- Strong routing signals: `morning-brief`, `morning brief`, `connect my email for a morning brief`, `set up morning brief`, `configure morning brief`, `connect mail for morning brief`, `connect calendar for morning brief`, `set up my morning brief`, `모닝 브리핑 설정해줘`, `모닝 브리핑 설정`, `아침 브리핑 설정`, `메일 연동해서 브리핑`
+- Good example:
+  - Prompt: connect my email for a morning brief — I want a daily summary of mail and calendar.
+  - Expected behavior: Check the MCP prerequisite, diagnose the current connection, guide OAuth/token issuance, show the read/draft-only diff, and apply only after approval.
+  - Why: The request is a mail/calendar integration setup and needs the shared setup contract plus the Send-permission guardrail.
+- Bad example:
+  - Prompt: morning-brief: check my email for anything urgent.
+  - Expected behavior: Route to a mail-reading task instead of starting a connection setup walkthrough.
+  - Why: A one-off email check is a task request, not an integration setup request.
+- Quality bar:
+  - Prerequisite check: confirm the subscription, account, or capability the step needs exists before continuing; mark unmet prerequisites "not applicable" and skip them explicitly.
+  - Read-only diagnose: read the current Hermes config, `.env` keys, and installed version without writing anything.
+  - Guide: walk the user through any account creation, OAuth, or token issuance they must complete themselves.
+  - Diff-approved apply: show the exact config or `.env` diff and write only after the user explicitly approves it.
+  - Verify: re-read the updated config and report a completion checklist covering every applicable item.
+  - Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation.
+- Completion checklist:
+  - If a prerequisite is unmet, mark that item "not applicable" and continue with the rest of the guide instead of blocking or guessing.
+  - Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.
+  - The connection is confirmed read and draft-only, with Send permission never enabled, before the brief is reported ready.
+- Recovery notes:
+  - If the mail or calendar prerequisite is unmet, mark that surface "not applicable" and offer the brief scoped to whichever surface is connected.
+  - If a pasted token fails validation, ask the user to reissue it rather than storing or retrying the same value silently.
+- Required inputs:
+  - mail and calendar MCP connection status
+  - OAuth token or app password supplied by the user
+- Expected outputs:
+  - read-only diagnosis of the current mail/calendar MCP connection state
+  - diff-approved MCP config write scoped to read and draft-only access
+  - an on-demand morning brief once connection is verified
+- Artifact expectations:
+  - connection verification note when the wrapper captures it
+- Safety rules:
+  - Configure mail and calendar MCP access as read and draft only; never enable Send permission, even if the user asks — drafts stay for the user to send themselves.
+  - OAuth tokens or app passwords are pasted by the user directly in chat and are never stored, logged, or persisted beyond the immediate diff confirmation.
+  - Do not treat a prepared connection as an observed brief; only report a brief after the connection is verified.
+
 ### quality-evidence-loop
 
 [omh] Prepare QA scenarios, independent review requirements, and source-bound quality evidence assessments.

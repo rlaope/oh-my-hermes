@@ -98,6 +98,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "run_hermes_research": "starting source-backed Hermes research",
     "run_local_operator_check": "running the local operator check",
     "run_omh_uninstall": "running omh uninstall",
+    "run_setup_guide": "walking the setup guide",
     "send_to_executor": "opening the selected coding agent",
     "show_command_preview": "showing the command preview",
     "show_context_brief": "showing the OMH context brief",

@@ -125,6 +125,30 @@ _HANDOFF_RECOVERY_NOTES = (
     "If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.",
 )
 
+# Shared five-step contract for the Hermes setup-guide skills (model-setup,
+# parallel-tools, websearch-setup, morning-brief). Ordering is guaranteed by
+# tuple index: prerequisite check -> read-only diagnose -> guide -> diff-
+# approved apply -> verify. Composed into each skill's quality_bar so the
+# rendered SKILL.md carries the items verbatim in index order.
+_HERMES_SETUP_FIVE_STEP_BAR = (
+    "Prerequisite check: confirm the subscription, account, or capability the step needs exists before continuing; mark unmet prerequisites \"not applicable\" and skip them explicitly.",
+    "Read-only diagnose: read the current Hermes config, `.env` keys, and installed version without writing anything.",
+    "Guide: walk the user through any account creation, OAuth, or token issuance they must complete themselves.",
+    "Diff-approved apply: show the exact config or `.env` diff and write only after the user explicitly approves it.",
+    "Verify: re-read the updated config and report a completion checklist covering every applicable item.",
+)
+
+_HERMES_SETUP_SKIP_SEMANTICS = (
+    "If a prerequisite is unmet, mark that item \"not applicable\" and continue with the rest of the guide instead of blocking or guessing.",
+    "Success is applicable-only: verification passes when every applicable item is confirmed complete, not when every possible item exists.",
+)
+
+_HERMES_SETUP_WRITE_BOUNDARY = (
+    "Diagnosis only reads the existing Hermes config, `.env` keys, and installed version; it never writes anything on its own.",
+    "Show the exact diff for any config or `.env` change and write it only after the user explicitly approves that diff.",
+    "Secret values such as tokens and API keys are pasted by the user directly in chat and are never stored, logged, or echoed back beyond the immediate diff confirmation.",
+)
+
 _CATEGORY_FINAL_CHECKLISTS = {
     "accessibility": (
         "The short-input or voice-like request is clarified enough to avoid accidental action.",
@@ -4656,6 +4680,299 @@ _DEFINITIONS = [
             "If skills.external_dirs or Hermes config is missing, route to setup repair rather than editing hidden runtime state.",
             "If plugin register smoke fails, reinstall the plugin bundle with setup --with-plugin --force before claiming plugin readiness.",
             "If omh is missing from PATH, use the installer-reported absolute command path and then re-run doctor.",
+        ),
+    ),
+    SkillDefinition(
+        "model-setup",
+        "Hermes Model Setup workflow: diagnose role-slot model configuration, guide provider connection, and apply changes only after diff approval.",
+        (
+            "model-setup",
+            "hermes model setup",
+            "set up my models",
+            "set up my model",
+            "configure my models",
+            "configure model provider",
+            "connect my model provider",
+            "set up model role slots",
+            "switch my session model",
+            "모델 설정 도와줘",
+            "모델 설정",
+            "모델 연결",
+            "모델 프로바이더 설정",
+            "모델 슬롯 설정",
+        ),
+        (
+            "Use when the user wants Hermes to check or configure role-slot model assignments (main, realtime-search, design), "
+            "connect a model provider, or switch the session model, following the shared prerequisite-check, diagnose, guide, "
+            "diff-approved apply, and verify contract."
+        ),
+        category="hermes-setup",
+        phase="setup",
+        delegation_boundary="retained",
+        handoff_policy=(
+            "Run diagnosis and guidance directly in Hermes for role-slot model setup. "
+            + " ".join(_HERMES_SETUP_WRITE_BOUNDARY)
+            + " Delegate to a selected coding executor only if the user needs a change outside chat-driven config edits."
+        ),
+        required_inputs=(
+            "current Hermes config file path",
+            "target role slot (main, realtime-search, or design)",
+            "provider account or API credential status",
+        ),
+        expected_outputs=(
+            "read-only diagnosis of current role-slot model assignments",
+            "diff-approved config write for the requested role slot",
+            "verification checklist confirming the applied slot change",
+        ),
+        artifact_expectations=("setup verification note when the wrapper captures it",),
+        safety_rules=(
+            "Do not name or assume a specific model, provider tier, or price; ask the user which provider and role slot they want and read the current assignment instead of guessing.",
+            "Keep prerequisite check, diagnosis, guidance, apply, and verify as separate, explicit steps.",
+        ),
+        quality_tier="hermes-setup-gated",
+        quality_bar=_HERMES_SETUP_FIVE_STEP_BAR
+        + (
+            "Treat each role slot (main, realtime-search, design) as an independent prerequisite/diagnose/apply unit instead of one combined change.",
+        ),
+        why_this_exists="`model-setup` exists to turn role-slot model configuration into a guided, read-before-write walkthrough instead of an unreviewed config edit.",
+        do_not_use_when=(
+            "The user is asking which model Hermes currently is, not asking to change or connect one.",
+            "The request needs a repository code change rather than a local Hermes config or `.env` edit.",
+            "No role slot, provider, or session-switch intent is named yet.",
+        ),
+        good_example=SkillExample(
+            prompt="Help me set up my models — I want to connect a new provider for the main role slot.",
+            expected="Check the provider prerequisite, read-only diagnose the current main-slot assignment, guide account/token setup, show the config diff, and apply only after approval.",
+            why="The request is role-slot model configuration and needs the shared setup contract.",
+        ),
+        bad_example=SkillExample(
+            prompt="model-setup: what model are you running right now?",
+            expected="Answer the identity question directly instead of starting a setup walkthrough.",
+            why="A status question is not a configuration request and should not trigger a write-capable guide.",
+        ),
+        final_checklist=_HERMES_SETUP_SKIP_SEMANTICS
+        + ("Every touched role slot was diagnosed, guided, diff-approved, and re-verified before being reported complete.",),
+        recovery_notes=(
+            "If a provider prerequisite is unmet, mark that role slot \"not applicable\" and continue with the remaining slots.",
+            "If the diagnosed config cannot be read, report the read failure and stop before proposing a diff.",
+            "If the user rejects a shown diff, keep the prior config as verified state and ask what to change.",
+        ),
+    ),
+    SkillDefinition(
+        "parallel-tools",
+        "Hermes Parallel Tools workflow: check version currency and parallel-tool capability status, then apply an update only after diff approval.",
+        (
+            "parallel-tools",
+            "parallel tools",
+            "hermes parallel tools setup",
+            "update hermes for parallel tools",
+            "check parallel tool support",
+            "enable parallel tool calls",
+            "verify parallel tools capability",
+            "check hermes version for parallel tools",
+            "헤르메스 업데이트 확인해줘",
+            "병렬 도구 설정",
+            "병렬 툴 확인",
+            "헤르메스 병렬 도구",
+        ),
+        (
+            "Use when the user wants Hermes to check whether parallel tool calls are current and enabled, run a version-currency "
+            "check, or report capability status, following the shared prerequisite-check, diagnose, guide, diff-approved apply, "
+            "and verify contract."
+        ),
+        category="hermes-setup",
+        phase="setup",
+        delegation_boundary="retained",
+        handoff_policy=(
+            "Run diagnosis and reporting directly in Hermes for parallel-tool capability. "
+            + " ".join(_HERMES_SETUP_WRITE_BOUNDARY)
+            + " Delegate to a selected coding executor only if the user needs a change outside a local version/config check."
+        ),
+        required_inputs=(
+            "installed Hermes version",
+            "current parallel-tool capability status",
+        ),
+        expected_outputs=(
+            "read-only diagnosis of the installed version and parallel-tool capability status",
+            "a user-runnable update command to check or restore version currency",
+            "a capability status report naming which parallel-tool features are active",
+        ),
+        artifact_expectations=("capability status note when the wrapper captures it",),
+        safety_rules=(
+            "Do not name a specific version number, release date, or product tier; read and report the installed version instead of assuming one.",
+            "Report the update command for the user to run themselves rather than claiming Hermes restarted or reloaded on its own.",
+        ),
+        quality_tier="hermes-setup-gated",
+        quality_bar=_HERMES_SETUP_FIVE_STEP_BAR
+        + (
+            "This is mostly a verify-only walkthrough: prefer reporting capability status over proposing a config change when parallel tools are already current.",
+        ),
+        why_this_exists="`parallel-tools` exists to give a quick, read-first answer to whether parallel tool calls are current and enabled, with an update path only when currency is actually missing.",
+        do_not_use_when=(
+            "The user wants a general Hermes update unrelated to parallel-tool capability.",
+            "No version or capability question has been asked yet.",
+            "The request needs a repository code change rather than a local version check.",
+        ),
+        good_example=SkillExample(
+            prompt="update hermes for parallel tools — can you check if I'm on a current enough version?",
+            expected="Read the installed version and capability status, report whether parallel tools are current, and hand back a user-runnable update command if not.",
+            why="The request is a version-currency and capability check, the core of this skill.",
+        ),
+        bad_example=SkillExample(
+            prompt="parallel-tools: update your memory with what we discussed.",
+            expected="Route to a memory workflow instead of a version-currency check.",
+            why="Memory update is unrelated to parallel-tool capability or Hermes version.",
+        ),
+        final_checklist=_HERMES_SETUP_SKIP_SEMANTICS
+        + ("The reported capability status matches an observed read, not an assumed default.",),
+        recovery_notes=(
+            "If the installed version cannot be read, report the read failure and stop before recommending an update.",
+            "If the update command is unavailable for the user's install path, name the blocker instead of guessing a fix.",
+        ),
+    ),
+    SkillDefinition(
+        "websearch-setup",
+        "Hermes Web Search Setup workflow: diagnose scraper and auxiliary extract-model configuration, guide account setup, and apply each change as its own diff approval.",
+        (
+            "websearch-setup",
+            "web search setup",
+            "make web search cheaper",
+            "set up web search",
+            "configure web search",
+            "reduce web search cost",
+            "connect scraper api key",
+            "set up auxiliary web-extract model",
+            "웹 검색 싸게 만들어줘",
+            "웹 검색 설정",
+            "웹서치 설정",
+            "웹 검색 비용 줄이기",
+        ),
+        (
+            "Use when the user wants to reduce web search cost or configure web search by setting up a scraper API key or an "
+            "auxiliary web-extract model routing block, following the shared prerequisite-check, diagnose, guide, diff-approved "
+            "apply, and verify contract."
+        ),
+        category="hermes-setup",
+        phase="setup",
+        delegation_boundary="retained",
+        handoff_policy=(
+            "Run diagnosis and guidance directly in Hermes for web search setup. "
+            + " ".join(_HERMES_SETUP_WRITE_BOUNDARY)
+            + " Delegate to a selected coding executor only if the user needs a change outside chat-driven config or `.env` edits."
+        ),
+        required_inputs=(
+            "scraper API key issued by the user's chosen web-extraction provider",
+            "target auxiliary web-extract model role slot",
+        ),
+        expected_outputs=(
+            "read-only diagnosis of the current scraper `.env` key and auxiliary web-extract model routing state",
+            "a diff-approved `.env` write adding the scraper API key, approved on its own",
+            "a diff-approved routing block change assigning the auxiliary web-extract model, approved separately from the key write",
+            "verification checklist confirming both writes were applied",
+        ),
+        artifact_expectations=("setup verification note when the wrapper captures it",),
+        safety_rules=(
+            "Never combine the scraper API key `.env` write and the auxiliary web-extract model routing write into a single apply step; each gets its own diff and its own approval.",
+            "Do not name a specific scraper product, extract-model provider, or price; ask the user which provider they hold an account with and read the current config instead of assuming one.",
+        ),
+        quality_tier="hermes-setup-gated",
+        quality_bar=_HERMES_SETUP_FIVE_STEP_BAR
+        + (
+            "Show the scraper API key diff as one diff approval and the auxiliary web-extract model routing diff as a second, separate diff approval; never merge them.",
+        ),
+        why_this_exists="`websearch-setup` exists to make web search cost and routing configurable through two clearly separated, diff-approved steps instead of one opaque edit.",
+        do_not_use_when=(
+            "The user wants Hermes to run a web search now, not configure how web search is set up.",
+            "No scraper key or auxiliary extract-model intent has been named yet.",
+            "The request needs a repository code change rather than a local `.env` or routing edit.",
+        ),
+        good_example=SkillExample(
+            prompt="make web search cheaper — I have a scraper account I want to use, and I want an auxiliary model handling extraction.",
+            expected="Diagnose the current `.env` and routing state, guide the scraper API key setup as one diff approval, then the auxiliary web-extract model routing as a second, separate diff approval.",
+            why="The request needs the two independently-approved writes this skill exists to keep separate.",
+        ),
+        bad_example=SkillExample(
+            prompt="websearch-setup: search the web for the latest news.",
+            expected="Run or route to the search request directly instead of starting a setup walkthrough.",
+            why="A live search request is not a configuration request.",
+        ),
+        final_checklist=_HERMES_SETUP_SKIP_SEMANTICS
+        + ("The scraper API key write and the auxiliary web-extract model write were verified as two separate, independently-approved changes.",),
+        recovery_notes=(
+            "If the scraper provider prerequisite is unmet, mark that step \"not applicable\" and continue with the auxiliary model routing step alone.",
+            "If either diff is rejected, keep the other step's state independent and do not roll both back together.",
+        ),
+    ),
+    SkillDefinition(
+        "morning-brief",
+        "Hermes Morning Brief setup workflow: diagnose mail and calendar MCP connection, guide read/draft-only access, and apply changes only after diff approval.",
+        (
+            "morning-brief",
+            "morning brief",
+            "connect my email for a morning brief",
+            "set up morning brief",
+            "configure morning brief",
+            "connect mail for morning brief",
+            "connect calendar for morning brief",
+            "set up my morning brief",
+            "모닝 브리핑 설정해줘",
+            "모닝 브리핑 설정",
+            "아침 브리핑 설정",
+            "메일 연동해서 브리핑",
+        ),
+        (
+            "Use when the user wants Hermes to connect mail and calendar access for an on-demand morning brief, following the "
+            "shared prerequisite-check, diagnose, guide, diff-approved apply, and verify contract."
+        ),
+        category="hermes-setup",
+        phase="setup",
+        delegation_boundary="retained",
+        handoff_policy=(
+            "Run diagnosis and guidance directly in Hermes for the mail/calendar connection. "
+            + " ".join(_HERMES_SETUP_WRITE_BOUNDARY)
+            + " Delegate to a selected coding executor only if the user needs a change outside chat-driven MCP config edits."
+        ),
+        required_inputs=(
+            "mail and calendar MCP connection status",
+            "OAuth token or app password supplied by the user",
+        ),
+        expected_outputs=(
+            "read-only diagnosis of the current mail/calendar MCP connection state",
+            "diff-approved MCP config write scoped to read and draft-only access",
+            "an on-demand morning brief once connection is verified",
+        ),
+        artifact_expectations=("connection verification note when the wrapper captures it",),
+        safety_rules=(
+            "Configure mail and calendar MCP access as read and draft only; never enable Send permission, even if the user asks — drafts stay for the user to send themselves.",
+            "OAuth tokens or app passwords are pasted by the user directly in chat and are never stored, logged, or persisted beyond the immediate diff confirmation.",
+            "Do not treat a prepared connection as an observed brief; only report a brief after the connection is verified.",
+        ),
+        quality_tier="hermes-setup-gated",
+        quality_bar=_HERMES_SETUP_FIVE_STEP_BAR
+        + (
+            "Keep the read/draft-only access boundary — never enable Send permission — as a hard constraint on every apply step, not an optional recommendation.",
+        ),
+        why_this_exists="`morning-brief` exists to connect mail and calendar access for an on-demand brief while keeping the connection strictly read and draft-only and the user's credentials unstored.",
+        do_not_use_when=(
+            "The user wants Hermes to check their email or calendar right now rather than set up the connection.",
+            "The connection is already configured and the user only wants today's brief, not a setup walkthrough.",
+            "The request needs a repository code change rather than a local MCP config edit.",
+        ),
+        good_example=SkillExample(
+            prompt="connect my email for a morning brief — I want a daily summary of mail and calendar.",
+            expected="Check the MCP prerequisite, diagnose the current connection, guide OAuth/token issuance, show the read/draft-only diff, and apply only after approval.",
+            why="The request is a mail/calendar integration setup and needs the shared setup contract plus the Send-permission guardrail.",
+        ),
+        bad_example=SkillExample(
+            prompt="morning-brief: check my email for anything urgent.",
+            expected="Route to a mail-reading task instead of starting a connection setup walkthrough.",
+            why="A one-off email check is a task request, not an integration setup request.",
+        ),
+        final_checklist=_HERMES_SETUP_SKIP_SEMANTICS
+        + ("The connection is confirmed read and draft-only, with Send permission never enabled, before the brief is reported ready.",),
+        recovery_notes=(
+            "If the mail or calendar prerequisite is unmet, mark that surface \"not applicable\" and offer the brief scoped to whichever surface is connected.",
+            "If a pasted token fails validation, ask the user to reissue it rather than storing or retrying the same value silently.",
         ),
     ),
 ]
