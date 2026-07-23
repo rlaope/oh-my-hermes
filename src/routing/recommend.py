@@ -1040,6 +1040,18 @@ _CATEGORY_POLICIES = {
             "artifacts only as backend/verifier state."
         ),
     ),
+    "hermes-setup": RecommendationPolicy(
+        next_action="run_setup_guide",
+        evidence_boundary=(
+            "A setup guide is not evidence that prerequisites exist, configuration was applied, or "
+            "verification passed; only the re-read checklist after approved edits is observed setup state."
+        ),
+        wrapper_guidance=(
+            "Walk the five-step setup contract in Hermes chat: confirm prerequisites (mark unmet items "
+            "not applicable), diagnose current configuration read-only, guide the manual steps, apply "
+            "config edits only after an approved diff, then re-verify and report the checklist."
+        ),
+    ),
     "delivery": RecommendationPolicy(
         next_action="present_app_delivery_loop",
         evidence_boundary="An app delivery loop is not implementation, deploy, monitoring, rollback, or completion evidence.",

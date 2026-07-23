@@ -33,6 +33,7 @@ from .policy import (
     meets_confidence_threshold,
 )
 from .policy import _doctor_health_guard_applies
+from .policy import _hermes_setup_guide_requested
 from .recommend import recommendation_for_definition, recommend_skills
 from .route_plan import build_workflow_route_plan, compact_workflow_route_plan
 from .task_cards import classify_task, task_card_recommendation
@@ -3526,6 +3527,10 @@ def _operator_surface_fast_path_decision(
     if only_skill is not None and selected_skill != only_skill:
         return None
     if selected_skill == "ralplan" and _is_fast_plain_direct_answer_question(routing_message):
+        return None
+    if selected_skill in ("web-research", "toolbelt-readiness") and _hermes_setup_guide_requested(
+        normalized_phrase(prepare_routing_text(routing_message).scoring_text)
+    ):
         return None
     if selected_skill == "paper-learning" and (
         _is_paper_learning_citation_research_request(routing_message)

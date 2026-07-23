@@ -330,6 +330,7 @@ VISIBLE_ACTIONS = (
     "prepare_deploy_monitor_plan",
     "prepare_review_or_followup_handoff",
     "run_local_operator_check",
+    "run_setup_guide",
     "prepare_operating_workflow",
     "prepare_memory_review",
     "prepare_coding_handoff",
@@ -820,6 +821,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_deploy_monitor_plan": ("prepare_deploy_monitor_plan", "Prepare deploy plan"),
     "prepare_review_or_followup_handoff": ("prepare_review_or_followup_handoff", "Prepare review"),
     "run_local_operator_check": ("run_local_operator_check", "Show local check"),
+    "run_setup_guide": ("run_setup_guide", "Start setup guide"),
     "prepare_operating_workflow": ("prepare_operating_workflow", "Prepare workflow"),
     "prepare_memory_review": ("prepare_memory_review", "Review memory"),
     "prepare_coding_handoff": ("prepare_coding_handoff", "Prepare coding handoff"),
@@ -4325,6 +4327,51 @@ def build_chat_response_from_route(
                         "source diversity",
                         "freshness confirmation",
                         "downstream plan or handoff",
+                    ],
+                },
+            )
+        if policy_next_action == "run_setup_guide":
+            evidence_boundary = str(policy.get("evidence_boundary", "")) or (
+                "A setup guide is not evidence that prerequisites exist, configuration was applied, or "
+                "verification passed; only the re-read checklist after approved edits is observed setup state."
+            )
+            body = (
+                "I will walk this setup in five steps: confirm prerequisites first and mark anything you do not "
+                "have as not applicable, read the current configuration without changing it, guide the manual "
+                "steps you must do yourself, apply local config edits only after you approve the shown diff, "
+                "then re-read the configuration and report the verification checklist."
+            )
+            return _chat_response(
+                kind="setup_guide",
+                headline="I can guide this setup and verify it against your current configuration.",
+                body=body,
+                phase="setup_guide_prepared",
+                next_action="run_setup_guide",
+                thread_key=thread_key,
+                actions=[
+                    _action("run_setup_guide", "Start setup guide", "primary"),
+                    _action("show_status", "Show status", "secondary"),
+                ],
+                claim_boundary=evidence_boundary,
+                extra_state={
+                    "route_action": action,
+                    "confidence": decision.get("confidence", "low"),
+                    "selected_workflow": selected,
+                    "workflow_explanation_reason": workflow_explanation_reason,
+                    "policy_next_action": policy_next_action,
+                    "artifact_schema": "setup_guide_card/v1",
+                    "setup_contract": [
+                        "prerequisite check",
+                        "read-only diagnose",
+                        "guided manual steps",
+                        "diff-approved apply",
+                        "verify checklist",
+                    ],
+                    "evidence_not_observed": [
+                        "prerequisite availability",
+                        "configuration reads",
+                        "approved config edits",
+                        "verification checklist results",
                     ],
                 },
             )

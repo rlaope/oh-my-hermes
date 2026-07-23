@@ -1157,6 +1157,26 @@ that a later `--force` reinstall does not also write, so switching from
 `full` back to a default `core` install does not delete previously installed
 skill files on disk.
 
+### Hermes Setup Guide Skills (Full Profile)
+
+A `full` install adds four conversational setup guides. Each one is a Hermes
+chat skill, not a new CLI command: the normal way to use them is to describe
+the outcome in chat and let Hermes run the guide.
+
+| Audience | Chat intent | What the guide covers |
+| --- | --- | --- |
+| Person using Hermes | Ask Hermes to set up your models. | Walks through the main / realtime-search / design model role slots, provider connection, and session model switching. |
+| Person using Hermes | Ask Hermes to make web search cheaper. | Walks through the scraper API key and an auxiliary web-extract model as two separate reviewed diffs. |
+| Person using Hermes | Ask Hermes to connect mail and calendar for a morning brief. | Walks through read/draft-only mail and calendar access for an on-demand morning brief. Mail Send permission is never enabled, and any token pasted by the user is never stored. |
+| Person using Hermes | Ask Hermes to check it is up to date. | Reports whether the installed Hermes/parallel-tools version is current and, if not, the update command to run. |
+
+Every guide follows the same five-step contract: check prerequisites (marking
+unmet ones "not applicable" and skipping them), read a config file or version
+read-only, walk the person through any manual step they must perform
+themselves (such as OAuth or token issuance), show a diff and apply it only
+after explicit approval, then re-verify. These skills install with the `full`
+profile; they are not part of the `core` default.
+
 Record the optional MCP bridge preference during setup:
 
 ```sh
