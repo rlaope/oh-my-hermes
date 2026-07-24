@@ -888,21 +888,21 @@ _DEFINITIONS = [
         handoff_policy="Reason over the /omh remainder, select or chain concrete workflows from the live catalog, and prepare a selected executor/runtime handoff only when the chosen chain requires code edits; do not execute code.",
         required_inputs=(
             "leading /omh or ./omh command with an imperative remainder",
-            "live OMH catalog via `omh recommend`/`omh docs workflows`",
+            "live OMH catalog via bounded `omh recommend --json` queries",
             "available shell/CLI or plugin tool surface",
         ),
         expected_outputs=(
             "selected workflow or chain with rationale",
-            "consulted catalog evidence from the recommend/docs output",
+            "consulted catalog evidence from the bounded recommend output",
             "observed-vs-prepared evidence boundary for the routing decision",
         ),
         artifact_expectations=("runtime run record when a wrapper can observe the meta-routing decision",),
         safety_rules=(
             "Trigger only on a leading `/omh` or `./omh` command token with a task remainder; bare `/omh`, `./omh`, or `omh` without a slash is a picker/other-lane signal, not meta-routing.",
-            "Consult the live catalog with `omh recommend \"<remainder>\" --json`; escalate to `omh docs workflows --json` when the remainder spans multiple stages or the top recommendation is low-confidence. Never rely on a memorized or embedded skill list — the catalog changes after `omh update`.",
+            "Consult the live catalog with `omh recommend \"<remainder>\" --json --limit 3`; when the remainder spans multiple stages or the top recommendation is low-confidence, re-query `omh recommend` once per stage with a rephrased stage description instead of dumping the full catalog. Never run `omh docs workflows --json` or `omh list --json` in chat context — their full-catalog output does not fit a chat budget — and never rely on a memorized or embedded skill list; the catalog changes after `omh update`.",
             "Never select `meta-router` itself from the recommendation output; exclude it and route to the next best concrete workflow or chain.",
             "Report the selected workflow(s), why, and the observed-vs-prepared evidence boundary; a routing decision is not execution, review, CI, or merge evidence.",
-            "If no shell/CLI surface is available, ask the wrapper to run `omh recommend`/`omh docs workflows` or use the plugin tool surface; never guess the catalog from memory — say the catalog is unavailable and offer the workflow picker instead.",
+            "If no shell/CLI surface is available, ask the wrapper to run the bounded `omh recommend` queries or use the plugin tool surface; never guess the catalog from memory — say the catalog is unavailable and offer the workflow picker instead.",
         ),
         quality_tier="routing-gated",
         quality_bar=(

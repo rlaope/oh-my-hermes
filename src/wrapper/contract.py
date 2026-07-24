@@ -1033,7 +1033,7 @@ _META_ROUTER_CHAT_CARDS: dict[str, dict[str, object]] = {
         "headline": "I can read the task and pick the right workflow(s) from the live catalog.",
         "body": (
             "I will reason over the /omh task, consult the live OMH catalog with `omh recommend --json` "
-            "(escalating to `omh docs workflows --json` when the shortlist is unclear), and select or chain the "
+            "(re-querying with rephrased stage descriptions when the shortlist is unclear), and select or chain the "
             "workflow(s) that fit — excluding meta-router itself. The routing decision names the workflow(s) to run "
             "and reports its evidence boundary; it is not execution, review, CI, or merge evidence."
         ),
