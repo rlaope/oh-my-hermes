@@ -38,8 +38,6 @@ LANGUAGE_NAMES = {
 
 MESSAGES = {
     "en": {
-        "language_title": "Setup language",
-        "language_intro": "Choose the language OMH should use for this terminal setup.",
         "menu_hint": "Use ↑/↓, Space/Enter, or a number. Colors are not required.",
         "recommended": "recommended",
         "select": "Select",
@@ -59,27 +57,8 @@ MESSAGES = {
         "status_already_registered": "already registered",
         "status_will_register": "will connect OMH workflows",
         "status_will_create": "will create",
-        "register_question": "Connect OMH workflows to this Hermes profile?",
-        "register_note": "This lets Hermes find the OMH workflows installed on this machine.",
-        "executor_title": "Default coding agent",
-        "executor_intro_1": "Choose who Hermes should suggest for coding work.",
-        "executor_intro_2": "This only saves the first suggestion; Hermes can still switch per request.",
-        "executor_choose_label": "Ask every time",
-        "executor_choose_desc": "Recommended. Hermes asks before using Codex, Claude Code, Hermes, or another coding agent.",
-        "executor_codex_label": "Codex",
-        "executor_codex_desc": "Use Codex for repo implementation, tests, and PR-shaped work.",
-        "executor_claude_label": "Claude Code",
-        "executor_claude_desc": "Use Claude Code when your team codes through Claude Code.",
-        "executor_generic_label": "Other coding agent",
-        "executor_generic_desc": "Prepare a portable prompt for another coding agent.",
-        "executor_hermes_label": "Hermes",
-        "executor_hermes_desc": "Keep coding work inside Hermes with OMH workflow guidance.",
-        "executor_runtime_label": "Oh-my runtime",
-        "executor_runtime_desc": "Use an oh-my runtime profile when the user has one.",
         "invalid_executor": "Invalid default executor: {error}",
         "plugin_note": "The plugin exposes local status context to Hermes without changing workflow behavior by itself.",
-        "mcp_question": "Prepare optional MCP bridge settings?",
-        "mcp_note": "This only records the bridge preference; OMH does not claim MCP host load until a host reports it.",
         "mcp_host_title": "MCP host",
         "mcp_host_intro": "Choose where OMH should write the local stdio MCP bridge config.",
         "mcp_host_generic_desc": "Only show the portable recipe; do not write a host config file.",
@@ -100,11 +79,6 @@ MESSAGES = {
         "team_none_label": "No extra team role preset now",
         "team_none_desc": "Recommended for first install. Core skills stay installed; other surfaces remain available through Hermes routing.",
         "advanced_title": "Advanced options",
-        "advanced_question": "Show advanced tool bridge options?",
-        "advanced_note": "Skip this on a first install. Team/profile packs stay available with explicit setup flags or `omh profile`.",
-        "github_star_question": "Would you like to star oh-my-hermes on GitHub?",
-        "github_star_note": "Yes uses your authenticated GitHub account. Setup continues either way.",
-        "github_star_declined": "🥲 No worries — continuing setup.",
         "github_star_thanks": "Thanks!",
         "github_star_dry_run": "Dry run only — GitHub star would be recorded here.",
         "github_star_failed": "Could not record the GitHub star: {reason}",
@@ -157,6 +131,7 @@ MESSAGES = {
         "registration_unknown": "Hermes connection: {status}",
         "apply_line": "Hermes connection detail: {message}",
         "default_handoff": "Coding requests: {summary}",
+        "default_handoff_pin_hint": "Tip: pin a durable owner anytime with `omh setup --default-executor <name>`.",
         "setup_profile": "Advanced routing detail: {selected}",
         "target_topology": "Hermes profile check: {count} profile(s) detected.",
         "plugin_bridge": "OMH status helper: {status}",
@@ -249,8 +224,6 @@ MESSAGES = {
         "kept": "Kept",
     },
     "ko": {
-        "language_title": "설치 언어",
-        "language_intro": "이 터미널 설치에서 OMH가 사용할 언어를 선택합니다.",
         "menu_hint": "↑/↓, Space/Enter, 숫자로 선택할 수 있습니다. 색상 없이도 동작합니다.",
         "recommended": "추천",
         "select": "선택",
@@ -270,27 +243,8 @@ MESSAGES = {
         "status_already_registered": "이미 등록됨",
         "status_will_register": "OMH 워크플로 연결 예정",
         "status_will_create": "생성 예정",
-        "register_question": "이 Hermes 프로필에 OMH 워크플로를 연결할까요?",
-        "register_note": "Hermes가 이 기기에 설치된 OMH 워크플로를 찾을 수 있게 합니다.",
-        "executor_title": "기본 코딩 에이전트",
-        "executor_intro_1": "Hermes가 코딩 작업에 먼저 제안할 대상을 고릅니다.",
-        "executor_intro_2": "이 값은 첫 제안만 저장합니다. 요청마다 Hermes가 다시 바꿀 수 있습니다.",
-        "executor_choose_label": "매번 물어보기",
-        "executor_choose_desc": "추천. Codex, Claude Code, Hermes, 기타 코딩 에이전트 중 무엇을 쓸지 먼저 묻습니다.",
-        "executor_codex_label": "Codex",
-        "executor_codex_desc": "저장소 구현, 테스트, PR 형태 작업에 Codex를 사용합니다.",
-        "executor_claude_label": "Claude Code",
-        "executor_claude_desc": "팀이 Claude Code로 코딩할 때 Claude Code를 사용합니다.",
-        "executor_generic_label": "기타 코딩 에이전트",
-        "executor_generic_desc": "다른 코딩 에이전트에도 줄 수 있는 프롬프트를 준비합니다.",
-        "executor_hermes_label": "Hermes",
-        "executor_hermes_desc": "OMH 워크플로 안내와 함께 Hermes 안에서 코딩 작업을 다룹니다.",
-        "executor_runtime_label": "Oh-my 런타임",
-        "executor_runtime_desc": "사용자가 oh-my 런타임을 쓰는 경우 그 프로필을 기본값으로 둡니다.",
         "invalid_executor": "기본 실행자 값이 올바르지 않습니다: {error}",
         "plugin_note": "플러그인은 워크플로 동작 자체를 바꾸지 않고 Hermes에 로컬 상태 맥락을 제공합니다.",
-        "mcp_question": "선택형 MCP 브리지 설정을 준비할까요?",
-        "mcp_note": "브리지 선호만 기록합니다. MCP 호스트가 보고하기 전까지 OMH는 로드됐다고 말하지 않습니다.",
         "mcp_host_title": "MCP 호스트",
         "mcp_host_intro": "OMH가 로컬 stdio MCP 브리지 설정을 어디에 쓸지 고릅니다.",
         "mcp_host_generic_desc": "이식 가능한 recipe만 보여주고 호스트 설정 파일은 쓰지 않습니다.",
@@ -311,11 +265,6 @@ MESSAGES = {
         "team_none_label": "지금은 추가 팀 역할 프리셋 없음",
         "team_none_desc": "첫 설치에 추천합니다. 핵심 스킬은 설치되고, 나머지 surface는 Hermes 라우팅으로 사용할 수 있습니다.",
         "advanced_title": "고급 옵션",
-        "advanced_question": "고급 도구 브리지 옵션을 볼까요?",
-        "advanced_note": "첫 설치라면 건너뛰어도 됩니다. 팀/프로필 팩은 명시적 setup 옵션이나 `omh profile`로 계속 사용할 수 있습니다.",
-        "github_star_question": "GitHub에서 oh-my-hermes에 star를 눌러줄까요?",
-        "github_star_note": "Yes를 누르면 인증된 GitHub 계정으로 star를 시도합니다. setup은 어떤 답을 골라도 계속 진행됩니다.",
-        "github_star_declined": "🥲 괜찮아요 — setup을 계속 진행합니다.",
         "github_star_thanks": "고마워요!",
         "github_star_dry_run": "dry-run입니다 — 여기서는 GitHub star를 기록하지 않습니다.",
         "github_star_failed": "GitHub star를 기록하지 못했습니다: {reason}",
@@ -368,6 +317,7 @@ MESSAGES = {
         "registration_unknown": "Hermes 연결: {status}",
         "apply_line": "Hermes 연결 상세: {message}",
         "default_handoff": "코딩 요청: {summary}",
+        "default_handoff_pin_hint": "팁: `omh setup --default-executor <이름>` 으로 언제든 기본 코딩 에이전트를 고정할 수 있습니다.",
         "setup_profile": "고급 라우팅 상세: {selected}",
         "target_topology": "Hermes 프로필 확인: {count}개 프로필 감지.",
         "plugin_bridge": "OMH 상태 도우미: {status}",
@@ -460,8 +410,6 @@ MESSAGES = {
         "kept": "유지됨",
     },
     "ja": {
-        "language_title": "セットアップ言語",
-        "language_intro": "このターミナルセットアップで OMH が使う言語を選びます。",
         "menu_hint": "↑/↓、Space/Enter、または数字で選択できます。色なしでも動作します。",
         "recommended": "推奨",
         "select": "選択",
@@ -481,27 +429,8 @@ MESSAGES = {
         "status_already_registered": "登録済み",
         "status_will_register": "OMH ワークフローを接続予定",
         "status_will_create": "作成予定",
-        "register_question": "この Hermes プロファイルに OMH ワークフローを接続しますか?",
-        "register_note": "Hermes がこのマシンにインストールされた OMH ワークフローを見つけられるようにします。",
-        "executor_title": "既定のコーディングエージェント",
-        "executor_intro_1": "Hermes がコーディング作業で最初に提案する相手を選びます。",
-        "executor_intro_2": "保存されるのは最初の提案だけです。リクエストごとに Hermes は切り替えられます。",
-        "executor_choose_label": "毎回確認",
-        "executor_choose_desc": "推奨。Codex、Claude Code、Hermes、その他のコーディングエージェントのどれを使うか確認します。",
-        "executor_codex_label": "Codex",
-        "executor_codex_desc": "リポジトリ実装、テスト、PR 形の作業に Codex を使います。",
-        "executor_claude_label": "Claude Code",
-        "executor_claude_desc": "チームが Claude Code でコーディングする場合に使います。",
-        "executor_generic_label": "その他のコーディングエージェント",
-        "executor_generic_desc": "別のコーディングエージェントに渡せるプロンプトを準備します。",
-        "executor_hermes_label": "Hermes",
-        "executor_hermes_desc": "OMH ワークフロー案内とともに Hermes 内でコーディング作業を扱います。",
-        "executor_runtime_label": "Oh-my ランタイム",
-        "executor_runtime_desc": "oh-my ランタイムを使う場合、そのプロファイルを既定にします。",
         "invalid_executor": "既定実行者が無効です: {error}",
         "plugin_note": "プラグインはワークフロー動作自体を変えずに、Hermes にローカル状態の文脈を渡します。",
-        "mcp_question": "任意の MCP ブリッジ設定を準備しますか?",
-        "mcp_note": "ブリッジ設定の希望だけを記録します。MCP ホストが報告するまで、OMH はロード済みとは主張しません。",
         "mcp_host_title": "MCP ホスト",
         "mcp_host_intro": "OMH がローカル stdio MCP ブリッジ設定を書き込む先を選びます。",
         "mcp_host_generic_desc": "ポータブルなレシピだけを表示し、ホスト設定ファイルは書き込みません。",
@@ -522,11 +451,6 @@ MESSAGES = {
         "team_none_label": "今は追加チームペルソナなし",
         "team_none_desc": "初回インストールに推奨。主要スキルは入り、他の surface は Hermes ルーティングで利用できます。",
         "advanced_title": "詳細オプション",
-        "advanced_question": "詳細なツールブリッジオプションを表示しますか?",
-        "advanced_note": "初回インストールではスキップして問題ありません。チーム/プロファイルパックは明示的な setup フラグや `omh profile` で利用できます。",
-        "github_star_question": "GitHub で oh-my-hermes に star を付けますか?",
-        "github_star_note": "Yes を選ぶと、認証済みの GitHub アカウントで star を試みます。どちらを選んでもセットアップは続行します。",
-        "github_star_declined": "🥲 大丈夫です — セットアップを続行します。",
         "github_star_thanks": "ありがとうございます!",
         "github_star_dry_run": "dry-run のため、ここでは GitHub star を記録しません。",
         "github_star_failed": "GitHub star を記録できませんでした: {reason}",
@@ -579,6 +503,7 @@ MESSAGES = {
         "registration_unknown": "Hermes 接続: {status}",
         "apply_line": "Hermes 接続詳細: {message}",
         "default_handoff": "コーディングリクエスト: {summary}",
+        "default_handoff_pin_hint": "ヒント: `omh setup --default-executor <name>` でいつでも既定のコーディングエージェントを固定できます。",
         "setup_profile": "詳細ルーティング: {selected}",
         "target_topology": "Hermes プロファイル確認: {count} 個のプロファイルを検出。",
         "plugin_bridge": "OMH ステータスヘルパー: {status}",
@@ -671,8 +596,6 @@ MESSAGES = {
         "kept": "保持",
     },
     "zh": {
-        "language_title": "设置语言",
-        "language_intro": "选择 OMH 在本次终端设置中使用的语言。",
         "menu_hint": "可用 ↑/↓、Space/Enter 或数字选择。无颜色也可使用。",
         "recommended": "推荐",
         "select": "选择",
@@ -692,27 +615,8 @@ MESSAGES = {
         "status_already_registered": "已注册",
         "status_will_register": "将连接 OMH 工作流",
         "status_will_create": "将创建",
-        "register_question": "是否将 OMH 工作流连接到此 Hermes 配置?",
-        "register_note": "这会让 Hermes 找到此机器上安装的 OMH 工作流。",
-        "executor_title": "默认编码代理",
-        "executor_intro_1": "选择 Hermes 在编码工作中优先建议的对象。",
-        "executor_intro_2": "这里只保存首次建议；每次请求 Hermes 仍可切换。",
-        "executor_choose_label": "每次询问",
-        "executor_choose_desc": "推荐。先询问使用 Codex、Claude Code、Hermes，还是其他编码代理。",
-        "executor_codex_label": "Codex",
-        "executor_codex_desc": "将 Codex 用于仓库实现、测试和 PR 型工作。",
-        "executor_claude_label": "Claude Code",
-        "executor_claude_desc": "当团队通过 Claude Code 编码时使用 Claude Code。",
-        "executor_generic_label": "其他编码代理",
-        "executor_generic_desc": "准备可交给其他编码代理的通用提示词。",
-        "executor_hermes_label": "Hermes",
-        "executor_hermes_desc": "在 OMH 工作流指导下把编码工作留在 Hermes 内处理。",
-        "executor_runtime_label": "Oh-my 运行时",
-        "executor_runtime_desc": "用户使用 oh-my 运行时时，将该配置作为默认值。",
         "invalid_executor": "默认执行器无效: {error}",
         "plugin_note": "插件向 Hermes 提供本地状态上下文，但本身不会改变工作流行为。",
-        "mcp_question": "是否准备可选 MCP 桥设置?",
-        "mcp_note": "这里只记录桥接偏好；在 MCP host 报告前，OMH 不会声称已加载。",
         "mcp_host_title": "MCP host",
         "mcp_host_intro": "选择 OMH 应写入本地 stdio MCP 桥配置的位置。",
         "mcp_host_generic_desc": "只显示可移植 recipe，不写入 host 配置文件。",
@@ -733,11 +637,6 @@ MESSAGES = {
         "team_none_label": "现在不添加团队角色预设",
         "team_none_desc": "首次安装推荐。核心技能会安装，其他 surface 仍可通过 Hermes 路由使用。",
         "advanced_title": "高级选项",
-        "advanced_question": "显示高级工具桥选项吗?",
-        "advanced_note": "首次安装可以跳过。团队/配置包仍可通过显式 setup 标志或 `omh profile` 使用。",
-        "github_star_question": "要在 GitHub 上给 oh-my-hermes 加星吗?",
-        "github_star_note": "选择 Yes 会使用已认证的 GitHub 账户尝试加星。无论选择什么，setup 都会继续。",
-        "github_star_declined": "🥲 没关系 — 继续 setup。",
         "github_star_thanks": "谢谢!",
         "github_star_dry_run": "dry-run 模式 — 此处不会记录 GitHub star。",
         "github_star_failed": "未能记录 GitHub star: {reason}",
@@ -790,6 +689,7 @@ MESSAGES = {
         "registration_unknown": "Hermes 连接: {status}",
         "apply_line": "Hermes 连接详情: {message}",
         "default_handoff": "编码请求: {summary}",
+        "default_handoff_pin_hint": "提示: 随时可用 `omh setup --default-executor <name>` 固定默认编码代理。",
         "setup_profile": "高级路由详情: {selected}",
         "target_topology": "Hermes 配置检查: 检测到 {count} 个配置。",
         "plugin_bridge": "OMH 状态助手: {status}",
@@ -895,6 +795,28 @@ def normalize_language(value: str | None) -> str:
 
 def language_from_env(default: str = "en") -> str:
     return normalize_language(os.environ.get("OMH_LANG") or os.environ.get("OMH_LANGUAGE") or default)
+
+
+def detect_locale_language(default: str = "en") -> str:
+    """Best-effort OS-locale language detection from env strings.
+
+    Reads `LC_ALL` > `LC_MESSAGES` > `LANG` as plain strings (never calls
+    `locale.setlocale`, which can raise on CI runners without generated
+    locales), then falls back to `locale.getlocale()`; unknown or unset
+    locales resolve to `default`.
+    """
+    candidates = [os.environ.get(name, "") for name in ("LC_ALL", "LC_MESSAGES", "LANG")]
+    try:
+        import locale
+
+        candidates.append((locale.getlocale()[0] or ""))
+    except Exception:
+        pass
+    for raw in candidates:
+        prefix = raw.split(".", 1)[0].split("_", 1)[0].split("-", 1)[0].strip().lower()
+        if prefix in LANGUAGE_CODES:
+            return prefix
+    return default
 
 
 def language_options() -> list[dict[str, str]]:

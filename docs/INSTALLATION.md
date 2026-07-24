@@ -119,15 +119,17 @@ The curl installer intentionally stops before setup. It installs the isolated
 command package and `omh` executable only. `omh setup` is the explicit,
 repairable step that installs generated managed skills and registers them with
 Hermes through `skills.external_dirs`.
-When `omh setup` is run in a real terminal, it opens a small colored wizard that
-chooses the setup language, connects OMH to the target Hermes profile, asks for
-one simple default coding agent suggestion (`Codex`, `Claude Code`, or
-`Hermes`), installs the OMH status helper, and then prints a human-readable
-summary. For a first install, pressing Enter through the recommended choices is
-the intended path. Advanced setup only asks about optional tool bridge
-preferences. Team/profile packs and operating models stay available as explicit
-commands or flags, but setup does not make a user lock the whole organization
-shape during first install. In non-interactive shells it uses safe defaults and
+When `omh setup` is run in a real terminal, it asks exactly one question —
+install scope (user or project). The setup language is auto-detected from the
+OS locale (`--language` or `OMH_LANG` override it), Hermes registration
+defaults to on (`--skip-apply` opts out), and there is no upfront coding-agent
+question: Hermes asks who should own coding work at the first coding request,
+in natural language. Optional surfaces stay behind flags — `--with-mcp` for
+the tool bridge, `--with-menubar`/`--no-menubar` for the menu bar, `--star`
+to star the GitHub repo. Team/profile packs and operating models stay
+available as explicit commands or flags, but setup does not make a user lock
+the whole organization shape during first install. In non-interactive shells
+it uses the same safe defaults and
 prints a concise step-by-step summary. Use
 `omh setup --json` or `OMH_OUTPUT=json omh setup` for the full
 machine-readable payload.
@@ -1204,17 +1206,17 @@ The `cto-loop` pack is an optional CTO, PM, Dev, QA, Security, and Ops
 team-shaped preset. It is not installed by default; use it only when the target
 Hermes workspace benefits from visible role files.
 
-Record a default coding agent during setup:
+Pin a durable coding-owner preference (optional — interactive setup never
+asks; by default Hermes asks at the first coding request):
 
 ```sh
 omh setup --default-executor claude-code
 ```
 
 Supported values are `choose`, `hermes`, `codex`, `claude-code`, `generic`,
-`omx-runtime`, `omo-runtime`, and `omc-runtime`. The interactive wizard
-intentionally shows only `Codex`, `Claude Code`, and `Hermes` so first setup
-stays understandable. Use the wider flag values only for wrappers, scripts, or
-advanced runtime profiles. Legacy `OMH_SETUP_PROFILES=1,3` still maps to setup
+`omx-runtime`, `omo-runtime`, and `omc-runtime`. This flag exists for
+wrappers, scripts, and users who want a standing default instead of the
+per-request question. Legacy `OMH_SETUP_PROFILES=1,3` still maps to setup
 profile categories for automation that already uses it, but new scripts should
 prefer `OMH_DEFAULT_EXECUTOR`.
 

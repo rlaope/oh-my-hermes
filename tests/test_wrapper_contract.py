@@ -454,6 +454,33 @@ class WrapperContractTests(unittest.TestCase):
         self.assertIn("choose_executor", actions)
         self.assertIn("not dispatch", payload["chat_response"]["claim_boundary"])
 
+    def test_executor_choice_card_offers_neutral_split_across_agents(self) -> None:
+        payload = build_chat_interaction_payload(
+            "research the repo, plan, implement, code-review, sync docs, and prepare a PR",
+            source="discord",
+        )
+        response = payload["chat_response"]
+        actions = {action["id"]: action for action in response["actions"]}
+
+        # POSITIVE: the split option routes to the prepare-only agent-board
+        # surface — a routing choice, never dispatch.
+        self.assertIn("prepare_agent_board_card", actions)
+        self.assertEqual(actions["prepare_agent_board_card"]["label"], "Split across agents")
+        self.assertEqual(actions["prepare_agent_board_card"]["style"], "secondary")
+        self.assertFalse(response["state"]["dispatchable"])
+
+        # Executor-neutral body: Hermes named first, no owner presented as a
+        # numbered default.
+        body = response["body"]
+        self.assertLess(body.index("Hermes"), body.index("Claude Code"))
+        self.assertLess(body.index("Claude Code"), body.index("Codex"))
+        self.assertIn("split it across several agents", body)
+
+        # NEGATIVE: splitting must not surface team/dispatch-style actions or
+        # an executor-specific alias from this card.
+        for forbidden in ("start_team", "start_swarm", "dispatch", "prepare_handoff", "open_codex", "open_claude_code"):
+            self.assertNotIn(forbidden, actions)
+
     def test_clarify_mode_has_no_handoff_actions(self) -> None:
         payload = build_chat_interaction_payload("fix maybe", mode="delegate")
 

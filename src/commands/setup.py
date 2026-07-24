@@ -42,7 +42,6 @@ from ..runtime.artifacts import read_state_result, update_state
 from ..setup_profiles import (
     PROJECT_MEMORY_MODES,
     build_setup_profile,
-    setup_profile_categories_for_executor,
     write_setup_profile,
 )
 from ..snippet import WORKSPACE_SNIPPET
@@ -56,7 +55,7 @@ from ..team_profiles import (
     operating_model_ids,
 )
 from .common import _action_label, _paths, _print_json, _wants_json
-from .language import LANGUAGE_CODES, language_from_env, language_options, normalize_language, tr
+from .language import LANGUAGE_CODES, detect_locale_language, language_from_env, normalize_language, tr
 
 INSTALLER_COMMAND = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh"
 COMMAND_PACKAGE_STATUS_SCHEMA_VERSION = "command_package_status/v1"
@@ -895,14 +894,12 @@ def cmd_setup(args: argparse.Namespace) -> int:
     language = _setup_language(args)
     paths = _paths(args)
     if _setup_should_interact(args):
-        if not _language_was_explicit(args):
-            language = _ask_setup_language(use_color=_use_color())
-            args.language = language
         if not _setup_paths_were_explicit(args) and not getattr(args, "scope", None):
             args.scope = _ask_setup_scope(use_color=_use_color(), language=language)
             paths = _paths(args)
         _run_setup_wizard(args, paths, language)
-        _offer_github_star_before_setup(language=language, use_color=_use_color(), dry_run=bool(args.dry_run))
+    if getattr(args, "star", False):
+        _star_github_repo(language=language, use_color=_use_color(), dry_run=bool(args.dry_run))
     if not args.with_mcp and (
         str(getattr(args, "mcp_host", "generic") or "generic") != "generic"
         or getattr(args, "mcp_config_path", None)
@@ -1134,7 +1131,7 @@ def _resolve_language(args: argparse.Namespace) -> str:
 def _setup_language(args: argparse.Namespace) -> str:
     if _language_was_explicit(args):
         return _resolve_language(args)
-    return "en"
+    return detect_locale_language()
 
 
 def _language_was_explicit(args: argparse.Namespace) -> bool:
@@ -1143,17 +1140,6 @@ def _language_was_explicit(args: argparse.Namespace) -> bool:
 
 def _setup_paths_were_explicit(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "omh_home", None) or getattr(args, "hermes_home", None))
-
-
-def _ask_setup_language(*, use_color: bool) -> str:
-    return _ask_single_choice(
-        tr("en", "language_title"),
-        [tr("en", "language_intro")],
-        language_options(),
-        default_choice="1",
-        use_color=use_color,
-        language="en",
-    )
 
 
 def _ask_setup_scope(*, use_color: bool, language: str) -> str:
@@ -1198,54 +1184,21 @@ def _run_setup_wizard(args: argparse.Namespace, paths, language: str) -> None:
         print(f"{tr(language, 'hermes_config')}: {_color(str(paths.hermes_config_path), '36', use_color)} ({tr(language, 'status_will_create')})")
     print(f"{tr(language, 'managed_skills')}: {_color(str(paths.skills_dir), '36', use_color)}")
 
-    args.skip_apply = not _ask_yes_no(
-        tr(language, "register_question"),
-        default=True,
-        use_color=use_color,
-        note=tr(language, "register_note"),
-        language=language,
-    )
-    args.default_executor = _ask_default_executor(use_color=use_color, language=language)
-    args.profile = setup_profile_categories_for_executor(str(args.default_executor))
-    show_advanced = _ask_yes_no(
-        tr(language, "advanced_question"),
-        default=False,
-        use_color=use_color,
-        note=tr(language, "advanced_note"),
-        language=language,
-    )
-    if show_advanced:
-        args.with_mcp = _ask_yes_no(
-            tr(language, "mcp_question"),
-            default=False,
+    if not args.profile and not getattr(args, "default_executor", None):
+        # No upfront coding-owner question: safety-first records "choose" so
+        # Hermes asks at the first coding request instead of setup time.
+        args.profile = ["safety-first"]
+    if args.with_mcp and str(getattr(args, "mcp_host", "generic") or "generic") == "generic":
+        args.mcp_host = _ask_mcp_host(
             use_color=use_color,
-            note=tr(language, "mcp_note"),
             language=language,
+            default_host=_default_mcp_host_for_executor(str(getattr(args, "default_executor", "") or "")),
         )
-        if args.with_mcp:
-            args.mcp_host = _ask_mcp_host(
-                use_color=use_color,
-                language=language,
-                default_host=_default_mcp_host_for_executor(str(getattr(args, "default_executor", "") or "")),
-            )
-    else:
-        args.with_mcp = False
     args.profile_pack = explicit_profile_packs
     print("")
 
 
-def _offer_github_star_before_setup(*, language: str, use_color: bool, dry_run: bool = False) -> None:
-    wants_star = _ask_yes_no(
-        tr(language, "github_star_question"),
-        default=True,
-        use_color=use_color,
-        note=tr(language, "github_star_note"),
-        language=language,
-    )
-    if not wants_star:
-        print(tr(language, "github_star_declined"))
-        print("")
-        return
+def _star_github_repo(*, language: str, use_color: bool, dry_run: bool = False) -> None:
     if dry_run:
         print(_color(tr(language, "github_star_dry_run"), "33", use_color))
         print("")
@@ -1274,46 +1227,6 @@ def _try_star_github_repo() -> dict[str, object]:
         return {"ok": True, "reason": "starred_or_already_starred"}
     detail = (completed.stderr or completed.stdout or "gh repo star failed").strip()
     return {"ok": False, "reason": detail}
-
-
-def _ask_default_executor(*, use_color: bool, language: str) -> str:
-    options = [
-        {
-            "choice": "1",
-            "value": "codex",
-            "label": tr(language, "executor_codex_label"),
-            "description": tr(language, "executor_codex_desc"),
-        },
-        {
-            "choice": "2",
-            "value": "claude-code",
-            "label": tr(language, "executor_claude_label"),
-            "description": tr(language, "executor_claude_desc"),
-        },
-        {
-            "choice": "3",
-            "value": "hermes",
-            "label": tr(language, "executor_hermes_label"),
-            "description": tr(language, "executor_hermes_desc"),
-        },
-    ]
-    value = _ask_single_choice(
-        tr(language, "executor_title"),
-        [
-            tr(language, "executor_intro_1"),
-            tr(language, "executor_intro_2"),
-        ],
-        options,
-        default_choice="1",
-        use_color=use_color,
-        language=language,
-    )
-    try:
-        build_setup_profile(default_executor=value)
-    except ValueError as exc:
-        print(_color(tr(language, "invalid_executor", error=exc), "31", use_color))
-        return "choose"
-    return value
 
 
 def _ask_mcp_host(*, use_color: bool, language: str, default_host: str = "generic") -> str:
@@ -1663,6 +1576,8 @@ def _print_setup_summary(payload: dict[str, object], *, language: str = "en") ->
         executor = str(profile.get("default_executor", ""))
         if executor:
             print(f"  {tr(language, 'default_handoff', summary=_executor_summary(language, executor))}")
+            if executor == "choose":
+                print(f"  {tr(language, 'default_handoff_pin_hint')}")
 
     if isinstance(topology, dict):
         print(
@@ -2789,6 +2704,7 @@ def _add_top_level_commands(sub) -> None:
     setup.add_argument("--interactive", action="store_true", help="Force the interactive setup wizard.")
     setup.add_argument("--no-interactive", action="store_true", help="Disable the interactive setup wizard.")
     setup.add_argument("--skip-apply", action="store_true", help="Install skills without registering them in Hermes config.")
+    setup.add_argument("--star", action="store_true", help="Star the oh-my-hermes GitHub repo via gh after setup (opt-in; never prompted).")
     setup.add_argument(
         "--profile",
         action="append",
@@ -2799,7 +2715,7 @@ def _add_top_level_commands(sub) -> None:
         "--default-executor",
         choices=CODING_EXECUTOR_TARGETS,
         default=None,
-        help="Default coding agent suggestion. Interactive setup only shows Codex, Claude Code, and Hermes.",
+        help="Durable coding-owner preference for automation and scripted installs. Interactive setup never asks; by default Hermes asks at the first coding request.",
     )
     setup.add_argument(
         "--operating-model",
