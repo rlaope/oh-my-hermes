@@ -120,8 +120,8 @@ command package and `omh` executable only. `omh setup` is the explicit,
 repairable step that installs generated managed skills and registers them with
 Hermes through `skills.external_dirs`.
 When `omh setup` is run in a real terminal, it asks exactly one question —
-install scope (user or project). The setup language is auto-detected from the
-OS locale (`--language` or `OMH_LANG` override it), Hermes registration
+install scope (user or project). Output is English by default (`--language`
+or `OMH_LANG` opt into ko/ja/zh), Hermes registration
 defaults to on (`--skip-apply` opts out), and there is no upfront coding-agent
 question: Hermes asks who should own coding work at the first coding request,
 in natural language. Optional surfaces stay behind flags — `--with-mcp` for

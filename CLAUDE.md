@@ -62,7 +62,10 @@ Rules:
   (`case_count == 51`, `intervention_case_count == 105`, etc.). When you add a
   routing case, skill, or demo card, update the exact-count assertions in the
   same commit — they are the point, not noise.
-- English for code, docs, commits, and PR text.
+- English for code, docs, commits, and PR text — and for all user-facing CLI
+  output by default. Localized output (ko/ja/zh) is explicit opt-in via
+  `--language` or `OMH_LANG` only; never auto-detect the OS locale. Korean-only
+  surfaces shrink the audience to Korean users.
 
 ## Workflow Rules
 

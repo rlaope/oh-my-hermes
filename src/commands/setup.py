@@ -55,7 +55,7 @@ from ..team_profiles import (
     operating_model_ids,
 )
 from .common import _action_label, _paths, _print_json, _wants_json
-from .language import LANGUAGE_CODES, detect_locale_language, language_from_env, normalize_language, tr
+from .language import LANGUAGE_CODES, language_from_env, normalize_language, tr
 
 INSTALLER_COMMAND = "curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh"
 COMMAND_PACKAGE_STATUS_SCHEMA_VERSION = "command_package_status/v1"
@@ -1129,9 +1129,11 @@ def _resolve_language(args: argparse.Namespace) -> str:
 
 
 def _setup_language(args: argparse.Namespace) -> str:
+    # English-first product surface: localized output is explicit opt-in via
+    # --language or OMH_LANG, never inferred from the OS locale.
     if _language_was_explicit(args):
         return _resolve_language(args)
-    return detect_locale_language()
+    return "en"
 
 
 def _language_was_explicit(args: argparse.Namespace) -> bool:
