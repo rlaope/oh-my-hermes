@@ -21,13 +21,18 @@ _EXPLICIT_SKILL_ALIASES = {
     "ulw": "ultrawork",
 }
 _PREFIXED_SKILL_ALIASES = {
-    "omh": "oh-my-hermes",
+    "omh": "meta-router",
     "ohmy": "oh-my-hermes",
     "skills": "oh-my-hermes",
     "paper-explainer": "paper-learning",
     "source-acquisition": "source-finder",
     "source-intake": "source-finder",
     "ulw": "ultrawork",
+}
+# A prefixed alias with no task remainder is a picker request, not a
+# meta-routing request; bare forms keep their pre-meta-router owner.
+_PREFIXED_BARE_SKILL_ALIASES = {
+    "omh": "oh-my-hermes",
 }
 
 _CONFIDENCE_RANK = {name: index for index, name in enumerate(CONFIDENCE_LEVELS, start=1)}
@@ -4684,6 +4689,8 @@ def explicit_skill_invocation(message: str, names: set[str]) -> str | None:
         return None if _explicit_skill_candidate_is_negated(stripped, first, alias) else alias
     if used_prefix:
         alias = _PREFIXED_SKILL_ALIASES.get(first)
+        if len(stripped.split(maxsplit=1)) == 1:
+            alias = _PREFIXED_BARE_SKILL_ALIASES.get(first, alias)
         if alias in names:
             return None if _explicit_skill_candidate_is_negated(stripped, first, alias) else alias
     return None

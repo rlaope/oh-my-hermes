@@ -431,6 +431,8 @@ Prefer `omh_interact` when the plugin/tool surface is available because it retur
 
 Do not make a normal chat user approve `omh list`, `omh recommend`, `omh chat interact`, or other backend commands just to see workflow options. Render compact summaries, context briefs, pickers, quickstart, probe, or status cards instead.
 
+Bare `./omh`, `/omh`, `./skills`, or `/skills` opens the workflow picker. A leading `/omh` or `./omh` command followed by an imperative task remainder routes to `meta-router`, which consults the live catalog and selects or chains the right workflow(s); the picker owns only the bare forms and workflow questions.
+
 ## Coding Delegation
 
 When a chat message is implementation-shaped and a wrapper wants a concrete executor handoff, run `omh coding delegate` after or instead of generic chat routing:

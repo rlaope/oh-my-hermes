@@ -979,6 +979,7 @@ WORKFLOW_CONTEXT_CARDS = (
     },
 )
 _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
+    "meta-router": "intent_to_plan",
     "deep-interview": "intent_to_plan",
     "plan": "intent_to_plan",
     "ralplan": "intent_to_plan",
@@ -4624,6 +4625,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "label": "Intent -> plan",
             "skills": [
                 "oh-my-hermes",
+                "meta-router",
                 "deep-interview",
                 "plan",
                 "ralplan",

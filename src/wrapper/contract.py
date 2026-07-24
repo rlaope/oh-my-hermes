@@ -326,6 +326,7 @@ VISIBLE_ACTIONS = (
     "triage_feedback",
     "prepare_ops_review",
     "present_app_delivery_loop",
+    "present_meta_route",
     "run_cto_loop",
     "prepare_deploy_monitor_plan",
     "prepare_review_or_followup_handoff",
@@ -799,6 +800,7 @@ _HUMAN_ACK_BODY_BY_SKILL = {
 }
 
 _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
+    "present_meta_route": ("present_meta_route", "Show workflow route"),
     "present_plan": ("present_plan", "Show plan"),
     "assess_loopability": ("assess_loopability", "Assess loopability"),
     "prepare_visual_prompt_card": ("prepare_visual_prompt_card", "Prepare image card"),
@@ -1023,6 +1025,40 @@ _OPERATING_BRIEF_CHAT_CARDS: dict[str, dict[str, object]] = {
 
 _OPERATING_BRIEF_WORKFLOW_BY_NEXT_ACTION = {
     str(config["next_action"]): workflow for workflow, config in _OPERATING_BRIEF_CHAT_CARDS.items()
+}
+
+_META_ROUTER_CHAT_CARDS: dict[str, dict[str, object]] = {
+    "meta-router": {
+        "kind": "meta_route",
+        "headline": "I can read the task and pick the right workflow(s) from the live catalog.",
+        "body": (
+            "I will reason over the /omh task, consult the live OMH catalog with `omh recommend --json` "
+            "(escalating to `omh docs workflows --json` when the shortlist is unclear), and select or chain the "
+            "workflow(s) that fit — excluding meta-router itself. The routing decision names the workflow(s) to run "
+            "and reports its evidence boundary; it is not execution, review, CI, or merge evidence."
+        ),
+        "phase": "meta_route_prepared",
+        "next_action": "present_meta_route",
+        "artifact_schema": "meta_route_card/v1",
+        "actions": [
+            {"id": "present_meta_route", "label": "Route to workflow", "style": "primary"},
+            {"id": "choose_skill", "label": "Show workflow options", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "read_the_omh_task",
+            "consult_live_catalog_with_omh_recommend_json",
+            "escalate_to_docs_workflows_json_if_unclear",
+            "select_or_chain_workflows_excluding_meta_router",
+            "present_decision_with_evidence_boundary",
+        ],
+        "evidence_not_observed": [
+            "execution",
+            "review",
+            "CI",
+            "merge",
+        ],
+    },
 }
 
 _REVIEW_QUALITY_CHAT_CARDS: dict[str, dict[str, object]] = {
@@ -3715,6 +3751,47 @@ def _review_quality_chat_response(
     )
 
 
+def _meta_router_chat_response(
+    *,
+    selected: str,
+    policy_next_action: str,
+    policy: dict[str, object],
+    decision: dict[str, object],
+    action: str,
+    thread_key: str,
+    workflow_explanation_reason: str,
+) -> dict[str, object] | None:
+    if selected not in _META_ROUTER_CHAT_CARDS:
+        return None
+    config = _META_ROUTER_CHAT_CARDS[selected]
+    next_action = str(config["next_action"])
+    action_specs = config.get("actions", [])
+    actions = [_action_from_spec(spec) for spec in action_specs if isinstance(spec, dict)]
+    evidence_boundary = str(policy.get("evidence_boundary", "")) or (
+        "A meta-routing decision names the workflow(s) to run; it is not execution, review, CI, or merge evidence."
+    )
+    return _chat_response(
+        kind=str(config["kind"]),
+        headline=str(config["headline"]),
+        body=str(config["body"]),
+        phase=str(config["phase"]),
+        next_action=next_action,
+        thread_key=thread_key,
+        actions=actions,
+        claim_boundary=evidence_boundary,
+        extra_state={
+            "route_action": action,
+            "confidence": decision.get("confidence", "low"),
+            "selected_workflow": selected,
+            "workflow_explanation_reason": workflow_explanation_reason,
+            "policy_next_action": policy_next_action,
+            "artifact_schema": str(config["artifact_schema"]),
+            "recommended_flow": list(config.get("recommended_flow", [])),
+            "evidence_not_observed": list(config.get("evidence_not_observed", [])),
+        },
+    )
+
+
 def _delivery_runtime_chat_response(
     *,
     selected: str,
@@ -3932,6 +4009,17 @@ def build_chat_response_from_route(
         )
         if operating_brief_response:
             return operating_brief_response
+        meta_router_response = _meta_router_chat_response(
+            selected=selected,
+            policy_next_action=policy_next_action,
+            policy=policy,
+            decision=decision,
+            action=action,
+            thread_key=thread_key,
+            workflow_explanation_reason=workflow_explanation_reason,
+        )
+        if meta_router_response:
+            return meta_router_response
         review_quality_response = _review_quality_chat_response(
             selected=selected,
             policy_next_action=policy_next_action,
