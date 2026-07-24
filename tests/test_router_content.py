@@ -109,6 +109,54 @@ class RouterContentTests(unittest.TestCase):
         for anchor in re.findall(r"\]\(\.\./README\.md#([^)]+)\)", docs_index):
             self.assertIn(anchor, headings, f"docs/README.md links to missing README anchor #{anchor}")
 
+    def test_catalog_index_reference_stays_fresh_and_budgeted(self) -> None:
+        # Shared 24,000-byte reference ceiling (asserted below in
+        # test_context_surfaces_stay_within_compact_budgets): catalog-index.md
+        # (~14.4KB) and workflow-registry.md (~19.6KB) both grow with the
+        # catalog, and harness-registry.md (23,985B) is the pack's tightest
+        # reference today. At roughly 150 routable skills the index nears its
+        # own 20,000-byte gate; the escalation is to shed low-value skills or
+        # drop to name-only lines, or raise a ceiling deliberately — never
+        # silent growth past a gate.
+        from omh.skills.catalog import routable_definitions
+        from omh.skills.render import _router_catalog_index_reference
+
+        rendered = _router_catalog_index_reference()
+        on_disk = Path("skills/oh-my-hermes/references/catalog-index.md").read_text(encoding="utf-8")
+        self.assertEqual(on_disk, rendered)
+
+        self.assertLess(len(rendered.encode("utf-8")), 20_000)
+        for line in rendered.splitlines():
+            self.assertLess(len(line.encode("utf-8")), 400, line)
+
+        skill_lines = [line for line in rendered.splitlines() if line.startswith("- `")]
+        names = [line.split("`")[1] for line in skill_lines]
+        expected = sorted(definition.name for definition in routable_definitions())
+        self.assertEqual(names, expected)
+        self.assertEqual(len(names), len(set(names)))
+
+        self.assertIn("`omh recommend \"<request>\" --json --limit 3` stays authoritative", rendered)
+        self.assertIn("Never paste full catalog dumps into chat context", rendered)
+        self.assertIn("references/workflow-registry.md", rendered)
+
+        router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
+        self.assertIn(
+            "`references/catalog-index.md` for the full-catalog shortlist",
+            router.content,
+        )
+        self.assertIn("never paste full catalog dumps into chat", router.content)
+
+        registry = next(
+            template.content
+            for template in builtin_skill_reference_templates()
+            if template.relative_path == "references/workflow-registry.md"
+        )
+        self.assertIn("references/catalog-index.md", registry)
+
+        meta_router = next(skill for skill in builtin_skill_templates() if skill.name == "meta-router")
+        self.assertIn("references/catalog-index.md", meta_router.content)
+        self.assertIn("Never run `omh docs workflows --json` or `omh list --json` in chat context", meta_router.content)
+
     def test_router_documents_best_effort_and_recovery(self) -> None:
         router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
         references = {
