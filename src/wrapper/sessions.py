@@ -973,11 +973,15 @@ def _session_chat_response(session: dict[str, Any]) -> dict[str, object]:
         return response(
             kind="handoff",
             headline="Choose the coding agent.",
-            body="Pick Codex, Claude Code, Hermes, or a runtime path before this becomes a prepared coding handoff.",
+            body="Keep this in Hermes, hand it to Claude Code, hand it to Codex or an oh-my runtime path, or split it across several agents in parallel before this becomes a prepared coding handoff.",
             phase="executor_choice_required",
             next_action="choose_executor",
             thread_key=thread_key,
-            actions=[_action("choose_executor", "Choose coding agent", "primary"), _action("cancel", "Cancel", "secondary")],
+            actions=[
+                _action("choose_executor", "Choose coding agent", "primary"),
+                _action("prepare_agent_board_card", "Split across agents", "secondary"),
+                _action("cancel", "Cancel", "secondary"),
+            ],
             claim_boundary="Choosing a coding agent is not dispatch or implementation evidence.",
         )
     if status == "executor_selected":

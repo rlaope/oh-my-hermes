@@ -5304,11 +5304,15 @@ def build_chat_response_from_delegation(delegation_payload: dict[str, object], *
         return _chat_response(
             kind="handoff",
             headline="Choose the coding agent.",
-            body="Pick Codex, Claude Code, Hermes, or an oh-my runtime path before this becomes a prepared coding handoff.",
+            body="Keep this in Hermes, hand it to Claude Code, hand it to Codex or an oh-my runtime path, or split it across several agents in parallel before this becomes a prepared coding handoff.",
             phase="executor_choice_required",
             next_action="choose_executor",
             thread_key=thread_key,
-            actions=[_action("choose_executor", "Choose coding agent", "primary"), _action("show_status", "Show status", "secondary")],
+            actions=[
+                _action("choose_executor", "Choose coding agent", "primary"),
+                _action("prepare_agent_board_card", "Split across agents", "secondary"),
+                _action("show_status", "Show status", "secondary"),
+            ],
             claim_boundary="Coding-agent choice is not dispatch or implementation evidence.",
             extra_state={
                 "delegation_action": action,
