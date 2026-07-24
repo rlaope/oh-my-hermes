@@ -10,7 +10,10 @@ repeat them.
 oh-my-hermes (OMH) is a Hermes-native wrapper orchestration layer: a
 deterministic skill catalog, router, and prepared-handoff generator installed
 next to Hermes Agent. Core `omh` code makes no LLM, API, or network calls and
-never patches Hermes. Pure Python 3.11+, zero runtime dependencies.
+never patches Hermes. Pure Python 3.11+, zero runtime dependencies. One scoped
+exception: `omh coding fanout dispatch` (explicit opt-in) spawns local agent
+CLIs as subprocesses — those CLIs make their own network calls; omh itself
+still makes none, and nothing executes without that explicit command.
 
 ## Build & Test
 

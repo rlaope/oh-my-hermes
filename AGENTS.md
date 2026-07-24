@@ -26,7 +26,10 @@ executor. If support differs, document the difference as a capability boundary
 instead of silently optimizing for Codex.
 
 Do not turn OMH into a hidden Hermes runtime patch, transport bot, network
-service, LLM router, or secret coding executor.
+service, LLM router, or secret coding executor. The one sanctioned execution
+surface is the explicit opt-in fanout dispatch bridge described under
+Implementation Boundaries — operator-invoked, local-only, fully observed,
+never hidden and never a default.
 
 ## Command Audience
 
@@ -97,6 +100,16 @@ PR without the chat history.
 
 - No LLM, API, Discord, Slack, GitHub, or network calls inside core `omh`
   features unless the user explicitly approves a scoped integration.
+- The approved scoped integration under that clause is the fanout dispatch
+  bridge (`omh coding fanout dispatch`, 2026-07 owner approval): an explicit
+  operator command that spawns LOCAL agent CLIs (the CLIs make their own
+  network calls; omh still makes none) in per-unit worktrees against a frozen
+  `fanout_contract/v1`, recording every spawn and exit as observed journal
+  evidence. It never runs by default, never merges branches, never persists
+  raw prompts under `.omh`, and never executes anything outside an explicit
+  `dispatch` invocation. Bridge dispatch is a separate axis from chat
+  prompt-handoff semantics: chat-prepared handoffs remain prompt-only for
+  prompt-only profiles.
 - No Hermes core patching.
 - Runtime artifacts are local, deterministic, schema-versioned, and
   metadata-only by default.
