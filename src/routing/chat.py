@@ -1983,14 +1983,7 @@ def _meta_router_fast_path_decision(
     remainder = _leading_omh_command_remainder(message)
     if remainder is None:
         return None
-    # The catalog-question detectors key on /omh and ./ markers, so they fire
-    # on every leading /omh command; scope them to the remainder to separate
-    # an imperative task from a catalog question asked through the command.
-    if (
-        is_native_entrypoint_question(remainder)
-        or is_skill_catalog_question(remainder)
-        or is_catalog_without_shell_question(remainder)
-    ):
+    if _meta_router_remainder_is_catalog_question(message):
         return None
     selected_skill = "meta-router"
     definition = _skill_definition_by_name(selected_skill)
@@ -2039,6 +2032,8 @@ def _explicit_skill_fast_path_decision(
     definitions = routable_definitions()
     selected_skill = explicit_skill_invocation(routing_message, definitions)
     if not selected_skill or selected_skill == _ROUTER_SKILL:
+        return None
+    if selected_skill == "meta-router" and _meta_router_remainder_is_catalog_question(message):
         return None
     if not _has_explicit_invocation_prefix(routing_message) and is_missed_route_feedback(routing_message):
         return None
@@ -2257,6 +2252,23 @@ def _leading_omh_command_remainder(message: str) -> str | None:
     if not remainder:
         return None
     return remainder
+
+
+def _meta_router_remainder_is_catalog_question(message: str) -> bool:
+    # The catalog-question detectors key on /omh and ./ markers, so they fire
+    # on every leading omh command; scope them to the remainder to separate
+    # an imperative task from a catalog question asked through the command.
+    parts = message.strip().split(None, 1)
+    if len(parts) != 2:
+        return False
+    remainder = parts[1].strip()
+    if not remainder:
+        return False
+    return (
+        is_native_entrypoint_question(remainder)
+        or is_skill_catalog_question(remainder)
+        or is_catalog_without_shell_question(remainder)
+    )
 
 
 def _specific_capability_fast_path_result(
