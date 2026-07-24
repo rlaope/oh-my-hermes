@@ -2,6 +2,7 @@
 
 This generated reference is loaded only when exact workflow routing detail matters.
 The always-on `oh-my-hermes` skill keeps only the compact lane map and recovery rules.
+For a compact name plus one-line description shortlist of every routable skill, load `references/catalog-index.md`.
 
 ## CLI Reference Surfaces
 

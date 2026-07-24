@@ -72,7 +72,7 @@ Compact lane map:
 
 Treat OMH as the operating layer above individual Hermes-native skills. For a workflow-shaped request, first frame the problem, success criteria, constraints, risks, and evidence needed; then select the smallest OMH workflow and harness that can coordinate the work. Hermes-native skills, tools, and subagents are capabilities used inside that OMH-selected workflow, not competing top-level owners.
 
-- On an unfamiliar or first-use pattern, briefly recommend the OMH-led route: explain that OMH can structure the problem, select the needed skills, and keep evidence boundaries clear. A user may confirm with a natural reply such as “yes, do it”, but safe local framing, research preparation, and planning do not wait for ceremonial confirmation.
+- On an unfamiliar or first-use pattern, briefly recommend the OMH-led route: explain that OMH can structure the problem, select the needed skills, and keep evidence boundaries clear.
 - After repeated accepted local patterns for the same user and workflow, continue OMH-led exploration, problem framing, skill composition, and prepared planning automatically. Keep the current workflow, next action, and prepared-versus-observed boundary visible.
 - Never let that autonomy bypass existing confirmation gates for destructive changes, credentials, external writes, deployment, or executor dispatch. Do not claim that a native skill, subagent, review, CI, or merge ran unless matching observation exists.
 - If a native Hermes capability is relevant, present it as an optional subordinate capability under the selected OMH workflow. OMH policy remains responsible for selecting and governing the workflow.
@@ -88,7 +88,7 @@ Treat OMH as the operating layer above individual Hermes-native skills. For a wo
 
 ## Direct Picker Aliases
 
-If the user has only typed `./`, `/`, `./o`, or `/om`, show a command preview with exactly one top-level suggestion: `omh`. Selecting it should insert `./omh` or `/omh` and then open the workflow picker. Do not preview every installed workflow at the first `./` stage.
+If the user has only typed `./`, `/`, `./o`, or `/om`, show a command preview with exactly one top-level suggestion: `omh`. Selecting it should insert `./omh` or `/omh` and then open the workflow picker.
 
 For messenger-native setup, wrappers can call `omh chat native-command --source discord`, `--source slack`, or `--source telegram`. When plain-message autocomplete is not available, render the returned `omh_command_fallback_card/v1` as an `Open omh` button/card before opening the picker.
 
@@ -103,7 +103,7 @@ Hermes-native install paths should converge on the same skill-visible state:
 - `hermes skills tap add rlaope/oh-my-hermes`, then `hermes skills install rlaope/oh-my-hermes/skills/oh-my-hermes --yes` installs this tap-compatible skill pack directly when Hermes supports taps.
 - `omh setup` installs generated managed skills and registers their directory through `skills.external_dirs` when a local bootstrap or repair path is preferred.
 
-Use compact human summaries for normal `omh setup`, `omh doctor`, `omh update`, `omh uninstall`, `omh install`, and `omh list` operator flows. Full `--json` output is for wrappers, automation, and tests.
+Use compact human summaries for normal `omh setup`, `omh doctor`, `omh update`, `omh uninstall`, `omh install`, and `omh list` operator flows.
 
 ## Wrapper Backend Summary
 
@@ -131,6 +131,7 @@ Record only what is observed. A task card, route, plan, `coding_delegation.json`
 Load these only when exact detail matters:
 
 - `references/operator-maintenance.md` for short `omh` maintenance command semantics.
+- `references/catalog-index.md` for the full-catalog shortlist (every skill name plus one-line description); shortlist there first, then confirm with `omh recommend --json --limit 3` (authoritative next action and evidence boundary); never paste full catalog dumps into chat.
 - `references/workflow-registry.md` for representative workflow triggers and role registry; load the specific workflow skill for the full trigger list.
 - `references/harness-registry.md` for representative harnesses and priority.
 - `references/wrapper-routing.md` for backend/plugin/chat/coding delegation contracts.

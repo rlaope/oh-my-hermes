@@ -1,0 +1,96 @@
+# OMH Skill Catalog Index
+
+Generated shortlist surface: every routable OMH skill's name and one-line description, regenerated from the catalog on every `omh setup`/`omh update`. Shortlist candidate workflows here first; `omh recommend "<request>" --json --limit 3` stays authoritative for confirmation and policy metadata (next action, evidence boundary). Never paste full catalog dumps into chat context.
+
+Trigger phrases and the role registry live in `references/workflow-registry.md`; descriptions stay in this separate file because merging both registries would breach the per-reference byte budget.
+
+## Skills
+
+- `accessibility-audit`: [omh] Hermes Accessibility Audit workflow: prepare WCAG, keyboard, focus, screen-reader, target-size, and reflow evidence gates for UI surfaces.
+- `achievements`: [omh] Hermes achievements observation workflow: summarize hermes-achievements badges, tiers, recent unlocks, and progress from local plugin artifacts.
+- `agent-board`: [omh] Hermes agent board workflow: coordinate multiple Hermes profiles or agents with task, handoff, heartbeat, blocker, and completion states.
+- `agent-debug`: [omh] Agent Debug workflow: capture a stuck, looping, drifting, or repeatedly failing agent run, diagnose the likely failure pattern, and prepare the smallest safe recovery action.
+- `agent-evaluation`: [omh] Hermes Agent Evaluation workflow: compare executor or agent choices on reproducible tasks using quality, cost, time, tool, and evidence metrics.
+- `agent-ops-review`: [omh] Hermes agent ops review workflow: help managers inspect AI-agent progress, blockers, quality gates, and throughput levers.
+- `ai-slop-cleaner`: [omh] Hermes AI slop cleaner workflow: behavior-preserving cleanup.
+- `ask`: [omh] Hermes adaptation for consulting an external advisor when configured.
+- `automation-blueprint`: [omh] Hermes Scheduled Ops Blueprint workflow: design recurring Hermes operations with schedule, delivery, silence policy, context chain, and prepared-vs-observed status.
+- `autoresearch-goal`: [omh] Hermes adaptation for durable research-goal execution.
+- `best-practice-research`: [omh] Hermes adaptation for bounded official/upstream best-practice research.
+- `browser-operator`: [omh] Hermes browser operator workflow: scope URL opening, page interaction, login/form boundaries, observations, and destructive confirmation gates.
+- `build-failure-triage`: [omh] Hermes Build Failure Triage workflow: classify build, typecheck, lint, test, CI, and DCO failures into minimal safe fix handoffs.
+- `cancel`: [omh] Hermes adaptation for ending active workflow state cleanly.
+- `code-review`: [omh] Hermes Code Review workflow: bug-first review with evidence.
+- `codebase-onboarding`: [omh] Hermes Codebase Onboarding workflow: create a repo map, reading path, glossary, risk map, and first-task runway for unfamiliar codebases.
+- `codegraph-refresh`: [omh] Hermes Codegraph Refresh workflow: refresh local code intelligence, summarize repo structure, and prepare task-scoped codegraph handoff context without overclaiming execution.
+- `command-operator`: [omh] Hermes command operator workflow: scope terminal, shell, CLI, package-manager, and test commands with cwd, environment, safety, and result-evidence gates.
+- `connector-operator`: [omh] Hermes connector operator workflow: scope external app actions across email, Slack, Discord, Notion, Linear, Jira, CRM, and similar providers with auth, payload, confirmation, and result-evidence gates.
+- `content-operator`: [omh] Hermes content operator workflow: scope publish-ready writing, rewriting, summarization, translation, release-note, newsletter, customer-copy, social-copy, README-copy, and email-draft work with audience, tone, style, source, review, and hallucination gates.
+- `context-budget-review`: [omh] Hermes Context Budget Review workflow: plan compact context, token/cost budgets, summarization checkpoints, and overflow recovery before long agent work.
+- `cto-loop`: [omh] Hermes CTO Loop workflow: roadmap, PM, technical tradeoffs, risk, delivery, release, and follow-up operating cadence.
+- `data-analysis`: [omh] Hermes data analysis workflow: scope supplied data with provenance, causal-claim, and hallucination guards.
+- `deep-interview`: [omh] Hermes Deep Interview workflow: one-question-at-a-time clarification.
+- `deliverable-package`: [omh] Hermes deliverable package workflow: track PPT, PDF, XLSX, DOCX, HWP, Markdown, and attachments through prepared, generated, QA, approved, and attached states.
+- `deploy-and-monitor`: [omh] Hermes Deploy-and-Monitor workflow: release checklist, deploy decision, health signals, rollback gate, and post-deploy status.
+- `design-orchestration`: [omh] Hermes design orchestration workflow: prepare a bounded design direction, existing-lane composition, and executor-neutral handoff.
+- `design-quality-gate`: [omh] Hermes Design Quality Gate workflow: enforce superior content, design, layout, publishing, and visual QA gates.
+- `doctor`: [omh] Hermes adaptation for diagnosing oh-my-hermes installation health.
+- `executor-runtime-readiness`: [omh] Hermes executor runtime readiness workflow: compare Codex, Claude Code, Hermes coding, and oh-my runtimes by available tools, missing tools, and handoff mode.
+- `external-connector-readiness`: [omh] Hermes external connector readiness workflow: decide whether a candidate plugin, connector, API, data provider, or multimodal route is safe, affordable, fresh, and observable enough to adopt, route, or trial.
+- `failure-signal-audit`: [omh] Failure Signal Audit workflow: find swallowed errors, unsafe fallbacks, hidden UI/runtime failures, and missing propagation before they become false green status.
+- `feedback-triage`: [omh] Hermes Feedback Triage workflow: cluster customer signals and choose the next workflow.
+- `frontend`: [omh] Hermes frontend workflow: prepare design-system-driven web UI creation, redesign, polish, accessibility, performance, and visual QA handoffs.
+- `gateway-intent-card`: [omh] Hermes gateway intent workflow: normalize Discord, Slack, Telegram, and other gateway sessions into origin, thread, delivery, silent, attachment, and status-update policy.
+- `github-event-ops`: [omh] Hermes GitHub event operations workflow: route PR, issue, CI, and review webhook events into triage, review, or fix handoff cards.
+- `harness-session-inventory`: [omh] Hermes harness session inventory workflow: normalize Codex, Claude Code, Hermes, OpenCode, Cursor, MCP host, worktree, and wrapper session metadata into one drift-aware inventory.
+- `idea-to-deploy`: [omh] Hermes Idea-to-Deploy workflow: shape an app idea into decisions, delivery handoff, verification, release, and monitoring status.
+- `img-summary`: [omh] Hermes img-summary workflow: turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards.
+- `instinct-ledger`: [omh] Instinct Ledger workflow: turn repeated project or cross-project lessons into atomic, confidence-scored instinct candidates with scoped promotion and export boundaries.
+- `live-info-operator`: [omh] Hermes live information workflow: scope read-only weather, finance, sports, map, place, exchange-rate, and time-zone lookups with provider, freshness, units, source-quality, and result-evidence gates.
+- `loop`: [omh] Hermes Loop workflow: agentic interviewer -> planner -> researcher -> builder -> reviewer cycles until a real gate.
+- `materials-package`: [omh] Hermes Materials Package workflow: decks, PDFs, spreadsheets, documents, HWP, Markdown, and binary export handoffs.
+- `media-input-operator`: [omh] Hermes media input workflow: scope audio, video, YouTube, screenshot, receipt image, OCR, meeting recording, transcript, timestamp, and clip-summary requests with source, permission, extraction, transcription, and hallucination gates.
+- `meeting-brief`: [omh] Hermes Meeting Brief workflow: agenda, prompts, decisions, and record template.
+- `memory-sync`: [omh] Hermes memory curation workflow: review stale, conflicting, duplicate, or risky memories and skill notes through approve/reject/update actions.
+- `meta-router`: [omh] Meta-routing guidance for a leading /omh command: reason over the imperative task, consult the live workflow catalog, and select or chain the right workflow(s).
+- `model-setup`: [omh] Hermes Model Setup workflow: diagnose role-slot model configuration, guide provider connection, and apply changes only after diff approval.
+- `morning-brief`: [omh] Hermes Morning Brief setup workflow: diagnose mail and calendar MCP connection, guide read/draft-only access, and apply changes only after diff approval.
+- `oh-my-hermes`: [omh] Router guidance for using oh-my-hermes workflow skills inside Hermes Agent.
+- `operating-rhythm`: [omh] Hermes Operating Rhythm workflow: meeting minutes, scrum/sprint records, retros, decisions, and follow-up history.
+- `ops-observability-card`: [omh] Hermes ops observability workflow: prepare an operations command-board for wrapper-safe token, cost, latency, run history, queue, failure-mode, external metric-provider, and service-quality evidence boundaries.
+- `ops-review`: [omh] Hermes Ops Review workflow: status, risks, blockers, priorities, and follow-ups.
+- `paper-learning`: [omh] Hermes Paper Learning workflow: explain a supplied paper or paper/PDF at a selected level while preserving full section coverage and source evidence boundaries.
+- `parallel-tools`: [omh] Hermes Parallel Tools workflow: check version currency and parallel-tool capability status, then apply an update only after diff approval.
+- `performance-goal`: [omh] Hermes adaptation for measurable performance-goal execution.
+- `physical-device-readiness`: [omh] Hermes readiness workflow for robots, 3D printers, IoT relays, sensors, and lab hardware before hardware trials.
+- `plan`: [omh] Hermes Plan workflow: structured planning before execution.
+- `production-audit`: [omh] Hermes Production Audit workflow: evaluate release, deploy, security, observability, rollback, docs, and support readiness without claiming production access.
+- `prompt-import-readiness`: [omh] Hermes prompt import readiness workflow: decide whether external CLI-agent prompt files can be safely reviewed, normalized, and offered as Hermes slash-command candidates without mutating prompts or command registries.
+- `ralph`: [omh] Hermes Ralph workflow: persistent execution with verification and review.
+- `ralplan`: [omh] Hermes Ralplan workflow: consensus planning with review gates.
+- `reliability-review`: [omh] Hermes Reliability Review workflow: postmortems, SLOs, error budgets, incident follow-ups, and service reliability evidence.
+- `report-package`: [omh] Hermes Report Package workflow: weekly/monthly reports, executive briefs, PPT-ready outlines, and upload packages.
+- `research-brief`: [omh] Hermes Research Brief workflow: source-backed business research without pretending evidence was fetched.
+- `research-department`: [omh] Hermes Research Department workflow pack: prepare Scout, Analyst, and Briefer research operations with source inbox and briefing status boundaries.
+- `rules-distill`: [omh] Hermes Rules Distill workflow: extract repeated principles from skills, prompts, traces, reviews, and failures into reviewed rule candidates without auto-mutating guidance.
+- `security-safety-review`: [omh] Hermes Security Safety Review workflow: review prompt, tool, secret, dependency, and destructive-action risks before agent or code execution.
+- `skill`: [omh] Hermes adaptation for managing local skills.
+- `skill-health`: [omh] Skill Health workflow: prepare a metadata-only OMH skill portfolio dashboard with stale surfaces, observed failure signals, pending amendments, and top actions.
+- `skill-scout`: [omh] Skill Scout workflow: prepare a metadata-only search-before-creation report for local, marketplace, GitHub, and web skill candidates with risk review and adoption options.
+- `source-finder`: [omh] Hermes Source Finder workflow: prepare typed source candidates and acquisition status before downstream work.
+- `strategy-brief`: [omh] Hermes Strategy Brief workflow: options, tradeoffs, recommendation, and decision notes.
+- `team`: [omh] Hermes Team workflow: coordinated parallel or sequential work lanes.
+- `toolbelt-readiness`: [omh] Hermes toolbelt readiness workflow: check which MCP servers, CLIs, APIs, credentials, and connectors a workflow needs before claiming it can run.
+- `ultragoal`: [omh] Hermes Ultragoal workflow: file-backed durable goal ledgers.
+- `ultraprocess`: [omh] Ultra Process - Research - Ralplan - Ultragoal - Code Review - Sync Circle: one PR-ready delivery cycle.
+- `ultraqa`: [omh] Hermes UltraQA workflow: adversarial QA and fix loops.
+- `ultrawork`: [omh] Hermes Ultrawork compatibility workflow: bounded parallel delivery guidance.
+- `verification-gate`: [omh] Hermes Verification Gate workflow: define and record build, lint, typecheck, test, security, docs, generated-output, and CI evidence before completion or merge.
+- `visual-qa`: [omh] Hermes visual-qa workflow: prepare observed-only rendered QA gates for web, frontend, image, document, and TUI surfaces.
+- `voice-operator`: [omh] Hermes voice operator workflow: turn short voice or mobile commands into clarify, plan, status, handoff, or confirmation actions.
+- `web-research`: [omh] Hermes Web Research workflow: source-backed current information gathering.
+- `websearch-setup`: [omh] Hermes Web Search Setup workflow: diagnose scraper and auxiliary extract-model configuration, guide account setup, and apply each change as its own diff approval.
+- `wiki`: [omh] Hermes adaptation for retained knowledge capture and destination-aware external knowledge connection guidance.
+- `workflow-learning`: [omh] Hermes workflow learning workflow: classify and review self-improvement store routes as an auxiliary review lane before durable writes, then record workflow attempts as metadata-only traces, evals, review queues, patch proposals, regression cases, audits, indexes, and exports.
+- `workspace-audit`: [omh] Hermes Workspace Audit workflow: map repository, skill, prompt, plugin, MCP, hook, config, and runtime surfaces before strengthening or operating OMH.
+- `workspace-file-operator`: [omh] Hermes workspace file operator workflow: scope local file/folder listing, search, organize, copy, move, rename, and delete tasks with path and destructive-action gates.
