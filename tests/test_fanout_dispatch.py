@@ -398,8 +398,20 @@ class FanoutDispatchCliTests(unittest.TestCase):
             self.assertEqual(summary["schema_version"], "fanout_dispatch_summary/v1")
             self.assertTrue(summary["dry_run"])
             self.assertFalse(summary["auto_merge"])
+            # Readiness is probed for real here, so statuses depend on which
+            # agent CLIs exist on the host; the invariant is that nothing
+            # spawns or completes under --dry-run.
             for entry in summary["units"]:
-                self.assertIn(entry["status"], {"dry_run_planned", "executor_not_ready", "unsupported_for_local_dispatch"})
+                self.assertIn(
+                    entry["status"],
+                    {
+                        "dry_run_planned",
+                        "executor_not_ready",
+                        "unsupported_for_local_dispatch",
+                        "blocked_by_dependency",
+                    },
+                )
+                self.assertNotIn(entry["status"], {"completed", "failed"})
 
             status, stdout, stderr = run_cli(base + ["coding", "fanout", "show", fanout_id])
             self.assertEqual(status, 0, stderr)
