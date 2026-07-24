@@ -1428,6 +1428,14 @@ def _route_chat_message_cached(
     )
     if fast_workflow_learning_decision is not None:
         return fast_workflow_learning_decision.to_dict()
+    fast_meta_router_decision = _meta_router_fast_path_decision(
+        message,
+        routing_message=routing_message,
+        source=source,
+        min_confidence=min_confidence,
+    )
+    if fast_meta_router_decision is not None:
+        return fast_meta_router_decision.to_dict()
     fast_catalog_decision = _catalog_fast_path_decision(
         message,
         routing_message=routing_message,
@@ -1965,6 +1973,62 @@ def _task_card_fast_path_recommendation(task_card: dict[str, object], query: str
     }
 
 
+def _meta_router_fast_path_decision(
+    message: str,
+    *,
+    routing_message: str,
+    source: str,
+    min_confidence: str,
+) -> ChatRouteDecision | None:
+    remainder = _leading_omh_command_remainder(message)
+    if remainder is None:
+        return None
+    # The catalog-question detectors key on /omh and ./ markers, so they fire
+    # on every leading /omh command; scope them to the remainder to separate
+    # an imperative task from a catalog question asked through the command.
+    if (
+        is_native_entrypoint_question(remainder)
+        or is_skill_catalog_question(remainder)
+        or is_catalog_without_shell_question(remainder)
+    ):
+        return None
+    selected_skill = "meta-router"
+    definition = _skill_definition_by_name(selected_skill)
+    selected_harness = primary_harness_for_skill(selected_skill)
+    reason = (
+        "Leading /omh command with an imperative remainder; consult the live "
+        "catalog and select the workflow(s)."
+    )
+    recommendation = recommendation_for_definition(
+        definition,
+        message,
+        matched=("meta_router_command", "token:/omh"),
+        score=12,
+        why=reason,
+    )
+    return ChatRouteDecision(
+        schema_version=1,
+        source=source,
+        action="dispatch",
+        selected_skill=selected_skill,
+        selected_harness=selected_harness,
+        candidate_skill=selected_skill,
+        candidate_harness=selected_harness,
+        confidence="high",
+        score=12,
+        threshold=min_confidence,
+        explicit=False,
+        ambiguous=False,
+        reason=reason,
+        clarification="",
+        routing_prompt=_routing_prompt("dispatch", selected_skill, selected_skill, reason, message),
+        task_card=None,
+        workflow_route_plan=None,
+        learning_candidate_card=None,
+        recommendations=(recommendation,),
+    )
+
+
 def _explicit_skill_fast_path_decision(
     message: str,
     *,
@@ -2180,6 +2244,19 @@ def _catalog_fast_path_decision(
 def _direct_picker_alias(message: str) -> bool:
     compact = message.strip().lower().strip(" \t\r\n!?,;:")
     return compact in _DIRECT_PICKER_ALIASES
+
+
+def _leading_omh_command_remainder(message: str) -> str | None:
+    parts = message.strip().split(None, 1)
+    if len(parts) != 2:
+        return None
+    head, remainder = parts
+    if head.lower() not in ("/omh", "./omh"):
+        return None
+    remainder = remainder.strip()
+    if not remainder:
+        return None
+    return remainder
 
 
 def _specific_capability_fast_path_result(

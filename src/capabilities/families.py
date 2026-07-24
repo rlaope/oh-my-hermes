@@ -160,6 +160,7 @@ _FAMILY_DEFINITIONS = (
 
 _WORKFLOW_FAMILY_OVERRIDES = {
     "oh-my-hermes": "plan_and_decide",
+    "meta-router": "plan_and_decide",
     "deep-interview": "plan_and_decide",
     "plan": "plan_and_decide",
     "ralplan": "plan_and_decide",

@@ -86,6 +86,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "prepare_voice_operator_card": "preparing a voice-operator card",
     "prepare_workspace_audit": "preparing a workspace audit",
     "present_app_delivery_loop": "preparing the app delivery loop",
+    "present_meta_route": "presenting the chosen workflow route",
     "present_plan": "preparing a reviewed plan",
     "refresh_status": "refreshing observed status",
     "record_missed_route": "recording a missed-route improvement candidate",

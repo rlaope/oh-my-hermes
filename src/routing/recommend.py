@@ -406,6 +406,11 @@ _DEFAULT_POLICY = RecommendationPolicy(
     wrapper_guidance="Route conservatively and show the missing decision before claiming work started.",
 )
 _SKILL_POLICIES = {
+    "meta-router": RecommendationPolicy(
+        next_action="present_meta_route",
+        evidence_boundary="A meta-routing decision names the workflow(s) to run; it is not execution, review, CI, or merge evidence.",
+        wrapper_guidance="Reason over the /omh remainder, consult the live catalog with omh recommend --json, exclude meta-router itself, and present the chosen workflow or chain with its evidence boundary.",
+    ),
     "cancel": RecommendationPolicy(
         next_action="cancel",
         evidence_boundary="Cancellation is observed only after the wrapper records the state change.",

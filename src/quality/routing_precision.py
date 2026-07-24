@@ -1444,6 +1444,42 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "run_setup_guide",
         "setup_guide",
     ),
+    RoutingInterventionCase(
+        "meta-router-slash-imperative-en",
+        "English /omh imperative opens the meta-router fast-path",
+        "/omh add a dark mode toggle to the settings page",
+        "dispatch",
+        "meta-router",
+        "present_meta_route",
+        "meta_route",
+    ),
+    RoutingInterventionCase(
+        "meta-router-dotslash-imperative-korean",
+        "Korean ./omh imperative opens the meta-router fast-path",
+        "./omh 로그인 화면 리팩터링부터 테스트까지 해줘",
+        "dispatch",
+        "meta-router",
+        "present_meta_route",
+        "meta_route",
+    ),
+    RoutingInterventionCase(
+        "meta-router-slash-chain-imperative",
+        "English /omh chained imperative opens the meta-router fast-path",
+        "/omh migrate this service off the deprecated API and add regression tests",
+        "dispatch",
+        "meta-router",
+        "present_meta_route",
+        "meta_route",
+    ),
+    RoutingInterventionCase(
+        "meta-router-bare-omh-regression-pin",
+        "Bare omh one-cycle delivery stays in ultraprocess, not meta-router",
+        "omh add a dark mode toggle and ship it in one cycle",
+        "dispatch",
+        "ultraprocess",
+        "choose_executor",
+        "handoff",
+    ),
 )
 
 

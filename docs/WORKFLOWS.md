@@ -87,9 +87,66 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Treat partial `./`, `/`, `./o`, or `/om` input as command preview; show one top-level `omh` entry before opening the workflow picker.
   - Use `omh chat route-hint` when a wrapper needs a metadata-only workflow preview without plugin load or shell catalog approval.
   - Use `omh chat native-command` contracts for Discord, Slack, Telegram, or Hermes command/menu registration; treat registration and button rendering as adapter-owned observed evidence.
-  - Treat bare `./omh`, `/omh`, `./skills`, or `/skills` as a workflow picker request, not as implementation intent.
+  - Treat bare `./omh`, `/omh`, `./skills`, or `/skills` as a workflow picker request, not as implementation intent; a `/omh <task>` command with an imperative remainder is a meta-router request, not a picker request.
   - Ask one concise question when routing signals conflict.
   - Do not claim to override Hermes core routing.
+
+### meta-router
+
+[omh] Meta-routing guidance for a leading /omh command: reason over the imperative task, consult the live workflow catalog, and select or chain the right workflow(s).
+
+- Category: `router`
+- Phase: `meta-routing`
+- Hermes role: `guide`
+- Quality tier: `routing-gated`
+- Exposure: `direct_skill`
+- Install visibility: `true`
+- Docs visibility: `primary_workflow_skill`
+- Compatibility alias: `false`
+- Preferred usage: Use as an installed Hermes workflow skill when this explicit workflow is the clearest user-facing handle.
+- Handoff policy: Reason over the /omh remainder, select or chain concrete workflows from the live catalog, and prepare a selected executor/runtime handoff only when the chosen chain requires code edits; do not execute code.
+- Why this exists: `meta-router` exists to turn a leading /omh command into a live catalog lookup: it reasons over the imperative task, selects or chains concrete workflows, and keeps the decision inside the observed/prepared evidence boundary instead of guessing from memory.
+- Use when: Use when the user opens a message with the /omh or ./omh command followed by an imperative task; reason over the task, consult the live OMH catalog, and select or chain the right workflow(s).
+- Do not use when:
+  - The /omh token is not the leading command token.
+  - The message is a bare picker alias or an OMH catalog/entrypoint question — those belong to oh-my-hermes.
+- Strong routing signals: `/omh`, `./omh`
+- Good example:
+  - Prompt: /omh migrate this service off the deprecated API and add tests
+  - Expected behavior: Consult `omh recommend` on the remainder, then chain the recommended plan and executor workflows with explicit observed-vs-prepared evidence boundaries.
+  - Why: A leading /omh command with an imperative remainder is a meta-routing request that reasons over the live catalog rather than a memorized list.
+- Bad example:
+  - Prompt: omh add dark mode
+  - Expected behavior: Do not meta-route; a bare `omh` alias without a leading slash command is a picker/other-lane signal.
+  - Why: Meta-routing triggers only on a leading /omh or ./omh command token, not on a bare alias.
+- Quality bar:
+  - Route only from a leading `/omh` or `./omh` command token with a task remainder, never from a bare alias.
+  - Consult the live catalog on every decision instead of a memorized or embedded skill list.
+  - Exclude `meta-router` from its own recommendation output and choose the next best concrete workflow or chain.
+  - Report the routing decision as prepared guidance, not execution, review, CI, or merge evidence.
+- Completion checklist:
+  - The selected workflow, confidence reason, evidence boundary, and user-facing next action are named.
+  - Low-confidence or conflicting signals return a picker or clarification instead of forced routing.
+  - Catalog answers are rendered without shell approval when wrapper metadata is sufficient.
+- Recovery notes:
+  - If routing signals conflict, show the compact picker or ask one clarifying question.
+  - If wrapper metadata is unavailable, keep the recommendation advisory and avoid runtime claims.
+- Required inputs:
+  - leading /omh or ./omh command with an imperative remainder
+  - live OMH catalog via `omh recommend`/`omh docs workflows`
+  - available shell/CLI or plugin tool surface
+- Expected outputs:
+  - selected workflow or chain with rationale
+  - consulted catalog evidence from the recommend/docs output
+  - observed-vs-prepared evidence boundary for the routing decision
+- Artifact expectations:
+  - runtime run record when a wrapper can observe the meta-routing decision
+- Safety rules:
+  - Trigger only on a leading `/omh` or `./omh` command token with a task remainder; bare `/omh`, `./omh`, or `omh` without a slash is a picker/other-lane signal, not meta-routing.
+  - Consult the live catalog with `omh recommend "<remainder>" --json`; escalate to `omh docs workflows --json` when the remainder spans multiple stages or the top recommendation is low-confidence. Never rely on a memorized or embedded skill list — the catalog changes after `omh update`.
+  - Never select `meta-router` itself from the recommendation output; exclude it and route to the next best concrete workflow or chain.
+  - Report the selected workflow(s), why, and the observed-vs-prepared evidence boundary; a routing decision is not execution, review, CI, or merge evidence.
+  - If no shell/CLI surface is available, ask the wrapper to run `omh recommend`/`omh docs workflows` or use the plugin tool surface; never guess the catalog from memory — say the catalog is unavailable and offer the workflow picker instead.
 
 ### ralph
 

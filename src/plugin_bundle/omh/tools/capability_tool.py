@@ -87,6 +87,7 @@ STANDALONE_CAPABILITY_FAMILIES = (
             "loop",
             "strategy-brief",
             "oh-my-hermes",
+            "meta-router",
             "plan",
             "ralph",
             "performance-goal",
