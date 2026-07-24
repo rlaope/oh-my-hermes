@@ -624,7 +624,7 @@ def cmd_coding_fanout_validate(args: argparse.Namespace) -> int:
 
 def cmd_coding_fanout_show(args: argparse.Namespace) -> int:
     from ..coding.fanout_artifacts import read_fanout_contract
-    from ..runtime.artifacts import read_state_result
+    from ..runtime.artifacts import show_run
 
     paths = _paths(args)
     try:
@@ -632,19 +632,31 @@ def cmd_coding_fanout_show(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         raise OmhError(f"fanout contract not found: {exc}") from exc
 
-    state = read_state_result(paths)
-    runs = state.get("runs", {}) if isinstance(state, dict) else {}
     units = contract.get("units", [])
     status_by_unit: dict[str, object] = {}
     for unit in units:
         if not isinstance(unit, dict):
             continue
         run_ref = str(unit.get("run_ref", ""))
-        run = runs.get(run_ref) if isinstance(runs, dict) else None
-        observed = run.get("status") if isinstance(run, dict) else None
+        observed = "not_observed"
+        latest_event = ""
+        if run_ref and (paths.runtime_runs_dir / run_ref / "run.json").exists():
+            try:
+                shown = show_run(paths, run_ref)
+            except (OSError, ValueError, KeyError):
+                shown = None
+            if isinstance(shown, dict):
+                events = [event for event in shown.get("journal_events", []) or [] if isinstance(event, dict)]
+                if events:
+                    latest = events[-1]
+                    latest_event = str(latest.get("event", ""))
+                    observed = str(latest.get("status", "not_observed"))
+                else:
+                    observed = "run_recorded_no_observations"
         status_by_unit[str(unit.get("unit_id"))] = {
             "prepared_status": unit.get("status", "prepared"),
-            "observed_run_status": observed or "not_observed",
+            "observed_run_status": observed,
+            "latest_observed_event": latest_event,
             "run_ref": run_ref,
         }
     _print_json(
@@ -656,6 +668,46 @@ def cmd_coding_fanout_show(args: argparse.Namespace) -> int:
             "claim_boundary": contract.get("claim_boundary", ""),
         }
     )
+    return 0
+
+
+def cmd_coding_fanout_dispatch(args: argparse.Namespace) -> int:
+    import subprocess as _subprocess
+
+    from ..coding.fanout_artifacts import read_fanout_contract
+    from ..coding.fanout_dispatch import dispatch_fanout
+
+    paths = _paths(args)
+    try:
+        contract = read_fanout_contract(paths, args.fanout_id)
+    except (OSError, ValueError) as exc:
+        raise OmhError(f"fanout contract not found: {exc}") from exc
+    goal_text = sys.stdin.read() if args.goal_file == "-" else Path(args.goal_file).expanduser().read_text(encoding="utf-8")
+    repo_root = Path(args.repo_root).expanduser().resolve()
+    resolved = _subprocess.run(
+        ["git", "rev-parse", args.base_ref],
+        cwd=str(repo_root),
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    if resolved.returncode != 0:
+        raise OmhError(f"could not resolve --base-ref {args.base_ref!r} in {repo_root}: {resolved.stderr.strip()}")
+    try:
+        summary = dispatch_fanout(
+            paths,
+            contract,
+            goal_text=goal_text,
+            repo_root=repo_root,
+            base_sha=resolved.stdout.strip(),
+            concurrency=args.concurrency,
+            timeout=args.timeout,
+            only_units=args.unit,
+            dry_run=bool(args.dry_run),
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(summary)
     return 0
 
 
@@ -692,6 +744,20 @@ def _add_coding_commands(sub) -> None:
     fanout_show = fanout_sub.add_parser("show")
     fanout_show.add_argument("fanout_id")
     fanout_show.set_defaults(func=cmd_coding_fanout_show)
+
+    fanout_dispatch = fanout_sub.add_parser(
+        "dispatch",
+        help="Opt-in local bridge: spawn each unit's local agent CLI in an isolated worktree (never merges).",
+    )
+    fanout_dispatch.add_argument("fanout_id")
+    fanout_dispatch.add_argument("--goal-file", required=True, help="File with the goal text frozen at prepare time ('-' for stdin).")
+    fanout_dispatch.add_argument("--repo-root", default=".", help="Repository the unit worktrees branch from.")
+    fanout_dispatch.add_argument("--base-ref", default="HEAD", help="Ref resolved once to a SHA all unit branches start from.")
+    fanout_dispatch.add_argument("--concurrency", type=int, default=2)
+    fanout_dispatch.add_argument("--timeout", type=int, default=1800, help="Per-unit subprocess timeout in seconds.")
+    fanout_dispatch.add_argument("--unit", action="append", default=None, help="Dispatch only these unit ids (repeatable).")
+    fanout_dispatch.add_argument("--dry-run", action="store_true", help="Resolve readiness, argv, and worktree paths; spawn nothing.")
+    fanout_dispatch.set_defaults(func=cmd_coding_fanout_dispatch)
 
     delegate = coding_sub.add_parser("delegate")
     delegate.add_argument("message", nargs="*", help="Coding task description to prepare for executor delegation.")

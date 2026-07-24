@@ -367,7 +367,10 @@ def prompt_invocation_for_profile(profile: str) -> dict[str, str]:
         "tool_label": labels[profile],
         "dispatch_text_template": templates[profile],
         "message_placeholder": "{message}",
-        "wrapper_note": "Copy or pass this prompt only when the user chooses that executor; OMH does not dispatch it.",
+        "wrapper_note": (
+            "Copy or pass this prompt only when the user chooses that executor; this chat prompt handoff does not "
+            "dispatch it. Only the explicit opt-in `omh coding fanout dispatch` bridge may spawn a local agent CLI."
+        ),
     }
 
 
