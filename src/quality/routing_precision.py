@@ -1480,6 +1480,15 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "choose_executor",
         "handoff",
     ),
+    RoutingInterventionCase(
+        "meta-router-catalog-question-remainder-picker",
+        "A /omh catalog question remainder opens the picker, not meta-router",
+        "/omh what workflows are available?",
+        "dispatch",
+        "oh-my-hermes",
+        "choose_skill",
+        "skill_picker",
+    ),
 )
 
 
