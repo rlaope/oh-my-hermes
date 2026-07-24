@@ -1,0 +1,252 @@
+[
+ {
+  "example_prompt": "Make onboarding feel smoother.",
+  "id": "plan_and_decide",
+  "label": "Plan and decide",
+  "next_action": "clarify_or_prepare_plan",
+  "not_evidence_until_observed": [
+   "plan acceptance",
+   "executor dispatch",
+   "verification"
+  ],
+  "owner_role": "planner",
+  "primary_workflows": [
+   "deep-interview",
+   "ralplan",
+   "codebase-onboarding",
+   "codegraph-refresh",
+   "ultragoal",
+   "loop",
+   "strategy-brief",
+   "oh-my-hermes",
+   "meta-router",
+   "plan",
+   "ralph",
+   "performance-goal"
+  ],
+  "route_summary": "Clarify the goal, choose the planning depth, and show the next concrete action.",
+  "source_examples": [
+   "ambitious goal -> loopability check -> loop or ultraprocess -> verification status",
+   "new repo -> codebase-onboarding -> reading path -> first-task runway",
+   "stale code index -> codegraph-refresh -> summary or task-scoped handoff",
+   "fuzzy feature request -> deep-interview -> ralplan -> accepted plan"
+  ],
+  "source_lanes": [
+   "intent_to_plan"
+  ],
+  "use_for": "Ambiguous goals, planning, decisions, and loopable work before execution."
+ },
+ {
+  "example_prompt": "Find papers, datasets, and repos for this topic.",
+  "id": "learn_and_gather",
+  "label": "Learn and gather",
+  "next_action": "gather_source_backed_evidence",
+  "not_evidence_until_observed": [
+   "source retrieval",
+   "source verification",
+   "decision approval"
+  ],
+  "owner_role": "researcher",
+  "primary_workflows": [
+   "source-finder",
+   "web-research",
+   "paper-learning",
+   "data-analysis",
+   "research-department",
+   "feedback-triage",
+   "best-practice-research",
+   "autoresearch-goal",
+   "research-brief",
+   "meeting-brief"
+  ],
+  "route_summary": "Name the source/synthesis split before summarizing or planning from the material.",
+  "source_examples": [
+   "customer signal -> feedback-triage -> investigation plan -> coding handoff -> status",
+   "source discovery -> source-finder -> candidate set -> downstream workflow",
+   "supplied CSV/logs -> data-analysis -> scope, schema, method, and evidence-limited findings",
+   "supplied paper -> paper-learning -> level choice -> coverage ledger -> section walkthrough"
+  ],
+  "source_lanes": [
+   "research_and_ops"
+  ],
+  "use_for": "Source finding, web research, papers, customer signals, and briefings."
+ },
+ {
+  "example_prompt": "Capture this decision.",
+  "id": "retain_knowledge",
+  "label": "Retain knowledge",
+  "next_action": "prepare_retained_knowledge_guidance",
+  "not_evidence_until_observed": [
+   "external write",
+   "memory mutation",
+   "connector I/O",
+   "source verification"
+  ],
+  "owner_role": "memory-keeper",
+  "primary_workflows": [
+   "wiki"
+  ],
+  "route_summary": "Prepare notes and hints without claiming writes.",
+  "source_examples": [
+   "decision -> wiki -> write boundary",
+   "external store -> wiki -> retrieval hints"
+  ],
+  "source_lanes": [
+   "retained_knowledge"
+  ],
+  "use_for": "Project wiki notes and external connection hints."
+ },
+ {
+  "example_prompt": "Make a PR summary card for reviewers.",
+  "id": "create_materials_and_visuals",
+  "label": "Create materials and visuals",
+  "next_action": "prepare_material_or_visual_card",
+  "not_evidence_until_observed": [
+   "frontend implementation",
+   "accessibility PASS",
+   "file export",
+   "image generation",
+   "visual QA",
+   "delivery"
+  ],
+  "owner_role": "operator",
+  "primary_workflows": [
+   "design-quality-gate",
+   "frontend",
+   "accessibility-audit",
+   "visual-qa",
+   "materials-package",
+   "report-package",
+   "deliverable-package",
+   "img-summary",
+   "content-operator",
+   "media-input-operator",
+   "design-orchestration"
+  ],
+  "route_summary": "Prepare the copy, prompt, package, or QA contract before claiming generated output.",
+  "source_examples": [
+   "meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence",
+   "broad design request -> design-orchestration -> named specialist lanes -> executor selection -> observed visual evidence",
+   "release notes or customer copy -> content-operator -> source, audience, tone, review, and output slots",
+   "frontend request -> frontend -> visual-qa -> observed render evidence"
+  ],
+  "source_lanes": [
+   "materials_and_visuals"
+  ],
+  "use_for": "Decks, PDFs, spreadsheets, reports, websites, frontend surfaces, accessibility audits, posters, image cards, visual QA, and shareable packages."
+ },
+ {
+  "example_prompt": "Turn this issue into a PR-ready plan and hand it to implementation.",
+  "executor_choices": [
+   "Codex",
+   "Claude Code",
+   "Hermes",
+   "generic runtime"
+  ],
+  "id": "delegate_coding_and_ship",
+  "label": "Delegate coding and ship",
+  "next_action": "prepare_scoped_coding_handoff",
+  "not_evidence_until_observed": [
+   "executor dispatch",
+   "implementation",
+   "review",
+   "CI",
+   "merge"
+  ],
+  "owner_role": "handoff-guide",
+  "primary_workflows": [
+   "idea-to-deploy",
+   "ultraprocess",
+   "executor-runtime-readiness",
+   "dynamic-workflow",
+   "code-review",
+   "build-failure-triage",
+   "verification-gate",
+   "security-safety-review",
+   "team",
+   "ultrawork",
+   "ultraqa",
+   "cto-loop",
+   "deploy-and-monitor",
+   "ai-slop-cleaner",
+   "request-to-handoff",
+   "executor selection",
+   "coding runtime handoff"
+  ],
+  "route_summary": "Choose model, runtime, and coding-owner targets only after scope is concrete, then track observed evidence separately.",
+  "source_examples": [
+   "accepted plan -> ultraprocess -> coding handoff -> review and CI evidence",
+   "failed checks -> build-failure-triage -> minimal fix handoff -> verification-gate",
+   "agentic action risk -> security-safety-review -> safe action policy -> remediation handoff",
+   "risky change -> ralplan -> executor selection -> observed coding-agent status"
+  ],
+  "source_lanes": [
+   "coding_handoff"
+  ],
+  "use_for": "Scoped coding handoffs, dynamic typed target choice across model, runtime, wrapper, tool, and agent surfaces, review, QA, CI, and merge readiness."
+ },
+ {
+  "example_prompt": "Why did this route to plan? Make it a regression.",
+  "id": "operate_and_observe",
+  "label": "Operate and observe",
+  "next_action": "show_status_or_prepare_operating_card",
+  "not_evidence_until_observed": [
+   "schedule creation",
+   "connector I/O",
+   "runtime load",
+   "skill patch approval"
+  ],
+  "owner_role": "tracker",
+  "primary_workflows": [
+   "doctor",
+   "workspace-audit",
+   "production-audit",
+   "automation-blueprint",
+   "github-event-ops",
+   "agent-board",
+   "gateway-intent-card",
+   "voice-operator",
+   "browser-operator",
+   "workspace-file-operator",
+   "command-operator",
+   "connector-operator",
+   "live-info-operator",
+   "agent-ops-review",
+   "agent-debug",
+   "failure-signal-audit",
+   "instinct-ledger",
+   "agent-evaluation",
+   "rules-distill",
+   "context-budget-review",
+   "toolbelt-readiness",
+   "external-connector-readiness",
+   "prompt-import-readiness",
+   "physical-device-readiness",
+   "skill-scout",
+   "skill-health",
+   "workflow-learning",
+   "memory-sync",
+   "achievements",
+   "harness-session-inventory",
+   "ops-observability-card",
+   "model-setup",
+   "parallel-tools",
+   "websearch-setup",
+   "morning-brief",
+   "skill",
+   "ask",
+   "cancel"
+  ],
+  "route_summary": "Show status, repair, schedule, or learning shape without claiming runtime actions happened.",
+  "source_examples": [
+   "daily digest request -> automation-blueprint -> confirmation card -> observed schedule evidence",
+   "long agent run -> context-budget-review -> must-keep pack -> checkpoint plan",
+   "stuck agent run -> agent-debug -> failure capture, diagnosis, and contained recovery",
+   "hidden failure -> failure-signal-audit -> fallback and false-green review"
+  ],
+  "source_lanes": [
+   "automation_and_status"
+  ],
+  "use_for": "Setup repair, status, automation, workflow learning, memory review, and ops cards."
+ }
+]

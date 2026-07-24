@@ -72,6 +72,11 @@ class PluginDistributionTests(unittest.TestCase):
             "*.md",
             pyproject["tool"]["setuptools"]["package-data"]["omh.plugin_bundle.omh.references"],
         )
+        self.assertTrue(root.joinpath("tools", "capability_families.json").is_file())
+        self.assertIn(
+            "capability_families.json",
+            pyproject["tool"]["setuptools"]["package-data"]["omh.plugin_bundle.omh.tools"],
+        )
 
     def test_plugin_yaml_advertises_metadata_tools_and_hooks(self) -> None:
         root = resources.files("omh.plugin_bundle.omh")

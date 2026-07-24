@@ -37,6 +37,7 @@ Source of truth → generated file → regen command → drift gate:
 | Same catalog data | `docs/WORKFLOWS.md` | `uv run python -m omh.cli docs workflows --output docs/WORKFLOWS.md` | `uv run python -m omh.cli docs workflows --check` |
 | Same catalog data | `docs/ROLES.md` | `uv run python -m omh.cli docs roles --output docs/ROLES.md` | `uv run python -m omh.cli docs roles --check` |
 | Demo case engine | `examples/use-cases/g1-g10-demo-cards.json` | `uv run python -m omh.cli cases demo --all --json` output | parse-equality in `tests/test_application_cases.py` |
+| `capability_family_projection()` in `src/capabilities/families.py` | `src/plugin_bundle/omh/tools/capability_families.json` | `uv run python -m omh.cli docs capability-families` | `uv run python -m omh.cli docs capability-families --check`; dict-parity in `tests/test_plugin_capabilities.py` |
 
 Rules:
 
@@ -79,6 +80,10 @@ Rules:
 
 ## Common Pitfalls
 
+- Adding a new installable skill involves more than `catalog.py` — awareness
+  lane + context card, ack/label/card coverage, and the generated
+  capability-family sidecar. Follow `docs/ADDING-A-SKILL.md`; the coverage
+  gates fail with paste-ready instructions when a surface is missed.
 - Hand-editing a generated `skills/*/SKILL.md` — the change is silently lost on
   regeneration and fails the byte gates. Edit `src/skills/catalog.py` /
   `render.py` instead.

@@ -2679,11 +2679,159 @@ class WrapperContractTests(unittest.TestCase):
             if not next_action or next_action in control_actions:
                 continue
             if next_action not in contract.VISIBLE_ACTIONS:
-                missing.append(f"{name}:{next_action}:not-visible")
+                missing.append(
+                    f"{name}: add \"{next_action}\" to VISIBLE_ACTIONS in src/wrapper/contract.py"
+                )
             if next_action not in contract._ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION:
-                missing.append(f"{name}:{next_action}:no-ack-primary")
+                missing.append(
+                    f"{name}: add \"{next_action}\": (\"{next_action}\", \"<Short label>\") to "
+                    "_ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION in src/wrapper/contract.py, and give the "
+                    "skill a dedicated non-ack chat card or the intervention harness will fail it "
+                    "as a generic ack"
+                )
 
         self.assertEqual(missing, [])
+
+    # Frozen legacy sets for the two new-skill coverage gates below. Do NOT
+    # add new entries when a gate fails for a new skill — register the skill
+    # instead (a curated label / a coverage case). Removing entries as legacy
+    # skills gain coverage is welcome.
+    _UNCURATED_LEGACY_NEXT_ACTIONS = frozenset(
+        {
+            # Inline payload-level actions that render via the
+            # `.replace("_", " ")` fallback today. Adding labels for them
+            # would change rendered chat text, which is pinned behavior.
+            "accept_or_revise_plan",
+            "route_coding_request",
+            "state_goal_success_criteria",
+        }
+    )
+    _CARD_COVERAGE_LEGACY_SKILLS = frozenset(
+        {
+            "accessibility-audit",
+            "agent-debug",
+            "agent-evaluation",
+            "browser-operator",
+            "build-failure-triage",
+            "cancel",
+            "codebase-onboarding",
+            "codegraph-refresh",
+            "command-operator",
+            "connector-operator",
+            "content-operator",
+            "context-budget-review",
+            "data-analysis",
+            "design-orchestration",
+            "design-quality-gate",
+            "external-connector-readiness",
+            "failure-signal-audit",
+            "frontend",
+            "harness-session-inventory",
+            "instinct-ledger",
+            "live-info-operator",
+            "media-input-operator",
+            "performance-goal",
+            "physical-device-readiness",
+            "production-audit",
+            "prompt-import-readiness",
+            "rules-distill",
+            "security-safety-review",
+            "skill-health",
+            "skill-scout",
+            "ultraqa",
+            "verification-gate",
+            "visual-qa",
+            "workspace-audit",
+            "workspace-file-operator",
+        }
+    )
+
+    @staticmethod
+    def _uncurated_next_actions(
+        next_actions: set[str], labels: dict[str, str], grandfathered: frozenset[str]
+    ) -> list[str]:
+        return sorted(
+            action
+            for action in next_actions
+            if action and action not in labels and action not in grandfathered
+        )
+
+    @staticmethod
+    def _policy_skills_without_coverage_case(
+        policy_skills: set[str], covered_skills: set[str], grandfathered: frozenset[str]
+    ) -> list[str]:
+        return sorted(
+            skill
+            for skill in policy_skills
+            if skill not in covered_skills and skill not in grandfathered
+        )
+
+    def test_new_policy_and_card_next_actions_have_curated_labels(self) -> None:
+        from omh.routing import recommend
+        from omh.routing.action_copy import NEXT_ACTION_LABELS
+        from omh.wrapper import contract
+
+        policies = {
+            **recommend._SKILL_POLICIES,
+            **recommend._CATEGORY_POLICIES,
+            **recommend._HERMES_ROLE_POLICIES,
+        }
+        card_dicts = (
+            contract._OPERATING_BRIEF_CHAT_CARDS,
+            contract._META_ROUTER_CHAT_CARDS,
+            contract._REVIEW_QUALITY_CHAT_CARDS,
+            contract._DELIVERY_RUNTIME_CHAT_CARDS,
+            contract._WORKFLOW_OPERATIONS_CHAT_CARDS,
+        )
+        next_actions = {policy.next_action for policy in policies.values()}
+        next_actions |= {
+            str(card.get("next_action", "")) for cards in card_dicts for card in cards.values()
+        }
+
+        missing = self._uncurated_next_actions(
+            next_actions, NEXT_ACTION_LABELS, self._UNCURATED_LEGACY_NEXT_ACTIONS
+        )
+        self.assertEqual(
+            missing,
+            [],
+            "next_action(s) without a curated label: add "
+            "'<next_action>': '<gerund phrase>' to NEXT_ACTION_LABELS in "
+            "src/routing/action_copy.py (do not rely on the '_'->' ' fallback "
+            "for new actions).",
+        )
+
+    def test_curated_label_gate_detects_new_uncurated_action(self) -> None:
+        detected = self._uncurated_next_actions(
+            {"prepare_brand_new_surface"}, {}, self._UNCURATED_LEGACY_NEXT_ACTIONS
+        )
+        self.assertEqual(detected, ["prepare_brand_new_surface"])
+
+    def test_new_policy_skills_register_a_chat_card_coverage_case(self) -> None:
+        from omh.quality.chat_card_coverage import CHAT_CARD_COVERAGE_CASES
+        from omh.quality.routing_precision import ROUTING_INTERVENTION_CASES
+        from omh.routing import recommend
+
+        covered = {case.expected_skill for case in CHAT_CARD_COVERAGE_CASES}
+        covered |= {case.expected_workflow for case in ROUTING_INTERVENTION_CASES}
+        missing = self._policy_skills_without_coverage_case(
+            set(recommend._SKILL_POLICIES), covered, self._CARD_COVERAGE_LEGACY_SKILLS
+        )
+        self.assertEqual(
+            missing,
+            [],
+            "Skill(s) with a _SKILL_POLICIES entry but no coverage case: add a "
+            "ChatCardCoverageCase in src/quality/chat_card_coverage.py or a "
+            "RoutingInterventionCase in src/quality/routing_precision.py so the "
+            "harness proves the skill renders a dedicated card, not a generic "
+            "ack. Remember: intervention cases move the exact-count fixtures "
+            "in 4 test files.",
+        )
+
+    def test_card_coverage_gate_detects_new_unregistered_skill(self) -> None:
+        detected = self._policy_skills_without_coverage_case(
+            {"brand-new-skill"}, set(), self._CARD_COVERAGE_LEGACY_SKILLS
+        )
+        self.assertEqual(detected, ["brand-new-skill"])
 
     def test_cancel_routes_to_control_action_without_plan_ui(self) -> None:
         payload = build_chat_interaction_payload("cancel", source="discord")
