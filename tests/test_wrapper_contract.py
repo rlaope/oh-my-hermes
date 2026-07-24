@@ -2708,41 +2708,9 @@ class WrapperContractTests(unittest.TestCase):
     )
     _CARD_COVERAGE_LEGACY_SKILLS = frozenset(
         {
-            "accessibility-audit",
-            "agent-debug",
-            "agent-evaluation",
-            "browser-operator",
-            "build-failure-triage",
+            # `cancel` is a control surface; its cancellation card is
+            # intentionally minimal and stays outside the coverage corpus.
             "cancel",
-            "codebase-onboarding",
-            "codegraph-refresh",
-            "command-operator",
-            "connector-operator",
-            "content-operator",
-            "context-budget-review",
-            "data-analysis",
-            "design-orchestration",
-            "design-quality-gate",
-            "external-connector-readiness",
-            "failure-signal-audit",
-            "frontend",
-            "harness-session-inventory",
-            "instinct-ledger",
-            "live-info-operator",
-            "media-input-operator",
-            "performance-goal",
-            "physical-device-readiness",
-            "production-audit",
-            "prompt-import-readiness",
-            "rules-distill",
-            "security-safety-review",
-            "skill-health",
-            "skill-scout",
-            "ultraqa",
-            "verification-gate",
-            "visual-qa",
-            "workspace-audit",
-            "workspace-file-operator",
         }
     )
 

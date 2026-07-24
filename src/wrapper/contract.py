@@ -2700,6 +2700,98 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "merge",
         ],
     },
+    "design-orchestration": {
+        "kind": "design_orchestration",
+        "headline": "I can prepare a design orchestration contract for this.",
+        "body": (
+            "I will prepare the design direction: goals, audience, constraints, visual references, quality gates, "
+            "and the handoff shape for frontend or materials work. Implementation, browser rendering, accessibility "
+            "PASS, and visual QA stay observed-only."
+        ),
+        "phase": "design_orchestration_prepared",
+        "next_action": "prepare_design_orchestration",
+        "artifact_schema": "design_orchestration_card/v1",
+        "claim_boundary_suffix": "It is not executor selection, implementation, browser rendering, accessibility PASS, visual QA, review, or delivery evidence.",
+        "actions": [
+            {"id": "prepare_design_orchestration", "label": "Prepare design direction", "style": "primary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "capture_design_goals",
+            "collect_visual_references",
+            "define_quality_gates",
+            "prepare_handoff_shape",
+        ],
+        "evidence_not_observed": [
+            "executor selection",
+            "implementation",
+            "browser rendering",
+            "accessibility PASS",
+            "visual QA",
+            "review",
+            "delivery",
+        ],
+    },
+    "external-connector-readiness": {
+        "kind": "external_connector_readiness",
+        "headline": "I can check what this external connector needs before use.",
+        "body": (
+            "I will prepare the readiness card: provider, credential and scope requirements, install and "
+            "configuration steps, capability limits, and the fallback when the connector is unavailable. Connector "
+            "installation, credential validation, provider access, and live API calls stay observed-only."
+        ),
+        "phase": "external_connector_readiness_prepared",
+        "next_action": "prepare_external_connector_readiness",
+        "artifact_schema": "external_connector_readiness_card/v1",
+        "claim_boundary_suffix": "It is not connector installation, credential validation, provider access, API invocation, or live-data retrieval evidence.",
+        "actions": [
+            {"id": "prepare_external_connector_readiness", "label": "Check connector readiness", "style": "primary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "identify_provider_and_scope",
+            "list_credential_requirements",
+            "outline_install_steps",
+            "define_unavailable_fallback",
+        ],
+        "evidence_not_observed": [
+            "connector installation",
+            "credential validation",
+            "provider access",
+            "API invocation",
+            "live-data retrieval",
+        ],
+    },
+    "failure-signal-audit": {
+        "kind": "failure_signal_audit",
+        "headline": "I can audit these failure signals before any fix.",
+        "body": (
+            "I will prepare the audit: signal inventory, grouping by suspected cause, severity and blast radius, "
+            "missing evidence, and the next diagnostic step per group. Remediation, code changes, runtime repair, "
+            "and incident closure stay observed-only."
+        ),
+        "phase": "failure_signal_audit_prepared",
+        "next_action": "prepare_failure_signal_audit",
+        "artifact_schema": "failure_signal_audit_card/v1",
+        "claim_boundary_suffix": "It is not remediation, code modification, runtime repair, incident closure, or verification evidence.",
+        "actions": [
+            {"id": "prepare_failure_signal_audit", "label": "Audit failure signals", "style": "primary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "collect_failure_signals",
+            "group_by_suspected_cause",
+            "rank_severity_and_blast_radius",
+            "name_next_diagnostic_step",
+        ],
+        "evidence_not_observed": [
+            "remediation",
+            "code modification",
+            "runtime repair",
+            "incident closure",
+            "verification",
+        ],
+    },
 }
 
 def _ack_actions_for_next_action(next_action: str) -> list[dict[str, object]]:
