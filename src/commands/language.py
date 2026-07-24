@@ -797,28 +797,6 @@ def language_from_env(default: str = "en") -> str:
     return normalize_language(os.environ.get("OMH_LANG") or os.environ.get("OMH_LANGUAGE") or default)
 
 
-def detect_locale_language(default: str = "en") -> str:
-    """Best-effort OS-locale language detection from env strings.
-
-    Reads `LC_ALL` > `LC_MESSAGES` > `LANG` as plain strings (never calls
-    `locale.setlocale`, which can raise on CI runners without generated
-    locales), then falls back to `locale.getlocale()`; unknown or unset
-    locales resolve to `default`.
-    """
-    candidates = [os.environ.get(name, "") for name in ("LC_ALL", "LC_MESSAGES", "LANG")]
-    try:
-        import locale
-
-        candidates.append((locale.getlocale()[0] or ""))
-    except Exception:
-        pass
-    for raw in candidates:
-        prefix = raw.split(".", 1)[0].split("_", 1)[0].split("-", 1)[0].strip().lower()
-        if prefix in LANGUAGE_CODES:
-            return prefix
-    return default
-
-
 def language_options() -> list[dict[str, str]]:
     return [
         {"choice": str(index), "value": code, "label": LANGUAGE_NAMES[code], "description": ""}

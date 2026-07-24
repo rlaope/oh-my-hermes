@@ -2354,22 +2354,19 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             star.assert_called_once_with()
             self.assertIn("Thanks!", stdout)
 
-    def test_setup_locale_language_detection_precedence(self) -> None:
-        from omh.commands.language import detect_locale_language
-
-        cleared = {name: "" for name in ("OMH_LANG", "OMH_LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG")}
-        with patch.dict(os.environ, {**cleared, "LANG": "ko_KR.UTF-8"}):
-            self.assertEqual(detect_locale_language(), "ko")
-        with patch.dict(os.environ, {**cleared, "LC_ALL": "ja_JP.UTF-8", "LANG": "ko_KR.UTF-8"}):
-            self.assertEqual(detect_locale_language(), "ja")
-        with patch.dict(os.environ, {**cleared, "LANG": "fr_FR.UTF-8"}):
-            self.assertEqual(detect_locale_language(), "en")
+    def test_setup_output_defaults_to_english_regardless_of_os_locale(self) -> None:
+        cleared = {name: "" for name in ("OMH_LANG", "OMH_LANGUAGE", "LC_ALL", "LC_MESSAGES")}
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
             base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
             with patch.dict(os.environ, {**cleared, "LANG": "ko_KR.UTF-8"}):
+                status, stdout, stderr = run_cli(base + ["setup", "--dry-run"], output_json=False)
+            self.assertEqual(status, 0, stderr)
+            self.assertIn("Coding requests:", stdout)
+            self.assertNotIn("코딩 요청", stdout)
+            with patch.dict(os.environ, {**cleared, "OMH_LANG": "ko"}):
                 status, stdout, stderr = run_cli(base + ["setup", "--dry-run"], output_json=False)
             self.assertEqual(status, 0, stderr)
             self.assertIn("코딩 요청", stdout)
