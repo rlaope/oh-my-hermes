@@ -357,6 +357,10 @@ class SkillDefinition:
     bad_example: SkillExample | None = None
     final_checklist: tuple[str, ...] = ()
     recovery_notes: tuple[str, ...] = ()
+    # Render-invisible routing metadata: only consumed by the capability-family
+    # projection. Set it only when the skill's family differs from its
+    # awareness-lane default; leave empty to inherit the lane default.
+    capability_family: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "description", omh_description(self.description))
@@ -1156,6 +1160,7 @@ _DEFINITIONS = [
         "Use when the user asks Hermes to take a concrete task through one full delivery cycle: research/codebase context, reviewed plan, selected implementation handoff, code review, docs sync when needed, and PR preparation.",
         category="process",
         phase="single-cycle-plan-to-pr",
+        capability_family="delegate_coding_and_ship",
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Keep the one-cycle process orchestration, source/codebase research, planning, review framing, docs-sync checks, PR narration, and evidence boundaries in Hermes; convert implementation into a selected executor/runtime handoff such as Codex, Claude Code, OMX/OMO/OMC, another coding agent, or explicit Hermes coding runtime only when the user accepts that owner.",
@@ -1813,6 +1818,7 @@ _DEFINITIONS = [
         "Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.",
         category="strategy",
         phase="brief",
+        capability_family="plan_and_decide",
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Keep strategy synthesis in Hermes; do not create implementation handoff until a decision is accepted and code work is explicit.",
@@ -1984,6 +1990,7 @@ _DEFINITIONS = [
         "Use when Hermes should summarize observed status, risks, blockers, priorities, and follow-up actions for recurring operating work.",
         category="operations",
         phase="status-review",
+        capability_family="operate_and_observe",
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Keep operating review and status narration in Hermes; delegate code fixes only from explicit accepted follow-up items.",
@@ -2028,6 +2035,7 @@ _DEFINITIONS = [
         "Use when Hermes should prepare or maintain recurring operating records such as meetings, scrums, sprint plans, retrospectives, decisions, and follow-ups.",
         category="operations",
         phase="rhythm-history",
+        capability_family="operate_and_observe",
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Keep cadence records, minutes scaffolds, decisions, and follow-up history in Hermes; delegate implementation only from separately accepted action items.",
@@ -4078,6 +4086,7 @@ _DEFINITIONS = [
         "Use when Hermes should review incident notes, SLOs, error budgets, or service reliability evidence while keeping remediation and closure claims observed.",
         category="reliability",
         phase="incident-and-slo-review",
+        capability_family="operate_and_observe",
         hermes_role="retained-cognition",
         delegation_boundary="retained-catalog-intent",
         handoff_policy="Keep incident/SLO/error-budget review in Hermes; prepare remediation handoffs only after an accepted fix direction exists and record closure only from observed evidence.",

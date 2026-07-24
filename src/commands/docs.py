@@ -63,6 +63,35 @@ def cmd_docs_roles(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_docs_capability_families(args: argparse.Namespace) -> int:
+    from ..capabilities.families import standalone_capability_families_json
+
+    content = standalone_capability_families_json()
+    output = (
+        Path(args.output).expanduser().resolve()
+        if args.output
+        else _default_capability_families_path()
+    )
+    if args.check:
+        try:
+            current = output.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise OmhError(f"capability families sidecar check failed: {exc}") from exc
+        if current != content:
+            raise OmhError(f"capability families sidecar is stale: {output}")
+        _print_json({"ok": True, "checked": str(output)})
+        return 0
+    atomic_write_text(output, content)
+    _print_json({"written": str(output)})
+    return 0
+
+
+def _default_capability_families_path() -> Path:
+    from ..plugin_bundle.omh import tools as plugin_tools
+
+    return (Path(plugin_tools.__file__).resolve().parent / "capability_families.json").resolve()
+
+
 def _tap_skills_check_payload(skills_root: Path) -> dict[str, object]:
     templates = {template.name: template for template in builtin_skill_templates()}
     reference_templates = {
@@ -126,6 +155,14 @@ def _add_docs_commands(sub) -> None:
     docs_roles.add_argument("--output", default=None)
     docs_roles.add_argument("--check", action="store_true")
     docs_roles.set_defaults(func=cmd_docs_roles)
+
+    docs_capability_families = docs_sub.add_parser(
+        "capability-families",
+        help="Write or check the generated plugin-bundle capability-family sidecar JSON.",
+    )
+    docs_capability_families.add_argument("--output", default=None)
+    docs_capability_families.add_argument("--check", action="store_true")
+    docs_capability_families.set_defaults(func=cmd_docs_capability_families)
 
 
 def _add_harness_commands(sub) -> None:

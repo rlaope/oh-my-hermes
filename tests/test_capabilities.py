@@ -70,8 +70,34 @@ class CapabilityManifestTests(unittest.TestCase):
         catalog_surfaces = {definition.name for definition in builtin_definitions()}
         conceptual_surfaces = {"request-to-handoff", "executor selection", "coding runtime handoff", "dynamic-workflow"}
 
-        self.assertFalse(generated_skills - lane_skills)
+        uncovered = sorted(generated_skills - lane_skills)
+        self.assertFalse(
+            uncovered,
+            "Installable skill(s) missing from awareness lanes: "
+            f"{uncovered}. For each, add the skill name to the matching lane "
+            "'skills' list inside awareness_primer_payload() in "
+            "src/plugin_bundle/omh/awareness.py, keeping the curated lane order.",
+        )
         self.assertLessEqual(lane_skills - catalog_surfaces, conceptual_surfaces)
+
+        from omh.plugin_bundle.omh.awareness import _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW
+
+        # The router itself and the cancel control surface intentionally have
+        # no workflow context card.
+        context_card_exempt = {"oh-my-hermes", "cancel"}
+        missing_context_cards = sorted(
+            skill
+            for skill in lane_skills & generated_skills
+            if skill not in _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW and skill not in context_card_exempt
+        )
+        self.assertFalse(
+            missing_context_cards,
+            "Lane skill(s) missing a workflow context card lane: "
+            f"{missing_context_cards}. Add '<skill>': '<lane_id>' to "
+            "_WORKFLOW_CONTEXT_CARD_BY_WORKFLOW in "
+            "src/plugin_bundle/omh/awareness.py (use the lane the skill "
+            "belongs to in awareness_primer_payload()).",
+        )
 
     def test_capability_families_are_user_facing_front_door_projection(self) -> None:
         projection = capability_family_projection()

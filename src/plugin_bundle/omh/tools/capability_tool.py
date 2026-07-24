@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Protocol, TypedDict
 
 from ..awareness import awareness_lane_examples, awareness_primer_payload
@@ -71,180 +72,26 @@ LANE_OWNER_ROLES = {
     "automation_and_status": "tracker",
     "coding_handoff": "handoff-guide",
 }
-STANDALONE_CAPABILITY_FAMILIES = (
-    {
-        "id": "plan_and_decide",
-        "label": "Plan and decide",
-        "owner_role": "planner",
-        "source_lanes": ("intent_to_plan",),
-        "use_for": "Ambiguous goals, planning, decisions, and loopable work before execution.",
-        "primary_workflows": (
-            "deep-interview",
-            "ralplan",
-            "codebase-onboarding",
-            "codegraph-refresh",
-            "ultragoal",
-            "loop",
-            "strategy-brief",
-            "oh-my-hermes",
-            "meta-router",
-            "plan",
-            "ralph",
-            "performance-goal",
-        ),
-        "next_action": "clarify_or_prepare_plan",
-        "example_prompt": "Make onboarding feel smoother.",
-        "route_summary": "Clarify the goal, choose the planning depth, and show the next concrete action.",
-        "not_evidence_until_observed": ("plan acceptance", "executor dispatch", "verification"),
-    },
-    {
-        "id": "learn_and_gather",
-        "label": "Learn and gather",
-        "owner_role": "researcher",
-        "source_lanes": ("research_and_ops",),
-        "use_for": "Source finding, web research, papers, customer signals, and briefings.",
-        "primary_workflows": (
-            "source-finder",
-            "web-research",
-            "paper-learning",
-            "data-analysis",
-            "research-department",
-            "feedback-triage",
-            "best-practice-research",
-            "autoresearch-goal",
-            "research-brief",
-            "meeting-brief",
-        ),
-        "next_action": "gather_source_backed_evidence",
-        "example_prompt": "Find papers, datasets, and repos for this topic.",
-        "route_summary": "Name the source/synthesis split before summarizing or planning from the material.",
-        "not_evidence_until_observed": ("source retrieval", "source verification", "decision approval"),
-    },
-    {
-        "id": "retain_knowledge",
-        "label": "Retain knowledge",
-        "owner_role": "memory-keeper",
-        "source_lanes": ("retained_knowledge",),
-        "use_for": "Project wiki notes and external connection hints.",
-        "primary_workflows": ("wiki",),
-        "next_action": "prepare_retained_knowledge_guidance",
-        "example_prompt": "Capture this decision.",
-        "route_summary": "Prepare notes and hints without claiming writes.",
-        "not_evidence_until_observed": ("external write", "memory mutation", "connector I/O", "source verification"),
-    },
-    {
-        "id": "create_materials_and_visuals",
-        "label": "Create materials and visuals",
-        "owner_role": "operator",
-        "source_lanes": ("materials_and_visuals",),
-        "use_for": "Decks, PDFs, spreadsheets, reports, websites, frontend surfaces, accessibility audits, posters, image cards, visual QA, and shareable packages.",
-        "primary_workflows": (
-            "design-quality-gate",
-            "frontend",
-            "accessibility-audit",
-            "visual-qa",
-            "materials-package",
-            "report-package",
-            "deliverable-package",
-            "img-summary",
-            "content-operator",
-            "media-input-operator",
-            "design-orchestration",
-        ),
-        "next_action": "prepare_material_or_visual_card",
-        "example_prompt": "Make a PR summary card for reviewers.",
-        "route_summary": "Prepare the copy, prompt, package, or QA contract before claiming generated output.",
-        "not_evidence_until_observed": ("frontend implementation", "accessibility PASS", "file export", "image generation", "visual QA", "delivery"),
-    },
-    {
-        "id": "delegate_coding_and_ship",
-        "label": "Delegate coding and ship",
-        "owner_role": "handoff-guide",
-        "source_lanes": ("coding_handoff",),
-        "use_for": (
-            "Scoped coding handoffs, dynamic typed target choice across model, runtime, wrapper, tool, and agent "
-            "surfaces, review, QA, CI, and merge readiness."
-        ),
-        "primary_workflows": (
-            "idea-to-deploy",
-            "ultraprocess",
-            "executor-runtime-readiness",
-            "dynamic-workflow",
-            "code-review",
-            "build-failure-triage",
-            "verification-gate",
-            "security-safety-review",
-            "team",
-            "ultrawork",
-            "ultraqa",
-            "cto-loop",
-            "deploy-and-monitor",
-            "ai-slop-cleaner",
-            "request-to-handoff",
-            "executor selection",
-            "coding runtime handoff",
-        ),
-        "executor_choices": ("Codex", "Claude Code", "Hermes", "generic runtime"),
-        "next_action": "prepare_scoped_coding_handoff",
-        "example_prompt": "Turn this issue into a PR-ready plan and hand it to implementation.",
-        "route_summary": (
-            "Choose model, runtime, and coding-owner targets only after scope is concrete, then track observed "
-            "evidence separately."
-        ),
-        "not_evidence_until_observed": ("executor dispatch", "implementation", "review", "CI", "merge"),
-    },
-    {
-        "id": "operate_and_observe",
-        "label": "Operate and observe",
-        "owner_role": "tracker",
-        "source_lanes": ("automation_and_status",),
-        "use_for": "Setup repair, status, automation, workflow learning, memory review, and ops cards.",
-        "primary_workflows": (
-            "doctor",
-            "workspace-audit",
-            "production-audit",
-            "automation-blueprint",
-            "github-event-ops",
-            "agent-board",
-            "gateway-intent-card",
-            "voice-operator",
-            "browser-operator",
-            "workspace-file-operator",
-            "command-operator",
-            "connector-operator",
-            "live-info-operator",
-            "agent-ops-review",
-            "agent-debug",
-            "failure-signal-audit",
-            "instinct-ledger",
-            "agent-evaluation",
-            "rules-distill",
-            "context-budget-review",
-            "toolbelt-readiness",
-            "external-connector-readiness",
-            "prompt-import-readiness",
-            "physical-device-readiness",
-            "skill-scout",
-            "skill-health",
-            "workflow-learning",
-            "memory-sync",
-            "achievements",
-            "harness-session-inventory",
-            "ops-observability-card",
-            "model-setup",
-            "parallel-tools",
-            "websearch-setup",
-            "morning-brief",
-            "skill",
-            "ask",
-            "cancel",
-        ),
-        "next_action": "show_status_or_prepare_operating_card",
-        "example_prompt": "Why did this route to plan? Make it a regression.",
-        "route_summary": "Show status, repair, schedule, or learning shape without claiming runtime actions happened.",
-        "not_evidence_until_observed": ("schedule creation", "connector I/O", "runtime load", "skill patch approval"),
-    },
-)
+def _load_standalone_capability_families() -> tuple[dict[str, object], ...]:
+    """Load the generated family sidecar written by `omh docs capability-families`.
+
+    The standalone bundle cannot import omh core, so the canonical
+    capability-family projection is vendored as `capability_families.json`
+    next to this module and kept in sync by the
+    `omh docs capability-families --check` drift gate. A missing or invalid
+    sidecar degrades to an empty tuple instead of breaking bundle import.
+    """
+    path = Path(__file__).resolve().with_name("capability_families.json")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ()
+    if not isinstance(payload, list):
+        return ()
+    return tuple(item for item in payload if isinstance(item, dict))
+
+
+STANDALONE_CAPABILITY_FAMILIES = _load_standalone_capability_families()
 STANDALONE_LANE_PLAYBOOK_IDS = {
     "intent_to_plan": ("request-to-handoff", "safe-feature-change"),
     "research_and_ops": ("source-finder", "research-department", "source-backed-research", "feedback-triage"),

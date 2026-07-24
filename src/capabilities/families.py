@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 from typing import Iterable, cast
 
 from ..plugin_bundle.omh.awareness import awareness_lane_examples, awareness_primer_payload
-from ..skills.catalog import installable_skill_names
+from ..skills.catalog import builtin_definitions, installable_skill_names
 
 CAPABILITY_FAMILY_SCHEMA_VERSION = "omh_capability_families/v1"
 
@@ -158,97 +159,35 @@ _FAMILY_DEFINITIONS = (
     },
 )
 
-_WORKFLOW_FAMILY_OVERRIDES = {
-    "oh-my-hermes": "plan_and_decide",
-    "meta-router": "plan_and_decide",
-    "deep-interview": "plan_and_decide",
-    "plan": "plan_and_decide",
-    "ralplan": "plan_and_decide",
-    "ralph": "plan_and_decide",
-    "ultragoal": "plan_and_decide",
-    "loop": "plan_and_decide",
-    "performance-goal": "plan_and_decide",
-    "strategy-brief": "plan_and_decide",
-    "codebase-onboarding": "plan_and_decide",
-    "codegraph-refresh": "plan_and_decide",
-    "source-finder": "learn_and_gather",
-    "data-analysis": "learn_and_gather",
-    "command-operator": "operate_and_observe",
-    "connector-operator": "operate_and_observe",
-    "live-info-operator": "operate_and_observe",
-    "workspace-audit": "operate_and_observe",
-    "production-audit": "operate_and_observe",
-    "agent-evaluation": "operate_and_observe",
-    "rules-distill": "operate_and_observe",
-    "context-budget-review": "operate_and_observe",
-    "agent-debug": "operate_and_observe",
-    "failure-signal-audit": "operate_and_observe",
-    "instinct-ledger": "operate_and_observe",
-    "skill-scout": "operate_and_observe",
-    "skill-health": "operate_and_observe",
-    "web-research": "learn_and_gather",
-    "best-practice-research": "learn_and_gather",
-    "autoresearch-goal": "learn_and_gather",
-    "research-brief": "learn_and_gather",
-    "research-department": "learn_and_gather",
-    "paper-learning": "learn_and_gather",
-    "feedback-triage": "learn_and_gather",
-    "meeting-brief": "learn_and_gather",
-    "wiki": "retain_knowledge",
-    "materials-package": "create_materials_and_visuals",
-    "report-package": "create_materials_and_visuals",
-    "deliverable-package": "create_materials_and_visuals",
-    "content-operator": "create_materials_and_visuals",
-    "media-input-operator": "create_materials_and_visuals",
-    "img-summary": "create_materials_and_visuals",
-    "design-orchestration": "create_materials_and_visuals",
-    "frontend": "create_materials_and_visuals",
-    "accessibility-audit": "create_materials_and_visuals",
-    "visual-qa": "create_materials_and_visuals",
-    "idea-to-deploy": "delegate_coding_and_ship",
-    "ultraprocess": "delegate_coding_and_ship",
-    "code-review": "delegate_coding_and_ship",
-    "build-failure-triage": "delegate_coding_and_ship",
-    "verification-gate": "delegate_coding_and_ship",
-    "security-safety-review": "delegate_coding_and_ship",
-    "team": "delegate_coding_and_ship",
-    "ultrawork": "delegate_coding_and_ship",
-    "ultraqa": "delegate_coding_and_ship",
-    "ai-slop-cleaner": "delegate_coding_and_ship",
-    "executor-runtime-readiness": "delegate_coding_and_ship",
-    "dynamic-workflow": "delegate_coding_and_ship",
-    "request-to-handoff": "delegate_coding_and_ship",
-    "executor selection": "delegate_coding_and_ship",
-    "coding runtime handoff": "delegate_coding_and_ship",
-    "cto-loop": "delegate_coding_and_ship",
-    "deploy-and-monitor": "delegate_coding_and_ship",
-    "github-event-ops": "operate_and_observe",
-    "automation-blueprint": "operate_and_observe",
-    "agent-board": "operate_and_observe",
-    "gateway-intent-card": "operate_and_observe",
-    "voice-operator": "operate_and_observe",
-    "browser-operator": "operate_and_observe",
-    "workspace-file-operator": "operate_and_observe",
-    "command-operator": "operate_and_observe",
-    "connector-operator": "operate_and_observe",
-    "live-info-operator": "operate_and_observe",
-    "external-connector-readiness": "operate_and_observe",
-    "prompt-import-readiness": "operate_and_observe",
-    "physical-device-readiness": "operate_and_observe",
-    "toolbelt-readiness": "operate_and_observe",
-    "harness-session-inventory": "operate_and_observe",
-    "ops-observability-card": "operate_and_observe",
-    "agent-ops-review": "operate_and_observe",
-    "memory-sync": "operate_and_observe",
-    "workflow-learning": "operate_and_observe",
-    "doctor": "operate_and_observe",
-    "skill": "operate_and_observe",
-    "ask": "operate_and_observe",
-    "cancel": "operate_and_observe",
-    "operating-rhythm": "operate_and_observe",
-    "ops-review": "operate_and_observe",
-    "reliability-review": "operate_and_observe",
-}
+
+@lru_cache(maxsize=1)
+def _workflow_family_overrides() -> dict[str, str]:
+    """Cross-lane family overrides derived from the skill catalog.
+
+    A skill inherits its family from its awareness-lane default; a
+    `SkillDefinition.capability_family` value is needed only when the skill
+    belongs to a different family than its lane. `dynamic-workflow` is a
+    conceptual CLI surface with no SkillDefinition and no awareness lane, so
+    its assignment lives here directly.
+    """
+    overrides = {
+        definition.name: definition.capability_family
+        for definition in builtin_definitions()
+        if definition.capability_family
+    }
+    overrides["dynamic-workflow"] = "delegate_coding_and_ship"
+    return overrides
+
+
+def standalone_capability_families_json() -> str:
+    """Serialize the canonical families for the vendored plugin-bundle sidecar.
+
+    The standalone bundle cannot import this module, so it loads this
+    generated JSON instead; `omh docs capability-families --check` keeps the
+    file byte-identical to this projection.
+    """
+    families = capability_family_projection()["families"]
+    return json.dumps(families, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
 
 
 def capability_family_projection(available_workflows: Iterable[str] | None = None) -> dict[str, object]:
@@ -418,7 +357,7 @@ def _workflow_to_family(
 ) -> dict[str, str]:
     mapping: dict[str, str] = {}
     family_ids = {str(family["id"]) for family in families}
-    for workflow, family_id in sorted(_WORKFLOW_FAMILY_OVERRIDES.items()):
+    for workflow, family_id in sorted(_workflow_family_overrides().items()):
         if workflow in available and family_id in family_ids:
             mapping[workflow] = family_id
             mapping[workflow.casefold()] = family_id
@@ -440,7 +379,7 @@ def _workflow_to_family(
 
 
 def _workflow_belongs_to_family(workflow: str, family_id: str, source_lanes: tuple[str, ...]) -> bool:
-    override = _WORKFLOW_FAMILY_OVERRIDES.get(workflow)
+    override = _workflow_family_overrides().get(workflow)
     if override:
         return override == family_id
     return any(_default_family_for_source_lane(lane_id) == family_id for lane_id in source_lanes)

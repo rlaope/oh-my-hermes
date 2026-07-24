@@ -86,3 +86,4 @@ packages = [
 "omh.catalogs" = ["*.json"]
 "omh.plugin_bundle.omh" = ["plugin.yaml", "config.yaml"]
 "omh.plugin_bundle.omh.references" = ["*.md"]
+"omh.plugin_bundle.omh.tools" = ["capability_families.json"]
