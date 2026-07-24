@@ -574,9 +574,124 @@ def cmd_coding_quality_harness_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_coding_fanout_prepare(args: argparse.Namespace) -> int:
+    from ..coding.fanout import build_fanout_contract, is_degenerate_single_unit, single_unit_redirect
+    from ..coding.fanout_artifacts import write_fanout_contract
+    from ..coding.fanout_contracts import FanoutContractError
+
+    units = _read_fanout_units(args.units)
+    if is_degenerate_single_unit(units):
+        _print_json(single_unit_redirect(units))
+        return 0
+    try:
+        contract = build_fanout_contract(
+            " ".join(args.goal).strip(),
+            units,
+            source=args.source,
+            source_metadata=_explicit_source_metadata(args),
+        )
+    except FanoutContractError as exc:
+        raise OmhError(str(exc)) from exc
+    if args.record:
+        contract = write_fanout_contract(_paths(args), contract)
+    _print_json(contract)
+    return 0
+
+
+def cmd_coding_fanout_validate(args: argparse.Namespace) -> int:
+    from ..coding.fanout import detect_boundary_overlaps, merge_order, validate_fanout_units, _normalized_unit
+    from ..coding.fanout_contracts import FanoutContractError
+
+    units = [_normalized_unit(unit, index) for index, unit in enumerate(_read_fanout_units(args.units))]
+    try:
+        validate_fanout_units(units)
+        notes = detect_boundary_overlaps(units)
+        order = merge_order(units)
+    except FanoutContractError as exc:
+        _print_json({"schema_version": "fanout_validation/v1", "ok": False, "error": str(exc)})
+        return 1
+    _print_json(
+        {
+            "schema_version": "fanout_validation/v1",
+            "ok": True,
+            "unit_count": len(units),
+            "merge_order": order,
+            "conflict_risk_notes": notes,
+        }
+    )
+    return 0
+
+
+def cmd_coding_fanout_show(args: argparse.Namespace) -> int:
+    from ..coding.fanout_artifacts import read_fanout_contract
+    from ..runtime.artifacts import read_state_result
+
+    paths = _paths(args)
+    try:
+        contract = read_fanout_contract(paths, args.fanout_id)
+    except (OSError, ValueError) as exc:
+        raise OmhError(f"fanout contract not found: {exc}") from exc
+
+    state = read_state_result(paths)
+    runs = state.get("runs", {}) if isinstance(state, dict) else {}
+    units = contract.get("units", [])
+    status_by_unit: dict[str, object] = {}
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        run_ref = str(unit.get("run_ref", ""))
+        run = runs.get(run_ref) if isinstance(runs, dict) else None
+        observed = run.get("status") if isinstance(run, dict) else None
+        status_by_unit[str(unit.get("unit_id"))] = {
+            "prepared_status": unit.get("status", "prepared"),
+            "observed_run_status": observed or "not_observed",
+            "run_ref": run_ref,
+        }
+    _print_json(
+        {
+            "schema_version": "fanout_board/v1",
+            "fanout_id": contract.get("fanout_id"),
+            "merge_order": contract.get("merge_plan", {}).get("merge_order", []),
+            "units": status_by_unit,
+            "claim_boundary": contract.get("claim_boundary", ""),
+        }
+    )
+    return 0
+
+
+def _read_fanout_units(units_arg: str) -> list[dict[str, object]]:
+    raw = sys.stdin.read() if units_arg == "-" else Path(units_arg).expanduser().read_text(encoding="utf-8")
+    payload = json.loads(raw)
+    units = payload.get("units") if isinstance(payload, dict) else payload
+    if not isinstance(units, list):
+        raise OmhError("fanout units input must be a JSON list (or an object with a 'units' list)")
+    return units
+
+
 def _add_coding_commands(sub) -> None:
     coding = sub.add_parser("coding", help="Prepare executor-neutral or tracked coding handoff artifacts.")
     coding_sub = coding.add_subparsers(dest="coding_command", required=True)
+
+    fanout = coding_sub.add_parser(
+        "fanout",
+        help="Validate and freeze a proposed parallel work split into a fanout contract (agent/backend surface).",
+    )
+    fanout_sub = fanout.add_subparsers(dest="fanout_command", required=True)
+
+    fanout_prepare = fanout_sub.add_parser("prepare")
+    fanout_prepare.add_argument("--goal", nargs="+", required=True, help="Accepted user goal being split.")
+    fanout_prepare.add_argument("--units", required=True, help="JSON unit list path, or '-' for stdin.")
+    fanout_prepare.add_argument("--source", choices=CHAT_SOURCES, default="generic")
+    fanout_prepare.add_argument("--record", action="store_true", help="Persist the contract under ~/.omh/coding/fanout/.")
+    fanout_prepare.set_defaults(func=cmd_coding_fanout_prepare)
+
+    fanout_validate = fanout_sub.add_parser("validate")
+    fanout_validate.add_argument("--units", required=True, help="JSON unit list path, or '-' for stdin.")
+    fanout_validate.set_defaults(func=cmd_coding_fanout_validate)
+
+    fanout_show = fanout_sub.add_parser("show")
+    fanout_show.add_argument("fanout_id")
+    fanout_show.set_defaults(func=cmd_coding_fanout_show)
 
     delegate = coding_sub.add_parser("delegate")
     delegate.add_argument("message", nargs="*", help="Coding task description to prepare for executor delegation.")

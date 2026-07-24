@@ -1518,8 +1518,9 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
         "headline": "I can prepare a board for multiple Hermes agents.",
         "body": (
             "I will prepare the agent board: targets, roles, tasks, handoff lanes, heartbeat expectations, blocker "
-            "states, and completion rules. Other agents accepting, working, heartbeat-ing, or completing work remains "
-            "unobserved until target-specific evidence exists."
+            "states, and completion rules. For parallel coding splits, `omh coding fanout` freezes the unit split "
+            "into a merge contract and `omh coding fanout show` is the live evidence view. Other agents accepting, "
+            "working, heartbeat-ing, or completing work remains unobserved until target-specific evidence exists."
         ),
         "phase": "agent_board_prepared",
         "next_action": "prepare_agent_board_card",

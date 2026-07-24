@@ -171,6 +171,10 @@ class OmhPaths:
         return self.omh_home / "coding" / "dynamic-workflows"
 
     @property
+    def fanout_contracts_dir(self) -> Path:
+        return self.omh_home / "coding" / "fanout"
+
+    @property
     def target_registry_path(self) -> Path:
         return self.omh_home / "targets.json"
 
