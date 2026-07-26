@@ -155,7 +155,11 @@ def _add_hermes_commands(sub) -> None:
         default=None,
         help="Read a Slack/Discord/Hermes-like JSON event from this path, or '-' for stdin.",
     )
-    plan.add_argument("--record", action="store_true", help="Write the plan under .hermes/plans.")
+    plan.add_argument(
+        "--record",
+        action="store_true",
+        help="Write the plan under <repo>/.omh/plans, or the OMH home when outside a repository.",
+    )
     plan.add_argument("--source-event-id", default="", help="Optional source message/event id to store as metadata.")
     plan.add_argument("--channel-ref", default="", help="Optional channel reference to store as metadata.")
     plan.add_argument("--user-ref", default="", help="Optional user reference to store as metadata.")

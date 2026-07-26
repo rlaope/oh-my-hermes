@@ -15,7 +15,7 @@ from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadat
 from ..local_store import atomic_write_json, atomic_write_text, utc_now
 from ..memory import validate_handoff_context_pack
 from ..observation_journal import append_observation_event
-from ..paths import OmhPaths
+from ..paths import OmhPaths, ensure_project_store_ignored, project_artifact_dir, project_identity
 from ..routing.recommend import recommend_skills
 from ..skills.catalog import (
     DEEP_INTERVIEW_CLARITY_DIMENSIONS,
@@ -188,11 +188,14 @@ def build_hermes_plan_event_payload(
 
 
 def write_hermes_plan(paths: OmhPaths, payload: dict[str, object]) -> dict[str, object]:
+    """Write the file-backed plan artifact into OMH's store for this repository."""
     plan = payload.get("plan")
     if not isinstance(plan, dict):
         raise ValueError("hermes plan payload is missing plan")
     slug = _slugify(str(plan.get("task_statement", "plan")))
-    path = _unique_artifact_path(paths.hermes_home / "plans", slug, ".md")
+    plans_dir = project_artifact_dir(paths, "plans")
+    ensure_project_store_ignored(plans_dir)
+    path = _unique_artifact_path(plans_dir, slug, ".md")
     content = render_plan_markdown(payload, path.name)
     atomic_write_text(path, content, private=True)
     artifact: dict[str, object] = {
@@ -202,7 +205,9 @@ def write_hermes_plan(paths: OmhPaths, payload: dict[str, object]) -> dict[str, 
         "status": plan.get("status", "draft"),
     }
     if plan.get("status") == "blocked":
-        context_path = _unique_artifact_path(paths.hermes_home / "context", f"{slug}-context", ".md")
+        context_path = _unique_artifact_path(
+            project_artifact_dir(paths, "plan-context"), f"{slug}-context", ".md"
+        )
         atomic_write_text(context_path, render_context_markdown(payload, context_path.name), private=True)
         artifact["context_path"] = str(context_path)
     try:
@@ -325,11 +330,13 @@ def build_plan_handoff_message(artifact: dict[str, object]) -> str:
 
 def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_target: str = "codex") -> dict[str, object]:
     plan_artifact_path = str(artifact.get("path", ""))
+    # Copied into each consumer below so editing one scope cannot rewrite the others.
+    scope = {"kind": "project", "ref": project_identity()}
     pack = {
         "schema_version": "handoff_context_pack/v1",
         "executor_target": executor_target,
         "session_id": "",
-        "scope": {"kind": "project", "ref": "default"},
+        "scope": dict(scope),
         "metadata": {
             "plan_artifact_path": plan_artifact_path,
             "plan_artifact_ref": plan_artifact_path,
@@ -356,7 +363,7 @@ def build_plan_handoff_context_pack(artifact: dict[str, object], *, executor_tar
                 "artifact_ref": plan_artifact_path,
                 "source": "hermes_plan",
                 "truth_level": "approved_context",
-                "scope": {"kind": "project", "ref": "default"},
+                "scope": dict(scope),
             }
         ],
         "excluded_context": [],

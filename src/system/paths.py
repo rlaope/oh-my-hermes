@@ -4,11 +4,16 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from .local_store import atomic_write_text
+
 
 @dataclass(frozen=True)
 class OmhPaths:
     omh_home: Path
     hermes_home: Path
+    # Whether the caller named `omh_home` rather than accepting the default.
+    # True by default: constructing OmhPaths directly always names one.
+    omh_home_named: bool = True
 
     @property
     def skills_dir(self) -> Path:
@@ -287,6 +292,55 @@ def project_hermes_home(cwd: str | Path | None = None) -> Path:
     return expand_path(cwd or Path.cwd()) / ".hermes"
 
 
+def find_project_root(cwd: str | Path | None = None) -> Path | None:
+    """Nearest ancestor holding a `.git` entry, or None outside a repository."""
+    # Filesystem-only: `git rev-parse` would be a subprocess in a core that makes
+    # no external calls. `.git` is a directory in a checkout and a file in a
+    # linked worktree, so both shapes count.
+    start = expand_path(cwd or Path.cwd())
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def project_artifact_dir(paths: OmhPaths, *segments: str, cwd: str | Path | None = None) -> Path:
+    """Repo-local `.omh/<segments>` inside a project, user-scope store outside one."""
+    # A named home wins over the inferred repository: `--omh-home` exists to say
+    # where the store is, and writing elsewhere would make the flag a lie.
+    if paths.omh_home_named:
+        return paths.omh_home.joinpath(*segments)
+    root = find_project_root(cwd)
+    base = root / ".omh" if root is not None else paths.omh_home
+    return base.joinpath(*segments)
+
+
+def ensure_project_store_ignored(directory: Path) -> None:
+    """Give a repo-local OMH store a `.gitignore` so it stays out of `git status`."""
+    # Only this repository's own .gitignore lists `.omh/`; a user's project has
+    # no such rule, so a recorded plan would be untracked and `git add -A` would
+    # commit it. Skipped outside a repository, where there is nothing to ignore
+    # against. An existing file is left alone in case the user wrote their own.
+    store = next((parent for parent in (directory, *directory.parents) if parent.name == ".omh"), None)
+    if store is None or find_project_root(store.parent) is None:
+        return
+    marker = store / ".gitignore"
+    if marker.exists():
+        return
+    try:
+        atomic_write_text(marker, "*\n")
+    except OSError:
+        return  # losing the ignore file is not worth failing the artifact over
+
+
+def project_identity(cwd: str | Path | None = None) -> str:
+    """Repository directory name, or "default" outside one."""
+    # A name rather than a hash: people read this in `scope.ref` next to values
+    # like `document-harness`. Same-named checkouts share a label.
+    root = find_project_root(cwd)
+    return root.name if root is not None and root.name else "default"
+
+
 def resolve_paths(
     omh_home: str | Path | None = None,
     hermes_home: str | Path | None = None,
@@ -301,4 +355,8 @@ def resolve_paths(
     return OmhPaths(
         omh_home=expand_path(omh_home) if omh_home else default_omh,
         hermes_home=expand_path(hermes_home) if hermes_home else default_hermes,
+        # Recorded here, while the caller's intent is still known: comparing the
+        # resolved home against the default later cannot tell a named home from
+        # an unnamed one that happens to match it.
+        omh_home_named=omh_home is not None,
     )

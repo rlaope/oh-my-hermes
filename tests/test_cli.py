@@ -9425,13 +9425,16 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                 self.assertFalse(coding_delegate["available"])
                 self.assertEqual(coding_delegate["unavailable_reason"], "task is not implementation-shaped")
 
-    def test_hermes_plan_records_under_hermes_home(self) -> None:
+    def test_hermes_plan_records_under_the_omh_store(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             hermes_home = root / ".hermes"
+            omh_home = root / ".omh"
 
             status, stdout, stderr = run_cli(
                 [
+                    "--omh-home",
+                    str(omh_home),
                     "--hermes-home",
                     str(hermes_home),
                     "hermes",
@@ -9456,7 +9459,9 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertTrue(contract_artifact["recorded"])
             self.assertEqual(contract_artifact["path"], artifact["path"])
             self.assertEqual(contract_artifact["status"], "draft")
-            self.assertEqual(plan_path.parent.resolve(), (hermes_home / "plans").resolve())
+            # Plans belong to OMH's store, not to Hermes' home directory.
+            self.assertEqual(plan_path.parent.resolve(), (omh_home / "plans").resolve())
+            self.assertFalse((hermes_home / "plans").exists())
             self.assertTrue(plan_path.exists())
             self.assertFalse((root / ("." + "om" + "x") / "plans").exists())
             text = plan_path.read_text(encoding="utf-8")
@@ -9583,8 +9588,20 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             hermes_home = root / ".hermes"
+            omh_home = root / ".omh"
 
-            status, stdout, stderr = run_cli(["--hermes-home", str(hermes_home), "hermes", "plan", "--record", "help"])
+            status, stdout, stderr = run_cli(
+                [
+                    "--omh-home",
+                    str(omh_home),
+                    "--hermes-home",
+                    str(hermes_home),
+                    "hermes",
+                    "plan",
+                    "--record",
+                    "help",
+                ]
+            )
 
             self.assertEqual(stderr, "")
             self.assertEqual(status, 0)
@@ -9605,8 +9622,9 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(payload["wrapper_contract"]["plan_artifact"]["context_path"], artifact["context_path"])
             plan_path = Path(artifact["path"])
             context_path = Path(artifact["context_path"])
-            self.assertEqual(plan_path.parent.resolve(), (hermes_home / "plans").resolve())
-            self.assertEqual(context_path.parent.resolve(), (hermes_home / "context").resolve())
+            self.assertEqual(plan_path.parent.resolve(), (omh_home / "plans").resolve())
+            self.assertEqual(context_path.parent.resolve(), (omh_home / "plan-context").resolve())
+            self.assertFalse((hermes_home / "context").exists())
             self.assertTrue(plan_path.exists())
             self.assertTrue(context_path.exists())
             context_text = context_path.read_text(encoding="utf-8")

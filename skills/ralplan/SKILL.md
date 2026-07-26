@@ -43,6 +43,7 @@ Bad example:
 - Observed repo facts and source/web evidence gaps are named.
 - At least two options or one chosen option plus rejected alternatives are recorded.
 - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
+- The plan exists as a recorded file-backed artifact, not only as chat narration.
 - The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.
 
 ## Recovery Notes
@@ -108,7 +109,8 @@ Expected outputs:
 
 Artifact expectations:
 
-- plan and review artifacts when a wrapper supports file-backed planning
+- record the plan with `omh hermes plan --record`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one
+- mark acceptance with `omh hermes plan-accept <path>` so acceptance_recorded and handoff_ready point at a real artifact
 
 Safety rules:
 

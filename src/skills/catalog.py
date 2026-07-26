@@ -4426,7 +4426,14 @@ _DEFINITIONS = [
         handoff_policy="Keep consensus planning and review in Hermes; produce explicit selected executor/runtime handoff guidance only after the plan is accepted.",
         required_inputs=("requirements", "codebase facts", "source or web evidence when needed", "options", "tradeoffs", "test shape"),
         expected_outputs=("reviewed plan", "acceptance criteria", "risk register", "verification commands", "handoff guidance"),
-        artifact_expectations=("plan and review artifacts when a wrapper supports file-backed planning",),
+        # Naming the commands is the point. This used to read "plan and review
+        # artifacts when a wrapper supports file-backed planning", which names
+        # no path and no command, so no plan file was ever produced and the
+        # planning harness rungs below had nothing to record.
+        artifact_expectations=(
+            "record the plan with `omh hermes plan --record`, which writes `<repo>/.omh/plans/<slug>.md` inside a repository and the user-scope OMH store outside one",
+            "mark acceptance with `omh hermes plan-accept <path>` so acceptance_recorded and handoff_ready point at a real artifact",
+        ),
         safety_rules=(
             "Do not implement directly from the planning lane.",
             "Do not invent codebase or web evidence; label missing evidence and source gaps.",
@@ -4463,6 +4470,7 @@ _DEFINITIONS = [
             "Observed repo facts and source/web evidence gaps are named.",
             "At least two options or one chosen option plus rejected alternatives are recorded.",
             "Risks, acceptance criteria, and verification commands are testable or explicitly blocked.",
+            "The plan exists as a recorded file-backed artifact, not only as chat narration.",
             "The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.",
         ),
         recovery_notes=(
