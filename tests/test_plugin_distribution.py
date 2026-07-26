@@ -299,6 +299,7 @@ print(json.dumps(observed, ensure_ascii=False))
                     "omh_gather_evidence",
                     "omh_hud",
                     "omh_interact",
+                    "omh_memory",
                     "omh_probe",
                     "omh_recommend",
                     "omh_role",

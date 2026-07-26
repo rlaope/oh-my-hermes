@@ -145,6 +145,14 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "`package_context_error` source instead of `standalone_plugin_bundle_fallback`.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/tools/memory_tool.py",
+        "_memory_bridge",
+        INTENTIONAL,
+        "Returns the distinct `package_memory_error` source plus a sanitized error type, so a "
+        "package runtime failure never reads as `standalone_plugin_bundle_fallback` -- the label "
+        "a host that genuinely lacks OMH would get.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/tools/recommend_tool.py",
         "_recommendations",
         INTENTIONAL,
@@ -156,8 +164,8 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # Ruff reports one hit per handler; the inventory is keyed per enclosing
 # function, and `_is_catalog_question` holds two handlers, so the two totals
 # differ by exactly one.
-EXPECTED_HANDLER_COUNT = 11
-EXPECTED_ANCHOR_COUNT = 10
+EXPECTED_HANDLER_COUNT = 12
+EXPECTED_ANCHOR_COUNT = 11
 
 
 class DerivedSite(NamedTuple):

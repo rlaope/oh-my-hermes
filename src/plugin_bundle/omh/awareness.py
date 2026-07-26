@@ -5183,6 +5183,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "Use omh_capabilities for detailed workflow catalog and capability manifest lookup.",
             "Use omh_probe when the user asks whether OMH is installed, what is missing, or what the next setup/runtime evidence step should be.",
             "Use omh_status or omh_hud for metadata-only runtime state.",
+            "Use omh_memory before adding to Hermes memory: it reports what Hermes already holds, what OMH holds that it does not, and the remaining character headroom.",
             "Use omh_role for responsibility context when a role marker is present.",
             "Use wrapper cards/actions for user-facing choices instead of asking users to approve shell catalog commands.",
         ],

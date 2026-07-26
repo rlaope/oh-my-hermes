@@ -48,7 +48,7 @@ flowchart LR
 
   user --> hermes
   skills --> hermes
-  plugin -->|"omh_interact, omh_recommend, omh_probe, omh_hud, omh_role, omh_status, evidence, hooks"| hermes
+  plugin -->|"omh_interact, omh_recommend, omh_probe, omh_hud, omh_memory, omh_role, omh_status, evidence, hooks"| hermes
   user --> wrapper
   wrapper -->|"chat_interaction/v1"| omh
   omh -->|"answer, clarify, plan, or status"| wrapper

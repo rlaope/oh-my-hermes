@@ -220,7 +220,8 @@ unselected coding agent never reads as an idle external agent named
 A quiet no-run line looks like
 `[omh] v1.0.3 | plugin:ready | target:single | coding-agent:not-selected`.
 The plugin also exposes `omh_context` for a compact OMH mental model plus
-generic-tool checkpoint, `omh_interact` for shell-free chat responses and
+generic-tool checkpoint, `omh_memory` for a metadata-only comparison of Hermes
+memory against OMH's approved records, `omh_interact` for shell-free chat responses and
 metadata-only wrapper session records, `omh_recommend` for route hints without
 session recording, `omh_probe` for local setup/runtime status and
 capability-roadmap cards, `omh_role`, validates `[omh-role:name]` markers for

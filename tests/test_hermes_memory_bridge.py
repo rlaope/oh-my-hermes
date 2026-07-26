@@ -14,10 +14,12 @@ Two defects motivate this file:
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from _local_package import load_local_package
 
@@ -40,6 +42,8 @@ from omh.memory import (
     capture_project_memory_candidate,
 )
 from omh.paths import resolve_paths
+from omh.plugin_bundle.omh.metadata import PROVIDED_TOOLS, TOOL_FILE_STEMS
+from omh.plugin_bundle.omh.tools.memory_tool import OMH_MEMORY_SCHEMA, omh_memory_handler
 
 # 1,119 characters but 2,631 UTF-8 bytes: comfortably under the 2,200-character
 # cap, and comfortably over it if bytes are counted by mistake. Stripped here
@@ -212,3 +216,44 @@ class BridgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MemoryToolTests(unittest.TestCase):
+    """The bridge was CLI-only, so Hermes could not reach it from chat."""
+
+    def _payload(self, root: Path) -> dict:
+        with patch.dict(os.environ, {"OMH_HOME": str(root / ".omh"), "HERMES_HOME": str(root / ".hermes")}):
+            return json.loads(omh_memory_handler({}))
+
+    def test_the_tool_is_registered_under_its_own_name(self) -> None:
+        self.assertEqual(OMH_MEMORY_SCHEMA["name"], "omh_memory")
+        self.assertIn("omh_memory", PROVIDED_TOOLS)
+        self.assertEqual(TOOL_FILE_STEMS["omh_memory"], "memory_tool")
+
+    def test_the_tool_returns_the_bridge_from_the_installed_package(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            _write_memory(root / ".hermes", "커피 원두는 밀봉 용기에 보관한다")
+            payload = self._payload(root)
+            self.assertEqual(payload["source_backend"], "package_memory")
+            self.assertEqual(payload["schema_version"], "hermes_memory_bridge/v1")
+            self.assertEqual(payload["plugin_tool"], "omh_memory")
+
+    def test_no_memory_entry_text_reaches_the_payload(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            secret = "루트비밀번호는hunter2이다"
+            _write_memory(root / ".hermes", secret)
+            self.assertNotIn(secret, json.dumps(self._payload(root), ensure_ascii=False))
+
+    def test_a_package_failure_is_not_labelled_as_a_missing_package(self) -> None:
+        with patch(
+            "omh.memory.build_hermes_memory_bridge", side_effect=RuntimeError("boom")
+        ):
+            payload = json.loads(omh_memory_handler({}))
+        # Reusing the standalone-fallback label here would make a real failure
+        # indistinguishable from a host that never had OMH installed.
+        self.assertEqual(payload["source_backend"], "package_memory_error")
+        self.assertEqual(payload["status"], "unavailable")
+        self.assertEqual(payload["reason"], "RuntimeError")
+        self.assertIn("not evidence", payload["claim_boundary"])
