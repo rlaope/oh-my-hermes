@@ -21,6 +21,7 @@ from pathlib import Path
 
 from ..config_adapter import external_dirs, read_config
 from ..paths import default_hermes_home
+from . import hermes_memory
 
 CONTRACT = "hermes_config_advice/v1"
 
@@ -43,9 +44,10 @@ AUXILIARY_TASK_SLOTS = (
     "title",
 )
 
-# Hermes memory files and their observed soft caps (chars).
-MEMORY_FILE_CAP_CHARS = 2200
-USER_FILE_CAP_CHARS = 1375
+# Hermes memory files and the character caps Hermes enforces on write. Sourced
+# from the reader so the cap and the unit it is measured in cannot drift apart.
+MEMORY_FILE_CAP_CHARS = hermes_memory.MEMORY_FILE_CAP_CHARS
+USER_FILE_CAP_CHARS = hermes_memory.USER_FILE_CAP_CHARS
 MEMORY_STALE_AFTER_DAYS = 30
 
 # Conservative SOUL starter heuristic knobs.
@@ -324,10 +326,8 @@ def _now_seconds() -> float:
 
 def check_hermes_memory_staleness(hermes_home: str | Path | None = None) -> AdviceEntry:
     home = _resolve_hermes_home(hermes_home)
-    memory_path = home / "memories" / "MEMORY.md"
-    user_path = home / "memories" / "USER.md"
     evidence_boundary = (
-        "Local size/mtime read of ~/.hermes/memories/MEMORY.md and USER.md only; "
+        "Local character/entry/mtime read of ~/.hermes/memories/MEMORY.md and USER.md only; "
         "OMH reports on Hermes memory and cannot change Hermes memory."
     )
     remediation = (
@@ -335,48 +335,45 @@ def check_hermes_memory_staleness(hermes_home: str | Path | None = None) -> Advi
         "chars, USER.md ~1,375 chars). If these look stale, update them from inside "
         "Hermes; OMH will not write to them."
     )
-    try:
-        if not memory_path.exists() and not user_path.exists():
-            return AdviceEntry(
-                "hermes_memory_staleness",
-                "unobserved",
-                remediation,
-                evidence_boundary,
-                "no memories/MEMORY.md or USER.md found",
-            )
-        now = _now_seconds()
-        details: list[str] = []
-        stale = False
-        for label, path, cap in (
-            ("MEMORY.md", memory_path, MEMORY_FILE_CAP_CHARS),
-            ("USER.md", user_path, USER_FILE_CAP_CHARS),
-        ):
-            if not path.exists():
-                details.append(f"{label} missing")
-                continue
-            stat = path.stat()
-            age_days = max(0.0, (now - stat.st_mtime) / 86400.0)
-            details.append(
-                f"{label} {stat.st_size} bytes (cap ~{cap}), {age_days:.0f}d since mtime"
-            )
-            if age_days >= MEMORY_STALE_AFTER_DAYS:
-                stale = True
-        status = "advice" if stale else "ok"
-        return AdviceEntry(
-            "hermes_memory_staleness",
-            status,
-            remediation,
-            evidence_boundary,
-            "; ".join(details),
-        )
-    except OSError as error:
+    readings = hermes_memory.read_hermes_memory(home, now=_now_seconds())
+    if not any(reading.exists for reading in readings):
         return AdviceEntry(
             "hermes_memory_staleness",
             "unobserved",
             remediation,
             evidence_boundary,
-            f"memory files unreadable: {error}",
+            "no memories/MEMORY.md or USER.md found",
         )
+    unreadable = [reading for reading in readings if reading.error]
+    if unreadable:
+        return AdviceEntry(
+            "hermes_memory_staleness",
+            "unobserved",
+            remediation,
+            evidence_boundary,
+            "; ".join(f"{reading.label} unreadable: {reading.error}" for reading in unreadable),
+        )
+    details: list[str] = []
+    flagged = False
+    for reading in readings:
+        if not reading.exists:
+            details.append(f"{reading.label} missing")
+            continue
+        details.append(
+            f"{reading.label} {reading.chars} chars of {reading.cap} in "
+            f"{len(reading.entries)} entries, {reading.age_days:.0f}d since mtime"
+        )
+        # A file at or over the cap is the condition Hermes rejects the next
+        # write on, so it is advice even when the file was touched today.
+        if reading.over_cap or reading.age_days >= MEMORY_STALE_AFTER_DAYS:
+            flagged = True
+    return AdviceEntry(
+        "hermes_memory_staleness",
+        "advice" if flagged else "ok",
+        remediation,
+        evidence_boundary,
+        "; ".join(details),
+    )
 
 
 # ---------------------------------------------------------------------------

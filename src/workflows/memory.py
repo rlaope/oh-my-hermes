@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from ..local_store import atomic_write_json, ensure_dir, file_lock, read_json_object, read_json_object_result, utc_now
+from ..maintenance.hermes_memory import (
+    DUPLICATE_SIMILARITY_THRESHOLD,
+    nearest_entry,
+    read_hermes_memory,
+)
 from ..paths import OmhPaths
 from ..profiles.setup import read_setup_profile
 from ..targets import summarize_target_registry
@@ -28,6 +33,7 @@ PROJECT_MEMORY_REVIEW_CARD_SCHEMA_VERSION = "project_memory_review_card/v1"
 PROJECT_MEMORY_REVIEW_QUEUE_SCHEMA_VERSION = "project_memory_review_queue/v1"
 PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION = "project_memory_review_record/v1"
 PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION = "project_memory_recall_pack/v1"
+HERMES_MEMORY_BRIDGE_SCHEMA_VERSION = "hermes_memory_bridge/v1"
 
 SOURCE_TRUTH_LEVELS = {
     "runtime_evidence": "observed_evidence",
@@ -173,6 +179,77 @@ def read_project_memory_policy(paths: OmhPaths) -> dict[str, object]:
     return build_project_memory_policy(paths)
 
 
+def build_hermes_memory_bridge(paths: OmhPaths) -> dict[str, object]:
+    """Relate OMH's approved records to what Hermes already remembers.
+
+    The two stores have no shared identifier, so neither could see the other:
+    OMH deduplicated only against itself, and Hermes' memory tool rejects only
+    exact-string duplicates. A fact approved in OMH and then restated by hand in
+    MEMORY.md therefore lived in both, worded differently, with nothing linking
+    them.
+
+    This is the read side of that link. It reports which approved record Hermes
+    already carries, which one it does not, and whether the next one would fit
+    under the cap Hermes enforces on write. Nothing here writes to Hermes: the
+    `memory` tool Hermes exposes to the model is what edits MEMORY.md.
+    """
+    readings = read_hermes_memory(paths.hermes_home)
+    records = _read_project_memory_records(paths)
+    memory_file = next((reading for reading in readings if reading.label == "MEMORY.md"), None)
+    entries = memory_file.entries if memory_file else ()
+    already_present: list[dict[str, object]] = []
+    promotable: list[dict[str, object]] = []
+    matched_entries: set[int] = set()
+    for record in records:
+        summary = str(record.get("summary", "") or "")
+        index, score = nearest_entry(summary, entries)
+        row: dict[str, object] = {
+            "record_id": str(record.get("record_id", "")),
+            "summary_length": len(summary),
+            "scope": record.get("scope", {}),
+            "nearest_entry_index": index,
+            "similarity": round(score, 2),
+        }
+        if score >= DUPLICATE_SIMILARITY_THRESHOLD:
+            matched_entries.add(index)
+            already_present.append(row)
+            continue
+        # `+ 1` is the delimiter Hermes inserts before an appended entry.
+        row["fits_headroom"] = bool(memory_file) and len(summary) + 1 <= memory_file.headroom_chars
+        promotable.append(row)
+    return {
+        "schema_version": HERMES_MEMORY_BRIDGE_SCHEMA_VERSION,
+        "files": [reading.to_dict() for reading in readings],
+        "approved_records": len(records),
+        "already_in_hermes": already_present,
+        "promotable": promotable,
+        "hermes_entries_without_omh_record": _unsourced_entry_rows(entries, matched_entries),
+        "duplicate_similarity_threshold": DUPLICATE_SIMILARITY_THRESHOLD,
+        "redaction_policy": "metadata_only",
+        "next_action": (
+            "Promote a record by asking Hermes to add it through its own memory tool; free headroom first "
+            "when nothing fits."
+        ),
+        "claim_boundary": (
+            "OMH reads Hermes memory and cannot change it. This comparison is prepared review context only; "
+            "it is not a Hermes memory write, execution, review, CI, or merge evidence."
+        ),
+    }
+
+
+def _unsourced_entry_rows(entries: tuple[str, ...], matched: set[int]) -> list[dict[str, object]]:
+    """Hermes entries no approved OMH record explains, as metadata only."""
+    return [
+        {
+            "entry_index": index,
+            "chars": len(entry),
+            "sha256": hashlib.sha256(entry.encode("utf-8")).hexdigest(),
+        }
+        for index, entry in enumerate(entries)
+        if index not in matched
+    ]
+
+
 def build_project_memory_status(paths: OmhPaths) -> dict[str, object]:
     candidates = _read_project_memory_candidates(paths)
     records = _read_project_memory_records(paths)
@@ -200,6 +277,7 @@ def build_project_memory_status(paths: OmhPaths) -> dict[str, object]:
             "review_records": len(reviews),
             "candidate_statuses": candidate_status_counts,
         },
+        "hermes_memory": build_hermes_memory_bridge(paths),
         "redaction_policy": "metadata_only",
         "claim_boundary": "Project memory status is prepared local context only; it is not execution, review, CI, merge, or Hermes internal-memory evidence.",
     }
