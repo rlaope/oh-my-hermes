@@ -377,7 +377,58 @@ def check_hermes_memory_staleness(hermes_home: str | Path | None = None) -> Advi
 
 
 # ---------------------------------------------------------------------------
-# 4. installed_skill_context_weight
+# 4. legacy_plan_artifacts
+# ---------------------------------------------------------------------------
+
+def check_legacy_plan_artifacts(hermes_home: str | Path | None = None) -> AdviceEntry:
+    """Report plans left in Hermes' home by the pre-relocation writer."""
+    home = _resolve_hermes_home(hermes_home)
+    legacy_dirs = ((home / "plans", "plans"), (home / "context", "context"))
+    evidence_boundary = (
+        "Local file count of ~/.hermes/plans and ~/.hermes/context only; OMH does not read, "
+        "move, or delete them."
+    )
+    remediation = (
+        "OMH used to write plan artifacts into Hermes' own home. It now writes them to "
+        "`<repo>/.omh/plans`, so these older files are no longer read by anything. They are "
+        "plain markdown: `omh hermes plan-accept <path>` still works on one, and they are "
+        "safe to delete or archive by hand. OMH will not touch them."
+    )
+    counts: list[str] = []
+    try:
+        for directory, label in legacy_dirs:
+            if not directory.is_dir():
+                continue
+            found = len([entry for entry in directory.glob("*.md") if entry.is_file()])
+            if found:
+                counts.append(f"{found} file(s) in {label}")
+    except OSError as error:
+        return AdviceEntry(
+            "legacy_plan_artifacts",
+            "unobserved",
+            remediation,
+            evidence_boundary,
+            f"legacy plan directories unreadable: {error}",
+        )
+    if not counts:
+        return AdviceEntry(
+            "legacy_plan_artifacts",
+            "ok",
+            remediation,
+            evidence_boundary,
+            "no plan artifacts left under ~/.hermes",
+        )
+    return AdviceEntry(
+        "legacy_plan_artifacts",
+        "advice",
+        remediation,
+        evidence_boundary,
+        "; ".join(counts),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 5. installed_skill_context_weight
 # ---------------------------------------------------------------------------
 
 def _count_skill_dirs(skills_dir: Path) -> int:
@@ -460,13 +511,14 @@ def check_installed_skill_context_weight(
 
 
 def run_config_advisories(hermes_home: str | Path | None = None) -> AdvisoryReport:
-    """Run all four read-only inspectors and return the separate advisory report."""
+    """Run every read-only inspector and return the separate advisory report."""
     return AdvisoryReport(
         contract=CONTRACT,
         entries=[
             check_auxiliary_routing_unset(hermes_home),
             check_soul_missing_or_starter(hermes_home),
             check_hermes_memory_staleness(hermes_home),
+            check_legacy_plan_artifacts(hermes_home),
             check_installed_skill_context_weight(hermes_home),
         ],
     )

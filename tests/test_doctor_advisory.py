@@ -17,6 +17,7 @@ from omh.maintenance.advisory import (
     check_auxiliary_routing_unset,
     check_hermes_memory_staleness,
     check_installed_skill_context_weight,
+    check_legacy_plan_artifacts,
     check_soul_missing_or_starter,
     run_config_advisories,
 )
@@ -28,6 +29,7 @@ ADVISORY_CHECK_IDS = {
     "auxiliary_routing_unset",
     "soul_missing_or_starter",
     "hermes_memory_staleness",
+    "legacy_plan_artifacts",
     "installed_skill_context_weight",
 }
 
@@ -170,6 +172,49 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(check_hermes_memory_staleness(home).status, "advice")
 
 
+class LegacyPlanArtifactTests(unittest.TestCase):
+    """Plans written by the pre-relocation writer are unread; say so out loud.
+
+    Nothing reads `~/.hermes/plans` any more. Staying silent about files that
+    are already on disk is how a user concludes their plans vanished.
+    """
+
+    def _home(self) -> Path:
+        return Path(tempfile.mkdtemp())
+
+    def test_no_legacy_directories_is_ok(self) -> None:
+        self.assertEqual(check_legacy_plan_artifacts(self._home()).status, "ok")
+
+    def test_an_empty_legacy_directory_is_ok(self) -> None:
+        home = self._home()
+        (home / "plans").mkdir(parents=True)
+        self.assertEqual(check_legacy_plan_artifacts(home).status, "ok")
+
+    def test_leftover_plans_are_reported_with_a_count(self) -> None:
+        home = self._home()
+        _write(home / "plans" / "2026-01-01T000000Z-old-plan-abc123.md", "# old\n")
+        _write(home / "plans" / "2026-01-02T000000Z-other-plan-def456.md", "# old\n")
+        entry = check_legacy_plan_artifacts(home)
+        self.assertEqual(entry.status, "advice")
+        self.assertIn("2 file(s) in plans", entry.observed)
+
+    def test_blocked_plan_context_is_counted_too(self) -> None:
+        home = self._home()
+        _write(home / "context" / "2026-01-01T000000Z-old-context-abc123.md", "# old\n")
+        entry = check_legacy_plan_artifacts(home)
+        self.assertEqual(entry.status, "advice")
+        self.assertIn("1 file(s) in context", entry.observed)
+
+    def test_the_remedy_never_offers_to_move_or_delete_them(self) -> None:
+        home = self._home()
+        _write(home / "plans" / "old.md", "# old\n")
+        entry = check_legacy_plan_artifacts(home)
+        # OMH reports on Hermes' home and does not write to it.
+        self.assertIn("OMH will not touch them", entry.remediation)
+        self.assertTrue(entry.read_only)
+        self.assertTrue((home / "plans" / "old.md").exists())
+
+
 class SkillWeightTests(unittest.TestCase):
     def _skills_dir(self, count: int) -> Path:
         skills_dir = Path(tempfile.mkdtemp()) / "skills"
@@ -213,7 +258,7 @@ class ContractShapeTests(unittest.TestCase):
         self.assertEqual(CONTRACT, "hermes_config_advice/v1")
         data = report.to_dict()
         self.assertEqual(data["contract"], CONTRACT)
-        self.assertEqual(len(data["entries"]), 4)
+        self.assertEqual(len(data["entries"]), len(ADVISORY_CHECK_IDS))
         for entry in data["entries"]:
             self.assertEqual(
                 set(entry.keys()),
@@ -279,7 +324,7 @@ class MembershipGuardrailTests(unittest.TestCase):
         os.utime(memory, (old, old))
         return omh_home, hermes_home
 
-    def test_all_four_fire_and_stay_out_of_checks(self) -> None:
+    def test_all_advisories_fire_and_stay_out_of_checks(self) -> None:
         omh_home, hermes_home = self._all_firing_home()
         paths = resolve_paths(omh_home, hermes_home)
 
@@ -291,6 +336,10 @@ class MembershipGuardrailTests(unittest.TestCase):
                 "auxiliary_routing_unset": "advice",
                 "soul_missing_or_starter": "advice",
                 "hermes_memory_staleness": "advice",
+                # The fixture home has no leftover ~/.hermes/plans, so this one
+                # reports ok rather than advice; the firing case is covered in
+                # LegacyPlanArtifactTests.
+                "legacy_plan_artifacts": "ok",
                 "installed_skill_context_weight": "advice",
             },
         )

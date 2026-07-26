@@ -4,8 +4,11 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from _cli_harness import run_cli
+from omh.codegraph.scanner import build_codegraph
+from omh.codegraph.schema import write_codegraph_artifact
 from omh.commands.main import build_parser
 
 
@@ -111,6 +114,31 @@ class CodegraphTests(unittest.TestCase):
             if edge["kind"] == "imports_internal"
         }
         self.assertIn(("pkg/cli.py", "pkg/core.py"), internal_imports)
+
+    def test_written_artifact_store_ignores_itself(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo = Path(tmp).resolve()
+            _sample_repo(repo)
+            # Only oh-my-hermes' own .gitignore lists `.omh/`. In any other
+            # repository the artifact was untracked, so `git add -A` after a
+            # codegraph build committed it.
+            (repo / ".git").mkdir()
+
+            status, _, stderr = run_cli(["codegraph", "build", "--repo", str(repo), "--write"])
+
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual((repo / ".omh" / ".gitignore").read_text(encoding="utf-8"), "*\n")
+
+    def test_written_artifact_outside_a_repository_gets_no_ignore_file(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo = Path(tmp).resolve()
+            _sample_repo(repo)
+
+            with patch("omh.system.paths.find_project_root", return_value=None):
+                write_codegraph_artifact(build_codegraph(repo))
+
+            self.assertTrue((repo / ".omh" / "codegraph" / "codegraph.json").exists())
+            self.assertFalse((repo / ".omh" / ".gitignore").exists())
 
     def test_build_command_writes_artifact_and_prints_json(self) -> None:
         with TemporaryDirectory() as tmp:

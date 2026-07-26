@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ..local_store import atomic_write_json
+from ..paths import ensure_project_store_ignored
 
 
 CODEGRAPH_SCHEMA_VERSION = "omh_codegraph/v1"
@@ -40,5 +41,8 @@ def write_codegraph_artifact(graph: dict[str, Any]) -> Path:
     if not repo_root:
         raise ValueError("codegraph artifact is missing repo_root")
     path = codegraph_artifact_path(repo_root)
+    # Without this the store is untracked in any repository but this one, so
+    # `git add -A` after a codegraph build commits the artifact.
+    ensure_project_store_ignored(path.parent)
     atomic_write_json(path, graph)
     return path

@@ -23,7 +23,9 @@ from omh.paths import (
     ensure_project_store_ignored,
     find_project_root,
     project_artifact_dir,
+    project_hermes_home,
     project_identity,
+    project_omh_home,
     resolve_paths,
 )
 from omh.workflows.hermes_planning import (
@@ -126,12 +128,40 @@ class ArtifactDirTests(unittest.TestCase):
             nested = root / "nested" / "deep"
             nested.mkdir(parents=True)
             paths = resolve_paths(scope="project")
-            # `--scope project` sets omh_home from the literal cwd, so without
-            # the walk a plan recorded from a subdirectory would land in
-            # nested/deep/.omh instead of the repository's own store.
             self.assertEqual(
                 project_artifact_dir(paths, "plans", cwd=nested), root / ".omh" / "plans"
             )
+
+
+class ScopeProjectAnchorTests(unittest.TestCase):
+    """`--scope project` means the project, not whichever directory you stand in."""
+
+    def test_both_homes_anchor_at_the_repository_root(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = _repo(Path(tmp).resolve())
+            nested = root / "nested" / "deep"
+            nested.mkdir(parents=True)
+            self.assertEqual(project_omh_home(nested), root / ".omh")
+            self.assertEqual(project_hermes_home(nested), root / ".hermes")
+
+    def test_the_store_and_its_artifacts_share_one_home(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = _repo(Path(tmp).resolve())
+            nested = root / "nested" / "deep"
+            nested.mkdir(parents=True)
+            paths = resolve_paths(project_omh_home(nested), project_hermes_home(nested))
+            # The literal-cwd version put manifest.json under nested/deep/.omh
+            # while plans resolved to the root: one run, two homes.
+            self.assertEqual(paths.manifest_path.parent, root / ".omh")
+            self.assertEqual(project_artifact_dir(paths, "plans").parent, root / ".omh")
+
+    def test_outside_a_repository_the_cwd_is_still_the_anchor(self) -> None:
+        with TemporaryDirectory() as tmp:
+            plain = Path(tmp).resolve() / "not-a-repo"
+            plain.mkdir()
+            with patch("omh.system.paths.find_project_root", return_value=None):
+                self.assertEqual(project_omh_home(plain), plain / ".omh")
+                self.assertEqual(project_hermes_home(plain), plain / ".hermes")
 
     def test_constructing_paths_directly_counts_as_naming_the_home(self) -> None:
         with TemporaryDirectory() as tmp:

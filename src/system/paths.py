@@ -285,11 +285,20 @@ def default_hermes_home() -> Path:
 
 
 def project_omh_home(cwd: str | Path | None = None) -> Path:
-    return expand_path(cwd or Path.cwd()) / ".omh"
+    return _project_anchor(cwd) / ".omh"
 
 
 def project_hermes_home(cwd: str | Path | None = None) -> Path:
-    return expand_path(cwd or Path.cwd()) / ".hermes"
+    return _project_anchor(cwd) / ".hermes"
+
+
+def _project_anchor(cwd: str | Path | None = None) -> Path:
+    """Where `--scope project` puts a store: the repository, not the shell's cwd."""
+    # These used the literal cwd, so running from a subdirectory scattered a
+    # store into `src/whatever/.omh` while repository-scoped artifacts resolved
+    # to the root -- one `--scope project` run, two homes.
+    root = find_project_root(cwd)
+    return root if root is not None else expand_path(cwd or Path.cwd())
 
 
 def find_project_root(cwd: str | Path | None = None) -> Path | None:
