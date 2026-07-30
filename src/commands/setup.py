@@ -26,10 +26,10 @@ from ..config_adapter import (
     ensure_external_dir,
     ensure_plugin_enabled,
     external_dirs,
+    maybe_set_memory_provider,
     memory_provider_selection,
     read_config,
     remove_external_dir,
-    set_memory_provider,
     write_config,
 )
 from ..install.compression_defaults import ensure_compression_defaults
@@ -836,6 +836,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
 
 def _apply_result(args: argparse.Namespace) -> dict[str, object]:
     paths = _paths(args)
+    memory_mode = str(getattr(args, "memory_mode", "") or "") or "review-first"
     current = read_config(paths.hermes_config_path)
     try:
         change = ensure_external_dir(current, paths.skills_dir)
@@ -850,7 +851,7 @@ def _apply_result(args: argparse.Namespace) -> dict[str, object]:
         # people AGENTS.md says should only need setup/update/doctor would never
         # have it. Claims the slot only when it is free; `set_memory_provider`
         # refuses when another product holds it, because Hermes runs exactly one.
-        memory_provider = set_memory_provider(plugin_enable.text, MEMORY_PROVIDER_NAME)
+        memory_provider = maybe_set_memory_provider(plugin_enable.text, MEMORY_PROVIDER_NAME, memory_mode)
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
     if not args.dry_run and (

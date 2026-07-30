@@ -222,6 +222,19 @@ def memory_provider_selection(config_text: str) -> str:
     return _section_scalar(config_text, "memory", "provider")
 
 
+def maybe_set_memory_provider(config_text: str, name: str, mode: str) -> ConfigChange:
+    """Alias of `set_memory_provider` that honors the CLI's memory_mode.
+
+    mode='off' means the operator explicitly told setup to leave Hermes
+    memory integration alone; in that case we must not claim the
+    `memory.provider` slot, whether it is empty or already set. Other modes
+    ('basic'/'full') preserve today's claim semantics via `set_memory_provider`.
+    """
+    if mode == "off":
+        return ConfigChange(False, "memory provider claim skipped (memory mode off)", config_text)
+    return set_memory_provider(config_text, name)
+
+
 def set_memory_provider(config_text: str, name: str) -> ConfigChange:
     """Point `memory.provider` at `name`, unless another product already holds it.
 

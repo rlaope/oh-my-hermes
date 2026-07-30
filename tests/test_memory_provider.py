@@ -743,6 +743,30 @@ class ProviderSlotTests(unittest.TestCase):
         self.assertEqual(memory_provider_selection("image_gen:\n  provider: openai\n"), "")
 
 
+class ProviderClaimTests(unittest.TestCase):
+    def test_memory_mode_off_never_writes_the_provider(self) -> None:
+        from omh.install.config_adapter import maybe_set_memory_provider
+
+        change = maybe_set_memory_provider("plugins:\n  enabled:\n    - omh\n", "omh", "off")
+        self.assertFalse(change.changed)
+        self.assertNotIn("provider", change.text)
+
+    def test_memory_mode_off_preserves_an_existing_provider(self) -> None:
+        from omh.install.config_adapter import maybe_set_memory_provider
+
+        original = "memory:\n  provider: honcho\n"
+        change = maybe_set_memory_provider(original, "omh", "off")
+        self.assertFalse(change.changed)
+        self.assertEqual(change.text, original)
+
+    def test_memory_mode_full_still_writes_the_provider(self) -> None:
+        from omh.install.config_adapter import maybe_set_memory_provider
+
+        change = maybe_set_memory_provider("plugins:\n  enabled:\n    - omh\n", "omh", "full")
+        self.assertTrue(change.changed)
+        self.assertIn("provider: omh", change.text)
+
+
 class MemoryCliTests(unittest.TestCase):
     def _base(self, root: Path) -> list[str]:
         return ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
