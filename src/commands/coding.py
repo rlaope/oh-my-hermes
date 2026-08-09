@@ -32,6 +32,7 @@ from ..routing.localization import normalized_phrase, routing_tokens
 from ..runtime.artifacts import append_journal_observation, create_prepared_coding_delegation_run, write_coding_delegation
 from ..system.paths import OmhPaths
 from ..workflows.blocked_work_records import mint_blocked_work_record
+from ..workflows.role_context_packs import validate_accepted_role_context, write_role_context_pack
 from ..wrapper.lifecycle import (
     CodingLifecycleError,
     record_codex_dispatch,
@@ -107,6 +108,7 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
         record_attached_recall_usage(paths, payload)
         if plan_artifact:
             _apply_plan_handoff_source(payload)
+            _accept_handoff_role_context(paths, payload)
         if payload.get("delegation_policy") or _payload_choice_required(payload):
             from ..executor_readiness import executor_choice_context
 
@@ -261,6 +263,32 @@ def _coding_plan_artifact(artifact: dict[str, object]) -> dict[str, object]:
         "task_statement_sha256": str(artifact.get("task_statement_sha256", "")),
         "task_statement_length": int(artifact.get("task_statement_length", 0) or 0),
     }
+
+
+def _accept_handoff_role_context(paths: OmhPaths, payload: dict[str, object]) -> None:
+    """Acceptance gate: a plan-backed handoff names one pack hash and stores it.
+
+    This is where "prepared" becomes "accepted" in this repository -- a coding
+    handoff built from a Hermes plan artifact, which `--from-plan` refuses to
+    read unless the plan carries status `accepted` or the operator explicitly
+    allowed a draft. Two things happen and neither is optional: the handoff is
+    refused if it does not name exactly one immutable pack hash, and the pack
+    it names is written into the content-addressed store so the pin stays
+    resolvable after the payload is gone.
+
+    Storing is not a mutation of anything already accepted. The destination is
+    derived from the content, so a later, different pack lands beside this one
+    instead of over it, and a handoff pinned to the old hash keeps resolving to
+    the old guidance.
+    """
+    for key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
+        handoff = payload.get(key)
+        if not isinstance(handoff, dict):
+            continue
+        errors = validate_accepted_role_context(handoff, f"coding_delegation {key}")
+        if errors:
+            raise ValueError("; ".join(errors))
+        write_role_context_pack(paths, handoff["role_context_pack"])
 
 
 def _apply_plan_handoff_source(payload: dict[str, object]) -> None:

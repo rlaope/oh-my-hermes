@@ -91,3 +91,48 @@ A handoff may contain only evaluator-eligible, conflict-free OMH context. It
 records exclusions with stable reasons instead of silently reusing stale or
 unreviewed material. Prepared handoff context remains preparation evidence,
 not execution, model-use, provider-use, review, CI, or merge evidence.
+
+## Role Context Packs
+
+Every prepared coding handoff also names one `role_context_pack/v1`: the
+reviewed guidance that travels with that handoff, addressed by the sha256 of
+its own content. The handoff carries the pin as `role_context_pack_hash` and
+the pack itself as `role_context_pack`, and a pin that does not recompute from
+the pack it names is a validation error rather than a warning.
+
+What the pack contains, and what it deliberately does not:
+
+- One ordered record per piece of guidance already approved for the handoff —
+  the `handoff_context_pack/v1` items and the `project_memory_recall_pack/v1`
+  records that passed their own eligibility gates. Nothing else composes a
+  pack.
+- Per record: its id, a short label, the sha256 of the guidance it stands for,
+  its origin surface, and the reason it was included, rendered from the reason
+  code that surface already emitted. No parallel reason vocabulary exists.
+- No guidance text. The pack is a manifest of what shaped the handoff; the
+  summaries stay in the surface they came from, bound to the pack by the
+  per-record hash.
+- No owner field. Codex, Claude Code, Hermes, and generic executor profiles
+  consume the identical contract, and identical guidance produces the identical
+  hash for all four. Owner-specific selection happens earlier, through the
+  perspective lens the recall and context builders already apply.
+
+Record order is part of the identity. The recall builder's ordering carries
+precedence, so the same records in a different order are a different pack.
+
+Packs are immutable by construction rather than by convention. The store lives
+at `.omh/memory/role-context-packs/<pack-hash>.json`, the writer derives that
+path from the content, and no update, patch, or delete entry point exists.
+Adjusting guidance before acceptance — dropping a record, or the guidance
+changing underneath — mints the next pack and leaves the accepted one
+byte-identical, so a handoff pinned to the earlier hash keeps resolving to the
+guidance it was accepted with. `diff_role_context_packs` renders the
+additions, removals, reorders, and stale records between two packs so the
+change can be shown before it is accepted.
+
+An empty pack is a real pack. A handoff that travels with no reviewed guidance
+still names a hash, and that hash is distinguishable from carrying no pack at
+all.
+
+A pack is prepared context. It is not execution, review, CI, merge, or Hermes
+internal-memory evidence.

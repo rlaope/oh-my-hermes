@@ -55,6 +55,7 @@ from ..system.record_revision import (
     revision_field_errors,
 )
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack, validate_project_memory_recall_pack
+from ..workflows.role_context_packs import validate_role_context_pack_pin
 from ..coding.action_gate import (
     HANDOFF_SAFETY_CONTRACT_KEY,
     split_handoff_safety_contract,
@@ -303,6 +304,8 @@ CODING_EXECUTOR_HANDOFF_KEYS = (
     "context_pack",
     "context_pack_blocked",
     "memory_recall_pack",
+    "role_context_pack",
+    "role_context_pack_hash",
     "project_governance_profile",
     "project_governance_blocked",
     "task_authority_envelope",
@@ -339,6 +342,8 @@ CODING_PROMPT_HANDOFF_KEYS = (
     "context_pack",
     "context_pack_blocked",
     "memory_recall_pack",
+    "role_context_pack",
+    "role_context_pack_hash",
     "project_governance_profile",
     "project_governance_blocked",
     "task_authority_envelope",
@@ -382,6 +387,8 @@ CODING_RUNTIME_HANDOFF_KEYS = (
     "context_pack",
     "context_pack_blocked",
     "memory_recall_pack",
+    "role_context_pack",
+    "role_context_pack_hash",
     "project_governance_profile",
     "project_governance_blocked",
     "task_authority_envelope",
@@ -1191,6 +1198,7 @@ def _compact_executor_handoff(value: Any) -> dict[str, Any]:
     memory_recall_pack = _compact_memory_recall_pack(value.get("memory_recall_pack"))
     if memory_recall_pack:
         compact["memory_recall_pack"] = memory_recall_pack
+    _carry_role_context_pack(value, compact)
     _compact_governance_and_family(value, compact)
     _compact_task_authority_envelope(value, compact, "executor_handoff")
     return compact
@@ -1256,6 +1264,7 @@ def _compact_prompt_handoff(value: Any) -> dict[str, Any]:
     memory_recall_pack = _compact_memory_recall_pack(value.get("memory_recall_pack"))
     if memory_recall_pack:
         compact["memory_recall_pack"] = memory_recall_pack
+    _carry_role_context_pack(value, compact)
     _compact_governance_and_family(value, compact)
     _compact_task_authority_envelope(value, compact, "prompt_handoff")
     return compact
@@ -1324,6 +1333,7 @@ def _compact_runtime_handoff(value: Any) -> dict[str, Any]:
     memory_recall_pack = _compact_memory_recall_pack(value.get("memory_recall_pack"))
     if memory_recall_pack:
         compact["memory_recall_pack"] = memory_recall_pack
+    _carry_role_context_pack(value, compact)
     team_path = _compact_hermes_coding_team_path(value.get("hermes_coding_team_path"))
     if team_path:
         compact["hermes_coding_team_path"] = team_path
@@ -1723,6 +1733,24 @@ def _compact_evidence_contract(value: Any) -> dict[str, list[str]]:
         "prepared_is_not": _compact_string_list(value.get("prepared_is_not", [])),
         "observed_required_for": _compact_string_list(value.get("observed_required_for", [])),
     }
+
+
+def _carry_role_context_pack(value: Any, compact: dict[str, Any]) -> None:
+    """Copy the pinned pack into the recorded handoff verbatim, never compacted.
+
+    Every other pack on a handoff is summarised on the way into the run ledger
+    because only its shape matters there. This one is the ledger's copy of a
+    content address: shortening any field would change what the hash covers, so
+    the recorded handoff would name a pack whose recomputation no longer
+    matched, and `validate_role_context_pack_pin` would reject the record that
+    was just written. The pack is already a bounded manifest of ids, hashes,
+    and reasons, so carrying it whole costs nothing a summary would have saved.
+    """
+    pack = value.get("role_context_pack") if isinstance(value, dict) else None
+    if not isinstance(pack, dict) or not pack:
+        return
+    compact["role_context_pack"] = deepcopy(pack)
+    compact["role_context_pack_hash"] = str(value.get("role_context_pack_hash", ""))
 
 
 def _compact_context_pack(value: Any) -> dict[str, Any]:
@@ -3852,6 +3880,10 @@ def validate_handoff_context_pack_fields(handoff: dict[str, Any], label: str) ->
         errors.extend(validate_handoff_context_blocked(handoff.get("context_pack_blocked"), label=f"{label} context_pack_blocked"))
     if "memory_recall_pack" in handoff:
         errors.extend(validate_project_memory_recall_pack(handoff.get("memory_recall_pack"), label=f"{label} memory_recall_pack"))
+    # A pinned pack hash that disagrees with the pack it names is an error, not
+    # a warning: the whole point of the pin is that a reader can trust it
+    # without re-deriving the guidance.
+    errors.extend(validate_role_context_pack_pin(handoff, label))
     return errors
 
 

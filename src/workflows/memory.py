@@ -2433,6 +2433,18 @@ def _freshness_warnings(
     return warnings
 
 
+def freshness_reason_detail(reason_code: str) -> str:
+    """Human text for one recall-pack freshness reason code, or "" when unknown.
+
+    Public so other handoff surfaces can explain a record with the vocabulary
+    the recall pack already emits instead of growing a parallel table that
+    drifts from it. Read-only on purpose: adding a code to `_FRESHNESS_REASON_TEXT`
+    also changes what `_freshness_warnings` treats as a freshness reason, so
+    the table stays owned by recall.
+    """
+    return _FRESHNESS_REASON_TEXT.get(str(reason_code), "")
+
+
 def _recall_evidence_fields(value: Any) -> dict[str, object]:
     evidence = value if isinstance(value, dict) else {}
     return {

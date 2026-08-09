@@ -67,6 +67,7 @@ from ..quality.specialist_work import build_specialist_work_quality_contract
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..isolation import build_isolation_plan
 from ..memory import validate_handoff_context_blocked, validate_handoff_context_pack, validate_project_memory_recall_pack
+from ..workflows.role_context_packs import build_role_context_pack, pin_role_context_pack
 from ..routing.executor_cues import contains_boundary_phrase
 from ..routing.recommend import recommend_skills
 from ..workflows.blocked_work_records import decision_from_action_gate, request_class_shape
@@ -586,6 +587,7 @@ def build_coding_delegation_payload(
     )
     payload["specialist_work_quality"] = specialist_work_quality
     _attach_specialist_work_quality(payload, specialist_work_quality)
+    _attach_role_context_pack(payload)
     _attach_task_authority_envelope(payload, authority_envelope)
     _attach_governance_and_family(payload, governance, family_template, quality_harness)
     payload["harness_quality"] = _public_harness_quality(
@@ -938,6 +940,32 @@ def _attach_context_pack(handoff: object, context_pack: dict[str, object] | None
     if errors:
         raise ValueError("; ".join(errors))
     handoff["context_pack"] = context_pack
+
+
+def _attach_role_context_pack(payload: dict[str, object]) -> None:
+    """Mint and pin one immutable guidance pack on whichever handoff exists.
+
+    Minting runs after the guidance surfaces are attached, so the pack names
+    exactly what survived attachment -- a blocked context pack contributes
+    nothing, and a handoff carrying no reviewed guidance still gets a pack,
+    an empty one whose hash says so. That ordering is what makes the pinned
+    hash unavoidable: there is no route that attaches guidance to a coding
+    handoff and skips the hash, because the hash is derived from the handoff
+    rather than passed into it.
+    """
+    for key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
+        handoff = payload.get(key)
+        if not isinstance(handoff, dict):
+            continue
+        context_pack = handoff.get("context_pack")
+        memory_recall_pack = handoff.get("memory_recall_pack")
+        pin_role_context_pack(
+            handoff,
+            build_role_context_pack(
+                context_pack=context_pack if isinstance(context_pack, dict) else None,
+                memory_recall_pack=memory_recall_pack if isinstance(memory_recall_pack, dict) else None,
+            ),
+        )
 
 
 def _attach_memory_recall_pack(handoff: object, memory_recall_pack: dict[str, object] | None) -> None:

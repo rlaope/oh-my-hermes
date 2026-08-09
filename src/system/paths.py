@@ -251,6 +251,11 @@ class OmhPaths:
         return self.memory_dir / "archive"
 
     @property
+    def role_context_packs_dir(self) -> Path:
+        """Content-addressed store: every file here is named by its own sha256."""
+        return self.memory_dir / "role-context-packs"
+
+    @property
     def goals_dir(self) -> Path:
         return self.omh_home / "goals"
 

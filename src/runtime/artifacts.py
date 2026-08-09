@@ -1440,6 +1440,14 @@ def _handoff_contract_summary(handoff: dict[str, Any]) -> dict[str, Any]:
     memory_recall_pack = _object_or_empty(handoff.get("memory_recall_pack"))
     if memory_recall_pack:
         summary["memory_recall_pack"] = _memory_recall_pack_summary(memory_recall_pack)
+    role_context_pack = _object_or_empty(handoff.get("role_context_pack"))
+    if role_context_pack:
+        # The linked run records the exact pack hash rather than a copy of the
+        # guidance. The hash is what a later reader resolves; copying the
+        # records into the manifest would give the run a second version of them
+        # that could drift from the one the handoff pinned.
+        summary["role_context_pack_hash"] = str(handoff.get("role_context_pack_hash", ""))
+        summary["role_context_pack"] = _role_context_pack_summary(role_context_pack)
     binding = _object_or_empty(handoff.get("executor_local_workflow"))
     selected_profile = str(summary["selected_executor_profile"])
     if binding and str(binding.get("profile", "")) == selected_profile and not validate_executor_local_workflow(binding):
@@ -1458,6 +1466,19 @@ def _context_pack_summary(context_pack: dict[str, Any]) -> dict[str, Any]:
         "blocked_by_conflicts_count": len(_list_or_empty(context_pack.get("blocked_by_conflicts"))),
         "redaction_policy": context_pack.get("redaction_policy", ""),
         "claim_boundary": context_pack.get("claim_boundary", ""),
+    }
+
+
+def _role_context_pack_summary(pack: dict[str, Any]) -> dict[str, Any]:
+    records = _list_or_empty(pack.get("records"))
+    return {
+        "schema_version": pack.get("schema_version", ""),
+        "pack_hash": pack.get("pack_hash", ""),
+        "record_count": len(records),
+        "record_ids": [str(record.get("record_id", "")) for record in records if isinstance(record, dict)],
+        "origins": sorted({str(record.get("origin", "")) for record in records if isinstance(record, dict)}),
+        "redaction_policy": pack.get("redaction_policy", ""),
+        "claim_boundary": pack.get("claim_boundary", ""),
     }
 
 
