@@ -95,7 +95,7 @@ packages = [
 
 [dependency-groups]
 lint = [
-    "ruff==0.16.1",
+    "ruff==0.16.2",
 ]
 
 # Initial static-analysis baseline (issue #638). Scoped to Pyflakes (F) —
