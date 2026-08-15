@@ -18,6 +18,7 @@ from .catalog_questions import (
 )
 from .action_copy import next_action_label as _route_next_action_label
 from .candidate_handoff import build_candidate_handoff
+from .decision_contract import build_route_decision_contract
 from .domain_signals import (
     DomainRouteSignal,
     specialist_domain_operator_override,
@@ -1391,6 +1392,7 @@ def _enriched_route(
     candidate_handoff = build_candidate_handoff(route, message)
     if candidate_handoff:
         route["candidate_handoff"] = candidate_handoff
+    route["route_decision"] = build_route_decision_contract(route)
     return _apply_skill_governance(route, skill_policy)
 
 
@@ -5871,6 +5873,7 @@ def routing_record_payload(
     user_ref: str = "",
 ) -> dict[str, object]:
     payload = {
+        "route_decision": build_route_decision_contract(decision),
         "source": decision["source"],
         "action": decision["action"],
         "selected_skill": decision["selected_skill"],

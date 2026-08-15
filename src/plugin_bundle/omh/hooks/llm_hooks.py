@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 from datetime import datetime, timezone
 import hashlib
 
@@ -161,7 +162,8 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         except Exception as exc:
             # Keep the historical degradation component stable while moving
             # the hot path from full status to the active-only projection.
-            degraded.append((COMPONENT_RUNTIME_STATUS_READ, safe_error_type(type(exc).__name__)))
+            error_type = "RuntimeError" if getattr(exc, "errno", None) == errno.ELOOP else type(exc).__name__
+            degraded.append((COMPONENT_RUNTIME_STATUS_READ, safe_error_type(error_type)))
             activity = {"active_executors": []}
         if activity.get("active_executors"):
             status = read_omh_status(omh_home=omh_home, limit=3)
@@ -182,7 +184,8 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         # exactly like a host with nothing to report.
         status = {}
         hud = {}
-        degraded.append((COMPONENT_RUNTIME_STATUS_READ, safe_error_type(type(exc).__name__)))
+        error_type = "RuntimeError" if getattr(exc, "errno", None) == errno.ELOOP else type(exc).__name__
+        degraded.append((COMPONENT_RUNTIME_STATUS_READ, safe_error_type(error_type)))
 
     if include_awareness and is_first_turn and status.get("active_executors") and not should_include_awareness:
         context_parts.insert(0, awareness_primer_context())

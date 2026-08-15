@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import math
 import os
@@ -113,7 +114,12 @@ MAX_HUD_TEXT_CHARS = 120
 
 
 def _expand_path(value: str | Path) -> Path:
-    return Path(os.path.expandvars(str(value))).expanduser().resolve()
+    try:
+        return Path(os.path.expandvars(str(value))).expanduser().resolve()
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise RuntimeError("cannot resolve path through a symlink loop") from exc
+        raise
 
 
 def _hud_text(value: Any, *, limit: int = MAX_HUD_TEXT_CHARS) -> str:

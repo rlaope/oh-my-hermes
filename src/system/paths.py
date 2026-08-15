@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -597,7 +598,14 @@ def find_project_root(cwd: str | Path | None = None) -> Path | None:
     # linked worktree, so both shapes count.
     start = expand_path(cwd or Path.cwd())
     for candidate in (start, *start.parents):
-        if (candidate / ".git").exists():
+        git_entry = candidate / ".git"
+        # Empty `.git` directories are intentionally supported as lightweight
+        # repository fixtures and by callers that only need an anchor.  Do
+        # not, however, treat a placeholder marker at the system temp root as
+        # the repository for every temporary directory below it.
+        if git_entry.is_file() or (
+            git_entry.is_dir() and candidate != Path(tempfile.gettempdir()).resolve()
+        ):
             return candidate
     return None
 

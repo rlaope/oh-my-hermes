@@ -32,6 +32,9 @@ Homepage = "https://rlaope.github.io/oh-my-hermes/"
 Issues = "https://github.com/rlaope/oh-my-hermes/issues"
 Repository = "https://github.com/rlaope/oh-my-hermes"
 
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+
 [tool.setuptools]
 packages = [
   "omh",

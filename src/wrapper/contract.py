@@ -4125,6 +4125,7 @@ def _build_chat_interaction_payload_uncached(
         if paths:
             record_attached_recall_usage(paths, delegation)
         delegation["executor_resolution"] = executor_resolution
+        delegation["route_decision"] = route_payload.get("route_decision", {})
         coding_route_decision = _coding_route_decision_for_delegation(message, executor_resolution, paths)
         delegation["coding_route_decision"] = coding_route_decision
         _attach_executor_choice_context(delegation, paths)
@@ -4322,6 +4323,7 @@ def _attach_coding_owner_handoff(
     if paths:
         record_attached_recall_usage(paths, delegation)
     delegation["executor_resolution"] = executor_resolution
+    delegation["route_decision"] = route_payload.get("route_decision", {})
     delegation["route_context"] = {
         "schema_version": "coding_route_context/v1",
         "selected_skill": route_payload.get("selected_skill", ""),
@@ -6750,12 +6752,18 @@ def _glob_fingerprints(
     child_dir_fingerprints: tuple[tuple[str, int, int, int], ...] | None = None,
     limit: int = 256,
 ) -> tuple[tuple[str, int, int, int], ...]:
+    effective_child_dir_fingerprints = (
+        child_dir_fingerprints
+        if child_dir_fingerprints is not None
+        else _child_dir_fingerprints(root, limit=limit)
+    )
     paths = _glob_fingerprint_paths_cached(
         str(root),
         pattern,
         limit,
         _path_fingerprint(root),
-        child_dir_fingerprints if child_dir_fingerprints is not None else _child_dir_fingerprints(root, limit=limit),
+        effective_child_dir_fingerprints,
+        _glob_child_target_fingerprints(root, pattern, effective_child_dir_fingerprints),
     )
     return tuple(_path_fingerprint(Path(path)) for path in paths)
 
@@ -6767,12 +6775,36 @@ def _glob_fingerprint_paths_cached(
     limit: int,
     _root_fingerprint: tuple[str, int, int, int],
     _child_dir_fingerprints: tuple[tuple[str, int, int, int], ...],
+    _child_target_fingerprints: tuple[tuple[str, int, int, int], ...],
 ) -> tuple[str, ...]:
     try:
         paths = sorted(Path(root).glob(pattern))
     except OSError:
         return ()
     return tuple(str(path) for path in paths[:limit])
+
+
+def _glob_child_target_fingerprints(
+    root: Path,
+    pattern: str,
+    child_dir_fingerprints: tuple[tuple[str, int, int, int], ...] | None,
+) -> tuple[tuple[str, int, int, int], ...]:
+    """Include nested targets in the cache key, including currently-missing ones.
+
+    A child directory's mtime is not reliable on every filesystem after a
+    file is created.  The status probe mostly uses ``*/<fixed filename>``;
+    fingerprinting those target paths makes a newly-created observation
+    invalidate the cached empty glob without removing the cache entirely.
+    """
+    if not pattern.startswith("*/") or child_dir_fingerprints is None:
+        return ()
+    relative = pattern[2:]
+    if not relative or "/" in relative or "*" in relative or "?" in relative:
+        return ()
+    return tuple(
+        _path_fingerprint(Path(directory) / relative)
+        for directory, *_ in child_dir_fingerprints
+    )
 
 
 def _child_dir_fingerprints(root: Path, *, limit: int = 256) -> tuple[tuple[str, int, int, int], ...]:

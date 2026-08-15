@@ -70,6 +70,7 @@ from ..coding.product_family_templates import validate_product_family_template
 from ..coding.product_quality_harnesses import validate_product_quality_harness
 from ..coding.project_governance import validate_project_governance_blocked, validate_project_governance_profile
 from ..routing.route_plan import compact_workflow_route_plan
+from ..routing.decision_contract import ROUTE_DECISION_SCHEMA_VERSION
 from ..skills.catalog_types import REASONING_DEMAND_VALUES
 from ..workflows.approval_receipts import (
     APPROVAL_RECEIPT_KEYS,
@@ -172,6 +173,21 @@ RUNTIME_OBSERVATION_RECORD_KEYS = (
 ROUTE_ACTIONS = ("dispatch", "clarify", "fallback")
 ROUTE_CONFIDENCES = ("low", "medium", "high")
 ROUTING_RECOMMENDATION_KEYS = ("skill", "score", "confidence", "matched", "reasoning_demand")
+ROUTE_DECISION_KEYS = (
+    "schema_version",
+    "router_stage",
+    "action",
+    "selected_skill",
+    "selected_harness",
+    "candidates",
+    "confidence",
+    "threshold",
+    "margin",
+    "explicit",
+    "ambiguous",
+    "fallback",
+    "reason",
+)
 CODING_DELEGATION_SCHEMA_VERSION = "coding_delegation/v1"
 CODING_DELEGATION_RECORD_TYPE = "coding_delegation"
 CODING_DELEGATION_ACTIONS = ("delegate", "clarify", "fallback")
@@ -839,6 +855,7 @@ def build_routing_record(routing: dict[str, Any]) -> dict[str, Any]:
     record = {
         "schema_version": SCHEMA_VERSION,
         "updated_at": utc_now(),
+        "route_decision": routing.get("route_decision", {}),
         "source": str(routing.get("source", "generic")),
         "action": action,
         "selected_skill": str(routing.get("selected_skill", "oh-my-hermes")),
@@ -2368,6 +2385,21 @@ def validate_routing_record(routing: dict[str, Any]) -> list[str]:
     _require(isinstance(routing.get("explicit"), bool), errors, "routing explicit must be boolean")
     _require(isinstance(routing.get("ambiguous"), bool), errors, "routing ambiguous must be boolean")
     _require(isinstance(routing.get("recommendations"), list), errors, "routing recommendations must be a list")
+    route_decision = routing.get("route_decision", {})
+    if route_decision:
+        _require(isinstance(route_decision, dict), errors, "routing route_decision must be an object")
+        if isinstance(route_decision, dict):
+            extra_keys = sorted(set(route_decision) - set(ROUTE_DECISION_KEYS))
+            _require(not extra_keys, errors, f"routing route_decision has unsupported keys: {extra_keys}")
+            _require(
+                route_decision.get("schema_version") == ROUTE_DECISION_SCHEMA_VERSION,
+                errors,
+                "routing route_decision schema_version is invalid",
+            )
+            if "candidates" in route_decision:
+                _require(isinstance(route_decision.get("candidates"), list), errors, "routing route_decision candidates must be a list")
+            if "fallback" in route_decision:
+                _require(isinstance(route_decision.get("fallback"), bool), errors, "routing route_decision fallback must be boolean")
     for index, recommendation in enumerate(routing.get("recommendations", [])):
         _require(isinstance(recommendation, dict), errors, f"routing recommendations[{index}] must be an object")
         if not isinstance(recommendation, dict):

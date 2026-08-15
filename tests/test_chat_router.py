@@ -4196,6 +4196,20 @@ selected_workflow=ultraprocess
         self.assertNotIn(message, json.dumps(record))
         self.assertRegex(str(record["message_sha256"]), r"^[a-f0-9]{64}$")
 
+    def test_route_decision_contract_is_shared_and_privacy_safe(self) -> None:
+        message = "risky refactor"
+        decision = route_chat_message(message, source="discord")
+
+        contract = decision["route_decision"]
+        self.assertEqual(contract["schema_version"], "route_decision/v1")
+        self.assertEqual(contract["action"], decision["action"])
+        self.assertEqual(contract["selected_skill"], decision["selected_skill"])
+        self.assertNotIn("margin", contract)
+        self.assertNotIn(message, json.dumps(contract))
+
+        record = routing_record_payload(decision, message)
+        self.assertEqual(record["route_decision"], contract)
+
     def test_public_route_payload_omits_raw_message_by_default(self) -> None:
         message = "risky refactor"
         decision = route_chat_message(message, source="discord")

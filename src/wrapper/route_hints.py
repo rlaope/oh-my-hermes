@@ -9,6 +9,7 @@ from ..plugin_bundle.omh.awareness import (
 from ..plugin_bundle.omh.degradation import degradation_chat_note
 from ..routing.catalog_questions import is_skill_catalog_question
 from ..routing.action_copy import next_action_label
+from ..routing.chat import route_chat_message
 
 # `contract` never imports this module, so the edge is one-way and cycle-free.
 # Reusing its helpers keeps the route-hint path on the same messenger-safe
@@ -40,6 +41,7 @@ def build_chat_route_hint_payload(
     metadata = dict(source_metadata or {})
     route_hint = awareness_route_hint(message, max_hints=max_hints)
     route_hint = _route_hint_with_catalog_picker(route_hint, message)
+    route_decision = route_chat_message(message, source=source, limit=max_hints)["route_decision"]
     generic_tool_checkpoint = _generic_tool_checkpoint()
     hints = [hint for hint in route_hint.get("hints", []) if isinstance(hint, dict)]
     primary_hint = hints[0] if hints else {}
@@ -50,6 +52,7 @@ def build_chat_route_hint_payload(
         source=source,
         render_profile=render_profile_for_source(source, metadata),
         generic_tool_checkpoint=generic_tool_checkpoint,
+        route_decision=route_decision,
     )
     payload: dict[str, object] = {
         "schema_version": CHAT_ROUTE_HINT_SCHEMA_VERSION,
@@ -57,6 +60,7 @@ def build_chat_route_hint_payload(
         "message_length": len(message),
         "source_metadata": metadata,
         "route_hint": route_hint,
+        "route_decision": route_decision,
         "generic_tool_checkpoint": generic_tool_checkpoint,
         "chat_response": response,
         "wrapper_contract": {
@@ -158,6 +162,7 @@ def _response_for_hint(
     source: str,
     render_profile: str,
     generic_tool_checkpoint: dict[str, object],
+    route_decision: dict[str, object],
 ) -> dict[str, object]:
     checkpoint_body = _checkpoint_body_text(generic_tool_checkpoint)
     if primary_hint:
@@ -258,6 +263,7 @@ def _response_for_hint(
         "not_executed": list(route_hint.get("not_executed", [])),
         "hints": hints,
         "catalog_question": bool(route_hint.get("catalog_question", False)),
+        "route_decision": route_decision,
     }
     # This rebuild is an explicit key whitelist, so a key added upstream is
     # dropped here by default. `degradation` is set conditionally: a healthy
