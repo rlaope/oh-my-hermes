@@ -19,6 +19,7 @@ from omh.workflow_learning import (
     build_self_improvement_store_route_record,
     build_workflow_learning_review_queue,
     build_learning_export_bundle,
+    build_routing_quality_metrics,
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
     build_workflow_eval_result,
@@ -234,6 +235,40 @@ class WorkflowLearningTests(unittest.TestCase):
             self.assertNotIn(message, serialized)
             self.assertEqual(len(list_learning_traces(paths)), 1)
             self.assertEqual(replay_regression_cases(paths)["status"], "passed")
+
+    def test_routing_quality_metrics_aggregate_outcomes_and_corrections(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_learning_trace(
+                paths,
+                build_trace_from_chat_interaction(
+                    build_chat_interaction_payload("plan a safe implementation", source="discord"),
+                    outcome="useful",
+                ),
+            )
+            write_learning_trace(
+                paths,
+                build_trace_from_chat_interaction(
+                    build_chat_interaction_payload("help me with this", source="discord"),
+                    outcome="unknown",
+                ),
+            )
+            record_missed_route(
+                paths,
+                build_chat_interaction_payload("make an image explaining the cron feature", source="discord"),
+                expected_workflow="img-summary",
+                fixture_message="make an image explaining the cron feature",
+            )
+
+            metrics = build_routing_quality_metrics(paths)
+
+            self.assertEqual(metrics["schema_version"], "routing_quality_metrics/v1")
+            self.assertEqual(metrics["counts"]["traces"], 3)
+            self.assertEqual(metrics["counts"]["operator_corrections"], 1)
+            self.assertEqual(metrics["counts"]["corrections_with_expected_workflow"], 1)
+            self.assertGreaterEqual(metrics["counts"]["traces_with_margin"], 1)
+            self.assertEqual(metrics["privacy"]["raw_prompt_stored"], False)
+            self.assertNotIn("make an image explaining the cron feature", json.dumps(metrics))
 
     def test_missed_route_helper_dry_run_does_not_write_records(self) -> None:
         with TemporaryDirectory() as tmp:

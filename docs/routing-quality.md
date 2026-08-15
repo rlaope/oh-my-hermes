@@ -18,3 +18,13 @@ regression baseline, not a claim about production traffic. The next telemetry
 step should measure the same dimensions from privacy-safe route metadata:
 dispatch accuracy from operator corrections, clarification rate, fallback
 rate, and confidence-margin distributions.
+
+Local traces can be summarized with:
+
+```bash
+omh learning metrics
+```
+
+The metrics command reads only metadata-only learning traces. Operator
+missed-route corrections are counted separately and may include an expected
+workflow identifier, while prompts and operator notes remain excluded.

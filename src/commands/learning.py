@@ -15,6 +15,7 @@ from ..workflow_learning import (
     build_self_improvement_store_route_record,
     build_workflow_learning_review_queue,
     build_workflow_learning_audit,
+    build_routing_quality_metrics,
     build_learning_export_bundle,
     build_regression_case_from_trace,
     build_trace_from_chat_interaction,
@@ -457,6 +458,15 @@ def cmd_learning_audit(args: argparse.Namespace) -> int:
     return 0 if payload.get("status") in {"ready", "no_records", "needs_attention"} else 1
 
 
+def cmd_learning_metrics(args: argparse.Namespace) -> int:
+    try:
+        payload = build_routing_quality_metrics(_paths(args), limit=args.limit)
+    except (OSError, json.JSONDecodeError, ValueError, WorkflowLearningError) as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json(payload)
+    return 0
+
+
 SKILL_DRAFT_CLAIM_BOUNDARY_NOTE = (
     "A skill draft is review material stored under .omh/learning/skill-drafts/. OMH did not install a skill, "
     "write anything under skills/, register catalog data, run the workflow, pass review, run CI, or merge."
@@ -809,6 +819,13 @@ def _add_learning_commands(sub) -> None:
     audit.add_argument("--limit", type=int, default=20, help="Maximum recent traces to summarize.")
     audit.add_argument("--all", action="store_true", help="Audit and summarize all traces.")
     audit.set_defaults(func=cmd_learning_audit)
+
+    metrics = learning_sub.add_parser(
+        "metrics",
+        help="Aggregate privacy-safe routing quality metrics from local learning traces.",
+    )
+    metrics.add_argument("--limit", type=int, default=None, help="Use only the newest N learning traces.")
+    metrics.set_defaults(func=cmd_learning_metrics)
 
     regression = learning_sub.add_parser("regression", help="Manage deterministic workflow regression cases.")
     regression_sub = regression.add_subparsers(dest="regression_command", required=True)

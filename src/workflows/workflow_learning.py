@@ -31,6 +31,7 @@ WORKFLOW_LEARNING_EXPORT_SCHEMA_VERSION = "workflow_learning_export/v1"
 WORKFLOW_LEARNING_AUDIT_SCHEMA_VERSION = "workflow_learning_audit/v1"
 LEARNING_AUDIT_CARD_SCHEMA_VERSION = "learning_audit_card/v1"
 MISSED_ROUTE_RESULT_SCHEMA_VERSION = "learning_missed_route_result/v1"
+ROUTING_QUALITY_METRICS_SCHEMA_VERSION = "routing_quality_metrics/v1"
 TRACE_REF_PREFIX = "omh-learning-trace"
 EXPORT_REF_PREFIX = "omh-learning-export"
 PRIVACY_MODE = "metadata_only"
@@ -328,6 +329,9 @@ def build_trace_from_chat_interaction(
             "Learning traces are review material, not automatic skill patches.",
         ],
     }
+    route_decision = _object(route.get("route_decision"))
+    if route_decision:
+        trace["route"]["route_decision"] = _compact_route_decision_for_learning(route_decision)
     validate_workflow_learning_trace(trace)
     return trace
 
@@ -429,6 +433,9 @@ def build_trace_from_runtime_run(
             "Learning traces are review material, not automatic skill patches.",
         ],
     }
+    route_decision = _object(routing.get("route_decision"))
+    if route_decision:
+        trace["route"]["route_decision"] = _compact_route_decision_for_learning(route_decision)
     validate_workflow_learning_trace(trace)
     return trace
 
@@ -439,6 +446,80 @@ def write_learning_trace(paths: OmhPaths, trace: dict[str, Any]) -> dict[str, An
     atomic_write_json(path, trace, private=True)
     _update_learning_index(paths, trace, "trace")
     return trace
+
+
+def build_routing_quality_metrics(paths: OmhPaths, *, limit: int | None = None) -> dict[str, Any]:
+    """Aggregate bounded routing outcomes from local metadata-only traces."""
+    traces = _read_valid_learning_records(paths.learning_traces_dir, validate_workflow_learning_trace)
+    if limit is not None:
+        traces = traces[-max(limit, 0) :]
+
+    action_counts: dict[str, int] = {}
+    confidence_counts: dict[str, int] = {}
+    margins: list[int] = []
+    corrections = 0
+    corrections_with_expected_workflow = 0
+    for trace in traces:
+        route = _object(trace.get("route"))
+        action = str(route.get("action", "unknown")) or "unknown"
+        confidence = str(route.get("confidence", "unknown")) or "unknown"
+        action_counts[action] = action_counts.get(action, 0) + 1
+        confidence_counts[confidence] = confidence_counts.get(confidence, 0) + 1
+        route_decision = _object(route.get("route_decision"))
+        margin = route_decision.get("margin")
+        if isinstance(margin, int) and not isinstance(margin, bool):
+            margins.append(margin)
+        feedback = _object(trace.get("feedback"))
+        if feedback.get("kind") == "missed_route":
+            corrections += 1
+            if str(feedback.get("expected_workflow", "")).strip():
+                corrections_with_expected_workflow += 1
+
+    dispatches = action_counts.get("dispatch", 0)
+    clarifications = action_counts.get("clarify", 0)
+    fallbacks = action_counts.get("fallback", 0)
+    total = len(traces)
+    return {
+        "schema_version": ROUTING_QUALITY_METRICS_SCHEMA_VERSION,
+        "generated_at": utc_now(),
+        "privacy": {
+            "mode": PRIVACY_MODE,
+            "raw_prompt_stored": False,
+            "raw_platform_event_stored": False,
+            "dimensions": ["action", "confidence", "route margin", "operator correction metadata"],
+        },
+        "scope": {
+            "learning_dir": str(paths.learning_dir),
+            "limit": "all" if limit is None else limit,
+        },
+        "counts": {
+            "traces": total,
+            "dispatches": dispatches,
+            "clarifications": clarifications,
+            "fallbacks": fallbacks,
+            "operator_corrections": corrections,
+            "corrections_with_expected_workflow": corrections_with_expected_workflow,
+            "traces_with_margin": len(margins),
+        },
+        "rates": {
+            "dispatch_rate": _metric_rate(dispatches, total),
+            "clarification_rate": _metric_rate(clarifications, total),
+            "fallback_rate": _metric_rate(fallbacks, total),
+            "operator_correction_rate": _metric_rate(corrections, total),
+        },
+        "action_counts": dict(sorted(action_counts.items())),
+        "confidence_counts": dict(sorted(confidence_counts.items())),
+        "margin": {
+            "count": len(margins),
+            "minimum": min(margins) if margins else None,
+            "maximum": max(margins) if margins else None,
+            "average": round(sum(margins) / len(margins), 3) if margins else None,
+        },
+        "claim_boundary": (
+            "Routing quality metrics summarize local metadata-only learning traces. "
+            "They do not identify users, retain prompts, prove production accuracy, or change routing behavior."
+        ),
+    }
 
 
 def list_learning_traces(paths: OmhPaths, *, limit: int | None = None) -> list[dict[str, Any]]:
@@ -947,6 +1028,14 @@ def record_missed_route(
         outcome="failed",
         feedback_summary="Operator reported that Hermes did not use the intended OMH workflow.",
     )
+    trace["feedback"] = {
+        "kind": "missed_route",
+        "expected_workflow": str(expected_workflow or ""),
+        "expected_harness": str(expected_harness or ""),
+        "expected_next_action": str(expected_next_action or ""),
+        "fixture_provided": bool(fixture_message),
+    }
+    validate_workflow_learning_trace(trace)
     eval_result = build_workflow_eval_result(trace, rubric_id=rubric_id)
     regression_case = build_regression_case_from_trace(
         trace,
@@ -1544,6 +1633,17 @@ def validate_workflow_learning_trace(trace: dict[str, Any]) -> None:
     status = _object(trace["status"])
     if status.get("outcome") not in _LEARNING_OUTCOMES:
         raise WorkflowLearningError("trace status.outcome is invalid")
+    feedback = trace.get("feedback")
+    if feedback is not None:
+        if not isinstance(feedback, dict):
+            raise WorkflowLearningError("trace.feedback must be an object")
+        if str(feedback.get("kind", "")) not in {"missed_route"}:
+            raise WorkflowLearningError("trace.feedback.kind is invalid")
+        for key in ("expected_workflow", "expected_harness", "expected_next_action"):
+            if not isinstance(feedback.get(key), str):
+                raise WorkflowLearningError(f"trace.feedback.{key} must be a string")
+        if not isinstance(feedback.get("fixture_provided"), bool):
+            raise WorkflowLearningError("trace.feedback.fixture_provided must be boolean")
     _reject_forbidden_payload_keys(trace)
 
 
@@ -3765,6 +3865,36 @@ def _first_sentence(value: str) -> str:
 
 def _object(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _metric_rate(count: int, total: int) -> float:
+    return round(count / total, 4) if total else 0.0
+
+
+def _compact_route_decision_for_learning(decision: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "schema_version",
+        "router_stage",
+        "action",
+        "selected_skill",
+        "selected_harness",
+        "confidence",
+        "threshold",
+        "margin",
+        "candidates",
+        "explicit",
+        "ambiguous",
+        "fallback",
+    }
+    compact = {key: decision[key] for key in allowed if key in decision}
+    candidates = compact.get("candidates")
+    if isinstance(candidates, list):
+        compact["candidates"] = [
+            {"skill": str(item.get("skill", ""))}
+            for item in candidates[:2]
+            if isinstance(item, dict) and str(item.get("skill", ""))
+        ]
+    return compact
 
 
 def _list(value: object) -> list[Any]:
