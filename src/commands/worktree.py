@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from ..executors import CODING_EXECUTOR_TARGETS
 from ..installer import OmhError
+from ..coding.branch_policy import create_feature_worktree, verify_repository_branch
 from ..worktree_creator import list_worktree_records
 from ..wrapper.worktree_binding import build_worktree_executor_binding
 from .common import _paths, _print_json
@@ -44,6 +46,24 @@ def cmd_worktree_bind(args: argparse.Namespace) -> int:
     return 1 if payload["status"] == "blocked_missing_worktree" else 0
 
 
+def cmd_worktree_feature(args: argparse.Namespace) -> int:
+    payload = create_feature_worktree(
+        Path(args.repo).resolve(),
+        seed_id=args.seed,
+        feature=args.feature,
+        worktree_path=args.path,
+        base_ref=args.base_ref,
+    )
+    _print_json({"feature_worktree": payload})
+    return 0 if payload["status"] == "created" else 1
+
+
+def cmd_worktree_verify(args: argparse.Namespace) -> int:
+    payload = verify_repository_branch(Path(args.repo).resolve(), seed_id=args.seed)
+    _print_json({"branch_policy": payload})
+    return 0 if payload["status"] == "allowed" else 1
+
+
 def _add_worktree_commands(sub) -> None:
     worktree = sub.add_parser(
         "worktree",
@@ -72,3 +92,19 @@ def _add_worktree_commands(sub) -> None:
     bind.add_argument("--runtime-profile", default="", help="Override the runtime profile for runtime observation recipes.")
     bind.add_argument("--prompt-ref", default="", help="Opaque prompt/handoff reference held by the wrapper.")
     bind.set_defaults(func=cmd_worktree_bind)
+
+    feature = worktree_sub.add_parser(
+        "feature",
+        help="Create a dedicated feature/<seed>-<name> branch and linked worktree.",
+    )
+    feature.add_argument("--repo", default=".", help="Repository root used as the worktree source.")
+    feature.add_argument("--seed", required=True, help="Seed/issue id included in the branch name.")
+    feature.add_argument("--feature", required=True, help="Short feature name used in the branch name.")
+    feature.add_argument("--path", type=Path, help="Optional linked worktree path.")
+    feature.add_argument("--base-ref", default="HEAD", help="Commit or ref used as the worktree base.")
+    feature.set_defaults(func=cmd_worktree_feature)
+
+    verify = worktree_sub.add_parser("verify", help="Verify the current repository is on an allowed feature branch.")
+    verify.add_argument("--repo", default=".", help="Repository root to verify.")
+    verify.add_argument("--seed", default="", help="Optional seed id that must appear in the branch name.")
+    verify.set_defaults(func=cmd_worktree_verify)

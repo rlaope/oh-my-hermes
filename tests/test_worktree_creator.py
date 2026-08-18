@@ -59,6 +59,13 @@ class WorktreeParserTests(unittest.TestCase):
         )
         self.assertEqual(bind_args.worktree_command, "bind")
 
+    def test_feature_and_verify_subcommands_are_available(self) -> None:
+        parser = build_parser()
+        feature = parser.parse_args(["worktree", "feature", "--seed", "ubuntu-ab12", "--feature", "memory-router"])
+        verify = parser.parse_args(["worktree", "verify", "--seed", "ubuntu-ab12"])
+        self.assertEqual(feature.worktree_command, "feature")
+        self.assertEqual(verify.worktree_command, "verify")
+
     def test_prepare_git_worktree_is_not_importable(self) -> None:
         import omh.worktree_creator as worktree_creator
 
