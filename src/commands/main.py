@@ -72,6 +72,7 @@ from .goal import (
     cmd_goal_create,
     cmd_goal_status,
 )
+from .git import _add_git_commands
 from .hermes import _add_hermes_commands, cmd_hermes_plan
 from .hud import _add_hud_commands, cmd_hud
 from .learning import (
@@ -302,6 +303,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_runtime_commands(sub)
     _add_goal_commands(sub)
     _add_state_commands(sub)
+    _add_git_commands(sub)
     return parser
 
 

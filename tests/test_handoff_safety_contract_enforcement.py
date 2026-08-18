@@ -126,6 +126,10 @@ def _imported_modules(tree: ast.Module) -> list[tuple[str, tuple[str, ...], int]
 # is reachable only from an explicit operator command; none sits on the chat or
 # handoff-preparation path.
 PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
+    "src/coding/git_checkpoint.py": (
+        "operator-invoked `omh git` checkpoint, maintenance, and range-diff commands; runs bounded local "
+        "Git observations only and never dispatches work or mutates repository state."
+    ),
     "src/coding/fanout_dispatch.py": (
         "`omh coding fanout dispatch` -- the one opt-in bridge that spawns local agent CLIs, "
         "documented as the scoped exception in CLAUDE.md."
@@ -448,6 +452,36 @@ FORGE_PROGRAMS = frozenset({"gh", "hub", "glab", "tea"})
 # The complete set of git argv literals in `src/`, keyed by file and by the run
 # of literal words that follow `git`. Every one is local; none names a remote.
 GIT_ARGV_ALLOWLIST: dict[tuple[str, tuple[str, ...]], str] = {
+    ("src/coding/git_checkpoint.py", ("status",)): (
+        "captures local dirty-state entries for a checkpoint; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("rev-parse",)): (
+        "resolves local repository metadata and commit objects for a checkpoint; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("rev-parse", "HEAD")): (
+        "captures the local HEAD commit for a checkpoint; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("branch",)): (
+        "captures the current local branch for a checkpoint; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("config", "remote.origin.url")): (
+        "captures the configured origin URL without invoking a remote Git command; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("config", "maintenance.strategy")): (
+        "reports the local maintenance strategy; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("config", "maintenance.auto")): (
+        "reports the local maintenance auto setting; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("worktree", "list")): (
+        "reports registered worktrees; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("worktree", "prune")): (
+        "reports stale worktree candidates with --dry-run only; read-only"
+    ),
+    ("src/coding/git_checkpoint.py", ("range-diff",)): (
+        "compares local patch ranges after a rebase; read-only"
+    ),
     ("src/coding/worktree_creator.py", ("worktree", "add")): (
         "creates a local isolated workspace for an executor; touches no remote"
     ),
