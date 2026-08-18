@@ -744,9 +744,10 @@ _ULTRAPROCESS_OBLIGATIONS = (
         carried=(
             CarriedEntry(
                 "handoff_policy",
-                "[capability:delivery_boundary] Convert implementation into a selected executor/runtime "
-                "handoff such as Codex, Claude Code, OMX/OMO/OMC, another coding agent, or explicit Hermes "
-                "coding runtime only when the user accepts that owner; no external CLI is the default owner.",
+                "[capability:delivery_boundary] Convert implementation into an external executor/runtime "
+                "handoff such as Codex, Claude Code, OMX/OMO/OMC, or another coding agent only when the user "
+                "accepts that owner; no external CLI is the default owner, and external handoff is a separate "
+                "opt-in path, never the default recommendation.",
             ),
         ),
         notes=(
@@ -769,9 +770,11 @@ _ULTRAPROCESS_OBLIGATIONS = (
         carried=(
             CarriedEntry(
                 "quality_bar",
-                "[capability:delivery_boundary] For implementation, hand off to the `durable_checkpoint` "
-                "capability or the selected executor/runtime path with acceptance criteria and verification "
-                "commands attached.",
+                "[capability:delivery_boundary] For implementation, default to Hermes-native delegation with "
+                "a per-lane `omh_delegate_route` mixture route and acceptance criteria and verification "
+                "commands attached; hand off to the `durable_checkpoint` capability for work that must "
+                "survive sessions, and prepare a selected external executor/runtime path only on the user's "
+                "explicit owner acceptance.",
             ),
             CarriedEntry(
                 "expected_outputs",

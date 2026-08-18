@@ -83,6 +83,7 @@ def register(ctx):
     from .tools.capability_tool import OMH_CAPABILITIES_SCHEMA, omh_capabilities_handler
     from .tools.chat_tool import OMH_INTERACT_SCHEMA, omh_interact_handler
     from .tools.context_tool import OMH_CONTEXT_SCHEMA, omh_context_handler
+    from .tools.delegate_route_tool import OMH_DELEGATE_ROUTE_SCHEMA, omh_delegate_route_handler
     from .tools.evidence_tool import OMH_EVIDENCE_SCHEMA, omh_evidence_handler
     from .tools.hud_tool import OMH_HUD_SCHEMA, omh_hud_handler
     from .tools.memory_tool import OMH_MEMORY_SCHEMA, omh_memory_handler
@@ -106,6 +107,13 @@ def register(ctx):
         OMH_CONTEXT_SCHEMA,
         omh_context_handler,
         description=OMH_CONTEXT_SCHEMA["description"],
+    )
+    ctx.register_tool(
+        "omh_delegate_route",
+        _TOOLSET,
+        OMH_DELEGATE_ROUTE_SCHEMA,
+        omh_delegate_route_handler,
+        description=OMH_DELEGATE_ROUTE_SCHEMA["description"],
     )
     ctx.register_tool(
         "omh_gather_evidence",

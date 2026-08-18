@@ -125,7 +125,12 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # review repointed the remaining retired-name recommendation copy to
 # `ultrawork` capability phrasing (the fit-recommendation rule grew by the
 # capability wording); the ceiling stays exactly the measured value.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 698935
+# Re-measured when the owner made the Hermes coding harness the default
+# implementation owner for ulw-work (#1001): the handoff policy and
+# delivery-boundary quality bar grew by the per-lane `omh_delegate_route`
+# mixture-routing guidance and the inherit-wave rule. Deliberate product
+# copy, not drift; the ceiling stays exactly the measured value.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 699780
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

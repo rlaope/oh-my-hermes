@@ -2817,7 +2817,13 @@ class RouterContentTests(unittest.TestCase):
         self.assertEqual(definitions["ai-slop-cleaner"].hermes_role, "handoff-guide")
         self.assertIn("ulw", definitions["ultrawork"].triggers)
         self.assertIn("$ulw", definitions["ultrawork"].triggers)
-        self.assertIn("selected runtime", definitions["ultrawork"].handoff_policy)
+        # Changed on purpose: the owner made the Hermes coding harness with
+        # per-lane mixture routing the default implementation owner, so the
+        # policy now asserts the Hermes-native default plus the explicit
+        # opt-in-only external handoff instead of a generic "selected runtime".
+        self.assertIn("Hermes-native delegate_task subagents", definitions["ultrawork"].handoff_policy)
+        self.assertIn("omh_delegate_route", definitions["ultrawork"].handoff_policy)
+        self.assertIn("only when the user accepts that owner", definitions["ultrawork"].handoff_policy)
         self.assertIn("selected executor/runtime handoff", definitions["ultraprocess"].handoff_policy)
         self.assertTrue(any("source or web evidence" in item for item in definitions["ralplan"].required_inputs))
         self.assertIn("verification commands", definitions["ralplan"].expected_outputs)

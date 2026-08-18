@@ -622,6 +622,7 @@ print(json.dumps(observed, ensure_ascii=False))
                 [
                     "omh_capabilities",
                     "omh_context",
+                    "omh_delegate_route",
                     "omh_gather_evidence",
                     "omh_hud",
                     "omh_interact",
