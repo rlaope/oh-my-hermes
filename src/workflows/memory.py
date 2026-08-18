@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -67,6 +68,7 @@ MEMORY_ATTENTION_CHANGE_SCHEMA_VERSION = "memory_attention_change/v1"
 MEMORY_ATTENTION_JOURNAL_SCHEMA_VERSION = "omh_memory_attention_journal/v1"
 MEMORY_ROLLUP_SCHEMA_VERSION = "omh_memory_rollup/v1"
 HERMES_MEMORY_BRIDGE_SCHEMA_VERSION = "hermes_memory_bridge/v1"
+MEMORY_RETRIEVAL_OBSERVATION_SCHEMA_VERSION = "memory_retrieval_observation/v1"
 
 SOURCE_TRUTH_LEVELS = {
     "runtime_evidence": "observed_evidence",
@@ -153,6 +155,7 @@ _PROJECT_MEMORY_RECALL_PACK_KEYS = {
     "excluded_records",
     "freshness_warnings",
     "attention",
+    "retrieval_observation",
     "record_count",
     "truncated",
     "redaction_policy",
@@ -166,6 +169,19 @@ _FRESHNESS_WARNING_KEYS = {
     "detail",
     "delivered",
     "next_action",
+}
+_RETRIEVAL_OBSERVATION_KEYS = {
+    "schema_version",
+    "rounds",
+    "latency_ms",
+    "query_length",
+    "requested_limit",
+    "selected_records",
+    "excluded_records",
+    "selected_token_estimate",
+    "truncated",
+    "cache_hit",
+    "claim_boundary",
 }
 _PROJECT_MEMORY_RECALL_ITEM_KEYS = {
     "record_id",
@@ -933,6 +949,7 @@ def memory_recall_pack_for_handoff(
     session_id: str = "",
     limit: int = 5,
 ) -> dict[str, object] | None:
+    started = time.perf_counter()
     # The executor target is the handoff's perspective lens: unscoped records
     # pass as always, and records observed for this executor join them --
     # while a record about any other executor stays out of this pack.
@@ -953,6 +970,29 @@ def memory_recall_pack_for_handoff(
     # operator never got the chance to confirm, replace, or retire it.
     if not pack.get("enabled") or not (pack.get("included_records") or pack.get("freshness_warnings")):
         return None
+    included = pack.get("included_records", [])
+    excluded = pack.get("excluded_records", [])
+    included_records = included if isinstance(included, list) else []
+    excluded_records = excluded if isinstance(excluded, list) else []
+    selected_chars = sum(
+        len(str(item.get("summary", ""))) for item in included_records if isinstance(item, dict)
+    )
+    pack["retrieval_observation"] = {
+        "schema_version": MEMORY_RETRIEVAL_OBSERVATION_SCHEMA_VERSION,
+        "rounds": 1,
+        "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+        "query_length": len(query),
+        "requested_limit": limit,
+        "selected_records": len(included_records),
+        "excluded_records": len(excluded_records),
+        "selected_token_estimate": (selected_chars + 3) // 4,
+        "truncated": bool(pack.get("truncated", False)),
+        "cache_hit": False,
+        "claim_boundary": (
+            "Retrieval observation reports this local recall-pack operation only; "
+            "it is not provider billing truth or task-success evidence."
+        ),
+    }
     return pack
 
 
@@ -2585,6 +2625,8 @@ def validate_project_memory_recall_pack(value: Any, *, label: str = "memory_reca
     # the full scalar-only shape.
     if "attention" in value:
         _validate_context_map(value.get("attention"), _RECALL_ATTENTION_KEYS, errors, f"{label}.attention")
+    if "retrieval_observation" in value:
+        _validate_context_map(value.get("retrieval_observation"), _RETRIEVAL_OBSERVATION_KEYS, errors, f"{label}.retrieval_observation")
     _validate_context_map(value.get("task_ref"), _PROJECT_MEMORY_TASK_REF_KEYS, errors, f"{label}.task_ref")
     if not isinstance(value.get("truncated"), bool):
         errors.append(f"{label}.truncated must be a boolean")
@@ -3599,7 +3641,7 @@ def _validate_context_map(value: Any, allowed: set[str], errors: list[str], labe
         return
     _validate_allowed_keys(value, allowed, errors, label)
     for key, nested in value.items():
-        if isinstance(nested, (str, int, bool)) or nested is None:
+        if isinstance(nested, (str, int, float, bool)) or nested is None:
             continue
         errors.append(f"{label}.{key} must be scalar metadata")
 

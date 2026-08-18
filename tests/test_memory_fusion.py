@@ -301,6 +301,22 @@ class DerivedFromLineageTests(unittest.TestCase):
                 self.assertEqual(result["recorded"], 0, failure)
             self.assertEqual(read_recall_usage(paths), {})
 
+    def test_handoff_recall_pack_contains_bounded_retrieval_observation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            _approve_capture(paths, "Memory retrieval uses bounded context budgets", tags=["memory", "retrieval"])
+
+            pack = memory_recall_pack_for_handoff(paths, "memory retrieval", executor_target="codex", limit=1)
+
+            self.assertIsNotNone(pack)
+            observation = pack["retrieval_observation"]
+            self.assertEqual(observation["schema_version"], "memory_retrieval_observation/v1")
+            self.assertEqual(observation["rounds"], 1)
+            self.assertEqual(observation["requested_limit"], 1)
+            self.assertEqual(observation["selected_records"], 1)
+            self.assertGreaterEqual(observation["latency_ms"], 0)
+            self.assertGreater(observation["selected_token_estimate"], 0)
+
     def test_capture_distinguishes_unreadable_from_missing_derived_from(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

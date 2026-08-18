@@ -1898,6 +1898,7 @@ def _compact_memory_recall_pack(value: Any) -> dict[str, Any]:
         "scope": _compact_context_scope(value.get("scope", {})),
         "perspective": _compact_perspective(value.get("perspective")),
         "query_intent": str(value.get("query_intent", "") or "default"),
+        "retrieval_observation": _compact_retrieval_observation(value.get("retrieval_observation")),
         # Included records survive compaction: they are already redacted,
         # bounded summaries (<=500 chars each, budget-capped), and the
         # lifecycle-backed executor path re-serves the persisted record, so
@@ -1962,6 +1963,25 @@ def _compact_ranking(value: Any) -> dict[str, Any]:
     }
     compacted["pinned"] = bool(ranking.get("pinned", False))
     return compacted
+
+
+def _compact_retrieval_observation(value: Any) -> dict[str, Any]:
+    observation = value if isinstance(value, dict) else {}
+    if not observation:
+        return {}
+    return {
+        "schema_version": str(observation.get("schema_version", "")),
+        "rounds": int(observation.get("rounds", 0) or 0),
+        "latency_ms": float(observation.get("latency_ms", 0) or 0),
+        "query_length": int(observation.get("query_length", 0) or 0),
+        "requested_limit": int(observation.get("requested_limit", 0) or 0),
+        "selected_records": int(observation.get("selected_records", 0) or 0),
+        "excluded_records": int(observation.get("excluded_records", 0) or 0),
+        "selected_token_estimate": int(observation.get("selected_token_estimate", 0) or 0),
+        "truncated": bool(observation.get("truncated", False)),
+        "cache_hit": bool(observation.get("cache_hit", False)),
+        "claim_boundary": str(observation.get("claim_boundary", "")),
+    }
 
 
 def _compact_perspective(value: Any) -> dict[str, str]:
