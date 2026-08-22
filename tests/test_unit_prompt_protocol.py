@@ -12,6 +12,7 @@ from omh.coding.fanout_dispatch import build_unit_prompt  # noqa: E402
 from omh.coding.model_routing import EXECUTOR_MODEL_OPTIONS, MODEL_ROLES  # noqa: E402
 from _cli_harness import run_cli  # noqa: E402
 from omh.coding.unit_prompt_protocol import (  # noqa: E402
+    FAILURE_KIND_PROTOCOL,
     GOAL_ECHO_PROTOCOL,
     HIGH_EFFORT_CALIBRATIONS,
     HIGH_EFFORT_TIER,
@@ -46,8 +47,13 @@ class ProtocolContentTests(unittest.TestCase):
         self.assertIn(GOAL_ECHO_PROTOCOL, prompt)
         self.assertIn("Done means, and only means:", prompt)
         self.assertIn(VERIFICATION_STOP_PROTOCOL, prompt)
+        self.assertIn(FAILURE_KIND_PROTOCOL, prompt)
         # Verification stays mandatory: the discipline bounds it, never skips it.
         self.assertIn("verification is never skipped", prompt)
+        # A policy denial is a boundary, and "blocked" needs a named persistent
+        # condition — neither may be relitigated by a rewrite.
+        self.assertIn("policy denial is a boundary, not a bug", prompt)
+        self.assertIn("remaining work is not blocked", prompt)
         self.assertIn("Commit your work; do not merge or push other branches.", prompt)
 
     def test_integration_checks_become_numbered_criteria(self) -> None:
@@ -142,6 +148,11 @@ class CalibrationSelectionTests(unittest.TestCase):
         self.assertIn("non-thinking", HIGH_EFFORT_CALIBRATIONS["qwen"])
         self.assertNotIn("<think>", HIGH_EFFORT_CALIBRATIONS["qwen"])
         self.assertIn("model version", HIGH_EFFORT_CALIBRATIONS["deepseek"])
+        # DeepSeek's own harness ships the exact-string editor contract the
+        # family is post-trained on, and treats cached prefixes as priced —
+        # both facts ride the calibration pair (deepseek-harness, 2026-08-13).
+        self.assertIn("exact literal strings", HIGH_EFFORT_CALIBRATIONS["deepseek"])
+        self.assertIn("byte-identical", MAIN_AGENT_COMPOSITION_CALIBRATIONS["deepseek"])
         self.assertIn("interleaved", HIGH_EFFORT_CALIBRATIONS["glm"])
 
     def test_no_route_means_no_calibration(self) -> None:

@@ -1,6 +1,6 @@
 """Verification discipline for prepared fanout unit prompts.
 
-Three deterministic text blocks ride every dispatched unit prompt:
+Four deterministic text blocks ride every dispatched unit prompt:
 
 1. **Goal echo-back** — before any tool use the subagent restates the goal,
    its own deliverable, and the completion criteria, and stops to report (not
@@ -12,6 +12,10 @@ Three deterministic text blocks ride every dispatched unit prompt:
    full pass is the floor, never skipped) and bounded (after the criteria
    pass, re-verifying is forbidden; on failure, at most two fix-and-verify
    cycles before reporting the failing criterion instead of looping).
+4. **Failure-kind discipline** — a permission, sandbox, or policy denial is
+   a boundary, not a bug (never retried through another route), and
+   "blocked" requires a named concrete condition that survives the bounded
+   fix cycles — difficulty, uncertainty, or remaining work is not blocked.
 
 High-effort routes additionally get a per-family calibration block that
 counters the known over-verification inertia of strong reasoning models.
@@ -50,6 +54,14 @@ VERIFICATION_STOP_PROTOCOL: Final[str] = (
     "has passed, STOP: do not re-verify, do not add a just-to-be-sure pass, and do not restart verification "
     "after edits that no criterion covers. If a criterion still fails after two fix-and-verify cycles, "
     "commit what passes and report the failing criterion with its output instead of looping."
+)
+
+FAILURE_KIND_PROTOCOL: Final[str] = (
+    "Failure-kind discipline: a permission, sandbox, or policy denial is a boundary, not a bug — do "
+    "not retry it through another tool or route; record the denial and continue with what the boundary "
+    "allows, or report it. Report blocked only when the same concrete condition still holds after the "
+    "bounded fix-and-verify cycles, and name that condition; difficulty, uncertainty, or useful "
+    "remaining work is not blocked."
 )
 
 REVIEW_ROLE_PROTOCOL: Final[str] = (
@@ -108,8 +120,9 @@ HIGH_EFFORT_CALIBRATIONS: Final[dict[str, str]] = {
         "High-effort calibration: treat the model version and declared thinking mode as contract "
         "fields; never apply legacy R1 prompting to every DeepSeek model. Preserve runtime-provided "
         "reasoning context across tool results only on a reasoning-capable route; otherwise use the "
-        "same explicit goal, boundaries, and completion criteria without thinking tags. Make the "
-        "smallest correct change, verify once, and stop."
+        "same explicit goal, boundaries, and completion criteria without thinking tags. Edit by exact "
+        "literal strings — a unique match with exact whitespace — as this family's edit training "
+        "expects. Make the smallest correct change, verify once, and stop."
     ),
     "mistral": (
         "High-effort calibration: instructions are followed literally here, so the stated criteria "
@@ -196,7 +209,9 @@ MAIN_AGENT_COMPOSITION_CALIBRATIONS: Final[dict[str, str]] = {
         "Composition calibration: keep the DeepSeek model version and thinking mode explicit in the "
         "prepared route. Preserve runtime reasoning context only when the selected model and executor "
         "support it; otherwise compose exact owners, scopes, dependencies, and verification commands "
-        "without synthetic thinking instructions. Validate once and stop."
+        "without synthetic thinking instructions. DeepSeek serving prices cached prefixes, so keep the "
+        "shared preamble byte-identical across unit prompts — stable ordering, no timestamps or "
+        "volatile status — with unit-specific content appended after it. Validate once and stop."
     ),
     "mistral": (
         "Composition calibration: write unit prompts literally and completely — a Mistral-family "
@@ -332,6 +347,7 @@ def unit_protocol_lines(unit: Mapping[str, Any]) -> list[str]:
     lines = [GOAL_ECHO_PROTOCOL, "Done means, and only means:"]
     lines.extend(f"{index}. {criterion}" for index, criterion in enumerate(criteria, start=1))
     lines.append(VERIFICATION_STOP_PROTOCOL)
+    lines.append(FAILURE_KIND_PROTOCOL)
     handoff = unit.get("handoff", {}) if isinstance(unit.get("handoff"), Mapping) else {}
     model_route = handoff.get("model_route") if isinstance(handoff.get("model_route"), Mapping) else None
     # Contract units carry the declared role inside the recorded route, not as

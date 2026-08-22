@@ -60,7 +60,7 @@ identical prompt. Nothing else about the pipeline changes per model.
 
 ## Universal protocols (every model, every family)
 
-`src/coding/unit_prompt_protocol.py` attaches three deterministic blocks to
+`src/coding/unit_prompt_protocol.py` attaches four deterministic blocks to
 every dispatched unit prompt, regardless of model:
 
 - **Goal echo-back** — before the first tool use, the subagent restates the
@@ -76,10 +76,36 @@ every dispatched unit prompt, regardless of model:
   criterion). *Why:* the two dominant agent failure modes are opposites —
   skipping verification, and looping on it — and one bounded rule counters
   both. Review-role units add criterion-bound blocking with a two-round cap.
+- **Failure-kind discipline** — a permission, sandbox, or policy denial is a
+  boundary, not a bug: the unit must not retry it through another tool or
+  route, and may report `blocked` only for a named concrete condition that
+  survives the bounded fix cycles — difficulty, uncertainty, or useful
+  remaining work is not blocked. *Why:* models over-generalize "failure →
+  try another way", which turns policy refusals into route-around attempts,
+  and under-specify "blocked", which turns difficulty into a stop. Adapted
+  from the DeepSeek Harness sandbox-denial no-retry marker and its
+  goal-policy blocked threshold ("difficulty, uncertainty, or useful
+  remaining work is not blocked"), generalized to every family because both
+  failure modes are cross-family (deepseek-ai/deepseek-harness, master
+  2026-08-13; adopted in #1071).
 
-These originate from the stop-condition techniques the oh-my-openagent
-research surfaced for high-effort models (terminal-condition rules,
-criterion-bound blocking, capped re-review), generalized to every family.
+The first three originate from the stop-condition techniques the
+oh-my-openagent research surfaced for high-effort models (terminal-condition
+rules, criterion-bound blocking, capped re-review), generalized to every
+family. The fourth comes from the DeepSeek Harness review named above.
+
+### Techniques compared and already structural (DeepSeek Harness review)
+
+The same harness review surfaced techniques OMH already carries structurally,
+recorded here so the comparison stays auditable instead of being relitigated:
+single-owner-of-facts (the skill catalog and its byte-gated generated
+projections), negative instructions phrased as the concrete behavior they
+forbid (the house calibration style throughout this file), and numeric stop
+bounds for ambiguous judgments (one-pass verification, two fix-and-verify
+cycles, two review rounds). Machine-readable result markers and
+KV-cache-aware request assembly belong to the executor/runtime that actually
+calls a model — outside the `deepseek` composer note below, they are out of
+OMH's boundary by design.
 
 ## Per-family calibrations: what, why, and where each came from
 
@@ -226,18 +252,30 @@ pairing so a benchmark claim can never mix in other prompt changes.
 - **Model trait:** a heterogeneous family — some variants are reasoning
   models, some are not, and the split moved across versions. The common
   error in the wild is applying legacy R1-era reasoning prompts to every
-  DeepSeek model, which is wrong on the non-reasoning variants.
+  DeepSeek model, which is wrong on the non-reasoning variants. Two further
+  facts come from DeepSeek's own agent harness
+  (deepseek-ai/deepseek-harness, master 2026-08-13): its benchmark preset
+  reproduces the Claude-SWE-compatible exact-string editor contract
+  verbatim — the family is post-trained on exact-literal `old_str` edit
+  semantics with uniqueness and whitespace discipline — and DeepSeek
+  serving prices cached prefixes, which that harness treats as a
+  first-class composition constraint.
 - **What OMH injects (subagent):** treat the model version and its declared
   thinking mode as *contract fields*; preserve runtime-provided reasoning
   context across tool results only on a reasoning-capable route; otherwise
-  use the same explicit goal/boundaries/criteria without thinking tags; make
+  use the same explicit goal/boundaries/criteria without thinking tags; edit
+  by exact literal strings (a unique match with exact whitespace); make
   the smallest correct change, verify once, stop.
 - **What OMH injects (composer):** keep the DeepSeek version and thinking
   mode explicit in the prepared route; no synthetic thinking instructions on
-  non-reasoning routes.
+  non-reasoning routes; keep the shared preamble byte-identical across unit
+  prompts — stable ordering, no timestamps or volatile status — with
+  unit-specific content appended after it, because cached prefixes are
+  priced.
 - **Source:** provider-published model characteristics (DeepSeek's
-  reasoning/non-reasoning variant split); shipped with the benchmark
-  harness.
+  reasoning/non-reasoning variant split; shipped with the benchmark
+  harness), plus the DeepSeek Harness review adopted in #1071 (exact-string
+  RL edit contract, priced prefix caching).
 
 ### `mistral` (Mistral Large / Medium)
 
