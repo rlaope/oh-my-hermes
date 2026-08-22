@@ -2443,5 +2443,220 @@ class FanoutBriefTextCeilingTests(unittest.TestCase):
         self.assertTrue(text.endswith("Boundary text."))
 
 
+_PY = shlex.quote(sys.executable)
+_PASSING_COMMAND = f"{_PY} -c pass"
+_FAILING_COMMAND = f"{_PY} -c 'import sys; sys.stdout.write(\"boom\"); sys.exit(3)'"
+_ENV_COMMAND = f"OMH_VERIFY=1 {_PY} -c 'import os,sys; sys.exit(0 if os.environ.get(\"OMH_VERIFY\") else 1)'"
+
+
+def _verification_runner(script: Path, sidecar: Path, payload: dict[str, object], *, mode: str = "valid"):
+    """Agent spawns write a sidecar; verification commands really run."""
+    verified: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        if argv[0] == "git":
+            return subprocess.run(argv, **kwargs)
+        if argv[0] in {"codex", "claude"}:
+            return subprocess.run(
+                [sys.executable, str(script), mode, str(sidecar), json.dumps(payload)],
+                cwd=kwargs.get("cwd"),
+                text=True,
+                capture_output=True,
+                timeout=kwargs.get("timeout"),
+            )
+        verified.append(list(argv))
+        return subprocess.run(
+            argv,
+            cwd=kwargs.get("cwd"),
+            env=kwargs.get("env"),
+            text=True,
+            capture_output=True,
+            timeout=kwargs.get("timeout"),
+        )
+
+    runner.verified = verified
+    return runner
+
+
+class FanoutDispatchVerificationTests(unittest.TestCase):
+    def _setup(self, tmp: str, commands: list[str], *, mode: str = "valid"):
+        root = Path(tmp)
+        paths = OmhPaths(omh_home=root / ".omh", hermes_home=root / ".hermes")
+        repo, sha = _make_repo(root)
+        units = [dict(unit) for unit in _UNITS]
+        units[0]["verification_commands"] = commands
+        contract = write_fanout_contract(paths, build_fanout_contract(_GOAL, units))
+        sidecar = unit_result_path(paths, contract["fanout_id"], "core")
+        runner = _verification_runner(
+            _stub_executor_script(root),
+            sidecar,
+            _unit_result_payload(contract, sha),
+            mode=mode,
+        )
+        return paths, repo, sha, contract, runner
+
+    def _dispatch(self, paths, repo, sha, contract, runner, **kwargs):
+        summary = dispatch_fanout(
+            paths,
+            contract,
+            goal_text=_GOAL,
+            repo_root=repo,
+            base_sha=sha,
+            only_units=["core"],
+            runner=runner,
+            readiness=_ready,
+            **kwargs,
+        )
+        return {entry["unit_id"]: entry for entry in summary["units"]}["core"]
+
+    def test_all_passing_commands_are_dispatcher_observed_and_flip_the_ladder(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, repo, sha, contract, runner = self._setup(tmp, [_PASSING_COMMAND, _ENV_COMMAND])
+
+            core = self._dispatch(paths, repo, sha, contract, runner, run_verification=True)
+
+            self.assertEqual(core["verification_status"], "passed")
+            self.assertEqual(len(core["verification_checks"]), 2)
+            for row in core["verification_checks"]:
+                self.assertEqual(row["status"], "passed")
+                self.assertEqual(row["reported_by"], "dispatcher")
+                self.assertEqual(row["observed_by"], "dispatcher")
+                self.assertEqual(row["observation_source"], "dispatch_verification")
+            self.assertNotIn("verification_failures", core)
+            self.assertIn("not review, CI", core["verification_claim_boundary"])
+            # The ladder flips from the journal event the run appended, not from
+            # the row list: the existing reader is what advances it.
+            self.assertTrue(_unit_verification_is_observed(paths, core["run_ref"]))
+            self.assertTrue(core["unit_verification_observed"])
+            self.assertTrue(core["integration_ready"])
+            self.assertEqual(len(runner.verified), 2)
+
+    def test_a_failing_command_keeps_the_unit_short_of_integration_ready(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, repo, sha, contract, runner = self._setup(tmp, [_PASSING_COMMAND, _FAILING_COMMAND])
+
+            core = self._dispatch(paths, repo, sha, contract, runner, run_verification=True)
+
+            self.assertEqual(core["verification_status"], "failed")
+            self.assertEqual([row["status"] for row in core["verification_checks"]], ["passed", "failed"])
+            self.assertEqual(len(core["verification_failures"]), 1)
+            self.assertIn("exit 3: boom", core["verification_failures"][0])
+            self.assertFalse(_unit_verification_is_observed(paths, core["run_ref"]))
+            self.assertFalse(core["unit_verification_observed"])
+            self.assertFalse(core["integration_ready"])
+            # The unit's own process still succeeded; only verification failed.
+            self.assertTrue(core["process_succeeded"])
+            self.assertTrue(core["result_schema_valid"])
+
+    def test_a_command_that_cannot_start_is_a_failed_check_not_a_failed_dispatch(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, repo, sha, contract, runner = self._setup(
+                tmp, ["omh-no-such-verification-binary --check"]
+            )
+
+            core = self._dispatch(paths, repo, sha, contract, runner, run_verification=True)
+
+            self.assertEqual(core["verification_status"], "failed")
+            self.assertEqual(core["status"], "completed")
+            self.assertIn("not found on PATH", core["verification_failures"][0])
+
+    def test_nothing_runs_without_the_explicit_flag(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, repo, sha, contract, runner = self._setup(tmp, [_PASSING_COMMAND])
+
+            core = self._dispatch(paths, repo, sha, contract, runner)
+
+            self.assertNotIn("verification_status", core)
+            self.assertNotIn("verification_checks", core)
+            self.assertEqual(runner.verified, [])
+            self.assertFalse(core["unit_verification_observed"])
+            self.assertFalse(core["integration_ready"])
+
+    def test_a_unit_declaring_no_commands_is_unchanged_under_the_flag(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, repo, sha, contract, runner = self._setup(tmp, [])
+
+            core = self._dispatch(paths, repo, sha, contract, runner, run_verification=True)
+
+            self.assertNotIn("verification_status", core)
+            self.assertEqual(runner.verified, [])
+            self.assertFalse(core["unit_verification_observed"])
+
+    def test_verification_waits_on_a_sidecar_that_validated(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, repo, sha, contract, runner = self._setup(tmp, [_PASSING_COMMAND], mode="corrupt")
+
+            core = self._dispatch(paths, repo, sha, contract, runner, run_verification=True)
+
+            self.assertFalse(core["result_schema_valid"])
+            self.assertNotIn("verification_status", core)
+            self.assertEqual(runner.verified, [])
+
+    def test_dry_run_names_the_commands_the_flag_would_run(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, repo, sha, contract, runner = self._setup(tmp, [_PASSING_COMMAND])
+
+            planned = self._dispatch(
+                paths, repo, sha, contract, runner, dry_run=True, run_verification=True
+            )
+            self.assertEqual(planned["planned_verification_commands"], [_PASSING_COMMAND])
+
+            without = self._dispatch(paths, repo, sha, contract, runner, dry_run=True)
+            self.assertNotIn("planned_verification_commands", without)
+            self.assertEqual(runner.verified, [])
+
+
+class FanoutDispatchVerificationCliTests(unittest.TestCase):
+    def _prepare(self, root: Path, base: list[str]) -> str:
+        units_path = root / "units.json"
+        units = [dict(unit) for unit in _UNITS]
+        units[0]["verification_commands"] = [_PASSING_COMMAND]
+        units_path.write_text(json.dumps(units), encoding="utf-8")
+        status, stdout, stderr = run_cli(
+            base
+            + ["coding", "fanout", "prepare", "--goal", *_GOAL.split(), "--units", str(units_path), "--record"]
+        )
+        self.assertEqual(status, 0, stderr)
+        contract = json.loads(stdout)
+        units_by_id = {unit["unit_id"]: unit for unit in contract["units"]}
+        self.assertEqual(units_by_id["core"]["verification_commands"], [_PASSING_COMMAND])
+        return str(contract["fanout_id"])
+
+    def test_flag_is_off_by_default_and_threaded_when_passed(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo, _sha = _make_repo(root)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            fanout_id = self._prepare(root, base)
+            goal_path = root / "goal.txt"
+            goal_path.write_text(_GOAL, encoding="utf-8")
+            captured: dict[str, object] = {}
+
+            def fake_dispatch(paths, contract, **kwargs):
+                captured.update(kwargs)
+                return {"schema_version": "fanout_dispatch_summary/v1", "units": []}
+
+            argv = base + [
+                "coding",
+                "fanout",
+                "dispatch",
+                fanout_id,
+                "--goal-file",
+                str(goal_path),
+                "--repo-root",
+                str(repo),
+                "--dry-run",
+            ]
+            with mock.patch("omh.coding.fanout_dispatch.dispatch_fanout", fake_dispatch):
+                status, _stdout, stderr = run_cli(argv)
+            self.assertEqual(status, 0, stderr)
+            self.assertFalse(captured["run_verification"])
+
+            with mock.patch("omh.coding.fanout_dispatch.dispatch_fanout", fake_dispatch):
+                status, _stdout, stderr = run_cli(argv + ["--run-verification"])
+            self.assertEqual(status, 0, stderr)
+            self.assertTrue(captured["run_verification"])
+
+
 if __name__ == "__main__":
     unittest.main()

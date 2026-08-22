@@ -90,6 +90,17 @@ def validate_unit_result(payload: Mapping[str, object]) -> dict[str, object]:
     return result
 
 
+def validate_check_rows(rows: object) -> list[dict[str, object]]:
+    """Return normalized check rows, or raise.
+
+    The same gate `validate_unit_result` applies to a payload's `checks`,
+    exposed on its own so rows the dispatcher writes about its own observations
+    pass through the identical schema — including the provenance rule — rather
+    than a second, looser copy of it.
+    """
+    return _validated_checks(rows)
+
+
 def _validated_schema_version(value: object) -> str:
     if value != FANOUT_UNIT_RESULT_SCHEMA_VERSION:
         raise ValueError(

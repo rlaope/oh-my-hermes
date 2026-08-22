@@ -20,6 +20,7 @@ from omh.coding.fanout_unit_results import (  # noqa: E402
     FANOUT_UNIT_RESULT_CHECK_STATUSES,
     FANOUT_UNIT_RESULT_PROCESS_STATUSES,
     FANOUT_UNIT_RESULT_SCHEMA_VERSION,
+    validate_check_rows,
     validate_unit_result,
 )
 
@@ -342,6 +343,34 @@ class FanoutUnitResultTests(unittest.TestCase):
 
         self.assertEqual(result["executor_note"], "written by a newer executor")
         self.assertEqual(result["checks"][0]["duration_ms"], 1234)
+
+
+class CheckRowValidatorTests(unittest.TestCase):
+    """The rows the dispatcher writes go through the same gate as the payload's."""
+
+    def _dispatcher_row(self, **overrides: object) -> dict[str, object]:
+        row = {
+            "command": "python -m unittest",
+            "status": "passed",
+            "evidence_ref": "journal:dispatch_verification:fanout-0123456789ab-core",
+            "reported_by": "dispatcher",
+            "observed_by": "dispatcher",
+            "observation_source": "dispatch_verification",
+        }
+        row.update(overrides)
+        return row
+
+    def test_dispatcher_observed_rows_validate(self) -> None:
+        rows = validate_check_rows([self._dispatcher_row(), self._dispatcher_row(status="failed")])
+
+        self.assertEqual([row["status"] for row in rows], ["passed", "failed"])
+        self.assertEqual(rows[0]["observation_source"], "dispatch_verification")
+
+    def test_a_dispatcher_row_still_has_to_name_its_observation_source(self) -> None:
+        with self.assertRaises(ValueError) as caught:
+            validate_check_rows([self._dispatcher_row(observation_source=None)])
+
+        self.assertIn("observation_source", str(caught.exception))
 
 
 if __name__ == "__main__":

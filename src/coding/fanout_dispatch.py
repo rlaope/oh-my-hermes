@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import shlex
 import shutil
@@ -26,10 +27,13 @@ from .fanout_contracts import (
     FANOUT_CLAIM_BOUNDARY,
     FANOUT_CONTRACT_SCHEMA_VERSION,
     LEGACY_FANOUT_CONTRACT_SCHEMA_VERSION,
+    UNIT_VERIFICATION_OBSERVATION_SOURCE,
+    FanoutContractError,
+    verification_command_argv,
 )
 from .inflight import InflightMarkerError, clear_inflight_marker, write_inflight_marker
 from .unit_prompt_protocol import unit_protocol_lines
-from .fanout_unit_results import validate_unit_result
+from .fanout_unit_results import validate_check_rows, validate_unit_result
 from .unit_telemetry import parse_unit_telemetry
 
 FANOUT_DISPATCH_SCHEMA_VERSION = "fanout_dispatch_summary/v1"
@@ -37,6 +41,16 @@ DISPATCH_CLAIM_BOUNDARY = (
     "A dispatch summary records observed local subprocess activity only. It is not verification, review, CI, "
     "merge-readiness, or merge evidence, and omh never merges unit branches itself."
 )
+UNIT_VERIFICATION_CLAIM_BOUNDARY = (
+    "A dispatcher verification row records that omh itself ran one command the contract declared, in that "
+    "unit's worktree, and what it exited with. It is not review, CI, merge-readiness, or merge evidence, "
+    "and a passing command proves only that command."
+)
+# Ten minutes per command. The field exists to carry unit-test and byte-gate
+# commands, which finish well inside that; the ceiling is here so one hung
+# command cannot hold a whole dispatch open.
+_VERIFICATION_COMMAND_TIMEOUT = 600
+_MAX_VERIFICATION_OUTPUT_TAIL = 300
 EXECUTOR_LIMIT_SIGNALS_SCHEMA_VERSION = "executor_limit_signals/v1"
 EXECUTOR_LIMIT_SIGNALS_CLAIM_BOUNDARY = (
     "A limit signal records that one observed local dispatch failure matched a rate/usage-limit shape. "
@@ -572,6 +586,125 @@ def _unit_verification_is_observed(paths: OmhPaths, run_ref: str) -> bool:
     return bool(projection.get("unit_verification_observed"))
 
 
+def declared_verification_commands(unit: Mapping[str, Any]) -> list[str]:
+    """The runnable commands one contract unit declares, or an empty list."""
+    declared = unit.get("verification_commands")
+    if not isinstance(declared, (list, tuple)):
+        return []
+    return [str(entry).strip() for entry in declared if str(entry).strip()]
+
+
+def _run_verification_command(
+    command: str,
+    worktree: Path,
+    runner: Callable[..., Any],
+) -> tuple[str, str]:
+    """Run one command in the unit worktree; return its status and a bounded tail.
+
+    Never raises: a command that cannot start is a failed check, not a failed
+    dispatch. `shell=False`, so the argv comes from the contract's own frozen
+    split and nothing in the command string is reinterpreted here.
+    """
+    try:
+        env_overrides, argv = verification_command_argv(command)
+    except FanoutContractError as exc:
+        return "failed", str(exc)
+    try:
+        completed = runner(
+            argv,
+            cwd=str(worktree),
+            env={**os.environ, **env_overrides},
+            text=True,
+            capture_output=True,
+            timeout=_VERIFICATION_COMMAND_TIMEOUT,
+        )
+        exit_code = int(getattr(completed, "returncode", 1))
+        combined = (
+            f"{getattr(completed, 'stdout', '') or ''}{getattr(completed, 'stderr', '') or ''}"
+        )
+    except FileNotFoundError:
+        return "failed", f"{argv[0]} not found on PATH"
+    except subprocess.TimeoutExpired:
+        return "failed", f"timed out after {_VERIFICATION_COMMAND_TIMEOUT}s"
+    except (OSError, subprocess.SubprocessError, TypeError, ValueError) as exc:
+        return "failed", f"could not run: {exc}"
+    if exit_code == 0:
+        return "passed", ""
+    tail = redact_metadata_text(
+        combined[-_MAX_VERIFICATION_OUTPUT_TAIL:], limit=_MAX_VERIFICATION_OUTPUT_TAIL
+    )
+    return "failed", f"exit {exit_code}: {tail}"
+
+
+def _run_unit_verification(
+    paths: OmhPaths,
+    unit: Mapping[str, Any],
+    *,
+    run_ref: str,
+    unit_id: str,
+    worktree: Path,
+    owner: str,
+    runner: Callable[..., Any],
+) -> dict[str, Any]:
+    """Run one unit's declared verification commands and record what was observed.
+
+    Every row is dispatcher-reported AND dispatcher-observed: omh ran the
+    command itself, which is the only way the result schema allows an
+    observation to be claimed. All rows passing is what appends the per-unit
+    `unit_verification_observed` journal event, so the ladder flips from the
+    same evidence an operator would otherwise record by hand. Any failure
+    appends nothing, leaving the unit short of `integration_ready`.
+    """
+    commands = declared_verification_commands(unit)
+    if not commands:
+        return {}
+    rows: list[dict[str, object]] = []
+    failures: list[str] = []
+    for command in commands:
+        status, detail = _run_verification_command(command, worktree, runner)
+        rows.append(
+            {
+                "command": command,
+                "status": status,
+                "evidence_ref": f"journal:{UNIT_VERIFICATION_OBSERVATION_SOURCE}:{run_ref}",
+                "reported_by": "dispatcher",
+                "observed_by": "dispatcher",
+                "observation_source": UNIT_VERIFICATION_OBSERVATION_SOURCE,
+            }
+        )
+        if status != "passed":
+            failures.append(f"{command}: {detail}")
+    # Through the shared validator, not beside it: rows omh writes about itself
+    # are held to the schema every executor-written row goes through.
+    validated_rows = validate_check_rows(rows)
+    if not failures:
+        append_journal_observation(
+            paths,
+            {
+                "target_type": "run",
+                "target_id": run_ref,
+                "run_id": run_ref,
+                "event": "unit_verification_observed",
+                "status": "observed",
+                "summary": (
+                    f"dispatcher ran {len(validated_rows)} declared verification command(s) "
+                    f"for unit {unit_id}; all passed"
+                ),
+                "worker_ref": unit_id,
+                "worktree_ref": str(worktree),
+                "runtime_profile": owner,
+            },
+        )
+    verification: dict[str, Any] = {
+        "verification_status": "failed" if failures else "passed",
+        "verification_checks": validated_rows,
+        "verification_claim_boundary": UNIT_VERIFICATION_CLAIM_BOUNDARY,
+    }
+    if failures:
+        verification["verification_failures"] = failures
+    return verification
+
+
 def dispatch_fanout(
     paths: OmhPaths,
     contract: Mapping[str, Any],
@@ -584,6 +717,7 @@ def dispatch_fanout(
     timeout: int = 1800,
     only_units: Sequence[str] | None = None,
     dry_run: bool = False,
+    run_verification: bool = False,
     runner: Callable[..., Any] = subprocess.run,
     readiness: Callable[..., dict[str, object]] = probe_executor_readiness,
     live_safety_profile_revision: str | None = None,
@@ -728,6 +862,7 @@ def dispatch_fanout(
                     source_ref=source_ref,
                     timeout=timeout,
                     dry_run=dry_run,
+                    run_verification=run_verification,
                     runner=runner,
                     readiness=readiness,
                     current_catalog_digest=current_catalog_digest,
@@ -934,6 +1069,7 @@ def _dispatch_unit(
     base_sha: str,
     timeout: int,
     dry_run: bool,
+    run_verification: bool = False,
     source_ref: str = "",
     runner: Callable[..., Any],
     readiness: Callable[..., dict[str, object]],
@@ -1045,6 +1181,12 @@ def _dispatch_unit(
         }
         if fingerprint_note is not None:
             planned["inventory_fingerprint"] = fingerprint_note
+        # Only when the operator asked for verification: a plan that named
+        # commands nothing was going to run would read as a promise.
+        if run_verification:
+            declared_commands = declared_verification_commands(unit)
+            if declared_commands:
+                planned["planned_verification_commands"] = declared_commands
         # The deep-interview surface: when the unit has not answered (no
         # declared skill_sequence) and the environment offers a genuine
         # arrangement choice, the dry run carries the question card so a
@@ -1201,6 +1343,21 @@ def _dispatch_unit(
         worktree=worktree,
         owner=owner,
     )
+    # Both rungs below it must already hold: a unit whose process failed has
+    # nothing to verify, and one whose sidecar did not validate has not yet
+    # reported what it did. Runs before the ladder is built, so the journal
+    # event it may append is visible to `_unit_verification_is_observed`.
+    verification: dict[str, Any] = {}
+    if run_verification and exit_code == 0 and unit_result.get("result_schema_valid"):
+        verification = _run_unit_verification(
+            paths,
+            unit,
+            run_ref=run_ref,
+            unit_id=unit_id,
+            worktree=worktree,
+            owner=owner,
+            runner=runner,
+        )
     result = {
         "unit_id": unit_id,
         "run_ref": run_ref,
@@ -1216,6 +1373,7 @@ def _dispatch_unit(
             unit_verification_observed=_unit_verification_is_observed(paths, run_ref),
         ),
         **unit_result,
+        **verification,
         "started_at": started_at,
         "finished_at": finished_at,
         "duration_seconds": duration_seconds,

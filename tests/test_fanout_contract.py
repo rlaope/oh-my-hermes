@@ -36,6 +36,9 @@ from omh.coding.fanout_contracts import (  # noqa: E402
     FANOUT_SPAWN_PLAN_THRESHOLD,
     FanoutContractError,
     MAX_SPAWN_PLAN_FIELD_CHARS,
+    MAX_UNIT_VERIFICATION_COMMAND_CHARS,
+    MAX_UNIT_VERIFICATION_COMMANDS,
+    verification_command_argv,
 )
 from omh.system.paths import OmhPaths  # noqa: E402
 
@@ -1351,6 +1354,91 @@ class FanoutCliTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("safe snapshot filename", stderr)
         self.assertNotIn("Traceback", stderr)
+
+
+class FanoutVerificationCommandTests(unittest.TestCase):
+    def _with_commands(self, commands: object) -> list[dict[str, object]]:
+        units = [dict(unit) for unit in _UNITS]
+        units[0]["verification_commands"] = commands
+        return units
+
+    def test_absent_field_leaves_the_contract_byte_identical(self) -> None:
+        without = build_fanout_contract("split work", _UNITS)
+        declared_empty = build_fanout_contract("split work", self._with_commands([]))
+
+        self.assertEqual(without, declared_empty)
+        for unit in without["units"]:
+            self.assertNotIn("verification_commands", unit)
+            # The prose checks are untouched by the new field either way.
+            self.assertEqual(
+                unit["integration_checks"],
+                [
+                    "unit tests covering the unit's file_scope pass",
+                    "no edits outside boundary.file_scope",
+                ],
+            )
+
+    def test_declared_commands_are_normalized_onto_the_owning_unit_only(self) -> None:
+        contract = build_fanout_contract(
+            "split work",
+            self._with_commands(["  python  -m   unittest  ", "python -c 'print(1)'"]),
+        )
+        units = {unit["unit_id"]: unit for unit in contract["units"]}
+
+        self.assertEqual(
+            units["core"]["verification_commands"],
+            ["python -m unittest", "python -c 'print(1)'"],
+        )
+        self.assertNotIn("verification_commands", units["tests"])
+        self.assertNotIn("verification_commands", units["docs"])
+
+    def test_blank_entry_is_refused_rather_than_dropped(self) -> None:
+        for bad in ([""], ["   "], ["python -m unittest", ""], [None], [42]):
+            with self.subTest(commands=bad):
+                with self.assertRaises(FanoutContractError) as raised:
+                    build_fanout_contract("split work", self._with_commands(bad))
+                self.assertIn("verification_commands entries must be non-empty", str(raised.exception))
+
+    def test_non_list_payload_is_refused(self) -> None:
+        with self.assertRaises(FanoutContractError) as raised:
+            build_fanout_contract("split work", self._with_commands("python -m unittest"))
+        self.assertIn("must be a list of command strings", str(raised.exception))
+
+    def test_count_and_length_caps_are_enforced(self) -> None:
+        too_many = [f"python -c 'print({index})'" for index in range(MAX_UNIT_VERIFICATION_COMMANDS + 1)]
+        with self.assertRaises(FanoutContractError) as raised:
+            build_fanout_contract("split work", self._with_commands(too_many))
+        self.assertIn(f"at most {MAX_UNIT_VERIFICATION_COMMANDS} commands", str(raised.exception))
+
+        too_long = ["python -c " + "a" * MAX_UNIT_VERIFICATION_COMMAND_CHARS]
+        with self.assertRaises(FanoutContractError) as raised:
+            build_fanout_contract("split work", self._with_commands(too_long))
+        self.assertIn(f"at most {MAX_UNIT_VERIFICATION_COMMAND_CHARS} chars", str(raised.exception))
+
+        at_cap = [f"python -c 'print({index})'" for index in range(MAX_UNIT_VERIFICATION_COMMANDS)]
+        contract = build_fanout_contract("split work", self._with_commands(at_cap))
+        units = {unit["unit_id"]: unit for unit in contract["units"]}
+        self.assertEqual(len(units["core"]["verification_commands"]), MAX_UNIT_VERIFICATION_COMMANDS)
+
+    def test_unrunnable_command_is_refused_at_freeze_time(self) -> None:
+        for bad in ("python -c 'unbalanced", "PYTHONPATH=tests"):
+            with self.subTest(command=bad):
+                with self.assertRaises(FanoutContractError):
+                    build_fanout_contract("split work", self._with_commands([bad]))
+
+    def test_command_split_keeps_leading_env_assignments_out_of_the_argv(self) -> None:
+        env, argv = verification_command_argv("PYTHONPATH=tests uv run python -m unittest")
+
+        self.assertEqual(env, {"PYTHONPATH": "tests"})
+        self.assertEqual(argv, ["uv", "run", "python", "-m", "unittest"])
+
+        env, argv = verification_command_argv("python -c 'print(1)'")
+        self.assertEqual(env, {})
+        self.assertEqual(argv, ["python", "-c", "print(1)"])
+
+        # No shell runs these, so a pipe is an argument rather than an operator.
+        _env, argv = verification_command_argv("python -c 'print(1)' | tee log")
+        self.assertEqual(argv, ["python", "-c", "print(1)", "|", "tee", "log"])
 
 
 if __name__ == "__main__":

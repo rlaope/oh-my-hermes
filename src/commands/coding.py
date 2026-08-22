@@ -1640,6 +1640,7 @@ def cmd_coding_fanout_dispatch(args: argparse.Namespace) -> int:
             timeout=args.timeout,
             only_units=args.unit,
             dry_run=bool(args.dry_run),
+            run_verification=bool(args.run_verification),
         )
         _print_json(summary)
         return 0
@@ -1667,6 +1668,7 @@ def cmd_coding_fanout_dispatch(args: argparse.Namespace) -> int:
             timeout=args.timeout,
             only_units=args.unit,
             dry_run=bool(args.dry_run),
+            run_verification=bool(args.run_verification),
         )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
@@ -1893,6 +1895,11 @@ def _add_coding_commands(sub) -> None:
     fanout_dispatch.add_argument("--timeout", type=int, default=1800, help="Per-unit subprocess timeout in seconds.")
     fanout_dispatch.add_argument("--unit", action="append", default=None, help="Dispatch only these unit ids (repeatable).")
     fanout_dispatch.add_argument("--dry-run", action="store_true", help="Resolve readiness, argv, and worktree paths; spawn nothing.")
+    fanout_dispatch.add_argument(
+        "--run-verification",
+        action="store_true",
+        help="Run each unit's contract verification_commands in its worktree after its sidecar validates.",
+    )
     fanout_dispatch.set_defaults(func=cmd_coding_fanout_dispatch)
 
     fanout_migrate = fanout_sub.add_parser(

@@ -17,7 +17,10 @@ from .fanout_contracts import (
     FANOUT_UNIT_OWNERS,
     FanoutContractError,
     MAX_SPAWN_PLAN_FIELD_CHARS,
+    MAX_UNIT_VERIFICATION_COMMAND_CHARS,
+    MAX_UNIT_VERIFICATION_COMMANDS,
     PREPARED_NOT_OBSERVED,
+    verification_command_argv,
 )
 from .executor_capability_snapshots import (
     ExecutorCapabilitySnapshotError,
@@ -377,6 +380,12 @@ def _normalized_unit(unit: Mapping[str, object], index: int) -> dict[str, object
         # means "arrange from discovery at dispatch time", [] means "the operator
         # chose the pure prompt". Order is preserved — a sequence is a sequence.
         "skill_sequence": _normalized_skill_sequence(unit.get("skill_sequence"), index),
+        # Prose `integration_checks` say what "verified" means; these say how a
+        # dispatcher could observe it. An empty answer is the default and means
+        # the contract names no command anyone can run for this unit.
+        "verification_commands": _normalized_verification_commands(
+            unit.get("verification_commands"), index
+        ),
     }
 
 
@@ -405,6 +414,44 @@ def _normalized_skill_sequence(value: object, index: int) -> list[str] | None:
                 f"at most {_MAX_SKILL_INVOCATION_CHARS} chars, and contain no backticks"
             )
     return entries
+
+
+def _normalized_verification_commands(value: object, index: int) -> list[str]:
+    """Collapse a unit's declared verification commands to their stored shape.
+
+    Blank entries raise rather than being dropped: a command the operator meant
+    to write and left empty is a hole in the evidence they are asking the
+    dispatcher to produce, and silently shortening the list would hide it.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise FanoutContractError(
+            f"unit at index {index} verification_commands must be a list of command strings"
+        )
+    if len(value) > MAX_UNIT_VERIFICATION_COMMANDS:
+        raise FanoutContractError(
+            f"unit at index {index} verification_commands must have at most "
+            f"{MAX_UNIT_VERIFICATION_COMMANDS} commands"
+        )
+    commands: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str) or not entry.strip():
+            raise FanoutContractError(
+                f"unit at index {index} verification_commands entries must be non-empty strings; "
+                f"got {entry!r}"
+            )
+        command = " ".join(entry.split())
+        if len(command) > MAX_UNIT_VERIFICATION_COMMAND_CHARS:
+            raise FanoutContractError(
+                f"unit at index {index} verification_commands entries must be at most "
+                f"{MAX_UNIT_VERIFICATION_COMMAND_CHARS} chars"
+            )
+        # Parsed at freeze time so a command no dispatcher could run fails here,
+        # where the operator is still holding it, rather than mid-dispatch.
+        verification_command_argv(command)
+        commands.append(command)
+    return commands
 
 
 def _sibling_scopes(units: Sequence[Mapping[str, object]], unit_id: str) -> list[str]:
@@ -468,4 +515,8 @@ def _contract_unit(
     # contracts byte-identical and means "arrange from discovery at dispatch".
     if unit.get("skill_sequence") is not None:
         contract_unit["skill_sequence"] = list(unit["skill_sequence"])
+    # Same additive rule: a unit that declared no runnable command carries no
+    # key, so contracts frozen before this field stay byte-identical.
+    if unit.get("verification_commands"):
+        contract_unit["verification_commands"] = list(unit["verification_commands"])
     return contract_unit

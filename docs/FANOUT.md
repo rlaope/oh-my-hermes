@@ -133,6 +133,34 @@ Rules:
   spawn and exit are recorded as journal observations
   (`worker_dispatch`/`worker_result`, canonicalized to
   `executor_dispatch_observed`/`executor_result_observed`).
+- **Executable verification (opt-in).** A unit may declare
+  `verification_commands: [...]` beside its prose `integration_checks`. The
+  field is optional and additive — a unit that declares none carries no key and
+  its contract stays byte-identical to one frozen before the field existed. At
+  freeze time each command is bounded (at most 8 per unit, 240 chars each), may
+  not be blank, and is split with `shlex` so a command no dispatcher could run
+  is refused while the operator is still holding it. Leading `NAME=VALUE`
+  tokens become environment overrides (this repo's own gate is spelled
+  `PYTHONPATH=tests uv run ...`); everything after them is an argv run with
+  `shell=False`, so pipes and redirections are argument text, not operators.
+  `omh coding fanout dispatch --run-verification` — explicit, never on by
+  default — runs those commands with `cwd` set to the unit's own worktree,
+  after that unit's process exited 0 *and* its sidecar validated, with a
+  10-minute ceiling per command. Each command becomes a check row omh both
+  reported and observed (`reported_by`/`observed_by: dispatcher`,
+  `observation_source: dispatch_verification`), validated through the same
+  `fanout_unit_result/v1` gate every executor-written row goes through. Only
+  when every command passes does dispatch append the unit's
+  `unit_verification_observed` journal event, which is what flips that rung of
+  the ladder — the semantics are unchanged, the observation is simply one omh
+  made itself instead of one a human recorded with `omh runtime observe`. Any
+  failure appends nothing, leaves the unit short of `integration_ready`, and is
+  reported in `verification_failures` with the exit code and a bounded output
+  tail. A command that cannot start is a failed check, never a failed dispatch.
+  Under `--dry-run` the flag only names the commands in
+  `planned_verification_commands`. This runs inside the same sanctioned
+  dispatch bridge as the unit spawns themselves: still operator-invoked, still
+  local, still no merge and no network from omh.
 - **Dependency bar.** A satisfied dependency means only that the owner agent
   process exited 0. It is not verified, reviewed, or correct work. Failed
   units block their dependents, never their independents.
@@ -409,7 +437,7 @@ omh coding fanout migrate-legacy <fanout-id> \
   [--confirm-contract-sha256 <digest>]  # operator/maintenance only
 omh coding fanout dispatch <fanout-id> --goal-file goal.txt \
   [--repo-root .] [--base-ref HEAD] [--concurrency 2] [--timeout 1800] \
-  [--unit <id> ...] [--dry-run]
+  [--unit <id> ...] [--dry-run] [--run-verification]
 omh coding model-route [--executor <profile>] [--role <role>] [--model <id>] [--effort <level>] [--domain <name>] [--explain] [--from-inventory] [--json]
 omh coding model-inventory [--json]
 omh coding composition-guide [--model <id>] [--json]
@@ -417,4 +445,5 @@ omh coding composition-guide [--model <id>] [--json]
 
 `--units` and `--goal-file` accept `-` for stdin. `--dry-run` resolves
 readiness, planned argv, and worktree paths without spawning anything or
-creating any runs.
+creating any runs. `--run-verification` is off unless typed; it runs only the
+`verification_commands` a unit's own contract declares.

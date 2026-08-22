@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+import shlex
+
 from .executors import EXECUTOR_PROFILES, HERMES_CODING_TEAM_STATUS_LADDER
 
 
@@ -73,5 +76,47 @@ FANOUT_SPAWN_PLAN_CLAIM_BOUNDARY = (
 )
 
 
+# Optional per-unit executable verification. A unit may carry command strings
+# the dispatcher runs itself under `--run-verification`; the prose
+# `integration_checks` stay beside them, unchanged. Bounded like every other
+# operator-typed contract string: eight commands is more than one unit boundary
+# can justify, and 240 chars is a command line rather than a pasted script.
+MAX_UNIT_VERIFICATION_COMMANDS = 8
+MAX_UNIT_VERIFICATION_COMMAND_CHARS = 240
+# Named once so the check rows the dispatcher writes, the journal event they
+# back, and the docs describing both cannot drift apart.
+UNIT_VERIFICATION_OBSERVATION_SOURCE = "dispatch_verification"
+
+# A leading `NAME=VALUE` token: the one shell idiom a verification command may
+# use, because the repo's own integration gate is spelled that way.
+_ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
 class FanoutContractError(ValueError):
     """Raised when a proposed fanout unit list cannot be frozen into a contract."""
+
+
+def verification_command_argv(command: str) -> tuple[dict[str, str], list[str]]:
+    """Split one verification command into env overrides and an argv.
+
+    No shell ever runs one of these — the split happens here and the argv is
+    executed with `shell=False` — so pipes, redirections, and substitutions are
+    ordinary argument text rather than operators. Leading `NAME=VALUE` tokens
+    are the single exception, kept because `PYTHONPATH=tests uv run ...` is how
+    this repo's own gate commands are written and refusing them would make the
+    field unusable for exactly the commands it exists to carry.
+
+    Raises `FanoutContractError` so the freeze path rejects an unrunnable
+    command where the operator can still fix it.
+    """
+    try:
+        tokens = shlex.split(command)
+    except ValueError as exc:
+        raise FanoutContractError(f"verification command is not parseable: {exc}") from exc
+    env: dict[str, str] = {}
+    while tokens and _ENV_ASSIGNMENT_RE.match(tokens[0]):
+        name, _, value = tokens.pop(0).partition("=")
+        env[name] = value
+    if not tokens:
+        raise FanoutContractError("verification command must name a program to run")
+    return env, tokens
