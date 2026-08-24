@@ -221,6 +221,22 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("references/catalog-index.md", meta_router.content)
         self.assertIn("Never run `omh docs workflows --json` or `omh list --json` in chat context", meta_router.content)
 
+    def test_goal_experiment_is_installable_without_reviving_retired_ultragoal(self) -> None:
+        definitions = {definition.name: definition for definition in builtin_definitions()}
+        definition = definitions["goal-experiment"]
+
+        self.assertEqual(omh_skill_display_name("goal-experiment"), "ulw-goal-experiment")
+        self.assertIn("goal-experiment", installable_skill_names())
+        self.assertIn("ulw-goal-experiment", definition.triggers)
+        self.assertNotIn("ulw-goal", definition.triggers)
+        self.assertNotEqual(definition.name, "ultragoal")
+
+        templates = {template.name: template.content for template in builtin_skill_templates()}
+        self.assertIn("goal-experiment", templates)
+        self.assertIn("name: ulw-goal-experiment", templates["goal-experiment"])
+        self.assertIn("requires_user_activation", templates["goal-experiment"])
+        self.assertIn("omh loop ulw-goal", templates["goal-experiment"])
+
     def test_router_documents_best_effort_and_recovery(self) -> None:
         router = next(skill for skill in builtin_skill_templates() if skill.name == "oh-my-hermes")
         references = {
@@ -894,6 +910,7 @@ class RouterContentTests(unittest.TestCase):
                 'connector-operator': 'omh-apps',
                 'context': 'ulw-context',
                 'deep-interview': 'ulw-interview',
+                'goal-experiment': 'ulw-goal-experiment',
                 'img-summary': 'omh-image-cards',
                 'live-info-operator': 'omh-live-info',
                 'media-input-operator': 'omh-media-input',
@@ -3616,7 +3633,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`deep-interview`, `ralplan`, `loop`", docs_readme)
         # Retired engines must not be presented as current planning skills.
         self.assertNotIn("`ultragoal`", docs_readme)
-        self.assertIn("**102 installable skills**", docs_readme)
+        self.assertIn("**103 installable skills**", docs_readme)
         self.assertIn("**Retain knowledge**", docs_readme)
         self.assertIn("python -m unittest discover -s tests", ci)
         self.assertIn("python -m compileall src", ci)

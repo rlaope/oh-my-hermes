@@ -1,7 +1,7 @@
 # Turning OMH Capability Families On and Off
 
-OMH ships 102 installable workflow skills. Before this existed the only lever
-was binary — `core` (9 skills) or `full` (all of them) — so wanting the coding
+OMH groups its installable workflow skills into six capability families. Before
+this existed the only lever was binary — `core` or `full` — so wanting the coding
 handoff surface but not the memory surface meant taking both.
 
 A capability policy makes that choice per family, without uninstalling OMH.

@@ -16,6 +16,8 @@ from omh.goal_loop import (
     LOOP_GOAL_DRIVER_HANDOFF_SCHEMA,
     LOOP_START_CARD_SCHEMA,
     LOOP_STATUS_CARD_SCHEMA,
+    ULW_GOAL_EXPERIMENT_SCHEMA,
+    ULW_GOAL_EXPERIMENT_EVALUATION_SCHEMA,
     assess_loopability,
     block_loop_queue_item,
     build_loop_cycle_narration,
@@ -23,8 +25,10 @@ from omh.goal_loop import (
     build_loop_queue_handoff,
     build_loop_start_card,
     build_loop_status_card,
+    build_ulw_goal_experiment_card,
     create_loop_cycle,
     dispatch_loop_queue_item,
+    evaluate_ulw_goal_experiment,
     inspect_loop_queue_item,
     list_loop_queue,
     loop_cycle_path,
@@ -66,7 +70,360 @@ WORKFLOW_PATTERN_PROSE = {
 }
 
 
+def _ulw_goal_turn_evidence(pair_id: str, arm: str) -> dict:
+    return {
+        "schema_version": "ulw_goal_turn_evidence/v1",
+        "session_id": f"session:{arm}:{pair_id}",
+        "turns": [
+            {
+                "turn_index": turn_index,
+                "ended_evidence_ref": f"log:{arm}:{pair_id}:turn:{turn_index}:ended",
+            }
+            for turn_index in (1, 2)
+        ],
+        "artifact_writes": [
+            {
+                "artifact": f"step{turn_index}.txt",
+                "turn_index": turn_index,
+                "observed_evidence_ref": f"stat:{arm}:{pair_id}:step{turn_index}.txt",
+            }
+            for turn_index in (1, 2)
+        ],
+    }
+
+
+def _ulw_goal_pair_records(count: int) -> list[dict]:
+    command = "python -m unittest tests.test_loop_cycle"
+    records = []
+    for index in range(count):
+        pair_id = f"release-contract-{index + 1}"
+        records.append(
+            {
+                "schema_version": "ulw_goal_paired_run/v1",
+                "pair_id": pair_id,
+                "task_id": pair_id,
+                "environment": {
+                    "model": "flagship",
+                    "provider": "moa",
+                    "permission_profile": "execute_with_gates",
+                    "turn_budget": 8,
+                    "verification_command": command,
+                },
+                "baseline": {
+                    "workflow": "ulw-loop",
+                    "turn_evidence": _ulw_goal_turn_evidence(pair_id, "baseline"),
+                    "verification": {
+                        "observed": True,
+                        "passed": True,
+                        "command": command,
+                        "evidence_refs": [f"test:baseline:{pair_id}"],
+                    },
+                },
+                "candidate": {
+                    "workflow": "ulw-goal-experiment",
+                    "activation_status": "observed",
+                    "continuation_observed": True,
+                    "turn_evidence": _ulw_goal_turn_evidence(pair_id, "candidate"),
+                    "verification": {
+                        "observed": True,
+                        "passed": True,
+                        "command": command,
+                        "evidence_refs": [f"test:candidate:{pair_id}"],
+                    },
+                },
+            }
+        )
+    return records
+
+
 class GoalLoopTests(unittest.TestCase):
+    def test_ulw_goal_experiment_prepares_native_goal_without_claiming_activation(self) -> None:
+        card = build_ulw_goal_experiment_card(
+            "Make the release workflow reliable",
+            outcome="The release workflow completes with observed verification evidence.",
+            verification="PYTHONPATH=tests uv run python -m unittest tests.test_loop_cycle passes",
+            constraints=["Preserve existing ulw-loop behavior"],
+            boundaries=["Only the OMH loop control plane is in scope"],
+            stop_when="Hermes native /goal is unavailable or a permission gate blocks progress",
+            quality_gates=["PYTHONPATH=tests uv run python -m unittest tests.test_loop_cycle"],
+        )
+
+        self.assertEqual(card["schema_version"], ULW_GOAL_EXPERIMENT_SCHEMA)
+        self.assertEqual(card["experiment_name"], "ulw-goal-experiment")
+        self.assertEqual(card["requested_alias"], "ulw-goal")
+        self.assertEqual(card["status"], "prepared_not_observed")
+        self.assertEqual(card["native_goal"]["activation_status"], "not_observed")
+        self.assertEqual(card["native_goal"]["activation_state"], "requires_user_activation")
+        self.assertFalse(card["native_goal"]["executed"])
+        self.assertEqual(card["completion_authority"]["final"], "omh_goal_completion_gate/v1")
+        self.assertEqual(card["completion_authority"]["native_judge"], "observation_only")
+        self.assertTrue(card["native_goal"]["command"].startswith("/goal "))
+        self.assertIn(
+            "verify: PYTHONPATH=tests uv run python -m unittest tests.test_loop_cycle passes",
+            card["native_goal"]["command"],
+        )
+        self.assertIn(
+            "/goal gate add PYTHONPATH=tests uv run python -m unittest tests.test_loop_cycle",
+            card["native_goal"]["follow_up_commands"],
+        )
+        self.assertIn("/subgoal <criterion>", card["native_goal"]["control_commands"])
+        self.assertEqual(card["evaluation"]["baseline"], "ulw-loop")
+        self.assertEqual(card["evaluation"]["candidate"], "ulw-goal-experiment")
+        self.assertEqual(card["absorption_gate"]["decision"], "keep_ulw_loop_default")
+        self.assertFalse(card["absorption_gate"]["eligible"])
+        self.assertIn("not activation evidence", card["claim_boundary"])
+
+    def test_ulw_goal_experiment_exposes_role_playbook_and_evidence_state_machine(self) -> None:
+        card = build_ulw_goal_experiment_card(
+            "Make the release workflow reliable",
+            outcome="The release workflow completes with observed verification evidence.",
+            verification="PYTHONPATH=tests uv run python -m unittest tests.test_loop_cycle passes",
+            constraints=["Preserve existing ulw-loop behavior"],
+            boundaries=["Only the OMH loop control plane is in scope"],
+            stop_when="A permission, verification, context, budget, or native-goal gate blocks progress",
+            quality_gates=["PYTHONPATH=tests uv run python -m unittest tests.test_loop_cycle"],
+        )
+
+        playbook = card["execution_playbook"]
+        self.assertEqual(playbook["schema_version"], "ulw_goal_execution_playbook/v1")
+        self.assertEqual(playbook["status"], "prepared_not_observed")
+        self.assertEqual(playbook["progress_policy"], "advance_one_role_after_its_observed_gate")
+        self.assertEqual(
+            [stage["role"] for stage in playbook["stages"]],
+            ["interviewer", "planner", "researcher", "builder", "reviewer", "loop_controller"],
+        )
+        self.assertEqual(playbook["stages"][0]["state"], "ready")
+        self.assertTrue(all(stage["state"] == "blocked_by_prior_gate" for stage in playbook["stages"][1:]))
+        self.assertEqual(
+            list(card["evidence_state_machine"]),
+            ["preparation", "activation", "continuation", "deterministic_verification", "omh_completion", "absorption"],
+        )
+        self.assertEqual(card["evidence_state_machine"]["preparation"]["status"], "prepared_not_observed")
+        self.assertEqual(card["evidence_state_machine"]["activation"]["status"], "not_observed")
+        self.assertEqual(card["evidence_state_machine"]["absorption"]["status"], "blocked")
+        self.assertIn("verification_failed", playbook["stop_conditions"])
+        self.assertIn("native_goal_unavailable", playbook["stop_conditions"])
+
+    def test_ulw_goal_evaluation_rejects_missing_paired_run_records(self) -> None:
+        scores = {
+            "completion_rate": 4.0,
+            "false_completion_rate": 4.0,
+            "verification_evidence_quality": 4.0,
+            "user_interventions": 4.0,
+            "turn_and_cost_efficiency": 4.0,
+        }
+        hard_gates = {
+            "false_completion_rate_not_worse": True,
+            "verification_evidence_quality_not_worse": True,
+            "stop_and_permission_controls_preserved": True,
+            "observed_verification_overrides_judge_claim": True,
+        }
+
+        with self.assertRaisesRegex(ValueError, "paired_run_records are required"):
+            evaluate_ulw_goal_experiment(
+                paired_runs=5,
+                baseline_scores=scores,
+                candidate_scores=scores,
+                hard_gate_results=hard_gates,
+            )
+
+    def test_ulw_goal_evaluation_rejects_continuation_claim_without_turn_evidence(self) -> None:
+        scores = {
+            "completion_rate": 4.0,
+            "false_completion_rate": 4.0,
+            "verification_evidence_quality": 4.0,
+            "user_interventions": 4.0,
+            "turn_and_cost_efficiency": 4.0,
+        }
+        hard_gates = {
+            "false_completion_rate_not_worse": True,
+            "verification_evidence_quality_not_worse": True,
+            "stop_and_permission_controls_preserved": True,
+            "observed_verification_overrides_judge_claim": True,
+        }
+        pair = _ulw_goal_pair_records(1)[0]
+        del pair["candidate"]["turn_evidence"]
+
+        with self.assertRaisesRegex(ValueError, "candidate turn_evidence is required"):
+            evaluate_ulw_goal_experiment(
+                paired_runs=1,
+                baseline_scores=scores,
+                candidate_scores=scores,
+                hard_gate_results=hard_gates,
+                paired_run_records=[pair],
+            )
+
+    def test_ulw_goal_evaluation_rejects_multiple_artifact_writes_in_one_turn(self) -> None:
+        scores = {
+            "completion_rate": 4.0,
+            "false_completion_rate": 4.0,
+            "verification_evidence_quality": 4.0,
+            "user_interventions": 4.0,
+            "turn_and_cost_efficiency": 4.0,
+        }
+        hard_gates = {
+            "false_completion_rate_not_worse": True,
+            "verification_evidence_quality_not_worse": True,
+            "stop_and_permission_controls_preserved": True,
+            "observed_verification_overrides_judge_claim": True,
+        }
+        pair = _ulw_goal_pair_records(1)[0]
+        pair["candidate"]["turn_evidence"]["artifact_writes"][1]["turn_index"] = 1
+
+        with self.assertRaisesRegex(ValueError, "candidate turn_evidence.artifact_writes must assign at most one artifact per turn"):
+            evaluate_ulw_goal_experiment(
+                paired_runs=1,
+                baseline_scores=scores,
+                candidate_scores=scores,
+                hard_gate_results=hard_gates,
+                paired_run_records=[pair],
+            )
+
+    def test_ulw_goal_evaluation_rejects_scores_without_observed_pair_verification(self) -> None:
+        scores = {
+            "completion_rate": 4.0,
+            "false_completion_rate": 4.0,
+            "verification_evidence_quality": 4.0,
+            "user_interventions": 4.0,
+            "turn_and_cost_efficiency": 4.0,
+        }
+        hard_gates = {
+            "false_completion_rate_not_worse": True,
+            "verification_evidence_quality_not_worse": True,
+            "stop_and_permission_controls_preserved": True,
+            "observed_verification_overrides_judge_claim": True,
+        }
+        pair = {
+            "schema_version": "ulw_goal_paired_run/v1",
+            "pair_id": "release-contract-1",
+            "task_id": "release-contract",
+            "environment": {
+                "model": "flagship",
+                "provider": "moa",
+                "permission_profile": "execute_with_gates",
+                "turn_budget": 8,
+                "verification_command": "python -m unittest tests.test_loop_cycle",
+            },
+            "baseline": {
+                "workflow": "ulw-loop",
+                "verification": {
+                    "observed": True,
+                    "passed": True,
+                    "command": "python -m unittest tests.test_loop_cycle",
+                    "evidence_refs": ["run:baseline:release-contract-1"],
+                },
+            },
+            "candidate": {
+                "workflow": "ulw-goal-experiment",
+                "activation_status": "observed",
+                "continuation_observed": True,
+                "verification": {
+                    "observed": False,
+                    "passed": False,
+                    "command": "python -m unittest tests.test_loop_cycle",
+                    "evidence_refs": [],
+                },
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "candidate verification must be observed"):
+            evaluate_ulw_goal_experiment(
+                paired_runs=1,
+                baseline_scores=scores,
+                candidate_scores=scores,
+                hard_gate_results=hard_gates,
+                paired_run_records=[pair],
+            )
+
+    def test_ulw_goal_evaluation_blocks_absorption_without_observed_activation_and_continuation(self) -> None:
+        baseline = {
+            "completion_rate": 3.0,
+            "false_completion_rate": 3.5,
+            "verification_evidence_quality": 3.0,
+            "user_interventions": 3.0,
+            "turn_and_cost_efficiency": 3.0,
+        }
+        candidate = {metric: 4.5 for metric in baseline}
+        hard_gates = {
+            "false_completion_rate_not_worse": True,
+            "verification_evidence_quality_not_worse": True,
+            "stop_and_permission_controls_preserved": True,
+            "observed_verification_overrides_judge_claim": True,
+        }
+        records = _ulw_goal_pair_records(5)
+        records[0]["candidate"]["activation_status"] = "not_observed"
+        records[1]["candidate"]["continuation_observed"] = False
+
+        evaluation = evaluate_ulw_goal_experiment(
+            paired_runs=5,
+            baseline_scores=baseline,
+            candidate_scores=candidate,
+            hard_gate_results=hard_gates,
+            paired_run_records=records,
+        )
+
+        self.assertFalse(evaluation["observed_native_goal_gate"]["met"])
+        self.assertEqual(
+            evaluation["observed_native_goal_gate"]["unobserved_activation_pair_ids"],
+            ["release-contract-1"],
+        )
+        self.assertEqual(
+            evaluation["observed_native_goal_gate"]["unobserved_continuation_pair_ids"],
+            ["release-contract-2"],
+        )
+        self.assertFalse(evaluation["absorption_gate"]["eligible"])
+        self.assertEqual(evaluation["absorption_gate"]["decision"], "keep_ulw_loop_default")
+
+    def test_ulw_goal_evaluation_requires_multidimensional_gain_and_hard_gates(self) -> None:
+        baseline = {
+            "completion_rate": 3.0,
+            "false_completion_rate": 3.0,
+            "verification_evidence_quality": 3.0,
+            "user_interventions": 3.0,
+            "turn_and_cost_efficiency": 3.0,
+        }
+        candidate = {metric: 4.0 for metric in baseline}
+        hard_gates = {
+            "false_completion_rate_not_worse": True,
+            "verification_evidence_quality_not_worse": True,
+            "stop_and_permission_controls_preserved": True,
+            "observed_verification_overrides_judge_claim": True,
+        }
+        records = _ulw_goal_pair_records(5)
+
+        passed = evaluate_ulw_goal_experiment(
+            paired_runs=5,
+            baseline_scores=baseline,
+            candidate_scores=candidate,
+            hard_gate_results=hard_gates,
+            paired_run_records=records,
+        )
+        blocked = evaluate_ulw_goal_experiment(
+            paired_runs=5,
+            baseline_scores=baseline,
+            candidate_scores=candidate,
+            hard_gate_results={**hard_gates, "observed_verification_overrides_judge_claim": False},
+            paired_run_records=records,
+        )
+
+        low_axis = evaluate_ulw_goal_experiment(
+            paired_runs=5,
+            baseline_scores=baseline,
+            candidate_scores={**candidate, "turn_and_cost_efficiency": 2.5},
+            hard_gate_results=hard_gates,
+            paired_run_records=records,
+        )
+
+        self.assertEqual(passed["schema_version"], ULW_GOAL_EXPERIMENT_EVALUATION_SCHEMA)
+        self.assertEqual(passed["material_improvement_threshold"], 0.20)
+        self.assertTrue(passed["absorption_gate"]["eligible"])
+        self.assertEqual(passed["absorption_gate"]["decision"], "absorb_into_ulw_loop_default")
+        self.assertFalse(blocked["absorption_gate"]["eligible"])
+        self.assertEqual(blocked["absorption_gate"]["decision"], "keep_ulw_loop_default")
+        self.assertIn("observed_verification_overrides_judge_claim", blocked["failed_hard_gates"])
+        self.assertFalse(low_axis["absorption_gate"]["eligible"])
+        self.assertEqual(low_axis["below_minimum_axes"], ["turn_and_cost_efficiency"])
+
     def test_loop_start_card_redacts_goal_and_exposes_start_contract(self) -> None:
         card = build_loop_start_card(
             "Make OMH a 10k-star quality Hermes-native project",

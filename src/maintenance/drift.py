@@ -188,7 +188,7 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="installable_skill_count",
             describe="Installable workflow skills quoted in reference surfaces",
             live=_installable_skill_count,
-            expected=102,
+            expected=103,
             sites=(
                 "docs/README.md",
             ),

@@ -5,7 +5,7 @@ import re
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Final, Iterable
+from typing import Any, Final, Iterable, Mapping
 
 from ..codex_progress import summarize_codex_jsonl_text
 from ..goal_ledger import build_goal_completion_gate, read_goal_ledger
@@ -41,6 +41,24 @@ _INNER_TIER_EXPECTED_SIGNAL = (
     "or targeted test output returns pass/fail."
 )
 _GOAL_DRIVER_LINE_LIMIT = 360
+ULW_GOAL_EXPERIMENT_SCHEMA = "ulw_goal_experiment/v1"
+ULW_GOAL_EXPERIMENT_EVALUATION_SCHEMA = "ulw_goal_experiment_evaluation/v1"
+ULW_GOAL_EXECUTION_PLAYBOOK_SCHEMA = "ulw_goal_execution_playbook/v1"
+ULW_GOAL_PAIRED_RUN_SCHEMA = "ulw_goal_paired_run/v1"
+ULW_GOAL_TURN_EVIDENCE_SCHEMA = "ulw_goal_turn_evidence/v1"
+ULW_GOAL_METRIC_WEIGHTS = {
+    "completion_rate": 30,
+    "false_completion_rate": 25,
+    "verification_evidence_quality": 20,
+    "user_interventions": 15,
+    "turn_and_cost_efficiency": 10,
+}
+ULW_GOAL_HARD_GATES = (
+    "false_completion_rate_not_worse",
+    "verification_evidence_quality_not_worse",
+    "stop_and_permission_controls_preserved",
+    "observed_verification_overrides_judge_claim",
+)
 
 LOOP_PHASES = {
     "interview",
@@ -399,6 +417,565 @@ LOOP_CORE_SKILLS = tuple(
         for skill in (str(role["skill"]), *[str(item) for item in role.get("adjacent_skills", [])])
     )
 )
+
+
+def build_ulw_goal_experiment_card(
+    objective: str,
+    *,
+    outcome: str,
+    verification: str,
+    constraints: Iterable[str] | None = None,
+    boundaries: Iterable[str] | None = None,
+    stop_when: str,
+    quality_gates: Iterable[str] | None = None,
+    linked_loop_id: str = "",
+    linked_goal_id: str = "",
+) -> dict[str, Any]:
+    """Prepare ``ulw-goal`` without claiming that Hermes activated ``/goal``."""
+
+    headline = _safe_summary(objective, limit=360)
+    contract_outcome = _safe_summary(outcome, limit=360)
+    contract_verification = _safe_summary(verification, limit=360)
+    contract_stop = _safe_summary(stop_when, limit=360)
+    if not headline:
+        raise ValueError("ulw-goal objective is required")
+    if not contract_outcome:
+        raise ValueError("ulw-goal outcome is required")
+    if not contract_verification:
+        raise ValueError("ulw-goal verification is required")
+    if not contract_stop:
+        raise ValueError("ulw-goal stop_when is required")
+
+    constraint_rows = _non_empty_summaries(constraints, limit=360)
+    boundary_rows = _non_empty_summaries(boundaries, limit=360)
+    gate_rows = _non_empty_summaries(quality_gates, limit=500)
+    command_lines = [
+        f"/goal {headline}",
+        "",
+        f"outcome: {contract_outcome}",
+        f"verify: {contract_verification}",
+    ]
+    if constraint_rows:
+        command_lines.append(f"constraints: {'; '.join(constraint_rows)}")
+    if boundary_rows:
+        command_lines.append(f"boundaries: {'; '.join(boundary_rows)}")
+    command_lines.append(f"stop when: {contract_stop}")
+
+    return {
+        "schema_version": ULW_GOAL_EXPERIMENT_SCHEMA,
+        "experiment_name": "ulw-goal-experiment",
+        "requested_alias": "ulw-goal",
+        "status": "prepared_not_observed",
+        "linked_loop_id": _safe_summary(linked_loop_id, limit=128),
+        "linked_goal_id": _safe_summary(linked_goal_id, limit=128),
+        "native_goal": {
+            "owner": "hermes",
+            "activation_status": "not_observed",
+            "activation_state": "requires_user_activation",
+            "executed": False,
+            "prepared_slash_text": "\n".join(command_lines),
+            "command": "\n".join(command_lines),
+            "completion_contract": {
+                "outcome": contract_outcome,
+                "verification": contract_verification,
+                "constraints": constraint_rows,
+                "boundaries": boundary_rows,
+                "stop_when": contract_stop,
+            },
+            "follow_up_commands": [f"/goal gate add {gate}" for gate in gate_rows],
+            "control_commands": [
+                "/goal status",
+                "/goal show",
+                "/goal pause",
+                "/goal resume",
+                "/goal wait <pid> [reason]",
+                "/goal unwait",
+                "/subgoal <criterion>",
+            ],
+            "capability_boundary": (
+                "Hermes CLI or gateway command handling must accept this command in the target session. "
+                "OMH does not set GoalManager state or enqueue Hermes continuation turns."
+            ),
+        },
+        "ulw_loop": {
+            "role_pipeline": _loop_role_pipeline(),
+            "verification_policy": _loop_verification_policy(),
+            "failure_modes": _failure_mode_definitions(),
+            "responsibility": (
+                "Shape the goal, plan evidence, preserve checkpoints, and refuse completion when required "
+                "observed verification is missing."
+            ),
+        },
+        "execution_playbook": _ulw_goal_execution_playbook(),
+        "evidence_state_machine": _ulw_goal_evidence_state_machine(),
+        "completion_authority": {
+            "native_judge": "observation_only",
+            "native_judgement_effect": "does_not_satisfy_omh_criteria_automatically",
+            "final": "omh_goal_completion_gate/v1",
+        },
+        "evaluation": {
+            "baseline": "ulw-loop",
+            "candidate": "ulw-goal-experiment",
+            "minimum_paired_runs": 5,
+            "metrics": [
+                {
+                    "id": metric,
+                    "weight": weight,
+                    "direction": (
+                        "lower_is_better"
+                        if metric in {"false_completion_rate", "user_interventions"}
+                        else "higher_is_better"
+                    ),
+                }
+                for metric, weight in ULW_GOAL_METRIC_WEIGHTS.items()
+            ],
+            "score_interpretation": "Review each observed metric on a 0-5 scale where a higher score is better.",
+            "hard_gates": list(ULW_GOAL_HARD_GATES),
+        },
+        "absorption_gate": {
+            "decision": "keep_ulw_loop_default",
+            "eligible": False,
+            "required_evidence": [
+                "minimum_paired_runs_met",
+                "all_hard_gates_pass",
+                "weighted_efficiency_improves_materially",
+                "no_material_task_class_regression",
+                "safe_fallback_without_native_goal",
+            ],
+            "decision_owner": "reviewed experiment result",
+        },
+        "next_action": "submit_native_goal_command_then_record_observed_activation",
+        "claim_boundary": (
+            "This card is prepared OMH guidance, not activation evidence. It does not prove that Hermes "
+            "accepted /goal, continued a turn, ran a gate, verified work, or completed the goal."
+        ),
+    }
+
+
+def _ulw_goal_execution_playbook() -> dict[str, Any]:
+    stage_gates = {
+        "interviewer": (
+            "objective_outcome_verification_constraints_boundaries_and_stop_when_are_explicit",
+            "completion_contract_reviewed",
+        ),
+        "planner": (
+            "completion_contract_reviewed",
+            "bounded_plan_with_acceptance_and_verification_exists",
+        ),
+        "researcher": (
+            "bounded_plan_with_acceptance_and_verification_exists",
+            "decision_relevant_facts_have_source_or_repo_evidence",
+        ),
+        "builder": (
+            "decision_relevant_facts_have_source_or_repo_evidence",
+            "selected_owner_and_reversible_execution_handoff_are_explicit",
+        ),
+        "reviewer": (
+            "observed_execution_evidence_exists",
+            "deterministic_verification_and_review_evidence_pass",
+        ),
+        "loop_controller": (
+            "deterministic_verification_and_review_evidence_pass_or_gap_is_named",
+            "continue_wait_block_or_complete_is_evidence_backed",
+        ),
+    }
+    stages = []
+    for index, role in enumerate(_loop_role_pipeline()):
+        role_id = str(role["id"])
+        entry_gate, exit_gate = stage_gates[role_id]
+        stages.append(
+            {
+                "position": index + 1,
+                "role": role_id,
+                "skill": role["skill"],
+                "responsibility": role["responsibility"],
+                "entry_gate": entry_gate,
+                "exit_gate": exit_gate,
+                "state": "ready" if index == 0 else "blocked_by_prior_gate",
+                "observed_evidence_refs": [],
+            }
+        )
+    return {
+        "schema_version": ULW_GOAL_EXECUTION_PLAYBOOK_SCHEMA,
+        "status": "prepared_not_observed",
+        "progress_policy": "advance_one_role_after_its_observed_gate",
+        "stages": stages,
+        "stop_conditions": [
+            "permission_blocked",
+            "verification_failed",
+            "context_exhausted",
+            "budget_exhausted",
+            "external_wait",
+            "native_goal_unavailable",
+        ],
+        "claim_boundary": (
+            "The playbook defines role order and gates only. It is not evidence that a role ran, "
+            "Hermes activated /goal, work executed, or verification passed."
+        ),
+    }
+
+
+def _ulw_goal_evidence_state_machine() -> dict[str, dict[str, Any]]:
+    return {
+        "preparation": {
+            "status": "prepared_not_observed",
+            "required_evidence": ["ulw_goal_experiment/v1"],
+        },
+        "activation": {
+            "status": "not_observed",
+            "required_evidence": ["target Hermes session accepted /goal"],
+        },
+        "continuation": {
+            "status": "not_observed",
+            "required_evidence": ["target Hermes session continued at least one turn under the goal"],
+        },
+        "deterministic_verification": {
+            "status": "not_observed",
+            "required_evidence": ["named verification command and observed exit/result"],
+        },
+        "omh_completion": {
+            "status": "blocked",
+            "required_evidence": ["omh_goal_completion_gate/v1 with linked observed evidence"],
+        },
+        "absorption": {
+            "status": "blocked",
+            "required_evidence": ["five valid paired runs and every absorption hard gate"],
+        },
+    }
+
+
+def evaluate_ulw_goal_experiment(
+    *,
+    paired_runs: int,
+    baseline_scores: Mapping[str, float],
+    candidate_scores: Mapping[str, float],
+    hard_gate_results: Mapping[str, bool],
+    paired_run_records: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Evaluate scored paired runs and keep absorption behind safety gates."""
+
+    if paired_runs < 0:
+        raise ValueError("paired_runs must be non-negative")
+    baseline = _validated_ulw_goal_scores(baseline_scores, "baseline_scores")
+    candidate = _validated_ulw_goal_scores(candidate_scores, "candidate_scores")
+    if paired_run_records is None:
+        raise ValueError("paired_run_records are required for observed evaluation")
+    records = _validated_ulw_goal_paired_runs(paired_run_records)
+    if len(records) != paired_runs:
+        raise ValueError("paired_runs must equal the number of paired_run_records")
+    missing_gates = [gate for gate in ULW_GOAL_HARD_GATES if gate not in hard_gate_results]
+    unknown_gates = sorted(set(hard_gate_results) - set(ULW_GOAL_HARD_GATES))
+    if missing_gates:
+        raise ValueError(f"hard_gate_results missing: {', '.join(missing_gates)}")
+    if unknown_gates:
+        raise ValueError(f"hard_gate_results unknown: {', '.join(unknown_gates)}")
+
+    baseline_weighted = _weighted_ulw_goal_score(baseline)
+    candidate_weighted = _weighted_ulw_goal_score(candidate)
+    improvement_ratio = (
+        (candidate_weighted - baseline_weighted) / baseline_weighted
+        if baseline_weighted > 0
+        else (1.0 if candidate_weighted > 0 else 0.0)
+    )
+    failed_hard_gates = [gate for gate in ULW_GOAL_HARD_GATES if not bool(hard_gate_results[gate])]
+    below_minimum_axes = [metric for metric, score in candidate.items() if score < 3.0]
+    unobserved_activation_pair_ids = [
+        record["pair_id"]
+        for record in records
+        if record["candidate"]["activation_status"] != "observed"
+    ]
+    unobserved_continuation_pair_ids = [
+        record["pair_id"]
+        for record in records
+        if record["candidate"]["continuation_observed"] is not True
+    ]
+    observed_native_goal_gate_met = not (
+        unobserved_activation_pair_ids or unobserved_continuation_pair_ids
+    )
+    minimum_runs_met = paired_runs >= 5
+    material_improvement = improvement_ratio >= 0.20
+    eligible = (
+        minimum_runs_met
+        and observed_native_goal_gate_met
+        and not failed_hard_gates
+        and not below_minimum_axes
+        and material_improvement
+    )
+
+    return {
+        "schema_version": ULW_GOAL_EXPERIMENT_EVALUATION_SCHEMA,
+        "experiment_name": "ulw-goal-experiment",
+        "requested_alias": "ulw-goal",
+        "paired_runs": paired_runs,
+        "paired_run_evidence": {
+            "provided": paired_run_records is not None,
+            "validated_count": len(records),
+            "pair_ids": [record["pair_id"] for record in records],
+        },
+        "observed_native_goal_gate": {
+            "met": observed_native_goal_gate_met,
+            "unobserved_activation_pair_ids": unobserved_activation_pair_ids,
+            "unobserved_continuation_pair_ids": unobserved_continuation_pair_ids,
+        },
+        "minimum_paired_runs": 5,
+        "minimum_paired_runs_met": minimum_runs_met,
+        "score_scale": {"minimum": 0.0, "maximum": 5.0, "kind": "reviewed_observation_score"},
+        "weights": dict(ULW_GOAL_METRIC_WEIGHTS),
+        "baseline": {"scores": baseline, "weighted_score": baseline_weighted},
+        "candidate": {"scores": candidate, "weighted_score": candidate_weighted},
+        "improvement_ratio": improvement_ratio,
+        "material_improvement_threshold": 0.20,
+        "material_improvement_met": material_improvement,
+        "minimum_axis_score": 3.0,
+        "below_minimum_axes": below_minimum_axes,
+        "hard_gate_results": {gate: bool(hard_gate_results[gate]) for gate in ULW_GOAL_HARD_GATES},
+        "failed_hard_gates": failed_hard_gates,
+        "absorption_gate": {
+            "eligible": eligible,
+            "decision": "absorb_into_ulw_loop_default" if eligible else "keep_ulw_loop_default",
+        },
+        "claim_boundary": (
+            "This evaluation derives a decision from reviewed scores and supplied gate results. It is not "
+            "Hermes /goal activation, execution, verification, review, CI, merge, or completion evidence."
+        ),
+    }
+
+
+def _validated_ulw_goal_paired_runs(
+    records: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    pair_ids: set[str] = set()
+    for index, value in enumerate(records):
+        label = f"paired_run_records[{index}]"
+        record = _paired_run_mapping(value, label)
+        if record.get("schema_version") != ULW_GOAL_PAIRED_RUN_SCHEMA:
+            raise ValueError(f"{label} schema_version must be {ULW_GOAL_PAIRED_RUN_SCHEMA}")
+        pair_id = _paired_run_text(record.get("pair_id"), f"{label} pair_id")
+        task_id = _paired_run_text(record.get("task_id"), f"{label} task_id")
+        if pair_id in pair_ids:
+            raise ValueError(f"duplicate paired-run pair_id: {pair_id}")
+        pair_ids.add(pair_id)
+
+        environment = _paired_run_mapping(record.get("environment"), f"{label} environment")
+        model = _paired_run_text(environment.get("model"), f"{label} environment.model")
+        provider = _paired_run_text(environment.get("provider"), f"{label} environment.provider")
+        permission_profile = _paired_run_text(
+            environment.get("permission_profile"),
+            f"{label} environment.permission_profile",
+        )
+        verification_command = _paired_run_text(
+            environment.get("verification_command"),
+            f"{label} environment.verification_command",
+        )
+        turn_budget = environment.get("turn_budget")
+        if not isinstance(turn_budget, int) or isinstance(turn_budget, bool) or turn_budget <= 0:
+            raise ValueError(f"{label} environment.turn_budget must be a positive integer")
+
+        baseline = _validated_ulw_goal_run_leg(
+            record.get("baseline"),
+            label=f"{label} baseline",
+            expected_workflow="ulw-loop",
+            verification_command=verification_command,
+        )
+        candidate = _validated_ulw_goal_run_leg(
+            record.get("candidate"),
+            label=f"{label} candidate",
+            expected_workflow="ulw-goal-experiment",
+            verification_command=verification_command,
+        )
+        activation_status = candidate.get("activation_status")
+        if activation_status not in {"observed", "not_observed", "unavailable"}:
+            raise ValueError(f"{label} candidate activation_status is invalid")
+        if not isinstance(candidate.get("continuation_observed"), bool):
+            raise ValueError(f"{label} candidate continuation_observed must be boolean")
+
+        normalized.append(
+            {
+                "schema_version": ULW_GOAL_PAIRED_RUN_SCHEMA,
+                "pair_id": pair_id,
+                "task_id": task_id,
+                "environment": {
+                    "model": model,
+                    "provider": provider,
+                    "permission_profile": permission_profile,
+                    "turn_budget": turn_budget,
+                    "verification_command": verification_command,
+                },
+                "baseline": baseline,
+                "candidate": candidate,
+            }
+        )
+    return normalized
+
+
+def _validated_ulw_goal_run_leg(
+    value: Any,
+    *,
+    label: str,
+    expected_workflow: str,
+    verification_command: str,
+) -> dict[str, Any]:
+    leg = _paired_run_mapping(value, label)
+    if leg.get("workflow") != expected_workflow:
+        raise ValueError(f"{label} workflow must be {expected_workflow}")
+    verification = _paired_run_mapping(leg.get("verification"), f"{label} verification")
+    if verification.get("observed") is not True:
+        raise ValueError(f"{label} verification must be observed")
+    if not isinstance(verification.get("passed"), bool):
+        raise ValueError(f"{label} verification.passed must be boolean")
+    command = _paired_run_text(verification.get("command"), f"{label} verification.command")
+    if command != verification_command:
+        raise ValueError(f"{label} verification.command must match the shared environment")
+    evidence_refs = verification.get("evidence_refs")
+    if not isinstance(evidence_refs, list) or not evidence_refs:
+        raise ValueError(f"{label} verification.evidence_refs must be a non-empty list")
+    normalized_refs = [
+        _paired_run_text(item, f"{label} verification.evidence_refs")
+        for item in evidence_refs
+    ]
+    result = {
+        "workflow": expected_workflow,
+        "verification": {
+            "observed": True,
+            "passed": bool(verification["passed"]),
+            "command": command,
+            "evidence_refs": normalized_refs,
+        },
+    }
+    if expected_workflow == "ulw-goal-experiment":
+        result["activation_status"] = leg.get("activation_status")
+        result["continuation_observed"] = leg.get("continuation_observed")
+        result["turn_evidence"] = _validated_ulw_goal_turn_evidence(
+            leg.get("turn_evidence"),
+            label=f"{label} turn_evidence",
+            continuation_claimed=leg.get("continuation_observed") is True,
+        )
+    return result
+
+
+def _validated_ulw_goal_turn_evidence(
+    value: Any,
+    *,
+    label: str,
+    continuation_claimed: bool,
+) -> dict[str, Any]:
+    if value is None:
+        raise ValueError(f"{label} is required")
+    evidence = _paired_run_mapping(value, label)
+    if evidence.get("schema_version") != ULW_GOAL_TURN_EVIDENCE_SCHEMA:
+        raise ValueError(
+            f"{label} schema_version must be {ULW_GOAL_TURN_EVIDENCE_SCHEMA}"
+        )
+    session_id = _paired_run_text(evidence.get("session_id"), f"{label}.session_id")
+    turns = evidence.get("turns")
+    if not isinstance(turns, list) or not turns:
+        raise ValueError(f"{label}.turns must be a non-empty list")
+
+    normalized_turns: list[dict[str, Any]] = []
+    for index, value in enumerate(turns):
+        turn_label = f"{label}.turns[{index}]"
+        turn = _paired_run_mapping(value, turn_label)
+        turn_index = turn.get("turn_index")
+        if (
+            not isinstance(turn_index, int)
+            or isinstance(turn_index, bool)
+            or turn_index <= 0
+        ):
+            raise ValueError(f"{turn_label}.turn_index must be a positive integer")
+        normalized_turns.append(
+            {
+                "turn_index": turn_index,
+                "ended_evidence_ref": _paired_run_text(
+                    turn.get("ended_evidence_ref"),
+                    f"{turn_label}.ended_evidence_ref",
+                ),
+            }
+        )
+
+    turn_indices = [turn["turn_index"] for turn in normalized_turns]
+    if turn_indices != list(range(1, len(normalized_turns) + 1)):
+        raise ValueError(f"{label}.turns must be contiguous and ordered from 1")
+    if continuation_claimed and len(normalized_turns) < 2:
+        raise ValueError(
+            f"{label}.turns must include at least two same-session turns when continuation_observed is true"
+        )
+    artifact_writes = evidence.get("artifact_writes")
+    if not isinstance(artifact_writes, list) or not artifact_writes:
+        raise ValueError(f"{label}.artifact_writes must be a non-empty list")
+    normalized_writes: list[dict[str, Any]] = []
+    artifact_names: set[str] = set()
+    writes_per_turn: dict[int, int] = {}
+    for index, value in enumerate(artifact_writes):
+        write_label = f"{label}.artifact_writes[{index}]"
+        write = _paired_run_mapping(value, write_label)
+        artifact = _paired_run_text(write.get("artifact"), f"{write_label}.artifact")
+        turn_index = write.get("turn_index")
+        if (
+            not isinstance(turn_index, int)
+            or isinstance(turn_index, bool)
+            or turn_index not in turn_indices
+        ):
+            raise ValueError(f"{write_label}.turn_index must reference an observed turn")
+        if artifact in artifact_names:
+            raise ValueError(f"{label}.artifact_writes artifacts must be unique")
+        artifact_names.add(artifact)
+        writes_per_turn[turn_index] = writes_per_turn.get(turn_index, 0) + 1
+        normalized_writes.append(
+            {
+                "artifact": artifact,
+                "turn_index": turn_index,
+                "observed_evidence_ref": _paired_run_text(
+                    write.get("observed_evidence_ref"),
+                    f"{write_label}.observed_evidence_ref",
+                ),
+            }
+        )
+    if any(count > 1 for count in writes_per_turn.values()):
+        raise ValueError(
+            f"{label}.artifact_writes must assign at most one artifact per turn"
+        )
+    return {
+        "schema_version": ULW_GOAL_TURN_EVIDENCE_SCHEMA,
+        "session_id": session_id,
+        "turns": normalized_turns,
+        "artifact_writes": normalized_writes,
+    }
+
+
+def _paired_run_mapping(value: Any, label: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _paired_run_text(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be non-empty text")
+    return _safe_summary(value, limit=500)
+
+
+def _validated_ulw_goal_scores(scores: Mapping[str, float], label: str) -> dict[str, float]:
+    missing = [metric for metric in ULW_GOAL_METRIC_WEIGHTS if metric not in scores]
+    unknown = sorted(set(scores) - set(ULW_GOAL_METRIC_WEIGHTS))
+    if missing:
+        raise ValueError(f"{label} missing: {', '.join(missing)}")
+    if unknown:
+        raise ValueError(f"{label} unknown: {', '.join(unknown)}")
+    normalized = {metric: float(scores[metric]) for metric in ULW_GOAL_METRIC_WEIGHTS}
+    invalid = [metric for metric, score in normalized.items() if not 0.0 <= score <= 5.0]
+    if invalid:
+        raise ValueError(f"{label} scores must be between 0 and 5: {', '.join(invalid)}")
+    return normalized
+
+
+def _weighted_ulw_goal_score(scores: Mapping[str, float]) -> float:
+    return sum(scores[metric] * weight for metric, weight in ULW_GOAL_METRIC_WEIGHTS.items()) / 100.0
+
+
+def _non_empty_summaries(values: Iterable[str] | None, *, limit: int) -> list[str]:
+    return [summary for value in values or () if (summary := _safe_summary(value, limit=limit))]
+
 
 _PROFILE_ALLOWED_ACTIONS: dict[str, set[str]] = {
     "observe_only": {"research", "planning"},

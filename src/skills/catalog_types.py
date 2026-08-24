@@ -47,6 +47,7 @@ OMH_SKILL_DISPLAY_NAME_OVERRIDES = {
     # word that means something. Canonical names are untouched.
     "context": "ulw-context",
     "deep-interview": "ulw-interview",
+    "goal-experiment": "ulw-goal-experiment",
     "ralplan": "ulw-plan",
     "ultragoal": "ulw-goal",
     "ultraprocess": "ulw-process",

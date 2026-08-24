@@ -26,7 +26,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - `handoff-guide`: `ultrawork`, `ai-slop-cleaner`, `executor-runtime-readiness`
 - `memory-keeper`: `rules-distill`, `wiki`, `memory-new`, `memory-sync`, `decision-recall`
 - `operator`: `strategy-brief`, `meeting-brief`, `feedback-triage`, `finance-analysis`, `people-ops`, `support-operations`, `sales-development`, `ops-review`, `operating-rhythm`, `report-package`, `materials-package`, `img-summary`, `design-orchestration`, `design-quality-gate`, `frontend`, `visual-qa`, `workspace-audit`, `agent-evaluation`, `automation-blueprint`, `reliability-review`, `idea-to-deploy`, `cto-loop`, `deploy-and-monitor`, `github-event-ops`, `deliverable-package`, `physical-device-readiness`, `agent-debug`, `skill-scout`, `skill-health`, `provider-profile-posture`
-- `planner`: `loop`, `context`, `deep-interview`, `curriculum-design`, `product-brief`, `codebase-onboarding`, `codegraph-refresh`, `plan`, `ralplan`
+- `planner`: `goal-experiment`, `loop`, `context`, `deep-interview`, `curriculum-design`, `product-brief`, `codebase-onboarding`, `codegraph-refresh`, `plan`, `ralplan`
 - `researcher`: `jit-learn`, `research`, `source-finder`, `research-brief`, `research-department`, `paper-learning`, `best-practice-research`, `autoresearch-goal`
 - `reviewer`: `legal-compliance-review`, `localization-review`, `accessibility-audit`, `build-failure-triage`, `production-audit`, `verification-gate`, `security-safety-review`, `ultraqa`, `code-review`, `ask`, `failure-signal-audit`
 - `tracker`: `context-budget-review`, `performance-goal`, `ultraperf`, `cancel`, `skill`, `doctor`, `capability-toggle`, `running-work-board`, `buzz`, `agent-board`, `toolbelt-readiness`, `harness-session-inventory`, `ops-observability-card`, `achievements`, `agent-ops-review`, `instinct-ledger`, `workflow-learning`, `run-efficiency`
@@ -37,6 +37,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 When Hermes exposes installed skill descriptions to the model, use this registry as the routing map:
 
 - `meta-router`: `/omh`, `./omh`
+- `goal-experiment`: `goal experiment`, `goal-experiment`, `ulw-goal-experiment`, `$ulw-goal-experiment`, `compare ulw loop and native goal`, `native goal benchmark`, `goal completion contract experiment`, `목표 실험`, `ulw loop와 goal 비교`
 - `loop`: `loop`, `./loop`, `$loop`, `goal loop`, `long horizon goal`, `never stop`, `research plan goal feedback`, `token exhaustion resume`, `permission profile`
 - `context`: `ulw-context`, `$context`, `./context`, `project terminology alignment`, `review project terms`, `align project terminology`, `terminology this project uses`
 - `deep-interview`: `deep-interview`, `$deep-interview`, `interview`, `don't assume`, `clarify`, `feature shaping`, `ambiguous product request`, `one question`, `온보딩`

@@ -36,7 +36,139 @@ from omh.wrapper_sessions import (
 )
 
 
+def _ulw_goal_cli_pair_records(count: int) -> list[dict]:
+    command = "python -m unittest tests.test_loop_cycle"
+    return [
+        {
+            "schema_version": "ulw_goal_paired_run/v1",
+            "pair_id": f"cli-release-{index + 1}",
+            "task_id": f"cli-release-{index + 1}",
+            "environment": {
+                "model": "flagship",
+                "provider": "moa",
+                "permission_profile": "execute_with_gates",
+                "turn_budget": 8,
+                "verification_command": command,
+            },
+            "baseline": {
+                "workflow": "ulw-loop",
+                "verification": {
+                    "observed": True,
+                    "passed": True,
+                    "command": command,
+                    "evidence_refs": [f"test:cli:baseline:{index + 1}"],
+                },
+            },
+            "candidate": {
+                "workflow": "ulw-goal-experiment",
+                "activation_status": "observed",
+                "continuation_observed": True,
+                "turn_evidence": {
+                    "schema_version": "ulw_goal_turn_evidence/v1",
+                    "session_id": f"cli-candidate-session-{index + 1}",
+                    "turns": [
+                        {
+                            "turn_index": 1,
+                            "ended_evidence_ref": f"test:cli:candidate:{index + 1}:turn:1",
+                        },
+                        {
+                            "turn_index": 2,
+                            "ended_evidence_ref": f"test:cli:candidate:{index + 1}:turn:2",
+                        },
+                    ],
+                    "artifact_writes": [
+                        {
+                            "artifact": "stage1.txt",
+                            "turn_index": 1,
+                            "observed_evidence_ref": f"test:cli:candidate:{index + 1}:write:1",
+                        },
+                        {
+                            "artifact": "stage2.txt",
+                            "turn_index": 2,
+                            "observed_evidence_ref": f"test:cli:candidate:{index + 1}:write:2",
+                        },
+                    ],
+                },
+                "verification": {
+                    "observed": True,
+                    "passed": True,
+                    "command": command,
+                    "evidence_refs": [f"test:cli:candidate:{index + 1}"],
+                },
+            },
+        }
+        for index in range(count)
+    ]
+
+
 class CliTests(unittest.TestCase):
+    def test_loop_ulw_goal_alias_prepares_native_goal_experiment(self) -> None:
+        command = [
+            "loop",
+            "ulw-goal",
+            "Make release verification reliable",
+            "--outcome",
+            "The release workflow has observed verification evidence",
+            "--verification",
+            "python -m unittest tests.test_loop_cycle passes",
+            "--constraint",
+            "Preserve existing ulw-loop behavior",
+            "--boundary",
+            "OMH loop control plane only",
+            "--stop-when",
+            "Hermes native goal is unavailable",
+            "--quality-gate",
+            "python -m unittest tests.test_loop_cycle",
+        ]
+
+        status, stdout, stderr = run_cli(command)
+
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["ulw_goal_experiment"]["schema_version"], "ulw_goal_experiment/v1")
+        self.assertEqual(payload["ulw_goal_experiment"]["status"], "prepared_not_observed")
+        self.assertEqual(payload["ulw_goal_experiment"]["native_goal"]["activation_status"], "not_observed")
+
+    def test_loop_ulw_goal_evaluate_alias_applies_absorption_gate(self) -> None:
+        with TemporaryDirectory() as tmp:
+            result_path = Path(tmp) / "results.json"
+            result_path.write_text(
+                json.dumps(
+                    {
+                        "paired_runs": 5,
+                        "baseline_scores": {
+                            "completion_rate": 3,
+                            "false_completion_rate": 3,
+                            "verification_evidence_quality": 3,
+                            "user_interventions": 3,
+                            "turn_and_cost_efficiency": 3,
+                        },
+                        "candidate_scores": {
+                            "completion_rate": 4,
+                            "false_completion_rate": 4,
+                            "verification_evidence_quality": 4,
+                            "user_interventions": 4,
+                            "turn_and_cost_efficiency": 4,
+                        },
+                        "hard_gate_results": {
+                            "false_completion_rate_not_worse": True,
+                            "verification_evidence_quality_not_worse": True,
+                            "stop_and_permission_controls_preserved": True,
+                            "observed_verification_overrides_judge_claim": True,
+                        },
+                        "paired_run_records": _ulw_goal_cli_pair_records(5),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(["loop", "ulw-goal-evaluate", "--results-json", str(result_path)])
+
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(stdout)["ulw_goal_evaluation"]
+        self.assertTrue(payload["absorption_gate"]["eligible"])
+        self.assertEqual(payload["absorption_gate"]["decision"], "absorb_into_ulw_loop_default")
+
     def test_ops_design_orchestration_is_pure_and_prepared(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

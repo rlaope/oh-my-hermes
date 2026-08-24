@@ -101,9 +101,9 @@ NON_SKILL_BACKTICKS = frozenset(
 # `ultraprocess`/`ultragoal` to `ultrawork`'s delivery-boundary and
 # durable-checkpoint capabilities, adding two loop -> ultrawork cases, one new
 # pair, and loop as a new deferring owner.
-EXPECTED_DEFERENCE_CASES = 133
-EXPECTED_DEFERENCE_PAIRS = 142
-EXPECTED_DEFERRING_OWNERS = 46
+EXPECTED_DEFERENCE_CASES = 135
+EXPECTED_DEFERENCE_PAIRS = 144
+EXPECTED_DEFERRING_OWNERS = 47
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,
 # not one more dict line with a plausible sentence attached.

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 
 from ..goal_loop import (
     LOOP_ACTIONS,
@@ -14,8 +16,10 @@ from ..goal_loop import (
     build_loop_queue_handoff,
     build_loop_start_card,
     build_loop_status_card,
+    build_ulw_goal_experiment_card,
     create_loop_cycle,
     dispatch_loop_queue_item,
+    evaluate_ulw_goal_experiment,
     inspect_loop_queue_item,
     list_loop_queue,
     list_loop_cycles,
@@ -84,6 +88,43 @@ def cmd_loop_start(args: argparse.Namespace) -> int:
         _print_json({"loop": cycle, "status_card": build_loop_status_card(_paths(args), str(cycle["loop_id"]))})
     except (FileNotFoundError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
+    return 0
+
+
+def cmd_loop_goal_experiment(args: argparse.Namespace) -> int:
+    try:
+        card = build_ulw_goal_experiment_card(
+            " ".join(args.objective),
+            outcome=args.outcome,
+            verification=args.verification,
+            constraints=args.constraint or [],
+            boundaries=args.boundary or [],
+            stop_when=args.stop_when,
+            quality_gates=args.quality_gate or [],
+            linked_loop_id=args.linked_loop or "",
+            linked_goal_id=args.linked_goal or "",
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    _print_json({"ulw_goal_experiment": card})
+    return 0
+
+
+def cmd_loop_goal_evaluate(args: argparse.Namespace) -> int:
+    try:
+        payload = json.loads(Path(args.results_json).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("results JSON must be an object")
+        evaluation = evaluate_ulw_goal_experiment(
+            paired_runs=int(payload.get("paired_runs", -1)),
+            baseline_scores=payload.get("baseline_scores", {}),
+            candidate_scores=payload.get("candidate_scores", {}),
+            hard_gate_results=payload.get("hard_gate_results", {}),
+            paired_run_records=payload.get("paired_run_records"),
+        )
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise OmhError(f"invalid ulw-goal results: {exc}") from exc
+    _print_json({"ulw_goal_evaluation": evaluation})
     return 0
 
 
@@ -266,8 +307,6 @@ def cmd_loop_queue_observe_codex(args: argparse.Namespace) -> int:
         if args.codex_log_text:
             log_text = args.codex_log_text
         elif args.codex_log_jsonl:
-            from pathlib import Path
-
             log_text = Path(args.codex_log_jsonl).read_text(encoding="utf-8")
         cycle = observe_codex_loop_queue_item(
             _paths(args),
@@ -365,6 +404,34 @@ def _add_loop_commands(sub) -> None:
     )
     assess.add_argument("--include-goal", action="store_true", help="Include the raw goal text in stdout.")
     assess.set_defaults(func=cmd_loop_assess)
+
+    goal_experiment = loop_sub.add_parser(
+        "goal-experiment",
+        aliases=("ulw-goal-experiment", "ulw-goal"),
+        help="Prepare the ulw-goal experiment and a native Hermes /goal completion contract without activating it.",
+    )
+    goal_experiment.add_argument("objective", nargs="+", help="The goal headline to shape for Hermes /goal.")
+    goal_experiment.add_argument("--outcome", required=True)
+    goal_experiment.add_argument("--verification", required=True)
+    goal_experiment.add_argument("--constraint", action="append")
+    goal_experiment.add_argument("--boundary", action="append")
+    goal_experiment.add_argument("--stop-when", required=True)
+    goal_experiment.add_argument("--quality-gate", action="append")
+    goal_experiment.add_argument("--linked-loop", default="")
+    goal_experiment.add_argument("--linked-goal", default="")
+    goal_experiment.set_defaults(func=cmd_loop_goal_experiment)
+
+    goal_evaluate = loop_sub.add_parser(
+        "goal-experiment-evaluate",
+        aliases=("ulw-goal-evaluate",),
+        help="Evaluate paired ulw-loop and ulw-goal results and gate any default absorption decision.",
+    )
+    goal_evaluate.add_argument(
+        "--results-json",
+        required=True,
+        help="Path to reviewed paired-run scores and hard-gate results.",
+    )
+    goal_evaluate.set_defaults(func=cmd_loop_goal_evaluate)
 
     status = loop_sub.add_parser("status")
     status.add_argument("--loop", dest="loop_id", default="")

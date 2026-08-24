@@ -48,6 +48,7 @@ Trigger phrases and the role registry live in `references/workflow-registry.md`;
 - `omh-frontend`: [omh] Hermes frontend workflow: prepare design-system-driven web UI creation, redesign, polish, accessibility, performance, and visual QA handoffs.
 - `omh-gateway-intent-card`: [omh] Hermes gateway intent workflow: normalize Discord, Slack, Telegram, and other gateway sessions into origin, thread, delivery, silent, attachment, and status-update policy.
 - `omh-github-event-ops`: [omh] Hermes GitHub event operations workflow: route PR, issue, CI, and review webhook events into triage, review, or fix handoff cards.
+- `ulw-goal-experiment`: [omh] Native goal experiment: shape an ULW loop contract, require explicit Hermes activation, and compare observed results before changing the loop default.
 - `omh-harness-session-inventory`: [omh] Hermes harness session inventory workflow: normalize Codex, Claude Code, Hermes, OpenCode, Cursor, MCP host, worktree, and wrapper session metadata into one drift-aware inventory.
 - `omh-idea-to-deploy`: [omh] Hermes Idea-to-Deploy workflow: shape an app idea into decisions, delivery handoff, verification, release, and monitoring status.
 - `omh-image-cards`: [omh] Image prompt cards - turn meetings, reports, PRs, issues, research, and releases into domain-aware image prompt cards.

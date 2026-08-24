@@ -174,7 +174,9 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # section carrying the constraint-versus-metric precedence and the completion
 # boundary); the full method and the attribution live in the on-demand
 # reference; warranted growth.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 711787
+# 711787 -> 718390: the opt-in goal experiment added one generated skill and
+# exposed it through the intent-to-plan awareness lane; warranted growth.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 718390
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 
