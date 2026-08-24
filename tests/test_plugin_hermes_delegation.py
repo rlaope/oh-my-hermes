@@ -24,6 +24,7 @@ from omh.plugin_bundle.omh.hermes_delegation import (
     load_mixture_chain_overrides,
     mixture_category_for,
     mixture_chain_overrides_path,
+    parse_model_provider_routes,
     read_hermes_native_subagents,
 )
 
@@ -283,6 +284,22 @@ class MixtureChainOverridesTest(unittest.TestCase):
                     HERMES_MIXTURE_CATEGORY_CHAINS,
                 )
 
+    def test_provider_routes_reject_non_string_scalars(self):
+        routes, status = parse_model_provider_routes(
+            {
+                "schema_version": "model_provider_routes/v1",
+                "models": {
+                    "quick": {
+                        "provider": 123,
+                        "model": True,
+                    }
+                },
+            }
+        )
+
+        self.assertEqual(routes, {})
+        self.assertTrue(status.startswith("invalid:"), status)
+
     def test_the_embedded_chains_mirror_the_shipped_recommendation_catalog(self):
         from omh.coding.model_recommendations import SHIPPED_MODEL_RECOMMENDATIONS
         from omh.coding.model_routing import MODEL_CATEGORIES
@@ -311,6 +328,48 @@ class HermesNativeSubagentReaderTest(unittest.TestCase):
         self.assertEqual(payload["status"], "idle")
         self.assertEqual(payload["rows"], [])
         self.assertEqual(payload["active"], 0)
+
+    def test_provider_wire_child_uses_configured_alias_and_provider(self):
+        route_path = self.home / "routing" / "model-providers.json"
+        route_path.parent.mkdir(parents=True)
+        route_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "model_provider_routes/v1",
+                    "models": {
+                        "glm-5.2-ultrafast": {
+                            "provider": "gateway",
+                            "model": "z-ai/glm-5.2-ultrafast",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        _build_state_db(
+            self.home,
+            [
+                {
+                    "id": "20260818_100100_provider",
+                    "model": "z-ai/glm-5.2-ultrafast",
+                    "effort": "low",
+                    "started_at": NOW - 60,
+                    "usage": {"last_seen": NOW - 5, "output_tokens": 10},
+                }
+            ],
+        )
+
+        row = read_hermes_native_subagents(
+            self.home,
+            now=NOW,
+            omh_home=self.home,
+        )["rows"][0]
+
+        self.assertEqual(row["alias"], "glm-5.2-ultrafast")
+        self.assertEqual(row["provider"], "gateway")
+        self.assertEqual(row["provider_source"], "model_provider_routes")
+        self.assertEqual(row["model"], "z-ai/glm-5.2-ultrafast")
+        self.assertEqual(row["category"], "quick")
 
     def test_a_live_child_projects_a_running_row_with_model_effort_and_metrics(self):
         _build_state_db(
@@ -544,6 +603,53 @@ class HermesNativeSubagentReaderTest(unittest.TestCase):
 
 
 class HudMergeTest(unittest.TestCase):
+    def test_read_omh_hud_uses_requested_provider_route_home(self):
+        from omh.plugin_bundle.omh.runtime_reader import read_omh_hud
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / "omh"
+            hermes_home = root / "hermes"
+            route_path = omh_home / "routing" / "model-providers.json"
+            route_path.parent.mkdir(parents=True)
+            hermes_home.mkdir()
+            route_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "model_provider_routes/v1",
+                        "models": {
+                            "glm-5.2-ultrafast": {
+                                "provider": "gateway",
+                                "model": "z-ai/glm-5.2-ultrafast",
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _build_state_db(
+                hermes_home,
+                [
+                    {
+                        "id": "20260818_100100_provider",
+                        "model": "z-ai/glm-5.2-ultrafast",
+                        "effort": "low",
+                        "started_at": time.time() - 30,
+                        "usage": {
+                            "api_calls": 1,
+                            "output_tokens": 10,
+                            "last_seen": time.time() - 1,
+                        },
+                    }
+                ],
+            )
+
+            row = read_omh_hud(omh_home, hermes_home)["subagents"]["rows"][0]
+
+            self.assertEqual(row["alias"], "glm-5.2-ultrafast")
+            self.assertEqual(row["provider"], "gateway")
+            self.assertEqual(row["category"], "quick")
+
     def test_read_omh_hud_merges_native_rows_and_stays_active_while_they_linger(self):
         from omh.plugin_bundle.omh.runtime_reader import read_omh_hud
 

@@ -664,7 +664,7 @@ def read_omh_hud(
     }
     # Hermes-native delegate_task children are work the HUD must show even
     # though they never touch the OMH runtime store; see hermes_delegation.
-    native = read_hermes_native_subagents(hermes)
+    native = read_hermes_native_subagents(hermes, omh_home=home)
     if native["rows"]:
         merged = payload["subagents"]
         merged["rows"] = (list(merged["rows"]) + list(native["rows"]))[:5]

@@ -111,7 +111,7 @@ def load_mixture_chain_overrides(
     """
     path = mixture_chain_overrides_path(omh_home)
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = _strict_json_loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}, "absent"
     except (OSError, UnicodeDecodeError, ValueError):
@@ -151,11 +151,13 @@ def parse_mixture_chain_overrides(
             unknown_keys = sorted(set(entry) - {"model", "reasoning_effort"})
             if unknown_keys:
                 return {}, f"invalid: category {name!r} entry fields {unknown_keys}"
-            model = str(entry.get("model", ""))
-            effort = str(entry.get("reasoning_effort", ""))
-            if not _CHAIN_TOKEN_RE.match(model):
+            model = entry.get("model", "")
+            effort = entry.get("reasoning_effort", "")
+            if not isinstance(model, str) or not _CHAIN_TOKEN_RE.fullmatch(model):
                 return {}, f"invalid: category {name!r} names a non-token model"
-            if effort and not _CHAIN_TOKEN_RE.match(effort):
+            if not isinstance(effort, str) or (
+                effort and not _CHAIN_TOKEN_RE.fullmatch(effort)
+            ):
                 return {}, f"invalid: category {name!r} names a non-token effort"
             chain.append((model, effort))
         overrides[name] = tuple(chain)
@@ -207,7 +209,7 @@ def load_model_provider_routes(
     """
     path = model_provider_routes_path(omh_home)
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = _strict_json_loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}, "absent"
     except (OSError, UnicodeDecodeError, ValueError):
@@ -231,20 +233,20 @@ def parse_model_provider_routes(
         return {}, f"invalid: unsupported fields {unknown}"
     routes: dict[str, tuple[str, str]] = {}
     for alias, entry in models.items():
-        if not _CHAIN_TOKEN_RE.match(str(alias)):
+        if not isinstance(alias, str) or not _CHAIN_TOKEN_RE.fullmatch(alias):
             return {}, f"invalid: alias {alias!r} is not a token"
         if not isinstance(entry, dict):
             return {}, f"invalid: alias {alias!r} must map to an object"
         unknown_keys = sorted(set(entry) - {"provider", "model"})
         if unknown_keys:
             return {}, f"invalid: alias {alias!r} entry fields {unknown_keys}"
-        provider = str(entry.get("provider", ""))
-        model = str(entry.get("model", ""))
-        if not _CHAIN_TOKEN_RE.match(provider):
+        provider = entry.get("provider", "")
+        model = entry.get("model", "")
+        if not isinstance(provider, str) or not _CHAIN_TOKEN_RE.fullmatch(provider):
             return {}, f"invalid: alias {alias!r} names a non-token provider"
-        if not _CHAIN_TOKEN_RE.match(model):
+        if not isinstance(model, str) or not _CHAIN_TOKEN_RE.fullmatch(model):
             return {}, f"invalid: alias {alias!r} names a non-token model"
-        routes[str(alias)] = (provider, model)
+        routes[alias] = (provider, model)
     return routes, "applied"
 
 
@@ -270,6 +272,7 @@ def resolve_provider_model(
 
 def chain_alias_for(
     model: str,
+    provider: str = "",
     routes: Mapping[str, tuple[str, str]] | None = None,
 ) -> str:
     """Map a wire model back to the alias its chain uses.
@@ -278,10 +281,39 @@ def chain_alias_for(
     wire model has to be translated back before any chain lookup; otherwise a
     routed model looks absent from the chain it came from.
     """
-    for alias, (_, wire_model) in (routes or {}).items():
-        if model == wire_model:
-            return alias
-    return model
+    if not provider:
+        return model
+    aliases = {
+        alias
+        for alias, (route_provider, wire_model) in (routes or {}).items()
+        if provider == route_provider and model == wire_model
+    }
+    return next(iter(aliases)) if len(aliases) == 1 else model
+
+
+def configured_route_for_wire(
+    model: str,
+    routes: Mapping[str, tuple[str, str]] | None = None,
+) -> tuple[str, str]:
+    """Return one uniquely configured alias/provider for an observed wire model."""
+    matches = {
+        (alias, provider)
+        for alias, (provider, wire_model) in (routes or {}).items()
+        if model == wire_model
+    }
+    return next(iter(matches)) if len(matches) == 1 else (model, "")
+
+
+def _strict_json_loads(text: str) -> object:
+    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON key {key!r}")
+            result[key] = value
+        return result
+
+    return json.loads(text, object_pairs_hook=unique_object)
 
 # Rough USD-per-million-token list prices used ONLY when the host recorded no
 # cost (subscription billing bills nothing per call; the owner asked for an
@@ -584,6 +616,7 @@ def read_hermes_native_subagents(
     # Category labels honor the user's ~/.omh/routing/model-chains.json
     # overrides so a customized chain labels its children like a shipped one.
     active_chains = effective_mixture_category_chains(omh_home)
+    provider_routes, _ = load_model_provider_routes(omh_home)
     payload: dict[str, Any] = {
         "status": "idle",
         "rows": [],
@@ -677,6 +710,10 @@ def read_hermes_native_subagents(
                 cost_approximate = True
 
         parent_model = state.get("parent_models", {}).get(child["parent_id"], "")
+        route_alias, route_provider = configured_route_for_wire(
+            child["model"],
+            provider_routes,
+        )
         session_tail = child["session_id"].rsplit("_", 1)[-1][:8]
         # A finished child's elapsed is frozen at its last activity: a done
         # task should not keep aging, and a byte-stable lingering row is what
@@ -687,19 +724,23 @@ def read_hermes_native_subagents(
             "task_id": session_tail,
             "role": "hermes-native",
             "action": _text(task.get("goal", ""), limit=_ACTION_LIMIT),
+            "alias": route_alias,
+            "provider": route_provider,
             "model": child["model"],
             "effort": child["effort"],
             "tokens": tokens_total if tokens_total else None,
             "elapsed_seconds": max(0.0, elapsed_until - child["started_at"]),
             "observed_at": _iso_utc(last_activity),
             "category": mixture_category_for(
-                child["model"],
+                route_alias,
                 child["effort"],
                 parent_model=parent_model,
                 chains=active_chains,
             ),
             "delegation_id": delegation_id,
         }
+        if route_provider:
+            row["provider_source"] = "model_provider_routes"
         if failure_hint:
             row["failure_hint"] = failure_hint
         api_calls = usage.get("api_calls")

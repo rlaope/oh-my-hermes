@@ -309,6 +309,11 @@ fallback, and HUD labels alike —
 Check the chains currently in effect with `omh model-chains show`. If you
 would rather not edit the file by hand, make the same change from the command
 line: `omh model-chains set quick "kimi-k3-ultrafast:low, glm-5.2-ultrafast:low"`.
+When an alias uses a provider-specific wire ID, map it once in
+`~/.omh/routing/model-providers.json` with
+`model_provider_routes/v1`; `set`, `status`, fallback, and HUD then report the
+complete alias/provider/wire-model route. OMH stores only provider IDs, never
+provider credentials.
 
 Ask Hermes to **set up my models** to review or change them. These are editable
 preferences, not benchmark results. See

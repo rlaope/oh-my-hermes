@@ -301,12 +301,19 @@ Supply them in `~/.omh/routing/model-providers.json`
 An alias listed here dispatches as that provider's model; an alias not listed
 dispatches unchanged with no provider, which is what a direct-billing host
 wants — the file is optional and absent by default. A `provider` passed
-explicitly to `omh_delegate_route` outranks any stored route. Fallback still
-walks the chain by alias, so a routed model is translated back before its
-chain position is looked up. Validation matches the chain document: strict,
-token-only, atomic, with an invalid file ignored whole and reported by
-`action=status` as `provider_routes: invalid: ...` beside the resolved
-`provider_routes_path`.
+explicitly with its wire `model` to `omh_delegate_route` outranks any stored
+route. Provider and model change atomically; partial pairs and providerless
+wire-shaped models fail before Hermes config is mutated. Fallback translates
+an active exact provider/wire pair back to one alias and requires the category
+when that alias has multiple chain origins. Validation is strict, token-only,
+and atomic: an invalid file is reported by `action=status` and blocks set or
+fallback rather than silently inheriting a parent provider.
+
+`action=status` and fallback results expose the complete
+`alias`/`provider`/`model`/`reasoning_effort` shape. HUD rows use the same
+configured mapping for labeling and mark the provider source as
+`model_provider_routes`; that configured metadata is not provider execution
+or credential evidence.
 
 The X/Grok row is a static, editable affinity for work explicitly declaring X
 platform data. It is not a measured capability, performance, or availability

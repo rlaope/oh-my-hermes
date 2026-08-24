@@ -7,7 +7,6 @@ from ..delegation_routing import read_delegation_route, write_delegation_route
 from ..hermes_delegation import (
     HERMES_MIXTURE_CATEGORY_CHAINS,
     chain_alias_for,
-    effective_mixture_category_chains,
     load_mixture_chain_overrides,
     load_model_provider_routes,
     mixture_chain_overrides_path,
@@ -29,16 +28,19 @@ def _chain_entry(
 ) -> dict[str, str]:
     """Render one chain position.
 
-    `model` stays the alias the chain is written in, so a host with no
-    provider routes sees exactly what it always saw. The dispatched values
-    appear beside it only when a route actually applies, which is also the
-    only case where they differ.
+    The public shape always carries alias, provider, executable model, and
+    effort; unresolved aliases report an empty provider explicitly.
     """
-    entry = {"model": alias, "reasoning_effort": effort}
+    entry = {
+        "alias": alias,
+        "provider": "",
+        "model": alias,
+        "reasoning_effort": effort,
+    }
     wire_model, provider = resolve_provider_model(alias, routes=routes)
     if provider:
         entry["provider"] = provider
-        entry["wire_model"] = wire_model
+        entry["model"] = wire_model
     return entry
 
 
@@ -54,8 +56,9 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
         "Hermes has NO provider-side fallback: a child whose model the billing account "
         "cannot serve dies on an HTTP 400 yet its delegation still reports completed with "
         "the error text as the result — a completed child with no recorded model usage "
-        "means exactly this. When that happens call action=fallback to advance the route "
-        "to the category chain's next candidate and re-dispatch; an exhausted chain "
+        "means exactly this. When that happens call action=fallback with the category "
+        "returned by set to advance the route and re-dispatch; shared routes fail "
+        "closed without that origin. An exhausted chain "
         "clears the route so the next dispatch inherits the parent's working model."
     ),
     "parameters": {
@@ -68,8 +71,8 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
                     "set writes a route; clear removes the routable keys so children "
                     "inherit the parent again; status reads the current route; fallback "
                     "advances the current route to the next candidate in its category "
-                    "chain (clearing to parent inheritance once the chain is exhausted) "
-                    "— use it after a dispatched child completed with no model usage."
+                    "chain (clearing to parent inheritance once the chain is exhausted). "
+                    "Reuse the category returned by set; ambiguous origins fail closed."
                 ),
             },
             "category": {
@@ -102,9 +105,8 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
             "provider": {
                 "type": "string",
                 "description": (
-                    "Optional delegation.provider override for models that live on a "
-                    "different provider than the parent session. Requires that provider "
-                    "to be configured in Hermes."
+                    "Hermes provider override. Supply it together with model so the "
+                    "provider/wire identity remains atomic."
                 ),
             },
             "hermes_home": {
@@ -114,8 +116,8 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
             "omh_home": {
                 "type": "string",
                 "description": (
-                    "Optional OMH home override for the chain-override document "
-                    "(routing/model-chains.json). Defaults to ~/.omh."
+                    "Optional OMH home override for model-chains.json and "
+                    "model-providers.json. Defaults to ~/.omh."
                 ),
             },
             "observation": OBSERVATION_SCHEMA,
@@ -131,8 +133,11 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
     omh_home = str(args.get("omh_home", "") or "") or None
     # Every chain read below honors the user's routing/model-chains.json
     # overrides; the category vocabulary itself stays the shipped closed set.
-    chains = effective_mixture_category_chains(omh_home)
-    _, override_status = load_mixture_chain_overrides(omh_home)
+    overrides, override_status = load_mixture_chain_overrides(omh_home)
+    chains = {
+        name: overrides.get(name, chain)
+        for name, chain in HERMES_MIXTURE_CATEGORY_CHAINS.items()
+    }
     # Chains name models the way a person says them. A host that reaches
     # models through a provider needs a provider id and that provider's own
     # (often namespaced) model string; routing/model-providers.json supplies
@@ -140,9 +145,17 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
     provider_routes, provider_route_status = load_model_provider_routes(omh_home)
 
     if action == "status":
+        route = read_delegation_route(hermes_home)
+        if route.get("model"):
+            route.setdefault("provider", "")
+            route["alias"] = chain_alias_for(
+                str(route["model"]),
+                str(route["provider"]),
+                provider_routes,
+            )
         payload: dict[str, Any] = {
             "status": "status",
-            "route": read_delegation_route(hermes_home),
+            "route": route,
             "categories": {
                 category: [
                     _chain_entry(alias, effort, provider_routes)
@@ -164,14 +177,30 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         return json.dumps(attach_public_observation(result, observation), sort_keys=True)
 
     if action == "fallback":
+        if override_status.startswith("invalid:"):
+            payload = {"status": "error", "error": override_status}
+            return json.dumps(
+                attach_public_observation(payload, observation),
+                sort_keys=True,
+            )
+        if provider_route_status.startswith("invalid:"):
+            payload = {"status": "error", "error": provider_route_status}
+            return json.dumps(
+                attach_public_observation(payload, observation),
+                sort_keys=True,
+            )
         route = read_delegation_route(hermes_home)
         current_model = str(route.get("model", ""))
+        current_provider = str(route.get("provider", ""))
         # The live route holds whatever was dispatched, which is the provider's
         # wire model when a route applied. Chain positions are keyed by alias,
         # so translate back before any chain lookup below -- otherwise a routed
         # model reads as absent from the very chain it came from.
-        current_alias = chain_alias_for(current_model, provider_routes)
-        current_effort = str(route.get("reasoning_effort", ""))
+        current_alias = chain_alias_for(
+            current_model,
+            current_provider,
+            provider_routes,
+        )
         if not current_model:
             payload = {
                 "status": "error",
@@ -188,60 +217,51 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
                 ),
             }
             return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
-        if not category:
-            # A (model, effort) pair can sit in several chains — e.g.
-            # glm-5.2-ultrafast:low ends unspecified-low AND heads quick.
-            # Prefer the effort-exact match, and within each pool prefer a
-            # chain that can still advance: fallback exists to move forward,
-            # so an ambiguous route only reads as exhausted when NO matching
-            # chain has a next candidate.
-            def _chain_index(chain: tuple) -> int:
-                return next((i for i, (alias, _) in enumerate(chain) if alias == current_alias), -1)
-
-            exact = [
-                name
-                for name, chain in chains.items()
-                if any(alias == current_alias and chain_effort == current_effort for alias, chain_effort in chain)
-            ]
-            loose = [
-                name
-                for name, chain in chains.items()
-                if any(alias == current_alias for alias, _ in chain)
-            ]
-            for pool in (exact, loose):
-                if not pool:
-                    continue
-                advancing = [
-                    name
-                    for name in pool
-                    if 0 <= _chain_index(chains[name])
-                    < len(chains[name]) - 1
-                ]
-                # Head-most wins: a route set from a category starts at that
-                # chain's head, so when a (model, effort) pair sits in several
-                # advancing chains, the one holding it earliest is the likely
-                # origin (glm-5.2-ultrafast:low heads quick but is mid-chain
-                # in unspecified-low). Explicit `category` overrides.
-                category = min(
-                    advancing or pool,
-                    key=lambda name: _chain_index(chains[name]),
-                )
-                break
-        if not category:
+        if not current_provider and "/" in current_model:
+            payload = {
+                "status": "error",
+                "error": f"current route {current_model!r} requires an explicit provider",
+            }
+            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        matches = [
+            (name, index)
+            for name, chain in chains.items()
+            for index, (alias, _) in enumerate(chain)
+            if alias == current_alias and (not category or name == category)
+        ]
+        if not matches:
             payload = {
                 "status": "error",
                 "error": (
-                    f"current route model {current_model!r} is not in any mixture chain; "
-                    "pass category explicitly"
+                    f"current route model {current_model!r} does not match "
+                    + (
+                        f"category {category!r}"
+                        if category
+                        else "any mixture chain; pass category explicitly"
+                    )
                 ),
             }
             return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        if len(matches) > 1:
+            origins = ", ".join(sorted({name for name, _ in matches}))
+            payload = {
+                "status": "error",
+                "error": (
+                    f"current route model {current_model!r} has ambiguous origins "
+                    f"across {origins}; pass category explicitly"
+                ),
+            }
+            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+        category, index = matches[0]
         chain = chains[category]
-        index = next((i for i, (alias, _) in enumerate(chain) if alias == current_alias), -1)
-        if index < 0 or index + 1 >= len(chain):
+        if index + 1 >= len(chain):
             # Chain exhausted: restore inheritance so the next dispatch runs on
             # the parent's known-working model instead of one more rejection.
-            result = write_delegation_route(hermes_home, clear=True)
+            result = write_delegation_route(
+                hermes_home,
+                clear=True,
+                expected_previous=route,
+            )
             if result.get("status") == "cleared":
                 result["status"] = "exhausted_to_inherit"
             result["category"] = category
@@ -252,14 +272,25 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         wire_model, next_provider = resolve_provider_model(
             next_model, routes=provider_routes
         )
+        if "/" in wire_model and not next_provider:
+            payload = {
+                "status": "error",
+                "error": (
+                    f"next route {next_model!r} has no provider-aware wire model; "
+                    "fallback refused without mutation"
+                ),
+            }
+            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
         result = write_delegation_route(
             hermes_home,
             model=wire_model,
             reasoning_effort=next_effort,
             provider=next_provider,
+            expected_previous=route,
         )
         if result.get("status") == "routed":
             result["status"] = "fell_back"
+            result["applied"]["alias"] = next_model
             result["category"] = category
             result["from"] = current_model
             result["fallback_candidates"] = [
@@ -276,6 +307,12 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         }
         return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
 
+    if override_status.startswith("invalid:"):
+        payload = {"status": "error", "error": override_status}
+        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    if provider_route_status.startswith("invalid:"):
+        payload = {"status": "error", "error": provider_route_status}
+        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
     category = str(args.get("category", "") or "").strip()
     model = str(args.get("model", "") or "").strip()
     effort = str(args.get("reasoning_effort", "") or "").strip()
@@ -289,23 +326,42 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
             ),
         }
         return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
-    if not model:
-        if not category:
-            payload = {"status": "error", "error": "set needs a category or an explicit model"}
-            return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
-        head_model, head_effort = chains[category][0]
-        model = head_model
+    if provider and not model:
+        payload = {
+            "status": "error",
+            "error": "provider and model overrides must appear together",
+        }
+        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    if not model and not category:
+        payload = {"status": "error", "error": "set needs a category or an explicit model"}
+        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
+    alias = model
+    if category and not model:
+        alias, head_effort = chains[category][0]
         if not effort:
             effort = head_effort
-    model, provider = resolve_provider_model(model, provider, provider_routes)
+    if provider:
+        wire_model = model
+    else:
+        wire_model, provider = resolve_provider_model(alias, routes=provider_routes)
+    if "/" in wire_model and not provider:
+        payload = {
+            "status": "error",
+            "error": "a wire-shaped model requires an explicit provider",
+        }
+        return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
     result = write_delegation_route(
-        hermes_home, model=model, reasoning_effort=effort, provider=provider
+        hermes_home,
+        model=wire_model,
+        reasoning_effort=effort,
+        provider=provider,
     )
     if result.get("status") == "routed":
+        result["applied"]["alias"] = alias
         result["category"] = category
         chain = chains.get(category, ())
         result["fallback_candidates"] = [
-            {"model": alias, "reasoning_effort": chain_effort}
+            _chain_entry(alias, chain_effort, provider_routes)
             for alias, chain_effort in chain[1:]
         ]
     result["evidence_boundary"] = _EVIDENCE_BOUNDARY

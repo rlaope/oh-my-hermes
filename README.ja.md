@@ -226,6 +226,7 @@ $ cat ~/.omh/routing/model-chains.json
 ```
 
 現在有効な chain は `omh model-chains show` で確認できます。ファイルを直接編集したくない場合は、`omh model-chains set quick "kimi-k3-ultrafast:low, glm-5.2-ultrafast:low"` のようにコマンドから同じファイルを書き換えられます。
+alias に provider 固有の wire ID が必要な場合は、`model_provider_routes/v1` 形式の `~/.omh/routing/model-providers.json` に一度マッピングします。その後は `set`、`status`、fallback、HUD が alias/provider/wire model の完全な route を表示します。OMH が保存するのは provider ID だけで、credential は保存しません。
 
 Hermes に **モデルをセットアップして** と頼むと、確認や変更ができます。これは編集可能な優先設定であり、benchmark 結果ではありません。詳しい設定、fallback、provider、所有権のルールは [Guided Model Setup](docs/INSTALLATION.md#guided-model-setup) を参照してください。
 

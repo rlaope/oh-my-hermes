@@ -354,6 +354,17 @@ conversation:
    `mixture_chain_overrides/v1` document.
 4. Re-run `omh model-chains show` and report the confirmed state.
 
+If a chain alias needs a provider-specific wire model, edit the sibling
+`~/.omh/routing/model-providers.json` document:
+
+```json
+{"schema_version":"model_provider_routes/v1","models":{"glm-5.2-ultrafast":{"provider":"opengateway","model":"z-ai/glm-5.2-ultrafast"}}}
+```
+
+Re-run `omh_delegate_route` with `action=status` and report its complete
+alias/provider/model/effort route. Provider and model overrides are atomic;
+never copy credentials into OMH.
+
 A user who declines the interview keeps the shipped defaults; record that as
 the observed result instead of skipping the step silently.
 
