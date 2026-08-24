@@ -30,10 +30,6 @@ The tag-driven npm/Bun, GitHub wheel, and Homebrew tap release is defined by
 `.github/workflows/release.yml`. Its release order, one-time external setup,
 resume rules, rollback matrix, immutable artifact checks, and pending-first-
 release status are the single contract in [Distribution](DISTRIBUTION.md).
-A daily auto-release workflow cuts the next stable patch tag whenever `main`
-has moved past the last release, so these channels track `main` instead of
-waiting for a manual tag; its guards and boundaries live in the same
-Distribution contract under "Automated stable cadence".
 
 Those package-manager artifacts extend the stable channel; they do not replace
 the installer, Hermes skill tap, generated-document, or evidence checks below.

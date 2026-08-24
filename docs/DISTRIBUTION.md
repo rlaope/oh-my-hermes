@@ -94,33 +94,14 @@ All distribution tags share one non-cancelling concurrency group. The tap
 update cannot run before npm publication succeeds, and an older run cannot
 downgrade a newer tap formula.
 
-## Automated stable cadence
+## Release cadence
 
-`.github/workflows/auto-release.yml` keeps the package-manager channels
-tracking `main` without a human remembering to tag. Once a day (and on
-manual dispatch) it checks whether the `main` tip has moved past the tag of
-the current `pyproject.toml` version. When it has, the workflow bumps every
-version surface to the next patch release with
-`tools/package_manager/bump_version.py` (pyproject, `src/omh/version.py`,
-the plugin manifest, and `.release-channel` back to `stable`), runs the full
-test suite on the bumped tree, pushes the commit and `vX.Y.Z` tag to `main`
-atomically, and dispatches the distribution workflow for that tag.
-
-Boundaries of the automation:
-
-- It cuts stable patch releases only. When the version in `pyproject.toml`
-  has no tag yet, a manual release (stable or beta) is staged and the
-  automation skips without touching anything.
-- The cadence is daily, not per-merge, because the protected `npm`
-  environment requires one human deployment approval per release run. Each
-  automated release still pauses at that approval before anything publishes.
-- The bump commit and tag are pushed with the workflow's `GITHUB_TOKEN`, so
-  they do not trigger the tag-push path of the distribution workflow or a CI
-  run on `main`; the auto-release job runs the full suite itself before
-  pushing, and it starts the distribution workflow through
-  `workflow_dispatch` with the new tag.
-- Pause the cadence by disabling the Auto Release workflow in the Actions
-  UI, never by reverting a bump commit.
+Releases are cut by hand. Package-manager channels advance only when a
+maintainer bumps the version surfaces and pushes a `vX.Y.Z` tag, so `main`
+can sit ahead of the published packages between releases; that gap is
+expected, not a fault. A scheduled auto-tagging workflow was tried and
+removed: automatic patch bumps moved the public version without a person
+deciding a release was warranted.
 
 ## Resume and rollback
 
