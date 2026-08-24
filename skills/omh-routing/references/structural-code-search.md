@@ -71,7 +71,7 @@ elimination.
 - Only `-U`/`--update-all` writes; `--rewrite` without it prints a read-only
   diff preview.
 - Always spell `ast-grep`, never `sg`: some installs alias `sg` to ast-grep,
-  but on many Linux distributions `sg` is util-linux's setgid tool. The
+  but on many Linux distributions `sg` is util-linux's newgrp-family group switch. The
   collision is conditional, so the long name is the only safe spelling.
 
 ## Version Scope

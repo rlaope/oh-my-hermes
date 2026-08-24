@@ -56,7 +56,7 @@ Handoff prompts choose an edit format. Steer it from the profile's declared capa
 - After any accepted edit, require re-grounding: re-read the changed region before the next edit rather than reasoning from the pre-edit copy in context.
 - Prefer narrow reads with search-before-edit — locate the symbol or string, read only the region around it, then edit — over whole-file reads that push the rest of the handoff out of context.
 
-These are capability-conditioned prompt shapes, not performance claims. Do not tell the user an edit format will make an executor faster, cheaper, or more accurate; the profile metadata is descriptive, and only observed run evidence can say what happened.
+These are capability-conditioned prompt shapes, not performance claims. Do not claim an edit format will make an executor faster, cheaper, or more accurate; the profile metadata is descriptive, and only observed run evidence can say what happened.
 
 ### Resource References In Prepared Handoffs
 
@@ -81,7 +81,7 @@ When a handoff is expected to produce more than one commit, plan the commits bef
 
 A commit plan is preparation. Commits, review, CI, and merge stay separately observed.
 
-## Large Output And Context Safety
+## Large Results And Window Safety
 
 Wrappers must keep raw Codex JSONL, tool output, process logs, and oversized
 executor notes out of Hermes chat context. Use `omh chat codex-progress` or the

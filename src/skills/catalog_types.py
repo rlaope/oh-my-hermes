@@ -301,8 +301,8 @@ DELEGATE_PERMISSION_PREFLIGHT_RULE = (
     "settings-file guesses: for non-interactive Claude Code pass `--permission-mode acceptEdits` or an "
     "explicit `--allowedTools` list (`--dangerously-skip-permissions` only inside an isolated worktree or "
     "sandbox), and the equivalent sandbox/approval flags for other CLIs. `acceptEdits: true` is not a "
-    "settings key and `~/.claude/settings.local.json` is not a file Claude Code reads — user scope is "
-    "`~/.claude/settings.json` and project scope is `<dispatch cwd>/.claude/settings.local.json` with "
+    "settings key and the home-directory `settings.local.json` is not a file Claude Code reads — user scope is "\
+    "`settings.json` under `~/.claude` and project scope is `settings.local.json` under `<dispatch cwd>/.claude` with "\
     "rules under `permissions.allow`. Prove the grant with a bounded scratch-edit probe run before the "
     "real dispatch: a permission denial in a non-interactive run recurs identically on retry, so never "
     "redispatch until a changed grant is proven, and surface an ungrantable permission as a blocker "
