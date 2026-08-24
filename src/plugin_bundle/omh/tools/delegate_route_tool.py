@@ -196,6 +196,21 @@ def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
         # wire model when a route applied. Chain positions are keyed by alias,
         # so translate back before any chain lookup below -- otherwise a routed
         # model reads as absent from the very chain it came from.
+        if not current_provider and any(
+            current_model in {alias, wire_model}
+            for alias, (_, wire_model) in provider_routes.items()
+        ):
+            payload = {
+                "status": "error",
+                "error": (
+                    f"current route {current_model!r} requires configured "
+                    "provider identity"
+                ),
+            }
+            return json.dumps(
+                attach_public_observation(payload, observation),
+                sort_keys=True,
+            )
         current_alias = chain_alias_for(
             current_model,
             current_provider,

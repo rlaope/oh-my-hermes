@@ -165,6 +165,21 @@ class DelegationRouteWriterTest(unittest.TestCase):
             "credential_sentinel: keep\n",
         )
 
+    def test_quoted_route_keys_and_binary_scalars_are_refused(self):
+        for content in (
+            "delegation:\n  'model': old-model\n",
+            "delegation:\n  model: 0b1010\n",
+        ):
+            with self.subTest(content=content):
+                self.config.write_text(content, encoding="utf-8")
+                before = self.config.read_bytes()
+
+                result = write_delegation_route(self.home, model="new-model")
+
+                self.assertEqual(result["status"], "error")
+                self.assertIn("unsupported delegation mapping", result["error"])
+                self.assertEqual(self.config.read_bytes(), before)
+
 
 class DelegateRouteToolTest(unittest.TestCase):
     def setUp(self):
@@ -375,6 +390,33 @@ class DelegateRouteToolTest(unittest.TestCase):
         before = self.config.read_bytes()
         wrong = self._call(action="fallback", category="quick")
         self.assertEqual(wrong["status"], "error")
+        self.assertEqual(self.config.read_bytes(), before)
+
+    def test_registry_backed_alias_requires_provider_before_fallback(self):
+        self._write_provider_routes(
+            {
+                "head": {"provider": "gateway", "model": "vendor/head"},
+                "next": {"provider": "gateway", "model": "vendor/next"},
+            }
+        )
+        self._write_overrides(
+            {
+                "quick": [
+                    {"model": "head", "reasoning_effort": "low"},
+                    {"model": "next", "reasoning_effort": "low"},
+                ]
+            }
+        )
+        self.config.write_text(
+            "delegation:\n  model: head\n  reasoning_effort: low\n",
+            encoding="utf-8",
+        )
+        before = self.config.read_bytes()
+
+        result = self._call(action="fallback", category="quick")
+
+        self.assertEqual(result["status"], "error")
+        self.assertIn("requires configured provider identity", result["error"])
         self.assertEqual(self.config.read_bytes(), before)
 
     def test_fallback_aborts_when_active_route_changes_after_selection(self):

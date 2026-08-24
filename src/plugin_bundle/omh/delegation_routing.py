@@ -257,10 +257,30 @@ def _read_config_snapshot(
 
 
 def _has_unsupported_delegation(lines: list[str]) -> bool:
-    return any(
-        _top_level_key(line) == "delegation" and not _SECTION_RE.match(line)
-        for line in lines
-    )
+    child_indents = _delegation_child_indents(lines)
+    in_section = False
+    child_indent = 2
+    for index, line in enumerate(lines):
+        top_level_key = _top_level_key(line)
+        if top_level_key == "delegation":
+            if not _SECTION_RE.match(line):
+                return True
+            in_section = True
+            child_indent = child_indents.get(index, 2)
+            continue
+        if in_section and top_level_key is not None:
+            in_section = False
+        if not in_section:
+            continue
+        key = _mapping_key(line, child_indent)
+        if key not in ROUTABLE_KEYS:
+            continue
+        if not _managed_key_re(key, child_indent).match(line):
+            return True
+        _, _, raw = line.partition(":")
+        if _yaml_string_token(raw) is None:
+            return True
+    return False
 
 
 def _top_level_key(line: str) -> str | None:
@@ -274,6 +294,16 @@ def _top_level_key(line: str) -> str | None:
         return line[1:end]
     key, separator, _ = line.partition(":")
     return key.strip() if separator and key.strip() else None
+
+
+def _mapping_key(line: str, indent: int) -> str | None:
+    prefix = " " * indent
+    if not line.startswith(prefix):
+        return None
+    remainder = line[indent:]
+    if not remainder or remainder[0].isspace():
+        return None
+    return _top_level_key(remainder)
 
 
 def _yaml_string_token(raw: str) -> str | None:
@@ -302,7 +332,7 @@ def _yaml_string_token(raw: str) -> str | None:
         return None
     if re.fullmatch(
         r"(?:[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?"
-        r"|0x[0-9a-f]+|0o[0-7]+|\d{4}-\d{2}-\d{2})",
+        r"|0x[0-9a-f]+|0o[0-7]+|0b[01]+|\d{4}-\d{2}-\d{2})",
         lowered,
     ):
         return None
