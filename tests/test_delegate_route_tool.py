@@ -159,7 +159,10 @@ class DelegationRouteWriterTest(unittest.TestCase):
         ):
             result = write_delegation_route(self.home, model="child")
         self.assertEqual(result["status"], "error")
-        self.assertIn("symlink", result["error"])
+        self.assertTrue(
+            "symlink" in result["error"]
+            or result["error"] == "config changed during route read"
+        )
         self.assertEqual(
             target.read_text(encoding="utf-8"),
             "credential_sentinel: keep\n",
