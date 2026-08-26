@@ -245,7 +245,7 @@ What the terminal shows while OMH workflows run:
 - **Phase-structured TODO** — work is declared up front as numbered phases
   with tasks (`todo init`), rendered as the checklist above the prompt: one
   active item, tasks indented beneath every phase header, subtask nesting,
-  and fold lines once the plan grows past seven rows.
+  and fold lines once the plan grows past eight rows.
 
 <br>
 

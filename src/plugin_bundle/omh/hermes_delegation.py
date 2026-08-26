@@ -762,6 +762,9 @@ def read_hermes_native_subagents(
         elif row_state == "done":
             completed += 1
 
+    # The per-source bound is disclosed, not silent: the HUD merge adds this
+    # to its own drop count so the widget's `+N more` line stays honest.
+    payload["hidden"] = max(0, len(rows) - max(1, int(limit)))
     rows = rows[: max(1, int(limit))]
     payload["rows"] = rows
     payload["running"] = running

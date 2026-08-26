@@ -302,10 +302,25 @@ export default function register(sdk) {
     const metrics = sessionMetrics(payload)
     const maestro = payload.maestro || {}
     const mainRows = active && Array.isArray(maestro.rows) ? maestro.rows.slice(0, 1) : []
-    const activityLimit = Math.max(1, Math.min(3, viewportRows - 3))
-    const rows = active && Array.isArray(agents.rows)
-      ? agents.rows.slice(0, Math.max(0, activityLimit - mainRows.length))
-      : []
+    // Row budget learned from OMO's DAG status widget: five rows by default,
+    // but a RUNNING agent lane is never hidden by the cap — with many lanes
+    // executing at once the dock must tell that story. The viewport still
+    // wins: the dock keeps its chrome (Rule + header) plus prompt margin out
+    // of the budget, the `+N more` overflow line pays for a row of its own,
+    // and anything hidden — here or by the reader's own cap — is named by
+    // that line instead of vanishing.
+    const allAgentRows = active && Array.isArray(agents.rows) ? agents.rows : []
+    const runningAgents = allAgentRows
+      .filter(row => !row.state || row.state === 'running').length
+    const viewportBudget = Math.max(1, viewportRows - 5)
+    const agentBudget = Math.min(
+      Math.max(Math.max(5 - mainRows.length, 1), runningAgents),
+      Math.max(0, viewportBudget - mainRows.length),
+    )
+    let rows = allAgentRows.slice(0, agentBudget)
+    if (allAgentRows.length > rows.length && rows.length > 1) rows = rows.slice(0, rows.length - 1)
+    const hiddenRows =
+      Math.max(0, allAgentRows.length - rows.length) + (active ? Number(agents.hidden_rows) || 0 : 0)
     return h(
       Box,
       { flexDirection: 'column', width: '100%' },
@@ -342,6 +357,9 @@ export default function register(sdk) {
         ? ([...mainRows, ...rows].some(row => !row.state || row.state === 'running')
             ? h(LiveActivityRows, { columns, mainRows, receivedAt: state.receivedAt, rows, t })
             : h(ActivityRows, { columns, extraSeconds: 0, frame: 0, mainRows, rows, t }))
+        : null,
+      hiddenRows
+        ? h(Text, { color: t.color.muted, wrap: 'truncate-end' }, `  +${hiddenRows} more`)
         : null,
     )
   }
@@ -424,13 +442,13 @@ export default function register(sdk) {
         h(FrameRule, { columns, payload, t }),
       )
     }
-    // The whole plan by default, bounded at seven visible item rows. Every
+    // The whole plan by default, bounded at eight visible item rows. Every
     // phase renders its name as a header row with one indented item per row
     // beneath it — even a phase with a single task. The old space-saving
     // merge (`Research [•] task`) collapsed exactly the structure the owner
     // wants to read ('[] 이거 탭한번쳐서 한개여도. 그 구조로 나오게'), so a
     // lone task indents under its header like any other. When the plan
-    // exceeds seven items the window anchors just before the first
+    // exceeds eight items the window anchors just before the first
     // remaining item so current work is always on screen, and hidden
     // neighbours fold into muted `... (N earlier/later tasks)` lines.
     const shown = Array.isArray(todo.items) ? todo.items : []
@@ -443,7 +461,7 @@ export default function register(sdk) {
       const depth = Number(item.depth)
       return Number.isInteger(depth) && depth > 0 ? Math.min(depth, 3) : 0
     }
-    const TODO_DISPLAY_ROWS = 7
+    const TODO_DISPLAY_ROWS = 8
     const total = shown.length
     const firstRemaining = shown.findIndex(item => item.state !== 'done')
     const anchor = firstRemaining < 0 ? 0 : Math.max(0, firstRemaining - 1)

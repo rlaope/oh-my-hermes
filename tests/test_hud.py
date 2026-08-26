@@ -1361,5 +1361,77 @@ class TodoHudTests(unittest.TestCase):
             self.assertEqual(len(payload["display"]["todo_lines"]), 2)
 
 
+class ActivityRowOrderTests(unittest.TestCase):
+    """Merged activity rows: running first, settled newest-first, capped at 8.
+
+    Display-priority ordering adopted from OMO's DAG status widget — a late
+    failure must never be pushed off screen by older completed rows, and
+    running lanes keep dispatch order.
+    """
+
+    def _rows(self, *specs: tuple[str, str, str]) -> list[dict[str, str]]:
+        return [
+            {"task_id": task_id, "state": state, "observed_at": observed_at}
+            for task_id, state, observed_at in specs
+        ]
+
+    def test_running_rows_lead_and_keep_dispatch_order(self) -> None:
+        from omh.plugin_bundle.omh.runtime_reader import _ordered_activity_rows
+
+        rows = self._rows(
+            ("done-old", "done", "2026-08-26T10:00:00Z"),
+            ("run-b", "running", "2026-08-26T10:01:00Z"),
+            ("blocked-new", "blocked", "2026-08-26T10:05:00Z"),
+            ("run-a", "running", "2026-08-26T10:02:00Z"),
+            ("done-new", "done", "2026-08-26T10:04:00Z"),
+            ("failed-old", "failed", "2026-08-26T10:03:00Z"),
+        )
+        ordered = [row["task_id"] for row in _ordered_activity_rows(rows)]
+        self.assertEqual(
+            ordered,
+            ["run-b", "run-a", "blocked-new", "failed-old", "done-new", "done-old"],
+        )
+
+    def test_rows_without_a_state_count_as_running(self) -> None:
+        from omh.plugin_bundle.omh.runtime_reader import _ordered_activity_rows
+
+        rows = [{"task_id": "bare"}] + self._rows(("done", "done", "2026-08-26T10:00:00Z"))
+        self.assertEqual(
+            [row["task_id"] for row in _ordered_activity_rows(rows)],
+            ["bare", "done"],
+        )
+
+    def test_merged_rows_cap_at_eight_dropping_oldest_settled_first(self) -> None:
+        from omh.plugin_bundle.omh.runtime_reader import (
+            ACTIVITY_ROW_LIMIT,
+            _ordered_activity_rows,
+        )
+
+        self.assertEqual(ACTIVITY_ROW_LIMIT, 8)
+        rows = self._rows(
+            *[(f"run-{index}", "running", f"2026-08-26T10:0{index}:00Z") for index in range(6)],
+            ("done-new", "done", "2026-08-26T10:09:00Z"),
+            ("done-mid", "done", "2026-08-26T10:08:00Z"),
+            ("done-old", "done", "2026-08-26T10:07:00Z"),
+        )
+        ordered = [row["task_id"] for row in _ordered_activity_rows(rows)]
+        # The helper orders without dropping; the call site slices at the
+        # limit and discloses the count, so the capped view keeps all six
+        # running rows, fills the remainder with the newest settled rows, and
+        # the oldest settled row is the one that falls off.
+        self.assertEqual(len(ordered), 9)
+        capped = ordered[:ACTIVITY_ROW_LIMIT]
+        self.assertEqual(capped[:6], [f"run-{index}" for index in range(6)])
+        self.assertEqual(capped[6:], ["done-new", "done-mid"])
+
+    def test_row_limit_matches_the_native_reader_bound(self) -> None:
+        # The comment on ACTIVITY_ROW_LIMIT claims parity with the native
+        # reader's own per-source bound; make the claim enforceable.
+        from omh.plugin_bundle.omh.hermes_delegation import _ROW_LIMIT
+        from omh.plugin_bundle.omh.runtime_reader import ACTIVITY_ROW_LIMIT
+
+        self.assertEqual(ACTIVITY_ROW_LIMIT, _ROW_LIMIT)
+
+
 if __name__ == "__main__":
     unittest.main()

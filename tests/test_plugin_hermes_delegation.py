@@ -686,6 +686,45 @@ class HudMergeTest(unittest.TestCase):
             # gpt-5.6-terra:high is the deep chain head and differs from the
             # parent model, so the routed category is visible in the HUD row.
             self.assertEqual(rows[0]["category"], "deep")
+            # Nothing was dropped, so the disclosed hidden-row count is zero.
+            self.assertEqual(payload["subagents"]["hidden_rows"], 0)
+
+    def test_read_omh_hud_caps_many_native_rows_and_discloses_the_drop(self):
+        from omh.plugin_bundle.omh.runtime_reader import ACTIVITY_ROW_LIMIT, read_omh_hud
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / "omh"
+            hermes_home = root / "hermes"
+            omh_home.mkdir()
+            hermes_home.mkdir()
+            base = time.time()
+            _build_state_db(
+                hermes_home,
+                [
+                    {
+                        "id": f"20260818_1001{index:02d}_child{index:02d}",
+                        "model": "gpt-5.6-terra",
+                        "effort": "high",
+                        "started_at": base - 300 + index,
+                        "usage": {
+                            "api_calls": 1,
+                            "output_tokens": 10,
+                            "last_seen": base - 1,
+                        },
+                    }
+                    # One more child than the merge cap admits.
+                    for index in range(ACTIVITY_ROW_LIMIT + 1)
+                ],
+            )
+            payload = read_omh_hud(omh_home, hermes_home)
+            rows = payload["subagents"]["rows"]
+            self.assertEqual(len(rows), ACTIVITY_ROW_LIMIT)
+            # Every carried row is running (running rows outrank settled ones
+            # in the merged ordering) and the one capped row is disclosed so
+            # the widget can render `+N more` instead of silently truncating.
+            self.assertTrue(all(row["state"] == "running" for row in rows))
+            self.assertEqual(payload["subagents"]["hidden_rows"], 1)
 
 
 if __name__ == "__main__":
