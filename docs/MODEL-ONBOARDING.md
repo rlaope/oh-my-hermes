@@ -99,7 +99,9 @@ Files that move together (grep the old id to find every site):
 `APPROX_PRICE_PER_MTOK` takes the vendor's first-party list price with the
 source and month in a comment. A model or tier without a documented price
 gets no entry; absence renders no estimate. Check the existing family rows
-while you are there — the Claude 5 rows were stale until the 5.1 pass.
+while you are there — the Claude 5 rows were stale until the 5.1 pass. Users
+can override or supply prices via `~/.omh/routing/model-prices.json`
+(`model_price_overrides/v1`).
 
 ## 6. Machine placement stays provider-neutral
 

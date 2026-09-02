@@ -25,6 +25,7 @@ mixture routing is visible as such instead of masquerading as a routed one.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sqlite3
@@ -742,6 +743,7 @@ def _strict_json_loads(text: str) -> object:
 # and rendered with a `~`. Cache reads are charged at a tenth of input unless
 # APPROX_CACHE_READ_RATIO names the model.
 APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
+    # OpenAI list prices (openai.com/api/pricing, 2026-08):
     "gpt-5.6-sol": (1.25, 10.0),
     "gpt-5.6-terra": (1.25, 10.0),
     "gpt-5.6-luna": (0.25, 2.0),
@@ -754,21 +756,30 @@ APPROX_PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-mythos-5-1": (10.0, 50.0),
     "claude-sonnet-5": (2.0, 10.0),
     "claude-haiku-4-5": (1.0, 5.0),
+    # Moonshot AI list price (platform.moonshot.cn pricing, 2026-08):
     "kimi-k3": (0.6, 2.5),
+    # Zhipu AI list price (docs.z.ai pricing, 2026-08):
     "glm-5.2": (0.6, 2.2),
     # Z.ai list price for the 5.3 generation (docs.z.ai pricing, 2026-08).
     # 5.3 always reasons and bills the reasoning inside output tokens, so the
     # output side dominates real spend; still an approximation, not billing.
     "glm-5.3": (1.4, 4.4),
     "glm-5.3-flash": (0.15, 0.5),
+    # DeepSeek list price (api-docs.deepseek.com pricing, 2026-08):
     "deepseek-v3.2": (0.28, 0.42),
+    # Zhipu AI speed-tier ballpark (docs.z.ai pricing, 2026-08):
     "glm-5.2-ultrafast": (0.3, 1.2),
     # Speed-tier ballpark mirrors the glm pattern (roughly half the base
     # model's list price); editable approximation, not billing evidence.
     "kimi-k3-ultrafast": (0.3, 1.25),
+    # Google AI Studio list price (ai.google.dev/pricing, 2026-08):
     "gemini-3.1-pro": (1.25, 10.0),
+    # Alibaba Cloud Model Studio list price (alibabacloud.com pricing, 2026-08):
     "qwen3-coder": (0.4, 1.6),
+    # Upstage list price (upstage.ai pricing, 2026-08):
     "solar-pro2": (0.15, 0.60),
+    # xAI list price (docs.x.ai pricing, 2026-08):
+    "grok-code-fast": (0.2, 1.5),
 }
 
 
@@ -783,15 +794,121 @@ APPROX_CACHE_READ_RATIO: dict[str, float] = {
 }
 _DEFAULT_CACHE_READ_RATIO = 0.1
 
+# User-editable price overrides. Allows operators and users to correct or
+# customize token list prices (gateways with markups, enterprise rates, free tiers)
+# without editing shipped source code.
+MODEL_PRICE_OVERRIDES_SCHEMA_VERSION = "model_price_overrides/v1"
+
+
+def model_price_overrides_path(omh_home: str | Path | None = None) -> Path:
+    root = Path(omh_home).expanduser() if omh_home else Path.home() / ".omh"
+    return root / "routing" / "model-prices.json"
+
+
+def load_model_price_overrides(
+    omh_home: str | Path | None = None,
+) -> tuple[dict[str, tuple[float, float]], str]:
+    """Read the user's price override document.
+
+    Returns ``(overrides, status)`` where status is ``absent``, ``applied``,
+    or ``invalid: <reason>``, matching ``load_mixture_chain_overrides``.
+    """
+    path = model_price_overrides_path(omh_home)
+    try:
+        raw = _strict_json_loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}, "absent"
+    except (OSError, UnicodeDecodeError, ValueError):
+        return {}, "invalid: unreadable JSON"
+    return parse_model_price_overrides(raw)
+
+
+def parse_model_price_overrides(
+    raw: object,
+) -> tuple[dict[str, tuple[float, float]], str]:
+    """Validate one already-parsed price override document."""
+    if not isinstance(raw, dict):
+        return {}, "invalid: document must be a JSON object"
+    if raw.get("schema_version") != MODEL_PRICE_OVERRIDES_SCHEMA_VERSION:
+        return {}, f"invalid: schema_version must be {MODEL_PRICE_OVERRIDES_SCHEMA_VERSION}"
+    prices = raw.get("prices")
+    if not isinstance(prices, dict):
+        return {}, "invalid: prices must be an object"
+    unknown = sorted(set(raw) - {"schema_version", "prices"})
+    if unknown:
+        return {}, f"invalid: unsupported fields {unknown}"
+    overrides: dict[str, tuple[float, float]] = {}
+    for alias, entry in prices.items():
+        if not isinstance(alias, str) or not _CHAIN_TOKEN_RE.fullmatch(alias):
+            return {}, f"invalid: alias {alias!r} is not a token"
+        if not isinstance(entry, dict):
+            return {}, f"invalid: alias {alias!r} must map to an object"
+        unknown_keys = sorted(set(entry) - {"input", "output"})
+        if unknown_keys:
+            return {}, f"invalid: alias {alias!r} entry fields {unknown_keys}"
+        if "input" not in entry:
+            return {}, f"invalid: alias {alias!r} missing input price"
+        if "output" not in entry:
+            return {}, f"invalid: alias {alias!r} missing output price"
+        input_raw = entry["input"]
+        output_raw = entry["output"]
+        if isinstance(input_raw, bool) or not isinstance(input_raw, (int, float)):
+            return {}, f"invalid: alias {alias!r} names a non-numeric input price"
+        if isinstance(output_raw, bool) or not isinstance(output_raw, (int, float)):
+            return {}, f"invalid: alias {alias!r} names a non-numeric output price"
+        input_price = float(input_raw)
+        output_price = float(output_raw)
+        if not math.isfinite(input_price) or input_price < 0.0:
+            return {}, f"invalid: alias {alias!r} names an invalid input price"
+        if not math.isfinite(output_price) or output_price < 0.0:
+            return {}, f"invalid: alias {alias!r} names an invalid output price"
+        overrides[alias.casefold()] = (input_price, output_price)
+    return overrides, "applied"
+
+
+def effective_model_prices(
+    omh_home: str | Path | None = None,
+) -> dict[str, tuple[float, float]]:
+    """Shipped ballpark prices with the user's per-model overrides applied."""
+    overrides, _ = load_model_price_overrides(omh_home)
+    if not overrides:
+        return dict(APPROX_PRICE_PER_MTOK)
+    effective = dict(APPROX_PRICE_PER_MTOK)
+    effective.update(overrides)
+    return effective
+
+
+def resolve_model_price(
+    model: str,
+    price_overrides: Mapping[str, tuple[float, float]] | None = None,
+) -> tuple[tuple[float, float] | None, bool]:
+    """Look up price per Mtok for a model alias: (prices, is_override).
+
+    Returns ((input_price, output_price), True) if found in user overrides,
+    ((input_price, output_price), False) if found in shipped fallback,
+    or (None, False) if unknown.
+    """
+    key = _text(model).casefold()
+    if price_overrides and key in price_overrides:
+        return price_overrides[key], True
+    if key in APPROX_PRICE_PER_MTOK:
+        return APPROX_PRICE_PER_MTOK[key], False
+    return None, False
+
 
 def _approximate_cost_usd(
-    model: str, input_tokens: float, output_tokens: float, cache_read_tokens: float
+    model: str,
+    input_tokens: float,
+    output_tokens: float,
+    cache_read_tokens: float,
+    *,
+    prices: tuple[float, float] | None = None,
 ) -> float | None:
     key = _text(model).casefold()
-    prices = APPROX_PRICE_PER_MTOK.get(key)
-    if not prices or (input_tokens + output_tokens) <= 0:
+    effective_prices = prices if prices is not None else APPROX_PRICE_PER_MTOK.get(key)
+    if not effective_prices or (input_tokens + output_tokens) <= 0:
         return None
-    input_price, output_price = prices
+    input_price, output_price = effective_prices
     cache_ratio = APPROX_CACHE_READ_RATIO.get(key, _DEFAULT_CACHE_READ_RATIO)
     return (
         input_tokens * input_price
@@ -1076,6 +1193,7 @@ def read_hermes_native_subagents(
     active_chains = effective_mixture_category_chains(omh_home)
     provider_routes, _ = load_model_provider_routes(omh_home)
     route_provenance = load_delegation_route_provenance(omh_home)
+    price_overrides, _ = load_model_price_overrides(omh_home)
     payload: dict[str, Any] = {
         "status": "idle",
         "rows": [],
@@ -1183,11 +1301,25 @@ def read_hermes_native_subagents(
         # for an approximation there rather than a blank. Token-derived, and
         # flagged approximate so the widget can render it as `~$…`.
         cost_approximate = False
+        cost_override = False
         if not cost:
-            approx = _approximate_cost_usd(child["model"], input_tokens, output_tokens, cache_read)
-            if approx is not None:
-                cost = approx
-                cost_approximate = True
+            resolved_prices, is_override = resolve_model_price(
+                child["model"],
+                price_overrides=price_overrides,
+            )
+            if resolved_prices is not None:
+                approx = _approximate_cost_usd(
+                    child["model"],
+                    input_tokens,
+                    output_tokens,
+                    cache_read,
+                    prices=resolved_prices,
+                )
+                if approx is not None:
+                    cost = approx
+                    cost_approximate = True
+                    if is_override:
+                        cost_override = True
 
         parent_model = state.get("parent_models", {}).get(child["parent_id"], "")
         route_alias, route_provider = configured_route_for_wire(
@@ -1262,6 +1394,8 @@ def read_hermes_native_subagents(
             row["cost_usd"] = cost
             if cost_approximate:
                 row["cost_approximate"] = True
+            if cost_override:
+                row["cost_override"] = True
         if tokens_per_second is not None:
             row["tokens_per_second"] = tokens_per_second
         if cache_hit is not None:

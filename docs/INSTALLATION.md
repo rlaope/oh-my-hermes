@@ -389,6 +389,36 @@ configured mapping for labeling and mark the provider source as
 `model_provider_routes`; that configured metadata is not provider execution
 or credential evidence.
 
+### Customizing token prices for cost approximation
+
+When hosts record no per-call cost (such as subscription-billed plans), OMH
+derives an approximate cost from observed tokens using a shipped fallback
+ballpark table. Users and operators who use custom gateways with markups,
+enterprise committed-use discounts, promotional rates, or free tiers ($0.00)
+can override these prices without modifying source code.
+
+Supply overrides in `~/.omh/routing/model-prices.json`
+(`model_price_overrides/v1`), a sibling of the chain and provider documents:
+
+```json
+{
+  "schema_version": "model_price_overrides/v1",
+  "prices": {
+    "glm-5.2": {"input": 0.6, "output": 2.2},
+    "free-tier-model": {"input": 0.0, "output": 0.0}
+  }
+}
+```
+
+Prices are expressed in USD per million tokens (`input` and `output`). Values
+must be non-negative finite numbers (0.0 is explicitly accepted for free tiers
+and subscriptions). A model listed here supersedes the shipped ballpark table;
+unlisted models continue to use the shipped fallback. When cost is derived from
+a user override, the HUD activity row marks the derivation with both
+`cost_approximate: true` and `cost_override: true`. Validation matches the
+sibling documents: strict, atomic, and token-only, with an invalid file ignored
+whole rather than partially applied.
+
 The X/Grok row is a static, editable affinity for work explicitly declaring X
 platform data. It is not a measured capability, performance, or availability
 claim, never removes another candidate, and never overrides an explicit user

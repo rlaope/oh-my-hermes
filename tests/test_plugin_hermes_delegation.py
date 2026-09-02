@@ -16,19 +16,26 @@ import unittest
 from pathlib import Path
 
 from omh.plugin_bundle.omh.hermes_delegation import (
+    APPROX_PRICE_PER_MTOK,
     COMPLETED_LINGER_SECONDS,
     DELEGATION_ROUTE_PROVENANCE_SCHEMA_VERSION,
     HERMES_MIXTURE_CATEGORY_CHAINS,
     MIXTURE_CHAIN_OVERRIDES_SCHEMA_VERSION,
+    MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
     RECENT_ACTIVITY_SECONDS,
     append_delegation_route_provenance,
     effective_mixture_category_chains,
+    effective_model_prices,
     load_delegation_route_provenance,
     load_mixture_chain_overrides,
+    load_model_price_overrides,
     mixture_category_for,
     mixture_chain_overrides_path,
+    model_price_overrides_path,
+    parse_model_price_overrides,
     parse_model_provider_routes,
     read_hermes_native_subagents,
+    resolve_model_price,
 )
 
 NOW = 1_800_000_000.0
@@ -233,6 +240,13 @@ def _write_overrides(omh_home: Path, document: object) -> Path:
     return path
 
 
+def _write_price_overrides(omh_home: Path, document: object) -> Path:
+    path = model_price_overrides_path(omh_home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return path
+
+
 class ClaudeFableTierContractTest(unittest.TestCase):
     def test_every_hermes_lane_claude_row_declares_an_effort(self):
         # Hermes defaults an unset effort to medium, not the API default high,
@@ -361,6 +375,234 @@ class MixtureChainOverridesTest(unittest.TestCase):
         # Attribution order is the canonical category order; a reordered dict
         # would silently change which chain claims a shared model.
         self.assertEqual(tuple(HERMES_MIXTURE_CATEGORY_CHAINS), MODEL_CATEGORIES)
+
+
+class ModelPriceOverridesTest(unittest.TestCase):
+    """~/.omh/routing/model-prices.json is the user's price override surface:
+    it replaces prices for only the models it names, accepts 0.0 as a valid
+    free-tier/subscription rate, and an invalid document is ignored whole
+    rather than half-applied."""
+
+    def test_an_absent_document_yields_shipped_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            overrides, status = load_model_price_overrides(tmp)
+            self.assertEqual((overrides, status), ({}, "absent"))
+            self.assertEqual(len(effective_model_prices(tmp)), len(APPROX_PRICE_PER_MTOK))
+            self.assertEqual(
+                resolve_model_price("gpt-5.6-sol"),
+                ((1.25, 10.0), False),
+            )
+            self.assertEqual(
+                resolve_model_price("grok-code-fast"),
+                ((0.2, 1.5), False),
+            )
+            self.assertEqual(resolve_model_price("unknown-model"), (None, False))
+
+    def test_a_seeded_empty_document_applies_and_keeps_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_price_overrides(Path(tmp), {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {},
+            })
+            overrides, status = load_model_price_overrides(tmp)
+            self.assertEqual((overrides, status), ({}, "applied"))
+            self.assertEqual(effective_model_prices(tmp), dict(APPROX_PRICE_PER_MTOK))
+
+    def test_overriding_a_shipped_model_supersedes_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_price_overrides(Path(tmp), {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {
+                    "gpt-5.6-sol": {"input": 2.0, "output": 12.0},
+                },
+            })
+            overrides, status = load_model_price_overrides(tmp)
+            self.assertEqual(status, "applied")
+            effective = effective_model_prices(tmp)
+            self.assertEqual(effective["gpt-5.6-sol"], (2.0, 12.0))
+            self.assertEqual(effective["claude-opus-5"], (5.0, 25.0))
+            self.assertEqual(
+                resolve_model_price("gpt-5.6-sol", overrides),
+                ((2.0, 12.0), True),
+            )
+            self.assertEqual(
+                resolve_model_price("claude-opus-5", overrides),
+                ((5.0, 25.0), False),
+            )
+
+    def test_adding_a_custom_model_price(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_price_overrides(Path(tmp), {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {
+                    "custom-gateway-model": {"input": 0.5, "output": 1.5},
+                },
+            })
+            overrides, status = load_model_price_overrides(tmp)
+            self.assertEqual(status, "applied")
+            self.assertEqual(
+                resolve_model_price("custom-gateway-model", overrides),
+                ((0.5, 1.5), True),
+            )
+            self.assertEqual(
+                effective_model_prices(tmp)["custom-gateway-model"],
+                (0.5, 1.5),
+            )
+
+    def test_zero_input_and_output_prices_are_valid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_price_overrides(Path(tmp), {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {
+                    "free-promo-model": {"input": 0.0, "output": 0.0},
+                },
+            })
+            overrides, status = load_model_price_overrides(tmp)
+            self.assertEqual(status, "applied")
+            self.assertEqual(overrides["free-promo-model"], (0.0, 0.0))
+            self.assertEqual(
+                resolve_model_price("free-promo-model", overrides),
+                ((0.0, 0.0), True),
+            )
+
+    def test_boolean_price_values_are_rejected(self):
+        cases = {
+            "boolean input": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"bad-model": {"input": True, "output": 1.0}},
+            },
+            "boolean output": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"bad-model": {"input": 1.0, "output": False}},
+            },
+        }
+        for label, document in cases.items():
+            with self.subTest(case=label):
+                overrides, status = parse_model_price_overrides(document)
+                self.assertEqual(overrides, {})
+                self.assertTrue(status.startswith("invalid:"), status)
+                self.assertIn("non-numeric", status)
+
+    def test_negative_price_values_are_rejected(self):
+        cases = {
+            "negative input": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"bad-model": {"input": -0.5, "output": 1.0}},
+            },
+            "negative output": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"bad-model": {"input": 1.0, "output": -0.01}},
+            },
+        }
+        for label, document in cases.items():
+            with self.subTest(case=label):
+                overrides, status = parse_model_price_overrides(document)
+                self.assertEqual(overrides, {})
+                self.assertTrue(status.startswith("invalid:"), status)
+                self.assertIn("names an invalid", status)
+
+    def test_non_finite_price_values_are_rejected(self):
+        cases = {
+            "nan input": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"bad-model": {"input": float("nan"), "output": 1.0}},
+            },
+            "inf output": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"bad-model": {"input": 1.0, "output": float("inf")}},
+            },
+            "negative inf input": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"bad-model": {"input": float("-inf"), "output": 1.0}},
+            },
+        }
+        for label, document in cases.items():
+            with self.subTest(case=label):
+                overrides, status = parse_model_price_overrides(document)
+                self.assertEqual(overrides, {})
+                self.assertTrue(status.startswith("invalid:"), status)
+                self.assertIn("names an invalid", status)
+
+    def test_unknown_fields_are_rejected(self):
+        cases = {
+            "top-level models container": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {},
+                "models": {},
+            },
+            "top-level extra field": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {},
+                "extra": 1,
+            },
+            "entry extra field": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"m": {"input": 1.0, "output": 2.0, "cache": 0.1}},
+            },
+            "alternative key input_per_mtok": {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {"m": {"input_per_mtok": 1.0, "output": 2.0}},
+            },
+        }
+        for label, document in cases.items():
+            with self.subTest(case=label):
+                overrides, status = parse_model_price_overrides(document)
+                self.assertEqual(overrides, {})
+                self.assertTrue(status.startswith("invalid:"), status)
+
+    def test_invalid_schema_version_is_rejected(self):
+        overrides, status = parse_model_price_overrides({
+            "schema_version": "model_prices/v1",
+            "prices": {},
+        })
+        self.assertEqual(overrides, {})
+        self.assertEqual(
+            status,
+            f"invalid: schema_version must be {MODEL_PRICE_OVERRIDES_SCHEMA_VERSION}",
+        )
+
+    def test_non_token_model_names_are_rejected(self):
+        cases = {
+            "space in name": "model name with spaces",
+            "newline in name": "model\nname",
+            "empty string": "",
+        }
+        for label, bad_name in cases.items():
+            with self.subTest(case=label):
+                overrides, status = parse_model_price_overrides({
+                    "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                    "prices": {bad_name: {"input": 1.0, "output": 2.0}},
+                })
+                self.assertEqual(overrides, {})
+                self.assertTrue(status.startswith("invalid:"), status)
+                self.assertIn("is not a token", status)
+
+    def test_duplicate_json_keys_are_rejected_as_unreadable_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = model_price_overrides_path(tmp)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                '{"schema_version": "model_price_overrides/v1", "prices": {}, "prices": {}}',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                load_model_price_overrides(tmp),
+                ({}, "invalid: unreadable JSON"),
+            )
+
+    def test_partially_invalid_document_is_rejected_atomically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_price_overrides(Path(tmp), {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {
+                    "valid-model": {"input": 1.0, "output": 2.0},
+                    "bad-model": {"input": "not-a-number", "output": 2.0},
+                },
+            })
+            overrides, status = load_model_price_overrides(tmp)
+            self.assertEqual(overrides, {})
+            self.assertTrue(status.startswith("invalid:"), status)
+            self.assertNotIn("valid-model", overrides)
 
 
 class HermesNativeSubagentReaderTest(unittest.TestCase):
@@ -508,6 +750,237 @@ class HermesNativeSubagentReaderTest(unittest.TestCase):
         self.assertAlmostEqual(
             row["cost_usd"],
             (20_000 * 0.15 + 10_000 * 0.015 + 5_000 * 0.60) / 1_000_000,
+        )
+
+    def test_user_price_override_applies_at_runtime_with_cost_approximate_and_cost_override(self):
+        _write_price_overrides(
+            self.home / ".omh",
+            {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {
+                    "gpt-5.6-sol": {"input": 2.50, "output": 20.0},
+                },
+            },
+        )
+        _build_state_db(
+            self.home,
+            [
+                {
+                    "id": "20260818_100100_override",
+                    "model": "gpt-5.6-sol",
+                    "effort": "high",
+                    "started_at": NOW - 60,
+                    "usage": {
+                        "input_tokens": 20_000,
+                        "output_tokens": 5_000,
+                        "cache_read_tokens": 10_000,
+                        "first_seen": NOW - 50,
+                        "last_seen": NOW - 5,
+                    },
+                }
+            ],
+        )
+        _write_manifest(
+            self.home,
+            "deleg_override",
+            ["override lane"],
+            started=NOW - 65,
+            log_mtime=NOW - 5,
+        )
+        payload = read_hermes_native_subagents(self.home, now=NOW, omh_home=self.home / ".omh")
+        row = payload["rows"][0]
+        self.assertEqual(row["model"], "gpt-5.6-sol")
+        self.assertTrue(row["cost_approximate"])
+        self.assertTrue(row["cost_override"])
+        # Overridden rates: $2.50/M input, $20.0/M output; cache reads @ tenth ($0.25/M).
+        # 20k * 2.50 + 10k * 0.25 + 5k * 20.0 = 50 + 2.5 + 100 = 152.5 / 1000 = $0.1525.
+        self.assertAlmostEqual(
+            row["cost_usd"],
+            (20_000 * 2.50 + 10_000 * 0.25 + 5_000 * 20.0) / 1_000_000,
+        )
+
+    def test_shipped_price_approximation_does_not_set_cost_override(self):
+        _write_price_overrides(
+            self.home / ".omh",
+            {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {
+                    "gpt-5.6-sol": {"input": 2.50, "output": 20.0},
+                },
+            },
+        )
+        _build_state_db(
+            self.home,
+            [
+                {
+                    "id": "20260818_100100_shipped",
+                    "model": "claude-opus-5",
+                    "effort": "high",
+                    "started_at": NOW - 60,
+                    "usage": {
+                        "input_tokens": 10_000,
+                        "output_tokens": 4_000,
+                        "cache_read_tokens": 30_000,
+                        "first_seen": NOW - 50,
+                        "last_seen": NOW - 5,
+                    },
+                }
+            ],
+        )
+        _write_manifest(
+            self.home,
+            "deleg_shipped",
+            ["shipped lane"],
+            started=NOW - 65,
+            log_mtime=NOW - 5,
+        )
+        payload = read_hermes_native_subagents(self.home, now=NOW, omh_home=self.home / ".omh")
+        row = payload["rows"][0]
+        self.assertEqual(row["model"], "claude-opus-5")
+        self.assertTrue(row["cost_approximate"])
+        self.assertNotIn("cost_override", row)
+        # Claude Opus 5 shipped price: $5.0/M input, $25.0/M output, tenth cache read ($0.50/M).
+        self.assertAlmostEqual(
+            row["cost_usd"],
+            (10_000 * 5.0 + 30_000 * 0.50 + 4_000 * 25.0) / 1_000_000,
+        )
+
+    def test_grok_code_fast_shipped_price_approximation(self):
+        _build_state_db(
+            self.home,
+            [
+                {
+                    "id": "20260818_100100_grok01",
+                    "model": "grok-code-fast",
+                    "effort": "low",
+                    "started_at": NOW - 300,
+                    "usage": {
+                        "api_calls": 5,
+                        "input_tokens": 20_000,
+                        "output_tokens": 5_000,
+                        "cache_read_tokens": 10_000,
+                        "first_seen": NOW - 290,
+                        "last_seen": NOW - 10,
+                    },
+                }
+            ],
+        )
+        _write_manifest(
+            self.home,
+            "deleg_grok",
+            ["grok lane"],
+            started=NOW - 305,
+            log_mtime=NOW - 5,
+        )
+        payload = read_hermes_native_subagents(self.home, now=NOW, omh_home=self.home / ".omh")
+        self.assertEqual(payload["status"], "observed")
+        self.assertEqual(payload["running"], 1)
+        row = payload["rows"][0]
+        self.assertEqual(row["model"], "grok-code-fast")
+        self.assertTrue(row["cost_approximate"])
+        self.assertNotIn("cost_override", row)
+        # Grok Code Fast shipped list price: $0.20/M input, $1.50/M output; cache reads @ tenth ($0.02/M).
+        # 20k input @ $0.20/M + 10k cache reads @ $0.02/M + 5k output @ $1.50/M.
+        self.assertAlmostEqual(
+            row["cost_usd"],
+            (20_000 * 0.20 + 10_000 * 0.02 + 5_000 * 1.50) / 1_000_000,
+        )
+
+    def test_zero_price_override_applies_at_runtime_with_cost_approximate_and_cost_override(self):
+        _write_price_overrides(
+            self.home / ".omh",
+            {
+                "schema_version": MODEL_PRICE_OVERRIDES_SCHEMA_VERSION,
+                "prices": {
+                    "free-tier-model": {"input": 0.0, "output": 0.0},
+                    "gpt-5.6-sol": {"input": 2.50, "output": 20.0},
+                },
+            },
+        )
+        overrides, status = load_model_price_overrides(self.home / ".omh")
+        self.assertEqual(status, "applied")
+        self.assertEqual(overrides["free-tier-model"], (0.0, 0.0))
+        self.assertEqual(overrides["gpt-5.6-sol"], (2.50, 20.0))
+
+        _build_state_db(
+            self.home,
+            [
+                {
+                    "id": "20260818_100100_free",
+                    "model": "free-tier-model",
+                    "effort": "low",
+                    "started_at": NOW - 60,
+                    "usage": {
+                        "input_tokens": 15_000,
+                        "output_tokens": 3_000,
+                        "cache_read_tokens": 5_000,
+                        "first_seen": NOW - 50,
+                        "last_seen": NOW - 5,
+                    },
+                },
+                {
+                    "id": "20260818_100100_nonzero",
+                    "model": "gpt-5.6-sol",
+                    "effort": "high",
+                    "started_at": NOW - 70,
+                    "usage": {
+                        "input_tokens": 20_000,
+                        "output_tokens": 5_000,
+                        "cache_read_tokens": 10_000,
+                        "first_seen": NOW - 60,
+                        "last_seen": NOW - 10,
+                    },
+                },
+                {
+                    "id": "20260818_100100_shipped",
+                    "model": "claude-opus-5",
+                    "effort": "high",
+                    "started_at": NOW - 80,
+                    "usage": {
+                        "input_tokens": 10_000,
+                        "output_tokens": 4_000,
+                        "cache_read_tokens": 30_000,
+                        "first_seen": NOW - 70,
+                        "last_seen": NOW - 15,
+                    },
+                },
+            ],
+        )
+        _write_manifest(
+            self.home,
+            "deleg_multi",
+            ["free lane", "nonzero lane", "shipped lane"],
+            started=NOW - 85,
+            log_mtime=NOW - 5,
+        )
+        payload = read_hermes_native_subagents(self.home, now=NOW, omh_home=self.home / ".omh")
+        rows_by_model = {row["model"]: row for row in payload["rows"]}
+
+        # 1. Zero-cost override row:
+        free_row = rows_by_model["free-tier-model"]
+        self.assertIn("cost_usd", free_row)
+        self.assertEqual(free_row["cost_usd"], 0.0)
+        self.assertTrue(free_row["cost_approximate"])
+        self.assertTrue(free_row["cost_override"])
+        self.assertIsNotNone(free_row["cost_usd"])
+        self.assertIs(type(free_row["cost_usd"]), float)
+
+        # 2. Non-zero override row:
+        nonzero_row = rows_by_model["gpt-5.6-sol"]
+        self.assertTrue(nonzero_row["cost_approximate"])
+        self.assertTrue(nonzero_row["cost_override"])
+        self.assertAlmostEqual(
+            nonzero_row["cost_usd"],
+            (20_000 * 2.50 + 10_000 * 0.25 + 5_000 * 20.0) / 1_000_000,
+        )
+
+        # 3. Shipped fallback row (un-overridden):
+        shipped_row = rows_by_model["claude-opus-5"]
+        self.assertTrue(shipped_row["cost_approximate"])
+        self.assertNotIn("cost_override", shipped_row)
+        self.assertAlmostEqual(
+            shipped_row["cost_usd"],
+            (10_000 * 5.0 + 30_000 * 0.50 + 4_000 * 25.0) / 1_000_000,
         )
 
     def test_an_observed_host_cost_is_never_replaced_by_the_approximation(self):

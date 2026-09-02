@@ -573,12 +573,14 @@ gate requires a completed paired run on the intended execution surface.
 - **Cost approximation** — `APPROX_PRICE_PER_MTOK` in
   `src/plugin_bundle/omh/hermes_delegation.py` supplies `~$` estimates only
   when the host recorded no cost; models absent from the table show no
-  approximation (never a fabricated number). Cache reads are priced at a
-  tenth of input unless `APPROX_CACHE_READ_RATIO` names the model: Claude
-  Fable 5.1 lists $10 / $50 per MTok with cache reads at $0.25 (0.025x) and
-  cache writes at $12.50 (5-minute TTL) / $20 (1-hour TTL); Opus 5 reads at
-  the tenth. Mythos 5.1 carries the Fable figure because its cache-read rate
-  was open at launch — approximate, like every number in the table.
+  approximation (never a fabricated number). Overrides live in
+  `~/.omh/routing/model-prices.json` (`model_price_overrides/v1`). Cache reads
+  are priced at a tenth of input unless `APPROX_CACHE_READ_RATIO` names the
+  model: Claude Fable 5.1 lists $10 / $50 per MTok with cache reads at $0.25
+  (0.025x) and cache writes at $12.50 (5-minute TTL) / $20 (1-hour TTL); Opus 5
+  reads at the tenth. Mythos 5.1 carries the Fable figure because its
+  cache-read rate was open at launch — approximate, like every number in the
+  table.
 - **`max_tokens` is a failure signal, not a stop** — a unit whose final turn
   ended on `stop_reason: max_tokens` is a failed attempt: the output was cut
   mid-thought and nothing after the cut was verified. It is never a done
