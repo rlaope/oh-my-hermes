@@ -135,6 +135,10 @@ class FamilyPrefixParityTests(unittest.TestCase):
         self.assertEqual(model_family("solar-pro2"), "solar")
         self.assertEqual(model_family("upstage/solar-pro2"), "solar")
 
+    def test_minimax_family_is_recognized(self) -> None:
+        self.assertEqual(model_family("MiniMax-M3"), "minimax")
+        self.assertEqual(model_family("MiniMax-M2.7"), "minimax")
+
     def test_vendor_prefixed_model_ids_alias_to_design_families(self) -> None:
         self.assertEqual(model_family("digitalocean/openai-gpt-5.6-sol"), "gpt")
         self.assertEqual(model_family("digitalocean/anthropic-claude-opus-5"), "claude")

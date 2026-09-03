@@ -450,6 +450,7 @@ _MODEL_FAMILY_PREFIXES: Final[tuple[tuple[str, str], ...]] = (
     ("qwen-", "qwen"),
     ("kimi-", "kimi"),
     ("mistral-", "mistral"),
+    ("minimax-", "minimax"),
     ("llama-", "llama"),
     ("deepseek-", "deepseek"),
     ("codestral-", "codestral"),
