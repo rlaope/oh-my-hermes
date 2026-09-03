@@ -37,6 +37,7 @@ from omh.goal_loop import (
     observe_loop_queue_item,
     read_loop_cycle,
     record_loop_feedback,
+    recover_loop_queue_item_dispatch,
     run_loop_once_result,
     tick_loop_runtime,
     update_loop_permission,
@@ -771,6 +772,14 @@ class GoalLoopTests(unittest.TestCase):
         self.assertTrue(observed_item["observed"])
         self.assertEqual(observed_item["executor_session"]["dispatch_status"], "progress_observed")
         self.assertEqual(observed_item["executor_session"]["progress_summary"]["schema_version"], "codex_progress_summary/v1")
+        self.assertEqual(
+            observed_item["observed_dispatch_attempt_id"],
+            dispatched_item["executor_session"]["active_attempt_id"],
+        )
+        self.assertEqual(
+            observed_item["executor_session"]["dispatch_attempts"][0]["delivery_outcome"],
+            "delivery_confirmed",
+        )
         self.assertIn("codex-jsonl:1", observed_item["observed_evidence_refs"])
         self.assertEqual(narration["schema_version"], "loop_cycle_narration/v1")
         self.assertIn("이번 사이클", narration["headline"])
@@ -778,6 +787,309 @@ class GoalLoopTests(unittest.TestCase):
         self.assertIn("implementation", narration["not_evidence_yet"])
         self.assertIn("ci", narration["not_evidence_yet"])
         self.assertEqual(validate_loop_cycle(observed), {"ok": True, "errors": []})
+
+    def test_loop_queue_dispatch_exact_replay_is_a_no_op(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Keep dispatch retries auditable",
+                goal_reframe="Record one stable executor dispatch identity.",
+                success_criteria=["Exact dispatch retries do not mutate the loop record"],
+                permission_profile="execute_with_gates",
+                allowed_executors=["codex"],
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"])
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            first = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                thread_ref="codex-thread-1",
+                evidence_refs=["wrapper:dispatch:1"],
+                summary="Codex dispatch recorded.",
+            )
+            replayed = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                thread_ref="codex-thread-1",
+                evidence_refs=["wrapper:dispatch:1"],
+                summary="Codex dispatch recorded.",
+            )
+
+        self.assertEqual(replayed, first)
+        self.assertEqual(replayed["runtime"]["queue"][0]["executor_session"]["active_attempt_id"], replayed["runtime"]["queue"][0]["executor_session"]["dispatch_attempts"][0]["attempt_id"])
+
+    def test_loop_queue_dispatch_conflict_preserves_the_first_attempt(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Keep dispatch retries auditable",
+                goal_reframe="Reject a conflicting executor dispatch identity.",
+                success_criteria=["Conflicting dispatch retries preserve the first attempt"],
+                permission_profile="execute_with_gates",
+                allowed_executors=["codex", "claude-code"],
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"])
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            first = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                thread_ref="codex-thread-1",
+                evidence_refs=["wrapper:dispatch:1"],
+                summary="First dispatch.",
+            )
+
+            with self.assertRaisesRegex(ValueError, "explicit recovery"):
+                dispatch_loop_queue_item(
+                    paths,
+                    cycle["loop_id"],
+                    queue_id,
+                    executor="claude-code",
+                    session_ref="claude-session-2",
+                    thread_ref="claude-thread-2",
+                    evidence_refs=["wrapper:dispatch:2"],
+                    summary="Conflicting dispatch.",
+                )
+
+            stored = read_loop_cycle(paths, cycle["loop_id"])
+
+        self.assertEqual(stored, first)
+        session = stored["runtime"]["queue"][0]["executor_session"]
+        self.assertEqual(session["executor"], "codex")
+        self.assertEqual(session["session_ref"], "codex-session-1")
+        self.assertEqual(session["thread_ref"], "codex-thread-1")
+        self.assertEqual(session["dispatch_evidence_refs"], ["wrapper:dispatch:1"])
+        self.assertEqual(len(session["dispatch_attempts"]), 1)
+
+    def test_loop_queue_dispatch_recovery_preserves_attempt_history(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Recover failed executor dispatches",
+                goal_reframe="Create a new attempt without erasing the failed attempt.",
+                success_criteria=["Dispatch attempt history remains ordered"],
+                permission_profile="execute_with_gates",
+                allowed_executors=["codex"],
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"])
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            first = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                evidence_refs=["wrapper:dispatch:1"],
+            )
+            first_attempt_id = first["runtime"]["queue"][0]["executor_session"]["active_attempt_id"]
+            recovered = recover_loop_queue_item_dispatch(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                prior_attempt_id=first_attempt_id,
+                prior_outcome="delivery_failed",
+                outcome_evidence_refs=["wrapper:delivery-failed:1"],
+                outcome_summary="The executor rejected the dispatch.",
+                executor="codex",
+                session_ref="codex-session-2",
+                evidence_refs=["wrapper:dispatch:2"],
+            )
+
+        session = recovered["runtime"]["queue"][0]["executor_session"]
+        attempts = session["dispatch_attempts"]
+        self.assertEqual([attempt["attempt_index"] for attempt in attempts], [1, 2])
+        self.assertEqual(attempts[0]["attempt_id"], first_attempt_id)
+        self.assertEqual(attempts[0]["delivery_outcome"], "delivery_failed")
+        self.assertEqual(attempts[0]["outcome_evidence_refs"], ["wrapper:delivery-failed:1"])
+        self.assertEqual(attempts[1]["delivery_outcome"], "delivery_unknown")
+        self.assertEqual(session["active_attempt_id"], attempts[1]["attempt_id"])
+        self.assertEqual(session["session_ref"], "codex-session-2")
+
+    def test_loop_queue_dispatch_recovery_records_uncertain_prior_outcome(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Recover an unacknowledged executor dispatch",
+                goal_reframe="Preserve the uncertain attempt before dispatching again.",
+                success_criteria=["Uncertain delivery remains distinguishable from failure"],
+                permission_profile="execute_with_gates",
+                allowed_executors=["codex"],
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"])
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            first = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                evidence_refs=["wrapper:dispatch:1"],
+            )
+            first_attempt_id = first["runtime"]["queue"][0]["executor_session"]["active_attempt_id"]
+            recovered = recover_loop_queue_item_dispatch(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                prior_attempt_id=first_attempt_id,
+                prior_outcome="delivery_unknown",
+                outcome_evidence_refs=["wrapper:ack-timeout:1"],
+                executor="codex",
+                session_ref="codex-session-2",
+                evidence_refs=["wrapper:dispatch:2"],
+            )
+
+        attempts = recovered["runtime"]["queue"][0]["executor_session"]["dispatch_attempts"]
+        self.assertEqual(attempts[0]["delivery_outcome"], "delivery_unknown")
+        self.assertEqual(attempts[1]["delivery_outcome"], "delivery_unknown")
+        self.assertNotEqual(attempts[0]["attempt_id"], attempts[1]["attempt_id"])
+
+    def test_loop_queue_observation_requires_attempt_binding_after_recovery(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Bind executor observations to dispatch attempts",
+                goal_reframe="Identify which recovered dispatch produced observed progress.",
+                success_criteria=["Late observations cannot bind to the wrong dispatch attempt"],
+                permission_profile="execute_with_gates",
+                allowed_executors=["codex"],
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"])
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            first = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                evidence_refs=["wrapper:dispatch:1"],
+            )
+            first_attempt_id = first["runtime"]["queue"][0]["executor_session"]["active_attempt_id"]
+            recovered = recover_loop_queue_item_dispatch(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                prior_attempt_id=first_attempt_id,
+                prior_outcome="delivery_unknown",
+                outcome_evidence_refs=["wrapper:ack-timeout:1"],
+                executor="codex",
+                session_ref="codex-session-2",
+                evidence_refs=["wrapper:dispatch:2"],
+            )
+
+            with self.assertRaisesRegex(ValueError, "dispatch attempt id is required"):
+                observe_codex_loop_queue_item(
+                    paths,
+                    cycle["loop_id"],
+                    queue_id,
+                    codex_log_text='{"role":"assistant","content":"Work completed."}',
+                    evidence_refs=["codex-jsonl:1"],
+                )
+
+            observed = observe_codex_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                codex_log_text='{"role":"assistant","content":"Work completed."}',
+                evidence_refs=["codex-jsonl:1"],
+                dispatch_attempt_id=first_attempt_id,
+            )
+
+        item = observed["runtime"]["queue"][0]
+        self.assertEqual(item["observed_dispatch_attempt_id"], first_attempt_id)
+        attempts = item["executor_session"]["dispatch_attempts"]
+        self.assertEqual(attempts[0]["delivery_outcome"], "delivery_confirmed")
+        self.assertEqual(attempts[1]["delivery_outcome"], "delivery_unknown")
+        self.assertEqual(
+            recovered["runtime"]["queue"][0]["executor_session"]["active_attempt_id"],
+            attempts[1]["attempt_id"],
+        )
+
+    def test_loop_cycle_validation_rejects_ambiguous_dispatch_attempt_state(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Validate executor dispatch identity",
+                goal_reframe="Reject persisted state that cannot identify its active dispatch.",
+                success_criteria=["Ambiguous dispatch state fails validation"],
+                permission_profile="execute_with_gates",
+                allowed_executors=["codex"],
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"])
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            dispatched = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                evidence_refs=["wrapper:dispatch:1"],
+            )
+            observed = observe_codex_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                codex_log_text='{"role":"assistant","content":"Work completed."}',
+                evidence_refs=["codex-jsonl:1"],
+            )
+
+        duplicate = copy.deepcopy(dispatched)
+        duplicate_session = duplicate["runtime"]["queue"][0]["executor_session"]
+        duplicate_session["dispatch_attempts"].append(copy.deepcopy(duplicate_session["dispatch_attempts"][0]))
+        duplicate_errors = validate_loop_cycle(duplicate)["errors"]
+
+        mismatched = copy.deepcopy(dispatched)
+        mismatched["runtime"]["queue"][0]["executor_session"]["session_ref"] = "other-session"
+        mismatch_errors = validate_loop_cycle(mismatched)["errors"]
+
+        unbound = copy.deepcopy(observed)
+        unbound["runtime"]["queue"][0]["observed_dispatch_attempt_id"] = ""
+        unbound_errors = validate_loop_cycle(unbound)["errors"]
+
+        self.assertTrue(any("attempt_id duplicates" in error for error in duplicate_errors))
+        self.assertTrue(any("must match the active dispatch attempt" in error for error in mismatch_errors))
+        self.assertTrue(any("must identify a recorded dispatch attempt" in error for error in unbound_errors))
+
+    def test_loop_cycle_validation_keeps_legacy_single_dispatch_records_readable(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            cycle = create_loop_cycle(
+                paths,
+                goal_summary="Read legacy executor dispatch state",
+                goal_reframe="Preserve compatibility with records written before attempt history.",
+                success_criteria=["Legacy records remain valid"],
+                permission_profile="execute_with_gates",
+                allowed_executors=["codex"],
+            )
+            ticked = tick_loop_runtime(paths, cycle["loop_id"])
+            queue_id = ticked["runtime"]["queue"][0]["queue_id"]
+            dispatched = dispatch_loop_queue_item(
+                paths,
+                cycle["loop_id"],
+                queue_id,
+                executor="codex",
+                session_ref="codex-session-1",
+                evidence_refs=["wrapper:dispatch:1"],
+            )
+
+        legacy = copy.deepcopy(dispatched)
+        session = legacy["runtime"]["queue"][0]["executor_session"]
+        session.pop("active_attempt_id")
+        session.pop("dispatch_attempts")
+        self.assertEqual(validate_loop_cycle(legacy), {"ok": True, "errors": []})
 
     def test_loop_queue_lifecycle_lists_handoffs_observes_and_blocks_items(self) -> None:
         with TemporaryDirectory() as tmp:

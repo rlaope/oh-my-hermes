@@ -8885,6 +8885,39 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(dispatched["loop"]["runtime"]["queue"][0]["status"], "prepared_not_observed")
             self.assertEqual(dispatched["loop"]["runtime"]["queue"][0]["executor_session"]["dispatch_status"], "dispatched")
             self.assertEqual(dispatched["loop"]["runtime"]["queue"][0]["executor_session"]["session_ref"], "codex-session-cli")
+            first_attempt_id = dispatched["loop"]["runtime"]["queue"][0]["executor_session"]["active_attempt_id"]
+
+            status, stdout, stderr = run_cli(
+                home
+                + [
+                    "loop",
+                    "queue",
+                    "recover-dispatch",
+                    "--loop",
+                    "loop-cli",
+                    "--queue",
+                    queue_id,
+                    "--prior-attempt-id",
+                    first_attempt_id,
+                    "--prior-outcome",
+                    "delivery_unknown",
+                    "--outcome-evidence-ref",
+                    "wrapper:ack-timeout:cli",
+                    "--executor",
+                    "codex",
+                    "--codex-session-ref",
+                    "codex-session-cli-2",
+                    "--evidence-ref",
+                    "wrapper:codex-dispatch:cli-2",
+                ]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            recovered = json.loads(stdout)
+            recovery_session = recovered["loop"]["runtime"]["queue"][0]["executor_session"]
+            self.assertEqual(len(recovery_session["dispatch_attempts"]), 2)
+            self.assertEqual(recovery_session["dispatch_attempts"][0]["delivery_outcome"], "delivery_unknown")
+            second_attempt_id = recovery_session["active_attempt_id"]
 
             status, stdout, stderr = run_cli(home + ["loop", "queue", "narrate", "--loop", "loop-cli", "--queue", queue_id])
             self.assertEqual(stderr, "")
@@ -8909,6 +8942,8 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                     "codex-log:cli",
                     "--evidence-ref",
                     "codex-jsonl:cli",
+                    "--dispatch-attempt-id",
+                    second_attempt_id,
                     "--summary",
                     "Codex defined the issue and started implementation.",
                 ]
@@ -8918,6 +8953,10 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             codex_observed = json.loads(stdout)
             self.assertEqual(codex_observed["loop"]["runtime"]["queue"][0]["status"], "observed")
             self.assertEqual(codex_observed["loop"]["runtime"]["queue"][0]["executor_session"]["dispatch_status"], "progress_observed")
+            self.assertEqual(
+                codex_observed["loop"]["runtime"]["queue"][0]["observed_dispatch_attempt_id"],
+                second_attempt_id,
+            )
             self.assertEqual(codex_observed["narration"]["schema_version"], "loop_cycle_narration/v1")
 
             observed = codex_observed

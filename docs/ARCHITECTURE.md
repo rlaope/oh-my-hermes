@@ -2049,16 +2049,23 @@ exits non-zero. That is the conservative direction; the alternative was a
 duplicate id the validator now rejects anyway. A distinct `mutation_id`
 applies normally.
 
-Surfaces that do **not** materialize the id need nothing extra, but the reason
-has to be checked rather than assumed. Loop cycles
-(`src/workflows/goal_loop.py`) mint `cycle_id` and `queue_id` from
-`_new_item_id()`, never from the `mutation_id`; their queue mutators are
-additionally guarded by status preconditions — `observe` and `dispatch` require
-`prepared_not_observed`, `block` refuses an already-observed item — so a
-replayed queue mutation is refused rather than applied twice. Wrapper sessions
-(`src/wrapper/sessions.py`) mutate in place — status transitions and a single
-`current_run_id` — instead of appending id-bearing items, so a repeat write is
-idempotent by shape.
+Surfaces that do **not** materialize the mutation id still need their own replay
+invariant. Loop cycles (`src/workflows/goal_loop.py`) mint `cycle_id` and
+`queue_id` from `_new_item_id()`, never from the `mutation_id`. Executor
+dispatch is the exception inside that record: it materializes a stable
+`loop_dispatch_attempt/v1` identity from the normalized dispatch metadata.
+Replaying the exact metadata is a no-op, divergent metadata is refused, and
+`omh loop queue recover-dispatch` is the only path that can append a new
+attempt. Recovery records the prior attempt as `delivery_failed` or
+`delivery_unknown` with evidence before appending; an observation names the
+attempt it confirms, and must do so explicitly once recovery has made the
+history ambiguous. The legacy single `executor_session` fields remain a mirror
+of the active attempt, and records written before attempt history remain
+readable. Other queue mutators retain status preconditions — `observe` requires
+`prepared_not_observed`, and `block` refuses an already-observed item. Wrapper
+sessions (`src/wrapper/sessions.py`) mutate in place — status transitions and a
+single `current_run_id` — instead of appending id-bearing items, so a repeat
+write is idempotent by shape.
 
 ### Bounded mutation ids
 

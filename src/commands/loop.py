@@ -4,6 +4,7 @@ import argparse
 
 from ..goal_loop import (
     LOOP_ACTIONS,
+    LOOP_DISPATCH_RECOVERY_OUTCOMES,
     LOOP_EXECUTOR_OPTION_IDS,
     LOOP_STICKY_RULE_DEFAULT_GAP,
     LOOP_STICKY_RULE_DEFAULT_MAX_REPEATS,
@@ -28,6 +29,7 @@ from ..goal_loop import (
     read_loop_cycle,
     record_loop_goal_driver_observation,
     record_loop_feedback,
+    recover_loop_queue_item_dispatch,
     run_loop_once_result,
     tick_loop_runtime,
     update_loop_permission,
@@ -309,6 +311,28 @@ def cmd_loop_queue_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_loop_queue_recover_dispatch(args: argparse.Namespace) -> int:
+    try:
+        cycle = recover_loop_queue_item_dispatch(
+            _paths(args),
+            args.loop_id,
+            args.queue_id,
+            prior_attempt_id=args.prior_attempt_id,
+            prior_outcome=args.prior_outcome,
+            outcome_evidence_refs=args.outcome_evidence_ref or [],
+            outcome_summary=args.outcome_summary or "",
+            executor=args.executor,
+            session_ref=args.codex_session_ref or args.session_ref or "",
+            thread_ref=args.codex_thread_ref or args.thread_ref or "",
+            evidence_refs=args.evidence_ref or [],
+            summary=args.summary or "",
+        )
+        _print_json({"loop": cycle, "status_card": build_loop_status_card(_paths(args), args.loop_id)})
+    except (FileNotFoundError, ValueError) as exc:
+        raise OmhError(str(exc)) from exc
+    return 0
+
+
 def cmd_loop_queue_observe_codex(args: argparse.Namespace) -> int:
     try:
         log_text = ""
@@ -326,6 +350,7 @@ def cmd_loop_queue_observe_codex(args: argparse.Namespace) -> int:
             evidence_refs=args.evidence_ref or [],
             codex_log_ref=args.codex_log_ref or "",
             summary=args.summary or "",
+            dispatch_attempt_id=args.dispatch_attempt_id or "",
         )
         _print_json({"loop": cycle, "narration": build_loop_cycle_narration(_paths(args), args.loop_id, args.queue_id)})
     except (FileNotFoundError, OSError, ValueError) as exc:
@@ -352,6 +377,7 @@ def cmd_loop_queue_observe(args: argparse.Namespace) -> int:
             subagent_evidence_refs=args.subagent_evidence_ref or [],
             connector_evidence_refs=args.connector_evidence_ref or [],
             summary=args.summary or "",
+            dispatch_attempt_id=args.dispatch_attempt_id or "",
         )
         _print_json({"loop": cycle, "status_card": build_loop_status_card(_paths(args), args.loop_id)})
     except (FileNotFoundError, ValueError) as exc:
@@ -507,6 +533,26 @@ def _add_loop_commands(sub) -> None:
     queue_dispatch.add_argument("--summary", default="")
     queue_dispatch.set_defaults(func=cmd_loop_queue_dispatch)
 
+    queue_recover_dispatch = queue_sub.add_parser("recover-dispatch")
+    queue_recover_dispatch.add_argument("--loop", dest="loop_id", required=True)
+    queue_recover_dispatch.add_argument("--queue", dest="queue_id", required=True)
+    queue_recover_dispatch.add_argument("--prior-attempt-id", required=True)
+    queue_recover_dispatch.add_argument(
+        "--prior-outcome",
+        choices=LOOP_DISPATCH_RECOVERY_OUTCOMES,
+        required=True,
+    )
+    queue_recover_dispatch.add_argument("--outcome-evidence-ref", action="append", required=True)
+    queue_recover_dispatch.add_argument("--outcome-summary", default="")
+    queue_recover_dispatch.add_argument("--executor", choices=LOOP_EXECUTOR_OPTION_IDS, required=True)
+    queue_recover_dispatch.add_argument("--session-ref", default="")
+    queue_recover_dispatch.add_argument("--thread-ref", default="")
+    queue_recover_dispatch.add_argument("--codex-session-ref", default="")
+    queue_recover_dispatch.add_argument("--codex-thread-ref", default="")
+    queue_recover_dispatch.add_argument("--evidence-ref", action="append")
+    queue_recover_dispatch.add_argument("--summary", default="")
+    queue_recover_dispatch.set_defaults(func=cmd_loop_queue_recover_dispatch)
+
     queue_observe_codex = queue_sub.add_parser("observe-codex")
     queue_observe_codex.add_argument("--loop", dest="loop_id", required=True)
     queue_observe_codex.add_argument("--queue", dest="queue_id", required=True)
@@ -514,6 +560,7 @@ def _add_loop_commands(sub) -> None:
     queue_observe_codex.add_argument("--codex-log-text", default="")
     queue_observe_codex.add_argument("--codex-log-ref", default="")
     queue_observe_codex.add_argument("--evidence-ref", action="append", required=True)
+    queue_observe_codex.add_argument("--dispatch-attempt-id", default="")
     queue_observe_codex.add_argument("--summary", default="")
     queue_observe_codex.set_defaults(func=cmd_loop_queue_observe_codex)
 
@@ -529,6 +576,7 @@ def _add_loop_commands(sub) -> None:
     queue_observe.add_argument("--worktree-evidence-ref", action="append")
     queue_observe.add_argument("--subagent-evidence-ref", action="append")
     queue_observe.add_argument("--connector-evidence-ref", action="append")
+    queue_observe.add_argument("--dispatch-attempt-id", default="")
     queue_observe.add_argument("--summary", default="")
     queue_observe.set_defaults(func=cmd_loop_queue_observe)
 

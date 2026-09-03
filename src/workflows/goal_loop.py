@@ -49,11 +49,13 @@ LOOP_SMALL_LOOP_GUIDANCE_SCHEMA = "loop_small_loop_guidance/v1"
 LOOP_RUN_ONCE_RESULT_SCHEMA = "loop_run_once_result/v1"
 EXECUTOR_LOOP_CAPABILITY_SCHEMA = "executor_loop_capability/v1"
 LOOP_CYCLE_NARRATION_SCHEMA = "loop_cycle_narration/v1"
+LOOP_DISPATCH_ATTEMPT_SCHEMA = "loop_dispatch_attempt/v1"
 LOOP_INVOCATION_SCHEMA = "loop_invocation/v1"
 LOOP_CONSTRAINT_ASSESSMENT_SCHEMA = "loop_constraint_assessment/v1"
 LOOP_STICKY_RULE_SCHEMA = "loop_sticky_rule/v1"
 LOOP_STICKY_RULE_ATTACHMENT_SCHEMA = "loop_sticky_rule_attachment/v1"
 LOOP_STOP_LADDER_SCHEMA = "loop_stop_ladder/v1"
+LOOP_DISPATCH_RECOVERY_OUTCOMES = ("delivery_failed", "delivery_unknown")
 
 # The ordered stop ladder evaluated before a tick advances. The tuple order IS
 # the ladder: assess_loop_stop_ladder walks it top to bottom, the first rung
@@ -1911,21 +1913,31 @@ def dispatch_loop_queue_item(
 ) -> dict[str, Any]:
     refs = _safe_list(evidence_refs or [], limit=320)
     capability = loop_executor_capability(executor)
+    dispatch = _dispatch_request(capability, session_ref, thread_ref, refs, summary)
 
-    def mutate(cycle: dict[str, Any]) -> dict[str, Any]:
+    def mutate(cycle: dict[str, Any]) -> dict[str, Any] | None:
         runtime, item = _queue_item_ref(cycle, queue_id)
         if item.get("status") != "prepared_not_observed":
             raise ValueError("only prepared_not_observed loop queue items can record executor dispatch")
+        existing = _dict_value(item, "executor_session")
+        if str(existing.get("dispatch_status", "")) in {"prepared", "dispatched"}:
+            if _executor_session_dispatch(existing) == dispatch:
+                return None
+            if existing.get("dispatch_status") == "dispatched":
+                raise ValueError(
+                    "loop queue item already has a different executor dispatch; use explicit recovery"
+                )
+        attempts = [entry for entry in existing.get("dispatch_attempts", []) if isinstance(entry, dict)]
+        attempt = (
+            _new_dispatch_attempt(queue_id, len(attempts) + 1, dispatch)
+            if dispatch["dispatch_status"] == "dispatched"
+            else None
+        )
         item["executor_session"] = {
             **_empty_executor_session(str(capability["executor"])),
-            "executor": capability["executor"],
-            "loop_mode": capability["loop_mode"],
-            "dispatch_owner": capability["dispatch_owner"],
-            "dispatch_status": "dispatched" if refs or session_ref.strip() or thread_ref.strip() else "prepared",
-            "session_ref": _safe_summary(session_ref, limit=220) if session_ref.strip() else "",
-            "thread_ref": _safe_summary(thread_ref, limit=220) if thread_ref.strip() else "",
-            "dispatch_evidence_refs": refs,
-            "summary": _safe_summary(summary, limit=320) if summary.strip() else "Executor dispatch metadata recorded for this loop queue item.",
+            **dispatch,
+            "active_attempt_id": str(attempt["attempt_id"]) if attempt else "",
+            "dispatch_attempts": [*attempts, *([attempt] if attempt else [])],
             "capability": capability,
         }
         runtime["last_queue_id"] = str(item["queue_id"])
@@ -1948,6 +1960,97 @@ def dispatch_loop_queue_item(
     )
 
 
+def recover_loop_queue_item_dispatch(
+    paths: OmhPaths,
+    loop_id: str,
+    queue_id: str,
+    *,
+    prior_attempt_id: str,
+    prior_outcome: str,
+    outcome_evidence_refs: Iterable[str],
+    executor: str,
+    session_ref: str = "",
+    thread_ref: str = "",
+    evidence_refs: Iterable[str] | None = None,
+    outcome_summary: str = "",
+    summary: str = "",
+    expected_revision: int | None = None,
+    mutation_id: str | None = None,
+) -> dict[str, Any]:
+    attempt_id = _safe_summary(prior_attempt_id, limit=120)
+    if not attempt_id:
+        raise ValueError("prior dispatch attempt id is required")
+    if prior_outcome not in LOOP_DISPATCH_RECOVERY_OUTCOMES:
+        raise ValueError(
+            f"prior dispatch outcome must be one of: {', '.join(LOOP_DISPATCH_RECOVERY_OUTCOMES)}"
+        )
+    outcome_refs = _safe_list(outcome_evidence_refs, limit=320)
+    if not outcome_refs:
+        raise ValueError("dispatch recovery requires prior outcome evidence")
+    capability = loop_executor_capability(executor)
+    dispatch_refs = _safe_list(evidence_refs or [], limit=320)
+    dispatch = _dispatch_request(capability, session_ref, thread_ref, dispatch_refs, summary)
+    if dispatch["dispatch_status"] != "dispatched":
+        raise ValueError("dispatch recovery requires new dispatch identity or evidence")
+
+    def mutate(cycle: dict[str, Any]) -> dict[str, Any]:
+        runtime, item = _queue_item_ref(cycle, queue_id)
+        if item.get("status") != "prepared_not_observed":
+            raise ValueError("only prepared_not_observed loop queue items can recover executor dispatch")
+        existing = _dict_value(item, "executor_session")
+        attempts = [dict(entry) for entry in existing.get("dispatch_attempts", []) if isinstance(entry, dict)]
+        if not attempts:
+            raise ValueError("legacy executor dispatch has no attempt identity; record its outcome before recovery")
+        if existing.get("active_attempt_id") != attempt_id or attempts[-1].get("attempt_id") != attempt_id:
+            raise ValueError("prior dispatch attempt must be the active attempt")
+        attempts[-1] = {
+            **attempts[-1],
+            "delivery_outcome": prior_outcome,
+            "outcome_evidence_refs": outcome_refs,
+            "outcome_summary": (
+                _safe_summary(outcome_summary, limit=320)
+                if outcome_summary.strip()
+                else "Prior dispatch outcome recorded before explicit recovery."
+            ),
+        }
+        next_attempt = _new_dispatch_attempt(queue_id, len(attempts) + 1, dispatch)
+        item["executor_session"] = {
+            **existing,
+            **dispatch,
+            "active_attempt_id": next_attempt["attempt_id"],
+            "dispatch_attempts": [*attempts, next_attempt],
+            "capability": capability,
+        }
+        runtime["last_queue_id"] = str(item["queue_id"])
+        runtime["last_queue_status"] = str(item["status"])
+        cycle["runtime"] = runtime
+        cycle["next_action"] = "observe_runtime_queue"
+        cycle["updated_at"] = utc_now()
+        return cycle
+
+    return _guarded_cycle_update(
+        paths,
+        loop_id,
+        mutate,
+        operation="recover_loop_queue_item_dispatch",
+        expected_revision=expected_revision,
+        mutation_id=mutation_id,
+        mutation_digest=_mutation_digest(
+            "recover_loop_queue_item_dispatch",
+            queue_id,
+            attempt_id,
+            prior_outcome,
+            outcome_refs,
+            outcome_summary,
+            executor,
+            session_ref,
+            thread_ref,
+            dispatch_refs,
+            summary,
+        ),
+    )
+
+
 def observe_codex_loop_queue_item(
     paths: OmhPaths,
     loop_id: str,
@@ -1957,6 +2060,7 @@ def observe_codex_loop_queue_item(
     evidence_refs: Iterable[str] | None = None,
     codex_log_ref: str = "",
     summary: str = "",
+    dispatch_attempt_id: str = "",
     expected_revision: int | None = None,
     mutation_id: str | None = None,
 ) -> dict[str, Any]:
@@ -1976,6 +2080,11 @@ def observe_codex_loop_queue_item(
         if item.get("status") != "prepared_not_observed":
             raise ValueError("only prepared_not_observed loop queue items can observe Codex progress")
         existing = _dict_value(item, "executor_session")
+        observed_attempt_id = _resolve_observed_dispatch_attempt(
+            existing,
+            dispatch_attempt_id,
+            expected_executor="codex",
+        )
         executor_session = {
             **_empty_executor_session("codex"),
             **existing,
@@ -1986,9 +2095,11 @@ def observe_codex_loop_queue_item(
             "progress_summary": progress,
             "summary": _safe_summary(summary, limit=320) if summary.strip() else str(progress.get("chat_summary", "")),
             "progress_evidence_refs": all_refs,
+            "dispatch_attempts": _confirm_dispatch_attempt(existing, observed_attempt_id, all_refs),
             "capability": loop_executor_capability("codex"),
         }
         item["executor_session"] = executor_session
+        item["observed_dispatch_attempt_id"] = observed_attempt_id
         item["status"] = "observed"
         item["observed"] = True
         observed_at = utc_now()
@@ -2040,7 +2151,9 @@ def observe_codex_loop_queue_item(
         operation="observe_codex_loop_queue_item",
         expected_revision=expected_revision,
         mutation_id=mutation_id,
-        mutation_digest=_mutation_digest("observe_codex_loop_queue_item", queue_id, all_refs, summary),
+        mutation_digest=_mutation_digest(
+            "observe_codex_loop_queue_item", queue_id, all_refs, summary, dispatch_attempt_id
+        ),
     )
 
 
@@ -2087,6 +2200,7 @@ def observe_loop_queue_item(
     subagent_evidence_refs: Iterable[str] | None = None,
     connector_evidence_refs: Iterable[str] | None = None,
     summary: str = "",
+    dispatch_attempt_id: str = "",
     expected_revision: int | None = None,
     mutation_id: str | None = None,
 ) -> dict[str, Any]:
@@ -2102,8 +2216,23 @@ def observe_loop_queue_item(
         runtime, item = _queue_item_ref(cycle, queue_id)
         if item.get("status") != "prepared_not_observed":
             raise ValueError("only prepared_not_observed loop queue items can be observed")
+        executor_session = _dict_value(item, "executor_session")
+        observed_attempt_id = _resolve_observed_dispatch_attempt(
+            executor_session,
+            dispatch_attempt_id,
+        )
+        if observed_attempt_id:
+            item["executor_session"] = {
+                **executor_session,
+                "dispatch_attempts": _confirm_dispatch_attempt(
+                    executor_session,
+                    observed_attempt_id,
+                    aggregate_refs,
+                ),
+            }
         item["status"] = "observed"
         item["observed"] = True
+        item["observed_dispatch_attempt_id"] = observed_attempt_id
         observed_at = utc_now()
         item["observed_at"] = observed_at
         item["observed_evidence_refs"] = aggregate_refs
@@ -2159,7 +2288,9 @@ def observe_loop_queue_item(
         operation="observe_loop_queue_item",
         expected_revision=expected_revision,
         mutation_id=mutation_id,
-        mutation_digest=_mutation_digest("observe_loop_queue_item", queue_id, aggregate_refs, summary),
+        mutation_digest=_mutation_digest(
+            "observe_loop_queue_item", queue_id, aggregate_refs, summary, dispatch_attempt_id
+        ),
     )
 
 
@@ -3177,6 +3308,8 @@ def _empty_executor_session(executor: str = "choose") -> dict[str, Any]:
         "session_ref": "",
         "thread_ref": "",
         "dispatch_evidence_refs": [],
+        "active_attempt_id": "",
+        "dispatch_attempts": [],
         "progress_evidence_refs": [],
         "progress_summary": {},
         "review_summary": {},
@@ -3184,6 +3317,114 @@ def _empty_executor_session(executor: str = "choose") -> dict[str, Any]:
         "capability": capability,
         "claim_boundary": capability["claim_boundary"],
     }
+
+
+def _dispatch_request(
+    capability: Mapping[str, Any],
+    session_ref: str,
+    thread_ref: str,
+    evidence_refs: Iterable[str],
+    summary: str,
+) -> dict[str, Any]:
+    refs = _safe_list(evidence_refs, limit=320)
+    return {
+        "executor": str(capability["executor"]),
+        "loop_mode": str(capability["loop_mode"]),
+        "dispatch_owner": str(capability["dispatch_owner"]),
+        "dispatch_status": "dispatched" if refs or session_ref.strip() or thread_ref.strip() else "prepared",
+        "session_ref": _safe_summary(session_ref, limit=220) if session_ref.strip() else "",
+        "thread_ref": _safe_summary(thread_ref, limit=220) if thread_ref.strip() else "",
+        "dispatch_evidence_refs": refs,
+        "summary": (
+            _safe_summary(summary, limit=320)
+            if summary.strip()
+            else "Executor dispatch metadata recorded for this loop queue item."
+        ),
+    }
+
+
+def _executor_session_dispatch(executor_session: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "executor": str(executor_session.get("executor", "")),
+        "loop_mode": str(executor_session.get("loop_mode", "")),
+        "dispatch_owner": str(executor_session.get("dispatch_owner", "")),
+        "dispatch_status": str(executor_session.get("dispatch_status", "")),
+        "session_ref": str(executor_session.get("session_ref", "")),
+        "thread_ref": str(executor_session.get("thread_ref", "")),
+        "dispatch_evidence_refs": _safe_list(
+            _string_list(executor_session.get("dispatch_evidence_refs", [])), limit=320
+        ),
+        "summary": str(executor_session.get("summary", "")),
+    }
+
+
+def _new_dispatch_attempt(
+    queue_id: str,
+    attempt_index: int,
+    dispatch: Mapping[str, Any],
+) -> dict[str, Any]:
+    identity = sha256_text(
+        json.dumps([queue_id, attempt_index, dict(dispatch)], sort_keys=True, separators=(",", ":"))
+    )[:16]
+    return {
+        "schema_version": LOOP_DISPATCH_ATTEMPT_SCHEMA,
+        "attempt_id": f"dispatch-{attempt_index}-{identity}",
+        "attempt_index": attempt_index,
+        **dict(dispatch),
+        "delivery_outcome": "delivery_unknown",
+        "outcome_evidence_refs": [],
+        "outcome_summary": "Dispatch was recorded without a confirmed delivery outcome.",
+        "recorded_at": utc_now(),
+    }
+
+
+def _resolve_observed_dispatch_attempt(
+    executor_session: Mapping[str, Any],
+    requested_attempt_id: str,
+    *,
+    expected_executor: str = "",
+) -> str:
+    attempts = [entry for entry in executor_session.get("dispatch_attempts", []) if isinstance(entry, dict)]
+    requested = _safe_summary(requested_attempt_id, limit=120) if requested_attempt_id.strip() else ""
+    if not attempts:
+        if requested:
+            raise ValueError("dispatch attempt id does not exist on this loop queue item")
+        return ""
+    if not requested:
+        if len(attempts) != 1:
+            raise ValueError("dispatch attempt id is required after explicit recovery")
+        requested = str(attempts[0].get("attempt_id", ""))
+    attempt = next((entry for entry in attempts if entry.get("attempt_id") == requested), None)
+    if attempt is None:
+        raise ValueError("dispatch attempt id does not exist on this loop queue item")
+    if expected_executor and attempt.get("executor") != expected_executor:
+        raise ValueError(f"dispatch attempt is not owned by {expected_executor}")
+    return requested
+
+
+def _confirm_dispatch_attempt(
+    executor_session: Mapping[str, Any],
+    attempt_id: str,
+    evidence_refs: Iterable[str],
+) -> list[dict[str, Any]]:
+    attempts = [dict(entry) for entry in executor_session.get("dispatch_attempts", []) if isinstance(entry, dict)]
+    if not attempt_id:
+        return attempts
+    refs = _safe_list(evidence_refs, limit=320)
+    for index, attempt in enumerate(attempts):
+        if attempt.get("attempt_id") != attempt_id:
+            continue
+        attempts[index] = {
+            **attempt,
+            "delivery_outcome": "delivery_confirmed",
+            "outcome_evidence_refs": _safe_list(
+                [*_string_list(attempt.get("outcome_evidence_refs", [])), *refs],
+                limit=320,
+            ),
+            "outcome_summary": "Executor progress or result was observed for this dispatch attempt.",
+        }
+        break
+    return attempts
 
 
 def _narration_next_message(status: str, executor_session: dict[str, Any]) -> str:
@@ -4122,6 +4363,9 @@ def _validate_runtime(runtime: object) -> list[str]:
         verification_plan = item.get("verification_plan")
         if verification_plan is not None:
             _validate_verification_plan(errors, index, verification_plan)
+        executor_session = item.get("executor_session")
+        if executor_session is not None:
+            _validate_executor_dispatch_session(errors, index, item, executor_session)
         if item.get("status") == "observed":
             if item.get("observed") is not True:
                 errors.append(f"runtime.queue[{index}].observed must be true when status is observed")
@@ -4153,6 +4397,98 @@ def _validate_runtime(runtime: object) -> list[str]:
                 if plan.get("strategy") != "none":
                     errors.append(f"runtime.queue[{index}].{key}.strategy must be none while blocked")
     return errors
+
+
+def _validate_executor_dispatch_session(
+    errors: list[str],
+    index: int,
+    queue_item: Mapping[str, Any],
+    value: object,
+) -> None:
+    prefix = f"runtime.queue[{index}].executor_session"
+    if not isinstance(value, dict):
+        errors.append(f"{prefix} must be an object")
+        return
+    if "dispatch_attempts" not in value:
+        return
+    attempts = value.get("dispatch_attempts")
+    if not isinstance(attempts, list):
+        errors.append(f"{prefix}.dispatch_attempts must be a list")
+        return
+    active_attempt_id = str(value.get("active_attempt_id", ""))
+    if not attempts:
+        if active_attempt_id:
+            errors.append(f"{prefix}.active_attempt_id must be empty without dispatch attempts")
+        if value.get("dispatch_status") == "dispatched":
+            errors.append(f"{prefix}.dispatch_attempts must record dispatched executor metadata")
+        return
+
+    seen_attempt_ids: set[str] = set()
+    attempts_by_id: dict[str, Mapping[str, Any]] = {}
+    for attempt_index, attempt in enumerate(attempts, start=1):
+        attempt_prefix = f"{prefix}.dispatch_attempts[{attempt_index - 1}]"
+        if not isinstance(attempt, dict):
+            errors.append(f"{attempt_prefix} must be an object")
+            continue
+        if attempt.get("schema_version") != LOOP_DISPATCH_ATTEMPT_SCHEMA:
+            errors.append(f"{attempt_prefix}.schema_version must be {LOOP_DISPATCH_ATTEMPT_SCHEMA}")
+        attempt_id = str(attempt.get("attempt_id", ""))
+        if not attempt_id:
+            errors.append(f"{attempt_prefix}.attempt_id is required")
+        elif attempt_id in seen_attempt_ids:
+            errors.append(f"{attempt_prefix}.attempt_id duplicates an earlier entry")
+        else:
+            seen_attempt_ids.add(attempt_id)
+            attempts_by_id[attempt_id] = attempt
+        if attempt.get("attempt_index") != attempt_index:
+            errors.append(f"{attempt_prefix}.attempt_index must preserve ordered attempt history")
+        if attempt.get("dispatch_status") != "dispatched":
+            errors.append(f"{attempt_prefix}.dispatch_status must be dispatched")
+        dispatch_refs = attempt.get("dispatch_evidence_refs")
+        if not isinstance(dispatch_refs, list) or not all(str(ref).strip() for ref in dispatch_refs):
+            errors.append(f"{attempt_prefix}.dispatch_evidence_refs must be a string list")
+        if not dispatch_refs and not str(attempt.get("session_ref", "")).strip() and not str(attempt.get("thread_ref", "")).strip():
+            errors.append(f"{attempt_prefix} must include dispatch identity or evidence")
+        outcome = attempt.get("delivery_outcome")
+        if outcome not in {"delivery_unknown", "delivery_confirmed", "delivery_failed"}:
+            errors.append(f"{attempt_prefix}.delivery_outcome is unsupported")
+        outcome_refs = attempt.get("outcome_evidence_refs")
+        if not isinstance(outcome_refs, list) or not all(str(ref).strip() for ref in outcome_refs):
+            errors.append(f"{attempt_prefix}.outcome_evidence_refs must be a string list")
+        elif outcome in {"delivery_confirmed", "delivery_failed"} and not outcome_refs:
+            errors.append(f"{attempt_prefix}.outcome_evidence_refs are required for a conclusive outcome")
+
+    active_attempt = attempts_by_id.get(active_attempt_id)
+    if active_attempt is None:
+        errors.append(f"{prefix}.active_attempt_id must identify a recorded dispatch attempt")
+        return
+    if attempts and active_attempt_id != str(attempts[-1].get("attempt_id", "")):
+        errors.append(f"{prefix}.active_attempt_id must identify the latest dispatch attempt")
+    if value.get("dispatch_status") not in {"dispatched", "progress_observed"}:
+        errors.append(f"{prefix}.dispatch_status must reflect recorded dispatch attempts")
+    for key in (
+        "executor",
+        "loop_mode",
+        "dispatch_owner",
+        "session_ref",
+        "thread_ref",
+        "dispatch_evidence_refs",
+    ):
+        if value.get(key) != active_attempt.get(key):
+            errors.append(f"{prefix}.{key} must match the active dispatch attempt")
+    observed_attempt_id = str(queue_item.get("observed_dispatch_attempt_id", ""))
+    if queue_item.get("status") == "observed":
+        observed_attempt = attempts_by_id.get(observed_attempt_id)
+        if observed_attempt is None:
+            errors.append(
+                f"runtime.queue[{index}].observed_dispatch_attempt_id must identify a recorded dispatch attempt"
+            )
+        elif observed_attempt.get("delivery_outcome") != "delivery_confirmed":
+            errors.append(
+                f"runtime.queue[{index}].observed_dispatch_attempt_id must identify a confirmed dispatch attempt"
+            )
+    elif observed_attempt_id:
+        errors.append(f"runtime.queue[{index}].observed_dispatch_attempt_id requires observed queue status")
 
 
 def _validate_verification_plan(errors: list[str], index: int, value: object) -> None:
