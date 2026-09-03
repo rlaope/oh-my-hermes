@@ -245,5 +245,150 @@ class OmhBenchmarkFrameworkTests(unittest.TestCase):
                 analyze(baseline, optimized, 10, 7, manifest)
 
 
+class OmhTargetedManifestAnalysisTests(unittest.TestCase):
+    """Issue #1056 step-0: targeted family manifests must flow end-to-end.
+
+    bench.py run accepts --manifest, but the analyze.py CLI used to reload the
+    canonical manifest directly, so a targeted manifest (for example, one live
+    solar family entry) could run but never pass the analysis coverage check.
+    These tests pin the CLI contract: --manifest selects the manifest used for
+    analysis coverage, defaults stay canonical, and mismatched manifests still
+    fail loudly.
+    """
+
+    def _run_cli(self, args):
+        return subprocess.run(
+            [sys.executable, str(BASE / "analyze.py"), *args],
+            capture_output=True,
+            text=True,
+        )
+
+    def _live_manifest(self):
+        manifest = json.loads((BASE / "manifest.json").read_text())
+        manifest["models"] = [m for m in manifest["models"] if m.get("live")][:1]
+        return manifest
+
+    def _evaluation_rows(self, manifest, condition):
+        import corpus
+
+        model = next(m for m in manifest["models"] if m.get("live"))
+        rows = []
+        for template, _task_class in corpus.TEMPLATES:
+            for seed in corpus.EVALUATION_SEEDS:
+                rows.append(
+                    {
+                        "schema_version": "omh_live_model_tool_run/v1",
+                        "created_at": "2026-08-13T00:00:00+00:00",
+                        "instance_id": f"E-{template}-{seed}",
+                        "split": "evaluation",
+                        "harness": "omh",
+                        "model": {"provider": model["provider"], "id": model["id"]},
+                        "task_digest": "a" * 64,
+                        "route": {},
+                        "observation": {
+                            "status": "completed",
+                            "tools": 1,
+                            "tokens": 1,
+                            "cost_usd": 0.0,
+                        },
+                        "grade": {"pass": True},
+                        "final_tree_digest": "b" * 64,
+                        "condition": condition,
+                    }
+                )
+        return rows
+
+    def test_targeted_manifest_cli_analyze_end_to_end(self) -> None:
+        manifest = self._live_manifest()
+        with TemporaryDirectory() as root:
+            root_path = Path(root)
+            manifest_path = root_path / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            baseline = root_path / "baseline.jsonl"
+            optimized = root_path / "optimized.jsonl"
+            for condition, output in (("baseline", baseline), ("optimized", optimized)):
+                rows = self._evaluation_rows(manifest, condition)
+                output.write_text(
+                    "".join(json.dumps(row) + chr(10) for row in rows),
+                    encoding="utf-8",
+                )
+            result = self._run_cli(
+                [
+                    "--baseline", str(baseline),
+                    "--optimized", str(optimized),
+                    "--manifest", str(manifest_path),
+                    "--bootstrap-repetitions", "100",
+                    "--seed", "7",
+                    "--output", str(root_path / "report.json"),
+                ]
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads((root_path / "report.json").read_text())
+            model = next(m for m in manifest["models"] if m.get("live"))
+            label = f"{model['provider']}/{model['id']}"
+            self.assertIn(label, report["models"])
+            self.assertEqual(
+                report["models"][label]["n"],
+                len(self._evaluation_rows(manifest, "baseline")),
+            )
+
+    def test_targeted_manifest_cli_rejects_mismatched_manifest(self) -> None:
+        manifest = self._live_manifest()
+        excluded = manifest["models"][0]
+        other = self._live_manifest()
+        other["models"] = [
+            m
+            for m in other["models"]
+            if (m["provider"], m["id"]) != (excluded["provider"], excluded["id"])
+        ]
+        with TemporaryDirectory() as root:
+            root_path = Path(root)
+            other_path = root_path / "other.json"
+            other_path.write_text(json.dumps(other), encoding="utf-8")
+            baseline = root_path / "baseline.jsonl"
+            baseline.write_text(
+                "".join(
+                    json.dumps(row) + chr(10)
+                    for row in self._evaluation_rows(manifest, "baseline")
+                ),
+                encoding="utf-8",
+            )
+            result = self._run_cli(
+                [
+                    "--baseline", str(baseline),
+                    "--optimized", str(baseline),
+                    "--manifest", str(other_path),
+                    "--bootstrap-repetitions", "100",
+                    "--output", str(root_path / "report.json"),
+                ]
+            )
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_cli_analyze_defaults_to_canonical_manifest(self) -> None:
+        manifest = self._live_manifest()
+        with TemporaryDirectory() as root:
+            root_path = Path(root)
+            baseline = root_path / "baseline.jsonl"
+            baseline.write_text(
+                "".join(
+                    json.dumps(row) + chr(10)
+                    for row in self._evaluation_rows(manifest, "baseline")
+                ),
+                encoding="utf-8",
+            )
+            result = self._run_cli(
+                [
+                    "--baseline", str(baseline),
+                    "--optimized", str(baseline),
+                    "--bootstrap-repetitions", "100",
+                    "--output", str(root_path / "report.json"),
+                ]
+            )
+            # One targeted live model against the canonical manifest violates
+            # the canonical matrix check: the old failure mode, still intact.
+            self.assertNotEqual(result.returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
+
