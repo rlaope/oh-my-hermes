@@ -429,8 +429,10 @@ class RouterContentTests(unittest.TestCase):
         # 25,300 -> 26,000: workflow-registry.md carries one row per routable
         # workflow (25,456 measured with the `inference-serving` row); one row
         # per new skill, ~2% headroom kept.
+        # 26,000 -> 26,700: the omh-docs row measures the registry at 26,096;
+        # this restores the same bounded per-row headroom.
         for template in builtin_skill_reference_templates():
-            self.assertLess(len(template.content.encode("utf-8")), 26_000, template.relative_path)
+            self.assertLess(len(template.content.encode("utf-8")), 26_700, template.relative_path)
 
         schemas = (
             OMH_CAPABILITIES_SCHEMA,
@@ -1014,6 +1016,7 @@ class RouterContentTests(unittest.TestCase):
                 'live-info-operator': 'omh-live-info',
                 'media-input-operator': 'omh-media-input',
                 'oh-my-hermes': 'omh-routing',
+                'product-docs': 'omh-docs',
                 'ralplan': 'ulw-plan',
                 'strategy-brief': 'omh-decide',
                 'ultragoal': 'ulw-goal',
@@ -3883,7 +3886,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`deep-interview`, `ralplan`, `loop`", docs_readme)
         # Retired engines must not be presented as current planning skills.
         self.assertNotIn("`ultragoal`", docs_readme)
-        self.assertIn("**116 installable skills**", docs_readme)
+        # The generated omh-docs addition raises the measured installable catalog to 117.
+        self.assertIn("**117 installable skills**", docs_readme)
         self.assertIn("**Retain knowledge**", docs_readme)
         self.assertIn("python -m unittest discover -s tests", ci)
         self.assertIn("python -m compileall src", ci)

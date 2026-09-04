@@ -2,8 +2,69 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from .localization import normalized_phrase
+from .visual_qa_cues import contains_cue_phrase
+
 
 _OMH_MARKERS = ("omh", "oh-my-hermes", "oh my hermes", "오마이헤르메스")
+_OMH_DOCS_SELF_KNOWLEDGE_CUES = (
+    "what is OMH",
+    "what is oh-my-hermes",
+    "how does OMH work",
+    "OMH documentation",
+    "oh-my-hermes documentation",
+    "OMH capability catalog",
+    "OMH skill catalog",
+    "OMH model routing",
+    "OMH memory system",
+    "OMH store local state",
+)
+_OMH_DOCS_NAMES = frozenset({"omh-docs", "product-docs"})
+_OMH_DOCS_INVOCATION_VERBS = frozenset({"use", "run", "invoke", "apply"})
+_OMH_DOCS_INVOCATION_FILLERS = frozenset({"please", "pls", "kindly", "ok", "okay", "now", "first", "then"})
+_OMH_DOCS_NON_REQUEST_CUES = (
+    "do not use omh-docs",
+    "don't use omh-docs",
+    "do not use product-docs",
+    "don't use product-docs",
+    "not asking you to invoke",
+)
+
+
+@lru_cache(maxsize=4096)
+def is_omh_docs_question(message: str) -> bool:
+    """Return whether a message asks for source-backed knowledge about OMH itself."""
+
+    if contains_cue_phrase(message, _OMH_DOCS_NON_REQUEST_CUES):
+        return False
+    return _is_explicit_omh_docs_invocation(message) or contains_cue_phrase(
+        message,
+        _OMH_DOCS_SELF_KNOWLEDGE_CUES,
+    )
+
+
+@lru_cache(maxsize=4096)
+def _is_explicit_omh_docs_invocation(message: str) -> bool:
+    """Recognize bounded imperative or leading-name OMH Docs invocations."""
+
+    words = [word.strip(":,.!?~…'\"()[]").lower() for word in normalized_phrase(message).split()]
+    if not words:
+        return False
+    first = words[0]
+    for prefix in ("./", "$", "/", "@"):
+        if first.startswith(prefix):
+            first = first[len(prefix) :]
+            break
+    if first in _OMH_DOCS_NAMES:
+        return True
+    index = 0
+    while index < len(words) and words[index] in _OMH_DOCS_INVOCATION_FILLERS:
+        index += 1
+    return (
+        index + 1 < len(words)
+        and words[index] in _OMH_DOCS_INVOCATION_VERBS
+        and words[index + 1] in _OMH_DOCS_NAMES
+    )
 
 
 @lru_cache(maxsize=4096)
@@ -12,6 +73,8 @@ def is_omh_intro_question(message: str) -> bool:
     if not text:
         return False
     if not any(marker in text for marker in _OMH_MARKERS):
+        return False
+    if is_omh_docs_question(message):
         return False
     if any(
         marker in text

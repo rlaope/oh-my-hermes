@@ -15,6 +15,8 @@ from .render import (
     context_reference_templates,
     context_skill,
     deep_interview_skill,
+    docs_reference_templates,
+    docs_skill,
     ai_slop_cleaner_reference_templates,
     agent_ops_review_reference_templates,
     award_bar_score_reference_templates,
@@ -58,6 +60,7 @@ def builtin_skill_reference_templates() -> list[SkillReferenceTemplate]:
         *wiki_reference_templates(),
         *code_review_reference_templates(),
         *context_reference_templates(),
+        *docs_reference_templates(),
         *context_budget_reference_templates(),
         *buzz_reference_templates(),
         *loop_reference_templates(),
@@ -97,6 +100,8 @@ def _skill_template_for(name: str) -> SkillTemplate:
         return context_skill()
     if name == "deep-interview":
         return deep_interview_skill()
+    if name == "product-docs":
+        return docs_skill()
     if name == "jit-learn":
         return jit_learn_skill()
     if name == "loop":

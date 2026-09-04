@@ -31,7 +31,12 @@ from .input_language import routing_input_language
 from .intent import classify_workflow_intent, scrub_diagnostic_status_text
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
 from .missed_route import is_missed_route_feedback
-from .omh_help import is_omh_intro_question, is_omh_quickstart_question, is_omh_status_question
+from .omh_help import (
+    is_omh_docs_question,
+    is_omh_intro_question,
+    is_omh_quickstart_question,
+    is_omh_status_question,
+)
 from .policy import (
     CONFIDENCE_LEVELS,
     MEMORY_CURATION_INTENT_PHRASES,
@@ -1598,6 +1603,10 @@ def _with_canonical_display_names(routing_message: str) -> str:
     instead of letting the extra `omh` token pull the request toward the router
     skill. Names the catalog does not own are left alone.
     """
+    if _explicit_skill_candidate_is_negated(routing_message, "omh-docs", "product-docs") or (
+        "omh-docs" in normalized_phrase(routing_message) and not is_omh_docs_question(routing_message)
+    ):
+        routing_message = canonical_display_mentions(routing_message, {"omh-docs": ""})
     return canonical_display_mentions(routing_message, _canonical_skill_by_display_name())
 
 
@@ -6254,7 +6263,11 @@ def route_explanation_payload(route: dict[str, object]) -> dict[str, object]:
 def explicit_skill_invocation(message: str, definitions: list[SkillDefinition] | None = None) -> str | None:
     definitions = definitions or routable_definitions()
     names = {definition.name for definition in definitions}
-    return explicit_skill_name(message, names) or _verb_invoked_skill_name(message, names)
+    return (
+        explicit_skill_name(message, names)
+        or _verb_invoked_skill_name(message, names)
+        or _verb_invoked_public_display_name(message, names)
+    )
 
 
 # An invocation verb that introduces an explicit skill mention mid-message.
@@ -6265,6 +6278,32 @@ _VERB_INVOCATION_CUES = frozenset({"use", "run", "invoke", "apply"})
 # Politeness or sequencing openers that may precede the verb without changing
 # the imperative reading.
 _VERB_INVOCATION_LEADING_FILLERS = frozenset({"please", "pls", "kindly", "ok", "okay", "now", "first", "then"})
+
+
+def _verb_invoked_public_display_name(message: str, names: set[str]) -> str | None:
+    """Resolve an imperative public label that intentionally remains uncanonicalized."""
+
+    public_names = {
+        display_name: canonical_name
+        for display_name, canonical_name in _canonical_skill_by_display_name().items()
+        if canonical_name in names and display_name != canonical_name
+    }
+    words = [_invocation_token(word) for word in message.strip().split()]
+    for index, word in enumerate(words[:-1]):
+        if word in _VERB_INVOCATION_LEADING_FILLERS:
+            continue
+        if word not in _VERB_INVOCATION_CUES:
+            return None
+        display_name = words[index + 1]
+        canonical_name = public_names.get(display_name)
+        if (
+            canonical_name is not None
+            and _verb_invocation_name_is_distinctive(display_name)
+            and not _explicit_skill_candidate_is_negated(message, display_name, canonical_name)
+        ):
+            return canonical_name
+        return None
+    return None
 
 
 def _verb_invoked_skill_name(message: str, names: set[str]) -> str | None:
@@ -6860,6 +6899,7 @@ _NARRATION_AMBIGUOUS_REQUEST_VERBS = frozenset(
 # cue, because the request word is usually the thing being declined -- "i will
 # look up the answer myself, thanks" contains `look up` and asks for nothing.
 _NARRATION_DECLINE_CUES = (
+    "not asking you to invoke",
     "myself thanks",
     "no action needed",
     "no action required",

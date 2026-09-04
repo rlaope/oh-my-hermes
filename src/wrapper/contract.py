@@ -42,6 +42,7 @@ from ..routing.omh_help import (
     is_omh_quickstart_question as _is_omh_quickstart_question,
     is_omh_status_question as _is_omh_status_question,
 )
+from ..routing.policy import _explicit_skill_candidate_is_negated
 from ..coding_delegation import CODING_EXECUTOR_TARGETS, build_coding_delegation_payload
 from ..capabilities.families import capability_family_cards
 from ..context import build_context_brief
@@ -8103,7 +8104,7 @@ def _resolve_mode(mode: str, route: dict[str, object], *, message: str = "") -> 
         return mode
     if _is_command_preview_invocation(message):
         return "route"
-    if _is_skill_catalog_question(message):
+    if _is_skill_catalog_question(_catalog_intent_message(message)):
         return "route"
     action = str(route.get("action", "fallback"))
     if action != "dispatch":
@@ -8170,10 +8171,21 @@ def _workflow_explanation_reason_for_route(
     return ""
 
 
+_OMH_DOCS_CATALOG_MENTION_RE = re.compile(r"(?<![0-9a-z-])(?:omh-docs|product-docs)(?![0-9a-z-])")
+
+
+def _catalog_intent_message(message: str) -> str:
+    """Remove only a negated OMH Docs mention before classifying catalog intent."""
+
+    if not _explicit_skill_candidate_is_negated(message, "omh-docs", "product-docs"):
+        return message
+    return _OMH_DOCS_CATALOG_MENTION_RE.sub("", normalized_phrase(message))
+
+
 def _is_generic_skill_catalog_route(message: str, decision: dict[str, object]) -> bool:
     if _is_skill_picker_invocation(message) or _is_command_preview_invocation(message):
         return False
-    if not _is_skill_catalog_question(message):
+    if not _is_skill_catalog_question(_catalog_intent_message(message)):
         return False
     return str(decision.get("selected_skill", "")) == _ROUTER_SKILL
 
@@ -8508,7 +8520,7 @@ def _command_preview_prefix(token: str) -> str:
 
 def _skill_picker_response(decision: dict[str, object], *, thread_key: str = "", message: str = "") -> dict[str, object]:
     picker = _skill_picker_state(message, source=str(decision.get("source", "generic")))
-    catalog_question = _is_skill_catalog_question(message) and not _is_skill_picker_invocation(message)
+    catalog_question = _is_skill_catalog_question(_catalog_intent_message(message)) and not _is_skill_picker_invocation(message)
     copy_locale = detect_copy_locale(message)
     primer = _context_primer_state()
     extra_state = {

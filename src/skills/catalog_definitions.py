@@ -1338,6 +1338,97 @@ _DEFINITIONS = [
         ),
     ),
     SkillDefinition(
+        "product-docs",
+        "Current-source-first documentation for OMH itself: product identity, public capability catalog, model routing, local state, and long-term memory.",
+        (
+            "product-docs",
+            "OMH documentation",
+            "oh-my-hermes documentation",
+            "what is OMH",
+            "what is oh-my-hermes",
+            "how does OMH work",
+            "OMH capability catalog",
+            "OMH skill catalog",
+            "OMH model routing",
+            "OMH memory system",
+            "where does OMH store local state",
+        ),
+        "Use for current, source-backed questions about OMH itself, including its product identity, public skill catalog, model routing, local installation state, and long-term memory.",
+        category="research",
+        phase="product-documentation",
+        hermes_role="retained-cognition",
+        delegation_boundary="retained",
+        handoff_policy=(
+            "Answer read-only OMH documentation questions directly from official current sources or bounded local metadata. "
+            "Route requested setup, update, settings, or code mutations to the appropriate specialized workflow and stop "
+            "before mutation unless the user separately authorizes it."
+        ),
+        required_inputs=(
+            "OMH documentation question",
+            "public-product or current-local-install scope",
+            "freshness, version, or ref requirement when material",
+        ),
+        expected_outputs=(
+            "source-backed answer",
+            "public-product and local-install facts kept separate",
+            "source URL or local command/path plus ref, version, or commit",
+            "named freshness or source-boundary gap",
+        ),
+        artifact_expectations=(
+            "one-shot answer by default; durable documentation artifact only when the user requests one",
+        ),
+        safety_rules=(
+            "Use official `rlaope/oh-my-hermes` sources for current public facts and disclose the source plus ref, version, or commit.",
+            "Use passive CLI output or narrowly scoped metadata for local-install facts; disclose diagnostic state writes and say that path presence varies by resolved home, scope, install, and profile.",
+            "Never read or print credentials, tokens, auth files, `.env` values, provider secrets, raw private logs, or unrelated user content.",
+            "Do not treat a local checkout or installed package as current public truth without recording its commit or version and disclosing possible staleness.",
+            "Do not mutate setup, installation, updates, settings, memory, routing, or repository files while answering a documentation question.",
+        ),
+        quality_tier="source-gated",
+        quality_bar=(
+            "Classify each claim as public-product or current-local-install before retrieval.",
+            "Retrieve only the sources needed for the question and stop when the answer is supported.",
+            "Prefer live repository metadata and current main sources for mutable public facts; never answer a current-facts question from model recall.",
+            "Query the current catalog for skill counts instead of hard-coding a mutable number.",
+            "If official sources disagree or freshness cannot be established, name the exact source boundary instead of flattening the conflict.",
+        ),
+        why_this_exists=(
+            "`omh-docs` gives Hermes one bounded, source-first way to explain OMH itself without turning product questions "
+            "into generic workflow routing or silently changing the user's installation."
+        ),
+        do_not_use_when=(
+            "The user wants generic documentation writing, editing, or summarization unrelated to OMH.",
+            "The question is about OpenAI or Hermes Agent rather than OMH; use that product's official documentation skill.",
+            "The user wants setup or repair; route to `doctor` and stop before changing the machine unless separately authorized.",
+            "The user wants to install, update, remove, or edit catalog skills; route to `skill` and stop before mutation unless separately authorized.",
+            "The user wants model or provider settings changed; route to `model-setup` and stop before mutation unless separately authorized.",
+        ),
+        good_example=SkillExample(
+            prompt="How does OMH model routing work, and which local settings can I inspect safely?",
+            expected=(
+                "Separate current public behavior from this installation, retrieve official sources plus passive local "
+                "metadata, disclose refs or versions, and answer without changing settings."
+            ),
+            why="The request asks for current OMH self-knowledge and local-state explanation, not a configuration change.",
+        ),
+        bad_example=SkillExample(
+            prompt="Rewrite my library's API documentation and publish it.",
+            expected="Do not select omh-docs; this is generic documentation authoring plus an external mutation.",
+            why="The skill explains OMH itself and does not author or publish unrelated documentation.",
+        ),
+        final_checklist=(
+            "Every mutable public claim cites an official current source and ref, version, or commit.",
+            "Local facts name the passive command, disclosed diagnostic, or metadata path and remain separate from public-product facts.",
+            "No prohibited secret, raw-log, or unrelated-content source was read or printed.",
+            "Any requested mutation was routed to a specialized workflow and not performed without separate authorization.",
+        ),
+        recovery_notes=(
+            "If official sources conflict, show the conflict with exact refs and lower confidence.",
+            "If network retrieval is unavailable, use a clean local checkout or installed package only with its commit or version and an explicit freshness caveat.",
+            "If a documented local path is absent, report that the install or profile does not expose it instead of treating absence as corruption.",
+        ),
+    ),
+    SkillDefinition(
         "source-finder",
         "Source candidate inventory - prepare typed source candidates and acquisition status before downstream work; use ulw-research to fetch and cite them, or research-brief to turn them into a decision-ready brief.",
         (

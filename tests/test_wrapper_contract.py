@@ -2934,6 +2934,7 @@ class WrapperContractTests(unittest.TestCase):
             "OMH로 할 수 있는 workflow가 뭐야?",
             "skill들은 뭐 있어?",
             "what OMH workflows are available?",
+            "Don't use omh-docs; show me the OMH workflow catalog",
             "¿Qué comandos de OMH están disponibles?",
             "Quelles commandes OMH sont disponibles ?",
             "Welche OMH Workflows gibt es?",
@@ -3028,7 +3029,6 @@ class WrapperContractTests(unittest.TestCase):
 
     def test_omh_intro_questions_render_context_brief_before_picker(self) -> None:
         for message in (
-            "what is OMH and how do I use it?",
             "explain OMH for a new Hermes user",
             "OMH가 뭐야? 어떻게 써?",
             "OMH 사용법 소개해줘",
@@ -3146,16 +3146,16 @@ class WrapperContractTests(unittest.TestCase):
 
         route = payload["route"]
         explanation = route["route_explanation"]
-        self.assertEqual(route["selected_skill"], "oh-my-hermes")
+        self.assertEqual(route["selected_skill"], "product-docs")
         self.assertEqual(
             route["routing_instruction"],
-            "Show the OMH context brief and offer the workflow picker as the next action.",
+            "Use the `product-docs` workflow for this chat message.",
         )
         self.assertEqual(explanation["schema_version"], "route_explanation/v1")
-        self.assertEqual(explanation["selected_workflow"], "oh-my-hermes")
-        self.assertEqual(explanation["next_action"], "show_context_brief")
-        self.assertIn("Context brief output", explanation["claim_boundary"])
-        self.assertIn("execution", explanation["not_evidence_yet"])
+        self.assertEqual(explanation["selected_workflow"], "product-docs")
+        self.assertEqual(explanation["next_action"], "run_hermes_research")
+        self.assertIn("Research guidance", explanation["claim_boundary"])
+        self.assertIn("source retrieval", explanation["not_evidence_yet"])
 
     def test_partial_dot_slash_invocation_exposes_omh_command_preview_only(self) -> None:
         cases = {

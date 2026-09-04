@@ -16,6 +16,7 @@ from .domain_signals import (
 from .intent import scrub_diagnostic_status_text
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
 from .missed_route import is_missed_route_feedback
+from .omh_help import is_omh_docs_question
 from .trigger_language_packs import (
     ORIGIN_USER,
     TriggerLanguagePack,
@@ -2231,6 +2232,9 @@ def _score_definition(
     if definition.name == "llm-app-dev" and _llm_app_dev_explicit_match(normalized_query):
         score += 30
         matched.add("direct:llm_app_dev")
+    if definition.name == "product-docs" and _omh_docs_offers_itself(normalized_query, query_tokens):
+        score += 30
+        matched.add("direct:omh_docs_self_knowledge")
     if definition.name == "memory-sync" and _memory_interview_explicit_match(normalized_query):
         score += 30
         matched.add("direct:memory_interview")
@@ -3070,6 +3074,13 @@ def _jit_learn_offers_itself(normalized_query: str, query_tokens: set[str]) -> b
     return jit_learn_guard_applies(normalized_query, query_tokens)
 
 
+def _omh_docs_offers_itself(normalized_query: str, query_tokens: set[str]) -> bool:
+    del query_tokens
+    if _explicit_skill_candidate_is_negated(normalized_query, "omh-docs", "product-docs"):
+        return False
+    return is_omh_docs_question(normalized_query)
+
+
 # Skills that withdraw from the shortlist unless their own precondition holds,
 # checked in `_score_definition`. An explicit invocation always overrides this:
 # naming a skill outright is the user overruling its self-assessment.
@@ -3082,6 +3093,7 @@ def _jit_learn_offers_itself(normalized_query: str, query_tokens: set[str]) -> b
 _SKILL_OFFERS_ITSELF: dict[str, Callable[[str, set[str]], bool]] = {
     "codebase-uml": _codebase_uml_offers_itself,
     "context": _context_alignment_offers_itself,
+    "product-docs": _omh_docs_offers_itself,
     "refactor-plan": _refactor_plan_offers_itself,
     "frontend-refactor": _frontend_refactor_offers_itself,
     "jit-learn": _jit_learn_offers_itself,
