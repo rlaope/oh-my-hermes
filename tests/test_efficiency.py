@@ -227,7 +227,11 @@ class EfficiencyContractTests(unittest.TestCase):
         # to 866,062 bytes on the merged tree. The ceiling restores ~12k
         # headroom; the exact value is ratcheted in
         # `FULL_PROFILE_SKILL_BODY_CHAR_LIMIT`.
-        self.assertLess(full["skill_body"]["bytes"], 878_000)
+        # 878,000 -> 893,000: omh-docs measures 882,271 bytes in the full
+        # profile after its research-and-ops lane projection. The ceiling
+        # restores the existing ~11k standing headroom; 882,271 remains the
+        # exact release ratchet.
+        self.assertLess(full["skill_body"]["bytes"], 893_000)
         self.assertLess(full["repeated"]["share_percent"], 38.0)
 
         # References are progressive disclosure, counted outside the always-loaded body.
@@ -1938,7 +1942,7 @@ class EfficiencyContractTests(unittest.TestCase):
 
     def test_wrapper_intent_classifiers_cache_repeated_messages(self) -> None:
         classifier_cases = (
-            (contract_module._is_omh_intro_question, "What is OMH and how should I use it?"),
+            (contract_module._is_omh_intro_question, "Explain OMH to me"),
             (contract_module._is_omh_quickstart_question, "OMH setup is done, what next?"),
             (contract_module._is_omh_status_question, "show OMH status"),
             (contract_module._is_command_preview_invocation, "./om"),

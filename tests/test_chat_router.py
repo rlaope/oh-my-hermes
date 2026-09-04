@@ -1088,8 +1088,6 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         chat_router_impl._public_chat_route_payload_cached.cache_clear()
 
         cases = (
-            ("what is OMH?", "omh_intro_question", "show_context_brief"),
-            ("what is oh-my-hermes?", "omh_intro_question", "show_context_brief"),
             ("how do I use OMH?", "omh_intro_question", "show_context_brief"),
             ("how do I use OMH with Discord/Slack/Telegram?", "omh_intro_question", "show_context_brief"),
             ("OMH 뭐야?", "omh_intro_question", "show_context_brief"),

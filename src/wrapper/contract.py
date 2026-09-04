@@ -38,6 +38,7 @@ from ..routing.owner_preference import (
 from ..coding.executors import EXTERNAL_CLI_PROFILES
 from ..routing.missed_route import is_missed_route_feedback
 from ..routing.omh_help import (
+    is_omh_docs_question as _is_omh_docs_question,
     is_omh_intro_question as _is_omh_intro_question,
     is_omh_quickstart_question as _is_omh_quickstart_question,
     is_omh_status_question as _is_omh_status_question,
@@ -8172,6 +8173,8 @@ def _workflow_explanation_reason_for_route(
 
 def _is_generic_skill_catalog_route(message: str, decision: dict[str, object]) -> bool:
     if _is_skill_picker_invocation(message) or _is_command_preview_invocation(message):
+        return False
+    if "omh-docs" in normalized_phrase(message) and not _is_omh_docs_question(message):
         return False
     if not _is_skill_catalog_question(message):
         return False

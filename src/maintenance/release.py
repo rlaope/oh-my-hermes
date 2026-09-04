@@ -181,7 +181,11 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # 383766 -> 384097: the axis-spread and reduced-motion quality-bar lines
 # were corrected against measured entry data; bounds and a counter-claim
 # replacing a wrong rule, not padding; warranted growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 384097
+# 384097 -> 387367: omh-docs adds one measured full capability section for
+# current-source product documentation; one row, not per-section padding.
+# 387367 -> 387378: use the unambiguous `product-docs` canonical identifier
+# while keeping `omh-docs` as the public label.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 387378
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -205,7 +209,10 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # `tech-debt-audit` skill; warranted growth.
 # 108618 -> 109590: one standalone capability row for the new
 # `award-bar-score` skill; warranted growth.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 109590
+# 109590 -> 110495: one measured standalone capability row for omh-docs.
+# 110495 -> 110519: the canonical `product-docs` identifier removes the generic
+# `docs` routing exception and preserves display-name symmetry.
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 110519
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the
@@ -624,7 +631,13 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # growth.
 # 876865 -> 877208: same measured correction reaching the always-loaded
 # body; warranted growth.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 877208
+# 877208 -> 882271: measured full-profile output after adding the 5,295-byte
+# omh-docs body and projecting its research-and-ops lane membership; its four
+# progressive references remain outside the always-loaded body count.
+# 882271 -> 882729: source-accuracy fixes document project-scoped OMH homes,
+# the doctor state-write side effect, and the metadata-only Hermes-memory
+# comparison boundary; this is measured product documentation, not padding.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 882729
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

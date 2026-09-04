@@ -459,7 +459,7 @@ class WrapperSurfaceDegradationTests(DegradationSignalTestCase):
     """
 
     ROUTE_HINT_MESSAGE = "Users report a wrapper-surface checkout bug"
-    INTRO_MESSAGE = "What is OMH and how should I use it?"
+    INTRO_MESSAGE = "Explain OMH to me"
 
     def setUp(self) -> None:
         super().setUp()

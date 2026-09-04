@@ -186,7 +186,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="routing_precision_case_count",
             describe="Routing precision cases",
             live=_routing_precision_case_count,
-            expected=163,
+            # omh-docs adds four measured generic, negated, and descriptive negative controls.
+            expected=167,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -198,7 +199,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="routing_precision_intervention_case_count",
             describe="Routing precision intervention cases",
             live=_routing_precision_intervention_case_count,
-            expected=286,
+            # omh-docs adds five measured OMH self-documentation interventions.
+            expected=291,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -210,7 +212,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="installable_skill_count",
             describe="Installable workflow skills quoted in reference surfaces",
             live=_installable_skill_count,
-            expected=116,
+            # The generated omh-docs addition raises the measured installable catalog to 117.
+            expected=117,
             sites=(
                 "docs/README.md",
             ),

@@ -38,6 +38,9 @@ OMH_SKILL_NAME_PREFIX = "omh-"
 # forward-looking contract rather than a live behavior.
 OMH_SKILL_DISPLAY_NAME_OVERRIDES = {
     "oh-my-hermes": "omh-routing",
+    # `product-docs` avoids reserving the generic canonical word `docs` while
+    # preserving the public skill name requested by users.
+    "product-docs": "omh-docs",
     # `strategy-brief` says what the output is, not what the skill does for
     # you. The skill turns goals and evidence into options, tradeoffs, and a
     # recommendation - it helps you decide. The canonical name stays put

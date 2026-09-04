@@ -38,6 +38,36 @@ class RoutingInterventionCase:
 # helpful but should not hijack the answer into workflow selection, catalog
 # pickers, coding handoffs, or generic workflow acknowledgements.
 ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
+    RoutingPrecisionCase(
+        "negated-omh-docs-authoring-stays-with-the-router",
+        "A negated omh-docs mention does not steal generic docs authoring",
+        "Don't use omh-docs; write API documentation for my library",
+        "answer_clarification",
+        "",
+        "product-docs",
+    ),
+    RoutingPrecisionCase(
+        "descriptive-omh-docs-mention-stays-direct",
+        "A descriptive omh-docs mention is not an invocation",
+        "I am discussing the omh-docs skill, not asking you to invoke it.",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "generic-docs-authoring-stays-with-the-router",
+        "A generic docs authoring request stays out of OMH self-documentation",
+        "use docs to write my API documentation",
+        "answer_clarification",
+        "",
+        "product-docs",
+    ),
+    RoutingPrecisionCase(
+        "generic-documentation-concept-stays-direct",
+        "A generic documentation concept stays out of OMH self-documentation",
+        "what is a documentation site?",
+        "answer_directly",
+        "direct_answer",
+    ),
     # A trigger inside a sentence that reports rather than asks. Every one of
     # these dispatched before the narration guard: the trigger match is a
     # substring match, and nothing weighed whether the sentence wanted work.
@@ -1231,6 +1261,56 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
 # Positive-intervention corpus. These are real OMH-shaped turns where the router
 # should still step in after the direct-answer fallback was added.
 ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
+    RoutingInterventionCase(
+        "omh-docs-capability-catalog",
+        "An OMH capability-catalog question reaches OMH self-documentation",
+        "Explain the OMH capability catalog",
+        "dispatch",
+        "product-docs",
+        "run_hermes_research",
+        "web_research",
+        "product-docs",
+    ),
+    RoutingInterventionCase(
+        "omh-docs-memory-system",
+        "An OMH memory-system question reaches OMH self-documentation",
+        "Explain the OMH memory system",
+        "dispatch",
+        "product-docs",
+        "run_hermes_research",
+        "web_research",
+        "product-docs",
+    ),
+    RoutingInterventionCase(
+        "omh-docs-local-state",
+        "An OMH local-state question reaches OMH self-documentation",
+        "How does OMH store local state?",
+        "dispatch",
+        "product-docs",
+        "run_hermes_research",
+        "web_research",
+        "product-docs",
+    ),
+    RoutingInterventionCase(
+        "omh-docs-public-name-invocation",
+        "A polite public omh-docs invocation resolves explicitly",
+        "Please use omh-docs to explain OMH",
+        "dispatch",
+        "product-docs",
+        "run_hermes_research",
+        "web_research",
+        "product-docs",
+    ),
+    RoutingInterventionCase(
+        "omh-docs-model-routing",
+        "An OMH model-routing question reaches OMH self-documentation",
+        "explain OMH model routing",
+        "dispatch",
+        "product-docs",
+        "run_hermes_research",
+        "web_research",
+        "product-docs",
+    ),
     RoutingInterventionCase(
         "finance-relevance-clarification",
         "Finance vocabulary keeps the finance candidate",

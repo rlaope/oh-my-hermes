@@ -14,6 +14,7 @@ from .intent import classify_omh_quality_intent
 from .localization import normalized_phrase, routing_tokens
 from .materials_cues import OFFICE_FILE_MATERIAL_PHRASES
 from .missed_route import has_normalized_missed_omh_workflow_context
+from .omh_help import is_omh_docs_question
 from .visual_qa_cues import BROWSER_VISUAL_QA_PHRASES, CUSTOMER_SYMPTOM_REPORT_PHRASES
 
 
@@ -7212,6 +7213,8 @@ def _memory_new_guard_applies(normalized_query: str) -> bool:
 
 def _memory_curation_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _public_plugin_connector_readiness_requested(normalized_query):
+        return False
+    if is_omh_docs_question(normalized_query):
         return False
     literature_review = _contains_phrase(normalized_query, ("literature review", "문헌 검토", "논문들 검토"))
     paper_context = bool({"paper", "papers", "논문"} & query_tokens)

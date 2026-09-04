@@ -2,8 +2,41 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from .visual_qa_cues import contains_cue_phrase
+
 
 _OMH_MARKERS = ("omh", "oh-my-hermes", "oh my hermes", "오마이헤르메스")
+_OMH_DOCS_SELF_KNOWLEDGE_CUES = (
+    "omh-docs",
+    "product-docs",
+    "what is OMH",
+    "what is oh-my-hermes",
+    "how does OMH work",
+    "OMH documentation",
+    "oh-my-hermes documentation",
+    "OMH capability catalog",
+    "OMH skill catalog",
+    "OMH model routing",
+    "OMH memory system",
+    "OMH store local state",
+)
+_OMH_DOCS_NON_REQUEST_CUES = (
+    "do not use omh-docs",
+    "don't use omh-docs",
+    "do not use product-docs",
+    "don't use product-docs",
+    "not asking you to invoke",
+)
+
+
+@lru_cache(maxsize=4096)
+def is_omh_docs_question(message: str) -> bool:
+    """Return whether a message asks for source-backed knowledge about OMH itself."""
+
+    return contains_cue_phrase(message, _OMH_DOCS_SELF_KNOWLEDGE_CUES) and not contains_cue_phrase(
+        message,
+        _OMH_DOCS_NON_REQUEST_CUES,
+    )
 
 
 @lru_cache(maxsize=4096)
@@ -12,6 +45,8 @@ def is_omh_intro_question(message: str) -> bool:
     if not text:
         return False
     if not any(marker in text for marker in _OMH_MARKERS):
+        return False
+    if is_omh_docs_question(message):
         return False
     if any(
         marker in text

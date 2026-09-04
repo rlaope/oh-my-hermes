@@ -949,6 +949,7 @@ ROUTER_KEYWORD_SKILLS = (
     "ultraperf",
     "ralplan",
     "loop",
+    "product-docs",
     "research",
     "research-department",
     "source-finder",
@@ -1210,6 +1211,7 @@ _WORKFLOW_CONTEXT_CARD_BY_WORKFLOW = {
     "refactor-plan": "intent_to_plan",
     "codebase-uml": "intent_to_plan",
     "product-brief": "intent_to_plan",
+    "product-docs": "research_and_ops",
     "web-research": "research_and_ops",
     "research": "research_and_ops",
     "research-department": "research_and_ops",
@@ -5847,6 +5849,7 @@ def awareness_primer_payload() -> dict[str, object]:
             "id": "research_and_ops",
             "label": "Research and company ops",
             "skills": [
+                "product-docs",
                 "source-finder",
                 "web-research",
                 "research",
@@ -6530,6 +6533,7 @@ def _canonical_workflow_by_display_name() -> dict[str, str]:
     # because a copied plugin bundle has no catalog import, and
     # `tests/test_display_names.py` locks the two together.
     for display, workflow in (
+        ("omh-docs", "product-docs"),
         ("omh-decide", "strategy-brief"),
         ("ulw-context", "context"),
         ("ulw-interview", "deep-interview"),

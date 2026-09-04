@@ -4732,8 +4732,8 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(gates["context_brief_coverage"]["status"], "passed")
             self.assertIn("10/10 context brief cases passing", gates["context_brief_coverage"]["summary"])
             self.assertEqual(gates["routing_precision"]["status"], "passed")
-            self.assertIn("163/163 negative-control cases", gates["routing_precision"]["summary"])
-            self.assertIn("286/286 interventions", gates["routing_precision"]["summary"])
+            self.assertIn("167/167 negative-control cases", gates["routing_precision"]["summary"])
+            self.assertIn("291/291 interventions", gates["routing_precision"]["summary"])
             self.assertIn("overroutes 0", gates["routing_precision"]["summary"])
             self.assertIn("missed interventions 0", gates["routing_precision"]["summary"])
             self.assertEqual(gates["localized_chat_copy"]["status"], "passed")
@@ -4790,7 +4790,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertIn("Chat card coverage: 82/82 (generic ack 0)", stdout)
             self.assertIn("Context brief coverage: 10/10 (route hints 9, catalog hints 1)", stdout)
             self.assertIn(
-                "Routing precision: 163/163 negative controls, 286/286 interventions "
+                "Routing precision: 167/167 negative controls, 291/291 interventions "
                 "(overroutes 0, catalog pickers 0, generic ack 0, missed interventions 0)",
                 stdout,
             )
@@ -4838,11 +4838,12 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(payload["summary"]["route_hint_mismatch_count"], 0)
             self.assertEqual(payload["summary"]["context_brief_coverage_passing"], 10)
             self.assertEqual(payload["summary"]["context_brief_coverage_total"], 10)
-            self.assertEqual(payload["summary"]["routing_precision_passing"], 163)
-            self.assertEqual(payload["summary"]["routing_precision_total"], 163)
+            # Includes the measured omh-docs negative/intervention cases.
+            self.assertEqual(payload["summary"]["routing_precision_passing"], 167)
+            self.assertEqual(payload["summary"]["routing_precision_total"], 167)
             self.assertEqual(payload["summary"]["routing_precision_overroute_count"], 0)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 286)
-            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 286)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_passing"], 291)
+            self.assertEqual(payload["summary"]["routing_precision_intervention_total"], 291)
             self.assertEqual(payload["summary"]["routing_precision_missed_intervention_count"], 0)
             self.assertEqual(payload["summary"]["localized_chat_copy_passing"], 8)
             self.assertEqual(payload["summary"]["localized_chat_copy_total"], 8)
@@ -8380,7 +8381,7 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                 self.assertNotIn("run_local_operator_check", json.dumps(payload))
 
     def test_chat_interact_omh_intro_questions_use_context_brief(self) -> None:
-        for message in ("what is OMH and how do I use it?", "OMH가 뭐야? 어떻게 써?"):
+        for message in ("OMH가 뭐야? 어떻게 써?", "OMH 사용법 소개해줘"):
             with self.subTest(message=message):
                 status, stdout, stderr = run_cli(["chat", "interact", "--source", "discord", message])
 
@@ -8402,6 +8403,22 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                 self.assertEqual(state["context_brief"]["source"], "discord")
                 self.assertEqual(state["workflow_explanation"]["label"], "context")
                 self.assertNotIn(message, json.dumps(payload))
+
+    def test_chat_interact_omh_self_documentation_uses_omh_docs(self) -> None:
+        status, stdout, stderr = run_cli(
+            ["chat", "interact", "--source", "discord", "what is OMH and how do I use it?"]
+        )
+
+        self.assertEqual(stderr, "")
+        self.assertEqual(status, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["mode"], "route")
+        self.assertEqual(payload["next_action"], "run_hermes_research")
+        self.assertEqual(payload["route"]["selected_skill"], "product-docs")
+        self.assertEqual(payload["chat_response"]["kind"], "web_research")
+        explanation = payload["chat_response"]["state"]["workflow_explanation"]
+        self.assertEqual(explanation["primary_action_label"], "Open omh-docs")
+        self.assertIn("omh-docs", explanation["why_this_workflow"])
 
     def test_chat_interact_non_catalog_command_questions_do_not_open_picker(self) -> None:
         for message in (
