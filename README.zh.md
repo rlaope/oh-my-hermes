@@ -165,9 +165,11 @@ omh doctor
 
 ## 你能得到什么
 
+OMH 以一个插件为 Hermes Agent 提供三样东西：编码智能（01–04、07）、长期记忆系统（08）、优化的工作流包（05–06）。每样各一个场景，取自真实界面。
+
 ### 01 · 每个请求匹配正确的模型，在执行之前就决定
 
-每个请求在派发前都会被打分，推动分数的每个信号都有名字。重命名判为 light，走 quick 通道；“找出所有引用 X 的地方”触发 exhaustive-search 信号，交给不会漏掉任何一处的模型。用同一个 GPT-6 Astra 跑 30 个编码任务：裸 Hermes 解出 18 个，花 $4.29、23 分钟；经过 OMH，同样的 18 个只花 $0.66、5 分钟。
+每个请求在派发前都会被打分，推动分数的每个信号都有名字。重命名判为 light，走 quick 通道；“找出所有引用 X 的地方”触发 exhaustive-search 信号，交给不会漏掉任何一处的模型。用同一个 GPT-6 Astra 跑同样的编码任务：同样的答案，花费从 $4.29 降到 $0.66，时间从 23 分钟降到 5 分钟。
 
 <p align="center">
   <img src="assets/showcase-01-routing.svg" alt="omh coding complexity 为两个请求打分的结果，以及 Astra 的测量表" width="1080">
@@ -234,6 +236,16 @@ omh doctor
 </p>
 
 [阅读重构计划技能 ↗](skills/omh-refactor-plan/SKILL.md)
+
+### 08 · 由评审者准入的长期记忆
+
+没有任何东西被悄悄记住。候选从会话中捕获，放上评审卡，带着写明的理由被记住、拒绝或推迟。已批准的记录带有来源和复审到期日；确认会重置时钟，沉默会让它从 active 老化到 reference 再到 archive。下一个会话会得到按任务排序、裁剪到 token 预算内的召回包，冲突与重复已被处理。Hermes 自己的记忆从不被读取或修改；这个存储属于 OMH，基于文件，经过评审。
+
+<p align="center">
+  <img src="assets/showcase-08-memory.svg" alt="长期记忆：准入卡片、一条记录的生命周期、注意力层级，以及为下一个会话准备的预算召回包" width="1080">
+</p>
+
+[阅读记忆模型 ↗](docs/MEMORY.md)
 
 <br>
 

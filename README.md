@@ -214,14 +214,18 @@ Maintenance paths such as reconciling a `--full` install back to core live in
 
 ## What you get
 
+OMH is three things for Hermes Agent, delivered as one plugin: the coding
+intelligence (01–04, 07), a long-term memory system (08), and optimized
+workflow packages (05–06). One scene each, drawn from the real surfaces.
+
 ### 01 · The right model per request, decided before anything runs
 
 Every request is scored before dispatch, and every signal that moved the
 score is named. A rename scores light and goes to the quick lane. "Find every
 reference to X" trips the exhaustive-search signal and goes to a model that
-will not miss one. Measured on 30 coding tasks with the same GPT-6 Astra:
-plain Hermes solved 18 for $4.29 in 23 minutes; through OMH, the same 18 for
-$0.66 in 5 minutes.
+will not miss one. Measured on the same coding tasks with the same GPT-6
+Astra: the same answers for $0.66 instead of $4.29, in 5 minutes instead of
+23.
 
 <p align="center">
   <img src="assets/showcase-01-routing.svg" alt="omh coding complexity scoring two requests, and the measured Astra table: same 18 of 30 solved, $4.29 to $0.66, 23 to 5 minutes" width="1080">
@@ -322,6 +326,23 @@ each phase as it runs, and whether anything checked it.
 </p>
 
 [Read the refactor plan skill ↗](skills/omh-refactor-plan/SKILL.md)
+
+### 08 · A long-term memory that a reviewer admitted
+
+Nothing is remembered silently. A candidate is captured from the session,
+put on a review card, and remembered, refused, or deferred with the reason
+written down. An approved record carries its provenance and a review-due
+date; confirming it resets the clock, silence ages it from active to
+reference to archive. The next session gets a recall pack ranked for its task
+and cut to a token budget, with conflicts and duplicates resolved. Hermes'
+own memory is never read or patched; this store is OMH's, file-backed and
+reviewed.
+
+<p align="center">
+  <img src="assets/showcase-08-memory.svg" alt="Long-term memory: admission cards, one record's lifecycle, attention tiers, and a budgeted recall pack for the next session" width="1080">
+</p>
+
+[Read the memory model ↗](docs/MEMORY.md)
 
 <br>
 
