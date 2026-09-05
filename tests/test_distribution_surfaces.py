@@ -204,28 +204,39 @@ class DistributionInstallSurfaceTests(unittest.TestCase):
             "README.zh.md",
             "docs/INSTALLATION.md",
         )
-        expected = (*INSTALL_COMMANDS, SETUP_COMMAND, DOCTOR_COMMAND)
+        # Two ordered runs share every markdown surface: the script installers
+        # lead into setup and then doctor, and the package managers keep their
+        # brew -> bun -> npm order. Where the package-manager run sits relative
+        # to the script run is the surface's call: the READMEs fold it into an
+        # "other installation paths" toggle after doctor, INSTALLATION.md
+        # lists it first.
+        script_run = (*INSTALL_COMMANDS[3:], SETUP_COMMAND, DOCTOR_COMMAND)
+        manager_run = INSTALL_COMMANDS[:3]
 
         for relative in surfaces:
             with self.subTest(surface=relative):
                 blocks = _fenced_blocks(
                     (PROJECT_ROOT / relative).read_text(encoding="utf-8")
                 )
-                positions = []
-                for command in expected:
+
+                def first_block(command: str) -> int:
                     matches = [
                         index
                         for index, block in enumerate(blocks)
                         if command in block.splitlines()
                     ]
                     self.assertTrue(matches, f"{relative} is missing {command}")
-                    positions.append(matches[0])
-                self.assertEqual(positions, sorted(positions))
+                    return matches[0]
+
+                script_positions = [first_block(c) for c in script_run]
+                self.assertEqual(script_positions, sorted(script_positions))
                 self.assertNotEqual(
-                    positions[-2],
-                    positions[-1],
+                    script_positions[-2],
+                    script_positions[-1],
                     f"{relative} groups canonical setup with doctor",
                 )
+                manager_positions = [first_block(c) for c in manager_run]
+                self.assertEqual(manager_positions, sorted(manager_positions))
 
     def test_agent_protocol_pins_script_installers_after_package_managers(
         self,
