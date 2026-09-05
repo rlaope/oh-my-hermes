@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import secrets
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
@@ -43,6 +44,14 @@ _REVIEW_KEYS = frozenset(
         "reviewed_at",
     }
 )
+_REVIEW_REQUEST_SCHEMA_VERSION = "memory_update_batch_review_request/v1"
+_REVIEW_REQUEST_KEYS = frozenset(
+    {"schema_version", "decisions", "reviewer_label", "policy_version", "reviewed_at"}
+)
+
+
+class _ScopePreconditionChanged(ValueError):
+    pass
 
 
 def stage_memory_update_batch(paths: OmhPaths, batch: Mapping[str, object], *, now: datetime | None = None) -> dict[str, object]:
@@ -52,9 +61,17 @@ def stage_memory_update_batch(paths: OmhPaths, batch: Mapping[str, object], *, n
     source_class = str(batch.get("source_class", "omh_local"))
     if source_class not in SOURCE_CLASSES:
         raise ValueError("unsupported batch source_class")
-    items = [_proposal(paths, raw, batch, batch_id, current, source_class) for raw in batch["updates"]]
+    scope_cache: dict[str, dict[str, Any] | None] = {}
+    items = [_proposal(paths, raw, batch, batch_id, current, source_class, scope_cache) for raw in batch["updates"]]
     _distinct_targets(items)
-    candidate = {"schema_version": BATCH_CANDIDATE_SCHEMA_VERSION, "batch_id": batch_id, "candidate_revision": 1, "stage_operation_id": _opaque("op_stage"), "apply_operation_id": _opaque("op_apply"), "status": "pending_review", "source_class": source_class, "source_surface": _label(batch.get("source_surface", "api")), "created_at": _stamp(current), "admission": {"state": "pending_review", "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION}, "items": items}
+    for item in items:
+        for scope in _item_scopes(item):
+            _scope_snapshot(paths, scope, scope_cache)
+    scope_preconditions = {
+        target: _scope_precondition_digest(value, items, target)
+        for target, value in sorted(scope_cache.items())
+    }
+    candidate = {"schema_version": BATCH_CANDIDATE_SCHEMA_VERSION, "batch_id": batch_id, "candidate_revision": 1, "stage_operation_id": _opaque("op_stage"), "apply_operation_id": _opaque("op_apply"), "status": "pending_review", "source_class": source_class, "source_surface": _label(batch.get("source_surface", "api")), "created_at": _stamp(current), "admission": {"state": "pending_review", "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION}, "scope_preconditions": scope_preconditions, "items": items}
     target = _candidate_relative(batch_id)
 
     def write_candidate(_: OmhPaths, step: dict[str, str]) -> None:
@@ -80,6 +97,18 @@ def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mappin
     with file_lock(paths.memory_index_path, private=True):
         candidate = _candidate(paths, batch_id)
         decision_map = _decisions(candidate, decisions)
+        request = candidate.get("review_request")
+        if request is None:
+            if candidate.get("review_seals") or any(
+                (_reviews_dir(paths) / f"{item['review_id']}.json").exists() for item in candidate["items"]
+            ):
+                raise ValueError("batch review is immutable")
+            request = _review_request(decision_map, label, reviewed_at)
+            candidate = {**candidate, "review_request": request}
+            atomic_write_json(paths.memory_dir / _candidate_relative(batch_id), candidate, private=True)
+        elif not _review_request_matches(request, candidate, decision_map, label):
+            raise ValueError("batch review is immutable")
+        reviewed_at = str(request["reviewed_at"])
         reviews = [_review_record(candidate, item, decision_map[item["item_id"]], label, reviewed_at) for item in candidate["items"]]
         ensure_dir(_reviews_dir(paths), private=True)
         existing_seals = candidate.get("review_seals", {})
@@ -87,7 +116,10 @@ def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mappin
             raise ValueError("batch review linkage is corrupt")
         seals: dict[str, str] = {}
         items_by_review = {str(item["review_id"]): item for item in candidate["items"]}
+        expected_review_ids = set(items_by_review)
         expected_item_ids = {str(item["item_id"]) for item in candidate["items"]}
+        if _existing_batch_review_ids(paths, batch_id) - expected_review_ids:
+            raise ValueError("batch review is immutable")
         if existing_seals and set(existing_seals) != expected_item_ids:
             raise ValueError("batch review is immutable")
         for review in reviews:
@@ -108,7 +140,16 @@ def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mappin
             else:
                 # Unsealed reviews are interrupted-write debris, not
                 # executable authorization. Replace them before committing
-                # the complete seal set on the candidate.
+                # the complete seal set on the candidate. A digest mismatch,
+                # however, proves the candidate itself moved since the review
+                # file was written and must fail closed.
+                present, error = read_json_object_result(path)
+                if (
+                    not error
+                    and isinstance(present, Mapping)
+                    and present.get("candidate_digest") != _candidate_digest(candidate)
+                ):
+                    raise ValueError("batch review is immutable")
                 atomic_write_json(path, review, private=True)
                 sealed = review
             seals[str(item["item_id"])] = _review_digest(sealed)
@@ -125,14 +166,15 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
     candidate = _candidate(paths, batch_id)
     try:
         reviews = _approved_reviews(paths, candidate)
+        _revalidate(candidate, reviews)
+        preconditions = _scope_preconditions(candidate)
     except ValueError:
         return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "review_required", "reason_code": "review_linkage_invalid", "applied": False, "batch_id": batch_id}
     if any(review["decision"] != "remember" for review in reviews.values()):
         return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "review_required", "reason_code": "review_required", "applied": False, "batch_id": batch_id}
-    _revalidate(candidate, reviews)
     scopes = sorted({_relative_scope(scope) for item in candidate["items"] for scope in _item_scopes(item)})
     steps = [
-        {"name": f"write_scope_{index}", "action": "write_batch_scope", "source": _candidate_relative(batch_id), "target": target}
+        {"name": f"write_scope_{index}", "action": "write_batch_scope", "source": _candidate_relative(batch_id), "target": target, "revision": preconditions[target]}
         for index, target in enumerate(scopes, start=1)
     ]
 
@@ -141,9 +183,21 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
             raise ValueError("unexpected batch apply operation")
         if write_hook:
             write_hook(step["name"])
+        if (
+            _scope_precondition_digest(
+                _scope_snapshot_by_target(paths, step["target"]),
+                candidate["items"],
+                step["target"],
+            )
+            != step["revision"]
+        ):
+            raise _ScopePreconditionChanged("reviewed scope changed before apply")
         _apply_scope(paths, candidate, reviews, step["target"])
 
-    operation = run_memory_operation(paths, operation_id=str(candidate["apply_operation_id"]), operation_type="apply_memory_batch", steps=steps, step_writer=write_scope, now=now)
+    try:
+        operation = run_memory_operation(paths, operation_id=str(candidate["apply_operation_id"]), operation_type="apply_memory_batch", steps=steps, step_writer=write_scope, now=now)
+    except _ScopePreconditionChanged:
+        return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "review_required", "reason_code": "scope_precondition_changed", "applied": False, "batch_id": batch_id}
     receipt = {key: operation["receipt"][key] for key in _RECEIPT_KEYS if key in operation.get("receipt", {})}
     return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "applied" if operation.get("state") == "completed" else str(operation.get("state")), "applied": operation.get("state") == "completed", "batch_id": batch_id, "receipt": receipt}
 
@@ -153,7 +207,15 @@ def legacy_batch_review_required(paths: OmhPaths, batch: Mapping[str, object], *
     return {"schema_version": _LEGACY_BATCH_SCHEMA_VERSION, "status": "review_required", "applied": False, "dry_run": bool(dry_run), "update_count": len(batch["updates"]), "claim_boundary": "Direct memory batches are review-required and do not write OMH memory."}
 
 
-def _proposal(paths: OmhPaths, raw: object, batch: Mapping[str, object], batch_id: str, now: datetime, source_class: str) -> dict[str, object]:
+def _proposal(
+    paths: OmhPaths,
+    raw: object,
+    batch: Mapping[str, object],
+    batch_id: str,
+    now: datetime,
+    source_class: str,
+    scope_cache: dict[str, dict[str, Any] | None],
+) -> dict[str, object]:
     if not isinstance(raw, Mapping):
         raise ValueError("memory batch update must be an object")
     op, target_ref = str(raw.get("op", "")), str(raw.get("item_id", ""))
@@ -167,8 +229,14 @@ def _proposal(paths: OmhPaths, raw: object, batch: Mapping[str, object], batch_i
     from_scope = _scope(raw.get("from_scope")) if op == "change_scope" else None
     if op == "change_scope" and from_scope == scope:
         raise ValueError("change_scope requires distinct scopes")
-    existing = _existing(paths, from_scope or scope, target_ref)
-    item_id = str(existing.get("item_id")) if existing and safe_token(existing.get("item_id")) else _opaque("item")
+    existing = _existing(paths, from_scope or scope, target_ref, scope_cache)
+    existing_id = str(existing.get("item_id", "")) if existing else ""
+    if existing and (
+        not safe_token(existing_id)
+        or classify_memory_admission(existing_id)["status"] != "safe"
+    ):
+        raise ValueError("unsafe legacy memory batch item")
+    item_id = existing_id if existing else _opaque("item")
     revision = int(existing.get("revision", 0)) + 1 if existing and isinstance(existing.get("revision"), int) else 1
     key = _label(raw.get("key", existing.get("key", target_ref) if existing else target_ref))
     value = str(raw.get("value", existing.get("value", "") if existing else ""))[:500]
@@ -301,6 +369,38 @@ def _review_record(candidate: Mapping[str, object], item: Mapping[str, object], 
     }
 
 
+def _review_request(decisions: Mapping[str, str], label: str, reviewed_at: str) -> dict[str, object]:
+    return {
+        "schema_version": _REVIEW_REQUEST_SCHEMA_VERSION,
+        "decisions": {key: decisions[key] for key in sorted(decisions)},
+        "reviewer_label": label,
+        "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION,
+        "reviewed_at": reviewed_at,
+    }
+
+
+def _review_request_matches(
+    request: object,
+    candidate: Mapping[str, object],
+    decisions: Mapping[str, str],
+    label: str,
+) -> bool:
+    if not isinstance(request, Mapping) or set(request) != _REVIEW_REQUEST_KEYS:
+        return False
+    items = candidate.get("items")
+    if not isinstance(items, list):
+        return False
+    expected_ids = {str(item.get("item_id", "")) for item in items if isinstance(item, Mapping)}
+    return (
+        request.get("schema_version") == _REVIEW_REQUEST_SCHEMA_VERSION
+        and request.get("decisions") == {key: decisions[key] for key in sorted(decisions)}
+        and set(decisions) == expected_ids
+        and request.get("reviewer_label") == label
+        and request.get("policy_version") == MEMORY_GOVERNANCE_POLICY_VERSION
+        and _canonical_review_time(request.get("reviewed_at"))
+    )
+
+
 def _review_matches(review: Mapping[str, object], candidate: Mapping[str, object], item: Mapping[str, object]) -> bool:
     seals = candidate.get("review_seals")
     return (
@@ -383,12 +483,100 @@ def _scope(value: object) -> dict[str, object]:
     return {"kind": kind, "ref": ref}
 
 
-def _existing(paths: OmhPaths, scope: Mapping[str, object], target_ref: str) -> dict[str, Any] | None:
-    value, error = read_json_object_result(paths.memory_dir / _relative_scope(scope))
-    if error or not isinstance(value, dict):
+def _existing(
+    paths: OmhPaths,
+    scope: Mapping[str, object],
+    target_ref: str,
+    scope_cache: dict[str, dict[str, Any] | None],
+) -> dict[str, Any] | None:
+    value = _scope_snapshot(paths, scope, scope_cache)
+    if not isinstance(value, dict):
         return None
     item = value.get("items", {}).get(target_ref) if isinstance(value.get("items"), dict) else None
     return item if isinstance(item, dict) else None
+
+
+def _scope_snapshot(
+    paths: OmhPaths,
+    scope: Mapping[str, object],
+    cache: dict[str, dict[str, Any] | None],
+) -> dict[str, Any] | None:
+    target = _relative_scope(scope)
+    if target not in cache:
+        cache[target] = _scope_snapshot_by_target(paths, target)
+    return cache[target]
+
+
+def _scope_snapshot_by_target(paths: OmhPaths, target: str) -> dict[str, Any] | None:
+    path = paths.memory_dir / target
+    if path.is_symlink():
+        raise ValueError("scope file is unsafe")
+    value, error = read_json_object_result(path)
+    if error or (value is not None and not isinstance(value, dict)):
+        raise ValueError("scope file is corrupt")
+    return value
+
+
+def _scope_precondition_digest(
+    value: Mapping[str, object] | None,
+    items: list[dict[str, object]] | list[object],
+    target: str,
+) -> str:
+    matching = [
+        item
+        for item in items
+        if isinstance(item, Mapping) and target in {_relative_scope(scope) for scope in _item_scopes(item)}
+    ]
+    item_keys: set[str] = set()
+    tombstone_keys: set[str] = set()
+    for item in matching:
+        target_ref = str(item.get("target_ref", ""))
+        item_id = str(item.get("item_id", ""))
+        item_keys.add(target_ref)
+        if not (
+            item.get("op") == "forget"
+            or (item.get("op") == "change_scope" and target == _relative_scope(item["from_scope"]))
+        ):
+            item_keys.add(item_id)
+        if item.get("op") == "forget":
+            tombstone_keys.add(target_ref)
+    data = dict(value) if isinstance(value, Mapping) else None
+    current_items = data.get("items", {}) if data else {}
+    current_tombstones = data.get("tombstones", {}) if data else {}
+    projection = {
+        "items": (
+            {key: current_items.get(key) for key in sorted(item_keys)}
+            if isinstance(current_items, Mapping)
+            else current_items
+        ),
+        "tombstones": (
+            {key: current_tombstones.get(key) for key in sorted(tombstone_keys)}
+            if isinstance(current_tombstones, Mapping)
+            else current_tombstones
+        ),
+    }
+    canonical = json.dumps(projection, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _scope_preconditions(candidate: Mapping[str, object]) -> dict[str, str]:
+    raw = candidate.get("scope_preconditions")
+    items = candidate.get("items")
+    if not isinstance(items, list):
+        raise ValueError("batch scope preconditions are invalid")
+    expected = {
+        _relative_scope(scope)
+        for item in items
+        if isinstance(item, Mapping)
+        for scope in _item_scopes(item)
+    }
+    if (
+        not isinstance(raw, Mapping)
+        or set(raw) != expected
+        or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value) for value in raw.values())
+    ):
+        raise ValueError("batch scope preconditions are invalid")
+    return {str(key): str(value) for key, value in raw.items()}
 
 
 def _item_scopes(item: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:
@@ -405,6 +593,20 @@ def _candidate_relative(batch_id: str) -> str:
 
 def _reviews_dir(paths: OmhPaths) -> Path:
     return paths.memory_dir / "reviews"
+
+
+def _existing_batch_review_ids(paths: OmhPaths, batch_id: str) -> set[str]:
+    review_ids: set[str] = set()
+    directory = _reviews_dir(paths)
+    if not directory.exists():
+        return review_ids
+    for path in directory.glob("*.json"):
+        if path.is_symlink() or not path.is_file():
+            continue
+        value, error = read_json_object_result(path)
+        if not error and isinstance(value, Mapping) and value.get("batch_id") == batch_id:
+            review_ids.add(str(value.get("review_id", "")))
+    return review_ids
 
 
 def _distinct_targets(items: list[dict[str, object]]) -> None:

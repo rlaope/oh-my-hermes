@@ -2876,7 +2876,12 @@ def _reconcile_retirement_archive(paths: OmhPaths) -> list[dict[str, object]]:
         stem = path.name[: -len(".json")]
         record_id, _, compact = stem.rpartition(".")
         retired_at = _iso_from_compact(compact) if record_id else None
-        if not record_id or retired_at is None or not _SAFE_REF.match(record_id):
+        if (
+            not record_id
+            or retired_at is None
+            or not _SAFE_REF.match(record_id)
+            or contains_credential_like_material(record_id)
+        ):
             continue
         repaired: list[str] = []
         if (record_id, retired_at) not in pairs:
@@ -2996,12 +3001,13 @@ def build_memory_retirement(
     skipped: list[dict[str, object]] = []
     candidates = sorted(records_dir.glob("*.json")) if records_dir.exists() else []
     for path in candidates:
+        safe_path_name = _redacted_metadata_label(path.name)
         if path.is_symlink() or not path.is_file():
-            skipped.append({"path_name": path.name, "reason": "symlink_or_not_file"})
+            skipped.append({"path_name": safe_path_name, "reason": "symlink_or_not_file"})
             continue
         data, _error = read_json_object_result(path)
         if data is None:
-            skipped.append({"path_name": path.name, "reason": "corrupt_json"})
+            skipped.append({"path_name": safe_path_name, "reason": "corrupt_json"})
             continue
         is_v2_approved = (
             data.get("schema_version") == PROJECT_MEMORY_RECORD_SCHEMA_VERSION
@@ -3014,18 +3020,18 @@ def build_memory_retirement(
             and data.get("review_status") == "approved"
         )
         if not (is_v2_approved or is_v1_approved):
-            skipped.append({"path_name": path.name, "reason": "not_canonical"})
+            skipped.append({"path_name": safe_path_name, "reason": "not_canonical"})
             continue
         record_id = str(data.get("record_id", ""))
-        if not _SAFE_REF.match(record_id) or record_id != path.stem:
-            skipped.append({"path_name": path.name, "reason": "unsafe_record_id"})
+        if not _SAFE_REF.match(record_id) or record_id != path.stem or contains_credential_like_material(record_id):
+            skipped.append({"path_name": safe_path_name, "reason": "unsafe_record_id"})
             continue
         state = _classify_record_expiry(data, now=now, window_days=window_days)
         ttl = data.get("ttl", {}) if isinstance(data.get("ttl"), dict) else {}
         row = {
             "record_id": record_id,
             "expires_at": str(ttl.get("expires_at", "") or ""),
-            "path_name": path.name,
+            "path_name": safe_path_name,
             # Delivery-usage annotation only: a never-delivered record is a
             # cheaper retire call than one executors keep receiving. A pin
             # likewise annotates, never blocks: expiry still wins.
@@ -3037,7 +3043,7 @@ def build_memory_retirement(
         elif state == "expiring":
             expiring_soon.append(row)
         elif state == "malformed":
-            skipped.append({"path_name": path.name, "reason": "malformed_expires_at"})
+            skipped.append({"path_name": safe_path_name, "reason": "malformed_expires_at"})
     return {
         "schema_version": RETIREMENT_REPORT_SCHEMA_VERSION,
         "applied": False,

@@ -18,7 +18,7 @@ _BLOCKED_PATTERNS = (
     # abc-secret-token). Keep this narrow so ordinary prose such as
     # "token-based parsing" remains usable.
     re.compile(
-        r"(?:password|passwd|secret|token|key)s?-(?:password|passwd|secret|token|key)s?",
+        r"(?:password|passwd|secret|token|key)s?-(?:password|passwd|secret|token|key)s?(?![A-Za-z0-9])",
         re.IGNORECASE,
     ),
     re.compile(r"api[_-]key", re.IGNORECASE),
@@ -26,7 +26,8 @@ _BLOCKED_PATTERNS = (
     re.compile(r"Bearer\s+", re.IGNORECASE),
     # High-confidence credential formats that carry no descriptive keyword.
     re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b", re.IGNORECASE),
-    re.compile(r"\b(?:gh[oprsu]|github_pat|glpat|hf)[_-][A-Za-z0-9_-]{16,}\b", re.IGNORECASE),
+    re.compile(r"\b(?:gh[oprsu]|github_pat|glpat)[_-][A-Za-z0-9_-]{16,}\b", re.IGNORECASE),
+    re.compile(r"\bhf_[A-Za-z0-9]{16,}\b", re.IGNORECASE),
     re.compile(r"\bnpm_[A-Za-z0-9]{16,}\b", re.IGNORECASE),
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b", re.IGNORECASE),
     re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b", re.IGNORECASE),
@@ -37,6 +38,10 @@ _BLOCKED_PATTERNS = (
     re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.IGNORECASE),
 )
 
+_CREDENTIAL_REVIEW_PATTERN = re.compile(
+    r"\b(?:credential|access[_ -]?token|private[_ -]?key|secret|token|api[_ -]?key)\s*[:=]\s*\S{12,}",
+    re.IGNORECASE,
+)
 _NEEDS_REVIEW_PATTERNS = (
     re.compile(r"ignore\s+previous", re.IGNORECASE),
     re.compile(r"reveal\s+the\s+system\s+prompt", re.IGNORECASE),
@@ -47,13 +52,12 @@ _NEEDS_REVIEW_PATTERNS = (
     # A credential-like value with an unknown prefix is not auto-safe. The
     # character-class and uniqueness checks below avoid treating normal prose
     # as an opaque value while keeping this gate deterministic.
-    re.compile(
-        r"\b(?:credential|access[_ -]?token|private[_ -]?key|secret|token|api[_ -]?key)\s*[:=]\s*\S{12,}",
-        re.IGNORECASE,
-    ),
+    _CREDENTIAL_REVIEW_PATTERN,
 )
 _OPAQUE_TOKEN_PATTERN = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9+/=_-]{32,}(?![A-Za-z0-9])")
-_HEX_DIGEST_PATTERN = re.compile(r"(?:[0-9A-Fa-f]{32}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{96}|[0-9A-Fa-f]{128})")
+_HEX_DIGEST_PATTERN = re.compile(
+    r"(?:[0-9A-Fa-f]{32}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{56}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{96}|[0-9A-Fa-f]{128})"
+)
 _UUID_PATTERN = re.compile(
     r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-8][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}"
 )
@@ -62,17 +66,58 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
-    r"(?:[A-Z][a-z]{2,}(?:\d+)*){2,}(?:[A-Z](?:[a-z]{2,})?\d+)?"
+    r"(?:(?:[A-Z]{2,}(?=[A-Z][a-z]{2,}))|(?:[A-Z][a-z]{2,}(?:\d+)?)|(?:[A-Z]\d+)){2,}"
 )
 _WINDOWS_ABSOLUTE_PATH_PATTERN = re.compile(r"^(?:[A-Za-z]:\\|\\\\)[^\r\n]+$")
 _SAFE_REASON_SEGMENT = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
+def _looks_like_safe_path_segment(segment: str) -> bool:
+    if (
+        re.fullmatch(r"\.?[a-z0-9][a-z0-9._-]*", segment)
+        or re.fullmatch(r"[A-Z][a-z]{2,}", segment)
+        or re.fullmatch(r"[A-Z]", segment)
+        or _HEX_DIGEST_PATTERN.fullmatch(segment)
+        or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(segment)
+        or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d+Z-[a-z0-9-]+(?:\.[a-z0-9]+)?", segment)
+    ):
+        return True
+    parts = segment.split("-")
+    return len(parts) > 1 and all(
+        bool(re.fullmatch(r"[a-z0-9][a-z0-9._]*", part))
+        or bool(_VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(part))
+        for part in parts
+    )
+
+
+def _looks_like_safe_path_token(token: str) -> bool:
+    if "/" not in token or any(char in "+=" for char in token):
+        return False
+    segments = [segment for segment in token.split("/") if segment]
+    return len(segments) >= 2 and all(_looks_like_safe_path_segment(segment) for segment in segments)
+
+
+def _looks_like_safe_windows_path(content: str) -> bool:
+    if not _WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content) or any(char in "+=" for char in content):
+        return False
+    segments = [segment for segment in content.split("\\") if segment and not re.fullmatch(r"[A-Za-z]:", segment)]
+    return bool(segments) and all(_looks_like_safe_path_segment(segment) for segment in segments)
+
+
+def _looks_like_safe_digest_query_token(token: str, content: str) -> bool:
+    if "://" not in content or token.count("=") != 1:
+        return False
+    key, value = token.split("=", 1)
+    return bool(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,31}", key)) and bool(
+        _HEX_DIGEST_PATTERN.fullmatch(value)
+    )
+
+
 def _looks_like_opaque_token(content: str) -> bool:
     """Recognize encoded opaque values without consuming common identifiers."""
-    windows_path = bool(_WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content)) and not any(
-        char in "+=" for char in content
-    )
+    windows_path = _looks_like_safe_windows_path(content)
+    if _WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content) and not windows_path:
+        return True
     for match in _OPAQUE_TOKEN_PATTERN.finditer(content):
         token = match.group(0)
         # Common immutable identifiers and explicit digest assignments are
@@ -84,20 +129,8 @@ def _looks_like_opaque_token(content: str) -> bool:
             or _UUID_PATTERN.fullmatch(token)
             or _DIGEST_ASSIGNMENT_PATTERN.fullmatch(token)
             or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(token)
-            or (
-                "/" in token
-                and not any(char in "+=" for char in token)
-                and (
-                    "-" in token
-                    or (token.startswith("/") and token.count("/") >= 2)
-                    or (
-                        match.start() > 0
-                        and content[match.start() - 1] == "."
-                        and match.end() < len(content)
-                        and content[match.end()] == "."
-                    )
-                )
-            )
+            or _looks_like_safe_path_token(token)
+            or _looks_like_safe_digest_query_token(token, content)
         ):
             continue
         has_lower = any(char.islower() for char in token)
@@ -123,7 +156,11 @@ def contains_credential_like_material(content: str) -> bool:
     """Return whether a value must be masked before it can serialize."""
     if not isinstance(content, str):
         return True
-    return any(pattern.search(content) for pattern in _BLOCKED_PATTERNS) or _looks_like_opaque_token(content)
+    return (
+        any(pattern.search(content) for pattern in _BLOCKED_PATTERNS)
+        or bool(_CREDENTIAL_REVIEW_PATTERN.search(content))
+        or _looks_like_opaque_token(content)
+    )
 
 
 def _iter_renderable_values(value: object, path: str) -> Iterator[tuple[str, str]]:

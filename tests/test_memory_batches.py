@@ -368,6 +368,102 @@ class MemoryBatchTests(TestCase):
             self.assertNotIn("forged_authorization", stored)
             self.assertTrue(apply_approved_memory_update_batch(paths, staged["batch_id"])["applied"])
 
+    def test_deleting_or_rewriting_candidate_review_state_cannot_change_a_refusal(self) -> None:
+        for mutation in ("delete_seals", "rewrite_request"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as home:
+                paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+                staged = stage_memory_update_batch(paths, _batch(f"sealed-refusal-{mutation}"))
+                item_id = staged["items"][0]["item_id"]
+                review_memory_update_batch(
+                    paths,
+                    staged["batch_id"],
+                    {item_id: "refuse"},
+                    reviewer_label="operator-label",
+                )
+                candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+                candidate.pop("review_seals")
+                if mutation == "rewrite_request":
+                    candidate["review_request"]["decisions"][item_id] = "remember"
+                candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+                with self.assertRaisesRegex(ValueError, "immutable"):
+                    review_memory_update_batch(
+                        paths,
+                        staged["batch_id"],
+                        {item_id: "remember"},
+                        reviewer_label="operator-label",
+                    )
+
+                result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+                self.assertFalse(result["applied"])
+                self.assertEqual(result["reason_code"], "review_linkage_invalid")
+                self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_rejects_scope_drift_since_staging_before_overwrite(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            scope_path = paths.memory_dir / "scopes" / "project.json"
+            scope_path.parent.mkdir(parents=True)
+            original = {
+                "schema_version": "omh_memory_scope/v2",
+                "scope": {"kind": "project", "ref": "default"},
+                "items": {
+                    "live-target": {
+                        "item_id": "live-item",
+                        "revision": 1,
+                        "key": "live_key",
+                        "summary": "Original reviewed value",
+                        "value": "original",
+                    }
+                },
+                "tombstones": {},
+            }
+            scope_path.write_text(json.dumps(original, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            staged = self._stage_and_remember(paths, _batch("live-target"))
+            changed = json.loads(scope_path.read_text(encoding="utf-8"))
+            changed["items"]["live-target"]["revision"] = 2
+            changed["items"]["live-target"]["value"] = "changed-after-review"
+            scope_path.write_text(json.dumps(changed, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            changed_bytes = scope_path.read_bytes()
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "scope_precondition_changed")
+            self.assertEqual(scope_path.read_bytes(), changed_bytes)
+
+    def test_stage_rejects_credential_shaped_legacy_item_id_without_echo(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            scope_path = paths.memory_dir / "scopes" / "project.json"
+            scope_path.parent.mkdir(parents=True)
+            scope_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_memory_scope/v2",
+                        "scope": {"kind": "project", "ref": "default"},
+                        "items": {
+                            "legacy-target": {
+                                "item_id": credential,
+                                "key": "safe_key",
+                                "summary": "Safe legacy summary",
+                                "value": "safe legacy value",
+                            }
+                        },
+                        "tombstones": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ValueError) as caught:
+                stage_memory_update_batch(paths, _batch("legacy-target"))
+
+            self.assertNotIn(credential, str(caught.exception))
+            self.assertFalse((paths.memory_dir / "candidates").exists())
+
     def test_apply_rejects_missing_wrong_or_extra_review_seals_before_any_write(self) -> None:
         for mutation in ("missing", "wrong", "extra"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as home:
