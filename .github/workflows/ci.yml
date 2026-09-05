@@ -229,6 +229,22 @@ jobs:
             exit 1
           }
           Write-Host "install.ps1 parsed clean on $($PSVersionTable.PSVersion)"
+      - name: Windows installer redirect headers (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhRedirectLocation.ps1
+      - name: Windows installer redirect-header mutation (PowerShell 7)
+        if: matrix.shard == 0
+        shell: pwsh
+        run: ./tests/powershell/Test-OmhRedirectLocation.ps1 -InjectRegression
+      - name: Windows installer redirect headers (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhRedirectLocation.ps1
+      - name: Windows installer redirect-header mutation (Windows PowerShell 5.1)
+        if: matrix.shard == 0
+        shell: powershell
+        run: ./tests/powershell/Test-OmhRedirectLocation.ps1 -InjectRegression
       - name: Windows installer end-to-end
         if: matrix.shard == 0
         shell: pwsh

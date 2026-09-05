@@ -87,7 +87,11 @@ class WindowsInstallerRedirectResponseTests(unittest.TestCase):
         # paths to one accessor that probes what the actual object supports.
         self.assertNotIn("$OmhLatestResponse.Headers['Location']", powershell)
         self.assertNotIn("$OmhLatestError.Headers['Location']", powershell)
-        self.assertEqual(powershell.count("Get-OmhRedirectLocation $OmhLatest"), 2)
+        self.assertEqual(
+            len(re.findall(r"\bGet-OmhRedirectLocation\s+\$\w+", powershell)),
+            2,
+            "both redirect paths must call the capability-based accessor",
+        )
         self.assertIn("PSObject.Properties['Headers']", powershell)
         self.assertIn("PSObject.Properties['Location']", powershell)
 
