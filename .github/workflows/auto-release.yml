@@ -94,7 +94,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add pyproject.toml src/omh/version.py \
-            src/plugin_bundle/omh/plugin.yaml .release-channel
+            src/plugin_bundle/omh/plugin.yaml .release-channel \
+            site/index.html site/i18n.js
           git commit -s -m "chore(release): cut v$NEW_VERSION
 
           Constraint: npm/Bun, the GitHub wheel, and the Homebrew tap publish only from vX.Y.Z tags, so a release requires this version-bump commit on main

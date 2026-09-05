@@ -237,6 +237,10 @@ class AutoReleaseWorkflowTests(unittest.TestCase):
             "src/omh/version.py",
             "src/plugin_bundle/omh/plugin.yaml",
             ".release-channel",
+            # The bump tool rewrites the site badge too; a cut that leaves
+            # these unstaged ships a landing page one version behind.
+            "site/index.html",
+            "site/i18n.js",
         ):
             self.assertIn(staged, self.workflow)
 
