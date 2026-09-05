@@ -65,11 +65,19 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
     r"(?:md5|sha(?:1|224|256|384|512))=(?:[0-9A-Fa-f]{32}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{56}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{96}|[0-9A-Fa-f]{128})",
     re.IGNORECASE,
 )
+_CAMEL_WORD = r"[A-Z][a-z]{2,}(?:\d+)?"
+_VERSION_COMPONENT = r"V\d+"
 _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
-    r"(?:(?:[A-Z]{2,}(?=[A-Z][a-z]{2,}))|(?:[A-Z][a-z]{2,}(?:\d+)?)|(?:[A-Z]\d+)){2,}"
+    rf"(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{4,}}"
+)
+_LOWER_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
+    rf"[a-z]{{2,}}(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
 )
 _ACRONYM_VERSION_IDENTIFIER_PATTERN = re.compile(
-    r"(?:[A-Z]{2,}[0-9]*)(?:[A-Z][a-z]{2,}){2,}(?:V[0-9]+)?"
+    rf"[A-Z]{{2,}}\d*(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
+)
+_SEPARATOR_SPLIT_OPAQUE_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9]{4,20}[./\\ _-]){1,}[A-Za-z0-9]{4,20}(?![A-Za-z0-9])"
 )
 _WINDOWS_ABSOLUTE_PATH_PATTERN = re.compile(r"^(?:[A-Za-z]:\\|\\\\)[^\r\n]+$")
 _SAFE_DIGEST_QUERY_KEYS = frozenset(
@@ -79,10 +87,21 @@ _SAFE_REASON_SEGMENT = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
 def _looks_like_structured_identifier(segment: str) -> bool:
-    return bool(_VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(segment)) or bool(
+    return any(
+        pattern.fullmatch(segment)
+        for pattern in (
+            _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN,
+            _LOWER_CAMEL_CASE_IDENTIFIER_PATTERN,
+            _ACRONYM_VERSION_IDENTIFIER_PATTERN,
+        )
+    )
+
+
+def _looks_like_path_identifier(segment: str) -> bool:
+    return _looks_like_structured_identifier(segment) or bool(
         re.fullmatch(r"[A-Za-z][A-Za-z0-9]+", segment)
+        and any(char.islower() for char in segment)
         and any(char.isupper() for char in segment)
-        and len(re.findall(r"[a-z]{2,}", segment)) >= 2
     )
 
 
@@ -92,7 +111,7 @@ def _looks_like_safe_path_segment(segment: str) -> bool:
         return bool(words) and all(_looks_like_safe_path_segment(word) for word in words)
     stem, dot, suffix = segment.rpartition(".")
     if dot and suffix and re.fullmatch(r"[a-z0-9]{1,16}", suffix) and (
-        _looks_like_structured_identifier(stem)
+        _looks_like_path_identifier(stem)
         or bool(re.fullmatch(r"[A-Z][A-Z0-9_]{1,31}", stem))
     ):
         return True
@@ -101,14 +120,14 @@ def _looks_like_safe_path_segment(segment: str) -> bool:
         or re.fullmatch(r"[A-Z][a-z]{2,}", segment)
         or re.fullmatch(r"[A-Z]", segment)
         or _HEX_DIGEST_PATTERN.fullmatch(segment)
-        or _looks_like_structured_identifier(segment)
+        or _looks_like_path_identifier(segment)
         or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d+Z-[a-z0-9-]+(?:\.[a-z0-9]+)?", segment)
     ):
         return True
     parts = segment.split("-")
     return len(parts) > 1 and all(
         bool(re.fullmatch(r"[a-z0-9][a-z0-9._]*", part))
-        or _looks_like_structured_identifier(part)
+        or _looks_like_path_identifier(part)
         for part in parts
     )
 
@@ -140,12 +159,7 @@ def _has_opaque_character_mix(token: str) -> bool:
     has_digit = any(char.isdigit() for char in token)
     has_encoding_punctuation = any(char in "+=" for char in token)
     if has_lower and has_upper and token.isalpha():
-        case_transitions = sum(
-            left.islower() != right.islower()
-            for left, right in zip(token, token[1:])
-        )
-        if case_transitions >= 8:
-            return True
+        return len(token) >= 32
     return (has_lower and has_upper and (has_digit or ("_" in token and "-" in token))) or (
         has_encoding_punctuation
         and sum((has_lower, has_upper, has_digit, has_encoding_punctuation)) >= 3
@@ -171,6 +185,8 @@ def _has_single_case_alphanumeric_opaque_mix(token: str) -> bool:
         return False
     if not digits:
         return len(token) >= 32 and all(char.isupper() for char in letters)
+    if len(token) >= 32 and all(char.isupper() for char in letters):
+        return True
     if len(digits) < 3:
         return False
     transitions = sum(
@@ -184,16 +200,32 @@ def _has_embedded_opaque_value(content: str) -> bool:
     """Detect opaque runs before a path or URL container can exempt them."""
     for match in re.finditer(r"[A-Za-z0-9]{32,}", content):
         segment = match.group(0)
-        if (
-            _HEX_DIGEST_PATTERN.fullmatch(segment)
-            or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(segment)
-            or _ACRONYM_VERSION_IDENTIFIER_PATTERN.fullmatch(segment)
-        ):
+        if _HEX_DIGEST_PATTERN.fullmatch(segment) or _looks_like_structured_identifier(segment):
             continue
         if _has_opaque_character_mix(segment) or _has_single_case_alphanumeric_opaque_mix(segment):
             return True
-        if _looks_like_structured_identifier(segment):
-            continue
+    return False
+
+
+def _has_separator_split_opaque_value(content: str) -> bool:
+    """Catch one opaque value split into equal-sized path/package fragments."""
+    for match in _SEPARATOR_SPLIT_OPAQUE_PATTERN.finditer(content):
+        fragments = re.findall(r"[A-Za-z0-9]+", match.group(0))
+        for start in range(len(fragments)):
+            for end in range(start + 2, min(len(fragments), start + 8) + 1):
+                window = fragments[start:end]
+                lengths = [len(fragment) for fragment in window]
+                combined = "".join(window)
+                equal_short_chunks = len(window) >= 4 and min(lengths) >= 4 and max(lengths) - min(lengths) <= 2
+                equal_long_chunks = len(window) >= 2 and min(lengths) >= 12 and max(lengths) - min(lengths) <= 4
+                if len(combined) < 32 or not (equal_short_chunks or equal_long_chunks):
+                    continue
+                if _HEX_DIGEST_PATTERN.fullmatch(combined) or _looks_like_structured_identifier(combined):
+                    continue
+                mixed = _has_opaque_character_mix(combined)
+                uppercase_fragments = sum(any(char.isupper() for char in fragment) for fragment in window)
+                if (mixed and uppercase_fragments >= 2) or _has_single_case_alphanumeric_opaque_mix(combined):
+                    return True
     return False
 
 
@@ -213,7 +245,7 @@ def _windows_path_has_split_opaque_value(content: str) -> bool:
 
 def _looks_like_opaque_token(content: str) -> bool:
     """Recognize encoded opaque values without consuming common identifiers."""
-    if _has_embedded_opaque_value(content):
+    if _has_embedded_opaque_value(content) or _has_separator_split_opaque_value(content):
         return True
     windows_path = bool(_WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content))
     if windows_path and _windows_path_has_split_opaque_value(content):
@@ -228,8 +260,7 @@ def _looks_like_opaque_token(content: str) -> bool:
             or _HEX_DIGEST_PATTERN.fullmatch(token)
             or _UUID_PATTERN.fullmatch(token)
             or _DIGEST_ASSIGNMENT_PATTERN.fullmatch(token)
-            or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(token)
-            or _ACRONYM_VERSION_IDENTIFIER_PATTERN.fullmatch(token)
+            or _looks_like_structured_identifier(token)
             or _looks_like_safe_path_token(token)
             or _looks_like_safe_digest_query_token(token, content)
         ):

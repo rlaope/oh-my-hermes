@@ -46,7 +46,7 @@ _REVIEW_KEYS = frozenset(
 )
 _REVIEW_REQUEST_SCHEMA_VERSION = "memory_update_batch_review_request/v1"
 _REVIEW_REQUEST_KEYS = frozenset(
-    {"schema_version", "decisions", "reviewer_label", "policy_version", "reviewed_at"}
+    {"schema_version", "candidate_digest", "decisions", "reviewer_label", "policy_version", "reviewed_at"}
 )
 
 
@@ -67,6 +67,7 @@ def stage_memory_update_batch(paths: OmhPaths, batch: Mapping[str, object], *, n
     for item in items:
         for scope in _item_scopes(item):
             _scope_snapshot(paths, scope, scope_cache)
+    _reject_live_logical_target_collisions(items, scope_cache)
     scope_preconditions = {
         target: _scope_precondition_digest(value, items, target)
         for target, value in sorted(scope_cache.items())
@@ -96,6 +97,7 @@ def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mappin
     reviewed_at = _stamp(_utc(now))
     with file_lock(paths.memory_index_path, private=True):
         candidate = _candidate(paths, batch_id)
+        _validate_review_membership(candidate)
         decision_map = _decisions(candidate, decisions)
         request = candidate.get("review_request")
         if request is None:
@@ -103,7 +105,7 @@ def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mappin
                 (_reviews_dir(paths) / f"{item['review_id']}.json").exists() for item in candidate["items"]
             ):
                 raise ValueError("batch review is immutable")
-            request = _review_request(decision_map, label, reviewed_at)
+            request = _review_request(candidate, decision_map, label, reviewed_at)
             candidate = {**candidate, "review_request": request}
             atomic_write_json(paths.memory_dir / _candidate_relative(batch_id), candidate, private=True)
         elif not _review_request_matches(request, candidate, decision_map, label):
@@ -313,7 +315,7 @@ def _apply_scope(
     if not matching:
         return
     scope = next(scope for item in matching for scope in _item_scopes(item) if _relative_scope(scope) == target)
-    path = paths.memory_dir / target
+    path = _checked_scope_path(paths, target)
     current, error = read_json_object_result(path)
     if error:
         raise ValueError("scope file is corrupt")
@@ -345,6 +347,7 @@ def _apply_scope(
             data["items"].pop(item["target_ref"], None)
             data["items"][item["item_id"]] = _approved_item(candidate, item, reviews[item["item_id"]])
     data["updated_at"] = updated_at
+    _checked_scope_path(paths, target)
     atomic_write_json(path, data, private=True)
 
 
@@ -498,9 +501,15 @@ def _review_record(candidate: Mapping[str, object], item: Mapping[str, object], 
     }
 
 
-def _review_request(decisions: Mapping[str, str], label: str, reviewed_at: str) -> dict[str, object]:
+def _review_request(
+    candidate: Mapping[str, object],
+    decisions: Mapping[str, str],
+    label: str,
+    reviewed_at: str,
+) -> dict[str, object]:
     return {
         "schema_version": _REVIEW_REQUEST_SCHEMA_VERSION,
+        "candidate_digest": _candidate_subject_digest(candidate),
         "decisions": {key: decisions[key] for key in sorted(decisions)},
         "reviewer_label": label,
         "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION,
@@ -522,6 +531,7 @@ def _review_request_matches(
     expected_ids = {str(item.get("item_id", "")) for item in items if isinstance(item, Mapping)}
     return (
         request.get("schema_version") == _REVIEW_REQUEST_SCHEMA_VERSION
+        and request.get("candidate_digest") == _candidate_subject_digest(candidate)
         and request.get("decisions") == {key: decisions[key] for key in sorted(decisions)}
         and set(decisions) == expected_ids
         and request.get("reviewer_label") == label
@@ -555,6 +565,16 @@ def _review_base_matches(review: Mapping[str, object], candidate: Mapping[str, o
     )
 
 
+def _candidate_subject_digest(candidate: Mapping[str, object]) -> str:
+    payload = {
+        str(key): value
+        for key, value in candidate.items()
+        if key not in {"review_request", "review_seals"}
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _candidate_digest(candidate: Mapping[str, object]) -> str:
     payload = {str(key): value for key, value in candidate.items() if key != "review_seals"}
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -573,6 +593,42 @@ def _canonical_review_time(value: object) -> bool:
         return _stamp(_parse_time(value)) == value
     except (TypeError, ValueError):
         return False
+
+
+def _validate_review_membership(candidate: Mapping[str, object]) -> None:
+    items = candidate.get("items")
+    if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+        raise ValueError("batch review membership is malformed")
+    for item in items:
+        identifiers = (
+            item.get("item_id", ""),
+            item.get("review_id", ""),
+            item.get("target_ref", ""),
+        )
+        artifact = item.get("artifact")
+        if (
+            any(not safe_token(str(value)) for value in identifiers)
+            or any(classify_memory_admission(str(value))["status"] != "safe" for value in identifiers)
+            or item.get("op") not in _OPS
+            or item.get("batch_id") != candidate.get("batch_id")
+            or not isinstance(artifact, dict)
+            or evaluate_renderable_strings(artifact).get("status") != "safe"
+            or stable_artifact_identity(artifact) != item.get("artifact_identity")
+            or canonical_payload_digest(artifact) != item.get("payload_digest")
+        ):
+            raise ValueError("batch review membership is malformed")
+        scope = _scope(item.get("scope"))
+        if artifact.get("scope") != scope or artifact.get("retention") != item.get("retention"):
+            raise ValueError("batch review membership is malformed")
+        if item.get("op") == "change_scope":
+            _scope(item.get("from_scope"))
+    try:
+        _distinct_targets(items)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("batch review membership is ambiguous") from exc
+    review_ids = [str(item.get("review_id", "")) for item in items]
+    if not all(review_ids) or len(review_ids) != len(set(review_ids)):
+        raise ValueError("batch review membership is ambiguous")
 
 
 def _decisions(candidate: Mapping[str, object], raw: Mapping[str, object] | list[Mapping[str, object]]) -> dict[str, str]:
@@ -637,13 +693,29 @@ def _scope_snapshot(
 
 
 def _scope_snapshot_by_target(paths: OmhPaths, target: str) -> dict[str, Any] | None:
-    path = paths.memory_dir / target
-    if path.is_symlink():
-        raise ValueError("scope file is unsafe")
+    path = _checked_scope_path(paths, target)
     value, error = read_json_object_result(path)
     if error or (value is not None and not isinstance(value, dict)):
         raise ValueError("scope file is corrupt")
     return value
+
+
+def _checked_scope_path(paths: OmhPaths, target: str) -> Path:
+    root = paths.memory_dir
+    relative = Path(target)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("scope path is unsafe")
+    path = root / relative
+    cursor = root
+    for part in relative.parts:
+        cursor /= part
+        if cursor.is_symlink():
+            raise ValueError("scope path is unsafe")
+    resolved_root = root.resolve(strict=False)
+    resolved_path = path.resolve(strict=False)
+    if resolved_root != resolved_path and resolved_root not in resolved_path.parents:
+        raise ValueError("scope path is unsafe")
+    return path
 
 
 def _scope_precondition_digest(
@@ -790,6 +862,32 @@ def _distinct_targets(items: list[dict[str, object]]) -> None:
         if logical_targets & item_logical_targets:
             raise ValueError("batch has ambiguous logical targets")
         logical_targets.update(item_logical_targets)
+
+
+def _reject_live_logical_target_collisions(
+    items: list[dict[str, object]],
+    scope_cache: Mapping[str, dict[str, Any] | None],
+) -> None:
+    for item in items:
+        if item.get("op") == "forget":
+            continue
+        scope = item.get("scope")
+        artifact = item.get("artifact")
+        if not isinstance(scope, Mapping) or not isinstance(artifact, Mapping):
+            raise ValueError("batch has malformed logical target")
+        current = scope_cache.get(_relative_scope(scope))
+        current_items = current.get("items", {}) if isinstance(current, Mapping) else {}
+        if not isinstance(current_items, Mapping):
+            continue
+        logical_key = str(artifact.get("key", ""))
+        allowed_refs = {str(item.get("target_ref", "")), str(item.get("item_id", ""))}
+        if any(
+            str(ref) not in allowed_refs
+            and isinstance(value, Mapping)
+            and str(value.get("key", "")) == logical_key
+            for ref, value in current_items.items()
+        ):
+            raise ValueError("batch has ambiguous live logical target")
 
 
 def _batch_view(candidate: Mapping[str, object], *, status: str) -> dict[str, object]:

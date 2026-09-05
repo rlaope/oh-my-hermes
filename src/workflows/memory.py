@@ -4415,8 +4415,8 @@ def _scope_for_project_memory(kind: str, ref: str) -> dict[str, str]:
     scope = _scope(str(kind or "project"), str(ref or "default"))
     if scope["kind"] not in ALLOWED_SCOPE_KINDS:
         raise ValueError(f"unsupported memory scope kind: {scope['kind']}")
-    if not _SAFE_REF.match(scope["ref"]):
-        raise ValueError(f"unsafe memory scope ref: {scope['ref']!r}")
+    if not _SAFE_REF.match(scope["ref"]) or contains_credential_like_material(scope["ref"]):
+        raise ValueError("unsafe memory scope ref")
     return scope
 
 
