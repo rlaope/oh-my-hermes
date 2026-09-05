@@ -1257,7 +1257,7 @@ def _is_preflight_filesystem_target(token: str) -> bool:
     )
 
 
-def _safety_preflight_target_paths(message: str) -> list[str]:
+def _safety_preflight_target_paths(message: str, *, excluded_path: str = "") -> list[str]:
     """Filesystem targets the user named in the message, before prompt expansion.
 
     This parser accepts path syntax rather than code-file extensions: workspace
@@ -1281,7 +1281,9 @@ def _safety_preflight_target_paths(message: str) -> list[str]:
                 continue
         if file_path is not None:
             token = file_path
-        if not _is_preflight_filesystem_target(token) or token in paths:
+        # The plan artifact is OMH-generated context. Skip only its exact path
+        # before it can consume the scan slot reserved for a real user target.
+        if token == excluded_path or not _is_preflight_filesystem_target(token) or token in paths:
             continue
         paths.append(token)
         if len(paths) >= _SAFETY_PREFLIGHT_TARGET_PATH_SCAN_LIMIT:
@@ -1354,11 +1356,9 @@ def _safety_preflight_request(
     empty approval approves nothing rather than everything.
     """
     # The supplied plan artifact already travels as metadata and context-pack
-    # state. Exclude only that exact generated path; every other path in the
-    # message, including text from the plan body, remains subject to preflight.
-    target_paths = [
-        path for path in _safety_preflight_target_paths(message) if path != plan_artifact_path
-    ]
+    # state. Exclude only that exact generated path during extraction so it
+    # cannot consume a bounded scan slot; every other message path remains live.
+    target_paths = _safety_preflight_target_paths(message, excluded_path=plan_artifact_path)
     return {
         "owner": owner,
         "approved_scope": f"coding/{workflow}",

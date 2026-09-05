@@ -39,6 +39,7 @@ from omh.coding.action_gate import (  # noqa: E402
     validate_task_authority_envelope,
 )
 from omh.coding.coding_delegation import (  # noqa: E402
+    _safety_preflight_request,
     _safety_preflight_target_paths,
     build_coding_delegation_payload,
     coding_delegation_record_payload,
@@ -817,6 +818,43 @@ class FilesystemTargetScopeRegressionTests(unittest.TestCase):
         self.assertEqual(denied["action_gate"]["outcome"], "deny")
         self.assertIn("target_path_absolute", denied["action_gate"]["denial"]["reason_codes"])
         self.assertNotIn("executor_handoff", denied)
+
+    def test_plan_artifact_path_does_not_consume_target_scan_budget(self) -> None:
+        plan_path = "/abs/plan.md"
+        plan_artifact = {
+            "path": plan_path,
+            "kind": "hermes_plan",
+            "schema_version": "hermes_plan/v1",
+            "status": "accepted",
+            "sha256": "a" * 64,
+            "task_statement_sha256": "b" * 64,
+            "task_statement_length": 42,
+        }
+        escaping_path = "../outside/marker.txt"
+        message = "Plan artifact: " + plan_path + "\n" + " ".join(
+            f"docs/n{index}.md" for index in range(32)
+        ) + f" {escaping_path}"
+        payload = build_coding_delegation_payload(
+            message,
+            executor_target="codex",
+            plan_artifact=plan_artifact,
+        )
+        self.assertEqual(payload["action_gate"]["outcome"], "deny")
+        self.assertFalse(payload["dispatchable"])
+        for key in ("executor_handoff", "prompt_handoff", "runtime_handoff"):
+            self.assertNotIn(key, payload)
+
+        request = _safety_preflight_request(
+            message,
+            owner="codex",
+            workflow="ultraprocess",
+            message_context_mode="full",
+            raw_content_included=False,
+            plan_artifact_path=plan_path,
+            intent="coding",
+            action="delegate",
+        )
+        self.assertIn(escaping_path, request["target_paths"])
 
     def test_adversarial_prefixes_and_embedded_network_markers_remain_local(self) -> None:
         from omh.coding.coding_delegation import _safety_preflight_target_paths
