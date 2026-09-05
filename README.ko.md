@@ -2,29 +2,6 @@
   <img src="assets/oh-my-hermes-wordmark.png" alt="OH-MY-HERMES" width="100%" style="display:block;max-width:none;height:auto">
 </p>
 
-<table align="center">
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/hermes-desktop.gif" alt="Hermes Desktop running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes 데스크톱, oh-my-hermes와 함께.</b><br>워크플로를 고르면, 만들기 전에 먼저 확인합니다.</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/hermes-cli.gif" alt="Hermes CLI running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes CLI, oh-my-hermes와 함께.</b><br>쓰던 터미널에서 같은 워크플로를.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/hermes-messenger.gif" alt="Hermes messenger app running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes 메신저 앱, oh-my-hermes와 함께.</b><br>스레드에서 요청하면 같은 스레드로 답합니다.</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/omh-setup.gif" alt="omh setup installing the OMH workflows" width="380" height="266"><br>
-      <sub><b><code>omh setup</code>, 명령 하나로.</b><br>워크플로를 설치하고 Hermes에 연결합니다.</sub>
-    </td>
-  </tr>
-</table>
-
 # oh-my-hermes
 
 <p align="center">
@@ -307,6 +284,29 @@ OMH 워크플로가 도는 동안 터미널이 보여주는 것:
 - **Phase-structured TODO** — 작업은 시작 전에 phase와 task로 선언되고
   (`todo init`), 프롬프트 위 체크리스트로 렌더됩니다: 활성 항목 하나,
   모든 phase 헤더 아래 들여쓴 task, 서브태스크 중첩, 7행 초과 시 접기.
+
+<table align="center">
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/hermes-desktop.gif" alt="Hermes Desktop running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes 데스크톱, oh-my-hermes와 함께.</b><br>워크플로를 고르면, 만들기 전에 먼저 확인합니다.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/hermes-cli.gif" alt="Hermes CLI running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes CLI, oh-my-hermes와 함께.</b><br>쓰던 터미널에서 같은 워크플로를.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/hermes-messenger.gif" alt="Hermes messenger app running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes 메신저 앱, oh-my-hermes와 함께.</b><br>스레드에서 요청하면 같은 스레드로 답합니다.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/omh-setup.gif" alt="omh setup installing the OMH workflows" width="380" height="266"><br>
+      <sub><b><code>omh setup</code>, 명령 하나로.</b><br>워크플로를 설치하고 Hermes에 연결합니다.</sub>
+    </td>
+  </tr>
+</table>
 
 <br>
 

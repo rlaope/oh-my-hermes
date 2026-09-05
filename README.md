@@ -2,29 +2,6 @@
   <img src="assets/oh-my-hermes-wordmark.png" alt="OH-MY-HERMES" width="100%" style="display:block;max-width:none;height:auto">
 </p>
 
-<table align="center">
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/hermes-desktop.gif" alt="Hermes Desktop running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes Desktop, with oh-my-hermes.</b><br>Pick a workflow; Hermes clarifies before it builds.</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/hermes-cli.gif" alt="Hermes CLI running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes CLI, with oh-my-hermes.</b><br>The same workflows, in your terminal.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/hermes-messenger.gif" alt="Hermes messenger app running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes messenger app, with oh-my-hermes.</b><br>Ask in a thread; the run reports back there.</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/omh-setup.gif" alt="omh setup installing the OMH workflows" width="380" height="266"><br>
-      <sub><b><code>omh setup</code>, one command.</b><br>Installs the workflows and connects them to Hermes.</sub>
-    </td>
-  </tr>
-</table>
-
 # oh-my-hermes
 
 <p align="center">
@@ -376,6 +353,29 @@ What the terminal shows while OMH workflows run:
   with tasks (`todo init`), rendered as the checklist above the prompt: one
   active item, tasks indented beneath every phase header, subtask nesting,
   and fold lines once the plan grows past eight rows.
+
+<table align="center">
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/hermes-desktop.gif" alt="Hermes Desktop running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes Desktop, with oh-my-hermes.</b><br>Pick a workflow; Hermes clarifies before it builds.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/hermes-cli.gif" alt="Hermes CLI running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes CLI, with oh-my-hermes.</b><br>The same workflows, in your terminal.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/hermes-messenger.gif" alt="Hermes messenger app running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes messenger app, with oh-my-hermes.</b><br>Ask in a thread; the run reports back there.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/omh-setup.gif" alt="omh setup installing the OMH workflows" width="380" height="266"><br>
+      <sub><b><code>omh setup</code>, one command.</b><br>Installs the workflows and connects them to Hermes.</sub>
+    </td>
+  </tr>
+</table>
 
 <br>
 
