@@ -79,7 +79,7 @@ def _rewrite_badge_versions(
 ) -> str:
     """Rewrite every hero-badge version in one site file, requiring exactly `expected` of them."""
     try:
-        content = path.read_text()
+        content = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise DistributionError(f"could not read {surface}") from exc
     matches = pattern.findall(content)
@@ -155,7 +155,9 @@ def bump_version_surfaces(
     if dry_run:
         return new_version
     for path, content in rewrites.items():
-        path.write_text(content)
+        # The locale strings are CJK; a platform default encoding (cp1252 on
+        # Windows CI) would refuse them, so every surface is written as UTF-8.
+        path.write_text(content, encoding="utf-8")
     (project_root / ".release-channel").write_text(f"{STABLE_CHANNEL}\n")
     return new_version
 

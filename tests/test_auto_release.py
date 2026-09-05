@@ -36,7 +36,8 @@ def _write_project(root: Path, *, source_version: str = "1.0.7") -> None:
     (root / ".release-channel").write_text("beta\n")
     (root / "site").mkdir()
     (root / "site" / "index.html").write_text(
-        '<span data-i18n="hero.badge">For Hermes Agent · v1.0.6</span>\n'
+        '<span data-i18n="hero.badge">For Hermes Agent · v1.0.6</span>\n',
+        encoding="utf-8",
     )
     (root / "site" / "i18n.js").write_text(
         '    "hero.badge": {\n'
@@ -45,7 +46,8 @@ def _write_project(root: Path, *, source_version: str = "1.0.7") -> None:
         '      ja: "Hermes Agent のための · v1.0.6",\n'
         '      zh: "为 Hermes Agent 打造 · v1.0.6"\n'
         '    },\n'
-        '    "install.note": { en: "public as of v1.0.6" },\n'
+        '    "install.note": { en: "public as of v1.0.6" },\n',
+        encoding="utf-8",
     )
 
 
@@ -77,9 +79,9 @@ class BumpVersionToolTests(unittest.TestCase):
         )
         self.assertIn(
             'data-i18n="hero.badge">For Hermes Agent · v1.0.8</span>',
-            (self.root / "site" / "index.html").read_text(),
+            (self.root / "site" / "index.html").read_text(encoding="utf-8"),
         )
-        i18n = (self.root / "site" / "i18n.js").read_text()
+        i18n = (self.root / "site" / "i18n.js").read_text(encoding="utf-8")
         self.assertEqual(i18n.count("· v1.0.8"), 4)
         # Historical prose ("public as of v1.0.6") is not a version surface.
         self.assertIn('en: "public as of v1.0.6"', i18n)
@@ -162,8 +164,8 @@ class BumpVersionToolTests(unittest.TestCase):
         for path, pattern in surfaces.items():
             with self.subTest(surface=str(path.relative_to(PROJECT_ROOT))):
                 self.assertEqual(len(pattern.findall(path.read_text())), 1)
-        self.assertEqual(len(SITE_BADGE_PATTERN.findall((PROJECT_ROOT / "site" / "index.html").read_text())), 1)
-        self.assertEqual(len(SITE_I18N_BADGE_PATTERN.findall((PROJECT_ROOT / "site" / "i18n.js").read_text())), 4)
+        self.assertEqual(len(SITE_BADGE_PATTERN.findall((PROJECT_ROOT / "site" / "index.html").read_text(encoding="utf-8"))), 1)
+        self.assertEqual(len(SITE_I18N_BADGE_PATTERN.findall((PROJECT_ROOT / "site" / "i18n.js").read_text(encoding="utf-8"))), 4)
 
     def test_repository_dry_run_bumps_to_the_next_patch(self) -> None:
         self.assertEqual(bump_version_surfaces(PROJECT_ROOT, dry_run=True), next_patch_version(canonical_version(PROJECT_ROOT)))
