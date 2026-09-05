@@ -268,6 +268,11 @@ class HistoricalLabelAliasTests(unittest.TestCase):
 
 
 class DisplayNamesLeaveDegradationRenderingAloneTests(unittest.TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        awareness_module._awareness_context_matches_message_cached.cache_clear()
+        awareness_module._awareness_route_hint_cached.cache_clear()
+
     def test_a_degraded_route_hint_still_carries_the_note_exactly_once(self) -> None:
         locale_failure = mock.patch.object(
             awareness_module,
