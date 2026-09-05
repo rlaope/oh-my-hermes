@@ -231,7 +231,12 @@ def _has_separator_split_opaque_value(content: str) -> bool:
                 single_case_with_signal = _has_single_case_alphanumeric_opaque_mix(combined) and (
                     any(char.isdigit() for char in combined) or combined.isupper()
                 )
-                if (mixed and every_fragment_has_uppercase) or single_case_with_signal:
+                lowercase_encoded_split = (
+                    combined.islower()
+                    and combined.isalpha()
+                    and len(set(combined)) * 100 >= len(combined) * 70
+                )
+                if (mixed and every_fragment_has_uppercase) or single_case_with_signal or lowercase_encoded_split:
                     return True
     return False
 

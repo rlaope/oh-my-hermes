@@ -305,6 +305,8 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
         split_opaque = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"
         uneven_parts = ("ABCDE", "FGHIJ", "KLMNO", "PQRSTUVWXYZaBcdef")
+        lowercase_parts = ("abcdefgh", "ijklmnop", "qrstuvwx", "yzabcdef")
+        lowercase_uneven_parts = ("abcde", "fghij", "klmno", "pqrstuvwxyzabcdefgh")
 
         for opaque in (*low_transition_base64, uppercase_alphanumeric):
             if opaque in low_transition_base64:
@@ -343,6 +345,18 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             ):
                 with self.subTest(separator=separator, uneven_container=container):
                     self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
+
+            for lowercase_variant in (lowercase_parts, lowercase_uneven_parts):
+                lowercase_split = separator.join(lowercase_variant)
+                for container in (
+                    lowercase_split,
+                    f"/safe/{lowercase_split}/artifact.txt",
+                    f"https://example.com/{lowercase_split}/artifact",
+                    f"@scope/{lowercase_split}",
+                    f"C:\\safe\\{lowercase_split}\\artifact.txt",
+                ):
+                    with self.subTest(separator=separator, lowercase_container=container):
+                        self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
 
         for semantic_identifier in (
             "projectMemorySchemaMigrationIdentifier",
@@ -407,6 +421,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "project-2026-memory-hardening-identifier",
             "secret-tokenizer-library-for-python-projects",
             "hf-transformers-inference-service-project",
+            "Unresolved memory conflicts block this context pack from executor handoff attachment.",
             "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/memory",
             (
                 "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/plans/"
