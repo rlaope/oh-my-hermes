@@ -249,12 +249,14 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
         uppercase_letters_only_base32 = "JBSWYDPF" * 4
         mixed_case_letters_only_base64 = "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV"
+        mixed_case_base64_with_lower_runs = "abCDefGHijKLmnOPqrSTuvWXyzABcDEF"
         lowercase_alphanumeric = "a9b8c7d6e5f4g3h2j1k0m9n8p7q6r5s4"
 
         for opaque in (
             uppercase_base32,
             uppercase_letters_only_base32,
             mixed_case_letters_only_base64,
+            mixed_case_base64_with_lower_runs,
             lowercase_alphanumeric,
         ):
             with self.subTest(opaque=opaque[:8]):
@@ -381,6 +383,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
         uppercase_letters_only_base32 = "JBSWYDPF" * 4
         mixed_case_letters_only_base64 = "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV"
+        mixed_case_base64_with_lower_runs = "abCDefGHijKLmnOPqrSTuvWXyzABcDEF"
         lowercase_alphanumeric = "a9b8c7d6e5f4g3h2j1k0m9n8p7q6r5s4"
         for unsafe_path in (
             f"C:\\safe\\{credential}\\artifact.txt",
@@ -388,6 +391,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             f"C:\\safe\\{uppercase_base32}\\artifact.txt",
             f"C:\\safe\\{uppercase_letters_only_base32}\\artifact.txt",
             f"C:\\safe\\{mixed_case_letters_only_base64}\\artifact.txt",
+            f"C:\\safe\\{mixed_case_base64_with_lower_runs}\\artifact.txt",
             f"C:\\safe\\{lowercase_alphanumeric}\\artifact.txt",
         ):
             with self.subTest(unsafe_path=unsafe_path), self.assertRaises(ValueError):

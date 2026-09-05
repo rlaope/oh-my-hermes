@@ -188,11 +188,12 @@ def _has_embedded_opaque_value(content: str) -> bool:
             _HEX_DIGEST_PATTERN.fullmatch(segment)
             or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(segment)
             or _ACRONYM_VERSION_IDENTIFIER_PATTERN.fullmatch(segment)
-            or _looks_like_structured_identifier(segment)
         ):
             continue
         if _has_opaque_character_mix(segment) or _has_single_case_alphanumeric_opaque_mix(segment):
             return True
+        if _looks_like_structured_identifier(segment):
+            continue
     return False
 
 
