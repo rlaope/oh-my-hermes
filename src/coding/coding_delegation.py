@@ -7,6 +7,7 @@ import hashlib
 from pathlib import Path
 import re
 from typing import Any, Mapping
+from urllib.parse import unquote
 
 from ..coding_contracts import (
     CLAUDE_CODE_SESSION_OBSERVATION_CONTRACT_SCHEMA_VERSION,
@@ -1199,8 +1200,22 @@ def _preflight_command_tokens() -> frozenset[str]:
     )
 
 
-def _preflight_path_candidate(token: str) -> str:
-    """Preserve the RHS filesystem anchor of an assignment or label."""
+# Delimiters can join an otherwise ordinary token to a second target. Only an
+# anchored remainder is a path: this keeps prose such as `12:30` and a second
+# project-relative name after `;` from manufacturing filesystem declarations.
+_PREFLIGHT_EMBEDDED_PATH_DELIMITERS = frozenset(";=:|&?,'\"`")
+_PERCENT_ESCAPE_RE = re.compile(r"%[0-9a-f]{2}", re.IGNORECASE)
+
+
+def _preflight_filesystem_anchor(token: str) -> bool:
+    """Recognize path starts that containment must inspect before label parsing."""
+    return token.startswith(("/", "\\", "~", "./", ".\\", "../", "..\\")) or bool(
+        re.match(r"^[a-z]:", token, re.IGNORECASE)
+    )
+
+
+def _preflight_assignment_path_candidate(token: str) -> str:
+    """Preserve the legacy RHS extraction so added spellings never replace it."""
     if "=" in token:
         _, value = token.split("=", 1)
         if value:
@@ -1211,6 +1226,52 @@ def _preflight_path_candidate(token: str) -> str:
     ):
         return value
     return token
+
+
+def _preflight_path_candidate(token: str) -> str:
+    """Keep an anchored target intact instead of rewriting it as a label value."""
+    return token if _preflight_filesystem_anchor(token) else _preflight_assignment_path_candidate(token)
+
+
+def _preflight_embedded_path_fragments(token: str) -> list[str]:
+    """Return only delimiter suffixes that independently begin at a filesystem root."""
+    fragments: list[str] = []
+    for index, character in enumerate(token):
+        if character not in _PREFLIGHT_EMBEDDED_PATH_DELIMITERS:
+            continue
+        # A drive letter's colon is part of its absolute anchor, not a label
+        # delimiter that should declare the same path a second time.
+        if character == ":" and index == 1 and token[0].isalpha():
+            continue
+        fragment = token[index + 1 :].rstrip(_CODE_REFERENCE_TRIM_CHARS).lstrip(_CODE_REFERENCE_OPENING_TRIM_CHARS)
+        if _preflight_filesystem_anchor(fragment):
+            fragments.append(fragment)
+    return fragments
+
+
+def _preflight_path_spellings(token: str) -> list[str]:
+    """Add anchored and decoded spellings without narrowing the legacy scan."""
+    spellings = [_preflight_path_candidate(token), _preflight_assignment_path_candidate(token)]
+    spellings.extend(_preflight_embedded_path_fragments(token))
+    # Decode only actual percent escapes and only after a raw URL was excluded
+    # by the caller. Decoding is deliberately single-pass: `%252e%252e` stays
+    # literal, matching a filesystem consumer's name. `unquote` leaves malformed
+    # escapes literal, while a second spelling exposes encoded separators and
+    # parent segments to containment. Several spellings can consume scan slots,
+    # so percent-encoded filenames practically allow roughly half MAX_TARGET_PATHS.
+    if _PERCENT_ESCAPE_RE.search(token):
+        decoded = unquote(token)
+        if decoded != token:
+            decoded = decoded.rstrip(_CODE_REFERENCE_TRIM_CHARS).lstrip(_CODE_REFERENCE_OPENING_TRIM_CHARS)
+            spellings.extend(
+                (
+                    decoded,
+                    _preflight_path_candidate(decoded),
+                    _preflight_assignment_path_candidate(decoded),
+                )
+            )
+            spellings.extend(_preflight_embedded_path_fragments(decoded))
+    return spellings
 
 
 def _preflight_file_uri_path(token: str) -> str | None:
@@ -1272,22 +1333,31 @@ def _safety_preflight_target_paths(message: str, *, excluded_path: str = "") -> 
         if not token:
             continue
         file_path = _preflight_file_uri_path(token)
-        if file_path is None:
+        if file_path is not None:
+            spellings = [file_path]
+        else:
+            # A pasted remote stays remote before decoding can make its escaped
+            # characters resemble a local traversal spelling.
             if _is_preflight_remote_location(token):
                 continue
-            token = _preflight_path_candidate(token)
-            file_path = _preflight_file_uri_path(token)
-            if file_path is None and _is_preflight_remote_location(token):
+            spellings = _preflight_path_spellings(token)
+        for spelling in spellings:
+            file_path = _preflight_file_uri_path(spelling)
+            if file_path is not None:
+                spelling = file_path
+            elif _is_preflight_remote_location(spelling):
                 continue
-        if file_path is not None:
-            token = file_path
-        # The plan artifact is OMH-generated context. Skip only its exact path
-        # before it can consume the scan slot reserved for a real user target.
-        if token == excluded_path or not _is_preflight_filesystem_target(token) or token in paths:
-            continue
-        paths.append(token)
-        if len(paths) >= _SAFETY_PREFLIGHT_TARGET_PATH_SCAN_LIMIT:
-            return paths
+            # The plan artifact is OMH-generated context. Skip only its exact
+            # path inside this scan before it consumes a real user target slot.
+            if (
+                spelling == excluded_path
+                or not _is_preflight_filesystem_target(spelling)
+                or spelling in paths
+            ):
+                continue
+            paths.append(spelling)
+            if len(paths) >= _SAFETY_PREFLIGHT_TARGET_PATH_SCAN_LIMIT:
+                return paths
     return paths
 
 
