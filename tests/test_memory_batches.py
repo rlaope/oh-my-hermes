@@ -107,7 +107,12 @@ class MemoryBatchTests(TestCase):
             self.assertFalse(paths.memory_dir.exists())
 
     def test_stage_rejects_structural_credentials_without_writing_a_candidate(self) -> None:
-        for value in ("gh" + "u_" + "a" * 36, "Ab3dEf4G" * 5 + "="):
+        for value in (
+            "gh" + "u_" + "a" * 36,
+            "Ab3dEf4G" * 5 + "=",
+            "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV",
+            "JBSWYDPFJBSWYDPFJBSWYDPFJBSWYDPF",
+        ):
             with self.subTest(value_kind=value[:4]), TemporaryDirectory() as home:
                 paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
                 unsafe = _batch("structural-credential")
@@ -556,6 +561,81 @@ class MemoryBatchTests(TestCase):
             self.assertEqual(result["reason_code"], "scope_precondition_changed")
             self.assertEqual(source_path.read_bytes(), source_bytes)
 
+            destination_path.unlink()
+            recovered = apply_approved_memory_update_batch(paths, staged["batch_id"])
+            self.assertTrue(recovered["applied"])
+
+    def test_multiscope_malformed_destination_is_rejected_before_source_mutation(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            source_path = paths.memory_dir / "scopes" / "project.json"
+            destination_path = paths.memory_dir / "scopes" / "runs" / "destination.json"
+            source_path.parent.mkdir(parents=True)
+            destination_path.parent.mkdir(parents=True)
+            source_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_memory_scope/v2",
+                        "scope": {"kind": "project", "ref": "default"},
+                        "items": {
+                            "move-target": {
+                                "item_id": "move-item",
+                                "revision": 1,
+                                "key": "move_key",
+                                "summary": "Move reviewed value",
+                                "value": "move value",
+                            }
+                        },
+                        "tombstones": {},
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            destination_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_memory_scope/v2",
+                        "scope": {"kind": "run", "ref": "destination"},
+                        "items": [],
+                        "tombstones": {},
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            batch = _batch("move-target")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates[0].update(
+                {
+                    "op": "change_scope",
+                    "from_scope": {"kind": "project", "ref": "default"},
+                    "to_scope": {"kind": "run", "ref": "destination"},
+                    "key": "move_key",
+                }
+            )
+            staged = self._stage_and_remember(paths, batch)
+            source_bytes = source_path.read_bytes()
+            destination_bytes = destination_path.read_bytes()
+
+            first = apply_approved_memory_update_batch(paths, staged["batch_id"])
+            second = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(first["applied"])
+            self.assertEqual(first["reason_code"], "scope_precondition_changed")
+            self.assertEqual(second, first)
+            self.assertEqual(source_path.read_bytes(), source_bytes)
+            self.assertEqual(destination_path.read_bytes(), destination_bytes)
+            self.assertFalse(
+                (paths.memory_dir / "operations" / f"{staged['operation_id']}.json").exists()
+            )
+
     def test_multiscope_retry_recovers_after_first_durable_scope_write(self) -> None:
         with TemporaryDirectory() as home:
             paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
@@ -659,6 +739,63 @@ class MemoryBatchTests(TestCase):
                     "scope": {"kind": "project", "ref": "default"},
                 }
             )
+
+            with self.assertRaisesRegex(ValueError, "ambiguous"):
+                stage_memory_update_batch(paths, batch)
+
+    def test_stage_rejects_duplicate_candidate_item_id_across_scopes(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            scopes = (
+                (
+                    paths.memory_dir / "scopes" / "project.json",
+                    {"kind": "project", "ref": "default"},
+                    "project-target",
+                    "project_key",
+                ),
+                (
+                    paths.memory_dir / "scopes" / "runs" / "run-1.json",
+                    {"kind": "run", "ref": "run-1"},
+                    "run-target",
+                    "run_key",
+                ),
+            )
+            for path, scope, target_ref, key in scopes:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": "omh_memory_scope/v2",
+                            "scope": scope,
+                            "items": {
+                                target_ref: {
+                                    "item_id": "shared-id",
+                                    "revision": 1,
+                                    "key": key,
+                                    "summary": f"Existing {key}",
+                                    "value": f"value for {key}",
+                                }
+                            },
+                            "tombstones": {},
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            batch = {
+                "schema_version": "memory_update_batch/v1",
+                "source_surface": "test",
+                "updates": [
+                    {
+                        "op": "update",
+                        "item_id": target_ref,
+                        "scope": scope,
+                    }
+                    for _path, scope, target_ref, _key in scopes
+                ],
+            }
 
             with self.assertRaisesRegex(ValueError, "ambiguous"):
                 stage_memory_update_batch(paths, batch)

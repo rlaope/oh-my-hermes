@@ -206,6 +206,27 @@ class MemoryContractTests(unittest.TestCase):
             self.assertNotIn(opaque_summary, json.dumps(approved, sort_keys=True))
             self.assertNotIn(opaque_tag.lower(), json.dumps(approved, sort_keys=True).lower())
 
+    def test_letters_only_encoded_values_are_review_gated_before_any_raw_persistence(self) -> None:
+        encoded_values = (
+            "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV",
+            "JBSWYDPFJBSWYDPFJBSWYDPFJBSWYDPF",
+        )
+        for encoded in encoded_values:
+            with self.subTest(encoded=encoded[:8]), TemporaryDirectory() as tmp:
+                paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+                write_setup_profile(paths, memory_mode="auto-safe")
+
+                captured = capture_project_memory_candidate(paths, encoded, source="cli")
+                candidate = captured["candidate"]
+                candidate_path = paths.memory_dir / "candidates" / f"{candidate['candidate_id']}.json"
+
+                self.assertEqual(candidate["safety"]["status"], "needs_review")
+                self.assertFalse(captured["auto_approved"])
+                self.assertEqual(candidate["summary"], "[redacted]")
+                self.assertNotIn(encoded, json.dumps(captured, sort_keys=True))
+                self.assertNotIn(encoded, candidate_path.read_text(encoding="utf-8"))
+                self.assertFalse((paths.memory_dir / "records").exists())
+
     def test_unknown_credential_label_is_redacted_before_candidate_and_review_persistence(self) -> None:
         credential = "credential:" + "a" * 40
         with TemporaryDirectory() as tmp:
