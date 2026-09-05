@@ -258,7 +258,12 @@ def sandbox_command(
     macos_read_root_aliases: Sequence[Path] = (),
     macos_read_literals: Sequence[Path] = (),
     macos_write_data_literals: Sequence[Path] = (),
+    write_literals: Sequence[Path] = (),
+    macos_mach_lookup_names: Sequence[str] = (),
     allow_broad_file_read: bool = False,
+    # A write root is not screened as a read root: this is an explicit execution
+    # allowance, while `read_roots_are_safe` protects data exposed to a child.
+    write_roots: Sequence[Path] = (),
 ) -> tuple[str, ...]:
     if selected == "sandbox-exec":
         executables = (argv[0], "/usr/bin/true")
@@ -292,8 +297,22 @@ def sandbox_command(
             f'(allow file-write-data (literal {json.dumps(str(root))}))'
             for root in macos_write_data_literals
         )
+        write_subpaths = " ".join(
+            f'(subpath {json.dumps(str(root))})' for root in unique_roots((child.root, *write_roots))
+        )
+        # Seatbelt's literal grants operations on the exact name. If an
+        # external writer removes that file and replaces it with a directory,
+        # the literal rule still denies writes below the replacement directory.
+        write_literal_policy = "".join(
+            f'(allow file-write* (literal {json.dumps(str(path.resolve()))}))'
+            for path in unique_roots(write_literals)
+        )
+        mach_lookup = "".join(
+            f'(allow mach-lookup (global-name {json.dumps(name)}))'
+            for name in macos_mach_lookup_names
+        )
         network = "(allow network*)" if allow_network else ""
-        policy = f'(version 1)(deny default)(deny syscall-unix (syscall-number 147 82))(allow process-fork){process_exec}(allow sysctl-read){file_read}{write_data_literals}(allow file-write* (subpath {json.dumps(str(child.root))})){network}'
+        policy = f'(version 1)(deny default)(deny syscall-unix (syscall-number 147 82))(allow process-fork){process_exec}(allow sysctl-read){file_read}{write_data_literals}{write_literal_policy}(allow file-write* {write_subpaths}){mach_lookup}{network}'
         return ("/usr/bin/sandbox-exec", "-p", policy, *argv)
     tool = _trusted_bwrap(backend_digest)
     assert tool is not None
@@ -302,8 +321,13 @@ def sandbox_command(
         flags.insert(3, "--unshare-net")
     bind_roots = unique_roots((*roots, Path(argv[0]).resolve().parent))
     binds = [part for root in bind_roots for part in ("--ro-bind", str(root), str(root))]
+    writable_roots = tuple(root for root in unique_roots((*write_roots, *write_literals)) if root != child.root)
+    # --bind-try keeps preparation non-fatal when an allowed state directory has
+    # not been created yet; it never grants the broad parent directory instead.
+    # In particular, it cannot create an absent exact file literal (#1356).
+    write_binds = [part for root in writable_roots for part in ("--bind-try", str(root), str(root))]
     env_flags = [part for key, value in sorted(environment.items()) for part in ("--setenv", key, value)]
-    return (tool, *flags, "--tmpfs", "/", *binds, "--bind", str(child.root), str(child.root), "--chdir", str(child.work), *env_flags, "--", *argv)
+    return (tool, *flags, "--tmpfs", "/", *binds, "--bind", str(child.root), str(child.root), *write_binds, "--chdir", str(child.work), *env_flags, "--", *argv)
 
 
 def _trusted_bwrap(expected_digest: str | None = None) -> str | None:

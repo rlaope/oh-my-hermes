@@ -86,6 +86,7 @@ from .fanout_health_events import (
 from .fanout_confinement import (
     FanoutFilesystemConfinement,
     confinement_receipt,
+    owner_state_directories,
     planned_fanout_filesystem_confinement,
     prepare_fanout_filesystem_confinement,
 )
@@ -438,8 +439,9 @@ def fanout_child_env(
     depth: int,
     fanout_id: str,
     unit_id: str,
+    owner: str = "",
 ) -> dict[str, str]:
-    """`base_env` plus this dispatcher's lineage stamp, for one child spawn.
+    """`base_env` plus this dispatcher's lineage and owner-state pins, for one child spawn.
 
     Every process this module starts gets the stamp, verification commands
     included: a guard a child sidesteps by shelling out one more level is not
@@ -448,11 +450,25 @@ def fanout_child_env(
     lineage_step = f"{fanout_id or 'unrecorded'}:{unit_id}"
     parent_lineage = str(base_env.get(FANOUT_LINEAGE_ENV_VAR, "") or "").strip()
     lineage = f"{parent_lineage}/{lineage_step}" if parent_lineage else lineage_step
-    return {
+    child_env = {
         **dict(base_env),
         FANOUT_DEPTH_ENV_VAR: str(depth + 1),
         FANOUT_LINEAGE_ENV_VAR: lineage[-_MAX_LINEAGE_CHARS:],
     }
+    if owner != "omo-runtime":
+        return child_env
+    host = omo_runtime_host()
+    environment_variable = {"pi": "PI_CODING_AGENT_DIR", "senpi": "SENPI_CODING_AGENT_DIR"}.get(host)
+    if environment_variable is None:
+        return child_env
+    state_directories = owner_state_directories(owner, child_env)
+    if len(state_directories) != 1:
+        return child_env
+    # A direct pi/senpi spawn must not inherit an ambient Senpi brand: it
+    # changes both the config directory and environment-prefix precedence.
+    child_env.pop("SENPI_BRAND", None)
+    child_env[environment_variable] = str(state_directories[0])
+    return child_env
 
 
 class _SpawnLedger:
@@ -3196,7 +3212,9 @@ def _dispatch_unit(
             not_ready["repair_card"] = dict(repair_card)
         if dry_run:
             not_ready["filesystem_confinement"] = planned_fanout_filesystem_confinement(
-                _worktree_path(repo_root, unit_id)
+                _worktree_path(repo_root, unit_id),
+                owner=owner,
+                environment=os.environ if base_env is None else base_env,
             )
         return not_ready
     discovery = (discoveries or {}).get(owner)
@@ -3246,7 +3264,11 @@ def _dispatch_unit(
             "status": "dry_run_planned",
             "planned_argv": [part if part != prompt else "<unit prompt>" for part in argv],
             "worktree_path": str(worktree),
-            "filesystem_confinement": planned_fanout_filesystem_confinement(worktree),
+            "filesystem_confinement": planned_fanout_filesystem_confinement(
+                worktree,
+                owner=owner,
+                environment=os.environ if base_env is None else base_env,
+            ),
             **_dispatch_status_ladder(),
         }
         if fingerprint_note is not None:
@@ -3335,6 +3357,7 @@ def _dispatch_unit(
         depth=dispatch_depth,
         fanout_id=fanout_id,
         unit_id=unit_id,
+        owner=owner,
     )
     from .worktree_creator import ensure_fanout_unit_worktree
 
@@ -3368,7 +3391,7 @@ def _dispatch_unit(
         verification_argv.append(check_argv)
     confinement = (
         prepare_fanout_filesystem_confinement(
-            worktree, child_env, (argv, *verification_argv)
+            worktree, child_env, (argv, *verification_argv), owner=owner
         )
         if runner is signal_safe_unit_runner
         else None
