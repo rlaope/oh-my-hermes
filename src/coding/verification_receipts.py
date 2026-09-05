@@ -43,6 +43,31 @@ RECEIPT_STATUSES = ("passed", "failed")
 
 _T = TypeVar("_T")
 _RECEIPT_KEY_RE = re.compile(r"^[0-9a-f]{64}$")
+_WINDOWS_EXTENDED_PREFIX = "\\\\?\\"
+_WINDOWS_EXTENDED_UNC_PREFIX = "\\\\?\\UNC\\"
+
+
+def _containment_path(path: Path) -> Path:
+    """Normalize equivalent Windows extended paths only for containment checks.
+
+    `Path.resolve(strict=False)` can return an extended DOS path for a missing
+    child while returning a normal path for its existing parent. Extended UNC
+    has a distinct spelling, so convert it to UNC rather than dropping the
+    namespace prefix blindly. Other device namespaces have no ordinary DOS or
+    UNC equivalent and remain unchanged.
+    """
+    raw = str(path)
+    if raw[: len(_WINDOWS_EXTENDED_UNC_PREFIX)].casefold() == _WINDOWS_EXTENDED_UNC_PREFIX.casefold():
+        return type(path)("\\\\" + raw[len(_WINDOWS_EXTENDED_UNC_PREFIX) :])
+    if (
+        raw.startswith(_WINDOWS_EXTENDED_PREFIX)
+        and len(raw) > len(_WINDOWS_EXTENDED_PREFIX) + 2
+        and raw[len(_WINDOWS_EXTENDED_PREFIX)].isalpha()
+        and raw[len(_WINDOWS_EXTENDED_PREFIX) + 1] == ":"
+        and raw[len(_WINDOWS_EXTENDED_PREFIX) + 2] == "\\"
+    ):
+        return type(path)(raw[len(_WINDOWS_EXTENDED_PREFIX) :])
+    return path
 
 
 def receipts_dir(paths: OmhPaths) -> Path:
@@ -56,8 +81,8 @@ def receipt_path(paths: OmhPaths, key: str) -> Path:
     directory = receipts_dir(paths)
     if directory.is_symlink():
         raise ValueError("verification receipt directory must not be a symlink")
-    resolved_home = paths.omh_home.resolve(strict=False)
-    resolved_directory = directory.resolve(strict=False)
+    resolved_home = _containment_path(paths.omh_home.resolve(strict=False))
+    resolved_directory = _containment_path(directory.resolve(strict=False))
     try:
         resolved_directory.relative_to(resolved_home)
     except ValueError as exc:
@@ -66,7 +91,7 @@ def receipt_path(paths: OmhPaths, key: str) -> Path:
     if destination.is_symlink():
         raise ValueError("verification receipt destination must not be a symlink")
     try:
-        destination.resolve(strict=False).relative_to(resolved_directory)
+        _containment_path(destination.resolve(strict=False)).relative_to(resolved_directory)
     except ValueError as exc:
         raise ValueError("verification receipt destination escapes receipt directory") from exc
     return destination
