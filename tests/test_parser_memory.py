@@ -147,6 +147,28 @@ class MemoryReviewRevisionCliTests(unittest.TestCase):
             self.assertFalse(payload["applied"])
             self.assertFalse((root / ".omh" / "memory" / "records").exists())
 
+    def test_stale_review_refusal_never_echoes_caller_revision(self) -> None:
+        sensitive_revision = "JBSWY3DPEHPK3PXP" * 3
+        for action in ("approve", "reject"):
+            with self.subTest(action=action), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                homes, candidate_id = self._capture(root)
+
+                status, stdout, stderr = run_cli(
+                    [*homes, "memory", action, candidate_id, "--candidate-revision", sensitive_revision]
+                )
+
+                payload = json.loads(stdout)
+                self.assertNotEqual(status, 0)
+                self.assertEqual(payload["reason_code"], "stale_review")
+                self.assertEqual(
+                    payload["detail"],
+                    "stale_review: the candidate changed after the reviewed card was rendered; re-read it and decide again",
+                )
+                self.assertNotIn(sensitive_revision, stdout)
+                self.assertNotIn(sensitive_revision, stderr)
+                self.assertFalse((root / ".omh" / "memory" / "records").exists())
+
     def test_approve_and_reject_with_the_displayed_revision_succeed(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

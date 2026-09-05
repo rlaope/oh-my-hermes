@@ -27,6 +27,7 @@ from ._memory_store_validation import (
 _INDEX_DIRS = (("scope_files", "scopes"), ("candidate_files", "candidates"), ("record_files", "records"), ("review_files", "reviews"))
 StepWriter = Callable[[OmhPaths, dict[str, Any]], str | None]
 IndexRebuilder = Callable[[OmhPaths], None]
+OperationPreflight = Callable[[OmhPaths], None]
 __all__ = [
     "MEMORY_OPERATION_SCHEMA_VERSION",
     "MEMORY_OPERATION_STATES",
@@ -50,12 +51,16 @@ def run_memory_operation(
     steps: Sequence[Mapping[str, object]],
     rebuild_index: IndexRebuilder | None = None,
     step_writer: StepWriter | None = None,
+    preflight: OperationPreflight | None = None,
     now: datetime | str | None = None,
 ) -> dict[str, Any]:
     normalized = build_memory_operation(operation_id, operation_type, steps, _stamp(now))
     with file_lock(paths.memory_index_path, private=True):
         ensure_dir(paths.memory_operations_dir, private=True)
-        _recover_unlocked(paths, rebuild_index, step_writer, now, skip=operation_id)
+        # A candidate-bound writer can only interpret its own operation. Passing
+        # it to unrelated interrupted records can poison their recovery state.
+        if step_writer is None:
+            _recover_unlocked(paths, rebuild_index, None, now, skip=operation_id)
         path = _operation_path(paths, operation_id)
         if path.is_symlink():
             return {"operation_id": operation_id, "state": "corrupt"}
@@ -63,6 +68,8 @@ def run_memory_operation(
         if error or existing is None or not valid_memory_operation(existing):
             if path.exists():
                 return _mark_corrupt_operation(paths, operation_id, now)
+            if preflight is not None:
+                preflight(paths)
             record = normalized
             atomic_write_json(path, record, private=True)
         else:
@@ -205,6 +212,12 @@ def _recover_unlocked(paths: OmhPaths, rebuild: IndexRebuilder | None, writer: S
             else:
                 results.append({"operation_id": "", "state": "corrupt"})
         else:
+            if writer is None and record.get("state") not in {"completed", "failed", "corrupt"} and any(
+                step.get("action") not in {"copy", "delete", "move", "rewrite_jsonl", "write_json"}
+                for step in record.get("steps", [])
+                if isinstance(step, Mapping)
+            ):
+                continue
             results.append(_resume_unlocked(paths, record, rebuild, writer, now))
     return results
 
