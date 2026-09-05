@@ -207,7 +207,7 @@ OMH 的编码面有三步：按模型调整提示（03），把工作拆成并�
 
 [阅读扇出契约 ↗](docs/FANOUT.md)
 
-### 05 · 只展示能证明之事的 HUD
+### 05 · Oh-My-Hermes 界面与 Hermes Agent 工作流
 
 每条委派通道一行：模型、effort、轮次、token、成本，实时更新。成本为零只在主机确认时才显示；无法定价的调用显示 `unknown`，而不是 `$0`。进程存在之前是 `Plan · not run`，执行器自称完成时是 `Code · reported done`，只有门禁通过后才是 `Test · verified`。提示框上方的阶段待办是这次运行自己的清单，不是事后写的摘要。
 
