@@ -9,6 +9,70 @@ from __future__ import annotations
 import re
 
 
+_BLOCKED_PATTERNS = (
+    re.compile(r"password\s*=", re.IGNORECASE),
+    re.compile(r"secret\s*=", re.IGNORECASE),
+    re.compile(r"token\s*=", re.IGNORECASE),
+    # Secret-token hyphen compounds (e.g. token-secret, secret-token,
+    # abc-secret-token). Keep this narrow so ordinary prose such as
+    # "token-based parsing" remains usable.
+    re.compile(
+        r"(?:password|passwd|secret|token|key)s?-(?:password|passwd|secret|token|key)s?",
+        re.IGNORECASE,
+    ),
+    re.compile(r"api[_-]key", re.IGNORECASE),
+    re.compile(r"auth[_-]header", re.IGNORECASE),
+    re.compile(r"Bearer\s+", re.IGNORECASE),
+    # High-confidence credential formats that carry no descriptive keyword.
+    re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b", re.IGNORECASE),
+    re.compile(r"\b(?:gh[oprs]|github_pat|glpat|npm|hf)[_-][A-Za-z0-9_-]{16,}\b", re.IGNORECASE),
+    re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b", re.IGNORECASE),
+    re.compile(r"\bAIza[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
+    re.compile(r"\bxox[a-z]?-[A-Za-z0-9-]{16,}\b", re.IGNORECASE),
+    re.compile(r"\b[a-z][a-z0-9+.-]{1,31}://[^/\s:@]+:[^@\s/]+@", re.IGNORECASE),
+    re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.IGNORECASE),
+)
+
+_NEEDS_REVIEW_PATTERNS = (
+    re.compile(r"ignore\s+previous", re.IGNORECASE),
+    re.compile(r"reveal\s+the\s+system\s+prompt", re.IGNORECASE),
+    re.compile(r"disregard\s+instructions", re.IGNORECASE),
+    re.compile(r"this\s+is\s+temporary", re.IGNORECASE),
+    re.compile(r"workaround\s+while", re.IGNORECASE),
+    re.compile(r"(temporary|temp|hack|quick\s+fix)\s+", re.IGNORECASE),
+    # A credential-like value with an unknown prefix is not auto-safe. The
+    # character-class and uniqueness checks below avoid treating normal prose
+    # as an opaque value while keeping this gate deterministic.
+    re.compile(
+        r"\b(?:credential|access[_ -]?token|private[_ -]?key|secret|token|api[_ -]?key)\s*[:=]\s*\S{12,}",
+        re.IGNORECASE,
+    ),
+)
+_OPAQUE_TOKEN_PATTERN = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9+/=_-]{32,}(?![A-Za-z0-9])")
+
+
+def _looks_like_opaque_token(content: str) -> bool:
+    """Recognize unknown long opaque values conservatively for review."""
+    for match in _OPAQUE_TOKEN_PATTERN.finditer(content):
+        token = match.group(0)
+        # Keep ordinary assignment labels and low-entropy hyphenated prose
+        # out of the opaque-value heuristic (for example sha256=aaaa... or
+        # human-definition-source-only-sentinel).
+        if "=" in token:
+            continue
+        character_classes = sum(
+            (
+                any(char.islower() for char in token),
+                any(char.isupper() for char in token),
+                any(char.isdigit() for char in token),
+                any(char in "+/=_-" for char in token),
+            )
+        )
+        if character_classes >= 3 or ("_-" not in token and len(set(token)) >= 12):
+            return True
+    return False
+
+
 def classify_memory_admission(content: str) -> dict[str, object]:
     """Classify memory content for safety admission.
     
@@ -20,39 +84,17 @@ def classify_memory_admission(content: str) -> dict[str, object]:
     if not isinstance(content, str):
         return {"status": "blocked"}
     
-    # Blocked patterns: explicit secrets/passwords, raw logs, transcripts, protected markers
-    blocked_patterns = [
-        r"password\s*=",
-        r"secret\s*=",
-        r"token\s*=",
-        # Secret-token hyphen compounds (e.g. token-secret, secret-token,
-        # abc-secret-token): two secret-class words joined by one hyphen.
-        # Narrow on purpose: no arbitrary hyphen chains, so ordinary prose
-        # like "token-based parsing" or "secret-management policy" never matches.
-        r"(?:password|passwd|secret|token|key)s?-(?:password|passwd|secret|token|key)s?",
-        r"api[_-]key",
-        r"auth[_-]header",
-        r"Bearer\s+",
-    ]
-    
-    for pattern in blocked_patterns:
-        if re.search(pattern, content, re.IGNORECASE):
+    for pattern in _BLOCKED_PATTERNS:
+        if pattern.search(content):
             return {"status": "blocked"}
-    
-    # Needs review patterns: prompt injection, temporary workarounds, credential hints
-    needs_review_patterns = [
-        r"ignore\s+previous",
-        r"reveal\s+the\s+system\s+prompt",
-        r"disregard\s+instructions",
-        r"this\s+is\s+temporary",
-        r"workaround\s+while",
-        r"(temporary|temp|hack|quick\s+fix)\s+",
-    ]
-    
-    for pattern in needs_review_patterns:
-        if re.search(pattern, content, re.IGNORECASE):
+
+    for pattern in _NEEDS_REVIEW_PATTERNS:
+        if pattern.search(content):
             return {"status": "needs_review"}
-    
+
+    if _looks_like_opaque_token(content):
+        return {"status": "needs_review"}
+
     return {"status": "safe"}
 
 
