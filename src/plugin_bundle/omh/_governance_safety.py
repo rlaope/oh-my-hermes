@@ -169,6 +169,17 @@ def _has_single_case_alphanumeric_opaque_mix(token: str) -> bool:
     return transitions >= 4
 
 
+def _has_embedded_single_case_opaque_value(content: str) -> bool:
+    """Detect opaque runs before a path or URL container can exempt them."""
+    for match in re.finditer(r"[A-Za-z0-9]{32,}", content):
+        segment = match.group(0)
+        if _HEX_DIGEST_PATTERN.fullmatch(segment):
+            continue
+        if _has_single_case_alphanumeric_opaque_mix(segment):
+            return True
+    return False
+
+
 def _windows_path_has_split_opaque_value(content: str) -> bool:
     unsafe_run: list[str] = []
     for segment in (
@@ -185,6 +196,8 @@ def _windows_path_has_split_opaque_value(content: str) -> bool:
 
 def _looks_like_opaque_token(content: str) -> bool:
     """Recognize encoded opaque values without consuming common identifiers."""
+    if _has_embedded_single_case_opaque_value(content):
+        return True
     windows_path = bool(_WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content))
     if windows_path and _windows_path_has_split_opaque_value(content):
         return True

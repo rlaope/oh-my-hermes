@@ -767,14 +767,17 @@ def _distinct_targets(items: list[dict[str, object]]) -> None:
             raise ValueError("batch has ambiguous scope-item targets")
         scope_item_targets.update(item_targets)
 
-        if op != "forget":
-            artifact = item.get("artifact")
-            if not isinstance(artifact, Mapping):
-                raise ValueError("batch has malformed logical target")
-            logical_target = (destination_target, str(artifact.get("key", "")))
-            if logical_target in logical_targets:
-                raise ValueError("batch has ambiguous logical targets")
-            logical_targets.add(logical_target)
+        artifact = item.get("artifact")
+        if not isinstance(artifact, Mapping):
+            raise ValueError("batch has malformed logical target")
+        logical_key = str(artifact.get("key", ""))
+        item_logical_targets = {
+            (_relative_scope(scope), logical_key)
+            for scope in _item_scopes(item)
+        }
+        if logical_targets & item_logical_targets:
+            raise ValueError("batch has ambiguous logical targets")
+        logical_targets.update(item_logical_targets)
 
 
 def _batch_view(candidate: Mapping[str, object], *, status: str) -> dict[str, object]:

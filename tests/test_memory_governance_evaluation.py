@@ -252,6 +252,17 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         for opaque in (uppercase_base32, lowercase_alphanumeric):
             with self.subTest(opaque=opaque[:8]):
                 self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
+            for container in (
+                f"/safe/{opaque}/artifact.txt",
+                f"https://example.com/{opaque}/artifact",
+                f"@scope/{opaque}",
+                f"C:\\safe\\{opaque}\\artifact.txt",
+            ):
+                with self.subTest(opaque=opaque[:8], container=container[:16]):
+                    self.assertEqual(
+                        governance.classify_memory_admission(container)["status"],
+                        "needs_review",
+                    )
 
         self.assertEqual(
             governance.classify_memory_admission("project2026memoryhardeningidentifier")["status"],
@@ -349,7 +360,14 @@ class SafetyAndEvaluationTests(unittest.TestCase):
 
         credential = "gh" + "u_" + "a" * 36
         padded = "Ab3dEf4G" * 5 + "="
-        for unsafe_path in (f"C:\\safe\\{credential}\\artifact.txt", f"C:\\safe\\{padded}\\artifact.txt"):
+        uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
+        lowercase_alphanumeric = "a9b8c7d6e5f4g3h2j1k0m9n8p7q6r5s4"
+        for unsafe_path in (
+            f"C:\\safe\\{credential}\\artifact.txt",
+            f"C:\\safe\\{padded}\\artifact.txt",
+            f"C:\\safe\\{uppercase_base32}\\artifact.txt",
+            f"C:\\safe\\{lowercase_alphanumeric}\\artifact.txt",
+        ):
             with self.subTest(unsafe_path=unsafe_path), self.assertRaises(ValueError):
                 build_plan_handoff_context_pack({**artifact, "path": unsafe_path})
 
