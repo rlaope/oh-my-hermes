@@ -280,6 +280,8 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "direview_dprof_e9da83f21e46282d3a9ae020_r1",
             "@scope/hermes-agent-runtime-v2-package",
             "@scope/HermesAgentRuntimeV2PackageManager",
+            "JSONRPC2ServerConfigurationManager",
+            "TLS13ConnectionConfigurationManager",
             "packages/hermes-agent-runtime-v2-package/src",
             "packages/HermesAgentRuntimeV2PackageManager/src",
             "https://example.com/releases/hermes-agent-v2-package",

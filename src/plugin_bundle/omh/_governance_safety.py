@@ -68,6 +68,9 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
 _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
     r"(?:(?:[A-Z]{2,}(?=[A-Z][a-z]{2,}))|(?:[A-Z][a-z]{2,}(?:\d+)?)|(?:[A-Z]\d+)){2,}"
 )
+_ACRONYM_VERSION_IDENTIFIER_PATTERN = re.compile(
+    r"(?:[A-Z]{2,}[0-9]*)(?:[A-Z][a-z]{2,}){2,}(?:V[0-9]+)?"
+)
 _WINDOWS_ABSOLUTE_PATH_PATTERN = re.compile(r"^(?:[A-Za-z]:\\|\\\\)[^\r\n]+$")
 _SAFE_DIGEST_QUERY_KEYS = frozenset(
     {"artifact", "artifact_id", "checksum", "commit", "digest", "hash", "id", "rev", "revision", "sha", "sha1", "sha224", "sha256", "sha384", "sha512"}
@@ -172,6 +175,7 @@ def _looks_like_opaque_token(content: str) -> bool:
             or _UUID_PATTERN.fullmatch(token)
             or _DIGEST_ASSIGNMENT_PATTERN.fullmatch(token)
             or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(token)
+            or _ACRONYM_VERSION_IDENTIFIER_PATTERN.fullmatch(token)
             or _looks_like_safe_path_token(token)
             or _looks_like_safe_digest_query_token(token, content)
         ):
