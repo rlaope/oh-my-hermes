@@ -604,6 +604,56 @@ function Get-OmhNormalizedTag {
     return "v$Version"
 }
 
+function Get-OmhRedirectLocation {
+    # Invoke-WebRequest exposes different header object types by PowerShell
+    # version and whether the redirect was returned or raised as an error.
+    param([object]$Response)
+    if ($null -eq $Response) { return '' }
+
+    $OmhHeadersProperty = $Response.PSObject.Properties['Headers']
+    if (-not $OmhHeadersProperty) { return '' }
+    try {
+        $OmhHeaders = $OmhHeadersProperty.Value
+    } catch {
+        return ''
+    }
+    if ($null -eq $OmhHeaders) { return '' }
+
+    # PowerShell 7's HttpResponseHeaders exposes Location as a Uri property.
+    $OmhLocationProperty = $OmhHeaders.PSObject.Properties['Location']
+    if ($OmhLocationProperty) {
+        try {
+            $OmhLocation = $OmhLocationProperty.Value
+            foreach ($OmhLocationValue in $OmhLocation) {
+                if ($null -ne $OmhLocationValue) { return [string]$OmhLocationValue }
+            }
+        } catch {}
+    }
+
+    # HttpResponseHeaders also provides TryGetValues; dictionaries do not.
+    $OmhTryGetValues = $OmhHeaders.PSObject.Methods['TryGetValues']
+    if ($OmhTryGetValues) {
+        try {
+            $OmhLocationValues = $null
+            if ($OmhHeaders.TryGetValues('Location', [ref]$OmhLocationValues)) {
+                foreach ($OmhLocationValue in $OmhLocationValues) {
+                    if ($null -ne $OmhLocationValue) { return [string]$OmhLocationValue }
+                }
+            }
+        } catch {}
+    }
+
+    # Windows PowerShell's WebHeaderCollection and response dictionaries use
+    # an indexer. Keep it isolated because HttpResponseHeaders has none.
+    try {
+        $OmhLocation = $OmhHeaders['Location']
+        foreach ($OmhLocationValue in $OmhLocation) {
+            if ($null -ne $OmhLocationValue) { return [string]$OmhLocationValue }
+        }
+    } catch {}
+    return ''
+}
+
 # ---------------------------------------------------------------------------
 # Main flow
 # ---------------------------------------------------------------------------
@@ -627,10 +677,10 @@ try {
                     $OmhLatestLocation = ''
                     try {
                         $OmhLatestResponse = Invoke-WebRequest -Uri $OmhRepoLatestUrl -Method Head -MaximumRedirection 0 -ErrorAction Stop
-                        $OmhLatestLocation = [string]$OmhLatestResponse.Headers['Location']
+                        $OmhLatestLocation = Get-OmhRedirectLocation $OmhLatestResponse
                     } catch {
                         $OmhLatestError = $_.Exception.Response
-                        if ($OmhLatestError) { $OmhLatestLocation = [string]$OmhLatestError.Headers['Location'] }
+                        $OmhLatestLocation = Get-OmhRedirectLocation $OmhLatestError
                     }
                     if ($OmhLatestLocation -match '/releases/tag/v([0-9]+\.[0-9]+\.[0-9]+)/?$') {
                         $OmhVersion = $Matches[1]
@@ -760,4 +810,10 @@ try {
 # `exit` only when this file was run as a script, which is what CI does. Under
 # `irm ... | iex` there is no script scope, so exiting would close the user's
 # shell on top of the diagnostic they still need to read.
-if ($OmhInstallFailed -and $MyInvocation.MyCommand.Path) { exit $OmhExitCode }
+$OmhInvocationPath = ''
+$OmhInvocationCommand = $MyInvocation.MyCommand
+if ($OmhInvocationCommand) {
+    $OmhInvocationPathProperty = $OmhInvocationCommand.PSObject.Properties['Path']
+    if ($OmhInvocationPathProperty) { $OmhInvocationPath = [string]$OmhInvocationPathProperty.Value }
+}
+if ($OmhInstallFailed -and $OmhInvocationPath) { exit $OmhExitCode }
