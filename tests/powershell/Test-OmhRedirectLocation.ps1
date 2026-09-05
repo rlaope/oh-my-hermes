@@ -7,11 +7,26 @@ Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $script:OmhMutationFailures = @()
 
+function Get-OmhHeaderCapabilityProfile {
+    param([object]$Headers)
+
+    $hasLocation = $false
+    $hasTryGetValues = $false
+    $hasItem = $false
+    if ($null -ne $Headers) {
+        $hasLocation = $null -ne $Headers.PSObject.Properties['Location']
+        $hasTryGetValues = $null -ne $Headers.PSObject.Methods['TryGetValues']
+        $hasItem = $null -ne $Headers.PSObject.Properties['Item']
+    }
+    return "Location=$hasLocation; TryGetValues=$hasTryGetValues; Item=$hasItem"
+}
+
 function Assert-OmhRedirectLocation {
     param(
         [string]$Name,
         [object]$Response,
-        [string]$Expected
+        [string]$Expected,
+        [object]$Headers = $null
     )
 
     try {
@@ -42,7 +57,7 @@ function Assert-OmhRedirectLocation {
         throw $message
     }
 
-    Write-Host "PASS: $Name"
+    Write-Host ('PASS: {0} ({1})' -f $Name, (Get-OmhHeaderCapabilityProfile $Headers))
 }
 
 try {
@@ -82,7 +97,7 @@ try {
     $ps7SuccessHeaders.Add('Location', [string[]]@('https://example.test/ps7-success'))
     Assert-OmhRedirectLocation 'PowerShell 7 success dictionary' ([pscustomobject]@{
         Headers = $ps7SuccessHeaders
-    }) 'https://example.test/ps7-success'
+    }) 'https://example.test/ps7-success' -Headers $ps7SuccessHeaders
 
     # PowerShell 7 error responses expose a Uri Location property and
     # TryGetValues, but no indexer. This shape intentionally uses the Location
@@ -100,7 +115,7 @@ try {
     }
     Assert-OmhRedirectLocation 'PowerShell 7 error response without indexer' ([pscustomobject]@{
         Headers = $ps7ErrorHeaders
-    }) 'https://example.test/ps7-error'
+    }) 'https://example.test/ps7-error' -Headers $ps7ErrorHeaders
 
     # This PSCustomObject has only TryGetValues: no Location adapted property
     # and no Item indexer. The guards keep it pinned to the fallback shape.
@@ -113,13 +128,14 @@ try {
         }
         return $false
     }
+    $tryGetValuesOnlyProfile = Get-OmhHeaderCapabilityProfile $tryGetValuesOnlyHeaders
     if ($tryGetValuesOnlyHeaders.PSObject.Properties['Location'] -or
         $tryGetValuesOnlyHeaders.PSObject.Properties['Item']) {
-        throw 'TryGetValues-only fake unexpectedly exposes a Location property or indexer.'
+        throw "TryGetValues-only fake observed $tryGetValuesOnlyProfile."
     }
     Assert-OmhRedirectLocation 'TryGetValues-only header fallback' ([pscustomobject]@{
         Headers = $tryGetValuesOnlyHeaders
-    }) 'https://example.test/try-get-values'
+    }) 'https://example.test/try-get-values' -Headers $tryGetValuesOnlyHeaders
 
     # Windows PowerShell 5.1 successful requests provide a plain dictionary.
     # Its IDictionary adapter also exposes Location as an adapted property, so
@@ -128,28 +144,27 @@ try {
     $ps51SuccessHeaders.Add('Location', 'https://example.test/ps51-success')
     Assert-OmhRedirectLocation 'Windows PowerShell 5.1 success dictionary' ([pscustomobject]@{
         Headers = $ps51SuccessHeaders
-    }) 'https://example.test/ps51-success'
+    }) 'https://example.test/ps51-success' -Headers $ps51SuccessHeaders
 
     # Windows PowerShell 5.1 error responses use this framework header type.
     $ps51ErrorHeaders = New-Object System.Net.WebHeaderCollection
     $ps51ErrorHeaders.Add('Location', 'https://example.test/ps51-error')
     Assert-OmhRedirectLocation 'Windows PowerShell 5.1 WebHeaderCollection error response' ([pscustomobject]@{
         Headers = $ps51ErrorHeaders
-    }) 'https://example.test/ps51-error'
+    }) 'https://example.test/ps51-error' -Headers $ps51ErrorHeaders
 
-    # NameValueCollection has an Item indexer but is not an IDictionary, so
-    # PowerShell does not adapt Location into a property. It has no
-    # TryGetValues method; the guards pin this to the indexer fallback.
+    # NameValueCollection supports a string-key indexer and has no
+    # TryGetValues method. Its adapter properties differ by host, so the PASS
+    # profile records the observed branch instead of assuming one here.
     $indexerOnlyHeaders = New-Object System.Collections.Specialized.NameValueCollection
     $indexerOnlyHeaders.Add('Location', 'https://example.test/indexer-only')
-    if ($indexerOnlyHeaders.PSObject.Properties['Location'] -or
-        $indexerOnlyHeaders.PSObject.Methods['TryGetValues'] -or
-        -not $indexerOnlyHeaders.PSObject.Properties['Item']) {
-        throw 'Indexer-only fake does not expose exactly the required capability.'
+    $indexerOnlyProfile = Get-OmhHeaderCapabilityProfile $indexerOnlyHeaders
+    if ($indexerOnlyHeaders.PSObject.Methods['TryGetValues']) {
+        throw "NameValueCollection indexer fake observed $indexerOnlyProfile."
     }
-    Assert-OmhRedirectLocation 'Indexer-only header fallback' ([pscustomobject]@{
+    Assert-OmhRedirectLocation 'NameValueCollection indexer fallback' ([pscustomobject]@{
         Headers = $indexerOnlyHeaders
-    }) 'https://example.test/indexer-only'
+    }) 'https://example.test/indexer-only' -Headers $indexerOnlyHeaders
 
     Assert-OmhRedirectLocation 'null response' $null ''
     Assert-OmhRedirectLocation 'response without Headers property' ([pscustomobject]@{}) ''
