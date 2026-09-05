@@ -261,6 +261,22 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
         self.assertEqual(command, expected)
         self.assertFalse(any("try" in part or part in {str(Path.home()), "--share-net"} for part in command))
 
+    def test_linux_owner_state_write_root_is_writable_without_broadening_reads(self) -> None:
+        child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
+        environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1"}
+        with patch("src.quality.cross_harness_adapter_sandbox._trusted_bwrap", return_value="/usr/bin/bwrap"):
+            command = sandbox_command(
+                ("/opt/runtime/bin/tool", "run"), "bwrap", (Path("/opt/fixtures"),), child, False, environment,
+                write_roots=(Path("/home/operator/.claude"),),
+                write_literals=(Path("/home/operator/.claude.json"),),
+            )
+        self.assertIn("--bind-try", command)
+        state_index = command.index("--bind-try")
+        state = str(Path("/home/operator/.claude").resolve())
+        state_file = str(Path("/home/operator/.claude.json").resolve())
+        self.assertEqual(command[state_index:state_index + 6], ("--bind-try", state, state, "--bind-try", state_file, state_file))
+        self.assertNotIn("--ro-bind", command[state_index:])
+
     def test_ambient_path_bwrap_is_never_executed(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

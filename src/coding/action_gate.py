@@ -868,8 +868,9 @@ _DATA_BOUNDARY_STATEMENTS = {
     ),
     "runtime_filesystem_confinement": (
         "Fanout places its owner and dispatcher verification processes under the existing OS sandbox. "
-        "It confines writes, not reads. A particular run reports confinement only after its same-root probe was "
-        "refused outside the unit worktree."
+        "It confines writes, not reads, to the unit worktree and the selected owner's state directories, with any "
+        "owner state file granted as an exact literal and only the two named credential mach-lookup allowances. "
+        "A particular run reports confinement only after its same-run probe wrote every directory root and was refused outside them."
     ),
     "runtime_network_confinement": (
         "Fanout preserves its existing network behavior, so the OS sandbox is not requested to confine network access."

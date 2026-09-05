@@ -12,10 +12,21 @@ from _local_package import load_local_package
 
 load_local_package()
 
-from omh.coding.fanout_confinement import prepare_fanout_filesystem_confinement  # noqa: E402
+from omh.coding.fanout_confinement import (  # noqa: E402
+    _probe,
+    owner_state_directories,
+    owner_state_files,
+    prepare_fanout_filesystem_confinement,
+)
+from omh.quality.cross_harness_adapter_sandbox import (  # noqa: E402
+    ChildContext,
+    runtime_roots,
+    sandbox_command,
+)
 from omh.coding.fanout_dispatch import (  # noqa: E402
     _run_planned_verification,
     _run_verification_command,
+    fanout_child_env,
     signal_safe_unit_runner,
 )
 from omh.system.paths import OmhPaths  # noqa: E402
@@ -39,6 +50,124 @@ def _linked_worktree(root: Path) -> Path:
 
 @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec confinement is exercised on macOS")
 class FanoutFilesystemConfinementTests(unittest.TestCase):
+    def test_owner_state_directories_allow_only_the_selected_owner_state(self) -> None:
+        home = Path("/tmp/fanout-owner-home").resolve()
+        with mock.patch("omh.coding.fanout_confinement.Path.home", return_value=home):
+            self.assertEqual(owner_state_directories("codex", {}), (home / ".codex",))
+            self.assertEqual(owner_state_directories("claude-code", {}), (home / ".claude",))
+            self.assertEqual(owner_state_files("claude-code", {}), (home / ".claude.json",))
+            configured_claude = {"CLAUDE_CONFIG_DIR": str(home / "configured-claude")}
+            self.assertEqual(owner_state_directories("claude-code", configured_claude), (home / "configured-claude",))
+            self.assertEqual(
+                owner_state_files("claude-code", configured_claude),
+                (home / "configured-claude" / ".claude.json",),
+            )
+            self.assertEqual(owner_state_directories("hermes", {}), (home / ".hermes",))
+            for host, expected in {
+                "pi": (home / ".pi" / "agent",),
+                "senpi": (home / ".senpi" / "agent",),
+                "opencode": (
+                    home / ".local" / "share" / "opencode",
+                    home / ".local" / "state" / "opencode",
+                ),
+            }.items():
+                with self.subTest(host=host):
+                    with mock.patch("omh.coding.fanout_dispatch.omo_runtime_host", return_value=host):
+                        self.assertEqual(owner_state_directories("omo-runtime", {}), expected)
+            with mock.patch("omh.coding.fanout_dispatch.omo_runtime_host", return_value="pi"):
+                self.assertEqual(
+                    owner_state_directories("omo-runtime", {"PI_CODING_AGENT_DIR": str(home / "pi-override")}),
+                    (home / "pi-override",),
+                )
+            with mock.patch("omh.coding.fanout_dispatch.omo_runtime_host", return_value="senpi"):
+                self.assertEqual(
+                    owner_state_directories("omo-runtime", {"OMO_CODING_AGENT_DIR": str(home / "omo-state")}),
+                    (home / ".senpi" / "agent",),
+                )
+                self.assertEqual(
+                    owner_state_directories("omo-runtime", {"PI_CODING_AGENT_DIR": str(home / "legacy-pi-override")}),
+                    (home / "legacy-pi-override",),
+                )
+                self.assertEqual(
+                    owner_state_directories(
+                        "omo-runtime",
+                        {
+                            "SENPI_CODING_AGENT_DIR": str(home / "senpi-override"),
+                            "PI_CODING_AGENT_DIR": str(home / "ignored-pi-override"),
+                        },
+                    ),
+                    (home / "senpi-override",),
+                )
+        self.assertEqual(owner_state_directories("unassigned", {}), ())
+
+    def test_omo_runtime_child_env_pins_agent_dir_and_scrubs_senpi_brand(self) -> None:
+        home = Path("/tmp/fanout-owner-home").resolve()
+        cases = {
+            "pi": ("PI_CODING_AGENT_DIR", {}, home / ".pi" / "agent"),
+            "senpi": (
+                "SENPI_CODING_AGENT_DIR",
+                {"PI_CODING_AGENT_DIR": str(home / "legacy-senpi-override")},
+                home / "legacy-senpi-override",
+            ),
+        }
+        for host, (environment_variable, overrides, expected) in cases.items():
+            with (
+                self.subTest(host=host),
+                mock.patch("omh.coding.fanout_confinement.Path.home", return_value=home),
+                mock.patch("omh.coding.fanout_dispatch.omo_runtime_host", return_value=host),
+            ):
+                child_env = fanout_child_env(
+                    {
+                        "SENPI_BRAND": '{"name":"omo","envPrefix":"OMO","configDir":".omo"}',
+                        **overrides,
+                    },
+                    depth=0,
+                    fanout_id="fanout",
+                    unit_id="unit",
+                    owner="omo-runtime",
+                )
+                self.assertEqual(child_env[environment_variable], str(expected))
+                self.assertEqual(owner_state_directories("omo-runtime", child_env), (expected,))
+                self.assertNotIn("SENPI_BRAND", child_env)
+        with mock.patch("omh.coding.fanout_dispatch.omo_runtime_host", return_value="opencode"):
+            child_env = fanout_child_env(
+                {"SENPI_BRAND": "ambient"},
+                depth=0,
+                fanout_id="fanout",
+                unit_id="unit",
+                owner="omo-runtime",
+            )
+        self.assertEqual(child_env["SENPI_BRAND"], "ambient")
+
+    def test_probe_writes_every_owner_state_root(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            worktree = root / "worktree"
+            worktree.mkdir()
+            first_state = root / "first-state"
+            second_state = root / "second-state"
+            first_state.mkdir()
+            second_state.mkdir()
+            child = ChildContext(
+                worktree, worktree, worktree, worktree, worktree,
+                worktree / "request", worktree / "artifact", "confinement-probe",
+            )
+            with (
+                mock.patch("omh.coding.fanout_confinement.sandbox_command", side_effect=lambda argv, *_args, **_kwargs: argv),
+                mock.patch(
+                    "omh.coding.fanout_confinement.subprocess.run",
+                    return_value=subprocess.CompletedProcess(
+                        (),
+                        0,
+                        "owner_state_exit=0\nowner_state_exit=0\ninside_exit=0 owner_state_exit=0 outside_exit=1\n",
+                        "",
+                    ),
+                ),
+            ):
+                receipt = _probe("sandbox-exec", (), (worktree, first_state, second_state), (), child, {}, "digest")
+            command = receipt["probe"]["command"]
+            self.assertTrue(any(str(second_state) in argument for argument in command))
+
     def test_probe_receipt_requires_an_inside_write_and_an_outside_refusal(self) -> None:
         with TemporaryDirectory() as temporary:
             worktree = Path(temporary) / "worktree"
@@ -55,6 +184,114 @@ class FanoutFilesystemConfinementTests(unittest.TestCase):
             self.assertEqual(confinement.receipt["probe"]["inside_write_exit_code"], 0)
             self.assertEqual(confinement.receipt["probe"]["outside_write_exit_code"], 1)
             self.assertIn("Operation not permitted", confinement.receipt["probe"]["refusal"])
+
+    def test_selected_owner_state_is_a_write_only_root_and_escape_routes_stay_refused(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = root / "worktree"
+            worktree.mkdir()
+            state = root / "claude-state"
+            state.mkdir()
+            outside = root / "outside"
+            unrelated_repo = root / "unrelated-repo"
+            unrelated_repo.mkdir()
+            _ = subprocess.run(("/usr/bin/git", "init", "-q"), cwd=unrelated_repo, check=True)
+            source = worktree / "rename-source"
+            source.write_text("source", encoding="utf-8")
+            linked_outside = root / "linked-outside"
+            linked_outside.mkdir()
+            symlink = worktree / "outside-link"
+            symlink.symlink_to(linked_outside, target_is_directory=True)
+            confinement = prepare_fanout_filesystem_confinement(
+                worktree,
+                {"CLAUDE_CONFIG_DIR": str(state)},
+                (("/bin/sh", "-c", "exit 0"),),
+                owner="claude-code",
+            )
+
+            self.assertTrue(confinement.receipt["enforced"])
+            self.assertEqual(confinement.receipt["write_roots"], [str(worktree), str(state)])
+            self.assertEqual(confinement.receipt["write_literals"], [str(state / ".claude.json")])
+            self.assertNotIn(state, confinement.roots)
+            self.assertNotIn(state / ".claude.json", confinement.roots)
+            policy = confinement.command(("/bin/sh", "-c", "exit 0"))[2]
+            self.assertIn(f'(allow file-write* (literal "{state / ".claude.json"}"))', policy)
+            self.assertIn('(allow mach-lookup (global-name "com.apple.securityd.xpc"))', policy)
+            self.assertIn('(allow mach-lookup (global-name "com.apple.SecurityServer"))', policy)
+            self.assertEqual(confinement.receipt["probe"]["owner_state_write_exit_code"], 0)
+            self.assertEqual(confinement.receipt["probe"]["owner_state_write_exit_codes"], [0])
+            write_state = subprocess.run(
+                confinement.command(("/bin/sh", "-c", 'printf state > "$1"', "probe", str(state / "state"))),
+                cwd=worktree,
+                env=confinement.command_environment(),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(write_state.returncode, 0, write_state.stderr)
+            self.assertTrue((state / "state").is_file())
+
+            escapes = {
+                "direct": ('printf direct > "$1"', (outside,)),
+                "child_process": ('/bin/sh -c \'printf child > "$1"\' child "$1"', (outside,)),
+                "rename_out": ('mv "$1" "$2"', (source, outside)),
+                "hardlink_out": ('ln "$1" "$2"', (source, outside)),
+                "symlink_out": ('printf symlink > "$1/file"', (symlink,)),
+                "unrelated_repo": ('printf unrelated > "$1/file"', (unrelated_repo,)),
+            }
+            for name, (script, arguments) in escapes.items():
+                with self.subTest(escape=name):
+                    completed = subprocess.run(
+                        confinement.command(("/bin/sh", "-c", script, name, *(str(path) for path in arguments))),
+                        cwd=worktree,
+                        env=confinement.command_environment(),
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertNotEqual(completed.returncode, 0, completed.stderr)
+            self.assertFalse(outside.exists())
+            self.assertTrue(source.is_file())
+            self.assertFalse((linked_outside / "file").exists())
+            self.assertFalse((unrelated_repo / "file").exists())
+
+    def test_seatbelt_literal_replacement_does_not_grant_descendant_writes(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = root / "worktree"
+            worktree.mkdir()
+            literal = root / "state-file"
+            literal.write_text("state", encoding="utf-8")
+            child = ChildContext(
+                worktree, worktree, worktree, worktree, worktree,
+                worktree / "request", worktree / "artifact", "literal-replacement",
+            )
+            literal.unlink()
+            literal.mkdir()
+            script = (
+                'printf child > "$1/child"; descendant=$?; '
+                'printf "descendant=%s\\n" "$descendant"; test "$descendant" -ne 0'
+            )
+            completed = subprocess.run(
+                sandbox_command(
+                    ("/bin/sh", "-c", script, "literal-replacement", str(literal)),
+                    "sandbox-exec",
+                    (worktree, Path("/bin"), *runtime_roots("sandbox-exec")),
+                    child,
+                    True,
+                    {},
+                    write_literals=(literal,),
+                ),
+                cwd=worktree,
+                env={},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout.strip(), "descendant=1")
+            self.assertTrue(literal.is_dir())
+            self.assertFalse((literal / "child").exists())
 
     def test_confined_command_can_exec_a_real_binary_without_widening_writes(self) -> None:
         with TemporaryDirectory() as temporary:
