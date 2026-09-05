@@ -304,6 +304,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "abcdefghijklmnopqrstuvwxyzaaaaaaaaa",
             "ABCDEFGHIJKLMNOPQRSTUVWXYZaBcdef",
             "J" + "j" * 9 + "K" + "k" * 9 + "L" + "l" * 11,
+            "QwertyuiopaAsdfghjklmObservation",
         )
         uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
         split_opaque = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"
@@ -317,6 +318,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                 self.assertGreater(len(decoded), 0)
             with self.subTest(opaque=opaque):
                 self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
+                self.assertTrue(governance.contains_credential_like_material(opaque))
             for container in (
                 f"/safe/{opaque}/artifact.txt",
                 f"https://example.com/{opaque}/artifact",
@@ -406,6 +408,9 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "HTTPServerConfigurationV2ProjectManager",
             "AlicePlatformReviewer2026Account",
             "AuthenticatedMaintainerObservation",
+            "/safe/AuthenticatedMaintainerObservation/artifact.txt",
+            "https://example.com/AuthenticatedMaintainerObservation/artifact",
+            "@scope/AuthenticatedMaintainerObservation",
             "direview_dprof_e9da83f21e46282d3a9ae020_r1",
             "@scope/hermes-agent-runtime-v2-package",
             "@scope/HermesAgentRuntimeV2PackageManager",

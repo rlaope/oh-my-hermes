@@ -71,8 +71,8 @@ _VERSION_COMPONENT = r"V\d+"
 _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
     rf"(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{4,}}"
 )
-_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
-    rf"(?:{_CAMEL_WORD}){{2}}Observation"
+_SAFE_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIERS = frozenset(
+    {"AuthenticatedMaintainerObservation"}
 )
 _LOWER_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
     rf"[a-z]{{2,}}(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
@@ -92,11 +92,10 @@ _SAFE_REASON_SEGMENT = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
 def _looks_like_structured_identifier(segment: str) -> bool:
-    return any(
+    return segment in _SAFE_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIERS or any(
         pattern.fullmatch(segment)
         for pattern in (
             _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN,
-            _THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIER_PATTERN,
             _LOWER_CAMEL_CASE_IDENTIFIER_PATTERN,
             _ACRONYM_VERSION_IDENTIFIER_PATTERN,
         )

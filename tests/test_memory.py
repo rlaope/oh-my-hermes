@@ -217,6 +217,7 @@ class MemoryContractTests(unittest.TestCase):
             "abcdefghijklmnopqrstuvwxyzaaaaaaaa",
             "ABCDE.FGHIJ.KLMNO.PQRSTUVWXYZaBcdef",
             "abcdefgh.ijklmnop.qrstuvwx.yzabcdef",
+            "QwertyuiopaAsdfghjklmObservation",
         )
         for encoded in encoded_values:
             with self.subTest(encoded=encoded[:8]), TemporaryDirectory() as tmp:
