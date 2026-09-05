@@ -721,7 +721,7 @@ def build_project_memory_status(paths: OmhPaths) -> dict[str, object]:
     expired_records = sum(1 for evaluation in evaluations if str(evaluation["reason_code"]).startswith("expired_"))
     candidate_status_counts: dict[str, int] = {}
     for candidate in candidates:
-        status = str(candidate.get("status", "unknown"))
+        status = _redact_admitted_text(str(candidate.get("status", "unknown")))
         candidate_status_counts[status] = candidate_status_counts.get(status, 0) + 1
     return {
         "schema_version": PROJECT_MEMORY_STATUS_SCHEMA_VERSION,
@@ -4436,8 +4436,8 @@ def _string_list(value: Any) -> list[str]:
 
 
 def _read_project_memory_candidate(paths: OmhPaths, candidate_id: str) -> dict[str, Any] | None:
-    if not _SAFE_REF.match(candidate_id):
-        raise ValueError(f"unsafe memory candidate id: {candidate_id!r}")
+    if not _SAFE_REF.match(candidate_id) or contains_credential_like_material(candidate_id):
+        raise ValueError("unsafe memory candidate id")
     return read_json_object(_memory_candidate_path(paths, candidate_id))
 
 
@@ -4912,9 +4912,16 @@ def _normalize_wrapper_snapshot(snapshot: dict[str, Any]) -> dict[str, object]:
     if snapshot.get("schema_version") != MEMORY_SNAPSHOT_SCHEMA_VERSION:
         raise ValueError("wrapper memory snapshot schema_version must be memory_snapshot/v1")
     source = "wrapper_snapshot"
-    scope = _normalize_scope(snapshot.get("scope", _scope("project", "default")))
+    scope = _redacted_scope(snapshot.get("scope", _scope("project", "default")))
     items = [_sanitize_item(item, default_scope=scope) for item in snapshot.get("items", []) if isinstance(item, dict)]
-    return _snapshot(source, scope, items, claim_boundary=str(snapshot.get("claim_boundary", "Wrapper supplied memory candidates are not trusted until reviewed.")))
+    return _snapshot(
+        source,
+        scope,
+        items,
+        claim_boundary=_redact_admitted_text(
+            str(snapshot.get("claim_boundary", "Wrapper supplied memory candidates are not trusted until reviewed."))
+        ),
+    )
 
 
 def _snapshot(source: str, scope: Any, items: list[dict[str, object]], *, claim_boundary: str = "") -> dict[str, object]:
@@ -4933,14 +4940,14 @@ def _snapshot(source: str, scope: Any, items: list[dict[str, object]], *, claim_
 
 
 def _sanitize_item(item: dict[str, Any], *, default_scope: dict[str, str]) -> dict[str, object]:
-    item_id = str(item.get("item_id") or _stable_ref(item.get("key", "item")))
-    key = str(item.get("key", item_id))
+    item_id = _redact_admitted_text(str(item.get("item_id") or _stable_ref(item.get("key", "item"))))
+    key = _redact_admitted_text(str(item.get("key", item_id)))
     summary = _safe_summary(item)
     sanitized: dict[str, object] = {
         "item_id": item_id,
         "key": key,
         "summary": summary,
-        "scope": _normalize_scope(item.get("scope", default_scope)),
+        "scope": _redacted_scope(item.get("scope", default_scope)),
         "sensitive": bool(item.get("sensitive", False)),
     }
     value = item.get("value")
@@ -4948,7 +4955,7 @@ def _sanitize_item(item: dict[str, Any], *, default_scope: dict[str, str]) -> di
         sanitized["value"] = str(value)
     replay_evaluation = item.get("replay_evaluation")
     if isinstance(replay_evaluation, dict):
-        sanitized["replay_evaluation"] = replay_evaluation
+        sanitized["replay_evaluation"] = _redact_nested_metadata(replay_evaluation)
     return sanitized
 
 
@@ -5169,7 +5176,11 @@ def _validate_domain_handoff_items(value: Any, errors: list[str], label: str) ->
 
 def _contains_sensitive_text(value: Any) -> bool:
     if isinstance(value, dict):
-        return any(_contains_sensitive_text(item) for item in value.values())
+        return any(
+            (isinstance(key, str) and contains_credential_like_material(key))
+            or _contains_sensitive_text(item)
+            for key, item in value.items()
+        )
     if isinstance(value, list):
         return any(_contains_sensitive_text(item) for item in value)
     if isinstance(value, str):
