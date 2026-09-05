@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from ..plugin_bundle.omh.memory_governance import MEMORY_GOVERNANCE_POLICY_VERSION, MEMORY_SCOPE_SCHEMA_VERSION, PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION, SOURCE_CLASSES, build_retention, canonical_memory_scope, canonical_payload_digest, classify_memory_admission, stable_artifact_identity
+from ..plugin_bundle.omh.memory_governance import MEMORY_GOVERNANCE_POLICY_VERSION, MEMORY_SCOPE_SCHEMA_VERSION, PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION, SOURCE_CLASSES, build_retention, canonical_memory_scope, canonical_payload_digest, classify_memory_admission, evaluate_renderable_strings, stable_artifact_identity
 from ..system.local_store import atomic_write_json, ensure_dir, file_lock, read_json_object_result, utc_now
 from ..system.paths import OmhPaths
 from ._memory_store_validation import safe_token
@@ -104,7 +104,11 @@ def _proposal(paths: OmhPaths, raw: object, batch: Mapping[str, object], batch_i
     if not isinstance(raw, Mapping):
         raise ValueError("memory batch update must be an object")
     op, target_ref = str(raw.get("op", "")), str(raw.get("item_id", ""))
-    if op not in _OPS or not safe_token(target_ref):
+    if (
+        op not in _OPS
+        or not safe_token(target_ref)
+        or classify_memory_admission(target_ref)["status"] != "safe"
+    ):
         raise ValueError("invalid memory batch update")
     scope = _scope(raw.get("to_scope") if op == "change_scope" else raw.get("scope"))
     from_scope = _scope(raw.get("from_scope")) if op == "change_scope" else None
@@ -119,6 +123,8 @@ def _proposal(paths: OmhPaths, raw: object, batch: Mapping[str, object], batch_i
     if classify_memory_admission("\n".join((key, value, summary))).get("status") != "safe":
         raise ValueError("unsafe memory batch candidate")
     retention_class = str(raw.get("retention_class", batch.get("retention_class", "standard")))
+    if classify_memory_admission(retention_class)["status"] != "safe":
+        raise ValueError("unsafe memory batch retention class")
     ttl_days = raw.get("ttl_days", batch.get("ttl_days"))
     if ttl_days is not None and (isinstance(ttl_days, bool) or not isinstance(ttl_days, int)):
         raise ValueError("ttl_days must be an integer")
@@ -181,14 +187,45 @@ def _approved_reviews(paths: OmhPaths, candidate: Mapping[str, object]) -> dict[
 
 
 def _revalidate(candidate: Mapping[str, object], reviews: Mapping[str, Mapping[str, object]]) -> None:
+    control_values = (
+        candidate.get("batch_id", ""),
+        candidate.get("stage_operation_id", ""),
+        candidate.get("apply_operation_id", ""),
+        candidate.get("source_surface", ""),
+    )
+    if (
+        any(not safe_token(str(value)) for value in control_values[:3])
+        or any(classify_memory_admission(str(value))["status"] != "safe" for value in control_values)
+        or candidate.get("source_class") not in SOURCE_CLASSES
+    ):
+        raise ValueError("batch candidate control metadata is invalid")
     for item in candidate["items"]:
-        artifact = item["artifact"]
-        if stable_artifact_identity(artifact) != item["artifact_identity"] or canonical_payload_digest(artifact) != item["payload_digest"] or classify_memory_admission("\n".join(str(artifact.get(key, "")) for key in ("key", "value", "summary"))).get("status") != "safe":
+        artifact = item.get("artifact")
+        if not isinstance(artifact, dict):
             raise ValueError("batch candidate linkage or safety is invalid")
-        _scope(artifact["scope"])
+        identifiers = (item.get("item_id", ""), item.get("review_id", ""), item.get("target_ref", ""))
+        if (
+            any(not safe_token(str(value)) for value in identifiers)
+            or any(classify_memory_admission(str(value))["status"] != "safe" for value in identifiers)
+            or item.get("op") not in _OPS
+            or item.get("batch_id") != candidate.get("batch_id")
+            or evaluate_renderable_strings(artifact).get("status") != "safe"
+            or stable_artifact_identity(artifact) != item["artifact_identity"]
+            or canonical_payload_digest(artifact) != item["payload_digest"]
+        ):
+            raise ValueError("batch candidate linkage or safety is invalid")
+        scope = _scope(item["scope"])
+        if scope != artifact.get("scope"):
+            raise ValueError("batch candidate scope linkage is invalid")
+        if item.get("op") == "change_scope":
+            _scope(item["from_scope"])
         build_retention(str(item["retention"]["class"]), record_type="fact", admitted_at=_utc(None), ttl_days=item["retention"].get("ttl_days"))
-        if reviews[item["item_id"]]["decision"] != "remember":
-            raise ValueError("unapproved batch item")
+        review = reviews[item["item_id"]]
+        if (
+            review["decision"] != "remember"
+            or classify_memory_admission(str(review.get("reviewer_label", "")))["status"] != "safe"
+        ):
+            raise ValueError("unapproved or unsafe batch review")
 
 
 def _review_record(candidate: Mapping[str, object], item: Mapping[str, object], decision: str, label: str, reviewed_at: str) -> dict[str, object]:
@@ -215,7 +252,7 @@ def _decisions(candidate: Mapping[str, object], raw: Mapping[str, object] | list
 
 
 def _candidate(paths: OmhPaths, batch_id: str) -> dict[str, Any]:
-    if not safe_token(batch_id):
+    if not safe_token(batch_id) or classify_memory_admission(batch_id)["status"] != "safe":
         raise ValueError("unsafe batch id")
     value, error = read_json_object_result(paths.memory_dir / _candidate_relative(batch_id))
     if error or not isinstance(value, dict) or value.get("schema_version") != BATCH_CANDIDATE_SCHEMA_VERSION or value.get("batch_id") != batch_id or not isinstance(value.get("items"), list) or not value["items"]:
@@ -230,9 +267,14 @@ def _validate_batch(batch: Mapping[str, object]) -> None:
 
 def _scope(value: object) -> dict[str, object]:
     scope = canonical_memory_scope(dict(value) if isinstance(value, Mapping) else {})
-    if not safe_token(scope["kind"]) or not safe_token(scope["ref"]):
+    kind, ref = str(scope["kind"]), str(scope["ref"])
+    if (
+        not safe_token(kind)
+        or not safe_token(ref)
+        or classify_memory_admission("\n".join((kind, ref)))["status"] != "safe"
+    ):
         raise ValueError("unsafe memory scope")
-    return scope
+    return {"kind": kind, "ref": ref}
 
 
 def _existing(paths: OmhPaths, scope: Mapping[str, object], target_ref: str) -> dict[str, Any] | None:
@@ -274,10 +316,12 @@ def _opaque(prefix: str) -> str:
 
 
 def _label(value: object) -> str:
-    text = str(value or "operator").strip()[:120]
+    text = str(value or "operator").strip()
     if not text:
         raise ValueError("reviewer label is required")
-    return text
+    if classify_memory_admission(text)["status"] != "safe":
+        raise ValueError("credential-like batch label is not allowed")
+    return text[:120]
 
 
 def _utc(value: datetime | None) -> datetime:

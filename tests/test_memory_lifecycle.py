@@ -135,6 +135,76 @@ class MemoryLifecycleTests(unittest.TestCase):
             self.assertFalse(conflict.report["eligible"])
             self.assertEqual(conflict.report["reason_code"], "newer_live_revision_conflict")
 
+    def test_restore_rescans_legacy_archive_before_creating_a_candidate(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, executor = _paths(tmp), _Executor()
+            _write_fixture(paths, retention="standard")
+            retirement = build_memory_retirement(paths, "mem-one", 1, now=NOW)
+            apply_memory_retirement(paths, retirement, transaction_executor=executor)
+            archive_path = paths.memory_dir / "archive/mem-one.r1.json"
+            archive = json.loads(archive_path.read_text())
+            credential = "gh" + "u_" + "a" * 36
+            archive["source"] = credential
+            atomic_write_json(archive_path, archive, private=True)
+
+            plan = build_memory_restore(paths, "mem-one", 1, now=NOW, candidate_id="cand-unsafe")
+
+            self.assertFalse(plan.report["eligible"])
+            self.assertEqual(plan.report["reason_code"], "safety_blocked_in_source")
+            self.assertEqual(plan.mutations, ())
+            self.assertNotIn(credential, json.dumps(plan.report, sort_keys=True))
+            self.assertFalse((paths.memory_dir / "candidates/cand-unsafe.json").exists())
+
+    def test_reapproval_rescans_existing_candidate_before_writing_a_record(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, executor = _paths(tmp), _Executor()
+            _write_fixture(paths, retention="standard")
+            apply_memory_retirement(
+                paths,
+                build_memory_retirement(paths, "mem-one", 1, now=NOW),
+                transaction_executor=executor,
+            )
+            restore = build_memory_restore(paths, "mem-one", 1, now=NOW, candidate_id="cand-existing")
+            apply_memory_restore(paths, restore, transaction_executor=executor)
+            candidate_path = paths.memory_dir / "candidates/cand-existing.json"
+            candidate = json.loads(candidate_path.read_text())
+            credential = "gh" + "u_" + "a" * 36
+            candidate["replacement"]["summary"] = credential
+            atomic_write_json(candidate_path, candidate, private=True)
+
+            plan = build_memory_reapproval(paths, "cand-existing", reviewer_claim="reviewer", now=NOW)
+
+            self.assertFalse(plan.report["eligible"])
+            self.assertEqual(plan.report["reason_code"], "safety_blocked_in_summary")
+            self.assertEqual(plan.mutations, ())
+            self.assertNotIn(credential, json.dumps(plan.report, sort_keys=True))
+            self.assertFalse((paths.memory_dir / "records/mem-one.json").exists())
+
+    def test_reapproval_rejects_credential_shaped_reviewer_claim(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths, executor = _paths(tmp), _Executor()
+            _write_fixture(paths, retention="standard")
+            apply_memory_retirement(
+                paths,
+                build_memory_retirement(paths, "mem-one", 1, now=NOW),
+                transaction_executor=executor,
+            )
+            restore = build_memory_restore(paths, "mem-one", 1, now=NOW, candidate_id="cand-reviewer")
+            apply_memory_restore(paths, restore, transaction_executor=executor)
+            credential = "gh" + "u_" + "a" * 36
+
+            plan = build_memory_reapproval(
+                paths,
+                "cand-reviewer",
+                reviewer_claim=credential,
+                now=NOW,
+            )
+
+            self.assertFalse(plan.report["eligible"])
+            self.assertEqual(plan.report["reason_code"], "unsafe_reviewer_claim")
+            self.assertEqual(plan.mutations, ())
+            self.assertNotIn(credential, json.dumps(plan.report, sort_keys=True))
+
     def test_correction_targets_one_revision_and_supersedes_before_replay(self) -> None:
         with TemporaryDirectory() as tmp:
             paths, executor = _paths(tmp), _Executor()
@@ -150,6 +220,27 @@ class MemoryLifecycleTests(unittest.TestCase):
             wrong = build_memory_correction(paths, "mem-one", 1, "ignored", now=NOW, candidate_id="cand-wrong")
             self.assertFalse(wrong.report["eligible"])
             self.assertEqual(original["revision"], 1)
+
+    def test_correction_rejects_credential_shaped_summary_before_creating_a_candidate(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths(tmp)
+            _write_fixture(paths, retention="standard", admitted_at=NOW)
+            credential = "gh" + "u_" + "a" * 36
+
+            plan = build_memory_correction(
+                paths,
+                "mem-one",
+                1,
+                credential,
+                now=NOW,
+                candidate_id="cand-unsafe",
+            )
+
+            self.assertFalse(plan.report["eligible"])
+            self.assertEqual(plan.report["reason_code"], "safety_blocked_in_summary")
+            self.assertEqual(plan.mutations, ())
+            self.assertNotIn(credential, json.dumps(plan.report, sort_keys=True))
+            self.assertTrue((paths.memory_dir / "records/mem-one.json").exists())
 
     def test_prune_is_scoped_and_manifest_mismatch_fails_closed(self) -> None:
         with TemporaryDirectory() as tmp:

@@ -104,6 +104,90 @@ class MemoryBatchTests(TestCase):
 
             self.assertFalse(paths.memory_dir.exists())
 
+    def test_stage_rejects_structural_credentials_without_writing_a_candidate(self) -> None:
+        for value in ("gh" + "u_" + "a" * 36, "Ab3dEf4G" * 5 + "="):
+            with self.subTest(value_kind=value[:4]), TemporaryDirectory() as home:
+                paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+                unsafe = _batch("structural-credential")
+                updates = unsafe["updates"]
+                self.assertIsInstance(updates, list)
+                assert isinstance(updates, list)
+                update = updates[0]
+                self.assertIsInstance(update, dict)
+                assert isinstance(update, dict)
+                update["value"] = value
+
+                with self.assertRaisesRegex(ValueError, "unsafe"):
+                    stage_memory_update_batch(paths, unsafe)
+
+                self.assertFalse(paths.memory_dir.exists())
+
+    def test_batch_surface_and_reviewer_labels_reject_credentials_before_writes(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            unsafe_surface = _batch("unsafe-surface")
+            unsafe_surface["source_surface"] = credential
+
+            with self.assertRaises(ValueError) as surface_error:
+                stage_memory_update_batch(paths, unsafe_surface)
+
+            self.assertNotIn(credential, str(surface_error.exception))
+            self.assertFalse(paths.memory_dir.exists())
+
+            staged = stage_memory_update_batch(paths, _batch("unsafe-reviewer"))
+            decisions = {item["item_id"]: "remember" for item in staged["items"]}
+            with self.assertRaises(ValueError) as reviewer_error:
+                review_memory_update_batch(
+                    paths,
+                    staged["batch_id"],
+                    decisions,
+                    reviewer_label=credential,
+                )
+
+            self.assertNotIn(credential, str(reviewer_error.exception))
+            self.assertFalse((paths.memory_dir / "reviews").exists())
+
+    def test_batch_control_metadata_rejects_credentials_before_candidate_persistence(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        for field in ("item_id", "scope_ref", "retention_class"):
+            with self.subTest(field=field), TemporaryDirectory() as home:
+                paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+                batch = _batch("control-metadata")
+                updates = batch["updates"]
+                assert isinstance(updates, list)
+                update = updates[0]
+                assert isinstance(update, dict)
+                if field == "item_id":
+                    update["item_id"] = credential
+                    update["key"] = "safe_key"
+                elif field == "scope_ref":
+                    update["scope"] = {"kind": "project", "ref": credential}
+                else:
+                    update["retention_class"] = credential
+
+                with self.assertRaises(ValueError) as caught:
+                    stage_memory_update_batch(paths, batch)
+
+                self.assertNotIn(credential, str(caught.exception))
+                self.assertFalse(paths.memory_dir.exists())
+
+    def test_apply_revalidates_tampered_batch_scope_before_any_write(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            staged = self._stage_and_remember(paths, _batch("tampered-scope"))
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["items"][0]["scope"]["ref"] = credential
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(ValueError) as caught:
+                apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertNotIn(credential, str(caught.exception))
+            self.assertFalse((paths.memory_dir / "scopes").exists())
+
     def test_refused_or_deferred_items_never_write(self) -> None:
         with TemporaryDirectory() as home:
             paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")

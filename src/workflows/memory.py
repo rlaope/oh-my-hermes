@@ -33,7 +33,9 @@ from ..plugin_bundle.omh.memory_governance import (
     build_retention,
     canonical_payload_digest,
     classify_memory_admission,
+    contains_credential_like_material,
     evaluate_memory_replay,
+    evaluate_renderable_strings,
     stable_artifact_identity,
 )
 from ..paths import OmhPaths, project_identity
@@ -786,6 +788,42 @@ def capture_project_memory_candidate(
             "reason": "project_memory_disabled",
             "claim_boundary": "Memory capture is disabled by OMH project policy; Hermes global or internal memory is not mutated.",
         }
+    # Structural metadata cannot be safely replaced with a redaction marker:
+    # scope and lineage values participate in lookup semantics, while actor
+    # labels participate in perspective filtering. Reject protected shapes
+    # before normalizers can lowercase them or include them in an exception.
+    structural_values = [
+        str(record_type or ""),
+        str(scope_kind or ""),
+        str(scope_ref or ""),
+        str(retention_class or ""),
+        str(stale_after or ""),
+        str(expires_at or ""),
+        str(observer or ""),
+        str(observed or ""),
+    ]
+    if isinstance(derived_from, (list, tuple)):
+        structural_values.extend(str(ref) for ref in derived_from)
+    elif derived_from is not None:
+        structural_values.append(str(derived_from))
+    structural_safety = _project_memory_safety(
+        "",
+        "",
+        tags=[],
+        source="",
+        source_ref="\n".join(structural_values),
+    )
+    if structural_safety["status"] != "safe":
+        return {
+            "schema_version": PROJECT_MEMORY_CAPTURE_SCHEMA_VERSION,
+            "captured": False,
+            "auto_approved": False,
+            "policy": policy,
+            "reason": "unsafe_project_memory_metadata",
+            "safety": structural_safety,
+            "redaction_policy": "metadata_only",
+            "claim_boundary": "Credential-like structural metadata is rejected before project-memory persistence.",
+        }
     # Absolute deadlines: "the contract ends on the 18th" is a date, not a
     # day count, and forcing the captor to do the subtraction moved the
     # anchor to whenever they happened to run the command. Each absolute
@@ -966,6 +1004,7 @@ def _project_memory_review_card_projection(candidate: dict[str, Any]) -> dict[st
     differ between two cards for the same candidate, so binding them would
     add noise to the fingerprint without adding any guarantee.
     """
+    candidate = _sanitize_project_memory_candidate(candidate)
     safety = candidate.get("safety", {}) if isinstance(candidate.get("safety"), dict) else {}
     return {
         "candidate_id": str(candidate.get("candidate_id", "")),
@@ -1058,6 +1097,11 @@ def approve_project_memory_candidate(
     retention_class: str | None = None,
     expected_revision: str = "",
 ) -> dict[str, object]:
+    reviewer_safety = classify_memory_admission(
+        "\n".join((str(approved_by or ""), str(retention_class or "")))
+    )
+    if reviewer_safety["status"] != "safe":
+        raise ValueError("credential-like project-memory approval metadata is not allowed")
     # Read, validate, and write under ONE hold of the store lock. Reading the
     # candidate outside the lock made the guard advisory: a recapture landing
     # between the revision check and the record write would be approved on the
@@ -1083,6 +1127,10 @@ def approve_project_memory_candidate(
                 f"candidate {candidate_id} is a lifecycle ({candidate.get('lifecycle', 'v2')}) candidate; "
                 "it must be reapproved through the lifecycle path, not plain approval"
             )
+        current_safety = evaluate_renderable_strings(candidate)
+        if current_safety.get("status") != "safe":
+            raise ValueError("project memory candidate no longer passes the current safety policy")
+        candidate = _sanitize_project_memory_candidate(candidate)
         safety = candidate.get("safety", {}) if isinstance(candidate.get("safety"), dict) else {}
         if safety.get("status") == "blocked":
             raise ValueError("blocked memory candidates must be rejected or recaptured without protected raw content")
@@ -1138,7 +1186,16 @@ def reject_project_memory_candidate(
         if expected_revision:
             _require_review_revision(candidate, expected_revision)
         now = utc_now()
-        candidate = {**candidate, "status": "rejected", "reviewed_at": now, "reviewed_by": rejected_by, "rejection_reason": _redact(str(reason or ""))[:300]}
+        safe_rejected_by = _redacted_metadata_label(rejected_by)
+        candidate = _sanitize_project_memory_candidate(
+            {
+                **candidate,
+                "status": "rejected",
+                "reviewed_at": now,
+                "reviewed_by": safe_rejected_by,
+                "rejection_reason": _redact(str(reason or ""))[:300],
+            }
+        )
         _write_project_memory_candidate_unlocked(paths, candidate)
         review = _write_project_memory_review_decision(
             paths,
@@ -1147,7 +1204,7 @@ def reject_project_memory_candidate(
                 "review_id": f"review_{candidate_id}",
                 "candidate_id": candidate_id,
                 "decision": "rejected",
-                "reviewer_claim": rejected_by,
+                "reviewer_claim": safe_rejected_by,
                 "reason": _redact(str(reason or ""))[:300],
                 "reviewed_at": now,
                 "claim_boundary": "Project memory review decisions are prepared governance only, never executor-use evidence.",
@@ -1757,7 +1814,7 @@ def build_memory_rollup(
             {
                 "record_id": str(record.get("record_id", "")),
                 "record_type": str(record.get("record_type", "")),
-                "summary": _redact(str(record.get("summary", "")))[:240],
+                "summary": _redact_admitted_text(str(record.get("summary", "")))[:240],
                 "approved_at": str(record.get("approved_at", "")),
             }
             for record in members
@@ -1765,7 +1822,7 @@ def build_memory_rollup(
         "member_count": len(members),
         "considered_count": considered,
         "truncated_members": truncated_members,
-        "proposed_summary": _redact(proposed_summary)[:240],
+        "proposed_summary": _redact_admitted_text(proposed_summary)[:240],
         "next_action": _rollup_next_action(reason_code),
         "redaction_policy": "metadata_only",
         "claim_boundary": (
@@ -1818,7 +1875,7 @@ def _rollup_next_action(reason_code: str) -> str:
 
 
 def _find_pending_candidate_by_summary(paths: OmhPaths, summary: str) -> str:
-    key = _normalized_summary_key(_redact(summary.strip())[:500])
+    key = _normalized_summary_key(_redact_admitted_text(summary.strip())[:500])
     if not key:
         return ""
     for candidate in _read_project_memory_candidates(paths):
@@ -2562,7 +2619,10 @@ def build_memory_perspectives(paths: OmhPaths) -> dict[str, object]:
     for record in _read_project_memory_records(paths):
         perspective = record.get("perspective")
         if isinstance(perspective, dict) and str(perspective.get("observed", "")):
-            key = (str(perspective.get("observer", "")), str(perspective.get("observed", "")))
+            key = (
+                _redacted_metadata_label(perspective.get("observer", "")),
+                _redacted_metadata_label(perspective.get("observed", "")),
+            )
             pairs[key] = pairs.get(key, 0) + 1
         else:
             unscoped += 1
@@ -2633,7 +2693,7 @@ def build_memory_lineage(paths: OmhPaths, record_id: str, *, depth: int = 3) -> 
     }
     base = {
         "schema_version": MEMORY_LINEAGE_SCHEMA_VERSION,
-        "record_id": str(record_id),
+        "record_id": _redacted_metadata_label(record_id),
         "depth": depth,
         "redaction_policy": "metadata_only",
         "claim_boundary": (
@@ -2672,7 +2732,12 @@ def build_memory_lineage(paths: OmhPaths, record_id: str, *, depth: int = 3) -> 
                 if ref not in records:
                     if (ref, node_id) not in seen_unresolved:
                         seen_unresolved.add((ref, node_id))
-                        unresolved.append({"record_id": ref, "referenced_by": node_id})
+                        unresolved.append(
+                            {
+                                "record_id": _redacted_metadata_label(ref),
+                                "referenced_by": _redacted_metadata_label(node_id),
+                            }
+                        )
                     continue
                 visited.add(ref)
                 ancestors.append(_lineage_card(records[ref], depth=hop, due_soon_days=window))
@@ -2718,15 +2783,17 @@ def build_memory_lineage(paths: OmhPaths, record_id: str, *, depth: int = 3) -> 
 
 def _lineage_card(record: dict[str, Any], *, depth: int, due_soon_days: int | None = None) -> dict[str, object]:
     return {
-        "record_id": str(record.get("record_id", "")),
+        "record_id": _redacted_metadata_label(record.get("record_id", "")),
         "depth": depth,
         "record_type": str(record.get("record_type", "")),
-        "summary": _redact(str(record.get("summary", "")))[:500],
-        "scope": _normalize_scope(record.get("scope", _scope("project", "default"))),
+        "summary": _redact_admitted_text(str(record.get("summary", "")))[:500],
+        "scope": _redacted_scope(record.get("scope", _scope("project", "default"))),
         "tags": _normalize_tags(record.get("tags", [])),
         "approved_at": str(record.get("approved_at", "")),
         "staleness": _record_staleness(record, due_soon_days=due_soon_days),
-        "derived_from": _string_list(record.get("derived_from", [])),
+        "derived_from": [
+            _redacted_metadata_label(ref) for ref in _string_list(record.get("derived_from", []))
+        ],
     }
 
 
@@ -3311,7 +3378,7 @@ def _build_project_memory_candidate(
 ) -> dict[str, object]:
     normalized_type = _normalize_record_type(record_type)
     scope = _scope_for_project_memory(scope_kind, scope_ref)
-    raw_tags = _normalize_tags(tags, redact_sensitive=False)
+    raw_tags = [unicodedata.normalize("NFC", str(value)).strip() for value in tags]
     normalized_tags = _normalize_tags(raw_tags)
     content_text = str(content or "")
     safety = _project_memory_safety(
@@ -3361,7 +3428,7 @@ def _build_project_memory_candidate(
         "candidate_id": candidate_id,
         "status": status,
         "record_type": normalized_type,
-        "summary": _redact(summary.strip())[:500],
+        "summary": _redact_admitted_text(summary.strip())[:500],
         "scope": scope,
         "tags": normalized_tags,
         "source": _redact(str(source or "cli")),
@@ -3477,7 +3544,7 @@ def _record_from_candidate(
         "candidate_id": str(candidate.get("candidate_id", "")),
         "revision": 1,
         "record_type": record_type,
-        "summary": _redact(str(candidate.get("summary", "")))[:500],
+        "summary": _redact_admitted_text(str(candidate.get("summary", "")))[:500],
         "scope": scope,
         "tags": _normalize_tags(candidate.get("tags", [])),
         "source": _redact(str(candidate.get("source", "cli"))),
@@ -3634,9 +3701,9 @@ def _recall_item(
 ) -> dict[str, object]:
     evidence = _replay_evaluation(record, evaluation)
     return {
-        "record_id": str(record.get("record_id", "")),
+        "record_id": _redacted_metadata_label(record.get("record_id", "")),
         "record_type": str(record.get("record_type", "")),
-        "summary": _redact(str(record.get("summary", "")))[:500],
+        "summary": _redact_admitted_text(str(record.get("summary", "")))[:500],
         "scope": _normalize_scope(record.get("scope", _scope("project", "default"))),
         "tags": _normalize_tags(record.get("tags", [])),
         "source": str(record.get("source", "")),
@@ -3659,7 +3726,7 @@ def _recall_exclusion(
 ) -> dict[str, object]:
     evidence = _replay_evaluation(record, evaluation)
     return {
-        "record_id": str(record.get("record_id", "")),
+        "record_id": _redacted_metadata_label(record.get("record_id", "")),
         "reason": reason or str(evidence["reason_code"]),
         "staleness": staleness,
         **_recall_evidence_fields(evidence),
@@ -3747,6 +3814,8 @@ def freshness_reason_detail(reason_code: str) -> str:
 
 def _recall_evidence_fields(value: Any) -> dict[str, object]:
     evidence = value if isinstance(value, dict) else {}
+    safe_evidence = _redact_nested_metadata(evidence)
+    evidence = safe_evidence if isinstance(safe_evidence, dict) else {}
     return {
         "revision": int(evidence.get("revision", 0) or 0),
         "admission_mode": str(evidence.get("admission_mode") or ""),
@@ -4343,11 +4412,17 @@ def _normalize_tags(values: Any, *, redact_sensitive: bool = True) -> list[str]:
     tags: list[str] = []
     seen: set[str] = set()
     for value in values:
-        tag = unicodedata.normalize("NFC", str(value)).strip().lower()
-        if not tag or not _SAFE_TAG.match(tag):
+        raw_tag = unicodedata.normalize("NFC", str(value)).strip()
+        if not raw_tag:
             continue
-        if redact_sensitive and _looks_sensitive(tag):
+        if raw_tag == "[redacted]":
+            tag = raw_tag
+        elif redact_sensitive and _looks_sensitive(raw_tag):
             tag = "[redacted]"
+        else:
+            tag = raw_tag.lower()
+            if not _SAFE_TAG.match(tag):
+                continue
         if tag not in seen:
             tags.append(tag)
             seen.add(tag)
@@ -4880,7 +4955,7 @@ def _sanitize_item(item: dict[str, Any], *, default_scope: dict[str, str]) -> di
 def _safe_summary(item: dict[str, Any]) -> str:
     summary = str(item.get("summary", ""))
     if summary:
-        return _redact(summary)
+        return _redact_admitted_text(summary)
     key = str(item.get("key", item.get("item_id", "item")))
     value = str(item.get("value", ""))
     if key in _PROMPTISH_KEYS or item.get("sensitive"):
@@ -4899,17 +4974,75 @@ def _safe_to_expose_value(key: str, value: Any, item: dict[str, Any]) -> bool:
     return len(text) <= 240
 
 
+def _redacted_metadata_label(value: Any) -> str:
+    text = str(value or "")
+    return "redacted" if _looks_sensitive(text) else text
+
+
+def _redact_nested_metadata(value: Any) -> Any:
+    if isinstance(value, str):
+        return _redact(value)
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for index, (key, nested) in enumerate(value.items()):
+            safe_key = _redact_admitted_text(str(key))
+            if safe_key in sanitized:
+                safe_key = f"redacted_{index}"
+            sanitized[safe_key] = _redact_nested_metadata(nested)
+        return sanitized
+    if isinstance(value, (list, tuple)):
+        return [_redact_nested_metadata(nested) for nested in value]
+    return value
+
+
+def _redacted_scope(value: Any) -> dict[str, str]:
+    scope = _normalize_scope(value)
+    return {
+        "kind": _redacted_metadata_label(scope.get("kind", "project")) or "project",
+        "ref": _redacted_metadata_label(scope.get("ref", "default")) or "default",
+    }
+
+
+def _sanitize_project_memory_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    nested = _redact_nested_metadata(candidate)
+    sanitized = nested if isinstance(nested, dict) else {}
+    sanitized["summary"] = _redact_admitted_text(str(candidate.get("summary", "")))[:500]
+    sanitized["tags"] = _normalize_tags(candidate.get("tags", []))
+    sanitized["source"] = _redact(str(candidate.get("source", "")))
+    sanitized["source_ref"] = _redact(str(candidate.get("source_ref", "")))[:160]
+    sanitized["scope"] = _redacted_scope(candidate.get("scope", _scope("project", "default")))
+    if "derived_from" in candidate:
+        sanitized["derived_from"] = [
+            _redacted_metadata_label(ref) for ref in _string_list(candidate.get("derived_from", []))
+        ]
+    if isinstance(candidate.get("perspective"), dict):
+        sanitized["perspective"] = {
+            str(key): _redacted_metadata_label(value)
+            for key, value in candidate["perspective"].items()
+        }
+    if isinstance(candidate.get("source_evidence"), dict):
+        sanitized["source_evidence"] = _redact_nested_metadata(candidate["source_evidence"])
+    return sanitized
+
+
 def _redact(value: str) -> str:
     if _looks_sensitive(value):
         return "[redacted]"
     return value[:240]
 
 
+def _redact_admitted_text(value: str) -> str:
+    if contains_credential_like_material(value):
+        return "[redacted]"
+    return value[:500]
+
+
 def _looks_sensitive(value: str) -> bool:
     lowered = value.lower()
-    if any(marker in lowered for marker in ("secret", "token", "password", "private-key", "api_key", "apikey")):
-        return True
-    return classify_memory_admission(value).get("status") == "blocked"
+    return any(
+        marker in lowered
+        for marker in ("secret", "token", "password", "private-key", "api_key", "apikey")
+    ) or contains_credential_like_material(value)
 
 
 def _validate_allowed_keys(value: dict[str, Any], allowed: set[str], errors: list[str], label: str) -> None:
@@ -5040,7 +5173,7 @@ def _contains_sensitive_text(value: Any) -> bool:
     if isinstance(value, list):
         return any(_contains_sensitive_text(item) for item in value)
     if isinstance(value, str):
-        return _looks_sensitive(value)
+        return contains_credential_like_material(value)
     return False
 
 

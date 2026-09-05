@@ -27,6 +27,7 @@ from omh.memory import (
     approve_project_memory_candidate,
     build_handoff_context_pack,
     build_memory_inspection,
+
     apply_memory_retirement,
     build_memory_retirement,
     build_memory_review_card,
@@ -137,7 +138,15 @@ class MemoryContractTests(unittest.TestCase):
         credentials = (
             AWS_ACCESS_KEY_ID,
             "gh" + "p_" + "a" * 36,
+            "gh" + "u_" + "a" * 36,
+            "github_pat_" + "a" * 24,
+            "glpat-" + "a" * 24,
+            "npm_" + "a" * 36,
+            "hf_" + "a" * 24,
             "sk" + "-" + "a" * 48,
+            "sk_" + "live_" + "a" * 32,
+            "ya29." + "a" * 40,
+            "Bearer synthetic-credential-value",
             "https://user:pass@example.com",
             "-----BEGIN PRIVATE KEY-----",
         )
@@ -166,6 +175,147 @@ class MemoryContractTests(unittest.TestCase):
                 self.assertNotIn(credential, json.dumps(rejected, sort_keys=True))
                 self.assertFalse((paths.memory_dir / "records").exists())
 
+    def test_opaque_values_are_classified_before_tag_normalization_and_redacted_from_review(self) -> None:
+        opaque_summary = "Ab3dEf4Ghi5Jk6Lm7No8Pq9Rs0Tu1Vw2Xy3Z"
+        opaque_tag = "AbCdEfGhIjKlMnOpQrSt_-UvWxYzAbCdEf"
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+
+            captured = capture_project_memory_candidate(
+                paths,
+                opaque_summary,
+                tags=[opaque_tag],
+                source="cli",
+            )
+            candidate = captured["candidate"]
+            review = build_project_memory_review(paths, candidate_id=candidate["candidate_id"])
+
+            self.assertEqual(candidate["safety"]["status"], "needs_review")
+            self.assertFalse(captured["auto_approved"])
+            self.assertEqual(candidate["summary"], "[redacted]")
+            self.assertEqual(candidate["tags"], ["[redacted]"])
+            self.assertNotIn(opaque_summary, json.dumps(captured, sort_keys=True))
+            self.assertNotIn(opaque_tag.lower(), json.dumps(captured, sort_keys=True).lower())
+            self.assertNotIn(opaque_summary, json.dumps(review, sort_keys=True))
+            self.assertNotIn(opaque_tag.lower(), json.dumps(review, sort_keys=True).lower())
+
+            approved = approve_project_memory_candidate(paths, candidate["candidate_id"])
+            self.assertEqual(approved["record"]["summary"], "[redacted]")
+            self.assertEqual(approved["record"]["tags"], ["[redacted]"])
+            self.assertNotIn(opaque_summary, json.dumps(approved, sort_keys=True))
+            self.assertNotIn(opaque_tag.lower(), json.dumps(approved, sort_keys=True).lower())
+
+    def test_recall_rescans_legacy_source_without_rewriting_the_record(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+            captured = capture_project_memory_candidate(
+                paths,
+                "Legacy source metadata recall fixture",
+                source="cli",
+            )
+            record_id = captured["record"]["record_id"]
+            record_path = paths.memory_dir / "records" / f"{record_id}.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["source"] = credential
+            record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            legacy_bytes = record_path.read_bytes()
+
+            recall = build_project_memory_recall_pack(paths, "legacy source metadata")
+
+            self.assertEqual(recall["record_count"], 0)
+            self.assertEqual(recall["excluded_records"][0]["reason"], "safety_blocked_in_source")
+            self.assertNotIn(credential, json.dumps(recall, sort_keys=True))
+            self.assertEqual(record_path.read_bytes(), legacy_bytes)
+
+    def test_legacy_candidate_review_and_rejection_mask_protected_fields(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            captured = capture_project_memory_candidate(paths, "Safe legacy candidate")
+            candidate_id = captured["candidate"]["candidate_id"]
+            candidate_path = paths.memory_dir / "candidates" / f"{candidate_id}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["summary"] = credential
+            candidate["record_type"] = credential
+            candidate["created_at"] = credential
+            candidate["duplicate_of"] = credential
+            candidate["time_sensitivity"] = {"next_action": credential}
+            candidate["tags"] = [credential]
+            candidate["source"] = credential
+            candidate["source_ref"] = credential
+            candidate["source_evidence"] = {credential: {"nested": credential}}
+            candidate["scope"]["ref"] = credential
+            candidate["perspective"] = {"observer": "hermes", "observed": credential}
+            candidate["safety"]["detail"] = credential
+            candidate[credential] = credential
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            review = build_project_memory_review(paths, candidate_id=candidate_id)
+            rejected = reject_project_memory_candidate(paths, candidate_id, reason=credential)
+
+            self.assertNotIn(credential, json.dumps(review, sort_keys=True))
+            self.assertNotIn(credential, json.dumps(rejected, sort_keys=True))
+            self.assertNotIn(credential, candidate_path.read_text(encoding="utf-8"))
+
+    def test_legacy_candidate_approval_rescans_all_renderable_fields(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            captured = capture_project_memory_candidate(paths, "Safe legacy approval candidate")
+            candidate_id = captured["candidate"]["candidate_id"]
+            candidate_path = paths.memory_dir / "candidates" / f"{candidate_id}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["time_sensitivity"] = {"reason": credential}
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(ValueError) as caught:
+                approve_project_memory_candidate(paths, candidate_id)
+
+            self.assertNotIn(credential, str(caught.exception))
+            self.assertFalse((paths.memory_dir / "records").exists())
+
+    def test_excluded_legacy_scope_never_leaks_through_replay_evidence(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+            captured = capture_project_memory_candidate(paths, "Safe scope replay fixture")
+            record_id = captured["record"]["record_id"]
+            record_path = paths.memory_dir / "records" / f"{record_id}.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["scope"]["ref"] = credential
+            record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            legacy_bytes = record_path.read_bytes()
+
+            recall = build_project_memory_recall_pack(paths, "scope replay fixture")
+
+            self.assertEqual(recall["record_count"], 0)
+            self.assertNotIn(credential, json.dumps(recall, sort_keys=True))
+            self.assertEqual(record_path.read_bytes(), legacy_bytes)
+
+    def test_legacy_record_inspection_views_mask_structural_credentials(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+            captured = capture_project_memory_candidate(paths, "Safe inspection fixture")
+            record_id = captured["record"]["record_id"]
+            record_path = paths.memory_dir / "records" / f"{record_id}.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["scope"]["ref"] = credential
+            record["derived_from"] = [credential]
+            record["perspective"] = {"observer": "hermes", "observed": credential}
+            record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            lineage = memory_workflow.build_memory_lineage(paths, record_id)
+            perspectives = memory_workflow.build_memory_perspectives(paths)
+
+            self.assertNotIn(credential, json.dumps(lineage, sort_keys=True))
+            self.assertNotIn(credential, json.dumps(perspectives, sort_keys=True))
+
     def test_project_memory_auto_safe_policy_auto_approves_safe_candidates(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -176,6 +326,74 @@ class MemoryContractTests(unittest.TestCase):
             self.assertTrue(captured["auto_approved"])
             self.assertEqual(captured["record"]["schema_version"], "project_memory_record/v2")
             self.assertEqual(build_project_memory_status(paths)["counts"]["approved_records"], 1)
+
+    def test_safe_credential_vocabulary_remains_visible_in_auto_safe_memory(self) -> None:
+        summary = "Use token-based parsing with the secret-management policy"
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+
+            captured = capture_project_memory_candidate(paths, summary)
+
+            self.assertTrue(captured["auto_approved"])
+            self.assertEqual(captured["candidate"]["summary"], summary)
+            self.assertEqual(captured["record"]["summary"], summary)
+            recall = build_project_memory_recall_pack(paths, "parsing policy")
+            self.assertEqual(recall["included_records"][0]["summary"], summary)
+            self.assertEqual(validate_project_memory_recall_pack(recall), [])
+
+    def test_structural_capture_metadata_rejects_credentials_without_serializing_them(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        cases = (
+            {"record_type": credential},
+            {"scope_kind": credential},
+            {"scope_ref": credential},
+            {"retention_class": credential},
+            {"stale_after": credential},
+            {"observed": credential},
+            {"derived_from": [credential]},
+        )
+        for kwargs in cases:
+            with self.subTest(field=next(iter(kwargs))), TemporaryDirectory() as tmp:
+                paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+                write_setup_profile(paths, memory_mode="auto-safe")
+
+                captured = capture_project_memory_candidate(paths, "Safe summary", **kwargs)
+
+                self.assertFalse(captured["captured"])
+                self.assertFalse(captured["auto_approved"])
+                self.assertEqual(captured["reason"], "unsafe_project_memory_metadata")
+                self.assertNotIn(credential, json.dumps(captured, sort_keys=True))
+                self.assertFalse((paths.memory_dir / "candidates").exists())
+                self.assertFalse((paths.memory_dir / "records").exists())
+
+    def test_reviewer_metadata_cannot_serialize_credentials(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            approve_candidate = capture_project_memory_candidate(paths, "Approve fixture")["candidate"]
+
+            with self.assertRaises(ValueError) as approval_error:
+                approve_project_memory_candidate(
+                    paths,
+                    approve_candidate["candidate_id"],
+                    approved_by=credential,
+                )
+
+            self.assertNotIn(credential, str(approval_error.exception))
+            self.assertFalse((paths.memory_dir / "records").exists())
+
+            reject_candidate = capture_project_memory_candidate(paths, "Reject fixture")["candidate"]
+            rejected = reject_project_memory_candidate(
+                paths,
+                reject_candidate["candidate_id"],
+                rejected_by=credential,
+                reason=credential,
+            )
+
+            self.assertNotIn(credential, json.dumps(rejected, sort_keys=True))
+            candidate_path = paths.memory_dir / "candidates" / f"{reject_candidate['candidate_id']}.json"
+            self.assertNotIn(credential, candidate_path.read_text(encoding="utf-8"))
 
     def test_staleness_uses_injected_now_and_utc_naive_rule(self) -> None:
         with TemporaryDirectory() as tmp:
