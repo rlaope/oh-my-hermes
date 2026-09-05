@@ -207,6 +207,59 @@ Maintenance paths such as reconciling a `--full` install back to core live in
 
 <br>
 
+## What you get
+
+**01 · Astra only where Astra is the difference**
+
+Same 30 coding tasks, same GPT-6 Astra, same 18 solved. Plain Hermes: $4.29
+and 23 minutes. Through OMH: $0.66 and 5 minutes. OMH scores every request
+before it dispatches anything. Routine work goes to the quick lane; "find
+every reference to X" goes to the model that will not miss one. The per-task
+table is in the [benchmark README](benchmarks/live-model-tools/v1/README.md).
+
+**02 · Fan-out that comes back as data, not prose**
+
+`ulw-work` splits an accepted plan into units that never share a file, gives
+each one its own worktree branched from a single pinned SHA, and reads back a
+typed sidecar per unit: process exited, schema valid, verification observed,
+integration ready. Four states, never one "done". A unit that exited 0 with
+no evidence stays `reported done` until something checks it.
+
+<p align="center">
+  <img src="assets/omh-terminal-ulw-work-session.png" alt="An ulw-work run: parallel lanes with disjoint file ownership, each with its own status row" width="1080">
+</p>
+
+**03 · A contract per model, not per vendor**
+
+`gpt-6-astra` is not "a GPT". OMH carries its documented effort ladder (a
+`low` floor, no `none`), Responses-only tool calling, and list price with the
+source cited, and keys the route resolver, the HUD cost line, and the
+calibration block off the exact id. The calibration is two sentences and it
+is measured: the first draft made Astra keep working on tasks it would not
+pass, cost 10% more for the same result, and was cut on that number.
+
+**04 · A HUD that shows only what it can prove**
+
+One row per delegated lane: model, effort, turn, tokens, cost, live. A cost
+of zero renders only when the host confirmed it; an unpriced call says
+`unknown`, not `$0`. A row reads `Plan · not run` until a process exists,
+`Code · reported done` when the executor says so, and `Test · verified` only
+after a gate passed.
+
+<p align="center">
+  <img src="assets/omh-terminal-boot-hud.png" alt="The OH-MY-HERMES HUD: per-lane rows with model, effort, turn, tokens, and cost" width="1080">
+</p>
+
+**05 · One catalog, 120+ workflows, byte-gated**
+
+Every skill Hermes can route to is generated from one source: the `SKILL.md`
+files, the workflow reference, the capability families, and the routing
+corpus with its negative controls. A one-character drift fails CI. Say the
+trigger in chat, in English or Korean, and the router names every signal it
+used to pick the workflow.
+
+<br>
+
 ## The OH-MY-HERMES terminal
 
 Bare `omh` opens Hermes — the same door as `hermes` — wearing the OMH
