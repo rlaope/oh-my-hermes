@@ -517,30 +517,29 @@ rest. Full catalog: [Workflow Reference](docs/WORKFLOWS.md).
 
 ## What OMH Adds
 
-OMH treats model choice and coding ownership as separate decisions, and it
-never reports preparation as execution. Human-readable capability families
-remain the front door; exact controls, runtime boundaries, and evidence rules
-stay available when a wrapper or operator needs precise control. The full
-generated catalog, triggers, harnesses, and evidence rules live in
-[Workflow Reference](docs/WORKFLOWS.md).
+Hermes Agent already runs the loop. OMH decides what goes into it: which
+model and effort each lane gets, who owns the code change, which skills
+apply, and what counts as done. Two rules hold everywhere — model choice
+and coding ownership are separate decisions, and nothing prepared is ever
+reported as executed. The generated catalog, triggers, and evidence rules
+live in [Workflow Reference](docs/WORKFLOWS.md).
 
 **Highlights**
 
 | Intelligence | What OMH adds |
 | --- | --- |
-| 🧭 **Mixture-of-models routing** | Routes each delegated lane onto a category (model + reasoning effort) applied per dispatch, with editable fallback chains that advance when a provider rejects a model — and honest `failed` rows when a child did no work. |
-| 🖥️ **Native TUI surface** | The OMH HUD (live delegation rows with category, turn, cost, cache), the phase todo checklist above the prompt, `parallel shot ×N` branding, full-row diff bands, and four managed skins (sky, amber, crimson, mono) you switch from an arrow-key picker with `omh theme` — all installed next to Hermes, never patching it. |
-| 📋 **Phase-structured plans** | `todo init` declares phases and tasks before engine work so runs walk a bounded checklist instead of an open-ended reasoning loop. |
-| ⚡ **Observed parallel work** | Splits independent work into explicit fanout units with isolated ownership, progress observation, and verification gates. |
-| 🎼 **Maestro handoffs** | Prepares handoffs to explicit coding owners and runtime profiles without becoming a hidden executor or treating preparation as execution. |
-| 🧠 **Context intelligence** | Projects compact, reviewed repository context without inventing hidden memory or silently changing the selected route. |
-| 📚 **Just-in-time learning** | Selects the highest-value learning target for the current blocker and prepares source-backed, application-first guidance without claiming learning already happened. |
-| 🔍 **Evidence-bound delivery** | Separates prepared intent, observed runtime activity, and verified outcomes across coding, review, CI, and merge work. |
-| 🔎 **Structural code search** | A measured `ast-grep` playbook — structural queries across 28 languages, body-capture bans, grep fallback — injected where executors search code; OMH detects the binary and never runs it. |
-| 🗄️ **Project memory system** | A deterministic file-backed memory provider Hermes can load, reviewed project-memory commands (inspect, pack, domain capture), consolidation-scheduling briefs, and memory review skills — never reading or patching Hermes' opaque internal memory. |
-| 🛠️ **Coding harnesses & guardrails** | Executor readiness probes, capability snapshots and owner-fit reports on prepared handoffs, code-mode discipline on `execute_code` results, and user-authored toolcall rules that block an off-script tool call with your rule text. |
-| ♾️ **Ultra workflow engines** | Parallel delivery lanes with disjoint ownership, measured goal loops with ledgers and real completion gates, and decision-frontier interviews that clarify intent before any engine runs — the ULW engines are listed in Ultra-Skills below. |
-| 📦 **A deterministic skill catalog** | 120+ installable workflow skills with a byte-exact generated catalog, routing precision corpora (negative controls included), and drift gates that fail CI on one-character divergence. |
+| 🧭 **Mixture-of-models routing** | Every delegated lane lands on a category (model + reasoning effort) at dispatch time. Chains fall through when a provider rejects a model, and a child that did no work shows `failed`, never a green row. |
+| 🎛️ **Per-family calibration** | Prompting is tuned per model family and generation — GPT-6 Astra, GPT-5.6, Claude 5.1, GLM 5.3, Kimi, Gemini, Qwen, DeepSeek and more — and each tune is kept only while the benchmark pair says it helps. |
+| 🗂️ **Categories you own** | Nine shipped categories per executor, with `omh model-chains set` to reorder, an entitlement interview that reorders chains per machine, and a live view of what a request would route to before it runs. |
+| 🖥️ **Native TUI surface** | The OMH HUD (live rows with category, turns, cost, cache), the phase todo above the prompt, `parallel shot ×N`, full-row diff bands, and managed skins — installed beside Hermes, never patching it. |
+| ⚡ **Observed parallel work** | Independent work splits into fanout units with disjoint file ownership, admission control under provider pressure, typed result sidecars, and verification gates that read what came back. |
+| 🎼 **Maestro handoffs** | An explicit second lane for Codex, Claude Code, or another CLI: readiness probes, capability snapshots, owner-fit reports, and per-run model and effort — opt-in, and never the default path. |
+| 💸 **Priced cost telemetry** | Token counts and dollar figures on every HUD row and run summary, priced from a rate table that cites its source; an unpriceable run reads `unknown`, never `$0`. |
+| 🧠 **Long-term project memory** | A file-backed memory provider Hermes loads, admission and retention policies, reviewer-gated writes, and recall packs with freshness and budget — Hermes' own memory stays untouched. |
+| 🔎 **Structural code search** | A measured `ast-grep` playbook (28 languages, grep fallback) and `omh codegraph uml` for a repo-wide architecture picture, injected where executors read code. |
+| 🛡️ **Guardrails you write** | Toolcall rules that block an off-script call with your own rule text, a completion-integrity gate that refuses stubs and skipped tests as evidence, and an approval tier for risky actions. |
+| ♾️ **Ultra workflow engines** | Parallel delivery lanes, measured goal loops with ledgers and real completion gates, and decision-frontier interviews before any engine runs — listed in Ultra-Skills above. |
+| 📦 **A deterministic catalog** | A hundred-plus installable skills generated from one source, routing precision corpora with negative controls, and drift gates that fail CI on a single divergent byte. |
 
 <br>
 

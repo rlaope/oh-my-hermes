@@ -399,29 +399,29 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 
 ## OMH가 더하는 것
 
-OMH는 모델 선택과 코딩 소유권을 서로 다른 결정으로 다루며, 준비를 실행으로
-보고하지 않습니다. 사람이 이해하기 쉬운 기능군은 계속 첫 진입점으로 남고,
-정밀한 제어·runtime 경계·증거 규칙은 wrapper나 operator가 필요할 때 확인할 수
-있습니다. 전체 목록과 trigger, harness, 증거 규칙은
+Hermes Agent는 이미 루프를 돌립니다. OMH는 그 루프에 무엇을 넣을지 정합니다.
+어느 lane에 어떤 모델과 추론 강도를 줄지, 코드 변경의 owner는 누구인지,
+어떤 스킬이 적용되는지, 무엇을 완료로 볼지입니다. 어디서나 두 규칙이
+지켜집니다. 모델 선택과 코딩 소유권은 별개의 결정이고, 준비된 것은 절대
+실행된 것으로 보고하지 않습니다. 생성 카탈로그와 trigger, 증거 규칙은
 [Workflow Reference](docs/WORKFLOWS.md)에 있습니다.
 
 **하이라이트**
 
 | 인텔리전스 | OMH가 더하는 것 |
 | --- | --- |
-| 🧭 **Mixture-of-models 라우팅** | 위임되는 lane마다 카테고리(모델 + 추론 강도)를 dispatch 단위로 적용하고, provider가 모델을 거부하면 편집 가능한 fallback chain을 따라 전진합니다 — 일을 하지 않은 자식은 정직하게 `failed`로 표시됩니다. |
-| 🖥️ **네이티브 TUI 표면** | OMH HUD(카테고리·턴·비용·캐시가 붙은 실시간 delegation 행), 프롬프트 위 phase todo 체크리스트, `parallel shot ×N` 표시, full-row diff 밴드, 관리형 스킨 — 모두 Hermes 옆에 설치되며 Hermes를 패치하지 않습니다. |
-| 📋 **Phase 구조 플랜** | `todo init`이 엔진 작업 전에 phase와 task를 선언해, 실행이 열린 추론 루프가 아니라 유한한 체크리스트를 걷게 합니다. |
-| ⚡ **관측 가능한 병렬 작업** | 독립적인 작업을 소유권이 분리된 fanout unit으로 나누고, 진행 상황과 verification gate를 관측합니다. |
-| 🎼 **Maestro handoff** | 숨은 executor가 되거나 준비를 실행으로 취급하지 않으면서 명시적인 코딩 owner와 runtime profile을 위한 handoff를 준비합니다. |
-| 🧠 **컨텍스트 인텔리전스** | 숨은 기억을 지어내거나 선택된 route를 몰래 바꾸지 않고, 검토된 저장소 컨텍스트를 간결하게 투영합니다. |
-| 📚 **JIT 학습** | 현재 blocker에 가장 가치 있는 학습 목표를 고르고, 이미 학습했다고 주장하지 않으면서 출처 기반의 즉시 적용 가능한 지침을 준비합니다. |
-| 🔍 **증거 기반 전달** | 코딩·review·CI·merge 전반에서 준비된 의도, 관측된 runtime 활동, 검증된 결과를 분리합니다. |
-| 🔎 **구조적 코드 검색** | 측정 기반 `ast-grep` 플레이북 — 28개 언어 구조 쿼리, body-capture 금지, grep 폴백 — 을 executor가 코드를 검색하는 지점에 주입합니다. OMH는 바이너리 존재만 감지하며 직접 실행하지 않습니다. |
-| 🗄️ **프로젝트 메모리 시스템** | Hermes가 로드할 수 있는 결정적 파일 기반 memory provider, 검토형 프로젝트 메모리 명령(inspect·pack·domain capture), consolidation 스케줄링 brief, 메모리 리뷰 스킬 — Hermes의 불투명한 내부 메모리는 읽지도 고치지도 않습니다. |
-| 🛠️ **코딩 하네스 & 가드레일** | executor readiness probe, 준비된 handoff에 붙는 capability snapshot과 owner-fit 리포트, `execute_code` 결과에 붙는 code-mode discipline, 규칙을 어긴 tool call을 규칙 텍스트로 차단하는 사용자 작성 toolcall rules. |
-| ♾️ **울트라 워크플로 엔진** | 소유권이 분리된 병렬 전달 레인, ledger와 실제 완료 gate로 도는 측정 루프, 엔진 실행 전에 의도를 명확히 하는 decision-frontier 인터뷰 — 엔진 목록은 아래 울트라 스킬 섹션에 있습니다. |
-| 📦 **결정적 스킬 카탈로그** | 120개 이상의 설치형 workflow 스킬, byte 단위로 검증되는 생성 카탈로그, 부정 케이스를 포함한 routing precision 코퍼스, 한 글자 드리프트에도 CI가 실패하는 drift gate. |
+| 🧭 **Mixture-of-models 라우팅** | 위임되는 lane마다 dispatch 시점에 카테고리(모델 + 추론 강도)가 붙습니다. provider가 모델을 거부하면 chain을 따라 내려가고, 일을 하지 않은 자식은 초록 행이 아니라 `failed`로 표시됩니다. |
+| 🎛️ **모델 계열별 캘리브레이션** | GPT-6 Astra, GPT-5.6, Claude 5.1, GLM 5.3, Kimi, Gemini, Qwen, DeepSeek 등 계열과 세대별로 프롬프팅을 튜닝하고, 벤치마크 쌍이 효과를 보여줄 때만 유지합니다. |
+| 🗂️ **직접 소유하는 카테고리** | executor마다 9개의 기본 카테고리, `omh model-chains set`으로 순서 변경, 머신별로 chain을 재정렬하는 entitlement 인터뷰, 실행 전에 요청이 어디로 라우팅될지 보여주는 실시간 뷰를 제공합니다. |
+| 🖥️ **네이티브 TUI 표면** | OMH HUD(카테고리·턴·비용·캐시가 붙은 실시간 행), 프롬프트 위 phase todo, `parallel shot ×N`, full-row diff 밴드, 관리형 스킨을 Hermes 옆에 설치하며 Hermes를 패치하지 않습니다. |
+| ⚡ **관측 가능한 병렬 작업** | 독립적인 작업을 파일 소유권이 겹치지 않는 fanout unit으로 나누고, provider 부하에 따른 admission control, 타입이 있는 결과 sidecar, 돌아온 결과를 읽는 verification gate를 붙입니다. |
+| 🎼 **Maestro handoff** | Codex, Claude Code 등 다른 CLI를 위한 명시적 두 번째 lane입니다. readiness probe, capability snapshot, owner-fit 리포트, 실행별 모델·강도 지정을 제공하며 opt-in이고 기본 경로가 아닙니다. |
+| 💸 **가격이 붙은 비용 텔레메트리** | 모든 HUD 행과 run summary에 토큰 수와 달러 금액을 표시합니다. 출처를 밝힌 요금표로 계산하고, 계산할 수 없는 run은 `$0`이 아니라 `unknown`으로 읽힙니다. |
+| 🧠 **장기 프로젝트 메모리** | Hermes가 로드하는 파일 기반 memory provider, admission·retention 정책, 리뷰어가 승인하는 쓰기, freshness와 budget이 있는 recall pack을 제공합니다. Hermes 자체 메모리는 건드리지 않습니다. |
+| 🔎 **구조적 코드 검색** | 측정 기반 `ast-grep` 플레이북(28개 언어, grep 폴백)과 저장소 전체 아키텍처 그림을 그리는 `omh codegraph uml`을 executor가 코드를 읽는 지점에 주입합니다. |
+| 🛡️ **직접 쓰는 가드레일** | 규칙을 어긴 tool call을 사용자의 규칙 텍스트로 차단하는 toolcall rules, stub과 skip된 테스트를 증거로 인정하지 않는 completion-integrity gate, 위험한 작업을 위한 approval tier를 제공합니다. |
+| ♾️ **울트라 워크플로 엔진** | 병렬 전달 lane, ledger와 실제 완료 gate로 도는 측정 루프, 엔진 실행 전의 decision-frontier 인터뷰를 제공합니다. 목록은 위 울트라 스킬 섹션에 있습니다. |
+| 📦 **결정적 카탈로그** | 하나의 소스에서 생성되는 100개 이상의 설치형 스킬, 부정 케이스를 포함한 routing precision 코퍼스, 한 바이트만 어긋나도 CI가 실패하는 drift gate를 제공합니다. |
 
 ## 주장보다 증거
 
