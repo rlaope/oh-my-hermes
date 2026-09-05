@@ -663,6 +663,46 @@ class MemoryBatchTests(TestCase):
             with self.assertRaisesRegex(ValueError, "ambiguous"):
                 stage_memory_update_batch(paths, batch)
 
+    def test_stage_rejects_distinct_ref_update_and_forget_for_same_logical_key(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            scope_path = paths.memory_dir / "scopes" / "project.json"
+            scope_path.parent.mkdir(parents=True)
+            scope_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_memory_scope/v2",
+                        "scope": {"kind": "project", "ref": "default"},
+                        "items": {
+                            "old-ref": {
+                                "item_id": "old-ref",
+                                "revision": 1,
+                                "key": "shared_key",
+                                "summary": "Existing logical target",
+                                "value": "existing value",
+                            }
+                        },
+                        "tombstones": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            batch = _batch("new-ref")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates[0]["key"] = "shared_key"
+            updates.append(
+                {
+                    "op": "forget",
+                    "item_id": "old-ref",
+                    "scope": {"kind": "project", "ref": "default"},
+                }
+            )
+
+            with self.assertRaisesRegex(ValueError, "ambiguous"):
+                stage_memory_update_batch(paths, batch)
+
     def test_stage_rejects_duplicate_logical_key_in_same_scope(self) -> None:
         with TemporaryDirectory() as home:
             paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")

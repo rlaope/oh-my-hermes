@@ -1083,9 +1083,7 @@ def _require_review_revision(candidate: dict[str, Any], expected_revision: str) 
     actual = project_memory_review_revision(candidate)
     if expected_revision != actual:
         raise StaleMemoryReviewError(
-            f"stale_review: candidate {candidate.get('candidate_id', '')} is now revision {actual}, "
-            f"not the reviewed revision {expected_revision}; re-read the card with "
-            "`omh memory review --candidate <id>` and decide again on what it shows now"
+            "stale_review: the candidate changed after the reviewed card was rendered; re-read it and decide again"
         )
 
 
