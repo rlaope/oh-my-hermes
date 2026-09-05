@@ -421,6 +421,11 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "project-2026-memory-hardening-identifier",
             "secret-tokenizer-library-for-python-projects",
             "hf-transformers-inference-service-project",
+            "DECLARED_MODEL_CONTRACT_PROJECTIONS",
+            "CAPABILITY_EVIDENCE_STALE_AFTER_SECONDS",
+            "SOURCE_FINDER_OBSERVATION_PROVENANCE",
+            "let data = pipe.fileHandleForReading.readDataToEndOfFile()",
+            "Mirrors SHIPPED_MODEL_RECOMMENDATIONS categories in",
             "Unresolved memory conflicts block this context pack from executor handoff attachment.",
             "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/memory",
             (

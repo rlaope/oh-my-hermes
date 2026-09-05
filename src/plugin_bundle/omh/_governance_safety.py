@@ -76,6 +76,7 @@ _LOWER_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
 _ACRONYM_VERSION_IDENTIFIER_PATTERN = re.compile(
     rf"[A-Z]{{2,}}\d*(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
 )
+_UPPER_SNAKE_IDENTIFIER_PATTERN = re.compile(r"[A-Z][A-Z0-9]{1,15}(?:_[A-Z][A-Z0-9]{1,15}){2,}")
 _SEPARATOR_SPLIT_OPAQUE_PATTERN = re.compile(
     r"(?<![A-Za-z0-9])(?:[A-Za-z0-9]{4,20}[./\\ _-]){1,}[A-Za-z0-9]{4,20}(?![A-Za-z0-9])"
 )
@@ -95,6 +96,15 @@ def _looks_like_structured_identifier(segment: str) -> bool:
             _ACRONYM_VERSION_IDENTIFIER_PATTERN,
         )
     )
+
+
+def _looks_like_semantic_upper_snake_identifier(segment: str) -> bool:
+    if not _UPPER_SNAKE_IDENTIFIER_PATTERN.fullmatch(segment):
+        return False
+    parts = segment.split("_")
+    vowel_parts = sum(any(char in "AEIOU" for char in part) for part in parts)
+    letters = "".join(parts)
+    return vowel_parts >= len(parts) - 1 and len(set(letters)) * 100 < len(letters) * 70
 
 
 def _looks_like_path_identifier(segment: str) -> bool:
@@ -212,7 +222,14 @@ def _has_embedded_opaque_value(content: str) -> bool:
 def _has_separator_split_opaque_value(content: str) -> bool:
     """Catch one opaque value split into path or package fragments."""
     for match in _SEPARATOR_SPLIT_OPAQUE_PATTERN.finditer(content):
-        fragments = re.findall(r"[A-Za-z0-9]+", match.group(0))
+        matched = match.group(0)
+        fragment_matches = list(re.finditer(r"[A-Za-z0-9]+", matched))
+        fragments = [fragment.group(0) for fragment in fragment_matches]
+        semantic_snake_spans = [
+            snake.span()
+            for snake in _UPPER_SNAKE_IDENTIFIER_PATTERN.finditer(matched)
+            if _looks_like_semantic_upper_snake_identifier(snake.group(0))
+        ]
         for start in range(len(fragments)):
             for end in range(start + 2, min(len(fragments), start + 8) + 1):
                 window = fragments[start:end]
@@ -224,6 +241,13 @@ def _has_separator_split_opaque_value(content: str) -> bool:
                 if len(combined) < 32 or not chunked:
                     continue
                 if _HEX_DIGEST_PATTERN.fullmatch(combined) or _looks_like_structured_identifier(combined):
+                    continue
+                window_start = fragment_matches[start].start()
+                window_end = fragment_matches[end - 1].end()
+                if any(_looks_like_structured_identifier(fragment) for fragment in window) or any(
+                    window_start < snake_end and snake_start < window_end
+                    for snake_start, snake_end in semantic_snake_spans
+                ):
                     continue
                 mixed = _has_opaque_character_mix(combined)
                 uppercase_fragments = sum(any(char.isupper() for char in fragment) for fragment in window)
