@@ -4983,7 +4983,7 @@ def _safe_to_expose_value(key: str, value: Any, item: dict[str, Any]) -> bool:
 
 def _redacted_metadata_label(value: Any) -> str:
     text = str(value or "")
-    return "redacted" if _looks_sensitive(text) else text
+    return "redacted" if contains_credential_like_material(text) else text
 
 
 def _redact_nested_metadata(value: Any) -> Any:
