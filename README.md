@@ -292,6 +292,22 @@ checklist, not a summary written afterwards.
 
 [Read the evidence rules ↗](docs/CAPABILITY_IMPACT.md)
 
+### 06 · Expert skills seep into the run
+
+You never invoke an expert. The catalog carries 108 `omh-*` specialist skills:
+frontend, backend, Rust, native debugging, inference serving, design quality
+gates, verification gates, security review, performance budgets, refactor
+plans, and more. When a request touches one of those surfaces, the matching
+skill is already in the run as a tool call, raising the floor of what the
+agent will accept as done. Say it in English or Korean; the router picks the
+specialists.
+
+<p align="center">
+  <img src="assets/showcase-06-skills.svg" alt="Expert omh-* skills loading into one run as tool calls, an orbit of specialists around the run, and three numbers" width="1080">
+</p>
+
+[Browse the catalog ↗](docs/WORKFLOWS.md)
+
 <br>
 
 ## The OH-MY-HERMES terminal
