@@ -150,7 +150,7 @@ def build_message_gate(
     no executor reads ``unknown`` and raises ``message_gate_missing_model_label``;
     a resolved executor with no route reads ``codex (executor default)`` and
     raises ``message_gate_unresolved_model_route``; a resolved route reads
-    ``codex (gpt-5-codex xhigh)`` and raises nothing. Collapsing the middle
+    ``codex (gpt-5.6-sol xhigh)`` and raises nothing. Collapsing the middle
     state into the last one is what let the main delegate path ship a header
     that could not distinguish "OMH applied no override" from "OMH never
     resolved a route", with no warning either way.
@@ -275,7 +275,7 @@ def _prompt_block(composed_prompt: str, model_field: str) -> str:
 
 
 def _model_field(executor: str, model_label: str) -> str:
-    """``codex (gpt-5-codex xhigh)`` -- executor and model as ONE visual field.
+    """``codex (gpt-5.6-sol xhigh)`` -- executor and model as ONE visual field.
 
     The parenthetical is never emitted empty: ``DELEGATE_MODEL_LABEL_RULE``
     names that exact shape as forbidden. A known executor with no resolved route

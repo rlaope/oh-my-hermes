@@ -47,7 +47,7 @@ def _write_dispatched_unit(root: Path) -> None:
                         "unit_id": "core",
                         "run_ref": "run-core",
                         "owner": "codex",
-                        "model": "gpt-5-codex",
+                        "model": "gpt-5.6-sol",
                         "reasoning_effort": "xhigh",
                         "status": "completed",
                         "duration_seconds": 92,
@@ -85,7 +85,7 @@ class StatusBoardCliTests(unittest.TestCase):
             json.loads(stdout)
         # The board still shows the row, just as a column instead of JSON.
         self.assertIn("Core work", stdout)
-        self.assertIn("gpt-5-codex xhigh", stdout)
+        self.assertIn("gpt-5.6-sol xhigh", stdout)
         self.assertIn("12,345", stdout)
 
     def test_json_opt_in_emits_the_schema_versioned_payload(self) -> None:

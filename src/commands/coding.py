@@ -1857,7 +1857,7 @@ def cmd_coding_fanout_brief(args: argparse.Namespace) -> int:
         selected_effort = model_route.get("selected_reasoning_effort", "")
         model_id = _bounded_fanout_brief_scalar(selected_model)
         effort = _bounded_fanout_brief_scalar(selected_effort)
-        # One human-readable label per subagent, e.g. "gpt-5-codex xhigh" —
+        # One human-readable label per subagent, e.g. "gpt-5.6-sol xhigh" —
         # what a briefing renders next to the unit without joining two fields.
         # The format is a stable part of fanout_briefing/v1 and is built by
         # the same `model_label_for` helper the status board uses, so the two
@@ -1984,7 +1984,7 @@ def _fanout_brief_unit_line(unit: dict) -> str:
         model_text += " [schema v1]"
     parts = [
         str(unit.get("unit_id", "")),
-        # Owner and model are ONE field visually: "codex (gpt-5-codex xhigh)".
+        # Owner and model are ONE field visually: "codex (gpt-5.6-sol xhigh)".
         # The status board's bullet renderer abandoned the standalone
         # "— (model)" field because a dash around a parenthetical doubled the
         # separator; the brief follows the same convention.

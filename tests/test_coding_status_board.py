@@ -122,7 +122,7 @@ class StatusBoardBuildTests(unittest.TestCase):
                         "unit_id": "core",
                         "run_ref": "run-core",
                         "owner": "codex",
-                        "model": "gpt-5-codex",
+                        "model": "gpt-5.6-sol",
                         "reasoning_effort": "xhigh",
                         "status": "completed",
                         "duration_seconds": 92.517,
@@ -136,7 +136,7 @@ class StatusBoardBuildTests(unittest.TestCase):
         self.assertEqual(payload["sources_used"], ["dispatch_summary"])
         self.assertEqual(unit["label"], "Core work")
         self.assertEqual(unit["status"], "completed")
-        self.assertEqual(unit["model_label"], "gpt-5-codex xhigh")
+        self.assertEqual(unit["model_label"], "gpt-5.6-sol xhigh")
         # The float duration is floored to a whole second; no float survives.
         self.assertEqual(unit["elapsed_seconds"], 92)
         self.assertIsInstance(unit["elapsed_seconds"], int)
@@ -367,7 +367,7 @@ class FormattingTests(unittest.TestCase):
         self.assertEqual(tokens_text_for(True), "unknown")
 
     def test_model_label_matches_fanout_brief_format(self) -> None:
-        self.assertEqual(model_label_for("gpt-5-codex", "xhigh"), "gpt-5-codex xhigh")
+        self.assertEqual(model_label_for("gpt-5.6-sol", "xhigh"), "gpt-5.6-sol xhigh")
         self.assertEqual(model_label_for("fable-5", ""), "fable-5")
         self.assertEqual(model_label_for("", ""), "executor default")
 
@@ -381,7 +381,7 @@ class FormattingTests(unittest.TestCase):
 
         table = (
             # (model, reasoning_effort, expected label)
-            ("gpt-5-codex", "xhigh", "gpt-5-codex xhigh"),
+            ("gpt-5.6-sol", "xhigh", "gpt-5.6-sol xhigh"),
             ("fable-5", "", "fable-5"),
             ("", "", "executor default"),
             # Provider-prefixed omo id from a local-inventory catalog
@@ -412,7 +412,7 @@ class MessengerProfileTests(unittest.TestCase):
                     {
                         "unit_id": "core",
                         "owner": "codex",
-                        "model": "gpt-5-codex",
+                        "model": "gpt-5.6-sol",
                         "reasoning_effort": "xhigh",
                         "status": "completed",
                         "duration_seconds": 2100,
@@ -459,7 +459,7 @@ class MessengerProfileTests(unittest.TestCase):
         # well produced "claude — (fable-5 high)", a doubled separator around a
         # parenthetical.
         self.assertIn("research — claude (fable-5 high) — Code · running — 35m — tokens unknown", bullets[0])
-        self.assertIn("feature work — codex (gpt-5-codex xhigh) — Code · reported done — 35m — 10,000,000 tokens", bullets[1])
+        self.assertIn("feature work — codex (gpt-5.6-sol xhigh) — Code · reported done — 35m — 10,000,000 tokens", bullets[1])
         for bullet in bullets:
             self.assertNotIn(" — (", bullet)
         self.assertIn("session sess-7", bullets[1])

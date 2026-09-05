@@ -35,7 +35,7 @@ class ResearchRoleTests(unittest.TestCase):
         """Autorouting survey consensus: standard is the default; shallow is
         the declared saving, deep the declared escalation — never inferred."""
         codex = resolve_model_route("codex", role="research")
-        self.assertEqual(codex["selected_model"], "gpt-5")
+        self.assertEqual(codex["selected_model"], "gpt-5.6-sol")
         # Standard research carries no effort of its own now that chains derive
         # from categories: `research` reads unspecified-low/quick and neither
         # declares one. The old hand-written `medium` had no category behind it,
@@ -65,10 +65,10 @@ class ResearchRoleTests(unittest.TestCase):
 
     def test_standard_and_unknown_depths_keep_the_role_chain(self) -> None:
         standard = resolve_model_route("codex", role="research", requested_depth="standard")
-        self.assertEqual(standard["selected_model"], "gpt-5")
+        self.assertEqual(standard["selected_model"], "gpt-5.6-sol")
         self.assertEqual(standard["depth"], "standard")
         unknown = resolve_model_route("codex", role="research", requested_depth="bottomless")
-        self.assertEqual(unknown["selected_model"], "gpt-5")
+        self.assertEqual(unknown["selected_model"], "gpt-5.6-sol")
         outcomes = {entry["stage"]: entry["outcome"] for entry in unknown["attempted"]}
         self.assertEqual(outcomes["research_depth"], "unknown_depth")
 
@@ -356,15 +356,16 @@ class ModelRouteResolverTests(unittest.TestCase):
     def test_review_role_on_codex_routes_to_chain_head_with_named_alternative(self) -> None:
         # THE behavior change of this PR: review-on-codex previously resolved
         # choice_required with no selected model; it now routes to the chain
-        # head and carries the standard-tier alternative in chain[].
+        # head. Both review categories now head on the same served model, so
+        # the chain de-duplicates to the one entry the CLI can actually run.
         route = resolve_model_route("codex", role="review")
         self.assertEqual(route["status"], "routed")
         self.assertEqual(route["provenance"], "role_chain_head")
-        self.assertEqual(route["selected_model"], "gpt-5-codex")
+        self.assertEqual(route["selected_model"], "gpt-5.6-sol")
         chain_models = [entry["model_id"] for entry in route["chain"]]
-        self.assertEqual(chain_models, ["gpt-5-codex", "gpt-5"])
+        self.assertEqual(chain_models, ["gpt-5.6-sol"])
         selected_flags = [entry["selected"] for entry in route["chain"]]
-        self.assertEqual(selected_flags, [True, False])
+        self.assertEqual(selected_flags, [True])
 
     def test_brain_role_gets_high_effort_from_chain_entry(self) -> None:
         # brain's high default moved from _HIGH_EFFORT_ROLES into chain data;
@@ -485,7 +486,7 @@ class EffortLadderTests(unittest.TestCase):
         self.assertEqual(route["effort_change"]["kind"], "legacy_alias_normalized")
 
     def test_auto_passes_through_when_catalog_has_no_contract_for_it(self) -> None:
-        route = resolve_model_route("codex", requested_model="gpt-5-codex", requested_effort="auto")
+        route = resolve_model_route("codex", requested_model="gpt-5.6-sol", requested_effort="auto")
         self.assertEqual(route["selected_reasoning_effort"], "auto")
         self.assertEqual(route["effort_change"]["kind"], "automatic_passthrough")
 
@@ -503,7 +504,7 @@ class EffortLadderTests(unittest.TestCase):
         # THE second behavior change of this PR (the live-bug fix): `max` on a
         # codex catalog model previously passed through unsupported; it now
         # steps down the ladder to the strongest supported rung.
-        route = resolve_model_route("codex", requested_model="gpt-5-codex", requested_effort="max")
+        route = resolve_model_route("codex", requested_model="gpt-5.6-sol", requested_effort="max")
         self.assertEqual(route["selected_reasoning_effort"], "xhigh")
         change = route["effort_change"]
         self.assertEqual(change["kind"], "ladder_downgrade")
@@ -525,7 +526,7 @@ class EffortLadderTests(unittest.TestCase):
         # Never-edit guard (a): effort-shaped off-vocabulary values pass
         # through byte-identically so a newer CLI vocabulary is never blocked
         # by a stale catalog. Same never-edit rule as guard (b).
-        route = resolve_model_route("codex", requested_model="gpt-5-codex", requested_effort="turbo-9")
+        route = resolve_model_route("codex", requested_model="gpt-5.6-sol", requested_effort="turbo-9")
         self.assertEqual(route["selected_reasoning_effort"], "turbo-9")
         self.assertEqual(route["effort_change"]["kind"], "unknown_vocabulary_passthrough")
 
@@ -762,7 +763,7 @@ class DispatchArgvTests(unittest.TestCase):
         )
 
     def test_codex_model_and_effort_insert_before_prompt(self) -> None:
-        route = resolve_model_route("codex", requested_model="gpt-5-codex", requested_effort="xhigh")
+        route = resolve_model_route("codex", requested_model="gpt-5.6-sol", requested_effort="xhigh")
         argv = build_dispatch_argv("codex", "do the work", route)
         self.assertEqual(
             argv,
@@ -770,7 +771,7 @@ class DispatchArgvTests(unittest.TestCase):
                 "codex",
                 "exec",
                 "--model",
-                "gpt-5-codex",
+                "gpt-5.6-sol",
                 "--config",
                 "model_reasoning_effort=xhigh",
                 "do the work",
@@ -798,21 +799,21 @@ class DispatchArgvTests(unittest.TestCase):
     def test_behavior_change_review_on_codex_now_emits_model(self) -> None:
         # 5b(i) before/after: the old resolver returned choice_required with
         # no selected_model for review-on-codex, so dispatch emitted the bare
-        # template argv; the chain head now emits --model gpt-5-codex.
+        # template argv; the chain head now emits --model gpt-5.6-sol.
         old_shape_route = {"selected_model": "", "selected_reasoning_effort": ""}
         self.assertEqual(build_dispatch_argv("codex", "p", old_shape_route), ["codex", "exec", "p"])
         new_route = resolve_model_route("codex", role="review")
         self.assertEqual(
             build_dispatch_argv("codex", "p", new_route),
-            ["codex", "exec", "--model", "gpt-5-codex", "p"],
+            ["codex", "exec", "--model", "gpt-5.6-sol", "p"],
         )
 
     def test_behavior_change_effort_max_on_codex_catalog_model(self) -> None:
         # 5b(ii) before/after: `max` previously reached the CLI unsupported;
         # the ladder now emits the downgraded rung in the argv.
-        old_shape_route = {"selected_model": "gpt-5-codex", "selected_reasoning_effort": "max"}
+        old_shape_route = {"selected_model": "gpt-5.6-sol", "selected_reasoning_effort": "max"}
         self.assertIn("model_reasoning_effort=max", build_dispatch_argv("codex", "p", old_shape_route))
-        new_route = resolve_model_route("codex", requested_model="gpt-5-codex", requested_effort="max")
+        new_route = resolve_model_route("codex", requested_model="gpt-5.6-sol", requested_effort="max")
         self.assertIn("model_reasoning_effort=xhigh", build_dispatch_argv("codex", "p", new_route))
 
 
@@ -922,8 +923,8 @@ class ModelRouteCliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             lines = [line for line in stdout.splitlines() if line.startswith("- ")]
             self.assertEqual(len(lines), len(MODEL_ROLES))
-            self.assertIn("gpt-5-codex*", stdout)
-            self.assertIn("gpt-5", stdout)
+            self.assertIn("gpt-5.6-terra high*", stdout)
+            self.assertIn("gpt-5.6-sol", stdout)
             self.assertNotIn("claude-code", stdout)
 
     def test_model_route_without_executor_or_explain_errors(self) -> None:

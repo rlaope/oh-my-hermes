@@ -4166,7 +4166,7 @@ class WrapperContractTests(unittest.TestCase):
                 "prepared": {
                     "executor_target": "codex",
                     "model_route": {
-                        "selected_model": "gpt-5-codex",
+                        "selected_model": "gpt-5.6-sol",
                         "selected_reasoning_effort": "xhigh",
                     },
                 },
@@ -4178,11 +4178,11 @@ class WrapperContractTests(unittest.TestCase):
 
         self.assertEqual(
             response["plain_headline"],
-            "The coding handoff (Codex — gpt-5-codex xhigh) was dispatched.",
+            "The coding handoff (Codex — gpt-5.6-sol xhigh) was dispatched.",
         )
         self.assertEqual(
             response["status_card"]["headline"],
-            "The coding handoff (Codex — gpt-5-codex xhigh) was dispatched.",
+            "The coding handoff (Codex — gpt-5.6-sol xhigh) was dispatched.",
         )
         # The status-board single-field convention: model and effort join with
         # a space, never nested parentheses.
@@ -4195,7 +4195,7 @@ class WrapperContractTests(unittest.TestCase):
                 "next_action": "dispatch_to_executor",
                 "prepared": {
                     "executor_target": "codex",
-                    "model_route": {"selected_model": "gpt-5-codex"},
+                    "model_route": {"selected_model": "gpt-5.6-sol"},
                 },
                 "execution": {"observed": False},
                 "verification": {"observed": False},
@@ -4203,7 +4203,7 @@ class WrapperContractTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(response["plain_headline"], "The coding handoff (Codex — gpt-5-codex) is ready.")
+        self.assertEqual(response["plain_headline"], "The coding handoff (Codex — gpt-5.6-sol) is ready.")
 
     def test_status_card_exposes_platform_neutral_progress_steps(self) -> None:
         card = build_status_card_from_status(

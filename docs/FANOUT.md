@@ -25,7 +25,7 @@ goal to Hermes in chat; these commands are the backend surface.
    expensive for agent context.
    For user-facing briefings, `omh coding fanout brief <id>` renders one
    line per unit in merge-plan order — unit, owner, `(model effort)` label
-   (for example `(gpt-5-codex xhigh)`), status, elapsed seconds, token
+   (for example `(gpt-5.6-sol xhigh)`), status, elapsed seconds, token
    count, session ref, last observed summary — as plain text by default
    with `--json` for the `fanout_briefing/v1` payload. It joins the
    contract, the persisted dispatch summary, and a one-event journal tail;

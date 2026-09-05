@@ -479,11 +479,11 @@ class SetupInterviewTests(unittest.TestCase):
             _write(path, {"schema_version": "omh_dispatch_model_preferences/v1", "profiles": {"claude-code": "opus"}})
             self.assertEqual(setup_module._seed_claude_code_dispatch_head(paths)["status"], "already_present")
             self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["profiles"], {"claude-code": "opus"})
-            _write(path, {"schema_version": "omh_dispatch_model_preferences/v1", "profiles": {"codex": "gpt-5-codex"}})
+            _write(path, {"schema_version": "omh_dispatch_model_preferences/v1", "profiles": {"codex": "gpt-5.6-sol"}})
             self.assertEqual(setup_module._seed_claude_code_dispatch_head(paths)["status"], "seeded")
             self.assertEqual(
                 json.loads(path.read_text(encoding="utf-8"))["profiles"],
-                {"claude-code": CLAUDE_FRONTIER_CHAIN_MODELS[0], "codex": "gpt-5-codex"},
+                {"claude-code": CLAUDE_FRONTIER_CHAIN_MODELS[0], "codex": "gpt-5.6-sol"},
             )
 
 
