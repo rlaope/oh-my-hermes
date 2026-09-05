@@ -27,6 +27,8 @@ __all__ = [
     "build_retention",
     "canonical_payload_digest",
     "classify_memory_admission",
+    "contains_credential_like_material",
+    "evaluate_renderable_strings",
     "resolve_record_expiry_deadline",
     "stable_artifact_identity",
     "evaluate_memory_replay",
@@ -221,7 +223,11 @@ def canonical_payload_digest(artifact: dict[str, object]) -> str:
 
 
 # Public re-exports from internal modules
-from ._governance_safety import classify_memory_admission  # noqa: F401, E402
+from ._governance_safety import (  # noqa: F401, E402
+    classify_memory_admission,
+    contains_credential_like_material,
+    evaluate_renderable_strings,
+)
 from ._governance_evaluation import (  # noqa: F401, E402
     stable_artifact_identity,
     evaluate_memory_replay,

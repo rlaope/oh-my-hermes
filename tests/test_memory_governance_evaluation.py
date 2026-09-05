@@ -123,6 +123,50 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         result = _evaluate(artifact, review)
         self.assertEqual(result["reason_code"], "safety_needs_review_in_summary")
 
+    def test_safety_rescan_covers_source_metadata_and_tags(self) -> None:
+        cases = (
+            ("source", "gh" + "u_" + "a" * 36, "safety_blocked_in_source"),
+            ("source_ref", "Ab3dEf4G" * 5 + "=", "safety_needs_review_in_source_ref"),
+            ("tags", ["Ab3d_Ef4Gh5Ij6Kl7Mn8Op9Qr0St1Uv2"], "safety_needs_review_in_tags"),
+            (
+                "source_evidence",
+                {"source_ref": "gh" + "u_" + "a" * 36},
+                "safety_blocked_in_source_evidence.source_ref",
+            ),
+            (
+                "scope",
+                {"kind": "project", "ref": "gh" + "u_" + "a" * 36},
+                "safety_blocked_in_scope.ref",
+            ),
+            ("derived_from", ["gh" + "u_" + "a" * 36], "safety_blocked_in_derived_from"),
+        )
+        for field, value, reason_code in cases:
+            with self.subTest(field=field):
+                artifact, review = _approved_artifact()
+                artifact[field] = value
+                digest = governance.canonical_payload_digest(artifact)
+                admission = artifact["admission"]
+                self.assertIsInstance(admission, dict)
+                assert isinstance(admission, dict)
+                admission["payload_digest"] = digest
+                review["payload_digest"] = digest
+                if field == "scope":
+                    identity = governance.stable_artifact_identity(artifact)
+                    admission["artifact_identity"] = identity
+                    review["artifact_identity"] = identity
+                    assert isinstance(value, dict)
+                    result = governance.evaluate_memory_replay(
+                        artifact,
+                        now=NOW,
+                        requested_scope=value,
+                        review_resolver={str(admission["review_id"]): review},
+                    )
+                else:
+                    result = _evaluate(artifact, review)
+
+                self.assertFalse(result["eligible"])
+                self.assertEqual(result["reason_code"], reason_code)
+
     def test_secret_token_forms_are_blocked_to_meet_the_remember_refuse_contract(self) -> None:
         """Hyphenated secret-token compounds are blocked; ordinary hyphenated prose is never admission-blocked."""
         for content in (
@@ -150,10 +194,14 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         aws = "AK" + "IA" + "A" * 16
         github = "gh" + "p_" + "a" * 36
         openai = "sk" + "-" + "a" * 48
+        stripe = "sk_" + "live_" + "a" * 32
+        google_oauth = "ya29." + "a" * 40
         for content in (
             aws,
             github,
             openai,
+            stripe,
+            google_oauth,
             "https://user:pass@example.com",
             "-----BEGIN RSA PRIVATE KEY-----",
         ):
@@ -183,6 +231,44 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         ):
             with self.subTest(ordinary=content):
                 self.assertEqual(governance.classify_memory_admission(content)["status"], "safe")
+
+    def test_source_host_token_prefixes_do_not_consume_ordinary_npm_prose(self) -> None:
+        github_user_token = "gh" + "u_" + "a" * 36
+        npm_token = "npm_" + "a" * 36
+
+        self.assertEqual(governance.classify_memory_admission(github_user_token)["status"], "blocked")
+        self.assertEqual(governance.classify_memory_admission(npm_token)["status"], "blocked")
+        self.assertEqual(
+            governance.classify_memory_admission("npm-package-name-with-long-suffix")["status"],
+            "safe",
+        )
+
+    def test_opaque_values_need_review_without_reclassifying_common_identifiers(self) -> None:
+        padded_base64 = "Ab3dEf4G" * 5 + "="
+        unpadded_base64url = "Ab3d_Ef4Gh5Ij6Kl7Mn8Op9Qr0St1Uv2"
+
+        self.assertEqual(governance.classify_memory_admission(padded_base64)["status"], "needs_review")
+        self.assertEqual(governance.classify_memory_admission(unpadded_base64url)["status"], "needs_review")
+        for ordinary in (
+            "0123456789abcdef0123456789abcdef01234567",
+            "123e4567-e89b-12d3-a456-426614174000",
+            "01890f3e-8b5a-7cc2-98c7-2f9c0b6a1d43",
+            "DeterministicProjectConfigurationManager",
+            "DeterministicProjectConfigurationManagerV2",
+            "AlicePlatformReviewer2026Account",
+            "direview_dprof_e9da83f21e46282d3a9ae020_r1",
+            "@scope/hermes-agent-runtime-v2-package",
+            "packages/hermes-agent-runtime-v2-package/src",
+            "https://example.com/releases/hermes-agent-v2-package",
+            "project-2026-memory-hardening-identifier",
+            "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/memory",
+            (
+                "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/plans/"
+                "2026-09-05T082831432517Z-implement-durable-observation-journal-with-tests-9f35ae.md"
+            ),
+        ):
+            with self.subTest(ordinary=ordinary):
+                self.assertEqual(governance.classify_memory_admission(ordinary)["status"], "safe")
 
     def test_scope_invalid_and_scope_mismatch_are_distinct_fail_closed_results(self) -> None:
         with self.assertRaises(ValueError):
