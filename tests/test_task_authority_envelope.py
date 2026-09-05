@@ -874,6 +874,48 @@ class FilesystemTargetScopeRegressionTests(unittest.TestCase):
                 self.assertIn(expected_path, _safety_preflight_target_paths(message))
                 self._assert_denied_for_every_profile(message, reason_code)
 
+    def test_delimited_and_percent_encoded_paths_cannot_hide_workspace_escapes(self) -> None:
+        """Every local spelling remains visible to the containment rule."""
+        for message, expected_path, reason_code in (
+            ("fix x;../outside/marker.txt", "../outside/marker.txt", "target_path_escapes_project"),
+            ("fix a=b=../outside/marker.txt", "../outside/marker.txt", "target_path_escapes_project"),
+            ("fix a/b:../outside/marker.txt", "../outside/marker.txt", "target_path_escapes_project"),
+            ('fix"../outside/marker.txt"', "../outside/marker.txt", "target_path_escapes_project"),
+            ("fix x;/etc/marker.txt", "/etc/marker.txt", "target_path_absolute"),
+            ("fix src/a.py;../outside/b.py", "../outside/b.py", "target_path_escapes_project"),
+            ("fix ../outside/marker.py?v=1", "../outside/marker.py?v=1", "target_path_escapes_project"),
+            ("fix ../outside/marker.txt?a=b", "../outside/marker.txt?a=b", "target_path_escapes_project"),
+            ("fix ..%2foutside/marker.txt", "../outside/marker.txt", "target_path_escapes_project"),
+            ("fix ..%2Foutside/marker.txt", "../outside/marker.txt", "target_path_escapes_project"),
+            ("fix %2e%2e/outside/marker.txt", "../outside/marker.txt", "target_path_escapes_project"),
+            ("fix %2e%2e%2foutside%2fmarker.txt", "../outside/marker.txt", "target_path_escapes_project"),
+            ("fix %2fetc%2fmarker.txt", "/etc/marker.txt", "target_path_absolute"),
+            (r"fix x;..\outside\marker.txt", r"..\outside\marker.txt", "target_path_escapes_project"),
+            (r"fix x;.\..\outside\marker.txt", r".\..\outside\marker.txt", "target_path_escapes_project"),
+            (r"fix x%3b..%5coutside/marker.txt", r"..\outside/marker.txt", "target_path_escapes_project"),
+        ):
+            with self.subTest(message=message):
+                self.assertIn(expected_path, _safety_preflight_target_paths(message))
+                self._assert_denied_for_every_profile(message, reason_code)
+
+        for message in (
+            "fix src/routing/chat.py?v=1",
+            'fix "docs/my%20notes.md"',
+            "fix https://example.org/a%2e%2e/b.py",
+            "fix target=src/routing/chat.py",
+            "fix src/a.py;src/b.py",
+            "fix the 12:30 timeout in src/a.py",
+            "implement pagination and add a regression test",
+        ):
+            for target in self._PROFILE_HANDOFFS:
+                with self.subTest(message=message, target=target):
+                    payload = build_coding_delegation_payload(message, executor_target=target, include_message=True)
+                    self.assertEqual(payload["action_gate"]["outcome"], "allow")
+
+        self.assertEqual(_safety_preflight_target_paths("fix target=src/routing/chat.py"), ["src/routing/chat.py"])
+        self.assertEqual(_safety_preflight_target_paths("fix https://example.org/a%2e%2e/b.py"), [])
+        self._assert_denied_for_every_profile("fix note:../outside/marker.txt", "target_path_escapes_project")
+
     def test_supported_local_targets_and_remote_references_remain_usable(self) -> None:
         from omh.coding.coding_delegation import _safety_preflight_target_paths
 
