@@ -1244,6 +1244,12 @@ def build_project_memory_recall_pack(
     query_intent: str | None = None,
 ) -> dict[str, object]:
     policy = read_project_memory_policy(paths)
+    structural_selectors = (scope_kind, scope_ref, observer, observed)
+    if any(
+        value is not None and contains_credential_like_material(str(value))
+        for value in structural_selectors
+    ):
+        raise ValueError("credential-like recall selector is not allowed")
     executor_target = _redacted_metadata_label(executor_target)
     session_id = _redacted_metadata_label(session_id)
     scope_kind = _redacted_metadata_label(scope_kind) if scope_kind is not None else None
@@ -1933,7 +1939,7 @@ def _resolve_query_intent(query: str, supplied: str | None) -> str:
     if normalized in {"", "auto"}:
         return _recall_query_intent(query)
     if normalized not in {"default", "temporal"}:
-        raise ValueError(f"query_intent must be one of auto, default, temporal; got {supplied!r}")
+        raise ValueError("query_intent must be one of auto, default, temporal")
     return normalized
 
 

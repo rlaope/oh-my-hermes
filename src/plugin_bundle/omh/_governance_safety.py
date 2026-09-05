@@ -145,6 +145,30 @@ def _has_opaque_character_mix(token: str) -> bool:
     )
 
 
+def _has_single_case_alphanumeric_opaque_mix(token: str) -> bool:
+    """Catch base-encoded values that do not mix letter case.
+
+    Long semantic identifiers commonly contain one version run (for example
+    ``project2026memoryhardeningidentifier``). Opaque encodings instead tend
+    to alternate letter and digit runs throughout the value, so require both
+    repeated transitions and several digits before review-gating a single-case
+    token.
+    """
+    if not token.isalnum():
+        return False
+    letters = [char for char in token if char.isalpha()]
+    digits = [char for char in token if char.isdigit()]
+    if not letters or len(digits) < 3:
+        return False
+    if any(char.islower() for char in letters) and any(char.isupper() for char in letters):
+        return False
+    transitions = sum(
+        left.isdigit() != right.isdigit()
+        for left, right in zip(token, token[1:])
+    )
+    return transitions >= 4
+
+
 def _windows_path_has_split_opaque_value(content: str) -> bool:
     unsafe_run: list[str] = []
     for segment in (
@@ -183,7 +207,7 @@ def _looks_like_opaque_token(content: str) -> bool:
         # Mixed-case alphanumeric material is a conservative opaque-value
         # signal. Base64 punctuation can substitute for one alphanumeric
         # class, while ordinary lowercase path/package separators do not.
-        if _has_opaque_character_mix(token):
+        if _has_opaque_character_mix(token) or _has_single_case_alphanumeric_opaque_mix(token):
             return True
     return False
 

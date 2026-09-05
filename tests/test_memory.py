@@ -291,17 +291,73 @@ class MemoryContractTests(unittest.TestCase):
                 executor_target=credential,
                 session_id=credential,
                 scope_kind="run",
-                scope_ref=credential,
-                observer=credential,
-                observed=credential,
+                scope_ref="safe-run",
+                observer="hermes",
+                observed="codex",
             )
             serialized = json.dumps(recall, sort_keys=True)
 
             self.assertNotIn(credential, serialized)
             self.assertEqual(recall["executor_target"], "redacted")
             self.assertEqual(recall["session_id"], "redacted")
-            self.assertEqual(recall["scope"], {"kind": "run", "ref": "redacted"})
-            self.assertEqual(recall["perspective"], {"observer": "redacted", "observed": "redacted"})
+            self.assertEqual(recall["scope"], {"kind": "run", "ref": "safe-run"})
+            self.assertEqual(recall["perspective"], {"observer": "hermes", "observed": "codex"})
+
+    def test_unsafe_recall_scope_selector_cannot_alias_redacted_scope(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+            captured = capture_project_memory_candidate(
+                paths,
+                "Redacted scope alias fixture",
+                scope_kind="run",
+                scope_ref="redacted",
+            )
+            self.assertTrue(captured["auto_approved"])
+
+            with self.assertRaisesRegex(ValueError, "selector") as caught:
+                build_project_memory_recall_pack(
+                    paths,
+                    "scope alias fixture",
+                    scope_kind="run",
+                    scope_ref=credential,
+                )
+
+            self.assertNotIn(credential, str(caught.exception))
+
+    def test_unsafe_recall_perspective_selector_cannot_alias_redacted_actor(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+            captured = capture_project_memory_candidate(
+                paths,
+                "Redacted perspective alias fixture",
+                observer="redacted",
+                observed="redacted",
+            )
+            self.assertTrue(captured["auto_approved"])
+
+            with self.assertRaisesRegex(ValueError, "selector") as caught:
+                build_project_memory_recall_pack(
+                    paths,
+                    "perspective alias fixture",
+                    observer=credential,
+                    observed=credential,
+                )
+
+            self.assertNotIn(credential, str(caught.exception))
+
+    def test_unsafe_recall_query_intent_error_does_not_echo_value(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            with self.assertRaises(ValueError) as caught:
+                build_project_memory_recall_pack(paths, "safe query", query_intent=credential)
+
+            self.assertNotIn(credential, str(caught.exception))
 
     def test_replay_projection_uses_sanitized_source_class_from_evaluation(self) -> None:
         credential = "gh" + "u_" + "a" * 36

@@ -645,6 +645,45 @@ class MemoryBatchTests(TestCase):
             self.assertEqual(len(matching), 1)
             self.assertEqual(matching[0]["item_id"], first_items[0]["item_id"])
 
+    def test_stage_rejects_update_and_forget_for_same_scope_target(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            batch = _batch("shared-target")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates.append(
+                {
+                    "op": "forget",
+                    "item_id": "shared-target",
+                    "scope": {"kind": "project", "ref": "default"},
+                }
+            )
+
+            with self.assertRaisesRegex(ValueError, "ambiguous"):
+                stage_memory_update_batch(paths, batch)
+
+    def test_stage_rejects_duplicate_logical_key_in_same_scope(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            batch = _batch("first-target")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates.append(
+                {
+                    "op": "update",
+                    "item_id": "second-target",
+                    "scope": {"kind": "project", "ref": "default"},
+                    "key": updates[0]["key"],
+                    "summary": "Second logical copy",
+                    "value": "second value",
+                }
+            )
+
+            with self.assertRaisesRegex(ValueError, "ambiguous"):
+                stage_memory_update_batch(paths, batch)
+
     def test_unrelated_batch_does_not_poison_interrupted_batch_recovery(self) -> None:
         with TemporaryDirectory() as home:
             paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")

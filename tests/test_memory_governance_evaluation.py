@@ -245,6 +245,19 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "safe",
         )
 
+    def test_single_case_alphanumeric_opaque_values_need_review(self) -> None:
+        uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
+        lowercase_alphanumeric = "a9b8c7d6e5f4g3h2j1k0m9n8p7q6r5s4"
+
+        for opaque in (uppercase_base32, lowercase_alphanumeric):
+            with self.subTest(opaque=opaque[:8]):
+                self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
+
+        self.assertEqual(
+            governance.classify_memory_admission("project2026memoryhardeningidentifier")["status"],
+            "safe",
+        )
+
     def test_opaque_values_need_review_without_reclassifying_common_identifiers(self) -> None:
         padded_base64 = "Ab3dEf4G" * 5 + "="
         unpadded_base64url = "Ab3d_Ef4Gh5Ij6Kl7Mn8Op9Qr0St1Uv2"
