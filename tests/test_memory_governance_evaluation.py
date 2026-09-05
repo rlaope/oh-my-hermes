@@ -248,9 +248,17 @@ class SafetyAndEvaluationTests(unittest.TestCase):
     def test_opaque_values_need_review_without_reclassifying_common_identifiers(self) -> None:
         padded_base64 = "Ab3dEf4G" * 5 + "="
         unpadded_base64url = "Ab3d_Ef4Gh5Ij6Kl7Mn8Op9Qr0St1Uv2"
+        split_opaque = "Ab3dEf4Gh5Ij6Kl7Mn8/Op9Qr0St1Uv2WxYz"
 
         self.assertEqual(governance.classify_memory_admission(padded_base64)["status"], "needs_review")
         self.assertEqual(governance.classify_memory_admission(unpadded_base64url)["status"], "needs_review")
+        for normalized_bypass in (
+            split_opaque,
+            f"https://example.com/{split_opaque}",
+            r"C:\safe\Ab3dEf4Gh5Ij6Kl7Mn8\Op9Qr0St1Uv2WxYz",
+        ):
+            with self.subTest(normalized_bypass=normalized_bypass):
+                self.assertEqual(governance.classify_memory_admission(normalized_bypass)["status"], "needs_review")
         self.assertEqual(
             governance.classify_memory_admission(f"C:\\safe\\{padded_base64}\\artifact.txt")["status"],
             "needs_review",
@@ -258,20 +266,31 @@ class SafetyAndEvaluationTests(unittest.TestCase):
 
         for ordinary in (
             "0123456789abcdef0123456789abcdef01234567",
+            "0123456789AbCdEf0123456789aBcDeF0123456789AbCdEf01234567",
             "123e4567-e89b-12d3-a456-426614174000",
             "01890f3e-8b5a-7cc2-98c7-2f9c0b6a1d43",
             "01890f3e-8b5a-7cC2-98c7-2f9c0b6a1d43",
             "DeterministicProjectConfigurationManager",
             "DeterministicProjectConfigurationManagerV2",
+            "HTTPServerConfigurationV2ProjectManager",
             "AlicePlatformReviewer2026Account",
             "direview_dprof_e9da83f21e46282d3a9ae020_r1",
             "@scope/hermes-agent-runtime-v2-package",
+            "@scope/HermesAgentRuntimeV2PackageManager",
             "packages/hermes-agent-runtime-v2-package/src",
+            "packages/HermesAgentRuntimeV2PackageManager/src",
             "https://example.com/releases/hermes-agent-v2-package",
+            "https://example.com/releases/HermesAgentRuntimeV2PackageManager",
+            (
+                "https://example.com/artifact?id="
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            ),
             "@scope/HermesAgent-runtime-v2-package",
             "packages/HermesAgent-runtime-v2-package/src",
             "https://github.com/NousResearch/HermesAgent-runtime-v2-package",
             "project-2026-memory-hardening-identifier",
+            "secret-tokenizer-library-for-python-projects",
+            "hf-transformers-inference-service-project",
             "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/memory",
             (
                 "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/plans/"

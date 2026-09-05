@@ -206,6 +206,56 @@ class MemoryContractTests(unittest.TestCase):
             self.assertNotIn(opaque_summary, json.dumps(approved, sort_keys=True))
             self.assertNotIn(opaque_tag.lower(), json.dumps(approved, sort_keys=True).lower())
 
+    def test_unknown_credential_label_is_redacted_before_candidate_and_review_persistence(self) -> None:
+        credential = "credential:" + "a" * 40
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+
+            captured = capture_project_memory_candidate(paths, credential)
+            candidate = captured["candidate"]
+            candidate_path = paths.memory_dir / "candidates" / f"{candidate['candidate_id']}.json"
+
+            self.assertEqual(candidate["safety"]["status"], "needs_review")
+            self.assertFalse(captured["auto_approved"])
+            self.assertNotIn(credential, json.dumps(captured, sort_keys=True))
+            self.assertNotIn(credential, candidate_path.read_text(encoding="utf-8"))
+            self.assertNotIn(credential, json.dumps(build_project_memory_review(paths), sort_keys=True))
+
+    def test_retirement_masks_credential_shaped_legacy_filenames_and_ids(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+            captured = capture_project_memory_candidate(paths, "Expired retirement security fixture", ttl_days=1)
+            record = dict(captured["record"])
+            expires_at = datetime.fromisoformat(str(record["ttl"]["expires_at"]).replace("Z", "+00:00"))
+            record["record_id"] = credential
+            records_dir = paths.memory_dir / "records"
+            credential_path = records_dir / f"{credential}.json"
+            credential_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            corrupt_path = records_dir / f"{credential}-corrupt.json"
+            corrupt_path.write_text("{", encoding="utf-8")
+
+            report = build_memory_retirement(paths, now=expires_at + timedelta(days=1))
+
+            self.assertNotIn(credential, json.dumps(report, sort_keys=True))
+
+            retired_at = (expires_at + timedelta(days=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            compact = retired_at.replace("-", "").replace(":", "")
+            archive_dir = paths.memory_dir / "archive"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            (archive_dir / f"{credential}.{compact}.json").write_text(
+                json.dumps(record, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            applied = apply_memory_retirement(paths, now=expires_at + timedelta(days=1))
+            journal = archive_dir / "retirements.jsonl"
+
+            self.assertNotIn(credential, json.dumps(applied, sort_keys=True))
+            self.assertNotIn(credential, journal.read_text(encoding="utf-8") if journal.exists() else "")
+
     def test_recall_rescans_legacy_source_without_rewriting_the_record(self) -> None:
         credential = "gh" + "u_" + "a" * 36
         with TemporaryDirectory() as tmp:
@@ -479,6 +529,28 @@ class MemoryContractTests(unittest.TestCase):
             self.assertEqual(recall["included_records"][0]["summary"], summary)
             self.assertEqual(recall["included_records"][0]["tags"], ["token-based", "secret-management"])
             self.assertEqual(validate_project_memory_recall_pack(recall), [])
+
+    def test_safe_identifier_and_path_shapes_remain_visible_in_auto_safe_memory(self) -> None:
+        sha224 = "0123456789AbCdEf0123456789aBcDeF0123456789AbCdEf01234567"
+        sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        values = (
+            sha224,
+            "HTTPServerConfigurationV2ProjectManager",
+            "@scope/HermesAgentRuntimeV2PackageManager",
+            "packages/HermesAgentRuntimeV2PackageManager/src",
+            "https://example.com/releases/HermesAgentRuntimeV2PackageManager",
+            f"https://example.com/artifact?id={sha256}",
+        )
+        for value in values:
+            with self.subTest(value=value), TemporaryDirectory() as tmp:
+                paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+                write_setup_profile(paths, memory_mode="auto-safe")
+
+                captured = capture_project_memory_candidate(paths, value)
+
+                self.assertTrue(captured["auto_approved"])
+                self.assertEqual(captured["candidate"]["summary"], value)
+                self.assertEqual(captured["record"]["summary"], value)
 
     def test_recall_pack_validator_rejects_credential_shaped_mapping_keys(self) -> None:
         credential = "gh" + "u_" + "a" * 36
