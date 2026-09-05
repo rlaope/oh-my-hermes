@@ -826,6 +826,79 @@ class MemoryBatchTests(TestCase):
             self.assertEqual(source["tombstones"]["move-target"]["reason_code"], "scope_changed")
             self.assertIn("move-item", destination["items"])
 
+    def test_multiscope_retry_rejects_scope_identity_drift_after_partial_write(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            source_path = paths.memory_dir / "scopes" / "project.json"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_memory_scope/v2",
+                        "scope": {"kind": "project", "ref": "default"},
+                        "items": {
+                            "move-target": {
+                                "item_id": "move-item",
+                                "revision": 1,
+                                "key": "move_key",
+                                "summary": "Move reviewed value",
+                                "value": "move value",
+                            }
+                        },
+                        "tombstones": {},
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            batch = _batch("move-target")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates[0].update(
+                {
+                    "op": "change_scope",
+                    "from_scope": {"kind": "project", "ref": "default"},
+                    "to_scope": {"kind": "thread", "ref": "thread-1"},
+                    "key": "move_key",
+                    "summary": "Move reviewed value",
+                    "value": "move value",
+                }
+            )
+            staged = self._stage_and_remember(paths, batch)
+            real_write = memory_batches_workflow.atomic_write_json
+            crashed = False
+
+            def crash_after_first_scope(path, payload, **kwargs):
+                nonlocal crashed
+                real_write(path, payload, **kwargs)
+                if not crashed and "scopes" in Path(path).parts:
+                    crashed = True
+                    raise RuntimeError("injected crash after first durable scope write")
+
+            with patch.object(memory_batches_workflow, "atomic_write_json", crash_after_first_scope):
+                with self.assertRaisesRegex(RuntimeError, "injected crash"):
+                    apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            altered = json.loads(source_path.read_text(encoding="utf-8"))
+            altered["scope"] = {"kind": "thread", "ref": "forged-thread"}
+            source_path.write_text(
+                json.dumps(altered, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            altered_bytes = source_path.read_bytes()
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "scope_precondition_changed")
+            self.assertEqual(source_path.read_bytes(), altered_bytes)
+            self.assertFalse(
+                (paths.memory_dir / "scopes" / "threads" / "thread-1.json").exists()
+            )
+
     @requires_symlinks
     def test_multiscope_rejects_symlinked_destination_parent_without_external_write(self) -> None:
         for timing in ("before_apply", "after_preflight"):

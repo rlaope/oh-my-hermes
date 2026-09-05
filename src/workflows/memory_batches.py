@@ -378,6 +378,17 @@ def _scope_matches_candidate_apply(
     ]
     if not matching:
         return False
+    expected_scope = next(
+        scope
+        for item in matching
+        for scope in _item_scopes(item)
+        if _relative_scope(scope) == target
+    )
+    if (
+        value.get("schema_version") != MEMORY_SCOPE_SCHEMA_VERSION
+        or value.get("scope") != dict(expected_scope)
+    ):
+        return False
     for item in matching:
         op = item.get("op")
         target_ref = str(item.get("target_ref", ""))
