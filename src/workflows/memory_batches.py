@@ -17,6 +17,18 @@ from .memory_store import run_memory_operation
 BATCH_CANDIDATE_SCHEMA_VERSION, BATCH_REVIEW_SCHEMA_VERSION, BATCH_RECEIPT_SCHEMA_VERSION = "memory_update_batch_candidate/v1", "memory_update_batch_review/v1", "memory_update_batch_receipt/v1"
 _LEGACY_BATCH_SCHEMA_VERSION, _OPS, _DECISIONS = "memory_update_batch/v1", frozenset({"keep", "forget", "update", "change_scope", "dismiss_conflict"}), frozenset({"remember", "refuse", "defer"})
 _RECEIPT_KEYS = frozenset({"schema_version", "operation_id", "operation_type", "state", "created_at", "completed_at", "step_count", "recovery_count", "outcome"})
+_REVIEW_BOUND_ITEM_KEYS = (
+    "review_id",
+    "candidate_revision",
+    "item_id",
+    "op",
+    "target_ref",
+    "scope",
+    "from_scope",
+    "retention",
+    "artifact_identity",
+    "payload_digest",
+)
 
 
 def stage_memory_update_batch(paths: OmhPaths, batch: Mapping[str, object], *, now: datetime | None = None) -> dict[str, object]:
@@ -229,15 +241,33 @@ def _revalidate(candidate: Mapping[str, object], reviews: Mapping[str, Mapping[s
 
 
 def _review_record(candidate: Mapping[str, object], item: Mapping[str, object], decision: str, label: str, reviewed_at: str) -> dict[str, object]:
-    return {"schema_version": PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION, "review_id": item["review_id"], "batch_id": candidate["batch_id"], "candidate_revision": item["candidate_revision"], "item_id": item["item_id"], "artifact_identity": item["artifact_identity"], "payload_digest": item["payload_digest"], "decision": decision, "reviewer_label": label, "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION, "reviewed_at": reviewed_at}
+    return {
+        "schema_version": PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION,
+        "batch_id": candidate["batch_id"],
+        "candidate_digest": canonical_payload_digest(dict(candidate)),
+        **{key: item.get(key) for key in _REVIEW_BOUND_ITEM_KEYS},
+        "decision": decision,
+        "reviewer_label": label,
+        "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION,
+        "reviewed_at": reviewed_at,
+    }
 
 
 def _review_matches(review: Mapping[str, object], candidate: Mapping[str, object], item: Mapping[str, object]) -> bool:
-    return review.get("schema_version") == PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION and all(review.get(key) == item.get(key) for key in ("review_id", "candidate_revision", "item_id", "artifact_identity", "payload_digest")) and review.get("batch_id") == candidate.get("batch_id") and review.get("decision") in _DECISIONS and isinstance(review.get("reviewer_label"), str) and bool(review["reviewer_label"])
+    return (
+        review.get("schema_version") == PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION
+        and all(review.get(key) == item.get(key) for key in _REVIEW_BOUND_ITEM_KEYS)
+        and review.get("batch_id") == candidate.get("batch_id")
+        and review.get("candidate_digest") == canonical_payload_digest(dict(candidate))
+        and review.get("decision") in _DECISIONS
+        and isinstance(review.get("reviewer_label"), str)
+        and bool(review["reviewer_label"])
+    )
 
 
 def _same_review(left: Mapping[str, object], right: Mapping[str, object]) -> bool:
-    return all(left.get(key) == right.get(key) for key in ("review_id", "batch_id", "candidate_revision", "item_id", "artifact_identity", "payload_digest", "decision", "reviewer_label"))
+    keys = (*_REVIEW_BOUND_ITEM_KEYS, "batch_id", "candidate_digest", "decision", "reviewer_label")
+    return all(left.get(key) == right.get(key) for key in keys)
 
 
 def _decisions(candidate: Mapping[str, object], raw: Mapping[str, object] | list[Mapping[str, object]]) -> dict[str, str]:

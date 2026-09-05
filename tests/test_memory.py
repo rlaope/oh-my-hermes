@@ -277,6 +277,22 @@ class MemoryContractTests(unittest.TestCase):
             self.assertNotIn(credential, str(caught.exception))
             self.assertFalse((paths.memory_dir / "records").exists())
 
+    def test_credential_shaped_candidate_id_never_reaches_review_paths_or_errors(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            captured = capture_project_memory_candidate(paths, "Safe candidate id fixture")
+            candidate = dict(captured["candidate"])
+            candidate["candidate_id"] = credential
+            unsafe_path = paths.memory_dir / "candidates" / f"{credential}.json"
+            unsafe_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(ValueError) as caught:
+                reject_project_memory_candidate(paths, credential)
+
+            self.assertNotIn(credential, str(caught.exception))
+            self.assertFalse((paths.memory_dir / "reviews").exists())
+
     def test_excluded_legacy_scope_never_leaks_through_replay_evidence(self) -> None:
         credential = "gh" + "u_" + "a" * 36
         with TemporaryDirectory() as tmp:
@@ -321,6 +337,23 @@ class MemoryContractTests(unittest.TestCase):
             self.assertNotIn(credential, json.dumps(lineage, sort_keys=True))
             self.assertNotIn(credential, json.dumps(perspectives, sort_keys=True))
 
+            wrapper = {
+                "schema_version": "memory_snapshot/v1",
+                "scope": {"kind": "project", "ref": credential},
+                "claim_boundary": credential,
+                "items": [
+                    {
+                        "item_id": credential,
+                        "key": credential,
+                        "summary": "Safe wrapper item",
+                        "scope": {"kind": "project", "ref": credential},
+                        "replay_evaluation": {"artifact_identity": {"scope": {"ref": credential}}},
+                    }
+                ],
+            }
+            wrapper_inspection = build_memory_inspection(paths, wrapper_snapshot=wrapper)
+            self.assertNotIn(credential, json.dumps(wrapper_inspection, sort_keys=True))
+
     def test_project_memory_auto_safe_policy_auto_approves_safe_candidates(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
@@ -352,6 +385,36 @@ class MemoryContractTests(unittest.TestCase):
             self.assertEqual(recall["included_records"][0]["summary"], summary)
             self.assertEqual(recall["included_records"][0]["tags"], ["token-based", "secret-management"])
             self.assertEqual(validate_project_memory_recall_pack(recall), [])
+
+    def test_recall_pack_validator_rejects_credential_shaped_mapping_keys(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+            capture_project_memory_candidate(paths, "Safe nested-key handoff fixture")
+            recall = build_project_memory_recall_pack(paths, "Safe nested-key handoff fixture")
+            self.assertTrue(recall["included_records"])
+            evaluation = recall["included_records"][0]["replay_evaluation"]
+            evaluation["artifact_identity"]["nested"] = {credential: "safe-value"}
+
+            errors = validate_project_memory_recall_pack(recall)
+
+            self.assertTrue(errors)
+            self.assertNotIn(credential, json.dumps(errors, sort_keys=True))
+
+    def test_status_masks_legacy_credential_shaped_candidate_status_keys(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            candidate = capture_project_memory_candidate(paths, "Safe status fixture", force_review=True)["candidate"]
+            candidate_path = paths.memory_dir / "candidates" / f"{candidate['candidate_id']}.json"
+            legacy = json.loads(candidate_path.read_text(encoding="utf-8"))
+            legacy["status"] = credential
+            candidate_path.write_text(json.dumps(legacy, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            status = build_project_memory_status(paths)
+
+            self.assertNotIn(credential, json.dumps(status, sort_keys=True))
 
     def test_structural_capture_metadata_rejects_credentials_without_serializing_them(self) -> None:
         credential = "gh" + "u_" + "a" * 36

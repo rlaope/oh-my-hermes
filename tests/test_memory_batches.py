@@ -182,10 +182,79 @@ class MemoryBatchTests(TestCase):
             candidate["items"][0]["scope"]["ref"] = credential
             candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-            with self.assertRaises(ValueError) as caught:
-                apply_approved_memory_update_batch(paths, staged["batch_id"])
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
 
-            self.assertNotIn(credential, str(caught.exception))
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "review_linkage_invalid")
+            self.assertNotIn(credential, json.dumps(result, sort_keys=True))
+            self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_binds_the_reviewed_operation_before_any_write(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            staged = self._stage_and_remember(paths, _batch("tampered-op"))
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["items"][0]["op"] = "forget"
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "review_linkage_invalid")
+            self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_binds_reviewed_target_before_any_write(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            staged = self._stage_and_remember(paths, _batch("tampered-target"))
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["items"][0]["target_ref"] = "different-safe-target"
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "review_linkage_invalid")
+            self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_binds_reviewed_source_scope_before_any_write(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            batch = _batch("tampered-source-scope")
+            updates = batch["updates"]
+            assert isinstance(updates, list)
+            update = updates[0]
+            assert isinstance(update, dict)
+            update["op"] = "change_scope"
+            update["from_scope"] = {"kind": "project", "ref": "default"}
+            update["to_scope"] = {"kind": "thread", "ref": "thread-1"}
+            staged = self._stage_and_remember(paths, batch)
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["items"][0]["from_scope"] = {"kind": "project", "ref": "different-project"}
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "review_linkage_invalid")
+            self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_binds_reviewed_retention_before_any_write(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            staged = self._stage_and_remember(paths, _batch("tampered-retention"))
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["items"][0]["retention"]["class"] = "durable"
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "review_linkage_invalid")
             self.assertFalse((paths.memory_dir / "scopes").exists())
 
     def test_refused_or_deferred_items_never_write(self) -> None:
