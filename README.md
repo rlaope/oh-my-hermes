@@ -113,26 +113,6 @@
 
 ## Quick Start
 
-Choose one installation method, then run setup below.
-
-**Homebrew:**
-
-```sh
-brew install rlaope/tap/omh
-```
-
-**Bun:**
-
-```sh
-bun install -g oh-my-hermes
-```
-
-**npm:**
-
-```sh
-npm install -g oh-my-hermes
-```
-
 **macOS / Linux:**
 
 ```sh
@@ -179,9 +159,32 @@ omh doctor
 ```
 
 <details>
-<summary><b>Other installation paths</b> — Hermes skill tap, manual fallback</summary>
+<summary><b>Other installation paths</b> — Homebrew, Bun, npm, Hermes skill tap, manual fallback</summary>
 
 <br>
+
+> **Status:** Homebrew, Bun, and npm package-manager installs are public as of
+> v1.0.6.
+
+**Homebrew:**
+
+```sh
+brew install rlaope/tap/omh
+```
+
+**Bun:**
+
+```sh
+bun install -g oh-my-hermes
+```
+
+**npm:**
+
+```sh
+npm install -g oh-my-hermes
+```
+
+Run `omh setup` after any of these, same as above.
 
 **Hermes skill tap path:**
 
