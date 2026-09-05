@@ -280,6 +280,29 @@ class MemoryContractTests(unittest.TestCase):
             self.assertNotIn(credential, json.dumps(recall, sort_keys=True))
             self.assertEqual(record_path.read_bytes(), legacy_bytes)
 
+    def test_recall_redacts_credential_shaped_request_metadata(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+
+            recall = build_project_memory_recall_pack(
+                paths,
+                "safe query",
+                executor_target=credential,
+                session_id=credential,
+                scope_kind="run",
+                scope_ref=credential,
+                observer=credential,
+                observed=credential,
+            )
+            serialized = json.dumps(recall, sort_keys=True)
+
+            self.assertNotIn(credential, serialized)
+            self.assertEqual(recall["executor_target"], "redacted")
+            self.assertEqual(recall["session_id"], "redacted")
+            self.assertEqual(recall["scope"], {"kind": "run", "ref": "redacted"})
+            self.assertEqual(recall["perspective"], {"observer": "redacted", "observed": "redacted"})
+
     def test_replay_projection_uses_sanitized_source_class_from_evaluation(self) -> None:
         credential = "gh" + "u_" + "a" * 36
         projection = memory_workflow._replay_evaluation(
