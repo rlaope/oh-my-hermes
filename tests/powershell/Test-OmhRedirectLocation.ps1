@@ -90,9 +90,10 @@ try {
         Invoke-Expression $accessor.Extent.Text
     }
 
+    # The parenthesised PASS profile is the authority for each branch; comments follow it.
     # PowerShell 7 successful Invoke-WebRequest responses expose a dictionary
-    # from header name to a collection of strings. PowerShell's IDictionary
-    # adapter exposes Location as an adapted property, so this uses branch one.
+    # from header name to a collection of strings. The observed profile takes
+    # the indexer branch.
     $ps7SuccessHeaders = New-Object 'System.Collections.Generic.Dictionary[string,System.Collections.Generic.IEnumerable[string]]'
     $ps7SuccessHeaders.Add('Location', [string[]]@('https://example.test/ps7-success'))
     Assert-OmhRedirectLocation 'PowerShell 7 success dictionary' ([pscustomobject]@{
@@ -100,8 +101,7 @@ try {
     }) 'https://example.test/ps7-success' -Headers $ps7SuccessHeaders
 
     # PowerShell 7 error responses expose a Uri Location property and
-    # TryGetValues, but no indexer. This shape intentionally uses the Location
-    # property branch before its fallback method.
+    # TryGetValues, but no indexer. It alone takes the Location property branch.
     $ps7ErrorHeaders = [pscustomobject]@{
         Location = [uri]'https://example.test/ps7-error'
     }
@@ -118,7 +118,7 @@ try {
     }) 'https://example.test/ps7-error' -Headers $ps7ErrorHeaders
 
     # This PSCustomObject has only TryGetValues: no Location adapted property
-    # and no Item indexer. The guards keep it pinned to the fallback shape.
+    # and no Item indexer. The observed profile takes the TryGetValues branch.
     $tryGetValuesOnlyHeaders = [pscustomobject]@{}
     $tryGetValuesOnlyHeaders | Add-Member -MemberType ScriptMethod -Name TryGetValues -Value {
         param([string]$Name, [ref]$Values)
@@ -138,8 +138,7 @@ try {
     }) 'https://example.test/try-get-values' -Headers $tryGetValuesOnlyHeaders
 
     # Windows PowerShell 5.1 successful requests provide a plain dictionary.
-    # Its IDictionary adapter also exposes Location as an adapted property, so
-    # this uses branch one rather than the indexer fallback.
+    # The observed profile takes the indexer branch.
     $ps51SuccessHeaders = New-Object 'System.Collections.Generic.Dictionary[string,string]'
     $ps51SuccessHeaders.Add('Location', 'https://example.test/ps51-success')
     Assert-OmhRedirectLocation 'Windows PowerShell 5.1 success dictionary' ([pscustomobject]@{
@@ -147,6 +146,7 @@ try {
     }) 'https://example.test/ps51-success' -Headers $ps51SuccessHeaders
 
     # Windows PowerShell 5.1 error responses use this framework header type.
+    # The observed profile takes the indexer branch.
     $ps51ErrorHeaders = New-Object System.Net.WebHeaderCollection
     $ps51ErrorHeaders.Add('Location', 'https://example.test/ps51-error')
     Assert-OmhRedirectLocation 'Windows PowerShell 5.1 WebHeaderCollection error response' ([pscustomobject]@{
@@ -154,8 +154,7 @@ try {
     }) 'https://example.test/ps51-error' -Headers $ps51ErrorHeaders
 
     # NameValueCollection supports a string-key indexer and has no
-    # TryGetValues method. Its adapter properties differ by host, so the PASS
-    # profile records the observed branch instead of assuming one here.
+    # TryGetValues method. The observed profile takes the indexer branch.
     $indexerOnlyHeaders = New-Object System.Collections.Specialized.NameValueCollection
     $indexerOnlyHeaders.Add('Location', 'https://example.test/indexer-only')
     $indexerOnlyProfile = Get-OmhHeaderCapabilityProfile $indexerOnlyHeaders
