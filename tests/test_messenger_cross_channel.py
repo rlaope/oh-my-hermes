@@ -87,7 +87,7 @@ class StructuredGateTests(unittest.TestCase):
         gate = build_message_gate(
             skill="ulw-work",
             executor="codex",
-            model="gpt-5-codex",
+            model="gpt-5.6-sol",
             status="prepared_not_observed",
             prompt_sha256="abc123",
             composed_prompt="Refactor the parser.",

@@ -7643,7 +7643,7 @@ def _english_series(items: list[str]) -> str:
 
 def _status_executor_suffix(status_payload: dict[str, Any]) -> str:
     """`` (Codex)`` or, when the handoff carries a resolved model route,
-    `` (Codex — gpt-5-codex xhigh)`` — the status-board single-field label
+    `` (Codex — gpt-5.6-sol xhigh)`` — the status-board single-field label
     convention (`model_label_for`); empty when nothing is known."""
     display = " — ".join(
         part

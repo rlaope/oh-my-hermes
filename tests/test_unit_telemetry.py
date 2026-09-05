@@ -33,7 +33,7 @@ CODEX_TOKEN_COUNT_EVENT = {
 }
 CODEX_SESSION_CONFIGURED_EVENT = {
     "id": "0",
-    "msg": {"type": "session_configured", "session_id": "0199f0aa-1b2c-4d5e-8f90-abcdef123456", "model": "gpt-5-codex"},
+    "msg": {"type": "session_configured", "session_id": "0199f0aa-1b2c-4d5e-8f90-abcdef123456", "model": "gpt-5.6-sol"},
 }
 CLAUDE_RESULT_EVENT = {
     "type": "result",

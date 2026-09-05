@@ -103,7 +103,7 @@ def _fields(**overrides: str) -> dict[str, str]:
     fields = {
         "owner": "codex",
         "owner_host": "local",
-        "model": "gpt-5-codex",
+        "model": "gpt-5.6-sol",
         "reasoning_effort": "medium",
         "run_ref": "run-core",
         "worktree": "/tmp/worktrees/core",
@@ -136,14 +136,14 @@ class RunningWorkBoardReaderTests(unittest.TestCase):
             self.assertEqual({unit["unit_id"] for unit in board["units"]}, {"core", "docs"})
             for unit in board["units"]:
                 self.assertEqual(unit["status"], "running")
-                self.assertEqual(unit["model_label"], "gpt-5-codex medium")
+                self.assertEqual(unit["model_label"], "gpt-5.6-sol medium")
             self.assertEqual(board["sources"]["fanout_root"], "present")
             # The RENDERED row pins the `runtime (model effort) — status`
             # parenthesized shape, so drift in this plugin-bundle copy of the
             # renderer fails the suite, not just the JSON fields.
             text = render_running_work_block_text(board)
-            self.assertIn(f"- {_FANOUT_ID}/core: codex (gpt-5-codex medium) — Code · running", text)
-            self.assertIn(f"- {_FANOUT_ID}/docs: codex (gpt-5-codex medium) — Code · running", text)
+            self.assertIn(f"- {_FANOUT_ID}/core: codex (gpt-5.6-sol medium) — Code · running", text)
+            self.assertIn(f"- {_FANOUT_ID}/docs: codex (gpt-5.6-sol medium) — Code · running", text)
             self.assertNotIn(" — (", text)
 
     def test_more_units_than_the_limit_states_truncation(self) -> None:

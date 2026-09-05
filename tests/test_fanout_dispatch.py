@@ -3348,7 +3348,7 @@ class FanoutBriefCliTests(unittest.TestCase):
             by_unit = {entry["unit_id"]: entry for entry in brief["units"]}
             core = by_unit["core"]
             self.assertEqual(core["owner"], "codex")
-            self.assertEqual(core["model"], "gpt-5-codex")
+            self.assertEqual(core["model"], "gpt-5.6-terra")
             self.assertEqual(core["status"], "completed")
             self.assertEqual(core["session_ref"], "unknown")
             self.assertEqual(core["tokens_total"], "unknown")
@@ -3367,7 +3367,7 @@ class FanoutBriefCliTests(unittest.TestCase):
             root = Path(tmp)
             paths = OmhPaths(omh_home=root / ".omh", hermes_home=root / ".hermes")
             units = [
-                {"unit_id": "review", "title": "Review", "owner": "codex", "file_scope": ["src/r/"], "role": "review"},
+                {"unit_id": "core", "title": "Core", "owner": "codex", "file_scope": ["src/r/"], "role": "brain"},
                 {"unit_id": "docs", "title": "Docs", "owner": "codex", "file_scope": ["docs/"], "role": "docs"},
             ]
             contract = write_fanout_contract(paths, build_fanout_contract(_GOAL, units))
@@ -3377,13 +3377,13 @@ class FanoutBriefCliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             brief = json.loads(stdout)
             by_unit = {entry["unit_id"]: entry for entry in brief["units"]}
-            # Behavior change #3 (display consequence of the review-on-codex
-            # chain head): the model field is a concrete id, no longer
-            # executor_default, and the alternative is the second chain entry.
-            review = by_unit["review"]
-            self.assertEqual(review["model"], "gpt-5-codex")
-            self.assertEqual(review["model_label"], "gpt-5-codex")
-            self.assertEqual(review["model_alternative"], "gpt-5")
+            # Behavior change #3 (display consequence of the chain head): the
+            # model field is a concrete id, no longer executor_default, and the
+            # alternative is the second chain entry (brain = deep > standard).
+            core = by_unit["core"]
+            self.assertEqual(core["model"], "gpt-5.6-terra")
+            self.assertEqual(core["model_label"], "gpt-5.6-terra high")
+            self.assertEqual(core["model_alternative"], "gpt-5.6-sol")
             # Single-entry chain (docs on codex): no alternative, empty string.
             self.assertEqual(by_unit["docs"]["model_alternative"], "")
 
@@ -3394,9 +3394,9 @@ class FanoutBriefCliTests(unittest.TestCase):
             # Owner and model read as ONE field, matching the status board's
             # bullet convention; a standalone "— (model)" field doubled the
             # separator around a parenthetical.
-            self.assertIn("codex (gpt-5-codex, alt: gpt-5)", stdout)
+            self.assertIn("codex (gpt-5.6-terra high, alt: gpt-5.6-sol)", stdout)
             self.assertNotIn(" — (", stdout)
-            self.assertNotIn("(gpt-5, alt:", stdout)
+            self.assertNotIn("(gpt-5.6-sol, alt:", stdout)
 
     def test_brief_degrades_silently_for_v1_routes(self) -> None:
         # A persisted v1 route carries no chain[]: the alternative must be
@@ -3417,7 +3417,7 @@ class FanoutBriefCliTests(unittest.TestCase):
                     unit["handoff"]["model_route"] = {
                         "schema_version": "coding_model_route/v1",
                         "source": "role_catalog_default",
-                        "selected_model": "gpt-5-codex",
+                        "selected_model": "gpt-5.6-sol",
                         "selected_reasoning_effort": "high",
                     }
             contract_path.write_text(json.dumps(stored), encoding="utf-8")
@@ -3427,7 +3427,7 @@ class FanoutBriefCliTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             brief = json.loads(stdout)
             core = {entry["unit_id"]: entry for entry in brief["units"]}["core"]
-            self.assertEqual(core["model_label"], "gpt-5-codex high")
+            self.assertEqual(core["model_label"], "gpt-5.6-sol high")
             self.assertEqual(core["model_alternative"], "")
             self.assertEqual(core["route_schema_version"], "coding_model_route/v1")
 
@@ -3435,7 +3435,7 @@ class FanoutBriefCliTests(unittest.TestCase):
                 base + ["coding", "fanout", "brief", str(contract["fanout_id"])], output_json=False
             )
             self.assertEqual(status, 0, stderr)
-            self.assertIn("codex (gpt-5-codex high [schema v1])", stdout)
+            self.assertIn("codex (gpt-5.6-sol high [schema v1])", stdout)
             self.assertNotIn(" — (", stdout)
             self.assertNotIn("alt:", stdout.split("docs")[0].split("core")[-1])
 
@@ -3511,7 +3511,7 @@ class FanoutBriefTextCeilingTests(unittest.TestCase):
             {
                 "unit_id": f"unit-{index:02d}",
                 "owner": "codex",
-                "model_label": "gpt-5-codex xhigh",
+                "model_label": "gpt-5.6-sol xhigh",
                 "model_alternative": "",
                 "route_schema_version": "coding_model_route/v2",
                 "status": "completed",

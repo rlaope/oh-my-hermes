@@ -59,7 +59,7 @@ def _routed_gate(**overrides: object) -> dict:
     fields: dict = {
         "skill": "ulw-work",
         "executor": "codex",
-        "model": "gpt-5-codex",
+        "model": "gpt-5.6-sol",
         "reasoning_effort": "xhigh",
         "status": "prepared_not_observed",
         "prompt_sha256": "533d406a486317830d49c302e798c242",
@@ -210,7 +210,7 @@ class PromptBlockTests(unittest.TestCase):
 
     def test_the_block_names_the_model_it_was_ordered_on(self) -> None:
         gate = _routed_gate(composed_prompt="You are Codex.")
-        self.assertIn("codex (gpt-5-codex xhigh)", gate["prompt_block"].split("\n")[0])
+        self.assertIn("codex (gpt-5.6-sol xhigh)", gate["prompt_block"].split("\n")[0])
 
 
 class PayloadShapeTests(unittest.TestCase):

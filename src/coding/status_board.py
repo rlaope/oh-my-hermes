@@ -215,7 +215,7 @@ def _aligned_rows_only(payload: dict[str, Any]) -> str:
 
 
 def model_label_for(model: str, reasoning_effort: str) -> str:
-    """The `gpt-5-codex xhigh` label shape shared with `omh coding fanout brief`."""
+    """The `gpt-5.6-sol xhigh` label shape shared with `omh coding fanout brief`."""
     return " ".join(part for part in (str(model or ""), str(reasoning_effort or "")) if part) or _MODEL_DEFAULT_LABEL
 
 

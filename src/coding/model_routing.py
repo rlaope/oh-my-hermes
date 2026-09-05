@@ -160,18 +160,18 @@ EXECUTOR_MODEL_OPTIONS: Final[dict[str, tuple[dict[str, object], ...]]] = {
             "reasoning_efforts": ("low", "medium", "high", "xhigh", "max"),
         },
         {
-            "model_id": "gpt-5-codex",
-            "label": "Codex frontier coding model",
+            "model_id": "gpt-5.6-sol",
+            "label": "GPT-5.6 Sol (frontier coding; the Codex CLI default)",
             "tier": "frontier",
             "recommended_roles": ("brain", "review", "design_visual"),
-            "reasoning_efforts": ("off", "minimal", "low", "medium", "high", "xhigh"),
+            "reasoning_efforts": ("low", "medium", "high", "xhigh"),
         },
         {
-            "model_id": "gpt-5",
-            "label": "General frontier model",
+            "model_id": "gpt-5.6-terra",
+            "label": "GPT-5.6 Terra (deep work tier)",
             "tier": "standard",
             "recommended_roles": ("implementation", "docs", "review", "research"),
-            "reasoning_efforts": ("off", "minimal", "low", "medium", "high", "xhigh"),
+            "reasoning_efforts": ("low", "medium", "high", "xhigh"),
         },
     ),
     "claude-code": (
@@ -326,28 +326,32 @@ def _CLAUDE_FRONTIER_CHAIN(effort: str) -> tuple[dict[str, str], ...]:
 
 
 BUILTIN_CATEGORY_MODELS: Final[dict[str, dict[str, tuple[dict[str, str], ...]]]] = {
-    # Codex: gpt-5-codex is the frontier CODING model, gpt-5 the general one.
-    # Every category that means "do the work well" therefore names the coding
-    # model, and the light categories name the general one. GPT-6 Astra heads
-    # the two full-depth categories (the slots the previous GPT frontier held)
-    # with gpt-5-codex as fall-through, mirroring the Hermes lane; the cost-tier
-    # categories keep their cheaper picks (Astra lists at 8x gpt-5.6-sol).
+    # Codex: the same GPT generation the Hermes lane ships. GPT-6 Astra heads
+    # the two full-depth categories with GPT-5.6 Sol as fall-through; `deep`
+    # is Terra over Sol, mirroring the Hermes lane; every lighter category
+    # names Sol, the Codex CLI's own default, at the effort the tier wants
+    # (Astra lists at 8x Sol, so it never heads a cost-tier slot). The
+    # previous table named the gpt-5 generation, which the CLI no longer
+    # serves on the owner machine (2026-09-05).
     "codex": {
         "ultrabrain": (
             {"model_id": "gpt-6-astra", "reasoning_effort": "xhigh"},
-            {"model_id": "gpt-5-codex", "reasoning_effort": "xhigh"},
+            {"model_id": "gpt-5.6-sol", "reasoning_effort": "xhigh"},
         ),
-        "deep": ({"model_id": "gpt-5-codex", "reasoning_effort": "high"},),
+        "deep": (
+            {"model_id": "gpt-5.6-terra", "reasoning_effort": "high"},
+            {"model_id": "gpt-5.6-sol", "reasoning_effort": "high"},
+        ),
         "architect": (
             {"model_id": "gpt-6-astra", "reasoning_effort": "xhigh"},
-            {"model_id": "gpt-5-codex", "reasoning_effort": "xhigh"},
+            {"model_id": "gpt-5.6-sol", "reasoning_effort": "xhigh"},
         ),
-        "unspecified-high": ({"model_id": "gpt-5-codex", "reasoning_effort": ""},),
-        "unspecified-low": ({"model_id": "gpt-5", "reasoning_effort": ""},),
-        "quick": ({"model_id": "gpt-5", "reasoning_effort": "low"},),
-        "writing": ({"model_id": "gpt-5", "reasoning_effort": ""},),
-        "visual-engineering": ({"model_id": "gpt-5-codex", "reasoning_effort": ""},),
-        "artistry": ({"model_id": "gpt-5", "reasoning_effort": ""},),
+        "unspecified-high": ({"model_id": "gpt-5.6-sol", "reasoning_effort": ""},),
+        "unspecified-low": ({"model_id": "gpt-5.6-sol", "reasoning_effort": ""},),
+        "quick": ({"model_id": "gpt-5.6-sol", "reasoning_effort": "low"},),
+        "writing": ({"model_id": "gpt-5.6-sol", "reasoning_effort": ""},),
+        "visual-engineering": ({"model_id": "gpt-5.6-sol", "reasoning_effort": ""},),
+        "artistry": ({"model_id": "gpt-5.6-sol", "reasoning_effort": ""},),
     },
     # Claude Code: every frontier category runs the owner-ordered Claude chain
     # (Fable 5.1 -> Mythos 5.1 -> Opus, 2026-09-02). Mythos 5.1 is Fable 5.1

@@ -1426,7 +1426,7 @@ class SilentLossTests(unittest.TestCase):
         signal = build_safe_progress_signal(
             executor_profile="codex",
             process_status="running",
-            routed_model="gpt-5-codex",
+            routed_model="gpt-5.6-sol",
             routed_reasoning_effort="xhigh",
             tokens_total=10,
             elapsed_seconds=5,
