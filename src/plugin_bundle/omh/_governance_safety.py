@@ -186,7 +186,7 @@ def _has_single_case_alphanumeric_opaque_mix(token: str) -> bool:
     if not digits:
         if all(char.isupper() for char in letters):
             return len(token) >= 32
-        return len(token) >= 32 and len(token) % 4 == 0 and len(set(token)) >= 8
+        return len(token) >= 32 and len(set(token)) >= 8
     if len(token) >= 32 and all(char.isupper() for char in letters):
         return True
     if len(digits) < 3:
