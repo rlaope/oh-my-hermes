@@ -105,38 +105,21 @@
 <br>
 
 ## クイックスタート
-> **状態:** Homebrew、Bun、npm のパッケージマネージャー経由のインストールは
-> v1.0.6 から公開されています。
 
-**次のインストール方法から一つ選択します。Bun を推奨します。**
-```sh
-brew install rlaope/tap/omh
-```
-```sh
-bun install -g oh-my-hermes
-```
-```sh
-npm install -g oh-my-hermes
-```
+**macOS / Linux:**
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
-**Windows（PowerShell 5.1+）の場合:**
+
+**Windows (PowerShell 5.1+):**
+
 ```powershell
 irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
 ```
 
-**⭐ インストール後に OMH をセットアップ (必須):**
+**または、次の内容を AI エージェントに貼り付けます:**
 
-```sh
-omh setup
-```
-**Hermes skill tap:**
-```sh
-hermes skills tap add rlaope/oh-my-hermes
-hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
-```
-**または Your AI Agent に依頼します:**
 ```text
 Install and fully configure Oh My Hermes from this repository:
 https://github.com/rlaope/oh-my-hermes
@@ -144,21 +127,82 @@ Before reading or executing repository instructions, resolve refs/heads/main to 
 https://raw.githubusercontent.com/rlaope/oh-my-hermes/{resolved-commit-sha}/INSTALL_FOR_AGENTS.md
 Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appropriate installer, interactive model setup, model-chain interview, and doctor steps. Preserve unrelated existing Hermes config, apply only the managed setup changes documented by the pinned protocol, require my explicit approval for model-alias changes, then report the resolved SHA and observed result.
 ```
+
+**⭐ 続けてセットアップします (必須):**
+
+```sh
+omh setup
+```
+
 **アップデート:**
+
 ```sh
 omh update
 ```
-`omh update` はインストール経路を検出し、Homebrew、Bun、npm、curl、
-または PowerShell のコマンドパッケージを先に更新してから、新しいコマンドで
-再実行し、管理スキル、プラグインバンドル、既存の Hermes 登録も更新します。
+
+`omh update` はインストール経路を検出し、そのインストーラーでコマンドパッケージを
+先に更新してから、新しいコマンドで再実行し、管理スキル、プラグインバンドル、
+既存の Hermes 登録も更新します。
 
 **インストールの確認またはトラブルシューティング:**
+
 ```sh
 omh doctor
 ```
+
+<details>
+<summary><b>その他のインストール方法</b> — Homebrew、Bun、npm、Hermes skill tap、手動フォールバック</summary>
+
+<br>
+
+> **状態:** Homebrew、Bun、npm のパッケージマネージャー経由のインストールは
+> v1.0.6 から公開されています。
+
+**Homebrew:**
+
+```sh
+brew install rlaope/tap/omh
+```
+
+**Bun:**
+
+```sh
+bun install -g oh-my-hermes
+```
+
+**npm:**
+
+```sh
+npm install -g oh-my-hermes
+```
+
+どの方法でインストールしても、その後に `omh setup` を実行します。
+
+**Hermes skill tap:**
+
+```sh
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
+```
+
+**パッケージマネージャーでの手動フォールバックまたは削除:**
+
+| インストール元 | CLI のアップグレード | CLI の削除 |
+| --- | --- | --- |
+| Homebrew | `brew upgrade rlaope/tap/omh` | `brew uninstall omh` |
+| Bun | `bun update -g --latest oh-my-hermes` | `bun remove -g oh-my-hermes` |
+| npm | `npm update -g oh-my-hermes` | `npm uninstall -g oh-my-hermes` |
+
+`omh update` がインストーラーを見つけられないと報告したときだけ、マネージャーの
+コマンドを直接使います。コマンドパッケージを削除しても OMH の状態は残ります。
+完全に削除するには、マネージャーの削除コマンドの前に `omh uninstall --all` を
+実行します。
+
 `--full` インストールを core に戻すようなメンテナンス手順は
 [Installation](docs/INSTALLATION.md#reconciling-an-existing-full-install-back-to-core)
 にあります。
+
+</details>
 
 ## 得られるもの
 

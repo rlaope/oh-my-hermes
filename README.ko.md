@@ -105,38 +105,21 @@
 <br>
 
 ## 빠른 시작
-> **상태:** Homebrew, Bun, npm 패키지 관리자 설치가 v1.0.6부터 공개되었습니다.
 
-**아래 설치 방법 중 하나를 선택합니다. Bun을 권장합니다.**
-```sh
-brew install rlaope/tap/omh
-```
-```sh
-bun install -g oh-my-hermes
-```
-```sh
-npm install -g oh-my-hermes
-```
+**macOS / Linux:**
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
 
-**Windows(PowerShell 5.1+)에서는:**
+**Windows (PowerShell 5.1+):**
+
 ```powershell
 irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
 ```
 
-**⭐ 설치 후 OMH를 설정합니다 (필수):**
+**또는 아래 내용을 AI 에이전트에 붙여 넣습니다:**
 
-```sh
-omh setup
-```
-**Hermes skill tap 경로:**
-```sh
-hermes skills tap add rlaope/oh-my-hermes
-hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
-```
-**또는 Your AI Agent에게 요청합니다:**
 ```text
 Install and fully configure Oh My Hermes from this repository:
 https://github.com/rlaope/oh-my-hermes
@@ -145,21 +128,79 @@ https://raw.githubusercontent.com/rlaope/oh-my-hermes/{resolved-commit-sha}/INST
 Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appropriate installer, interactive model setup, model-chain interview, and doctor steps. Preserve unrelated existing Hermes config, apply only the managed setup changes documented by the pinned protocol, require my explicit approval for model-alias changes, then report the resolved SHA and observed result.
 ```
 
+**⭐ 그다음 설정합니다 (필수):**
+
+```sh
+omh setup
+```
+
 **업데이트:**
+
 ```sh
 omh update
 ```
-`omh update`는 설치 경로를 감지해 Homebrew, Bun, npm, curl 또는 PowerShell
-명령 패키지를 먼저 갱신한 뒤, 새 명령으로 다시 진입해 관리 스킬, 플러그인
-번들, 기존 Hermes 등록까지 함께 갱신합니다.
+
+`omh update`는 설치 경로를 감지해 명령 패키지를 그 설치 도구로 먼저 갱신한 뒤,
+새 명령으로 다시 진입해 관리 스킬, 플러그인 번들, 기존 Hermes 등록까지
+함께 갱신합니다.
 
 **설치를 확인하거나 문제를 해결합니다:**
+
 ```sh
 omh doctor
 ```
+
+<details>
+<summary><b>다른 설치 경로</b> — Homebrew, Bun, npm, Hermes skill tap, 수동 대체 경로</summary>
+
+<br>
+
+> **상태:** Homebrew, Bun, npm 패키지 관리자 설치는 v1.0.6부터 공개되어 있습니다.
+
+**Homebrew:**
+
+```sh
+brew install rlaope/tap/omh
+```
+
+**Bun:**
+
+```sh
+bun install -g oh-my-hermes
+```
+
+**npm:**
+
+```sh
+npm install -g oh-my-hermes
+```
+
+위 방법 중 어느 것으로 설치해도 이후에 `omh setup`을 실행합니다.
+
+**Hermes skill tap 경로:**
+
+```sh
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
+```
+
+**패키지 관리자 수동 대체 또는 제거:**
+
+| 설치 도구 | CLI 업그레이드 | CLI 제거 |
+| --- | --- | --- |
+| Homebrew | `brew upgrade rlaope/tap/omh` | `brew uninstall omh` |
+| Bun | `bun update -g --latest oh-my-hermes` | `bun remove -g oh-my-hermes` |
+| npm | `npm update -g oh-my-hermes` | `npm uninstall -g oh-my-hermes` |
+
+`omh update`가 설치 도구를 찾지 못한다고 보고할 때만 관리자 명령을 직접
+사용합니다. 명령 패키지를 제거해도 OMH 상태는 남습니다. 완전히 제거하려면
+관리자의 제거 명령 전에 `omh uninstall --all`을 실행합니다.
+
 `--full` 설치를 core로 되돌리는 것 같은 유지보수 경로는
 [Installation](docs/INSTALLATION.md#reconciling-an-existing-full-install-back-to-core)에
 있습니다.
+
+</details>
 
 ## 얻는 것
 

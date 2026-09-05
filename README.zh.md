@@ -103,41 +103,20 @@
 <br>
 
 ## 快速开始
-> **状态：** Homebrew、Bun 与 npm 包管理器安装方式已随 v1.0.6 正式公开。
 
-**从以下安装方式中选择一种。推荐 Bun。**
-```sh
-brew install rlaope/tap/omh
-```
-```sh
-bun install -g oh-my-hermes
-```
-```sh
-npm install -g oh-my-hermes
-```
+**macOS / Linux：**
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
 ```
 
-**在 Windows（PowerShell 5.1+）上：**
+**Windows（PowerShell 5.1+）：**
+
 ```powershell
 irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
 ```
 
-**⭐ 安装后设置 OMH（必需）：
-
-```sh
-omh setup
-```
-
-**Hermes skill tap：**
-
-```sh
-hermes skills tap add rlaope/oh-my-hermes
-hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
-```
-
-**或者向 Your AI Agent 提出请求：**
+**或者把下面这段粘贴给你的 AI 代理：**
 
 ```text
 Install and fully configure Oh My Hermes from this repository:
@@ -147,21 +126,77 @@ https://raw.githubusercontent.com/rlaope/oh-my-hermes/{resolved-commit-sha}/INST
 Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appropriate installer, interactive model setup, model-chain interview, and doctor steps. Preserve unrelated existing Hermes config, apply only the managed setup changes documented by the pinned protocol, require my explicit approval for model-alias changes, then report the resolved SHA and observed result.
 ```
 
+**⭐ 然后进行设置（必需）：**
+
+```sh
+omh setup
+```
+
 **更新：**
+
 ```sh
 omh update
 ```
-`omh update` 会检测安装来源，先通过 Homebrew、Bun、npm、curl 或
-PowerShell 更新命令包，再重新进入新命令，同时刷新托管技能、插件包和现有
-Hermes 注册。
+
+`omh update` 会检测安装来源，先通过对应的安装器更新命令包，再重新进入
+新命令，同时刷新托管技能、插件包和现有 Hermes 注册。
 
 **验证安装或排查问题：**
+
 ```sh
 omh doctor
 ```
 
+<details>
+<summary><b>其他安装方式</b> — Homebrew、Bun、npm、Hermes skill tap、手动回退</summary>
+
+<br>
+
+> **状态：** Homebrew、Bun 与 npm 包管理器安装方式已随 v1.0.6 正式公开。
+
+**Homebrew:**
+
+```sh
+brew install rlaope/tap/omh
+```
+
+**Bun:**
+
+```sh
+bun install -g oh-my-hermes
+```
+
+**npm:**
+
+```sh
+npm install -g oh-my-hermes
+```
+
+无论用哪种方式安装，之后都运行 `omh setup`。
+
+**Hermes skill tap：**
+
+```sh
+hermes skills tap add rlaope/oh-my-hermes
+hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
+```
+
+**包管理器手动回退或卸载：**
+
+| 安装方式 | 升级 CLI | 卸载 CLI |
+| --- | --- | --- |
+| Homebrew | `brew upgrade rlaope/tap/omh` | `brew uninstall omh` |
+| Bun | `bun update -g --latest oh-my-hermes` | `bun remove -g oh-my-hermes` |
+| npm | `npm update -g oh-my-hermes` | `npm uninstall -g oh-my-hermes` |
+
+只有在 `omh update` 报告找不到其安装器时才直接使用包管理器命令。删除命令包
+会保留 OMH 状态。要完全卸载，请先运行 `omh uninstall --all`，再执行包管理器的
+卸载命令。
+
 把 `--full` 安装收敛回 core 这类维护路径，见
 [Installation](docs/INSTALLATION.md#reconciling-an-existing-full-install-back-to-core)。
+
+</details>
 
 ## 你能得到什么
 
