@@ -308,6 +308,21 @@ specialists.
 
 [Browse the catalog ↗](docs/WORKFLOWS.md)
 
+### 07 · The architecture in one picture, then improved in phases
+
+Ask for a picture of the repo and `codebase-uml` draws it from the code:
+packages, modules, and every import edge, with the cycles marked. The
+findings come ranked, and `refactor-plan` turns the top ones into phases that
+each land as one PR, behavior-locked by the tests, and abort the moment a lock
+breaks. The before and after are measured on the tree, and the dock shows
+each phase as it runs, and whether anything checked it.
+
+<p align="center">
+  <img src="assets/showcase-07-architecture.svg" alt="codebase-uml draws the repo with two cycles, the findings and a phased refactor plan beside it, the measured before and after, and one dock row per phase" width="1080">
+</p>
+
+[Read the refactor plan skill ↗](skills/omh-refactor-plan/SKILL.md)
+
 <br>
 
 ## The OH-MY-HERMES terminal

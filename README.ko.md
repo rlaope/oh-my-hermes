@@ -223,6 +223,16 @@ omh doctor
 
 [카탈로그 보기 ↗](docs/WORKFLOWS.md)
 
+### 07 · 아키텍처를 한 장으로, 그다음 단계별로 개선
+
+리포 그림을 부탁하면 `codebase-uml`이 코드에서 직접 그린다. 패키지, 모듈, 모든 import 간선, 그리고 순환은 표시된다. 발견 사항은 순위가 매겨져 나오고, `refactor-plan`이 상위 항목을 단계로 바꾼다. 각 단계는 PR 하나로 들어가고, 테스트로 동작이 잠기며, 잠금이 깨지는 순간 중단된다. 전후는 트리에서 측정되고, dock은 단계마다 실행 중인지, 무언가가 확인했는지를 보여준다.
+
+<p align="center">
+  <img src="assets/showcase-07-architecture.svg" alt="codebase-uml이 순환 2개와 함께 리포를 그리고, 옆에 발견 사항과 단계별 리팩터 계획, 측정된 전후, 단계별 dock 행" width="1080">
+</p>
+
+[리팩터 계획 스킬 보기 ↗](skills/omh-refactor-plan/SKILL.md)
+
 <br>
 
 ## OH-MY-HERMES 터미널

@@ -222,6 +222,16 @@ omh doctor
 
 [カタログを見る ↗](docs/WORKFLOWS.md)
 
+### 07 · アーキテクチャを一枚に、そして段階的に改善
+
+リポジトリの図を頼むと `codebase-uml` がコードから描く。パッケージ、モジュール、すべての import エッジ、そして循環にはマークが付く。発見事項はランク付きで返り、`refactor-plan` が上位のものをフェーズに変える。各フェーズは 1 つの PR として入り、テストで振る舞いがロックされ、ロックが壊れた瞬間に中止される。前後はツリー上で測定され、dock は各フェーズが実行中かどうか、何かが検証したかどうかを示す。
+
+<p align="center">
+  <img src="assets/showcase-07-architecture.svg" alt="codebase-uml が 2 つの循環とともにリポジトリを描き、その横に発見事項と段階的なリファクタ計画、測定された前後、フェーズごとの dock 行" width="1080">
+</p>
+
+[リファクタ計画スキルを読む ↗](skills/omh-refactor-plan/SKILL.md)
+
 <br>
 
 ## OH-MY-HERMES ターミナル

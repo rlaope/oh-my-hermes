@@ -3699,10 +3699,10 @@ class RouterContentTests(unittest.TestCase):
             # every language, and from 340 when the Be with us table with the
             # Discord community invite (~29 lines, owner-directed) landed in
             # every language, and from 370 when the five-item "What you get"
-            # showcase (h2 + five h3 blocks with a card each, ~47 lines,
+            # showcase (h2 + seven h3 blocks with a card each, ~65 lines,
             # owner-directed) landed in every language; it still sits below
             # README.md's length.
-            self.assertLess(len(localized_readme.splitlines()), 430)
+            self.assertLess(len(localized_readme.splitlines()), 450)
             # The trust surface is the evidence table, not the wire token that
             # used to stand in for it. Pinning the token meant a README could
             # satisfy this by naming a value no reader could decode; pinning

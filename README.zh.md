@@ -225,6 +225,16 @@ omh doctor
 
 [浏览目录 ↗](docs/WORKFLOWS.md)
 
+### 07 · 一张图看清架构，再分阶段改进
+
+让它画出仓库，`codebase-uml` 会直接从代码里画：包、模块、每一条 import 边，并标出循环依赖。发现按优先级排列，`refactor-plan` 把靠前的几项变成阶段：每个阶段作为一个 PR 落地，由测试锁定行为，锁一旦被打破就立刻中止。前后对比在代码树上实测，dock 显示每个阶段是否在运行，以及是否有东西检查过它。
+
+<p align="center">
+  <img src="assets/showcase-07-architecture.svg" alt="codebase-uml 画出带两个循环的仓库，旁边是发现项和分阶段重构计划、实测的前后对比，以及每个阶段一行 dock" width="1080">
+</p>
+
+[阅读重构计划技能 ↗](skills/omh-refactor-plan/SKILL.md)
+
 <br>
 
 ## OH-MY-HERMES 终端
