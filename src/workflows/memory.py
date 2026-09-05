@@ -1244,11 +1244,15 @@ def build_project_memory_recall_pack(
     query_intent: str | None = None,
 ) -> dict[str, object]:
     policy = read_project_memory_policy(paths)
+    executor_target = _redacted_metadata_label(executor_target)
+    session_id = _redacted_metadata_label(session_id)
+    scope_kind = _redacted_metadata_label(scope_kind) if scope_kind is not None else None
+    scope_ref = _redacted_metadata_label(scope_ref) if scope_ref is not None else None
     # Lens labels normalize exactly like capture labels: capture lowercases
     # and strips, so a raw "--observed Codex" here would silently match
     # nothing and read as "never captured".
-    observer = str(observer or "").strip().lower() or None
-    observed = str(observed or "").strip().lower() or None
+    observer = _redacted_metadata_label(str(observer or "").strip().lower()) or None
+    observed = _redacted_metadata_label(str(observed or "").strip().lower()) or None
     task_ref = {
         "sha256": hashlib.sha256(query.encode("utf-8")).hexdigest() if query else "",
         "length": len(query),

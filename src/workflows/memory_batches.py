@@ -179,13 +179,16 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
     ]
 
     def assert_precondition(check_paths: OmhPaths, step: dict[str, str]) -> None:
+        snapshot = _scope_snapshot_by_target(check_paths, step["target"])
         if (
-            _scope_precondition_digest(
-                _scope_snapshot_by_target(check_paths, step["target"]),
-                candidate["items"],
+            _scope_precondition_digest(snapshot, candidate["items"], step["target"])
+            != step["revision"]
+            and not _scope_matches_candidate_apply(
+                snapshot,
+                candidate,
+                reviews,
                 step["target"],
             )
-            != step["revision"]
         ):
             raise _ScopePreconditionChanged("reviewed scope changed before apply")
 
@@ -317,6 +320,14 @@ def _apply_scope(
         op = item["op"]
         if op == "change_scope" and target == _relative_scope(item["from_scope"]):
             data["items"].pop(item["target_ref"], None)
+            data["tombstones"][item["target_ref"]] = {
+                "item_id": item["target_ref"],
+                "operation_id": candidate["apply_operation_id"],
+                "candidate_item_id": item["item_id"],
+                "review_id": item["review_id"],
+                "reason_code": "scope_changed",
+                "tombstoned_at": updated_at,
+            }
         elif op == "forget":
             data["items"].pop(item["target_ref"], None)
             data["tombstones"][item["target_ref"]] = {"item_id": item["target_ref"], "operation_id": candidate["apply_operation_id"], "candidate_item_id": item["item_id"], "review_id": item["review_id"], "tombstoned_at": updated_at}
@@ -327,6 +338,73 @@ def _apply_scope(
             data["items"][item["item_id"]] = _approved_item(candidate, item, reviews[item["item_id"]])
     data["updated_at"] = updated_at
     atomic_write_json(path, data, private=True)
+
+
+def _scope_matches_candidate_apply(
+    value: Mapping[str, object] | None,
+    candidate: Mapping[str, object],
+    reviews: Mapping[str, Mapping[str, object]],
+    target: str,
+) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    items = value.get("items")
+    tombstones = value.get("tombstones", {})
+    if not isinstance(items, Mapping) or not isinstance(tombstones, Mapping):
+        return False
+    candidate_items = candidate.get("items")
+    if not isinstance(candidate_items, list):
+        return False
+    matching = [
+        item
+        for item in candidate_items
+        if isinstance(item, Mapping)
+        and target in {_relative_scope(scope) for scope in _item_scopes(item)}
+    ]
+    if not matching:
+        return False
+    for item in matching:
+        op = item.get("op")
+        target_ref = str(item.get("target_ref", ""))
+        item_id = str(item.get("item_id", ""))
+        review_id = str(item.get("review_id", ""))
+        if op == "change_scope" and target == _relative_scope(item["from_scope"]):
+            marker = tombstones.get(target_ref)
+            if target_ref in items or not isinstance(marker, Mapping):
+                return False
+            if any(
+                marker.get(key) != expected
+                for key, expected in {
+                    "operation_id": candidate.get("apply_operation_id"),
+                    "candidate_item_id": item_id,
+                    "review_id": review_id,
+                    "reason_code": "scope_changed",
+                }.items()
+            ):
+                return False
+        elif op == "forget":
+            marker = tombstones.get(target_ref)
+            if target_ref in items or not isinstance(marker, Mapping):
+                return False
+            if any(
+                marker.get(key) != expected
+                for key, expected in {
+                    "operation_id": candidate.get("apply_operation_id"),
+                    "candidate_item_id": item_id,
+                    "review_id": review_id,
+                }.items()
+            ):
+                return False
+        else:
+            review = reviews.get(item_id)
+            if not isinstance(review, Mapping):
+                return False
+            expected_item = _approved_item(candidate, item, review)
+            if items.get(item_id) != expected_item:
+                return False
+            if target_ref != item_id and target_ref in items:
+                return False
+    return True
 
 
 def _approved_item(candidate: Mapping[str, object], item: Mapping[str, object], review: Mapping[str, object]) -> dict[str, object]:
@@ -585,7 +663,10 @@ def _scope_precondition_digest(
             or (item.get("op") == "change_scope" and target == _relative_scope(item["from_scope"]))
         ):
             item_keys.add(item_id)
-        if item.get("op") == "forget":
+        if item.get("op") == "forget" or (
+            item.get("op") == "change_scope"
+            and target == _relative_scope(_item_scopes(item)[0])
+        ):
             tombstone_keys.add(target_ref)
     data = dict(value) if isinstance(value, Mapping) else None
     current_items = data.get("items", {}) if data else {}
