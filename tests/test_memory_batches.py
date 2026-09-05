@@ -134,6 +134,32 @@ class MemoryBatchTests(TestCase):
             self.assertEqual(scope["items"][item_id]["value"], "second synthetic value")
             self.assertEqual(scope["items"][item_id]["batch_id"], second["batch_id"])
 
+    def test_reviewed_dismiss_conflict_persists_operation_and_dismissal_time(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            first = self._stage_and_remember(paths, _batch("conflict-target"))
+            self.assertTrue(
+                apply_approved_memory_update_batch(paths, first["batch_id"])["applied"]
+            )
+            item_id = str(first["items"][0]["item_id"])
+            dismiss = _batch(item_id)
+            updates = dismiss["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates[0]["op"] = "dismiss_conflict"
+            second = self._stage_and_remember(paths, dismiss)
+
+            applied = apply_approved_memory_update_batch(paths, second["batch_id"])
+            scope = json.loads(
+                (paths.memory_dir / "scopes" / "project.json").read_text(encoding="utf-8")
+            )
+            stored = scope["items"][item_id]
+
+            self.assertTrue(applied["applied"])
+            self.assertEqual(stored["operation"], "dismiss_conflict")
+            self.assertEqual(stored["dismissed_at"], stored["admission"]["admitted_at"])
+            self.assertEqual(stored["candidate_item_id"], second["items"][0]["item_id"])
+
     def test_stage_rejects_unsafe_content_without_writing_a_candidate(self) -> None:
         with TemporaryDirectory() as home:
             paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
@@ -167,6 +193,45 @@ class MemoryBatchTests(TestCase):
                     stage_memory_update_batch(paths, unsafe)
 
                 self.assertFalse(paths.memory_dir.exists())
+
+    @requires_symlinks
+    def test_batch_candidate_and_review_parent_symlinks_cannot_escape_store(self) -> None:
+        for phase in ("candidate", "review"):
+            with self.subTest(phase=phase), TemporaryDirectory() as home:
+                paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+                outside = Path(home) / "outside"
+                outside.mkdir()
+
+                if phase == "candidate":
+                    paths.memory_dir.mkdir(parents=True)
+                    (paths.memory_dir / "candidates").symlink_to(
+                        outside,
+                        target_is_directory=True,
+                    )
+                    with self.assertRaises(ValueError):
+                        stage_memory_update_batch(paths, _batch("candidate-symlink"))
+                else:
+                    staged = stage_memory_update_batch(paths, _batch("review-symlink"))
+                    candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+                    candidate_bytes = candidate_path.read_bytes()
+                    (paths.memory_dir / "reviews").symlink_to(
+                        outside,
+                        target_is_directory=True,
+                    )
+                    decisions = {
+                        item["item_id"]: "remember"
+                        for item in staged["items"]
+                    }
+                    with self.assertRaises(ValueError):
+                        review_memory_update_batch(
+                            paths,
+                            staged["batch_id"],
+                            decisions,
+                            reviewer_label="operator-label",
+                        )
+                    self.assertEqual(candidate_path.read_bytes(), candidate_bytes)
+
+                self.assertEqual(list(outside.iterdir()), [])
 
     def test_batch_surface_and_reviewer_labels_reject_credentials_before_writes(self) -> None:
         credential = "gh" + "u_" + "a" * 36

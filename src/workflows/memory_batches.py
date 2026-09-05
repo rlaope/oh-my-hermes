@@ -12,10 +12,16 @@ from pathlib import Path
 from typing import Any
 
 from ..plugin_bundle.omh.memory_governance import MEMORY_GOVERNANCE_POLICY_VERSION, MEMORY_SCOPE_SCHEMA_VERSION, PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION, SOURCE_CLASSES, build_retention, canonical_memory_scope, canonical_payload_digest, classify_memory_admission, evaluate_renderable_strings, stable_artifact_identity
-from ..system.local_store import atomic_write_json, ensure_dir, file_lock, read_json_object_result
+from ..system.local_store import atomic_write_json, file_lock, read_json_object_result
 from ..system.paths import OmhPaths
 from ._memory_store_validation import safe_token
-from .memory_store import MemoryOperationIdentityError, run_memory_operation
+from .memory_store import (
+    MemoryOperationIdentityError,
+    checked_memory_directory,
+    checked_memory_json_path,
+    ensure_memory_directory,
+    run_memory_operation,
+)
 
 BATCH_CANDIDATE_SCHEMA_VERSION, BATCH_REVIEW_SCHEMA_VERSION, BATCH_RECEIPT_SCHEMA_VERSION = "memory_update_batch_candidate/v1", "memory_update_batch_review/v1", "memory_update_batch_receipt/v1"
 _LEGACY_BATCH_SCHEMA_VERSION, _OPS, _DECISIONS = "memory_update_batch/v1", frozenset({"keep", "forget", "update", "change_scope", "dismiss_conflict"}), frozenset({"remember", "refuse", "defer"})
@@ -74,15 +80,18 @@ def stage_memory_update_batch(paths: OmhPaths, batch: Mapping[str, object], *, n
     }
     candidate = {"schema_version": BATCH_CANDIDATE_SCHEMA_VERSION, "batch_id": batch_id, "candidate_revision": 1, "stage_operation_id": _opaque("op_stage"), "apply_operation_id": _opaque("op_apply"), "status": "pending_review", "source_class": source_class, "source_surface": _label(batch.get("source_surface", "api")), "created_at": _stamp(current), "admission": {"state": "pending_review", "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION}, "scope_preconditions": scope_preconditions, "items": items}
     target = _candidate_relative(batch_id)
+    ensure_memory_directory(paths, "candidates")
+    checked_memory_json_path(paths, target)
 
-    def write_candidate(_: OmhPaths, step: dict[str, str]) -> None:
+    def write_candidate(check_paths: OmhPaths, step: dict[str, str]) -> None:
         if step["action"] != "write_batch_candidate" or step["target"] != target:
             raise ValueError("unexpected batch staging operation")
-        present, error = read_json_object_result(paths.memory_dir / target)
+        path = checked_memory_json_path(check_paths, target)
+        present, error = read_json_object_result(path)
         if error:
             raise ValueError("batch candidate is corrupt")
         if present is None:
-            atomic_write_json(paths.memory_dir / target, candidate, private=True)
+            atomic_write_json(path, candidate, private=True)
         elif present != candidate:
             raise ValueError("batch candidate identity collision")
 
@@ -99,20 +108,20 @@ def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mappin
         candidate = _candidate(paths, batch_id)
         _validate_review_membership(candidate)
         decision_map = _decisions(candidate, decisions)
+        ensure_memory_directory(paths, "reviews")
         request = candidate.get("review_request")
         if request is None:
             if candidate.get("review_seals") or any(
-                (_reviews_dir(paths) / f"{item['review_id']}.json").exists() for item in candidate["items"]
+                _review_path(paths, str(item["review_id"])).exists() for item in candidate["items"]
             ):
                 raise ValueError("batch review is immutable")
             request = _review_request(candidate, decision_map, label, reviewed_at)
             candidate = {**candidate, "review_request": request}
-            atomic_write_json(paths.memory_dir / _candidate_relative(batch_id), candidate, private=True)
+            atomic_write_json(_candidate_path(paths, batch_id), candidate, private=True)
         elif not _review_request_matches(request, candidate, decision_map, label):
             raise ValueError("batch review is immutable")
         reviewed_at = str(request["reviewed_at"])
         reviews = [_review_record(candidate, item, decision_map[item["item_id"]], label, reviewed_at) for item in candidate["items"]]
-        ensure_dir(_reviews_dir(paths), private=True)
         existing_seals = candidate.get("review_seals", {})
         if not isinstance(existing_seals, dict):
             raise ValueError("batch review linkage is corrupt")
@@ -125,7 +134,7 @@ def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mappin
         if existing_seals and set(existing_seals) != expected_item_ids:
             raise ValueError("batch review is immutable")
         for review in reviews:
-            path = _reviews_dir(paths) / f"{review['review_id']}.json"
+            path = _review_path(paths, str(review["review_id"]))
             item = items_by_review[str(review["review_id"])]
             if existing_seals:
                 present, error = read_json_object_result(path)
@@ -160,7 +169,7 @@ def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mappin
             raise ValueError("batch review is immutable")
         sealed_candidate = {**candidate, "review_seals": seals}
         if sealed_candidate != candidate:
-            atomic_write_json(paths.memory_dir / _candidate_relative(batch_id), sealed_candidate, private=True)
+            atomic_write_json(_candidate_path(paths, batch_id), sealed_candidate, private=True)
     return {"schema_version": BATCH_REVIEW_SCHEMA_VERSION, "status": "reviewed", "batch_id": candidate["batch_id"], "reviewer_label": label, "items": [{"item_id": item["item_id"], "review_id": item["review_id"], "decision": decision_map[item["item_id"]]} for item in candidate["items"]]}
 
 
@@ -439,7 +448,9 @@ def _approved_item(candidate: Mapping[str, object], item: Mapping[str, object], 
     retention = build_retention(str(item["retention"]["class"]), record_type="fact", admitted_at=admitted, ttl_days=item["retention"].get("ttl_days"))
     days = item["artifact"].get("revalidation_days")
     revalidation = {"deadline": _stamp(admitted + timedelta(days=days))} if isinstance(days, int) and days > 0 else {}
-    artifact.update({"admission": {"state": "approved_manual", "review_id": review["review_id"], "reviewer_label": review["reviewer_label"], "admitted_at": review["reviewed_at"], "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION}, "retention": retention, "revalidation": revalidation, "batch_id": candidate["batch_id"], "candidate_item_id": item["item_id"], "operation_id": candidate["apply_operation_id"]})
+    artifact.update({"admission": {"state": "approved_manual", "review_id": review["review_id"], "reviewer_label": review["reviewer_label"], "admitted_at": review["reviewed_at"], "policy_version": MEMORY_GOVERNANCE_POLICY_VERSION}, "retention": retention, "revalidation": revalidation, "batch_id": candidate["batch_id"], "candidate_item_id": item["item_id"], "operation_id": candidate["apply_operation_id"], "operation": item["op"]})
+    if item["op"] == "dismiss_conflict":
+        artifact["dismissed_at"] = review["reviewed_at"]
     artifact["admission"]["payload_digest"] = canonical_payload_digest(artifact)
     return artifact
 
@@ -454,7 +465,7 @@ def _approved_reviews(paths: OmhPaths, candidate: Mapping[str, object]) -> dict[
         raise ValueError("exact immutable batch review seals are required")
     reviews: dict[str, dict[str, Any]] = {}
     for item in items:
-        value, error = read_json_object_result(_reviews_dir(paths) / f"{item['review_id']}.json")
+        value, error = read_json_object_result(_review_path(paths, str(item["review_id"])))
         if error or not isinstance(value, dict) or not _review_matches(value, candidate, item):
             raise ValueError("exact immutable batch review is required")
         reviews[item["item_id"]] = value
@@ -660,7 +671,7 @@ def _decisions(candidate: Mapping[str, object], raw: Mapping[str, object] | list
 def _candidate(paths: OmhPaths, batch_id: str) -> dict[str, Any]:
     if not safe_token(batch_id) or classify_memory_admission(batch_id)["status"] != "safe":
         raise ValueError("unsafe batch id")
-    value, error = read_json_object_result(paths.memory_dir / _candidate_relative(batch_id))
+    value, error = read_json_object_result(_candidate_path(paths, batch_id))
     if error or not isinstance(value, dict) or value.get("schema_version") != BATCH_CANDIDATE_SCHEMA_VERSION or value.get("batch_id") != batch_id or not isinstance(value.get("items"), list) or not value["items"]:
         raise ValueError("unknown or malformed batch candidate")
     return value
@@ -833,8 +844,16 @@ def _candidate_relative(batch_id: str) -> str:
     return f"candidates/{batch_id}.json"
 
 
+def _candidate_path(paths: OmhPaths, batch_id: str) -> Path:
+    return checked_memory_json_path(paths, _candidate_relative(batch_id))
+
+
+def _review_path(paths: OmhPaths, review_id: str) -> Path:
+    return checked_memory_json_path(paths, f"reviews/{review_id}.json")
+
+
 def _reviews_dir(paths: OmhPaths) -> Path:
-    return paths.memory_dir / "reviews"
+    return checked_memory_directory(paths, "reviews")
 
 
 def _existing_batch_review_ids(paths: OmhPaths, batch_id: str) -> set[str]:

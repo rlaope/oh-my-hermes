@@ -66,19 +66,14 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
     r"(?:md5|sha(?:1|224|256|384|512))=(?:[0-9A-Fa-f]{32}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{56}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{96}|[0-9A-Fa-f]{128})",
     re.IGNORECASE,
 )
-_CAMEL_WORD = r"[A-Z][a-z]{2,}(?:\d+)?"
-_VERSION_COMPONENT = r"V\d+"
-_VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
-    rf"(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{4,}}"
-)
 _SAFE_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIERS = frozenset(
     {"AuthenticatedMaintainerObservation"}
 )
-_LOWER_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
-    rf"[a-z]{{2,}}(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
+_IDENTIFIER_COMPONENT_PATTERN = re.compile(
+    r"[A-Z]+(?=[A-Z][a-z]|\d|$)|[A-Z]?[a-z]+|\d+"
 )
-_ACRONYM_VERSION_IDENTIFIER_PATTERN = re.compile(
-    rf"[A-Z]{{2,}}\d*(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
+_SEMANTIC_IDENTIFIER_CONNECTORS = frozenset(
+    {"a", "an", "and", "as", "at", "by", "for", "from", "in", "is", "not", "of", "on", "or", "the", "to", "v", "with"}
 )
 _UPPER_SNAKE_IDENTIFIER_PATTERN = re.compile(r"[A-Z][A-Z0-9]{1,15}(?:_[A-Z][A-Z0-9]{1,15}){2,}")
 _SEPARATOR_SPLIT_OPAQUE_PATTERN = re.compile(
@@ -92,14 +87,34 @@ _SAFE_REASON_SEGMENT = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
 def _looks_like_structured_identifier(segment: str) -> bool:
-    return segment in _SAFE_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIERS or any(
-        pattern.fullmatch(segment)
-        for pattern in (
-            _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN,
-            _LOWER_CAMEL_CASE_IDENTIFIER_PATTERN,
-            _ACRONYM_VERSION_IDENTIFIER_PATTERN,
-        )
+    if segment in _SAFE_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIERS:
+        return True
+    if not segment.isalnum() or not any(char.islower() for char in segment) or not any(
+        char.isupper() for char in segment
+    ):
+        return False
+    components = _IDENTIFIER_COMPONENT_PATTERN.findall(segment)
+    alpha_components = [component for component in components if component.isalpha()]
+    return (
+        "".join(components) == segment
+        and len(alpha_components) >= 3
+        and all(_looks_like_semantic_identifier_component(component) for component in components)
     )
+
+
+def _looks_like_semantic_identifier_component(component: str) -> bool:
+    if component.isdigit():
+        return True
+    lowered = component.lower()
+    if lowered in _SEMANTIC_IDENTIFIER_CONNECTORS:
+        return True
+    if component.isupper():
+        return 2 <= len(component) <= 8
+    if not component.isalpha() or not 4 <= len(component) <= 16:
+        return False
+    if not any(char in "aeiouy" for char in lowered):
+        return False
+    return re.search(r"[^aeiouy]{5,}", lowered) is None
 
 
 def _looks_like_semantic_upper_snake_identifier(segment: str) -> bool:
@@ -133,6 +148,7 @@ def _looks_like_safe_path_segment(segment: str) -> bool:
         re.fullmatch(r"\.?[a-z0-9][a-z0-9._-]*", segment)
         or re.fullmatch(r"[A-Z][a-z]{2,}", segment)
         or re.fullmatch(r"[A-Z]", segment)
+        or re.fullmatch(r"[A-Z][A-Z0-9_]{1,31}", segment)
         or _HEX_DIGEST_PATTERN.fullmatch(segment)
         or _looks_like_path_identifier(segment)
         or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d+Z-[a-z0-9-]+(?:\.[a-z0-9]+)?", segment)
@@ -239,7 +255,9 @@ def _has_separator_split_opaque_value(content: str) -> bool:
                 window = fragments[start:end]
                 lengths = [len(fragment) for fragment in window]
                 combined = "".join(window)
-                chunked = (len(window) >= 4 and min(lengths) >= 4) or (
+                chunked = (len(window) >= 3 and min(lengths) >= 8) or (
+                    len(window) >= 4 and min(lengths) >= 4
+                ) or (
                     len(window) >= 2 and min(lengths) >= 12
                 )
                 if len(combined) < 32 or not chunked:
@@ -248,9 +266,20 @@ def _has_separator_split_opaque_value(content: str) -> bool:
                     continue
                 window_start = fragment_matches[start].start()
                 window_end = fragment_matches[end - 1].end()
-                if any(_looks_like_structured_identifier(fragment) for fragment in window) or any(
+                semantic_snake_overlap = any(
                     window_start < snake_end and snake_start < window_end
                     for snake_start, snake_end in semantic_snake_spans
+                )
+                chunked_base32 = (
+                    len(window) >= 4
+                    and len(set(lengths)) == 1
+                    and lengths[0] == 8
+                    and combined.isalpha()
+                    and combined.isupper()
+                    and set(combined) <= set("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+                )
+                if any(_looks_like_structured_identifier(fragment) for fragment in window) or (
+                    semantic_snake_overlap and not chunked_base32
                 ):
                     continue
                 mixed = _has_opaque_character_mix(combined)

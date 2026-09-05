@@ -146,12 +146,12 @@ def evaluate_memory_replay(
         return result
     
     admission_state = admission.get("state")
-    result["admission_state"] = admission_state
-    
+
     from .memory_governance import ADMISSION_STATES
     if admission_state not in ADMISSION_STATES:
         result["reason_code"] = "admission_state_invalid"
         return result
+    result["admission_state"] = admission_state
     
     if admission_state in ("blocked", "rejected", "pending_review"):
         result["reason_code"] = {

@@ -169,6 +169,27 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                 self.assertFalse(result["eligible"])
                 self.assertEqual(result["reason_code"], reason_code)
 
+    def test_invalid_admission_state_fails_closed_without_echoing_unsafe_input(self) -> None:
+        unsafe_states = (
+            "QwertyuiopaAsdfghjklmObservationContext",
+            "rk_" + "live_" + "a" * 32,
+            "Ab3dEf4G" * 5 + "=",
+        )
+        for unsafe_state in unsafe_states:
+            with self.subTest(unsafe_state=unsafe_state[:8]):
+                artifact, review = _approved_artifact()
+                admission = artifact["admission"]
+                self.assertIsInstance(admission, dict)
+                assert isinstance(admission, dict)
+                admission["state"] = unsafe_state
+
+                result = _evaluate(artifact, review)
+
+                self.assertFalse(result["eligible"])
+                self.assertEqual(result["reason_code"], "admission_state_invalid")
+                self.assertIsNone(result["admission_state"])
+                self.assertNotIn(unsafe_state, json.dumps(result, sort_keys=True))
+
     def test_secret_token_forms_are_blocked_to_meet_the_remember_refuse_contract(self) -> None:
         """Hyphenated secret-token compounds are blocked; ordinary hyphenated prose is never admission-blocked."""
         for content in (
@@ -305,12 +326,17 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "ABCDEFGHIJKLMNOPQRSTUVWXYZaBcdef",
             "J" + "j" * 9 + "K" + "k" * 9 + "L" + "l" * 11,
             "QwertyuiopaAsdfghjklmObservation",
+            "QwertyuiopaAsdfghjklmObservationV2",
+            "QwertyuiopaAsdfghjklmObservationContext",
+            "AbcDefGhiJklMnoPqrStuVwxYzaBcdEfgJkl",
         )
         uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
         split_opaque = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"
         uneven_parts = ("ABCDE", "FGHIJ", "KLMNO", "PQRSTUVWXYZaBcdef")
         lowercase_parts = ("abcdefgh", "ijklmnop", "qrstuvwx", "yzabcdef")
         lowercase_uneven_parts = ("abcde", "fghij", "klmno", "pqrstuvwxyzabcdefgh")
+        three_part_camel = ("Qwertyuiopa", "Asdfghjklm", "Observation")
+        uppercase_base32_parts = ("JBSWYDPE",) * 4
 
         for opaque in (*low_transition_base64, uppercase_alphanumeric):
             if opaque in low_transition_base64:
@@ -363,6 +389,21 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                     with self.subTest(separator=separator, lowercase_container=container):
                         self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
 
+            for split_variant in (three_part_camel, uppercase_base32_parts):
+                opaque_split = separator.join(split_variant)
+                for container in (
+                    opaque_split,
+                    f"/safe/{opaque_split}/artifact.txt",
+                    f"https://example.com/{opaque_split}/artifact",
+                    f"@scope/{opaque_split}",
+                    f"C:\\safe\\{opaque_split}\\artifact.txt",
+                ):
+                    with self.subTest(separator=separator, opaque_split=container):
+                        self.assertEqual(
+                            governance.classify_memory_admission(container)["status"],
+                            "needs_review",
+                        )
+
         for semantic_identifier in (
             "projectMemorySchemaMigrationIdentifier",
             "projectMemorySchemaMigrationIdentifierV2",
@@ -411,6 +452,14 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "/safe/AuthenticatedMaintainerObservation/artifact.txt",
             "https://example.com/AuthenticatedMaintainerObservation/artifact",
             "@scope/AuthenticatedMaintainerObservation",
+            "ABlockIsRecoverableAndNotTerminal",
+            "benchmarks/live-model-tools/v1/README.md",
+            "https://github.com/rlaope/oh-my-hermes/blob/main/docs/CAPABILITY_IMPACT.md",
+            "https://github.com/rlaope/oh-my-hermes/blob/6da2a3cac0ac854d475a930f8975208bc22b06c9/docs/CAPABILITY_IMPACT.md",
+            (
+                "https://github.com/rlaope/oh-my-hermes/blob/"
+                "0123456789abcdef0123456789abcdef01234567/docs/CAPABILITY_IMPACT.md"
+            ),
             "direview_dprof_e9da83f21e46282d3a9ae020_r1",
             "@scope/hermes-agent-runtime-v2-package",
             "@scope/HermesAgentRuntimeV2PackageManager",
