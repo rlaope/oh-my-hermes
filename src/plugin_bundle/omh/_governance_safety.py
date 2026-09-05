@@ -68,7 +68,7 @@ def _looks_like_opaque_token(content: str) -> bool:
                 any(char in "+/=_-" for char in token),
             )
         )
-        if character_classes >= 3 or ("_-" not in token and len(set(token)) >= 12):
+        if character_classes >= 3 or (not any(char in "_-" for char in token) and len(set(token)) >= 12):
             return True
     return False
 
