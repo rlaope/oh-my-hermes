@@ -433,6 +433,63 @@ class MemoryBatchTests(TestCase):
             self.assertEqual(result["reason_code"], "scope_precondition_changed")
             self.assertEqual(scope_path.read_bytes(), changed_bytes)
 
+    def test_multiscope_preflight_rejects_all_drift_before_removing_source(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            source_path = paths.memory_dir / "scopes" / "project.json"
+            source_path.parent.mkdir(parents=True)
+            source = {
+                "schema_version": "omh_memory_scope/v2",
+                "scope": {"kind": "project", "ref": "default"},
+                "items": {
+                    "live-target": {
+                        "item_id": "live-item",
+                        "revision": 1,
+                        "key": "live_key",
+                        "summary": "Original reviewed value",
+                        "value": "original",
+                    }
+                },
+                "tombstones": {},
+            }
+            source_path.write_text(json.dumps(source, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = _batch("live-target")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            update = updates[0]
+            update.update(
+                {
+                    "op": "change_scope",
+                    "from_scope": {"kind": "project", "ref": "default"},
+                    "to_scope": {"kind": "run", "ref": "destination"},
+                }
+            )
+            staged = self._stage_and_remember(paths, batch)
+            source_bytes = source_path.read_bytes()
+            destination_path = paths.memory_dir / "scopes" / "runs" / "destination.json"
+            destination_path.parent.mkdir(parents=True)
+            destination_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_memory_scope/v2",
+                        "scope": {"kind": "run", "ref": "destination"},
+                        "items": {"live-item": {"item_id": "live-item", "value": "concurrent"}},
+                        "tombstones": {},
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "scope_precondition_changed")
+            self.assertEqual(source_path.read_bytes(), source_bytes)
+
     def test_stage_rejects_credential_shaped_legacy_item_id_without_echo(self) -> None:
         credential = "gh" + "u_" + "a" * 36
         with TemporaryDirectory() as home:

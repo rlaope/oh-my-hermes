@@ -27,6 +27,7 @@ from ._memory_store_validation import (
 _INDEX_DIRS = (("scope_files", "scopes"), ("candidate_files", "candidates"), ("record_files", "records"), ("review_files", "reviews"))
 StepWriter = Callable[[OmhPaths, dict[str, Any]], str | None]
 IndexRebuilder = Callable[[OmhPaths], None]
+OperationPreflight = Callable[[OmhPaths], None]
 __all__ = [
     "MEMORY_OPERATION_SCHEMA_VERSION",
     "MEMORY_OPERATION_STATES",
@@ -50,6 +51,7 @@ def run_memory_operation(
     steps: Sequence[Mapping[str, object]],
     rebuild_index: IndexRebuilder | None = None,
     step_writer: StepWriter | None = None,
+    preflight: OperationPreflight | None = None,
     now: datetime | str | None = None,
 ) -> dict[str, Any]:
     normalized = build_memory_operation(operation_id, operation_type, steps, _stamp(now))
@@ -63,6 +65,8 @@ def run_memory_operation(
         if error or existing is None or not valid_memory_operation(existing):
             if path.exists():
                 return _mark_corrupt_operation(paths, operation_id, now)
+            if preflight is not None:
+                preflight(paths)
             record = normalized
             atomic_write_json(path, record, private=True)
         else:

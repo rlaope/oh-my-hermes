@@ -256,6 +256,9 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             split_opaque,
             f"https://example.com/{split_opaque}",
             r"C:\safe\Ab3dEf4Gh5Ij6Kl7Mn8\Op9Qr0St1Uv2WxYz",
+            "https://example.com/artifact?session=" + "a" * 64,
+            "https://example.com/artifact?access=" + "b" * 64,
+            "https://example.com/artifact?key=" + "c" * 64,
         ):
             with self.subTest(normalized_bypass=normalized_bypass):
                 self.assertEqual(governance.classify_memory_admission(normalized_bypass)["status"], "needs_review")
@@ -304,6 +307,10 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                 "D:\\a\\oh-my-hermes\\oh-my-hermes\\.hermes\\plans\\"
                 "2026-09-05T092408607631Z-implement-durable-observation-journal-with-tests-9f35ae.md"
             ),
+            r"C:\Program Files\Hermes Agent\config.json",
+            r"C:\Users\Alice\myProject\README.md",
+            "packages/JSONRPC2ServerConfigurationManager/src",
+            "https://example.com/releases/TLS13ConnectionConfigurationManager",
         ):
             with self.subTest(ordinary=ordinary):
                 self.assertEqual(governance.classify_memory_admission(ordinary)["status"], "safe")
