@@ -14,9 +14,10 @@ import json
 import os
 import threading
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from _local_package import load_local_package
 
@@ -286,6 +287,83 @@ class ReceiptKeyTests(unittest.TestCase):
 
 
 class ReceiptPathSafetyTests(unittest.TestCase):
+    def test_receipt_path_accepts_equivalent_windows_extended_namespaces(self) -> None:
+        """Windows may resolve a missing child through the extended namespace."""
+        with TemporaryDirectory() as tmp:
+            paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            key = "d" * 64
+            directory = receipts_dir(paths)
+            destination = directory / f"{key}.json"
+            home = PureWindowsPath(r"C:\Users\runneradmin\AppData\Local\Temp\receipt-test\.omh")
+            receipt_directory = home / "coding" / "verification-receipts"
+            receipt_destination = receipt_directory / f"{key}.json"
+            extended_directory = PureWindowsPath(
+                r"\\?\C:\Users\runneradmin\AppData\Local\Temp\receipt-test\.omh\coding\verification-receipts"
+            )
+            extended_destination = extended_directory / f"{key}.json"
+            unc_home = PureWindowsPath(r"\\server\share\receipt-test\.omh")
+            extended_unc_directory = PureWindowsPath(
+                r"\\?\UNC\server\share\receipt-test\.omh\coding\verification-receipts"
+            )
+            extended_unc_destination = extended_unc_directory / f"{key}.json"
+
+            for label, resolved_directory, resolved_destination, resolved_home in (
+                ("extended DOS destination", receipt_directory, extended_destination, home),
+                ("extended DOS directory", extended_directory, receipt_destination, home),
+                ("extended UNC", extended_unc_directory, extended_unc_destination, unc_home),
+            ):
+                with self.subTest(label=label):
+                    resolved = {
+                        paths.omh_home: resolved_home,
+                        directory: resolved_directory,
+                        destination: resolved_destination,
+                    }
+
+                    def resolve(path: Path, *, strict: bool = False) -> PureWindowsPath:
+                        self.assertFalse(strict)
+                        return resolved[path]
+
+                    self.assertFalse(directory.exists())
+                    with patch.object(Path, "resolve", autospec=True, side_effect=resolve):
+                        self.assertEqual(receipt_path(paths, key), destination)
+                    self.assertFalse(directory.exists())
+
+    def test_receipt_path_rejects_extended_windows_namespace_escapes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = OmhPaths(omh_home=Path(tmp) / ".omh", hermes_home=Path(tmp) / ".hermes")
+            key = "e" * 64
+            directory = receipts_dir(paths)
+            destination = directory / f"{key}.json"
+            home = PureWindowsPath(r"C:\Users\runneradmin\AppData\Local\Temp\receipt-test\.omh")
+            receipt_directory = home / "coding" / "verification-receipts"
+
+            for label, resolved_directory, resolved_destination, error in (
+                (
+                    "directory",
+                    PureWindowsPath(r"\\?\C:\Users\runneradmin\AppData\Local\Temp\outside"),
+                    None,
+                    "verification receipt directory escapes omh home",
+                ),
+                (
+                    "destination",
+                    receipt_directory,
+                    PureWindowsPath(rf"\\?\C:\Users\runneradmin\AppData\Local\Temp\receipt-test\.omh\coding\outside\{key}.json"),
+                    "verification receipt destination escapes receipt directory",
+                ),
+            ):
+                with self.subTest(label=label):
+                    resolved = {paths.omh_home: home, directory: resolved_directory}
+                    if resolved_destination is not None:
+                        resolved[destination] = resolved_destination
+
+                    def resolve(path: Path, *, strict: bool = False) -> PureWindowsPath:
+                        self.assertFalse(strict)
+                        return resolved[path]
+
+                    with patch.object(Path, "resolve", autospec=True, side_effect=resolve):
+                        with self.assertRaisesRegex(ValueError, error):
+                            receipt_path(paths, key)
+
     def test_receipt_paths_accept_only_64_lowercase_hex_keys(self) -> None:
         # Given a receipt store and malformed caller-supplied keys
         with TemporaryDirectory() as tmp:

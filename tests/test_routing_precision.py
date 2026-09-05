@@ -6,6 +6,7 @@ import unittest
 from _cli_harness import run_cli
 from omh.quality.routing_precision import build_routing_precision_demo, routing_precision_errors
 from omh.routing import recommend as recommend_module
+from omh.routing.localization import prepare_routing_text
 
 
 class RoutingPrecisionTests(unittest.TestCase):
@@ -16,21 +17,21 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(payload["source"], "discord")
         self.assertTrue(payload["summary"]["all_passing"])
         # omh-docs contributes four measured negatives and five measured interventions.
-        self.assertEqual(payload["summary"]["case_count"], 167)
-        self.assertEqual(payload["summary"]["passing_count"], 167)
-        self.assertEqual(payload["summary"]["negative_case_count"], 167)
-        self.assertEqual(payload["summary"]["negative_passing_count"], 167)
+        self.assertEqual(payload["summary"]["case_count"], 171)
+        self.assertEqual(payload["summary"]["passing_count"], 171)
+        self.assertEqual(payload["summary"]["negative_case_count"], 171)
+        self.assertEqual(payload["summary"]["negative_passing_count"], 171)
         self.assertEqual(payload["summary"]["direct_answer_count"], 112)
         self.assertEqual(payload["summary"]["file_lookup_count"], 7)
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["intervention_case_count"], 295)
-        self.assertEqual(payload["summary"]["intervention_passing_count"], 295)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 309)
+        self.assertEqual(payload["summary"]["intervention_passing_count"], 309)
         self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
         self.assertEqual(payload["summary"]["intervention_generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["total_case_count"], 462)
-        self.assertEqual(payload["summary"]["total_passing_count"], 462)
+        self.assertEqual(payload["summary"]["total_case_count"], 480)
+        self.assertEqual(payload["summary"]["total_passing_count"], 480)
         self.assertEqual(routing_precision_errors(payload), [])
         self.assertIn("over-intervention and missed-intervention guards", payload["claim_boundary"])
 
@@ -404,6 +405,17 @@ class RoutingPrecisionTests(unittest.TestCase):
             self.assertTrue(case["passed"])
             self.assertNotEqual(case["observed"]["response_kind"], "ack")
 
+    def test_apple_style_library_normalization_requires_exact_tokens(self) -> None:
+        named = prepare_routing_text("Create an Apple-style product page with GSAP scroll motion.")
+        self.assertIn("apple product visual", named.scoring_text)
+
+        for query in (
+            "Create an Apple-style product page with notgsap123 scroll motion.",
+            "Create an Apple-style product page with xgsap scroll motion.",
+            "Create an Apple-style product page with gsap123 scroll motion.",
+        ):
+            self.assertNotIn("apple product visual", prepare_routing_text(query).scoring_text)
+
     def test_memory_refusal_and_korean_curation_routes_stay_precise(self) -> None:
         refusal = recommend_module.recommend_skills("do not save this token", limit=1)[0]
         curation = recommend_module.recommend_skills("기억 정리", limit=1)[0]
@@ -427,8 +439,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         self.assertEqual(stderr, "")
         self.assertIn("OMH routing precision", stdout)
-        self.assertIn("167/167 negative-control cases passing", stdout)
-        self.assertIn("Interventions: 295/295 expected workflow cases passing", stdout)
+        self.assertIn("171/171 negative-control cases passing", stdout)
+        self.assertIn("Interventions: 309/309 expected workflow cases passing", stdout)
         self.assertIn("overroutes: 0", stdout)
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)

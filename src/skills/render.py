@@ -5445,6 +5445,372 @@ fast for anyone in particular until the field percentile says so.
 """
 
 
+
+def apple_design_reference_templates() -> list[SkillReferenceTemplate]:
+    return list(_apple_design_reference_templates_cached())
+
+
+@lru_cache(maxsize=1)
+def _apple_design_reference_templates_cached() -> tuple[SkillReferenceTemplate, ...]:
+    return (
+        SkillReferenceTemplate(
+            "apple-design",
+            "references/platform-foundations.md",
+            _apple_platform_foundations_reference(),
+        ),
+        SkillReferenceTemplate(
+            "apple-design",
+            "references/materials-and-accessibility.md",
+            _apple_materials_and_accessibility_reference(),
+        ),
+        SkillReferenceTemplate(
+            "apple-design",
+            "references/product-visual-production.md",
+            _apple_product_visual_production_reference(),
+        ),
+        SkillReferenceTemplate(
+            "apple-design",
+            "references/web-production-libraries.md",
+            _apple_web_production_libraries_reference(),
+        ),
+        SkillReferenceTemplate(
+            "apple-design",
+            "references/review-playbook.md",
+            _apple_review_playbook_reference(),
+        ),
+    )
+
+
+def _apple_platform_foundations_reference() -> str:
+    return """# Apple Platform Foundations
+
+## Source record
+
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/designing-for-ios
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/designing-for-ipados
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/designing-for-macos
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/tutorials/data/design/human-interface-guidelines/typography.json
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/sf-symbols/
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/fonts/
+
+## Frame the brief first
+
+Record mode (`design`, `review`, or `improve`), target OS and current version,
+framework, input method, surface and state, current brand/design tokens, and
+whether the result is native Apple, Apple-inspired web, or another platform.
+Treat a supplied screen, capture, or code path as an **observation** only for
+what it shows; label any inferred intent or user behavior as a **hypothesis**.
+Make two to four directions before visual production when no direction is
+already selected.
+
+## Native iOS and iPadOS
+
+Prefer current system controls and semantic, adaptive colors over manually
+recreated controls or hard-coded appearances. Use text styles and Dynamic Type
+on iOS and iPadOS; design safe-area, adaptive-window, navigation, keyboard,
+pointer, and VoiceOver behavior around the actual target. Standard SwiftUI,
+UIKit, and AppKit components follow current SDK behavior, so avoid manual
+backgrounds that fight them. Check current API availability for the deployed
+platform rather than making a future-version assertion.
+
+## macOS
+
+macOS does **not** support Dynamic Type. Use macOS system styles, application
+text-scaling choices, and adaptive layout instead. Keep menu, keyboard,
+pointer, window, and VoiceOver behavior native to the selected macOS target;
+do not transplant iOS interaction assumptions into a Mac window.
+
+## Apple-inspired web
+
+This is inspiration, not native equivalence. Use system-font fallbacks rather
+than embedding system fonts; use appropriately licensed icons rather than
+assuming SF Symbols license coverage. Require responsive reflow and zoom,
+semantic HTML, visible focus, WCAG review, reduced-motion and
+reduced-transparency behavior, and an opaque fallback. Do not equate points
+with CSS pixels or prescribe one universal spacing, type, or blur recipe.
+
+## Boundary
+
+This reference covers iOS, iPadOS, macOS, and Apple-inspired web first. Route
+other Apple targets to their current official platform documentation. A brief
+or direction is prepared guidance, not observed implementation, accessibility
+PASS, visual PASS, or Apple certification.
+"""
+
+
+def _apple_materials_and_accessibility_reference() -> str:
+    return """# Materials and Accessibility
+
+## Source record
+
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/materials
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/tutorials/data/design/human-interface-guidelines/materials.json
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass.md
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/accessibility
+- Web standard, accessed 2026-09-05: https://www.w3.org/WAI/standards-guidelines/wcag/
+
+## Materials
+
+Liquid Glass belongs to the controls and navigation layer; standard materials
+belong behind content. Use custom glass sparingly. Prefer regular material when
+text legibility matters, and clear material only over rich-media backgrounds.
+The explicit exception is transient interactive content controls, where the
+current Apple guidance may justify the control-layer treatment. Native Liquid
+Glass is not a CSS `backdrop-filter` recipe.
+
+Apple's materials guidance includes a bright-content example that considers 35%
+dark dimming. Carry that as conditional source-applicable guidance, never as a
+universal CSS token or a fixed opacity recipe. Respect current API and version
+availability, different appearances, Reduce Transparency, and Increase
+Contrast. For web approximations, offer an opaque fallback rather than claiming
+native material behavior.
+
+## Access and input
+
+For native work, identify system control semantics, VoiceOver labels, Full
+Keyboard Access and keyboard paths, gesture alternatives, Reduce Motion, and
+appearance/contrast behavior. Dynamic Type applies to iOS and iPadOS, while
+macOS uses system styles, app text scaling, and adaptive layout. Verify with the
+current platform APIs and the actual target state.
+
+For Apple-inspired web, require semantic HTML, keyboard and focus behavior,
+reflow/zoom, contrast, pointer targets, motion reduction, and WCAG
+applicability. An accessibility plan is not WCAG PASS: hand observed proof to
+`accessibility-audit`; hand rendered state and motion evidence to `visual-qa`.
+
+## Boundary
+
+Use the Apple records for Apple-platform applicability and the W3C record for
+web-standard applicability. Neither source grants certification; unobserved
+screens, assistive-tech behavior, and rendered states remain not_observed.
+"""
+
+
+def _apple_product_visual_production_reference() -> str:
+    return """# Apple Product Visual Production
+
+## Reference record
+
+Select concrete references for the deliverable; use the observations to direct
+original work, not to copy assets or claim an Apple specification.
+
+- Apple MacBook Pro, accessed 2026-09-05: https://www.apple.com/macbook-pro/
+  — metal edge light, dark studio, and silhouette-led framing.
+- Apple AirPods Pro, accessed 2026-09-05: https://www.apple.com/airpods-pro/
+  — macro scale, white ceramic/plastic reading, and restrained negative space.
+- Apple Vision Pro, accessed 2026-09-05: https://www.apple.com/apple-vision-pro/
+  — glass, physical depth, and controlled reflection.
+- Apple HIG Motion, Materials, and App icons, accessed 2026-09-05:
+  https://developer.apple.com/design/human-interface-guidelines/motion,
+  https://developer.apple.com/design/human-interface-guidelines/materials, and
+  https://developer.apple.com/design/human-interface-guidelines/app-icons
+- Apple Icon Composer, accessed 2026-09-05:
+  https://developer.apple.com/icon-composer/ — a multilayer native icon-asset
+  pipeline, not a marketing renderer.
+
+## Choose the visual target before output
+
+Choose one target and keep its rules separate:
+
+1. **Apple marketing/product visual** — an original subject-led hero, product
+   render, or landing visual. It may use the reference observations above, but
+   is not native UI and must not copy Apple logos, products, photography, or SF
+   assets.
+2. **Native Apple application** — use the platform foundations, HIG, and
+   platform asset pipeline. Marketing composition does not replace toolbars,
+   navigation, controls, or input behavior.
+3. **Apple-inspired web UI** — make a deliberate web adaptation with web
+   semantics, accessibility, and opaque/reduced-motion fallbacks; it is not a
+   native application or Liquid Glass implementation.
+
+## Product-visual direction
+
+For a marketing/product visual, write an original art-direction record before
+making an image or scene:
+
+- subject geometry and silhouette, including chosen bevel/radius;
+- camera position, focal perspective, framing, crop, and copy-safe negative
+  space;
+- metal, glass, or plastic material behavior. State micro-roughness,
+  transmission, and reflection values as **renderer/project choices**, never
+  Apple specifications;
+- key, fill, rim, and grounding-shadow decisions; constrained palette,
+  backdrop, and subject scale; and
+- a strong single subject, controlled large type/spacing/crop, and gallery
+  variations only when the deliverable benefits from them. Do not substitute
+  blue rounded SaaS cards or universal glassmorphism for the composition.
+
+## Reference -> production -> comparison -> revision
+
+1. Name the selected reference pages and which observable dimensions apply to
+   this deliverable: silhouette, material, light, depth, composition, or type.
+2. Create original object and copy direction. Preserve user-supplied assets and
+   constraints; do not scrape or reuse reference assets.
+3. Identify the available execution mode before claiming an artifact:
+   - With an authorized connected image-generation tool, request actual output
+     and label it a **generated still image** with its tool and prompt variant.
+     A text-only tool can prepare paired prompt variants and a combined
+     comparison; it cannot claim image-to-image editing.
+   - With an authorized, confirmed available Blender or other 3D renderer,
+     prepare or execute its scene/render through the selected owner. A local
+     realtime shader render is an observed render mode when its renderer output
+     is available, but it is not an exported mesh or validated path trace. A
+     raster output alone does not verify a mesh or physical correctness.
+   - With frontend execution, implement only the authorized web behavior; CSS
+     depth does not prove a renderer, mesh, or native material.
+   - If an image generator is unavailable but an authorized renderer or coding
+     owner is available, use that actual production path. Only when no execution
+     path is available, state the exact missing boundary and provide a prepared
+     prompt/scene handoff. Do not call the handoff generated or rendered.
+4. Compare the same subject, camera, and content where feasible. If there is no
+   user original, label the baseline clearly as synthetic. Name changed
+   dimensions and remaining limits; open actual files/screenshots to the user
+   on request, then revise from the observed comparison.
+
+## Motion and review
+
+Storyboard camera path, object/material reveal, and interaction timing as
+project decisions. Implement motion only through an available renderer or
+coding owner with authorization; provide a reduced-motion alternative. A still
+image never proves motion: require actual frames, video, or browser evidence.
+
+Review against the selected reference dimensions: silhouette, material, light,
+composition, type, and technical artifact evidence. Do not assign an arbitrary
+Apple score or certification. A prepared direction, prompt, or scene is not
+image generation, rendering, animation, visual QA, or implementation evidence.
+"""
+
+
+def _apple_web_production_libraries_reference() -> str:
+    return """# Web Production Library Decisions
+
+## Source record
+
+These are optional web-production references for an **explicit Apple
+marketing/product visual** or explicit `apple-design` invocation. They are not
+native Apple APIs, do not establish Liquid Glass equivalence, and do not route
+generic GSAP, logo, or glass requests into this skill. Inspect the current
+project's dependency, build, runtime, and license policy before the selected
+coding owner integrates any of them; OMH does not install, vendor, or fetch
+libraries at runtime.
+
+- GSAP, reviewed at `13e2b790546426a1a2e0e9b409f3f8dc6d6611f2` on 2026-09-05:
+  https://github.com/greensock/gsap — framework-agnostic animation with
+  `gsap`, `gsap.context()`, `gsap.matchMedia()`, and optional ScrollTrigger.
+  Its package declares the GreenSock Standard "no charge" license; do not call
+  it an OSI license or assume every plugin has the same distribution posture.
+- liquid-logo, reviewed at `689bb38a1e0d5a6a8baf2d34847635eefde19994` on
+  2026-09-05: https://github.com/paper-design/liquid-logo — a private Next
+  application under PolyForm Shield 1.0.0, not an npm package or reusable
+  drop-in. Its dependencies include `@paper-design/shaders-react`; inspect
+  `paper-logo.tsx` and `liquid-frag.ts` before applying any pattern. They show
+  original-logo input and shader uniforms for edge, pattern blur/scale,
+  refraction, liquid amount, and speed.
+- liquid-glass-js, reviewed at `78cb6ccb0b9987bb60a88b14ccbd13a9e6e8ab2a`
+  on 2026-09-05: https://github.com/dashersw/liquid-glass-js — MIT-licensed
+  standalone browser files with `Container` and `Button` WebGL classes and an
+  optional `html2canvas` page-capture path. Its visual effect is a web effect,
+  not Apple native material.
+
+## Selection and integration
+
+**GSAP:** Select only when the existing project already permits GSAP and needs
+a sequence, scroll response, or object/camera reveal that CSS cannot express
+cleanly. The selected owner scopes animation with `gsap.context()` and uses
+`gsap.matchMedia()` to add the motion branch and a `prefers-reduced-motion`
+static or shortened branch. Register ScrollTrigger only when the existing
+project already includes and needs it. Return cleanup through `context.revert()`
+and `matchMedia.revert()`; do not leave timelines, ScrollTriggers, or listeners
+alive after route/component teardown. Verify actual browser frames or video for
+both branches after the last change.
+
+**liquid-logo:** Select as link-only technical research for an original,
+user-owned logo experiment when the owner has separately approved the license
+and a project-specific implementation path. Do not import, copy, vendor, or
+represent the application as a package. Its useful recipe is architectural:
+keep source-logo input, shader parameters, resize handling, request-animation-
+frame loop, and cancellation/resize cleanup as separate owned decisions. Supply
+a static image or ordinary logo fallback when WebGL2, motion, or GPU budget is
+unavailable; inspect the rendered result rather than calling a parameter change
+an observed visual improvement.
+
+**liquid-glass-js:** Select only for a deliberately web-only experimental
+control layer when its MIT source and the existing project's asset/runtime
+policy allow an owner-authored integration. Its `Container`/`Button` recipe
+uses chosen shape, radius, tint, child nesting, and `updateSizeFromDOM()` as
+project choices. Do not silently add its optional `html2canvas` dependency or
+CDN script: if page capture is not already approved and available, prepare a
+no-capture alternative or stop at the handoff. The owner must add lifecycle
+teardown for canvases, listeners, animation loops, and WebGL resources around
+the chosen integration because this source documents no `destroy` or `dispose`
+API. Prove normal, reduced-motion, opaque/static, keyboard, capture, and CORS
+states with actual browser evidence.
+
+## Evidence boundary
+
+A library selection, code recipe, license note, or prepared handoff is not an
+installed dependency, native Apple behavior, rendered output, motion proof,
+accessibility PASS, or visual QA. Record the actual project version, license
+review result, cleanup evidence, and rendered states supplied by the selected
+coding owner before making those claims.
+"""
+
+
+def _apple_review_playbook_reference() -> str:
+    return """# Apple Design Review Playbook
+
+## Source record
+
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/color
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/layout
+- Apple guidance, accessed 2026-09-05: https://developer.apple.com/design/human-interface-guidelines/typography
+- OMH recommendation, accessed 2026-09-05: evidence-shaped findings and owner handoffs below.
+
+## Review from evidence
+
+Read actual supplied screens, captures, and code before making a finding. State
+exactly what each artifact proves. With no supplied screenshot or rendered
+surface, set `visual_status` to `not_observed`; a description is not visual
+evidence. Review hierarchy and task flow before cosmetic polish. Compare the
+chosen platform convention against the target's controls, color, type, layout,
+input, material, and accessibility constraints rather than a generic glass
+style.
+
+Each `apple_design_finding/v1` carries:
+
+- severity;
+- location and evidence;
+- user impact;
+- source URL, date, class, and applicability;
+- actionable fix;
+- downstream owner; and
+- missing check.
+
+Mark a fact from supplied evidence as `observation`; mark an inference as
+`hypothesis`. Do not invent a compliance score. Design direction or a prepared
+brief does not prove coding, accessibility, visual QA, or Apple certification.
+
+## Compose remediation
+
+- Use `design-orchestration` for broad direction and alternatives.
+- Use `frontend` for Apple-inspired web or selected-owner implementation briefs.
+- Use `design-quality-gate` for a broad craft and content bar.
+- Use `accessibility-audit` for semantic, keyboard, VoiceOver, WCAG, and
+  assistive-technology evidence.
+- Use `visual-qa` for fresh captured states, viewports, motion, and visual
+  PASS/REVISE/BLOCK.
+- Use `award-bar-score` only for an external web-award rubric, never as Apple
+  compliance.
+
+The selected coding owner remains the implementation owner; do not substitute
+one by default. Return the smallest applicable handoff and the missing checks
+that keep it prepared rather than complete.
+
+Illustrative example data is not runtime status or evidence. Only a matching observed artifact may change implementation, accessibility, visual-QA, or certification status.
+"""
+
 def design_reference_templates() -> list[SkillReferenceTemplate]:
     return list(_design_reference_templates_cached())
 

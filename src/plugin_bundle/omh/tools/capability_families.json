@@ -142,6 +142,7 @@
    "content-operator",
    "media-input-operator",
    "design-orchestration",
+   "apple-design",
    "award-bar-score",
    "localization-review"
   ],
@@ -149,8 +150,8 @@
   "source_examples": [
    "meeting notes -> meeting-brief -> report-package -> img-summary -> delivery evidence",
    "broad design request -> design-orchestration -> named specialist lanes -> executor selection -> observed visual evidence",
-   "release notes or customer copy -> content-operator -> source, audience, tone, review, and output slots",
-   "frontend request -> frontend -> visual-qa -> observed render evidence"
+   "Apple UI design/review/improve -> apple-design -> platform-aware remediation -> existing implementation and evidence owners",
+   "release notes or customer copy -> content-operator -> source, audience, tone, review, and output slots"
   ],
   "source_lanes": [
    "materials_and_visuals"

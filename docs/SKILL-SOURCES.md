@@ -47,6 +47,18 @@ Rules:
 | `accessibility-audit` rule IDs + fix partition (issue #1261) | accessibility | https://github.com/Effeilo/claude-code-frontend-skills | `front-a11y/front-a11y-rules.md` (rule-ID scheme, severity split, auto-fixable partition) | MIT (see the API false-negative rule above) | 2026-09-02 | 3c9d5a0501ff |
 | `agent-evaluation` self-evaluation loops (issue #1263) | evaluation | https://github.com/github/awesome-copilot | `skills/agentic-eval/SKILL.md` (loop shapes, stop rules, judging strategies) | MIT | 2026-09-02 | 6a8fa297b0fe |
 | `frontend` web-vitals budgets (issue #1262) | frontend | https://github.com/rohitg00/awesome-claude-code-toolkit | `skills/frontend-excellence/SKILL.md` (CWV threshold table, field-vs-lab note) | Apache-2.0 | 2026-09-02 | ebdf1d596d2c |
+| `apple-design` | materials | https://github.com/dickwu/apple-design-skill | `README.md`, `SKILL.md`, `references/hig-lookup.md`, `references/hig/` reviewed as link-only context; no source text or bundled references reproduced | none | 2026-09-05 | d0bac1e765a27a696839e62962e36330ce72f0b7 |
+| `apple-design` product-visual references | materials | https://www.apple.com/macbook-pro/ | MacBook Pro, AirPods Pro, and Apple Vision Pro pages reviewed as link-only visual-reference context; no Apple assets or page text reproduced | n/a — primary web references | 2026-09-05 | — |
+| `apple-design` native icon boundary | materials | https://developer.apple.com/icon-composer/ | Icon Composer reviewed as native multilayer icon-pipeline context; not used as a marketing-renderer claim | n/a — primary documentation | 2026-09-05 | — |
+| `apple-design` GSAP integration boundary | materials | https://github.com/greensock/gsap | `README.md`, `package.json`, and type declarations reviewed for existing-project animation, match-media, and cleanup guidance; no source reproduced | GreenSock Standard no-charge license; not labeled OSI | 2026-09-05 | 13e2b790546426a1a2e0e9b409f3f8dc6d6611f2 |
+| `apple-design` liquid-logo research boundary | materials | https://github.com/paper-design/liquid-logo | `README.md`, `package.json`, canvas, shader-parameter, and lifecycle code reviewed as link-only technical context; no source reproduced | PolyForm Shield 1.0.0; not labeled OSI | 2026-09-05 | 689bb38a1e0d5a6a8baf2d34847635eefde19994 |
+| `apple-design` liquid-glass-js integration boundary | materials | https://github.com/dashersw/liquid-glass-js | `README.md`, `container.js`, and `button.js` reviewed for web-only class, capture, and lifecycle guidance; no source reproduced | MIT | 2026-09-05 | 78cb6ccb0b9987bb60a88b14ccbd13a9e6e8ab2a |
+
+Note on the `apple-design` row: no license file was present at the reviewed
+revision, and the README's HIG-derived-material note is not a redistribution
+license. OMH's guidance is independently written against Apple primary
+sources. [Apple Design](APPLE-DESIGN.md) records the comparison with existing
+OMH skills, the sources checked, and the native-versus-web boundaries.
 
 Note on the `codebase-uml` row (issue #1251): the review was advanced through
 `b2392e6230a1782e477a45d250b7cb9a569f95da` on 2026-09-04, which includes two

@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from ..core.errors import OmhError
-from ..converter import convert_from_dir
+from ..converter import convert_from_dir, convert_references_from_dir
 from ..local_store import atomic_write_text, read_json_object_result
 from ..manifest import local_modifications, new_manifest, read_manifest, skill_records, write_manifest
 from ..paths import (
@@ -138,7 +138,7 @@ def install_skill_pack(
     if profile not in SKILL_PROFILES:
         raise OmhError(f"unknown skill profile {profile!r}; choose one of {', '.join(SKILL_PROFILES)}")
     all_templates = convert_from_dir(source_dir) if source_dir else builtin_skill_templates()
-    reference_templates = [] if source_dir else builtin_skill_reference_templates()
+    reference_templates = convert_references_from_dir(source_dir) if source_dir else builtin_skill_reference_templates()
     if source_dir:
         # A retired ULW engine copied from a stale tap or checkout fails with
         # the explicit migration error, never a silent install of a contract

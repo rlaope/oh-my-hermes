@@ -418,6 +418,14 @@ CHAT_CARD_COVERAGE_CASES: tuple[ChatCardCoverageCase, ...] = (
         "prepare_data_analysis_card",
     ),
     ChatCardCoverageCase(
+        "apple-design",
+        "Apple Design",
+        "Review our iOS checkout against Apple HIG and prepare the frontend remediation",
+        "apple-design",
+        "apple_design",
+        "prepare_design_orchestration",
+    ),
+    ChatCardCoverageCase(
         "design-orchestration",
         "Design Orchestration",
         "디자인 맡겨줘",

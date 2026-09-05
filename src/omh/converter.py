@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .skill_pack import DESCRIPTIONS, SkillTemplate
+from .skill_pack import DESCRIPTIONS, SkillReferenceTemplate, SkillTemplate
 from .skills.catalog import (
     OMH_SKILL_DISPLAY_NAME_OVERRIDES,
     OMH_SKILL_NAME_PREFIX,
@@ -109,4 +109,26 @@ def convert_from_dir(source_dir: Path) -> list[SkillTemplate]:
     for skill_file in discover_skill_files(source_dir):
         raw = skill_file.read_text(encoding="utf-8")
         templates.append(convert_skill(raw, skill_file.parent.name))
+    return templates
+
+
+def convert_references_from_dir(source_dir: Path) -> list[SkillReferenceTemplate]:
+    """Copy progressive references beside each imported skill into the managed pack."""
+    templates: list[SkillReferenceTemplate] = []
+    for skill_file in discover_skill_files(source_dir):
+        raw = skill_file.read_text(encoding="utf-8")
+        skill_name = extract_name(raw, skill_file.parent.name)
+        references_dir = skill_file.parent / "references"
+        if not references_dir.is_dir():
+            continue
+        for reference_file in sorted(references_dir.rglob("*.md")):
+            if ".git" in reference_file.parts:
+                continue
+            templates.append(
+                SkillReferenceTemplate(
+                    skill_name=skill_name,
+                    relative_path=reference_file.relative_to(skill_file.parent).as_posix(),
+                    content=reference_file.read_text(encoding="utf-8"),
+                )
+            )
     return templates
