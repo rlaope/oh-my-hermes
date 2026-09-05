@@ -6,7 +6,7 @@ from functools import lru_cache
 import hashlib
 from pathlib import Path
 import re
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 from urllib.parse import unquote
 
 from ..coding_contracts import (
@@ -1205,6 +1205,15 @@ def _preflight_command_tokens() -> frozenset[str]:
 # project-relative name after `;` from manufacturing filesystem declarations.
 _PREFLIGHT_EMBEDDED_PATH_DELIMITERS = frozenset(";=:|&?,'\"`")
 _PERCENT_ESCAPE_RE = re.compile(r"%[0-9a-f]{2}", re.IGNORECASE)
+_PERCENT_DECODE_ROUNDS = 3
+
+
+@lru_cache(maxsize=1)
+def _preflight_containment_absolute_path_re() -> re.Pattern[str]:
+    """Resolve the evaluator's absolute-path rule without an import cycle."""
+    from ..quality import safety_preflight
+
+    return cast(re.Pattern[str], vars(safety_preflight)["_ABSOLUTE_PATH_RE"])
 
 
 def _preflight_filesystem_anchor(token: str) -> bool:
@@ -1249,28 +1258,65 @@ def _preflight_embedded_path_fragments(token: str) -> list[str]:
     return fragments
 
 
-def _preflight_path_spellings(token: str) -> list[str]:
-    """Add anchored and decoded spellings without narrowing the legacy scan."""
+def _preflight_containment_key(spelling: str) -> tuple[bool, bool, bool]:
+    """The path properties `_target_paths_denial` uses for an unrooted request."""
+    path_parts = tuple(part for part in spelling.replace("\\", "/").split("/") if part not in ("", "."))
+    return (
+        not spelling.strip(),
+        bool(_preflight_containment_absolute_path_re().match(spelling)),
+        ".." in path_parts,
+    )
+
+
+def _preflight_declared_containment_key(spelling: str, *, excluded_path: str) -> tuple[bool, bool, bool] | None:
+    """Return the evaluator key only for a spelling this parser will declare."""
+    file_path = _preflight_file_uri_path(spelling)
+    if file_path is None and _is_preflight_remote_location(spelling):
+        return None
+    declared_spelling = file_path if file_path is not None else spelling
+    if declared_spelling == excluded_path or not _is_preflight_filesystem_target(declared_spelling):
+        return None
+    return _preflight_containment_key(declared_spelling)
+
+
+def _preflight_path_spellings(token: str, *, excluded_path: str = "") -> list[str]:
+    """Add decoded spellings only when containment reads a new path property."""
     spellings = [_preflight_path_candidate(token), _preflight_assignment_path_candidate(token)]
     spellings.extend(_preflight_embedded_path_fragments(token))
+    declared_keys = {
+        key
+        for spelling in spellings
+        if (key := _preflight_declared_containment_key(spelling, excluded_path=excluded_path)) is not None
+    }
     # Decode only actual percent escapes and only after a raw URL was excluded
-    # by the caller. Decoding is deliberately single-pass: `%252e%252e` stays
-    # literal, matching a filesystem consumer's name. `unquote` leaves malformed
-    # escapes literal, while a second spelling exposes encoded separators and
-    # parent segments to containment. Several spellings can consume scan slots,
-    # so percent-encoded filenames practically allow roughly half MAX_TARGET_PATHS.
-    if _PERCENT_ESCAPE_RE.search(token):
-        decoded = unquote(token)
-        if decoded != token:
-            decoded = decoded.rstrip(_CODE_REFERENCE_TRIM_CHARS).lstrip(_CODE_REFERENCE_OPENING_TRIM_CHARS)
-            spellings.extend(
-                (
-                    decoded,
-                    _preflight_path_candidate(decoded),
-                    _preflight_assignment_path_candidate(decoded),
-                )
-            )
-            spellings.extend(_preflight_embedded_path_fragments(decoded))
+    # by the caller. The cap bounds parsing work: a spelling still encoded after
+    # it is reached is a literal filename spelling to this scanner, not a reason
+    # to recurse indefinitely. A decoded spelling consumes a declaration slot
+    # only when `_target_paths_denial` reads a containment property not already
+    # declared for this token; ordinary filename decodes do not.
+    decoded = token
+    for _ in range(_PERCENT_DECODE_ROUNDS):
+        if not _PERCENT_ESCAPE_RE.search(decoded):
+            break
+        next_decoded = unquote(decoded).rstrip(_CODE_REFERENCE_TRIM_CHARS).lstrip(
+            _CODE_REFERENCE_OPENING_TRIM_CHARS
+        )
+        if next_decoded == decoded:
+            break
+        decoded_spellings = [
+            next_decoded,
+            _preflight_path_candidate(next_decoded),
+            _preflight_assignment_path_candidate(next_decoded),
+            *_preflight_embedded_path_fragments(next_decoded),
+        ]
+        round_keys: set[tuple[bool, bool, bool]] = set()
+        for spelling in decoded_spellings:
+            key = _preflight_declared_containment_key(spelling, excluded_path=excluded_path)
+            if key is not None and key not in declared_keys:
+                spellings.append(spelling)
+                round_keys.add(key)
+        declared_keys.update(round_keys)
+        decoded = next_decoded
     return spellings
 
 
@@ -1340,7 +1386,7 @@ def _safety_preflight_target_paths(message: str, *, excluded_path: str = "") -> 
             # characters resemble a local traversal spelling.
             if _is_preflight_remote_location(token):
                 continue
-            spellings = _preflight_path_spellings(token)
+            spellings = _preflight_path_spellings(token, excluded_path=excluded_path)
         for spelling in spellings:
             file_path = _preflight_file_uri_path(spelling)
             if file_path is not None:
