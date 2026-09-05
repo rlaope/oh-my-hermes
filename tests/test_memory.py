@@ -338,13 +338,19 @@ class MemoryContractTests(unittest.TestCase):
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
             write_setup_profile(paths, memory_mode="auto-safe")
 
-            captured = capture_project_memory_candidate(paths, summary)
+            captured = capture_project_memory_candidate(
+                paths,
+                summary,
+                tags=["token-based", "secret-management"],
+            )
 
             self.assertTrue(captured["auto_approved"])
             self.assertEqual(captured["candidate"]["summary"], summary)
             self.assertEqual(captured["record"]["summary"], summary)
+            self.assertEqual(captured["record"]["tags"], ["token-based", "secret-management"])
             recall = build_project_memory_recall_pack(paths, "parsing policy")
             self.assertEqual(recall["included_records"][0]["summary"], summary)
+            self.assertEqual(recall["included_records"][0]["tags"], ["token-based", "secret-management"])
             self.assertEqual(validate_project_memory_recall_pack(recall), [])
 
     def test_structural_capture_metadata_rejects_credentials_without_serializing_them(self) -> None:
