@@ -218,10 +218,12 @@ OMH is three things for Hermes Agent, delivered as one plugin: the coding
 intelligence (01–04, 07), a long-term memory system (08), and optimized
 workflow packages (05–06). One scene each, drawn from the real surfaces.
 
-### 01 · The right model per request, decided before anything runs
+### 01 · Per-model tuning, task splitting, and stronger coding skills
 
-Every request is scored before dispatch, and every signal that moved the
-score is named. A rename scores light and goes to the quick lane. "Find every
+The coding side of OMH is three moves: tune the prompt per model (03), split
+work into lanes that run in parallel (04), and load the specialist skills the
+request calls for (06). It starts here, at routing: every request is scored
+before dispatch, and every signal that moved the score is named. A rename scores light and goes to the quick lane. "Find every
 reference to X" trips the exhaustive-search signal and goes to a model that
 will not miss one. Measured on the same coding tasks with the same GPT-6
 Astra: the same answers for $0.66 instead of $4.29, in 5 minutes instead of
