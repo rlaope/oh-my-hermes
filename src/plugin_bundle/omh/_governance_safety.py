@@ -169,7 +169,7 @@ def evaluate_renderable_strings(artifact: dict[str, object]) -> dict[str, object
     Returns worst-case result with status and reason_code.
     Fail-closed: any blocked field blocks, any needs_review field needs review.
     """
-    renderable_fields = (
+    prioritized_fields = (
         "summary",
         "value",
         "label",
@@ -191,11 +191,22 @@ def evaluate_renderable_strings(artifact: dict[str, object]) -> dict[str, object
         "perspective",
         "attention",
     )
+    renderable_fields = tuple(dict.fromkeys((*prioritized_fields, *(str(key) for key in artifact))))
 
     worst_status = "safe"
     worst_field = None
 
     for field in renderable_fields:
+        key_status = classify_memory_admission(field).get("status", "safe")
+        if key_status == "blocked":
+            return {
+                "status": "blocked",
+                "field": "metadata_key",
+                "reason_code": "safety_blocked_in_metadata_key",
+            }
+        if key_status == "needs_review" and worst_status != "blocked":
+            worst_status = "needs_review"
+            worst_field = "metadata_key"
         content = artifact.get(field)
         for value_path, value in _iter_renderable_values(content, field):
             result = classify_memory_admission(value)

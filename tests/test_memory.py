@@ -287,6 +287,8 @@ class MemoryContractTests(unittest.TestCase):
             record_path = paths.memory_dir / "records" / f"{record_id}.json"
             record = json.loads(record_path.read_text(encoding="utf-8"))
             record["scope"]["ref"] = credential
+            record["approved_at"] = credential
+            record["ttl"]["expires_at"] = credential
             record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             legacy_bytes = record_path.read_bytes()
 
@@ -305,6 +307,9 @@ class MemoryContractTests(unittest.TestCase):
             record_id = captured["record"]["record_id"]
             record_path = paths.memory_dir / "records" / f"{record_id}.json"
             record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["record_type"] = credential
+            record["approved_at"] = credential
+            record["ttl"]["expires_at"] = credential
             record["scope"]["ref"] = credential
             record["derived_from"] = [credential]
             record["perspective"] = {"observer": "hermes", "observed": credential}
