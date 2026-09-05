@@ -59,7 +59,7 @@ class CiOfflineBenchmarkTests(unittest.TestCase):
             if test_id.startswith(WRAPPER_PREFIX)
         )
 
-        self.assertEqual(len(assigned), 16)
+        self.assertEqual(len(assigned), 18)
         self.assertEqual(len(assigned), len(set(assigned)))
         self.assertTrue(
             all("benchmarks/live-model-tools" not in test_id for test_id in inventory)

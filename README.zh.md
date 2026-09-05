@@ -73,10 +73,6 @@
 > <p align="center">
 >   <img src="assets/omh-terminal-boot-banner.png" alt="OH-MY-HERMES terminal banner listing available tools, grouped skills, OMH specialists, infrastructure, and the model pool on Hermes Agent" width="1080">
 > </p>
->
-> <p align="center">
->   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
-> </p>
 
 > [!TIP]
 > 加入我们！
@@ -166,6 +162,76 @@ omh doctor
 
 把 `--full` 安装收敛回 core 这类维护路径，见
 [Installation](docs/INSTALLATION.md#reconciling-an-existing-full-install-back-to-core)。
+
+## 你能得到什么
+
+OMH 以一个插件为 Hermes Agent 提供三样东西：编码智能（01–04、07）、长期记忆系统（08）、优化的工作流包（05–06）。每样各一个场景，取自真实界面。
+
+### 01 · 按模型调优、拆分任务、强化编码技能
+
+OMH 的编码面有三步：按模型调整提示（03），把工作拆成并行通道（04），装载请求所需的专家技能（06）。起点是路由：每个请求在派发前都会被打分，推动分数的每个信号都有名字。重命名判为 light，走 quick 通道；“找出所有引用 X 的地方”触发 exhaustive-search 信号，交给不会漏掉任何一处的模型。用同一个 GPT-6 Astra 跑同样的编码任务：同样的答案，花费从 $4.29 降到 $0.66，时间从 23 分钟降到 5 分钟。
+
+<p align="center">
+  <img src="assets/showcase-01-routing.svg" alt="omh coding complexity 为两个请求打分的结果，以及 Astra 的测量表" width="1080">
+</p>
+
+### 02 · 类别按执行器归你所有
+
+`ultrabrain`、`deep`、`architect`、`quick`、`writing`、`visual-engineering`：每一个都是按编码执行器划分的模型+effort 链，在一个文件里即可查看和覆盖。提供方拒绝某个模型时链会前进；一次会继承无法提供该模型的提供方的派发会被拒绝，而不是悄悄降级。setup 会询问你的提供方，并按当前这台机器重排链。
+
+<p align="center">
+  <img src="assets/showcase-02-categories.svg" alt="omh coding category-maestro show：按执行器的类别链、一处操作者覆盖、一次被拒绝的派发" width="1080">
+</p>
+
+### 03 · 按模型家族调校的提示，并且经过测量
+
+13 个模型家族，每个家族一个校准块，每一句都针对该家族有文档记载的一个特性：告诉 Claude 清单已经完整，告诉 Gemini 没有工具输出的断言不算证据，告诉 Qwen3-Coder 永远不要输出 thinking 标签，告诉 DeepSeek 版本和 thinking 模式是契约字段。GPT-6 Astra 有自己的精确模型契约和校准块。有路由的地方就测量：Astra 的初稿让它在解不出的任务上继续硬做，同样的答案多花 10% token，于是按这个数字被删掉。
+
+<p align="center">
+  <img src="assets/showcase-03-calibration.svg" alt="每个模型家族一行校准、gpt-6-astra 模型契约、经测量的修订" width="1080">
+</p>
+
+### 04 · 只在安全的地方并行，回来时带着类型
+
+`ulw-work` 把已批准的计划拆成互不共享文件的单元，给每个单元一个从同一个固定 SHA 分出的工作树，并允许单元在一轮里发出全部工具调用。每个单元以四状态的类型化结果返回：进程已退出、schema 有效、已观察到验证、可集成。没有证据的 exit 0 在门禁检查之前一直停在 `reported done`，验证回执只在版本、命令、环境全部一致时复用。
+
+<p align="center">
+  <img src="assets/showcase-04-parallel.svg" alt="一次 ulw-work 扇出：三个文件互不重叠的单元、每单元一个工作树、类型化状态、一轮内发出的工具调用" width="1080">
+</p>
+
+### 05 · Oh-My-Hermes 界面与 Hermes Agent 工作流
+
+每条委派通道一行：模型、effort、轮次、token、成本，实时更新。经 Maestro 交给 Codex 或 Claude Code 的通道有自己的一行，标为 `(codex/maestro …)` 或 `(claude/maestro …)`。成本为零只在主机确认时才显示；无法定价的调用显示 `unknown`，而不是 `$0`。进程存在之前是 `Plan · not run`，执行器自称完成时是 `Code · reported done`，只有门禁通过后才是 `Test · verified`。提示框上方的阶段待办是这次运行自己的清单，不是事后写的摘要。
+
+<p align="center">
+  <img src="assets/showcase-05-hud.svg" alt="OMH HUD：每条通道的模型、effort、轮次、token、成本来源、证据状态，以及阶段待办" width="1080">
+</p>
+
+### 06 · 专家技能渗入运行
+
+你不需要去调用专家。目录里有 108 个 `omh-*` 专业技能：前端、后端、Rust、原生调试、推理服务、设计质量门禁、验证门禁、安全评审、性能预算、重构计划等等。当请求触及这些领域时，对应的技能已经作为工具调用进入运行，抬高了智能体认定“完成”的底线。用英文或韩文说出来，路由器会选出专家。
+
+<p align="center">
+  <img src="assets/showcase-06-skills.svg" alt="以工具调用形式进入一次运行的 omh-* 专家技能、围绕运行的专家轨道，以及三个数字" width="1080">
+</p>
+
+### 07 · 一张图看清架构，再分阶段改进
+
+让它画出仓库，`codebase-uml` 会直接从代码里画：包、模块、每一条 import 边，并标出循环依赖。发现按优先级排列，`refactor-plan` 把靠前的几项变成阶段：每个阶段作为一个 PR 落地，由测试锁定行为，锁一旦被打破就立刻中止。前后对比在代码树上实测，dock 显示每个阶段是否在运行，以及是否有东西检查过它。
+
+<p align="center">
+  <img src="assets/showcase-07-architecture.svg" alt="codebase-uml 画出带两个循环的仓库，旁边是发现项和分阶段重构计划、实测的前后对比，以及每个阶段一行 dock" width="1080">
+</p>
+
+### 08 · 由评审者准入的长期记忆
+
+没有任何东西被悄悄记住。候选从会话中捕获，放上评审卡，带着写明的理由被记住、拒绝或推迟。已批准的记录带有来源和复审到期日；确认会重置时钟，沉默会让它从 active 老化到 reference 再到 archive。下一个会话会得到按任务排序、裁剪到 token 预算内的召回包，冲突与重复已被处理。Hermes 自己的记忆从不被读取或修改；这个存储属于 OMH，基于文件，经过评审。
+
+<p align="center">
+  <img src="assets/showcase-08-memory.svg" alt="长期记忆：准入卡片、一条记录的生命周期、注意力层级，以及为下一个会话准备的预算召回包" width="1080">
+</p>
+
+<br>
 
 ## OH-MY-HERMES 终端
 

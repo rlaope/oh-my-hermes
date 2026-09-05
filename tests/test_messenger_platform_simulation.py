@@ -170,7 +170,7 @@ def _long_brief_body() -> str:
             "\n".join(
                 (
                     f"### Unit unit-{index:02d}",
-                    f"**Owner**: codex (gpt-5-codex xhigh); **status**: running; see [session](https://example.test/s/{index}).",
+                    f"**Owner**: codex (gpt-5.6-sol xhigh); **status**: running; see [session](https://example.test/s/{index}).",
                     "",
                     "```log",
                     f"unit-{index:02d}  targeted tests passed  ({index * 7}s elapsed)",

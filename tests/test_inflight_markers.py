@@ -32,7 +32,7 @@ def _fields(**overrides: str) -> dict[str, str]:
     fields = {
         "owner": "codex",
         "owner_host": "local",
-        "model": "gpt-5-codex",
+        "model": "gpt-5.6-sol",
         "reasoning_effort": "medium",
         "run_ref": "run-core",
         "worktree": "/tmp/worktrees/core",
@@ -62,7 +62,7 @@ class WriteReadRoundTripTest(unittest.TestCase):
             self.assertEqual(marker["unit_id"], "core")
             self.assertEqual(marker["marker_status"], "present")
             self.assertEqual(marker["owner"], "codex")
-            self.assertEqual(marker["model"], "gpt-5-codex")
+            self.assertEqual(marker["model"], "gpt-5.6-sol")
             self.assertEqual(marker["reasoning_effort"], "medium")
             self.assertEqual(marker["run_ref"], "run-core")
             self.assertEqual(marker["worktree"], "/tmp/worktrees/core")

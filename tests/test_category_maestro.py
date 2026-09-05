@@ -235,7 +235,7 @@ class CategoryMaestroResolverTests(unittest.TestCase):
         self.assertEqual(route["selected_reasoning_effort"], "high")
         self.assertEqual(route["provenance"], "role_chain_head")
         chain_models = [entry["model_id"] for entry in route["chain"]]
-        self.assertEqual(chain_models, ["gpt-5.6-sol", "gpt-5"])
+        self.assertEqual(chain_models, ["gpt-5.6-sol"])
 
     def test_depth_and_scale_chains_derive_from_the_merged_table(self) -> None:
         deep = resolve_model_route(
@@ -320,7 +320,7 @@ class CategoryMaestroFanoutTests(unittest.TestCase):
         route = contract["units"][0]["handoff"]["model_route"]
         self.assertEqual(route["selected_model"], "gpt-6-astra")
         self.assertEqual(
-            [entry["model_id"] for entry in route["chain"]], ["gpt-6-astra", "gpt-5-codex"]
+            [entry["model_id"] for entry in route["chain"]], ["gpt-6-astra", "gpt-5.6-sol"]
         )
         self.assertEqual(route["catalog_kind"], "built_in_defaults")
 

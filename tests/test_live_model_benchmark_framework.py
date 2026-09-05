@@ -176,6 +176,18 @@ class OmhBenchmarkFrameworkDelegationTests(_UpstreamDelegationBase):
             "test_analysis_compares_equal_task_digests",
         )
 
+    def test_analysis_pairs_the_family_arm_against_the_override(self) -> None:
+        self._delegate(
+            "OmhBenchmarkFrameworkTests",
+            "test_analysis_pairs_the_family_arm_against_the_override",
+        )
+
+    def test_bench_cli_schedules_the_family_condition_offline(self) -> None:
+        self._delegate(
+            "OmhBenchmarkFrameworkTests",
+            "test_bench_cli_schedules_the_family_condition_offline",
+        )
+
     def test_analysis_rejects_unscheduled_model_claim_matrix(self) -> None:
         self._delegate(
             "OmhBenchmarkFrameworkTests",

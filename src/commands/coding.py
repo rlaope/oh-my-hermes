@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -68,6 +69,92 @@ _CAPABILITY_SNAPSHOT_CLAIM_BOUNDARY = (
     "verification, review, CI, merge-readiness, or merge evidence."
 )
 _CAPABILITY_SNAPSHOT_EXECUTOR_TARGETS = tuple(target for target in CODING_EXECUTOR_TARGETS if target != "choose")
+_MODEL_CONTRACT_INVENTORY_MAX_BYTES = 1_048_576
+_MODEL_CONTRACT_SOURCE_LINEAGE_FIELD = "provenance"
+
+
+def _model_contract_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, entry in pairs:
+        if key in value:
+            raise ValueError("duplicate JSON key")
+        value[key] = entry
+    return value
+
+
+def _reject_model_contract_json_constant(_value: str) -> object:
+    raise ValueError("non-finite JSON number")
+
+
+def _parse_finite_model_contract_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError("non-finite JSON number")
+    return parsed
+
+
+def _read_model_contract_inventory(path_text: str) -> dict[str, object]:
+    try:
+        if path_text == "-":
+            raw = sys.stdin.read(_MODEL_CONTRACT_INVENTORY_MAX_BYTES + 1)
+            encoded = raw.encode("utf-8")
+        else:
+            with Path(path_text).expanduser().open("rb") as handle:
+                encoded = handle.read(_MODEL_CONTRACT_INVENTORY_MAX_BYTES + 1)
+            raw = encoded.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise OmhError("model contract audit inventory is not readable UTF-8 JSON") from exc
+    if len(encoded) > _MODEL_CONTRACT_INVENTORY_MAX_BYTES:
+        raise OmhError(
+            f"model contract audit inventory exceeds {_MODEL_CONTRACT_INVENTORY_MAX_BYTES} bytes"
+        )
+    try:
+        value = json.loads(
+            raw,
+            object_pairs_hook=_model_contract_json_object,
+            parse_constant=_reject_model_contract_json_constant,
+            parse_float=_parse_finite_model_contract_json_float,
+        )
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise OmhError("model contract audit inventory is not valid JSON") from exc
+    if not isinstance(value, dict):
+        raise OmhError("model contract audit inventory must contain a JSON object")
+    return value
+
+
+def cmd_coding_model_contract_audit(args: argparse.Namespace) -> int:
+    from ..coding.model_contract_coverage import build_model_contract_coverage, coverage_exit_code
+
+    try:
+        report = build_model_contract_coverage(
+            _read_model_contract_inventory(args.inventory),
+            required_models=args.required_model,
+            recommended_models=args.recommended_model,
+            intentional_exclusions=args.intentional_exclusion,
+        )
+    except ValueError as exc:
+        raise OmhError(str(exc)) from exc
+    if _wants_json(args):
+        _print_json(report)
+    else:
+        comparison = report.get("comparison")
+        summary = comparison.get("summary") if isinstance(comparison, dict) else None
+        if not isinstance(summary, dict):
+            raise OmhError("model contract audit produced an invalid summary")
+        status_counts = summary.get("status_counts")
+        if not isinstance(status_counts, dict):
+            raise OmhError("model contract audit produced invalid status counts")
+        print(f"Model contract coverage: {summary.get('outcome', 'unknown')}")
+        print(f"Comparison digest: {report['comparison_digest']}")
+        print(
+            "Coverage: "
+            + ", ".join(
+                f"{name}={count}"
+                for name, count in status_counts.items()
+            )
+        )
+        print(str(report["claim_boundary"]))
+    return coverage_exit_code(report)
 
 
 def cmd_coding_delegate(args: argparse.Namespace) -> int:
@@ -1325,12 +1412,17 @@ def cmd_coding_complexity(args: argparse.Namespace) -> int:
 
 
 def cmd_coding_model_contract(args: argparse.Namespace) -> int:
-    from ..coding.model_contracts import dynamic_effort_guidance, model_contract
+    from ..coding.model_contracts import (
+        dynamic_effort_guidance,
+        model_contract,
+        model_contract_projection,
+    )
     from ..coding.model_routing import model_family
 
     model = str(args.model or "").strip()
     contract = model_contract(model)
-    if contract is None:
+    projection = model_contract_projection(model)
+    if contract is None or projection is None:
         raise OmhError(
             f"no documented contract for `{model}`; the route resolver keeps treating it by family "
             f"(`{model_family(model) or 'unknown'}`) and the catalog alone"
@@ -1340,12 +1432,19 @@ def cmd_coding_model_contract(args: argparse.Namespace) -> int:
         "schema_version": "model_contract_report/v1",
         "requested_model": model,
         "family": model_family(model) or "unknown",
+        "projection": projection,
         "contract": dict(contract),
         "effort_policy": dynamic_effort_guidance(model, executor),
     }
     if _wants_json(args):
         _print_json(payload)
         return 0
+    print(
+        f"Requested `{projection['requested_model']}` resolves by "
+        f"{projection[_MODEL_CONTRACT_SOURCE_LINEAGE_FIELD]} to `{projection['contract_model_id']}` "
+        f"with reasoning mode `{projection['reasoning_mode']}` and "
+        f"service tier `{projection['service_tier']}`."
+    )
     print(f"Documented contract for `{contract['model_id']}` ({payload['family']} family):")
     print(f"- reasoning efforts: {', '.join(contract['reasoning_efforts'])} (floor `{contract['effort_floor']}`)")
     for effort, detail in dict(contract.get("unsupported_efforts", {})).items():
@@ -1758,7 +1857,7 @@ def cmd_coding_fanout_brief(args: argparse.Namespace) -> int:
         selected_effort = model_route.get("selected_reasoning_effort", "")
         model_id = _bounded_fanout_brief_scalar(selected_model)
         effort = _bounded_fanout_brief_scalar(selected_effort)
-        # One human-readable label per subagent, e.g. "gpt-5-codex xhigh" —
+        # One human-readable label per subagent, e.g. "gpt-5.6-sol xhigh" —
         # what a briefing renders next to the unit without joining two fields.
         # The format is a stable part of fanout_briefing/v1 and is built by
         # the same `model_label_for` helper the status board uses, so the two
@@ -1885,7 +1984,7 @@ def _fanout_brief_unit_line(unit: dict) -> str:
         model_text += " [schema v1]"
     parts = [
         str(unit.get("unit_id", "")),
-        # Owner and model are ONE field visually: "codex (gpt-5-codex xhigh)".
+        # Owner and model are ONE field visually: "codex (gpt-5.6-sol xhigh)".
         # The status board's bullet renderer abandoned the standalone
         # "— (model)" field because a dash around a parenthetical doubled the
         # separator; the brief follows the same convention.
@@ -3040,6 +3139,43 @@ def _add_coding_commands(sub) -> None:
     model_inventory.add_argument("--json", action="store_true", help="Emit the machine payload instead of plain text.")
     model_inventory.set_defaults(func=cmd_coding_model_inventory)
 
+    model_contract_audit = coding_sub.add_parser(
+        "model-contract-audit",
+        help=(
+            "Compare a bounded local JSON model inventory with shipped contracts; "
+            "network-free and reporting-only."
+        ),
+    )
+    model_contract_audit.add_argument(
+        "--inventory",
+        required=True,
+        help="Local JSON inventory path, or - for stdin (maximum 1048576 bytes).",
+    )
+    model_contract_audit.add_argument(
+        "--required-model",
+        action="append",
+        default=[],
+        help="Model id whose missing contract blocks the audit; repeatable.",
+    )
+    model_contract_audit.add_argument(
+        "--recommended-model",
+        action="append",
+        default=[],
+        help="Model id whose missing contract is advisory; repeatable.",
+    )
+    model_contract_audit.add_argument(
+        "--intentional-exclusion",
+        action="append",
+        default=[],
+        help="Model id intentionally outside OMH contract coverage; repeatable.",
+    )
+    model_contract_audit.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the stable model_contract_coverage/v1 payload.",
+    )
+    model_contract_audit.set_defaults(func=cmd_coding_model_contract_audit)
+
     complexity = coding_sub.add_parser(
         "complexity",
         help="Score a request's complexity and show the advisory model-class recommendation.",
@@ -3079,9 +3215,13 @@ def _add_coding_commands(sub) -> None:
 
     model_contract = coding_sub.add_parser(
         "model-contract",
-        help="Print the vendor-documented contract for one exact model id (efforts, limits, tool API, pricing, sources); metadata only.",
+        help="Print a vendor-documented exact contract or bounded declared projection (efforts, limits, tools, pricing, sources); metadata only.",
     )
-    model_contract.add_argument("--model", required=True, help="Exact model id, provider prefix welcome (for example gpt-6-astra, openai/gpt-6-astra).")
+    model_contract.add_argument(
+        "--model",
+        required=True,
+        help="Exact or explicitly declared model id, provider prefix welcome (for example gpt-6-astra, openai/gpt-6-astra-pro-fast).",
+    )
     model_contract.add_argument(
         "--executor",
         default=None,

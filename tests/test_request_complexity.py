@@ -251,12 +251,12 @@ class GuardCorpusTests(unittest.TestCase):
     def test_the_negative_controls_never_overscore(self) -> None:
         report = complexity_precision_report()
         self.assertEqual(report["overscore_count"], 0, report["overscored"])
-        self.assertEqual(report["precision_case_count"], 13)
+        self.assertEqual(report["precision_case_count"], 16)
 
     def test_the_intervention_cases_all_escalate_for_their_named_reasons(self) -> None:
         report = complexity_precision_report()
         self.assertEqual(report["missed_escalation_count"], 0, report["missed_escalations"])
-        self.assertEqual(report["intervention_case_count"], 7)
+        self.assertEqual(report["intervention_case_count"], 9)
 
     def test_a_trivial_one_liner_never_scores_deep(self) -> None:
         for message in (

@@ -241,3 +241,67 @@ measure them.
 
 Results describe this pinned corpus, OMH version, Hermes version, model IDs,
 and conditions only. They do not establish universal model superiority.
+
+### 2026-09-05 routing lanes: Hermes alone vs OMH on the same 30 tasks
+
+Same pinned evaluation corpus and day as the four-arm run above. Each row is
+one model at one effort through `hermes_current_session`, except the last
+three, which compose an OMH-routed outcome per task from the single-model
+rows: every task goes to the arm the router's class resolves to on this
+machine, and its measured record is taken as is. The routing decision comes
+from `omh coding complexity` on the task text alone; no benchmark result
+feeds the scorer.
+
+Cost is OMH's list-price table applied to each session's input and output
+tokens (`APPROX_PRICE_PER_MTOK`), so rows are comparable even where the host
+reports the call as included or unknown. Tool calls, turns, and wall clock
+come from the Hermes `sessions` table, joined by run order.
+
+| Arm | Passed | Tokens | List-price cost | Cost / pass | Tool calls | Turns | Median s / task | Total min |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Hermes alone: machine default, `gpt-5.6-sol` medium | 18 / 30 | 2,469,798 | $0.96 | $0.053 | 337 | 321 | 47 | 24.8 |
+| `gpt-6-astra` xhigh, no calibration | 18 / 30 | 1,550,904 | $4.29 | $0.239 | 310 | 203 | 39 | 23.3 |
+| `gpt-6-astra` xhigh + OMH calibration (shipped block) | 18 / 30 | 1,532,241 | $4.30 | $0.239 | 294 | 192 | 37 | 22.5 |
+| `gpt-6-astra` low (the effort the light tier would set) | 18 / 30 | 1,522,932 | $4.64 | $0.258 | 302 | 203 | 39 | 22.3 |
+| `quick` head alone: `z-ai/glm-5.2-ultrafast` low | 14 / 30 | 1,693,078 | $0.06 | $0.004 | 226 | 217 | 4 | 2.1 |
+| `unspecified-high` head alone: `moonshotai/kimi-k3-ultrafast` medium | 11 / 30 | 1,975,651 | $0.36 | $0.032 | 308 | 242 | 9 | 7.6 |
+| OMH routed, before `exhaustive_search` (all 30 → `quick`) | 14 / 30 | 1,693,078 | $0.06 | $0.004 | 226 | 217 | 4 | 2.1 |
+| OMH routed, after the signal, shipped chains (6 search → Kimi, 24 → GLM) | 12 / 30 | 1,732,236 | $0.10 | $0.008 | 244 | 222 | 5 | 2.5 |
+| OMH routed, after the signal, `unspecified-high` head = `gpt-5.6-sol` | 18 / 30 | 1,821,874 | $0.18 | $0.010 | 243 | 235 | 5 | 5.2 |
+
+Per template, the `quick` head tied the flagship on eight of ten (edit,
+read, lsp, routing: identical pass counts) and lost only the two
+exhaustive-search templates, REFERENCES 2 / 3 and PREDICATE 0 / 3 against
+3 / 3 and 3 / 3. Before this run the scorer read those prompts as light
+(score 0, no signal); `exhaustive_search` (+4) now lifts "find every
+reference / all usages / every occurrence" to `standard` on its own, and the
+30-task classification changed for exactly those six.
+
+What the numbers say, and no more:
+
+- Against the machine default (Sol medium), OMH routing with a GPT head for
+  the `standard` class keeps the pass rate (18 / 30) at 19% of the cost and
+  21% of the wall clock: $0.18 vs $0.96, 5.2 min vs 24.8 min.
+- Against the flagship at `xhigh`, the same routing keeps the pass rate at
+  4% of the cost and 22% of the wall clock.
+- With the shipped `unspecified-high` head (Kimi K3) the signal does not
+  recover the six search tasks on this machine (0 / 6 for Kimi ultrafast),
+  so the routed result is 12 / 30. The head has to pass exhaustive search;
+  Sol did (6 / 6), Astra did (6 / 6), GLM (2 / 6) and Kimi (0 / 6) did not.
+  An owner who wants the 18 / 30 row puts a GPT model first for that class:
+
+  ```json
+  {"schema_version": "mixture_chain_overrides/v1",
+   "categories": {"unspecified-high": [
+     {"model": "gpt-5.6-sol", "reasoning_effort": "medium"},
+     {"model": "kimi-k3", "reasoning_effort": "medium"}]}}
+  ```
+
+- Effort routing did nothing for Astra here: `low` and `xhigh` produced the
+  same passes, tokens, and wall clock, so no claim is made for it.
+- No arm passes a read or lsp task; 18 / 30 is this corpus's ceiling for
+  every model measured, so no routing can raise pass rate here. Pass-rate
+  claims need a corpus with headroom (#1333).
+
+Results describe this pinned corpus, OMH version, Hermes version, model IDs,
+and conditions only. They do not establish universal model superiority.

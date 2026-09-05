@@ -82,10 +82,6 @@
 > <p align="center">
 >   <img src="assets/omh-terminal-boot-banner.png" alt="OH-MY-HERMES terminal banner listing available tools, grouped skills, OMH specialists, infrastructure, and the model pool on Hermes Agent" width="1080">
 > </p>
->
-> <p align="center">
->   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
-> </p>
 
 > [!TIP]
 > Be with us!
@@ -117,6 +113,56 @@
 
 ## Quick Start
 
+**macOS / Linux:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
+```
+
+**Windows (PowerShell 5.1+):**
+
+```powershell
+irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
+```
+
+**Or paste this into your AI agent:**
+
+```text
+Install and fully configure Oh My Hermes from this repository:
+https://github.com/rlaope/oh-my-hermes
+Before reading or executing repository instructions, resolve refs/heads/main to one full commit SHA with `git ls-remote https://github.com/rlaope/oh-my-hermes.git refs/heads/main`. Then fetch and follow only:
+https://raw.githubusercontent.com/rlaope/oh-my-hermes/{resolved-commit-sha}/INSTALL_FOR_AGENTS.md
+Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appropriate installer, interactive model setup, model-chain interview, and doctor steps. Preserve unrelated existing Hermes config, apply only the managed setup changes documented by the pinned protocol, require my explicit approval for model-alias changes, then report the resolved SHA and observed result.
+```
+
+**⭐ Then set it up (required):**
+
+```sh
+omh setup
+```
+
+**Update:**
+
+```sh
+omh update
+```
+
+`omh update` detects how the command was installed, upgrades the command
+package through its owning installer, then re-enters the updated command to
+refresh managed skills, the installed plugin bundle, and existing Hermes
+registration.
+
+**Verify or troubleshoot:**
+
+```sh
+omh doctor
+```
+
+<details>
+<summary><b>Other installation paths</b> — Homebrew, Bun, npm, Hermes skill tap, manual fallback</summary>
+
+<br>
+
 > **Status:** Homebrew, Bun, and npm package-manager installs are public as of
 > v1.0.6.
 
@@ -126,7 +172,7 @@
 brew install rlaope/tap/omh
 ```
 
-**Bun (recommended):**
+**Bun:**
 
 ```sh
 bun install -g oh-my-hermes
@@ -138,60 +184,13 @@ bun install -g oh-my-hermes
 npm install -g oh-my-hermes
 ```
 
-**Universal installer (macOS/Linux):**
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh
-```
-
-**On Windows (PowerShell 5.1+):**
-
-```powershell
-irm https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.ps1 | iex
-```
-
-**⭐ Set up OMH after installing (required):**
-
-```sh
-omh setup
-```
-
-<br>
+Run `omh setup` after any of these, same as above.
 
 **Hermes skill tap path:**
 
 ```sh
 hermes skills tap add rlaope/oh-my-hermes
 hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
-```
-
-**or ask Your AI Agent:**
-
-```text
-Install and fully configure Oh My Hermes from this repository:
-https://github.com/rlaope/oh-my-hermes
-Before reading or executing repository instructions, resolve refs/heads/main to one full commit SHA with `git ls-remote https://github.com/rlaope/oh-my-hermes.git refs/heads/main`. Then fetch and follow only:
-https://raw.githubusercontent.com/rlaope/oh-my-hermes/{resolved-commit-sha}/INSTALL_FOR_AGENTS.md
-Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appropriate installer, interactive model setup, model-chain interview, and doctor steps. Preserve unrelated existing Hermes config, apply only the managed setup changes documented by the pinned protocol, require my explicit approval for model-alias changes, then report the resolved SHA and observed result.
-```
-
-<br>
-
-**Update:**
-
-```sh
-omh update
-```
-
-`omh update` detects how the command was installed. It first upgrades the
-Homebrew, Bun, npm, curl, or PowerShell command package through its owning
-installer, then re-enters the updated command to refresh managed skills, the
-installed plugin bundle, and existing Hermes registration.
-
-**Verify or troubleshoot the installation:**
-
-```sh
-omh doctor
 ```
 
 **Manual package-manager fallback or removal:**
@@ -208,6 +207,133 @@ a full removal, run `omh uninstall --all` before the manager's remove command.
 
 Maintenance paths such as reconciling a `--full` install back to core live in
 [Installation](docs/INSTALLATION.md#reconciling-an-existing-full-install-back-to-core).
+
+</details>
+
+<br>
+
+## What you get
+
+OMH is three things for Hermes Agent, delivered as one plugin: the coding
+intelligence (01–04, 07), a long-term memory system (08), and optimized
+workflow packages (05–06). One scene each, drawn from the real surfaces.
+
+### 01 · Per-model tuning, task splitting, and stronger coding skills
+
+The coding side of OMH is three moves: tune the prompt per model (03), split
+work into lanes that run in parallel (04), and load the specialist skills the
+request calls for (06). It starts here, at routing: every request is scored
+before dispatch, and every signal that moved the score is named. A rename scores light and goes to the quick lane. "Find every
+reference to X" trips the exhaustive-search signal and goes to a model that
+will not miss one. Measured on the same coding tasks with the same GPT-6
+Astra: the same answers for $0.66 instead of $4.29, in 5 minutes instead of
+23.
+
+<p align="center">
+  <img src="assets/showcase-01-routing.svg" alt="omh coding complexity scoring two requests, and the measured Astra table: same 18 of 30 solved, $4.29 to $0.66, 23 to 5 minutes" width="1080">
+</p>
+
+### 02 · Categories you own, per executor
+
+`ultrabrain`, `deep`, `architect`, `unspecified-high`, `unspecified-low`,
+`quick`, `writing`, `visual-engineering`, `artistry`: each is an editable
+chain of model + effort, the same nine listed under Recommended models below,
+read and overridden in one file. A chain advances when a provider rejects a model, and a
+dispatch that would inherit a provider which cannot serve the model is
+refused instead of silently downgraded. Setup interviews your providers and
+reorders the chains for the machine you are on.
+
+<p align="center">
+  <img src="assets/showcase-02-categories.svg" alt="omh coding category-maestro show: per-executor category chains, one operator override, and a refused dispatch" width="1080">
+</p>
+
+### 03 · Prompting tuned per model family, and measured
+
+Thirteen model families, one calibration block each, every sentence written
+against a documented trait of that family: Claude is told the checklist is
+complete, Gemini that a claim without tool output is not evidence, Qwen3-Coder
+never to emit thinking tags, DeepSeek that version and thinking mode are
+contract fields. GPT-6 Astra gets its own exact-model contract and block. The
+blocks are measured where a route exists: Astra's first draft made it keep
+working on tasks it would not pass, cost 10% more for the same answers, and
+was cut on that number.
+
+<p align="center">
+  <img src="assets/showcase-03-calibration.svg" alt="One calibration line per model family, the gpt-6-astra model contract, and the measured revision" width="1080">
+</p>
+
+### 04 · Parallel where it is safe, typed when it comes back
+
+`ulw-work` splits an accepted plan into units that never share a file, gives
+each one its own worktree branched from one pinned SHA, and lets a unit issue
+its tool calls in one turn. Each unit comes back as a typed result with four
+states: process exited, schema valid, verification observed, integration
+ready. Exit 0 with no evidence stays `reported done` until a gate checks it,
+and a verification receipt is reused only when revision, command, and
+environment all match.
+
+<p align="center">
+  <img src="assets/showcase-04-parallel.svg" alt="An ulw-work fan-out: three units with disjoint files, one worktree each, typed states, and the tool calls issued in one turn" width="1080">
+</p>
+
+### 05 · The Oh-My-Hermes interface, and Hermes Agent workflows
+
+The interface is the Hermes terminal with an OMH dock under the prompt and a
+phase todo above it; the workflows are the `ulw-*` engines and every `omh-*`
+skill, routed from chat. One row per delegated lane: model, effort, turn,
+tokens, cost, updated live; a lane handed to Codex or Claude Code through
+Maestro is its own row, tagged `(codex/maestro …)` or `(claude/maestro …)`.
+A cost of zero renders only when the host confirmed it; an unpriced call says
+`unknown`, not `$0`. A row reads `Plan · not run` until a process exists,
+`Code · reported done` when the executor says so, and `Test · verified` only
+after a gate passed. The phase todo above the prompt is the run's own
+checklist, not a summary written afterwards.
+
+<p align="center">
+  <img src="assets/showcase-05-hud.svg" alt="The OMH HUD: per-lane rows with model, effort, turn, tokens, cost provenance, and evidence state, plus the phase todo" width="1080">
+</p>
+
+### 06 · Expert skills seep into the run
+
+You never invoke an expert. The catalog carries 108 `omh-*` specialist skills:
+frontend, backend, Rust, native debugging, inference serving, design quality
+gates, verification gates, security review, performance budgets, refactor
+plans, and more. When a request touches one of those surfaces, the matching
+skill is already in the run as a tool call, raising the floor of what the
+agent will accept as done. Say it in English or Korean; the router picks the
+specialists.
+
+<p align="center">
+  <img src="assets/showcase-06-skills.svg" alt="Expert omh-* skills loading into one run as tool calls, an orbit of specialists around the run, and three numbers" width="1080">
+</p>
+
+### 07 · The architecture in one picture, then improved in phases
+
+Ask for a picture of the repo and `codebase-uml` draws it from the code:
+packages, modules, and every import edge, with the cycles marked. The
+findings come ranked, and `refactor-plan` turns the top ones into phases that
+each land as one PR, behavior-locked by the tests, and abort the moment a lock
+breaks. The before and after are measured on the tree, and the dock shows
+each phase as it runs, and whether anything checked it.
+
+<p align="center">
+  <img src="assets/showcase-07-architecture.svg" alt="codebase-uml draws the repo with two cycles, the findings and a phased refactor plan beside it, the measured before and after, and one dock row per phase" width="1080">
+</p>
+
+### 08 · A long-term memory that a reviewer admitted
+
+Nothing is remembered silently. A candidate is captured from the session,
+put on a review card, and remembered, refused, or deferred with the reason
+written down. An approved record carries its provenance and a review-due
+date; confirming it resets the clock, silence ages it from active to
+reference to archive. The next session gets a recall pack ranked for its task
+and cut to a token budget, with conflicts and duplicates resolved. Hermes'
+own memory is never read or patched; this store is OMH's, file-backed and
+reviewed.
+
+<p align="center">
+  <img src="assets/showcase-08-memory.svg" alt="Long-term memory: admission cards, one record's lifecycle, attention tiers, and a budgeted recall pack for the next session" width="1080">
+</p>
 
 <br>
 
@@ -448,6 +574,11 @@ dimensions rather than collapsed into one marketing score. See
 - [Workflow reference](docs/WORKFLOWS.md)
 - [Roles](docs/ROLES.md)
 - [Application cases](docs/APPLICATION_CASES.md)
+- [Model routing, fan-out contracts, and request scoring](docs/FANOUT.md)
+- [Per-model calibration map](MODEL_OPTI.md)
+- [Evidence rules and capability impact](docs/CAPABILITY_IMPACT.md)
+- [Long-term memory model](docs/MEMORY.md)
+- [Live model benchmark and measured results](benchmarks/live-model-tools/v1/README.md)
 - [Release and development](docs/RELEASE.md)
 
 <br>

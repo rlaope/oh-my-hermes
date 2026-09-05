@@ -109,6 +109,43 @@ class LoadTests(unittest.TestCase):
 
 
 class PricingTests(unittest.TestCase):
+    def test_declared_astra_tiers_inherit_base_rates_without_a_pro_multiplier(self) -> None:
+        expected = {
+            "gpt-6-astra": 60.0,
+            "gpt-6-astra-pro": 60.0,
+            "gpt-6-astra-fast": 120.0,
+            "gpt-6-astra-pro-fast": 120.0,
+            "gpt-6-astra-flex": 30.0,
+            "gpt-6-astra-pro-flex": 30.0,
+        }
+        for model_id, cost in expected.items():
+            with self.subTest(model_id=model_id):
+                self.assertAlmostEqual(
+                    _approximate_cost_usd(f"openai/{model_id}", 1_000_000, 1_000_000, 0),
+                    cost,
+                )
+        self.assertIsNone(
+            _approximate_cost_usd("gpt-6-astra-fastest", 1_000_000, 1_000_000, 0)
+        )
+
+    def test_exact_variant_price_override_wins_before_inherited_base_fallback(self) -> None:
+        overrides = {
+            "gpt-6-astra": (4.0, 16.0, None),
+            "gpt-6-astra-fast": (7.0, 23.0, None),
+        }
+        self.assertAlmostEqual(
+            _approximate_cost_usd(
+                "openai/gpt-6-astra-fast", 1_000_000, 1_000_000, 0, overrides
+            ),
+            30.0,
+        )
+        self.assertAlmostEqual(
+            _approximate_cost_usd(
+                "openai/gpt-6-astra-pro-flex", 1_000_000, 1_000_000, 0, overrides
+            ),
+            10.0,
+        )
+
     def test_the_users_rate_beats_the_shipped_ballpark(self) -> None:
         shipped = _approximate_cost_usd("claude-fable-5-1", 1_000_000, 0, 0)
         overridden = _approximate_cost_usd(

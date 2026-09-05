@@ -25,7 +25,7 @@ goal to Hermes in chat; these commands are the backend surface.
    expensive for agent context.
    For user-facing briefings, `omh coding fanout brief <id>` renders one
    line per unit in merge-plan order — unit, owner, `(model effort)` label
-   (for example `(gpt-5-codex xhigh)`), status, elapsed seconds, token
+   (for example `(gpt-5.6-sol xhigh)`), status, elapsed seconds, token
    count, session ref, last observed summary — as plain text by default
    with `--json` for the `fanout_briefing/v1` payload. It joins the
    contract, the persisted dispatch summary, and a one-event journal tail;
@@ -539,10 +539,13 @@ Rules:
   weighted, and carrying its own evidence. The score is exactly the sum of the
   listed signals, so a tier is always explainable from the payload alone.
   Signals: `architecture_keywords` (+3), `impact_system_wide` (+3),
-  `subtasks_many` (+4), `risk_keywords` (+2), `debugging_keywords` (+2),
-  `fanout_intent` (+2), `cross_file` (+2), `message_length` (+1/+2),
-  `routed_skill_class` (+1/+2), and `simple_request` (−2, the only signal that
-  subtracts). The tier names a model *class* — a `MODEL_CATEGORIES` member —
+  `subtasks_many` (+4), `exhaustive_search` (+4: "find every reference / all
+  usages / every occurrence" reaches `standard` on its own, because recall is
+  the whole task and the 2026-09-05 `live-model-tools` run showed the `quick`
+  head tying the flagship on every class except that one), `risk_keywords`
+  (+2), `debugging_keywords` (+2), `fanout_intent` (+2), `cross_file` (+2),
+  `message_length` (+1/+2), `routed_skill_class` (+1/+2), and
+  `simple_request` (−2, the only signal that subtracts). The tier names a model *class* — a `MODEL_CATEGORIES` member —
   which resolves through the user's own
   `<omh-home>/routing/model-chains.json` chains, so no model id is ever
   hardcoded; a class the user's chains do not cover is named as

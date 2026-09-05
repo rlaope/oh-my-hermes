@@ -3703,8 +3703,11 @@ class RouterContentTests(unittest.TestCase):
             # edited-category block, ~26 lines, owner-directed) landed in
             # every language, and from 340 when the Be with us table with the
             # Discord community invite (~29 lines, owner-directed) landed in
-            # every language; it still sits below README.md's length.
-            self.assertLess(len(localized_readme.splitlines()), 370)
+            # every language, and from 370 when the five-item "What you get"
+            # showcase (h2 + seven h3 blocks with a card each, ~65 lines,
+            # owner-directed) landed in every language; it still sits below
+            # README.md's length.
+            self.assertLess(len(localized_readme.splitlines()), 450)
             # The trust surface is the evidence table, not the wire token that
             # used to stand in for it. Pinning the token meant a README could
             # satisfy this by naming a value no reader could decode; pinning
@@ -3728,11 +3731,12 @@ class RouterContentTests(unittest.TestCase):
                 "omh-skill-magic-promo.png",
             ):
                 self.assertNotIn(image, localized_readme)
-            self.assertIn("friren-agent-omh-callout.png", localized_readme)
-            # hermes-omh-terminal-orchestration.png was retired from every
-            # README by owner decision (2026-08-25); it must not come back
-            # through a localization sync.
+            # hermes-omh-terminal-orchestration.png (2026-08-25) and
+            # friren-agent-omh-callout.png (2026-09-05) were retired from every
+            # README by owner decision; neither may come back through a
+            # localization sync.
             self.assertNotIn("hermes-omh-terminal-orchestration.png", localized_readme)
+            self.assertNotIn("friren-agent-omh-callout.png", localized_readme)
         self.assertIn("## Command Audience", agent_contract)
         self.assertIn("day-to-day OMH workflow", agent_contract)
         for command in ("`omh setup`", "`omh update`", "`omh doctor`"):
@@ -3753,7 +3757,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`Plan · not run`", readme)
         self.assertIn("`Code · reported done`", readme)
         self.assertIn("assets/hermes-agent-hero.png", readme)
-        self.assertIn("assets/friren-agent-omh-callout.png", readme)
+        self.assertNotIn("assets/friren-agent-omh-callout.png", readme)
         self.assertIn("contrib.rocks/image?repo=rlaope/oh-my-hermes", readme)
         self.assertNotIn("assets/artengine-friren-profile-card.png", readme)
         self.assertNotIn("assets/omh-core-workflows.png", readme)
@@ -4285,6 +4289,7 @@ class RouterContentTests(unittest.TestCase):
         # so natural, non-mechanical per-language translation is allowed.
         readme_section_translations = (
             ("## Quick Start", {"ko": "## 빠른 시작", "ja": "## クイックスタート", "zh": "## 快速开始"}),
+            ("## What you get", {"ko": "## 얻는 것", "ja": "## 得られるもの", "zh": "## 你能得到什么"}),
             (
                 "## The OH-MY-HERMES terminal",
                 {

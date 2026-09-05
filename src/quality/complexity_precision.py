@@ -58,6 +58,24 @@ class ComplexityInterventionCase:
 # so the corpus proves the scorer needs more than one keyword to escalate.
 COMPLEXITY_PRECISION_CASES: tuple[ComplexityPrecisionCase, ...] = (
     ComplexityPrecisionCase(
+        "single-definition-lookup",
+        "Looking up one definition stays light: one hit, not every hit",
+        "where is the RouteDecision class defined?",
+        "light",
+    ),
+    ComplexityPrecisionCase(
+        "rename-everywhere",
+        "A rename that says everywhere stays light: the tool does the finding",
+        "rename DEFAULT_RETRY_LIMIT to MAX_RETRY_ATTEMPTS everywhere",
+        "light",
+    ),
+    ComplexityPrecisionCase(
+        "read-one-implementation",
+        "Reading one implementation for facts stays light",
+        "read the configuration implementation and return the default timeout and retries with citations",
+        "light",
+    ),
+    ComplexityPrecisionCase(
         "typo-fix",
         "A typo fix never scores deep",
         "fix a typo in README.md",
@@ -148,6 +166,20 @@ COMPLEXITY_PRECISION_CASES: tuple[ComplexityPrecisionCase, ...] = (
 # Positive interventions. Each names the signals it expects to fire, so a case
 # that passes for the wrong reason is still a failure.
 COMPLEXITY_INTERVENTION_CASES: tuple[ComplexityInterventionCase, ...] = (
+    ComplexityInterventionCase(
+        "exhaustive-reference-search",
+        "Finding every reference with exact locations reaches standard on its own",
+        "Find every reference to RouteDecision, excluding comments and strings, and return exact locations as path, line, kind.",
+        "standard",
+        ("exhaustive_search",),
+    ),
+    ComplexityInterventionCase(
+        "exhaustive-predicate-search",
+        "Finding every function matching a predicate reaches standard on its own",
+        "Find every function that converts a provider failure to a fallback result and return exact locations.",
+        "standard",
+        ("exhaustive_search",),
+    ),
     ComplexityInterventionCase(
         "auth-rearchitecture",
         "A cross-service auth rearchitecture reaches deep",
