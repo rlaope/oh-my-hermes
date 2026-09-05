@@ -28,7 +28,7 @@ cat docs/MODEL-ONBOARDING.md
 cat MODEL_OPTI.md
 ```
 
-Three things the loop gets wrong most often:
+Six things the loop gets wrong most often:
 
 - Recognition before research. Probe every served id and every bare chat
   name with `omh coding model-route` first; a `model_family` of `unknown`
@@ -41,6 +41,16 @@ Three things the loop gets wrong most often:
   provider row is a separate concern in `model-providers.json`. Place the id
   with `omh model-chains set`, never by hand-editing the JSON, and let the
   older generation stay behind it as fall-through.
+- Served is not released. Prove the route with one `hermes --oneshot` call
+  and read the usage file (`model`, `provider`, `cost_status`) before any
+  measurement or placement; gateways want the vendor-prefixed id.
+- The override is measured against the block it replaced, on cost. Run the
+  `family` arm next to `baseline` and `optimized`; expect pass rate to tie
+  and read the paired token delta, tool calls, and turns. Same pass with
+  more tokens on the tasks it fails is a sentence that pushes — cut it.
+- A routing signal is only as good as the tier's chain head. Measure the
+  head on the request class it will receive before shipping the signal,
+  and name the head in every routing claim.
 
 Arguments pass through verbatim: the model ids as served (for example
 `claude-fable-5-1 claude-mythos-5-1`).

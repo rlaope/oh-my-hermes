@@ -54,6 +54,27 @@ A bare name that classifies `unknown` gets generic discipline; add it to
 `_CLAUDE_TIER_ALIASES` (Claude) or the prefix tables in
 `src/coding/model_routing.py`, with a `model_family` test.
 
+### Served, not released
+
+A released id, a catalog row, and a routed model are three different things,
+and none of them is a served route. Before any measurement or machine
+placement, prove the route with one call through the profile that will run
+the benchmark, and read the usage file, not the exit code:
+
+```sh
+hermes --oneshot "Reply with exactly the single word OK." --in "$PWD" \
+  --provider <provider> --model <id> --reasoning low --usage-file usage.json
+```
+
+`usage.json` names the `model` and `provider` that answered and a
+`cost_status` (`included` for a subscription route, `unknown` when the host
+cannot price it); a provider rejection lands there too, with `failed: true`.
+Gateways serve vendor-prefixed ids (`z-ai/glm-5.2-ultrafast`,
+`moonshotai/kimi-k3-ultrafast`) and reject the bare alias, so probe the id
+exactly as the manifest will name it. GPT-6 Astra sat "released" for a day
+before the owner account served it; #1310 stayed blocked on this probe, not
+on the release note.
+
 ### Contract coverage audit
 
 Capture or supply a local inventory, then run the deterministic audit before
@@ -134,6 +155,13 @@ Rules that have held across every onboarding so far:
 - Shipped defaults change only with explicit owner approval; the operator's
   own placement goes through `omh model-chains set` and
   `omh coding category-maestro set`, never by hand-editing the JSON.
+- A routing signal that lifts a request class to a tier only helps if that
+  tier's chain head passes the class's work on this machine. Measure the
+  head on the class before shipping the signal: on 2026-09-05 the
+  `exhaustive_search` signal lifted six search tasks to `unspecified-high`,
+  whose shipped head (Kimi K3 ultrafast) scored 0 / 6 on them, GLM 2 / 6,
+  Sol and Astra 6 / 6. The signal was right and the head was wrong; the
+  README documents the one-line chain override that makes the number real.
 
 Files that move together (grep the old id to find every site):
 
@@ -216,6 +244,51 @@ against what it replaced, not only against no calibration. Pass rate alone
 is the wrong yardstick on that corpus (every arm tends to tie); read the
 paired token delta and, where the host records them, tool-call and turn
 counts, because a counter for an "over-doing" trait shows up there first.
+
+### The measurement recipe (2026-09-05, GPT-6 Astra)
+
+The run that first exercised the family arm is the template. Each step is
+one command or one read; the whole set is about 25 minutes per 30-task arm.
+
+1. **Targeted manifest.** Copy `manifest.json`, keep the offline `fake`
+   entry, replace the live entries with the one model at the effort its
+   chain placement uses (Astra: `xhigh`). `analyze.py --manifest` reads the
+   same file, so a one-model run is analysed without touching the canonical
+   matrix.
+2. **Smoke both conditions first** (`bench.py smoke`, one paid call each).
+   A harness fault costs one call here and thirty later.
+3. **Arms, in a recorded order.** `baseline`, `family`, `optimized`, each a
+   separate `bench.py run --harness hermes_current_session --split evaluation
+   --condition <arm> --max-paid-calls 30`. The harness runs one condition per
+   invocation, so arm order is not counterbalanced within an arm; write the
+   order down and keep every arm on the same day.
+4. **Read cost, not only pass.** `analyze.py` gives the paired pass delta
+   and McNemar; expect `p = 1.0`. Then read the per-instance token delta with
+   a bootstrap CI, and pull `tool_call_count` and `api_call_count` for each
+   arm's sessions from the Hermes `sessions` table (session ids carry the
+   wall-clock start, so a run's rows are a contiguous window). Label those
+   two counts out-of-harness in the report; the usage file on this path does
+   not carry them.
+5. **Know what "worse" looks like.** Astra's first override cost 10% more
+   tokens than the family block for the same 18 / 30, with the excess in the
+   two templates it failed anyway: the model kept working on tasks it would
+   not pass. The clause with that reading ("carry them to completion instead
+   of pausing") was replaced and the block re-measured back to family-block
+   cost. Same pass, more tokens on failing tasks is the signature of a
+   sentence that pushes; cut it, re-run, report both numbers.
+6. **Measure effort before claiming it.** Astra at `low` produced the same
+   pass set, tokens, and wall clock as `xhigh` on this corpus. An effort-tier
+   claim needs its own arm.
+7. **Archive the records outside git.** `benchmarks/*/artifacts/` is
+   ignored; copy the `.jsonl` records, manifests, and scripts to a dated
+   directory outside the repo and name it in the report, so the numbers in
+   `MODEL_OPTI.md` and the benchmark README stay reproducible after the
+   scratch space is gone.
+
+What the corpus cannot say: no model passes its read or lsp templates, so
+18 / 30 is the ceiling for every arm and a pass-rate gain cannot come from
+it. Routing and calibration claims are cost and wall-clock claims here;
+pass-rate claims need a corpus with headroom (#1333).
 
 ## 9. Report
 
