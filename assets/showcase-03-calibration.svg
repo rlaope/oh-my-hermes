@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="588" viewBox="0 0 1520 588" role="img" aria-label="unit_prompt_protocol · one block per model family">
+<defs>
+  <radialGradient id="aura" cx="78%" cy="0%" r="75%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.55"/><stop offset="40%" stop-color="#38bdf8" stop-opacity="0.18"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+  <radialGradient id="aura2" cx="10%" cy="100%" r="60%"><stop offset="0%" stop-color="#818cf8" stop-opacity="0.30"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/></radialGradient>
+  <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.9"/><stop offset="100%" stop-color="#312e81" stop-opacity="0.6"/></linearGradient>
+  <clipPath id="clip"><rect x="0" y="0" width="1520" height="588" rx="18"/></clipPath>
+</defs>
+<g clip-path="url(#clip)">
+  <rect width="1520" height="588" fill="#060a19"/>
+  <rect width="1520" height="588" fill="url(#aura)"/>
+  <rect width="1520" height="588" fill="url(#aura2)"/>
+  <circle cx="1036.6" cy="53.9" r="1.7" fill="#e0f2fe" opacity="0.68"/>
+<circle cx="1135.1" cy="373.0" r="0.6" fill="#e0f2fe" opacity="0.66"/>
+<circle cx="561.2" cy="310.5" r="0.6" fill="#e0f2fe" opacity="0.89"/>
+<circle cx="694.4" cy="467.8" r="1.3" fill="#e0f2fe" opacity="0.88"/>
+<circle cx="643.3" cy="84.9" r="0.6" fill="#e0f2fe" opacity="0.31"/>
+<circle cx="114.2" cy="169.7" r="1.0" fill="#e0f2fe" opacity="0.67"/>
+<circle cx="657.2" cy="345.6" r="1.0" fill="#e0f2fe" opacity="0.67"/>
+<circle cx="871.1" cy="20.0" r="1.7" fill="#e0f2fe" opacity="0.65"/>
+<circle cx="767.9" cy="37.1" r="0.6" fill="#e0f2fe" opacity="0.68"/>
+<circle cx="1383.5" cy="40.3" r="1.7" fill="#e0f2fe" opacity="0.40"/>
+<circle cx="492.3" cy="310.2" r="0.6" fill="#e0f2fe" opacity="0.72"/>
+<circle cx="1362.7" cy="128.2" r="1.0" fill="#e0f2fe" opacity="0.70"/>
+<circle cx="776.2" cy="538.7" r="1.7" fill="#e0f2fe" opacity="0.28"/>
+<circle cx="414.4" cy="119.7" r="0.8" fill="#e0f2fe" opacity="0.39"/>
+<circle cx="939.1" cy="28.4" r="1.3" fill="#e0f2fe" opacity="0.32"/>
+<circle cx="986.1" cy="156.9" r="0.8" fill="#e0f2fe" opacity="0.31"/>
+<circle cx="987.6" cy="200.6" r="0.6" fill="#e0f2fe" opacity="0.31"/>
+<circle cx="227.0" cy="339.7" r="1.7" fill="#e0f2fe" opacity="0.68"/>
+<circle cx="1242.8" cy="169.7" r="0.6" fill="#e0f2fe" opacity="0.62"/>
+<circle cx="826.3" cy="173.0" r="0.8" fill="#e0f2fe" opacity="0.32"/>
+<circle cx="252.1" cy="340.9" r="1.7" fill="#e0f2fe" opacity="0.85"/>
+<circle cx="12.9" cy="163.1" r="1.7" fill="#e0f2fe" opacity="0.79"/>
+<circle cx="340.8" cy="100.9" r="1.3" fill="#e0f2fe" opacity="0.46"/>
+<circle cx="295.5" cy="568.5" r="0.6" fill="#e0f2fe" opacity="0.39"/>
+<circle cx="356.3" cy="258.4" r="1.7" fill="#e0f2fe" opacity="0.71"/>
+<circle cx="527.4" cy="323.4" r="1.7" fill="#e0f2fe" opacity="0.28"/>
+<circle cx="1291.9" cy="396.0" r="0.8" fill="#e0f2fe" opacity="0.72"/>
+<circle cx="1283.5" cy="376.1" r="1.0" fill="#e0f2fe" opacity="0.63"/>
+<circle cx="1327.6" cy="153.1" r="1.3" fill="#e0f2fe" opacity="0.39"/>
+<circle cx="1506.5" cy="486.4" r="1.0" fill="#e0f2fe" opacity="0.88"/>
+<circle cx="1321.9" cy="505.8" r="0.6" fill="#e0f2fe" opacity="0.80"/>
+<circle cx="739.8" cy="40.2" r="1.3" fill="#e0f2fe" opacity="0.64"/>
+<circle cx="854.0" cy="97.9" r="1.7" fill="#e0f2fe" opacity="0.72"/>
+<circle cx="431.0" cy="187.2" r="1.3" fill="#e0f2fe" opacity="0.34"/>
+<circle cx="65.7" cy="430.9" r="1.3" fill="#e0f2fe" opacity="0.64"/>
+<circle cx="132.9" cy="434.6" r="0.8" fill="#e0f2fe" opacity="0.34"/>
+<circle cx="561.4" cy="545.9" r="0.8" fill="#e0f2fe" opacity="0.36"/>
+<circle cx="354.5" cy="187.7" r="0.6" fill="#e0f2fe" opacity="0.36"/>
+<circle cx="1248.6" cy="472.3" r="1.0" fill="#e0f2fe" opacity="0.56"/>
+<circle cx="150.1" cy="566.6" r="1.0" fill="#e0f2fe" opacity="0.61"/>
+<circle cx="1440.4" cy="91.9" r="1.3" fill="#e0f2fe" opacity="0.76"/>
+<circle cx="113.7" cy="321.3" r="1.0" fill="#e0f2fe" opacity="0.40"/>
+<circle cx="379.1" cy="396.3" r="0.6" fill="#e0f2fe" opacity="0.52"/>
+<circle cx="754.9" cy="157.5" r="0.8" fill="#e0f2fe" opacity="0.79"/>
+<circle cx="882.2" cy="270.5" r="1.7" fill="#e0f2fe" opacity="0.76"/>
+<circle cx="309.4" cy="37.5" r="0.8" fill="#e0f2fe" opacity="0.57"/>
+<circle cx="683.9" cy="144.4" r="0.8" fill="#e0f2fe" opacity="0.32"/>
+<circle cx="235.0" cy="485.3" r="0.6" fill="#e0f2fe" opacity="0.42"/>
+<circle cx="729.0" cy="93.6" r="0.8" fill="#e0f2fe" opacity="0.86"/>
+<circle cx="1370.2" cy="542.7" r="1.7" fill="#e0f2fe" opacity="0.56"/>
+<circle cx="57.7" cy="16.7" r="0.8" fill="#e0f2fe" opacity="0.28"/>
+<circle cx="962.2" cy="346.0" r="1.0" fill="#e0f2fe" opacity="0.61"/>
+<circle cx="369.7" cy="288.2" r="1.0" fill="#e0f2fe" opacity="0.48"/>
+<circle cx="1117.0" cy="287.7" r="1.7" fill="#e0f2fe" opacity="0.57"/>
+<circle cx="606.7" cy="300.1" r="1.7" fill="#e0f2fe" opacity="0.29"/>
+<circle cx="1201.3" cy="361.1" r="0.8" fill="#e0f2fe" opacity="0.46"/>
+<circle cx="1321.1" cy="210.8" r="1.7" fill="#e0f2fe" opacity="0.33"/>
+<circle cx="644.6" cy="99.0" r="1.3" fill="#e0f2fe" opacity="0.81"/>
+<circle cx="616.1" cy="170.0" r="1.3" fill="#e0f2fe" opacity="0.80"/>
+<circle cx="377.7" cy="132.6" r="1.3" fill="#e0f2fe" opacity="0.68"/>
+<circle cx="675.7" cy="439.7" r="1.0" fill="#e0f2fe" opacity="0.31"/>
+<circle cx="760.6" cy="36.4" r="0.8" fill="#e0f2fe" opacity="0.80"/>
+<circle cx="135.8" cy="181.3" r="0.6" fill="#e0f2fe" opacity="0.28"/>
+<circle cx="418.1" cy="486.9" r="0.6" fill="#e0f2fe" opacity="0.64"/>
+<circle cx="1277.3" cy="514.3" r="1.3" fill="#e0f2fe" opacity="0.48"/>
+<circle cx="966.3" cy="385.3" r="0.8" fill="#e0f2fe" opacity="0.72"/>
+<circle cx="969.4" cy="238.5" r="1.0" fill="#e0f2fe" opacity="0.55"/>
+<circle cx="523.6" cy="546.1" r="1.7" fill="#e0f2fe" opacity="0.72"/>
+<circle cx="1241.1" cy="453.8" r="1.0" fill="#e0f2fe" opacity="0.75"/>
+<circle cx="303.2" cy="316.3" r="1.3" fill="#e0f2fe" opacity="0.52"/>
+<circle cx="1362.2" cy="211.2" r="1.7" fill="#e0f2fe" opacity="0.69"/>
+<circle cx="98.1" cy="539.1" r="1.3" fill="#e0f2fe" opacity="0.60"/>
+<circle cx="1455.6" cy="520.8" r="1.7" fill="#e0f2fe" opacity="0.33"/>
+<circle cx="891.1" cy="3.7" r="1.7" fill="#e0f2fe" opacity="0.72"/>
+<circle cx="1206.7" cy="7.8" r="0.8" fill="#e0f2fe" opacity="0.38"/>
+<circle cx="852.9" cy="168.4" r="1.3" fill="#e0f2fe" opacity="0.57"/>
+<circle cx="263.6" cy="377.2" r="1.3" fill="#e0f2fe" opacity="0.68"/>
+<circle cx="494.1" cy="176.9" r="0.6" fill="#e0f2fe" opacity="0.73"/>
+<circle cx="795.2" cy="327.2" r="1.3" fill="#e0f2fe" opacity="0.62"/>
+<circle cx="1200.8" cy="91.9" r="1.3" fill="#e0f2fe" opacity="0.37"/>
+<circle cx="1453.9" cy="140.9" r="0.6" fill="#e0f2fe" opacity="0.73"/>
+<circle cx="103.8" cy="577.7" r="1.0" fill="#e0f2fe" opacity="0.75"/>
+<circle cx="181.4" cy="523.7" r="0.6" fill="#e0f2fe" opacity="0.44"/>
+<circle cx="481.0" cy="352.3" r="1.0" fill="#e0f2fe" opacity="0.35"/>
+<circle cx="1474.8" cy="337.8" r="1.3" fill="#e0f2fe" opacity="0.31"/>
+<circle cx="371.5" cy="31.5" r="1.3" fill="#e0f2fe" opacity="0.80"/>
+<circle cx="411.8" cy="481.0" r="1.7" fill="#e0f2fe" opacity="0.49"/>
+<circle cx="438.7" cy="334.1" r="1.3" fill="#e0f2fe" opacity="0.42"/>
+<circle cx="802.0" cy="438.4" r="1.7" fill="#e0f2fe" opacity="0.48"/>
+<circle cx="1130.3" cy="262.1" r="1.0" fill="#e0f2fe" opacity="0.42"/>
+<circle cx="1480.0" cy="265.3" r="0.8" fill="#e0f2fe" opacity="0.55"/>
+<circle cx="687.6" cy="266.7" r="0.8" fill="#e0f2fe" opacity="0.56"/>
+<circle cx="1276.2" cy="583.3" r="1.7" fill="#e0f2fe" opacity="0.45"/>
+<circle cx="1021.6" cy="188.1" r="1.3" fill="#e0f2fe" opacity="0.85"/>
+<circle cx="565.6" cy="364.9" r="0.8" fill="#e0f2fe" opacity="0.79"/>
+<circle cx="573.1" cy="35.5" r="1.7" fill="#e0f2fe" opacity="0.52"/>
+<circle cx="1031.8" cy="324.5" r="1.3" fill="#e0f2fe" opacity="0.48"/>
+<circle cx="615.3" cy="40.6" r="1.3" fill="#e0f2fe" opacity="0.79"/>
+<circle cx="1156.8" cy="167.5" r="1.0" fill="#e0f2fe" opacity="0.62"/>
+<circle cx="497.8" cy="244.0" r="1.7" fill="#e0f2fe" opacity="0.55"/>
+<circle cx="1460.7" cy="75.7" r="0.6" fill="#e0f2fe" opacity="0.55"/>
+<circle cx="775.6" cy="337.9" r="0.8" fill="#e0f2fe" opacity="0.66"/>
+<circle cx="867.7" cy="145.6" r="1.3" fill="#e0f2fe" opacity="0.75"/>
+<circle cx="966.3" cy="387.9" r="0.8" fill="#e0f2fe" opacity="0.52"/>
+<circle cx="507.6" cy="286.4" r="1.0" fill="#e0f2fe" opacity="0.88"/>
+<circle cx="256.7" cy="366.1" r="1.0" fill="#e0f2fe" opacity="0.38"/>
+<circle cx="565.4" cy="513.8" r="0.8" fill="#e0f2fe" opacity="0.49"/>
+<circle cx="594.0" cy="193.3" r="0.6" fill="#e0f2fe" opacity="0.54"/>
+<circle cx="651.3" cy="117.7" r="1.0" fill="#e0f2fe" opacity="0.65"/>
+<circle cx="1324.1" cy="562.9" r="0.8" fill="#e0f2fe" opacity="0.44"/>
+<path d="M1079 90 L1080.3 95.4 L1086 97 L1080.3 98.6 L1079 104 L1077.1 98.6 L1072 97 L1077.1 95.4 Z" fill="#bae6fd" opacity="0.8"/>
+<path d="M464 388 L465.6 393.7 L471 395 L465.6 396.9 L464 402 L462.4 396.9 L457 395 L462.4 393.7 Z" fill="#bae6fd" opacity="0.8"/>
+<path d="M1123 77 L1124.4 81.9 L1130 84 L1124.4 85.1 L1123 91 L1121.2 85.1 L1116 84 L1121.2 81.9 Z" fill="#bae6fd" opacity="0.8"/>
+<path d="M757 145 L758.3 150.0 L764 152 L758.3 153.2 L757 159 L755.1 153.2 L750 152 L755.1 150.0 Z" fill="#bae6fd" opacity="0.8"/>
+  <rect x="0" y="0" width="1520" height="56" fill="#0b1226" opacity="0.92"/>
+  <circle cx="30" cy="28" r="7" fill="#fb7185"/><circle cx="54" cy="28" r="7" fill="#fbbf24"/><circle cx="78" cy="28" r="7" fill="#4ade80"/>
+  <text x="760" y="34" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#64748b">unit_prompt_protocol · one block per model family</text>
+  <text x="48" y="88" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#7dd3fc" opacity="0.9">src/coding/unit_prompt_protocol.py  ·  MODEL_OPTI.md</text>
+  <text x="48" y="116" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">13 families · 1 exact-model override · every block counters one documented trait</tspan></text><text x="48" y="164" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  gpt        </tspan><tspan fill="#cbd5e1">act on the decisive fact; a passed criterion is settled evidence</tspan></text><text x="48" y="188" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#fbbf24">  gpt-6-astra</tspan><tspan fill="#cbd5e1"> criteria are the whole job; ask once, only if it changes the answer</tspan></text><text x="48" y="212" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  claude     </tspan><tspan fill="#cbd5e1">the numbered criteria are the complete checklist; never grow it mid-run</tspan></text><text x="48" y="236" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  gemini     </tspan><tspan fill="#cbd5e1">a claim without the tool output that proves it is not evidence</tspan></text><text x="48" y="260" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  deepseek   </tspan><tspan fill="#cbd5e1">version and thinking mode are contract fields; no legacy R1 prompting</tspan></text><text x="48" y="284" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  qwen       </tspan><tspan fill="#cbd5e1">Qwen3-Coder is non-thinking; never ask for reasoning tags</tspan></text><text x="48" y="308" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  glm        </tspan><tspan fill="#cbd5e1">interleave reasoning only where it improves the next tool decision</tspan></text><text x="48" y="332" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  kimi       </tspan><tspan fill="#cbd5e1">decompose-compare-verify for the hard parts; mechanical steps run direct</tspan></text><text x="48" y="356" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">  grok · mistral · llama · codestral · solar · generic</tspan></text><text x="48" y="404" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#67e8f9">$ </tspan><tspan fill="#f8fafc">omh coding model-contract --model gpt-6-astra</tspan></text><text x="48" y="428" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">- reasoning efforts: low, medium, high, xhigh, max </tspan><tspan fill="#fbbf24">(floor `low`)</tspan></text><text x="48" y="452" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">- tool calling: responses API only · unsupported: temperature, top_p, top_logprobs</tspan></text><text x="48" y="476" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">- context 1,050,000 · input 922,000 · output 128,000 · sources cited 2026-09-04</tspan></text><text x="48" y="524" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">measured 2026-09-05: </tspan><tspan fill="#4ade80">draft +10% tokens, same answers → one clause cut</tspan><tspan fill="#cbd5e1"> · shipped: −5% turns</tspan></text>
+</g>
+<rect x="0.75" y="0.75" width="1518.5" height="586.5" rx="18" fill="none" stroke="url(#edge)" stroke-width="1.5"/>
+</svg>
