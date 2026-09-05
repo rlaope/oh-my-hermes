@@ -199,7 +199,7 @@ OMH의 코딩 쪽은 세 가지입니다. 모델별로 프롬프트를 튜닝하
 
 ### 05 · Oh-My-Hermes 인터페이스, 그리고 Hermes Agent 워크플로
 
-위임 레인마다 한 줄: 모델, effort, 턴, 토큰, 비용, 실시간. 비용 0은 호스트가 확인했을 때만 표시되고, 가격을 모르는 호출은 `$0`이 아니라 `unknown`이라고 말합니다. 프로세스가 생기기 전에는 `Plan · not run`, 실행기가 끝났다고 하면 `Code · reported done`, 게이트를 통과해야 `Test · verified`입니다. 프롬프트 위의 phase todo는 나중에 쓴 요약이 아니라 그 런의 체크리스트입니다.
+위임 레인마다 한 줄: 모델, effort, 턴, 토큰, 비용, 실시간. Maestro로 Codex나 Claude Code에 넘긴 레인은 `(codex/maestro …)`, `(claude/maestro …)` 태그가 붙은 자기 행으로 보입니다. 비용 0은 호스트가 확인했을 때만 표시되고, 가격을 모르는 호출은 `$0`이 아니라 `unknown`이라고 말합니다. 프로세스가 생기기 전에는 `Plan · not run`, 실행기가 끝났다고 하면 `Code · reported done`, 게이트를 통과해야 `Test · verified`입니다. 프롬프트 위의 phase todo는 나중에 쓴 요약이 아니라 그 런의 체크리스트입니다.
 
 <p align="center">
   <img src="assets/showcase-05-hud.svg" alt="OMH HUD: 레인별 모델·effort·턴·토큰·비용 출처·증거 상태, 그리고 phase todo" width="1080">

@@ -198,7 +198,7 @@ OMH のコーディング面は 3 つの動きだ。モデルごとにプロン�
 
 ### 05 · Oh-My-Hermes インターフェースと Hermes Agent ワークフロー
 
-委譲レーンごとに 1 行: モデル、effort、ターン、トークン、コスト、ライブ更新。コスト 0 はホストが確認したときだけ表示され、価格不明の呼び出しは `$0` ではなく `unknown` と言う。プロセスが存在するまでは `Plan · not run`、エグゼキュータが完了を告げれば `Code · reported done`、ゲートを通過して初めて `Test · verified`。プロンプト上の phase todo は後から書いた要約ではなく、その実行自身のチェックリストだ。
+委譲レーンごとに 1 行: モデル、effort、ターン、トークン、コスト、ライブ更新。Maestro 経由で Codex や Claude Code に渡したレーンは `(codex/maestro …)`、`(claude/maestro …)` のタグ付きで自分の行を持つ。コスト 0 はホストが確認したときだけ表示され、価格不明の呼び出しは `$0` ではなく `unknown` と言う。プロセスが存在するまでは `Plan · not run`、エグゼキュータが完了を告げれば `Code · reported done`、ゲートを通過して初めて `Test · verified`。プロンプト上の phase todo は後から書いた要約ではなく、その実行自身のチェックリストだ。
 
 <p align="center">
   <img src="assets/showcase-05-hud.svg" alt="OMH HUD: レーンごとのモデル・effort・ターン・トークン・コスト出所・証拠状態と phase todo" width="1080">

@@ -280,7 +280,9 @@ environment all match.
 The interface is the Hermes terminal with an OMH dock under the prompt and a
 phase todo above it; the workflows are the `ulw-*` engines and every `omh-*`
 skill, routed from chat. One row per delegated lane: model, effort, turn,
-tokens, cost, updated live. A cost of zero renders only when the host confirmed it; an unpriced call says
+tokens, cost, updated live; a lane handed to Codex or Claude Code through
+Maestro is its own row, tagged `(codex/maestro …)` or `(claude/maestro …)`.
+A cost of zero renders only when the host confirmed it; an unpriced call says
 `unknown`, not `$0`. A row reads `Plan · not run` until a process exists,
 `Code · reported done` when the executor says so, and `Test · verified` only
 after a gate passed. The phase todo above the prompt is the run's own
