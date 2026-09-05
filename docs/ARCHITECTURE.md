@@ -2722,12 +2722,14 @@ itself (#844); **account authorization** — the projection names the account,
 the minimum scopes, and a readiness state, but grants, verifies, and refuses
 nothing, because a consent flow owned by a provider's website is not observable
 from here (`host_owned_consent_flow_is_not_observable_by_omh`); and the three
-runtime `data_*` rows — the cross-harness adapter lane builds an OS confinement
-sandbox that no delegation or fanout lane places an executor under
-(`no_delegation_or_fanout_lane_places_an_executor_under_the_sandbox` on a
-capable host, and the host's own missing backend elsewhere; the advisory row
+runtime `data_*` rows — fanout places its owner and dispatcher verification
+processes under the cross-harness adapter OS sandbox, but a claim requires that
+dispatch's same-root probe receipt to show an outside-write refusal
+(`no_observed_fanout_filesystem_confinement_probe_receipt` before that receipt;
+the network row remains `fanout_lane_does_not_request_network_confinement`, and
+a host without a backend names that capability boundary). The advisory row
 reports `no_omh_side_measurement_observes_whether_an_executor_honoured_its_targets`
-on every host). All three used to cite #820, which was a mis-citation even
+on every host. All three used to cite #820, which was a mis-citation even
 before that issue landed — it shipped a workspace reservation, not an executor
 sandbox — and would have become a dangling pointer once it closed.
 

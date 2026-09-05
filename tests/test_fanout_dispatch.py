@@ -1329,9 +1329,35 @@ class FanoutDispatchEngineTests(unittest.TestCase):
             )
 
             self.assertTrue(all(entry["status"] == "dry_run_planned" for entry in summary["units"]))
+            self.assertTrue(
+                all(entry["filesystem_confinement"]["status"] == "prepared_not_observed" for entry in summary["units"])
+            )
             self.assertEqual(runner.spawned, [])
             self.assertFalse(paths.runtime_runs_dir.exists())
             self.assertFalse((repo.parent / "repo-fanout-core").exists())
+
+    @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec confinement is exercised on macOS")
+    def test_live_dispatch_records_a_probe_backed_filesystem_confinement_receipt(self) -> None:
+        """A working directory alone is not an observed filesystem boundary."""
+        with TemporaryDirectory() as tmp:
+            paths, repo, sha, contract = self._setup(tmp)
+
+            with mock.patch("omh.coding.fanout_dispatch.build_dispatch_argv", return_value=["/bin/sh", "-c", "exit 0"]):
+                summary = dispatch_fanout(
+                    paths,
+                    contract,
+                    goal_text=_GOAL,
+                    repo_root=repo,
+                    base_sha=sha,
+                    only_units=["core"],
+                    readiness=_ready,
+                )
+
+            core = {entry["unit_id"]: entry for entry in summary["units"]}["core"]
+            receipt = core["filesystem_confinement"]
+            self.assertEqual(receipt["status"], "observed")
+            self.assertTrue(receipt["enforced"])
+            self.assertEqual(receipt["probe"]["outside_write_exit_code"], 1)
 
     def test_resume_skips_completed_units(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -4033,6 +4059,11 @@ class FanoutDispatchPlannedVerificationTests(unittest.TestCase):
             # The unit-tier check ran once in its producer worktree; the full
             # gate ran once after fan-in against the explicit integrated tree.
             self.assertEqual(len(runner.verified), 2)
+            integration_confinement = core["integration_filesystem_confinement"]
+            self.assertEqual(integration_confinement["status"], "prepared_not_observed")
+            self.assertEqual(
+                integration_confinement["reason_code"], "sandbox_not_applied_to_injected_runner"
+            )
             self.assertTrue(core["unit_verification_observed"])
             self.assertTrue(core["integration_ready"])
 

@@ -334,9 +334,9 @@ class EnforcementFactsTests(unittest.TestCase):
     def test_a_host_confinement_limit_is_unenforced_and_says_which_kind_of_unenforced(self) -> None:
         """The genuine per-host difference: which blocker stands in the way.
 
-        A host with a confinement backend is blocked only on no lane placing an
-        executor under the sandbox; a host with none could not enforce a runtime
-        limit even after such a lane exists, and says so with its own reason.
+        A host with a confinement backend still needs a dispatch-specific
+        filesystem probe receipt (and fanout deliberately preserves network
+        access); a host with none names that capability boundary instead.
         """
         facts = self.facts()
         entries = [entry for entry in facts["limits"] if entry["enforcement_kind"] == "host_confinement"]
@@ -346,7 +346,10 @@ class EnforcementFactsTests(unittest.TestCase):
                 self.assertFalse(entry["enforced_here"])
                 self.assertEqual(entry["host_can_enforce"], facts["host_confinement_available"])
                 expected = (
-                    "no_delegation_or_fanout_lane_places_an_executor_under_the_sandbox"
+                    {
+                        "runtime_filesystem_confinement": "no_observed_fanout_filesystem_confinement_probe_receipt",
+                        "runtime_network_confinement": "fanout_lane_does_not_request_network_confinement",
+                    }[entry["limit"]]
                     if facts["host_confinement_available"]
                     else facts["host_confinement_unavailable_reason"]
                 )

@@ -141,6 +141,10 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "`omh coding fanout dispatch` -- the one opt-in bridge that spawns local agent CLIs, "
         "documented as the scoped exception in CLAUDE.md."
     ),
+    "src/coding/fanout_confinement.py": (
+        "`omh coding fanout dispatch`; runs only the same-backend `/bin/sh` filesystem-refusal "
+        "probe before the opt-in fanout owner or verification process is sandboxed."
+    ),
     "src/coding/diagnostic_execution_engine.py": (
         "`omh coding fanout dispatch --diagnostics`; imports only subprocess exception classes "
         "to classify an injected or built-in runner's bounded failure and contains no "

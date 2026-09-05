@@ -83,6 +83,12 @@ from .fanout_health_events import (
     monotonic_milliseconds,
     write_fanout_health_event,
 )
+from .fanout_confinement import (
+    FanoutFilesystemConfinement,
+    confinement_receipt,
+    planned_fanout_filesystem_confinement,
+    prepare_fanout_filesystem_confinement,
+)
 from .diagnostic_execution import DiagnosticExecutionEngine
 from .fanout_contracts import (
     FANOUT_CLAIM_BOUNDARY,
@@ -199,6 +205,7 @@ def signal_safe_unit_runner(
     timeout: float | None = None,
     on_spawn: Callable[[subprocess.Popen], None] | None = None,
     on_output: Callable[[str], None] | None = None,
+    confinement_command: Sequence[str] | None = None,
 ) -> subprocess.CompletedProcess:
     """Drop-in for `subprocess.run` that owns each child as a process group.
 
@@ -217,7 +224,7 @@ def signal_safe_unit_runner(
     """
     pipe = subprocess.PIPE if capture_output else None
     process = subprocess.Popen(
-        list(argv),
+        list(confinement_command or argv),
         cwd=cwd,
         env=dict(env) if env is not None else None,
         text=text,
@@ -1124,6 +1131,7 @@ def _run_verification_command(
     child_env: Mapping[str, str] | None = None,
     spill_dir: Path | None = None,
     timeout: int | None = None,
+    confinement: FanoutFilesystemConfinement | None = None,
 ) -> tuple[str, str, dict[str, Any] | None]:
     """Run one command in the unit worktree; return status, bounded tail, truncation record.
 
@@ -1146,16 +1154,28 @@ def _run_verification_command(
     except FanoutContractError as exc:
         return "failed", str(exc), None
     try:
+        environment = {**(os.environ if child_env is None else child_env), **env_overrides}
+        active_confinement = confinement
+        if runner is signal_safe_unit_runner and active_confinement is None:
+            active_confinement = prepare_fanout_filesystem_confinement(
+                worktree, environment, (argv,)
+            )
+        confinement_command = (
+            active_confinement.command(argv) if active_confinement is not None else None
+        )
+        if active_confinement is not None:
+            environment = {**active_confinement.command_environment(), **env_overrides}
         completed = runner(
             argv,
             cwd=str(worktree),
             # The dispatcher's lineage stamp when the caller passed one: a
             # declared verification command is a child of this dispatch too,
             # and a depth guard a command can shell around is not a guard.
-            env={**(os.environ if child_env is None else child_env), **env_overrides},
+            env=environment,
             text=True,
             capture_output=True,
             timeout=effective_timeout,
+            **({"confinement_command": confinement_command} if confinement_command is not None else {}),
         )
         exit_code = int(getattr(completed, "returncode", 1))
         combined = (
@@ -1203,6 +1223,7 @@ def _run_planned_verification(
     required_revision: str | None = None,
     post_integration: bool = False,
     producer_evidence: bool = False,
+    confinement: FanoutFilesystemConfinement | None = None,
 ) -> dict[str, Any]:
     """Run a metadata-carrying unit's checks through the revision-bound plan engine.
 
@@ -1244,6 +1265,7 @@ def _run_planned_verification(
             execution_environment,
             spill_dir=paths.runtime_output_spills_dir,
             timeout=node.timeout,
+            confinement=confinement,
         )
 
     result = (
@@ -1400,6 +1422,23 @@ def _run_integration_verification_wave(
         unit = units.get(unit_id)
         if entry is None or unit is None or not entry.get("verification_integration_deferred"):
             continue
+        integration_environment = verification_execution_environment(os.environ)
+        integration_argv: list[list[str]] = []
+        for command in declared_verification_commands(unit):
+            try:
+                _overrides, check_argv = verification_command_argv(command)
+            except FanoutContractError:
+                continue
+            integration_argv.append(check_argv)
+        integration_confinement = (
+            prepare_fanout_filesystem_confinement(
+                integrated_worktree, integration_environment, tuple(integration_argv)
+            )
+            if runner is signal_safe_unit_runner
+            else None
+        )
+        if integration_confinement is not None:
+            integration_environment = integration_confinement.command_environment()
         rerun = _run_planned_verification(
             paths,
             unit,
@@ -1409,13 +1448,14 @@ def _run_integration_verification_wave(
             worktree=integrated_worktree,
             owner=str(entry.get("owner") or "choose"),
             runner=runner,
-            child_env=None,
+            child_env=integration_environment,
             wave_width=wave_width,
             execution_gate=execution_gate,
             integration_ready=lambda: True,
             required_revision=integrated_revision,
             post_integration=True,
             producer_evidence=producer_evidence,
+            confinement=integration_confinement,
         )
         if not rerun:
             continue
@@ -1424,6 +1464,9 @@ def _run_integration_verification_wave(
             row for row in entry.get("verification_checks", []) if row.get("tier") != "integration"
         ]
         entry["verification_checks"] = [*unit_rows, *integration_rows]
+        entry["integration_filesystem_confinement"] = confinement_receipt(
+            integration_confinement, integrated_worktree
+        )
         entry.pop("verification_integration_deferred", None)
         entry.pop("verification_failures", None)
         entry.update(rerun)
@@ -1459,6 +1502,7 @@ def _run_unit_verification(
     fanout_id: str = "",
     wave_width: int = 1,
     execution_gate: VerificationExecutionGate | None = None,
+    confinement: FanoutFilesystemConfinement | None = None,
 ) -> dict[str, Any]:
     """Run one unit's declared verification commands and record what was observed.
 
@@ -1490,6 +1534,7 @@ def _run_unit_verification(
             wave_width=wave_width,
             execution_gate=execution_gate,
             integration_ready=lambda: False,
+            confinement=confinement,
         )
     rows: list[dict[str, object]] = []
     failures: list[str] = []
@@ -1502,6 +1547,7 @@ def _run_unit_verification(
                 runner,
                 child_env,
                 spill_dir=paths.runtime_output_spills_dir,
+                confinement=confinement,
             )
 
         outcome = (
@@ -3148,6 +3194,10 @@ def _dispatch_unit(
         repair_card = probe.get("repair_card")
         if isinstance(repair_card, Mapping):
             not_ready["repair_card"] = dict(repair_card)
+        if dry_run:
+            not_ready["filesystem_confinement"] = planned_fanout_filesystem_confinement(
+                _worktree_path(repo_root, unit_id)
+            )
         return not_ready
     discovery = (discoveries or {}).get(owner)
     sidecar_path = None
@@ -3196,6 +3246,7 @@ def _dispatch_unit(
             "status": "dry_run_planned",
             "planned_argv": [part if part != prompt else "<unit prompt>" for part in argv],
             "worktree_path": str(worktree),
+            "filesystem_confinement": planned_fanout_filesystem_confinement(worktree),
             **_dispatch_status_ladder(),
         }
         if fingerprint_note is not None:
@@ -3308,6 +3359,23 @@ def _dispatch_unit(
             **_dispatch_status_ladder(),
         }
     worktree = Path(str(worktree_record["worktree_path"]))
+    verification_argv: list[list[str]] = []
+    for command in declared_verification_commands(unit):
+        try:
+            _overrides, check_argv = verification_command_argv(command)
+        except FanoutContractError:
+            continue
+        verification_argv.append(check_argv)
+    confinement = (
+        prepare_fanout_filesystem_confinement(
+            worktree, child_env, (argv, *verification_argv)
+        )
+        if runner is signal_safe_unit_runner
+        else None
+    )
+    filesystem_confinement = confinement_receipt(confinement, worktree)
+    if confinement is not None:
+        child_env = confinement.command_environment()
     # After the worktree exists and before anything else touches it: a linked
     # artifact must be in place before the unit's process spawns to be worth
     # anything, and re-checking from inside the worktree (see
@@ -3447,6 +3515,9 @@ def _dispatch_unit(
                 binding_ref=lambda: progress_binding,
                 binding_set=_replace_binding,
             )
+        confinement_command = confinement.command(argv) if confinement is not None else None
+        if confinement_command is not None:
+            spawn_kwargs["confinement_command"] = confinement_command
         while True:
             attempt += 1
             output_tail = ""
@@ -3686,6 +3757,7 @@ def _dispatch_unit(
             fanout_id=fanout_id,
             wave_width=verification_wave_width,
             execution_gate=verification_execution_gate,
+            confinement=confinement,
         )
         if health_events is not None:
             health_events.finished(
@@ -3722,6 +3794,7 @@ def _dispatch_unit(
         "status": "completed" if exit_code == 0 else "failed",
         "exit_code": exit_code,
         "worktree_path": str(worktree),
+        "filesystem_confinement": filesystem_confinement,
         "shared_artifacts": shared_artifacts,
         **_dispatch_status_ladder(
             process_succeeded=exit_code == 0,
