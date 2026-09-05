@@ -354,6 +354,29 @@ class MemoryContractTests(unittest.TestCase):
             wrapper_inspection = build_memory_inspection(paths, wrapper_snapshot=wrapper)
             self.assertNotIn(credential, json.dumps(wrapper_inspection, sort_keys=True))
 
+    def test_wrapper_scope_preserves_ordinary_credential_vocabulary(self) -> None:
+        for scope_ref in ("token-based", "secret-management"):
+            with self.subTest(scope_ref=scope_ref), TemporaryDirectory() as tmp:
+                paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+                wrapper = {
+                    "schema_version": "memory_snapshot/v1",
+                    "scope": {"kind": "project", "ref": scope_ref},
+                    "items": [
+                        {
+                            "item_id": "safe-wrapper-item",
+                            "key": "safe_wrapper_item",
+                            "summary": "Safe wrapper item",
+                            "scope": {"kind": "project", "ref": scope_ref},
+                        }
+                    ],
+                }
+
+                inspection = build_memory_inspection(paths, wrapper_snapshot=wrapper)
+                snapshot = next(item for item in inspection["snapshots"] if item["source"] == "wrapper_snapshot")
+
+                self.assertEqual(snapshot["scope"]["ref"], scope_ref)
+                self.assertEqual(snapshot["items"][0]["scope"]["ref"], scope_ref)
+
     def test_project_memory_auto_safe_policy_auto_approves_safe_candidates(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
