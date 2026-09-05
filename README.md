@@ -233,8 +233,6 @@ Astra: the same answers for $0.66 instead of $4.29, in 5 minutes instead of
   <img src="assets/showcase-01-routing.svg" alt="omh coding complexity scoring two requests, and the measured Astra table: same 18 of 30 solved, $4.29 to $0.66, 23 to 5 minutes" width="1080">
 </p>
 
-[Read the benchmark ↗](benchmarks/live-model-tools/v1/README.md)
-
 ### 02 · Categories you own, per executor
 
 `ultrabrain`, `deep`, `architect`, `quick`, `writing`, `visual-engineering`:
@@ -247,8 +245,6 @@ reorders the chains for the machine you are on.
 <p align="center">
   <img src="assets/showcase-02-categories.svg" alt="omh coding category-maestro show: per-executor category chains, one operator override, and a refused dispatch" width="1080">
 </p>
-
-[Read the routing docs ↗](docs/FANOUT.md)
 
 ### 03 · Prompting tuned per model family, and measured
 
@@ -265,8 +261,6 @@ was cut on that number.
   <img src="assets/showcase-03-calibration.svg" alt="One calibration line per model family, the gpt-6-astra model contract, and the measured revision" width="1080">
 </p>
 
-[Read MODEL_OPTI.md ↗](MODEL_OPTI.md)
-
 ### 04 · Parallel where it is safe, typed when it comes back
 
 `ulw-work` splits an accepted plan into units that never share a file, gives
@@ -280,8 +274,6 @@ environment all match.
 <p align="center">
   <img src="assets/showcase-04-parallel.svg" alt="An ulw-work fan-out: three units with disjoint files, one worktree each, typed states, and the tool calls issued in one turn" width="1080">
 </p>
-
-[Read the fan-out contract ↗](docs/FANOUT.md)
 
 ### 05 · The Oh-My-Hermes interface, and Hermes Agent workflows
 
@@ -298,8 +290,6 @@ checklist, not a summary written afterwards.
   <img src="assets/showcase-05-hud.svg" alt="The OMH HUD: per-lane rows with model, effort, turn, tokens, cost provenance, and evidence state, plus the phase todo" width="1080">
 </p>
 
-[Read the evidence rules ↗](docs/CAPABILITY_IMPACT.md)
-
 ### 06 · Expert skills seep into the run
 
 You never invoke an expert. The catalog carries 108 `omh-*` specialist skills:
@@ -314,8 +304,6 @@ specialists.
   <img src="assets/showcase-06-skills.svg" alt="Expert omh-* skills loading into one run as tool calls, an orbit of specialists around the run, and three numbers" width="1080">
 </p>
 
-[Browse the catalog ↗](docs/WORKFLOWS.md)
-
 ### 07 · The architecture in one picture, then improved in phases
 
 Ask for a picture of the repo and `codebase-uml` draws it from the code:
@@ -328,8 +316,6 @@ each phase as it runs, and whether anything checked it.
 <p align="center">
   <img src="assets/showcase-07-architecture.svg" alt="codebase-uml draws the repo with two cycles, the findings and a phased refactor plan beside it, the measured before and after, and one dock row per phase" width="1080">
 </p>
-
-[Read the refactor plan skill ↗](skills/omh-refactor-plan/SKILL.md)
 
 ### 08 · A long-term memory that a reviewer admitted
 
@@ -345,8 +331,6 @@ reviewed.
 <p align="center">
   <img src="assets/showcase-08-memory.svg" alt="Long-term memory: admission cards, one record's lifecycle, attention tiers, and a budgeted recall pack for the next session" width="1080">
 </p>
-
-[Read the memory model ↗](docs/MEMORY.md)
 
 <br>
 

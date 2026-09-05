@@ -173,8 +173,6 @@ OMH의 코딩 쪽은 세 가지다. 모델별로 프롬프트를 튜닝하고(03
   <img src="assets/showcase-01-routing.svg" alt="omh coding complexity가 요청 두 개를 채점한 결과와 Astra 측정표" width="1080">
 </p>
 
-[벤치마크 보기 ↗](benchmarks/live-model-tools/v1/README.md)
-
 ### 02 · 카테고리는 실행기별로 당신이 소유한다
 
 `ultrabrain`, `deep`, `architect`, `quick`, `writing`, `visual-engineering`. 각각은 코딩 실행기별 모델+effort 체인이고, 파일 하나에서 읽고 덮어쓸 수 있다. 제공자가 모델을 거부하면 체인이 다음으로 넘어가고, 서빙할 수 없는 제공자를 물려받게 될 디스패치는 조용히 다운그레이드되는 대신 거부된다. setup이 제공자를 인터뷰하고 지금 이 머신에 맞게 체인을 재정렬한다.
@@ -182,8 +180,6 @@ OMH의 코딩 쪽은 세 가지다. 모델별로 프롬프트를 튜닝하고(03
 <p align="center">
   <img src="assets/showcase-02-categories.svg" alt="omh coding category-maestro show: 실행기별 카테고리 체인, 운영자 오버라이드 하나, 거부된 디스패치" width="1080">
 </p>
-
-[라우팅 문서 보기 ↗](docs/FANOUT.md)
 
 ### 03 · 모델 패밀리마다 다른 프롬프팅, 그리고 측정
 
@@ -193,8 +189,6 @@ OMH의 코딩 쪽은 세 가지다. 모델별로 프롬프트를 튜닝하고(03
   <img src="assets/showcase-03-calibration.svg" alt="패밀리별 캘리브레이션 한 줄씩, gpt-6-astra 모델 계약, 측정된 수정" width="1080">
 </p>
 
-[MODEL_OPTI.md 보기 ↗](MODEL_OPTI.md)
-
 ### 04 · 안전한 곳에서만 병렬, 돌아올 땐 타입으로
 
 `ulw-work`는 승인된 계획을 파일을 공유하지 않는 유닛으로 쪼개고, 유닛마다 고정된 SHA 하나에서 분기한 워크트리를 주며, 유닛이 툴 호출을 한 턴에 몰아 낼 수 있게 한다. 유닛은 상태 네 개짜리 타입 결과로 돌아온다: 프로세스 종료, 스키마 유효, 검증 관찰됨, 통합 준비됨. 증거 없는 exit 0은 게이트가 확인할 때까지 `reported done`에 머물고, 검증 영수증은 리비전·명령·환경이 전부 맞을 때만 재사용된다.
@@ -202,8 +196,6 @@ OMH의 코딩 쪽은 세 가지다. 모델별로 프롬프트를 튜닝하고(03
 <p align="center">
   <img src="assets/showcase-04-parallel.svg" alt="ulw-work 팬아웃: 파일이 겹치지 않는 유닛 셋, 유닛당 워크트리 하나, 타입 상태, 한 턴에 낸 툴 호출" width="1080">
 </p>
-
-[팬아웃 계약 보기 ↗](docs/FANOUT.md)
 
 ### 05 · Oh-My-Hermes 인터페이스, 그리고 Hermes Agent 워크플로
 
@@ -213,8 +205,6 @@ OMH의 코딩 쪽은 세 가지다. 모델별로 프롬프트를 튜닝하고(03
   <img src="assets/showcase-05-hud.svg" alt="OMH HUD: 레인별 모델·effort·턴·토큰·비용 출처·증거 상태, 그리고 phase todo" width="1080">
 </p>
 
-[증거 규칙 보기 ↗](docs/CAPABILITY_IMPACT.md)
-
 ### 06 · 전문가 스킬이 실행에 스며든다
 
 전문가를 따로 부르지 않는다. 카탈로그에는 `omh-*` 전문 스킬 108개가 있다: 프론트엔드, 백엔드, Rust, 네이티브 디버깅, 추론 서빙, 디자인 품질 게이트, 검증 게이트, 보안 리뷰, 성능 예산, 리팩터 계획 등. 요청이 그 영역을 건드리면 맞는 스킬이 이미 툴 호출로 실행 안에 들어와, 에이전트가 "끝났다"고 인정하는 기준선을 끌어올린다. 영어든 한국어든 말하면 라우터가 전문가를 고른다.
@@ -222,8 +212,6 @@ OMH의 코딩 쪽은 세 가지다. 모델별로 프롬프트를 튜닝하고(03
 <p align="center">
   <img src="assets/showcase-06-skills.svg" alt="실행 안으로 툴 호출로 들어오는 omh-* 전문 스킬들, 실행을 둘러싼 전문가들의 궤도, 숫자 셋" width="1080">
 </p>
-
-[카탈로그 보기 ↗](docs/WORKFLOWS.md)
 
 ### 07 · 아키텍처를 한 장으로, 그다음 단계별로 개선
 
@@ -233,8 +221,6 @@ OMH의 코딩 쪽은 세 가지다. 모델별로 프롬프트를 튜닝하고(03
   <img src="assets/showcase-07-architecture.svg" alt="codebase-uml이 순환 2개와 함께 리포를 그리고, 옆에 발견 사항과 단계별 리팩터 계획, 측정된 전후, 단계별 dock 행" width="1080">
 </p>
 
-[리팩터 계획 스킬 보기 ↗](skills/omh-refactor-plan/SKILL.md)
-
 ### 08 · 리뷰어가 승인한 장기 기억
 
 아무것도 조용히 기억되지 않는다. 후보는 세션에서 포착돼 리뷰 카드에 올라가고, 이유가 적힌 채로 기억·거부·보류된다. 승인된 기록은 출처와 재검토 기한을 갖는다. 확인하면 시계가 리셋되고, 침묵하면 active → reference → archive로 늙는다. 다음 세션은 작업에 맞게 순위가 매겨지고 토큰 예산에 맞춰 잘린 recall pack을 받으며, 충돌과 중복은 정리돼 있다. Hermes 자체 메모리는 읽거나 고치지 않는다. 이 저장소는 OMH의 것이고, 파일 기반이며, 리뷰된다.
@@ -242,8 +228,6 @@ OMH의 코딩 쪽은 세 가지다. 모델별로 프롬프트를 튜닝하고(03
 <p align="center">
   <img src="assets/showcase-08-memory.svg" alt="장기 기억: 승인 카드, 기록 하나의 생애, attention 티어, 다음 세션용 예산 recall pack" width="1080">
 </p>
-
-[메모리 모델 보기 ↗](docs/MEMORY.md)
 
 <br>
 
