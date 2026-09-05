@@ -8,7 +8,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from _local_package import load_local_package
-from _platform_support import requires_fcntl_locks
+from _platform_support import requires_fcntl_locks, requires_symlinks
 
 load_local_package()
 from omh.paths import resolve_paths
@@ -702,6 +702,206 @@ class MemoryBatchTests(TestCase):
             self.assertNotIn("move-target", source["items"])
             self.assertEqual(source["tombstones"]["move-target"]["reason_code"], "scope_changed")
             self.assertIn("move-item", destination["items"])
+
+    @requires_symlinks
+    def test_multiscope_rejects_symlinked_destination_parent_without_external_write(self) -> None:
+        for timing in ("before_apply", "after_preflight"):
+            with self.subTest(timing=timing), TemporaryDirectory() as home:
+                paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+                source_path = paths.memory_dir / "scopes" / "project.json"
+                source_path.parent.mkdir(parents=True)
+                source_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": "omh_memory_scope/v2",
+                            "scope": {"kind": "project", "ref": "default"},
+                            "items": {
+                                "move-target": {
+                                    "item_id": "move-item",
+                                    "revision": 1,
+                                    "key": "move_key",
+                                    "summary": "Move reviewed value",
+                                    "value": "move value",
+                                }
+                            },
+                            "tombstones": {},
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                batch = _batch("move-target")
+                updates = batch["updates"]
+                if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                    self.fail("batch fixture updates must contain a mapping")
+                updates[0].update(
+                    {
+                        "op": "change_scope",
+                        "from_scope": {"kind": "project", "ref": "default"},
+                        "to_scope": {"kind": "run", "ref": "destination"},
+                        "key": "move_key",
+                    }
+                )
+                staged = self._stage_and_remember(paths, batch)
+                source_bytes = source_path.read_bytes()
+                destination_parent = paths.memory_dir / "scopes" / "runs"
+                outside = Path(home) / "outside"
+                outside.mkdir()
+
+                if timing == "before_apply":
+                    destination_parent.symlink_to(outside, target_is_directory=True)
+                    result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+                else:
+                    calls = 0
+
+                    def replace_destination_parent(_name: str) -> None:
+                        nonlocal calls
+                        calls += 1
+                        if calls == 2:
+                            destination_parent.symlink_to(outside, target_is_directory=True)
+
+                    result = apply_approved_memory_update_batch(
+                        paths,
+                        staged["batch_id"],
+                        write_hook=replace_destination_parent,
+                    )
+
+                self.assertFalse(result["applied"])
+                self.assertEqual(result["reason_code"], "scope_precondition_changed")
+                self.assertEqual(source_path.read_bytes(), source_bytes)
+                self.assertFalse((outside / "destination.json").exists())
+
+    def test_stage_rejects_live_logical_key_under_a_different_ref(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            scope_path = paths.memory_dir / "scopes" / "project.json"
+            scope_path.parent.mkdir(parents=True)
+            scope_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "omh_memory_scope/v2",
+                        "scope": {"kind": "project", "ref": "default"},
+                        "items": {
+                            "item-a": {
+                                "item_id": "item-a",
+                                "revision": 1,
+                                "key": "shared_key",
+                                "summary": "Existing logical target",
+                                "value": "existing value",
+                            }
+                        },
+                        "tombstones": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            batch = _batch("target-b")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates[0]["key"] = "shared_key"
+
+            with self.assertRaisesRegex(ValueError, "ambiguous"):
+                stage_memory_update_batch(paths, batch)
+
+            self.assertFalse((paths.memory_dir / "candidates").exists())
+
+    def test_interrupted_review_request_binds_candidate_before_orphan_replacement(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            staged = stage_memory_update_batch(paths, _batch("request-binding"))
+            item_id = staged["items"][0]["item_id"]
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            real_write = memory_batches_workflow.atomic_write_json
+
+            def interrupt_seal(path, payload, **kwargs):
+                if Path(path) == candidate_path and isinstance(payload, dict) and "review_seals" in payload:
+                    raise RuntimeError("injected candidate seal interruption")
+                return real_write(path, payload, **kwargs)
+
+            with patch.object(memory_batches_workflow, "atomic_write_json", side_effect=interrupt_seal):
+                with self.assertRaisesRegex(RuntimeError, "candidate seal interruption"):
+                    review_memory_update_batch(
+                        paths,
+                        staged["batch_id"],
+                        {item_id: "remember"},
+                        reviewer_label="operator-label",
+                    )
+
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            review_path = paths.memory_dir / "reviews" / f"{candidate['items'][0]['review_id']}.json"
+            review_path.unlink()
+            candidate["source_surface"] = "mutated-after-review-request"
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "immutable"):
+                review_memory_update_batch(
+                    paths,
+                    staged["batch_id"],
+                    {item_id: "remember"},
+                    reviewer_label="operator-label",
+                )
+
+    def test_review_rejects_tampered_duplicate_candidate_item_id(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            batch = _batch("first-review-target")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates.append(
+                {
+                    "op": "update",
+                    "item_id": "second-review-target",
+                    "scope": {"kind": "run", "ref": "run-1"},
+                    "key": "second_review_target",
+                    "value": "second value",
+                    "summary": "Second review target",
+                }
+            )
+            staged = stage_memory_update_batch(paths, batch)
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            duplicate_id = candidate["items"][0]["item_id"]
+            candidate["items"][1]["item_id"] = duplicate_id
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "ambiguous"):
+                review_memory_update_batch(
+                    paths,
+                    staged["batch_id"],
+                    {duplicate_id: "remember"},
+                    reviewer_label="operator-label",
+                )
+
+            self.assertFalse((paths.memory_dir / "reviews").exists())
+
+    def test_review_rejects_unbound_retention_and_unsafe_review_id(self) -> None:
+        for mutation in ("retention", "review_id"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as home:
+                paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+                staged = stage_memory_update_batch(paths, _batch(f"review-{mutation}"))
+                candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+                item_id = candidate["items"][0]["item_id"]
+                if mutation == "retention":
+                    candidate["items"][0]["retention"]["class"] = "durable"
+                else:
+                    candidate["items"][0]["review_id"] = "../escaped-review"
+                candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+                with self.assertRaises(ValueError):
+                    review_memory_update_batch(
+                        paths,
+                        staged["batch_id"],
+                        {item_id: "remember"},
+                        reviewer_label="operator-label",
+                    )
+
+                self.assertFalse((paths.memory_dir / "escaped-review.json").exists())
+                self.assertFalse((paths.memory_dir / "reviews").exists())
 
     def test_concurrent_add_of_same_logical_target_rejects_second_candidate(self) -> None:
         with TemporaryDirectory() as home:

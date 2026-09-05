@@ -210,6 +210,9 @@ class MemoryContractTests(unittest.TestCase):
         encoded_values = (
             "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV",
             "JBSWYDPFJBSWYDPFJBSWYDPFJBSWYDPF",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZABabcd",
+            "ABCDEFGHIJKLMNOPQRSTUVWX12345678",
+            "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz",
         )
         for encoded in encoded_values:
             with self.subTest(encoded=encoded[:8]), TemporaryDirectory() as tmp:
@@ -226,6 +229,28 @@ class MemoryContractTests(unittest.TestCase):
                 self.assertNotIn(encoded, json.dumps(captured, sort_keys=True))
                 self.assertNotIn(encoded, candidate_path.read_text(encoding="utf-8"))
                 self.assertFalse((paths.memory_dir / "records").exists())
+
+    def test_separator_split_opaque_structural_selectors_fail_closed_without_echo(self) -> None:
+        selector = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+
+            captured = capture_project_memory_candidate(paths, "safe summary", scope_ref=selector)
+            self.assertFalse(captured["captured"])
+            self.assertFalse(captured["auto_approved"])
+            self.assertNotIn(selector, json.dumps(captured, sort_keys=True))
+            self.assertFalse((paths.memory_dir / "candidates").exists())
+            self.assertFalse((paths.memory_dir / "records").exists())
+
+            with self.assertRaises(ValueError) as recall_error:
+                build_project_memory_recall_pack(paths, scope_ref=selector)
+            self.assertNotIn(selector, str(recall_error.exception))
+
+            for action in (approve_project_memory_candidate, reject_project_memory_candidate):
+                with self.subTest(action=action.__name__), self.assertRaises(ValueError) as candidate_error:
+                    action(paths, selector)
+                self.assertNotIn(selector, str(candidate_error.exception))
 
     def test_unknown_credential_label_is_redacted_before_candidate_and_review_persistence(self) -> None:
         credential = "credential:" + "a" * 40

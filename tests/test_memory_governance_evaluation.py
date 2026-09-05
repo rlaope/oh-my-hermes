@@ -6,6 +6,7 @@ scope validation, legacy artifact handling, and metadata-only results.
 
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime, timezone
 import unittest
@@ -288,6 +289,54 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             governance.classify_memory_admission("project2026memoryhardeningidentifier")["status"],
             "safe",
         )
+
+    def test_low_transition_and_separator_split_opaque_values_need_review(self) -> None:
+        low_transition_base64 = (
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZABabcd",
+            "ABCDEFGHabcdIJKLMNOPQRSTUVWXwxyz",
+            "ABCDabcdEFGHijklMNOPqrstUVWXYZAB",
+            "ABCDabcdEFGHijklMNOPqrstUVWXyzab",
+        )
+        uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
+        split_opaque = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"
+
+        for opaque in (*low_transition_base64, uppercase_alphanumeric):
+            if opaque in low_transition_base64:
+                self.assertEqual(len(base64.b64decode(opaque, validate=True)), 24)
+            with self.subTest(opaque=opaque):
+                self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
+            for container in (
+                f"/safe/{opaque}/artifact.txt",
+                f"https://example.com/{opaque}/artifact",
+                f"@scope/{opaque}",
+                f"C:\\safe\\{opaque}\\artifact.txt",
+            ):
+                with self.subTest(container=container):
+                    self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
+
+        for separator in ("/", ".", "-", " "):
+            value = separator.join(split_opaque.split("."))
+            for container in (
+                value,
+                f"/safe/{value}/artifact.txt",
+                f"https://example.com/{value}/artifact",
+                f"@scope/{value}",
+                f"C:\\safe\\{value}\\artifact.txt",
+            ):
+                with self.subTest(separator=separator, container=container):
+                    self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
+
+        for semantic_identifier in (
+            "projectMemorySchemaMigrationIdentifier",
+            "projectMemorySchemaMigrationIdentifierV2",
+            "DeterministicProjectConfigurationManager",
+            "HTTPServerConfigurationV2ProjectManager",
+            "JSONRPC2ServerConfigurationManager",
+            "TLS13ConnectionConfigurationManager",
+            "project2026schema2migration3identifier",
+        ):
+            with self.subTest(semantic_identifier=semantic_identifier):
+                self.assertEqual(governance.classify_memory_admission(semantic_identifier)["status"], "safe")
 
     def test_opaque_values_need_review_without_reclassifying_common_identifiers(self) -> None:
         padded_base64 = "Ab3dEf4G" * 5 + "="
