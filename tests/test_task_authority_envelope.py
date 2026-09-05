@@ -916,6 +916,66 @@ class FilesystemTargetScopeRegressionTests(unittest.TestCase):
         self.assertEqual(_safety_preflight_target_paths("fix https://example.org/a%2e%2e/b.py"), [])
         self._assert_denied_for_every_profile("fix note:../outside/marker.txt", "target_path_escapes_project")
 
+    def test_percent_decoding_reaches_shape_fixpoint_without_halving_path_budget(self) -> None:
+        from omh.quality.safety_preflight import MAX_TARGET_PATHS
+
+        for target_path, decoded_path in (
+            ("%252e%252e/outside/marker.txt", "../outside/marker.txt"),
+            ("..%252foutside/marker.txt", "../outside/marker.txt"),
+            ("%25252e%25252e/outside/marker.txt", "../outside/marker.txt"),
+            ("%252e%252e%255coutside%255cmarker.txt", r"..\outside\marker.txt"),
+        ):
+            with self.subTest(target_path=target_path):
+                message = f"fix {target_path}"
+                self.assertIn(decoded_path, _safety_preflight_target_paths(message))
+                self._assert_denied_for_every_profile(message, "target_path_escapes_project")
+
+        for target_path, decoded_path in (
+            ("%7e/outside/marker.txt", "~/outside/marker.txt"),
+            ("%7E/outside/marker.txt", "~/outside/marker.txt"),
+            ("C%3a/outside/marker.txt", "C:/outside/marker.txt"),
+            ("x;C%3a/outside/marker.txt", "C:/outside/marker.txt"),
+        ):
+            with self.subTest(target_path=target_path):
+                message = f"fix {target_path}"
+                self.assertIn(decoded_path, _safety_preflight_target_paths(message))
+                self._assert_denied_for_every_profile(message, "target_path_absolute")
+
+        unc_message = "fix %5c%5cserver/share/marker.txt"
+        self.assertIn(r"\\server/share/marker.txt", _safety_preflight_target_paths(unc_message))
+        self._assert_denied_for_every_profile(unc_message, "target_path_absolute")
+
+        for target_path, reason_code in (
+            ("%43:./marker.txt", "target_path_absolute"),
+            ("%43:../", "target_path_absolute"),
+            ("%43:~", "target_path_absolute"),
+            ("%43:=/", "target_path_absolute"),
+            ("%43:x;~", "target_path_absolute"),
+            ("%7emarker.txt?/x", "target_path_absolute"),
+            ("%25%37%65:/..\\", "target_path_escapes_project"),
+            (r"./%3b..\%20", "target_path_escapes_project"),
+        ):
+            with self.subTest(target_path=target_path):
+                self._assert_denied_for_every_profile(f"fix {target_path}", reason_code)
+
+        encoded_filename_message = 'fix "docs/my%20notes.md"'
+        self.assertEqual(_safety_preflight_target_paths(encoded_filename_message), ["docs/my%20notes.md"])
+
+        encoded_filenames = [f"docs/my%20notes-{index}.md" for index in range(MAX_TARGET_PATHS)]
+        allowed_message = "fix " + " ".join(encoded_filenames)
+        self.assertEqual(_safety_preflight_target_paths(allowed_message), encoded_filenames)
+        for message in (encoded_filename_message, allowed_message):
+            for target in self._PROFILE_HANDOFFS:
+                with self.subTest(message=message, target=target):
+                    payload = build_coding_delegation_payload(message, executor_target=target)
+                    self.assertEqual(payload["action_gate"]["outcome"], "allow")
+
+        overflow_message = "fix " + " ".join(
+            [*encoded_filenames, f"docs/my%20notes-{MAX_TARGET_PATHS}.md"]
+        )
+        self.assertEqual(len(_safety_preflight_target_paths(overflow_message)), MAX_TARGET_PATHS + 1)
+        self._assert_denied_for_every_profile(overflow_message, "target_path_count_exceeded")
+
     def test_supported_local_targets_and_remote_references_remain_usable(self) -> None:
         from omh.coding.coding_delegation import _safety_preflight_target_paths
 
