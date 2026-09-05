@@ -139,6 +139,13 @@ def _has_opaque_character_mix(token: str) -> bool:
     has_upper = any(char.isupper() for char in token)
     has_digit = any(char.isdigit() for char in token)
     has_encoding_punctuation = any(char in "+=" for char in token)
+    if has_lower and has_upper and token.isalpha():
+        case_transitions = sum(
+            left.islower() != right.islower()
+            for left, right in zip(token, token[1:])
+        )
+        if case_transitions >= 8:
+            return True
     return (has_lower and has_upper and (has_digit or ("_" in token and "-" in token))) or (
         has_encoding_punctuation
         and sum((has_lower, has_upper, has_digit, has_encoding_punctuation)) >= 3
@@ -158,24 +165,33 @@ def _has_single_case_alphanumeric_opaque_mix(token: str) -> bool:
         return False
     letters = [char for char in token if char.isalpha()]
     digits = [char for char in token if char.isdigit()]
-    if not letters or len(digits) < 3:
+    if not letters:
         return False
     if any(char.islower() for char in letters) and any(char.isupper() for char in letters):
+        return False
+    if not digits:
+        return len(token) >= 32 and all(char.isupper() for char in letters)
+    if len(digits) < 3:
         return False
     transitions = sum(
         left.isdigit() != right.isdigit()
         for left, right in zip(token, token[1:])
     )
-    return transitions >= 4
+    return transitions >= 8
 
 
-def _has_embedded_single_case_opaque_value(content: str) -> bool:
+def _has_embedded_opaque_value(content: str) -> bool:
     """Detect opaque runs before a path or URL container can exempt them."""
     for match in re.finditer(r"[A-Za-z0-9]{32,}", content):
         segment = match.group(0)
-        if _HEX_DIGEST_PATTERN.fullmatch(segment):
+        if (
+            _HEX_DIGEST_PATTERN.fullmatch(segment)
+            or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(segment)
+            or _ACRONYM_VERSION_IDENTIFIER_PATTERN.fullmatch(segment)
+            or _looks_like_structured_identifier(segment)
+        ):
             continue
-        if _has_single_case_alphanumeric_opaque_mix(segment):
+        if _has_opaque_character_mix(segment) or _has_single_case_alphanumeric_opaque_mix(segment):
             return True
     return False
 
@@ -196,7 +212,7 @@ def _windows_path_has_split_opaque_value(content: str) -> bool:
 
 def _looks_like_opaque_token(content: str) -> bool:
     """Recognize encoded opaque values without consuming common identifiers."""
-    if _has_embedded_single_case_opaque_value(content):
+    if _has_embedded_opaque_value(content):
         return True
     windows_path = bool(_WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content))
     if windows_path and _windows_path_has_split_opaque_value(content):

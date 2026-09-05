@@ -247,9 +247,16 @@ class SafetyAndEvaluationTests(unittest.TestCase):
 
     def test_single_case_alphanumeric_opaque_values_need_review(self) -> None:
         uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
+        uppercase_letters_only_base32 = "JBSWYDPF" * 4
+        mixed_case_letters_only_base64 = "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV"
         lowercase_alphanumeric = "a9b8c7d6e5f4g3h2j1k0m9n8p7q6r5s4"
 
-        for opaque in (uppercase_base32, lowercase_alphanumeric):
+        for opaque in (
+            uppercase_base32,
+            uppercase_letters_only_base32,
+            mixed_case_letters_only_base64,
+            lowercase_alphanumeric,
+        ):
             with self.subTest(opaque=opaque[:8]):
                 self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
             for container in (
@@ -263,6 +270,17 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                         governance.classify_memory_admission(container)["status"],
                         "needs_review",
                     )
+
+        semantic_identifier = "project2026schema2migration3identifier"
+        for ordinary in (
+            semantic_identifier,
+            f"@scope/{semantic_identifier}",
+            f"/safe/{semantic_identifier}/artifact.txt",
+            f"C:\\safe\\{semantic_identifier}\\artifact.txt",
+            f"https://example.com/{semantic_identifier}/artifact",
+        ):
+            with self.subTest(ordinary=ordinary[:24]):
+                self.assertEqual(governance.classify_memory_admission(ordinary)["status"], "safe")
 
         self.assertEqual(
             governance.classify_memory_admission("project2026memoryhardeningidentifier")["status"],
@@ -361,11 +379,15 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         credential = "gh" + "u_" + "a" * 36
         padded = "Ab3dEf4G" * 5 + "="
         uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
+        uppercase_letters_only_base32 = "JBSWYDPF" * 4
+        mixed_case_letters_only_base64 = "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV"
         lowercase_alphanumeric = "a9b8c7d6e5f4g3h2j1k0m9n8p7q6r5s4"
         for unsafe_path in (
             f"C:\\safe\\{credential}\\artifact.txt",
             f"C:\\safe\\{padded}\\artifact.txt",
             f"C:\\safe\\{uppercase_base32}\\artifact.txt",
+            f"C:\\safe\\{uppercase_letters_only_base32}\\artifact.txt",
+            f"C:\\safe\\{mixed_case_letters_only_base64}\\artifact.txt",
             f"C:\\safe\\{lowercase_alphanumeric}\\artifact.txt",
         ):
             with self.subTest(unsafe_path=unsafe_path), self.assertRaises(ValueError):

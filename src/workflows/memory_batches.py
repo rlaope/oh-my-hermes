@@ -50,7 +50,7 @@ _REVIEW_REQUEST_KEYS = frozenset(
 )
 
 
-class _ScopePreconditionChanged(ValueError):
+class _ScopePreconditionChanged(RuntimeError):
     pass
 
 
@@ -179,7 +179,15 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
     ]
 
     def assert_precondition(check_paths: OmhPaths, step: dict[str, str]) -> None:
-        snapshot = _scope_snapshot_by_target(check_paths, step["target"])
+        try:
+            snapshot = _scope_snapshot_by_target(check_paths, step["target"])
+        except ValueError as exc:
+            raise _ScopePreconditionChanged("reviewed scope is unreadable before apply") from exc
+        if snapshot is not None and (
+            not isinstance(snapshot.get("items"), Mapping)
+            or not isinstance(snapshot.get("tombstones", {}), Mapping)
+        ):
+            raise _ScopePreconditionChanged("reviewed scope is malformed before apply")
         if (
             _scope_precondition_digest(snapshot, candidate["items"], step["target"])
             != step["revision"]
@@ -749,10 +757,14 @@ def _existing_batch_review_ids(paths: OmhPaths, batch_id: str) -> set[str]:
 def _distinct_targets(items: list[dict[str, object]]) -> None:
     scope_item_targets: set[tuple[str, str]] = set()
     logical_targets: set[tuple[str, str]] = set()
+    candidate_item_ids: set[str] = set()
     for item in items:
         op = str(item["op"])
         target_ref = str(item["target_ref"])
         item_id = str(item["item_id"])
+        if item_id in candidate_item_ids:
+            raise ValueError("batch has ambiguous candidate item ids")
+        candidate_item_ids.add(item_id)
         destination_scope = item.get("scope")
         if not isinstance(destination_scope, Mapping):
             raise ValueError("batch has malformed logical target")
