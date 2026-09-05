@@ -747,9 +747,34 @@ def _existing_batch_review_ids(paths: OmhPaths, batch_id: str) -> set[str]:
 
 
 def _distinct_targets(items: list[dict[str, object]]) -> None:
-    targets = [(item["op"], item["target_ref"], _relative_scope(item["scope"])) for item in items]
-    if len(targets) != len(set(targets)):
-        raise ValueError("batch has ambiguous scope-item targets")
+    scope_item_targets: set[tuple[str, str]] = set()
+    logical_targets: set[tuple[str, str]] = set()
+    for item in items:
+        op = str(item["op"])
+        target_ref = str(item["target_ref"])
+        item_id = str(item["item_id"])
+        destination_scope = item.get("scope")
+        if not isinstance(destination_scope, Mapping):
+            raise ValueError("batch has malformed logical target")
+        destination_target = _relative_scope(destination_scope)
+        item_targets: set[tuple[str, str]] = set()
+        for scope in _item_scopes(item):
+            scope_target = _relative_scope(scope)
+            item_targets.add((scope_target, target_ref))
+            if op != "forget" and scope_target == destination_target:
+                item_targets.add((scope_target, item_id))
+        if scope_item_targets & item_targets:
+            raise ValueError("batch has ambiguous scope-item targets")
+        scope_item_targets.update(item_targets)
+
+        if op != "forget":
+            artifact = item.get("artifact")
+            if not isinstance(artifact, Mapping):
+                raise ValueError("batch has malformed logical target")
+            logical_target = (destination_target, str(artifact.get("key", "")))
+            if logical_target in logical_targets:
+                raise ValueError("batch has ambiguous logical targets")
+            logical_targets.add(logical_target)
 
 
 def _batch_view(candidate: Mapping[str, object], *, status: str) -> dict[str, object]:
