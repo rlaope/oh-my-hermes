@@ -1084,7 +1084,14 @@ def approve_project_memory_candidate(
                 "it must be reapproved through the lifecycle path, not plain approval"
             )
         safety = candidate.get("safety", {}) if isinstance(candidate.get("safety"), dict) else {}
-        if safety.get("status") == "blocked":
+        candidate_safety = _project_memory_safety(
+            str(candidate.get("summary", "")),
+            "",
+            tags=candidate.get("tags", []) if isinstance(candidate.get("tags"), list) else [],
+            source=str(candidate.get("source", "")),
+            source_ref=str(candidate.get("source_ref", "")),
+        )
+        if safety.get("status") == "blocked" or candidate_safety.get("status") == "blocked":
             raise ValueError("blocked memory candidates must be rejected or recaptured without protected raw content")
         approved_at = utc_now()
         review_id = f"review_{candidate_id}"
@@ -2531,7 +2538,10 @@ def _perspective_projection(value: Any) -> dict[str, str]:
     observed = str(perspective.get("observed", ""))
     if not observed:
         return {}
-    return {"observer": str(perspective.get("observer", "") or _DEFAULT_PERSPECTIVE_OBSERVER), "observed": observed}
+    return {
+        "observer": _redact(str(perspective.get("observer", "") or _DEFAULT_PERSPECTIVE_OBSERVER)),
+        "observed": _redact(observed),
+    }
 
 
 def _record_perspective_matches(record: dict[str, Any], *, observer: str | None, observed: str | None) -> bool:
@@ -3311,9 +3321,16 @@ def _build_project_memory_candidate(
 ) -> dict[str, object]:
     normalized_type = _normalize_record_type(record_type)
     scope = _scope_for_project_memory(scope_kind, scope_ref)
-    normalized_tags = _normalize_tags(tags)
+    raw_tags = _normalize_tags(tags, redact_sensitive=False, preserve_case=True)
+    normalized_tags = _normalize_tags(raw_tags)
     content_text = str(content or "")
-    safety = _project_memory_safety(summary, content_text, tags=normalized_tags)
+    safety = _project_memory_safety(
+        summary,
+        content_text,
+        tags=raw_tags,
+        source=str(source or "cli"),
+        source_ref=str(source_ref or ""),
+    )
     now = utc_now()
     if expires_at_value:
         # An absolute expiry carries no day count -- the date IS the policy.
@@ -3357,14 +3374,14 @@ def _build_project_memory_candidate(
         "summary": _redact(summary.strip())[:500],
         "scope": scope,
         "tags": normalized_tags,
-        "source": str(source or "cli"),
+        "source": _redact(str(source or "cli")),
         "source_ref": stored_source_ref,
         **({"source_evidence": source_evidence} if source_evidence else {}),
         "created_at": now,
         "ttl": ttl,
         "staleness": staleness,
         "retention_class": str(retention_class),
-        "derived_from": [str(ref) for ref in derived_from],
+        "derived_from": [_redact(str(ref))[:160] for ref in derived_from],
         **({"perspective": dict(perspective)} if perspective else {}),
         "content_ref": {
             "sha256": hashlib.sha256(content_text.encode("utf-8")).hexdigest() if content_text else "",
@@ -3473,14 +3490,14 @@ def _record_from_candidate(
         "summary": _redact(str(candidate.get("summary", "")))[:500],
         "scope": scope,
         "tags": _normalize_tags(candidate.get("tags", [])),
-        "source": str(candidate.get("source", "cli")),
+        "source": _redact(str(candidate.get("source", "cli"))),
         "source_class": "omh_local",
         "source_ref": _redact(str(candidate.get("source_ref", "")))[:160],
         # The digest is carried over as observed at capture, never recomputed
         # here: approval must not silently re-bless a source that changed
         # while the candidate sat in the review queue.
         **({"source_evidence": evidence} if (evidence := _source_evidence_projection(candidate)) else {}),
-        "derived_from": _string_list(candidate.get("derived_from", [])),
+        "derived_from": _redacted_string_list(candidate.get("derived_from", [])),
         **(
             {"perspective": projection}
             if (projection := _perspective_projection(candidate.get("perspective")))
@@ -3632,12 +3649,12 @@ def _recall_item(
         "summary": _redact(str(record.get("summary", "")))[:500],
         "scope": _normalize_scope(record.get("scope", _scope("project", "default"))),
         "tags": _normalize_tags(record.get("tags", [])),
-        "source": str(record.get("source", "")),
+        "source": _redact(str(record.get("source", ""))),
         "approved_at": str(record.get("approved_at", "")),
         "staleness": staleness,
         "score": int(score),
         "attention_tier": attention_tier,
-        "derived_from": _string_list(record.get("derived_from", [])),
+        "derived_from": _redacted_string_list(record.get("derived_from", [])),
         "perspective": _perspective_projection(record.get("perspective")),
         **_recall_evidence_fields(evidence),
     }
@@ -4088,8 +4105,15 @@ def _source_evidence_state(record: dict[str, Any]) -> str:
     return "unchanged" if current == recorded else "changed"
 
 
-def _project_memory_safety(summary: str, content: str, *, tags: list[str]) -> dict[str, object]:
-    classification = classify_memory_admission("\n".join([summary, content, " ".join(tags)]))
+def _project_memory_safety(
+    summary: str,
+    content: str,
+    *,
+    tags: list[str],
+    source: str = "",
+    source_ref: str = "",
+) -> dict[str, object]:
+    classification = classify_memory_admission("\n".join([summary, content, " ".join(tags), source, source_ref]))
     status = str(classification.get("status", "blocked"))
     return {
         "schema_version": "project_memory_safety/v2",
@@ -4323,15 +4347,25 @@ def _scope_for_project_memory(kind: str, ref: str) -> dict[str, str]:
     return scope
 
 
-def _normalize_tags(values: Any) -> list[str]:
+def _normalize_tags(
+    values: Any,
+    *,
+    redact_sensitive: bool = True,
+    preserve_case: bool = False,
+) -> list[str]:
     if not isinstance(values, (list, tuple)):
         return []
     tags: list[str] = []
     seen: set[str] = set()
     for value in values:
-        tag = unicodedata.normalize("NFC", str(value)).strip().lower()
+        original_tag = unicodedata.normalize("NFC", str(value)).strip()
+        tag = original_tag
+        if not preserve_case:
+            tag = tag.lower()
         if not tag or not _SAFE_TAG.match(tag):
             continue
+        if redact_sensitive and _looks_sensitive(original_tag):
+            tag = "[redacted]"
         if tag not in seen:
             tags.append(tag)
             seen.add(tag)
@@ -4342,6 +4376,12 @@ def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if str(item)]
+
+
+def _redacted_string_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [_redact(str(item))[:160] for item in value if str(item)]
 
 
 def _read_project_memory_candidate(paths: OmhPaths, candidate_id: str) -> dict[str, Any] | None:
@@ -4891,7 +4931,9 @@ def _redact(value: str) -> str:
 
 def _looks_sensitive(value: str) -> bool:
     lowered = value.lower()
-    return any(marker in lowered for marker in ("secret", "token", "password", "private-key", "api_key", "apikey"))
+    if any(marker in lowered for marker in ("secret", "token", "password", "private-key", "api_key", "apikey")):
+        return True
+    return classify_memory_admission(value).get("status") in {"blocked", "needs_review"}
 
 
 def _validate_allowed_keys(value: dict[str, Any], allowed: set[str], errors: list[str], label: str) -> None:
