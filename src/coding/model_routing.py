@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 from typing import Final, Iterable, Mapping
 
-from .model_contracts import EFFORT_FLOOR_KIND, contract_effort_floor
+from .model_contracts import EFFORT_FLOOR_KIND, contract_effort_floor, model_contract_projection
 
 CODING_MODEL_ROUTE_SCHEMA_VERSION: Final[str] = "coding_model_route/v2"
 # The frozen v1 identifier: referenced only for reading persisted payloads.
@@ -1762,4 +1762,7 @@ def _route_payload(
         payload["catalog_fingerprint"] = catalog_fingerprint
     if effort_change is not None:
         payload["effort_change"] = effort_change
+    contract_projection = model_contract_projection(selected_model)
+    if contract_projection is not None:
+        payload["model_contract"] = contract_projection
     return payload

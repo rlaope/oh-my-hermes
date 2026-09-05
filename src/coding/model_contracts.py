@@ -1,4 +1,4 @@
-"""Exact-model contracts: what a vendor documents about one model id.
+"""Exact-model contracts and bounded declared inheritance.
 
 A contract is prepared metadata — the vendor's published effort vocabulary,
 limits, tool-calling surface, pricing, and runtime mechanisms for one exact
@@ -8,10 +8,11 @@ silently) and printed by `omh coding model-contract`. It never proves that a
 provider serves the model to this account, that a runtime implements any of
 the mechanisms named here, or that a route ran.
 
-Keyed by exact model id after the provider prefix is stripped, so
-`openai/gpt-6-astra` and `gpt-6-astra` resolve to the same record. A model
-without a contract gets `None`, never a guess: the catalog and family tables
-keep adjudicating exactly as before.
+Contracts are keyed by exact model id after the provider prefix is stripped.
+Provider catalogs may expose a bounded set of declared mode/service-tier aliases
+for one contract. Those aliases resolve only through the explicit projection
+table below; arbitrary suffix stripping is forbidden. A model without an exact
+or declared contract gets `None`, never a guess.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from __future__ import annotations
 from typing import Final, Mapping
 
 MODEL_CONTRACT_SCHEMA_VERSION: Final[str] = "model_contract/v1"
+MODEL_CONTRACT_PROJECTION_SCHEMA_VERSION: Final[str] = "model_contract_projection/v1"
 
 MODEL_CONTRACT_CLAIM_BOUNDARY: Final[str] = (
     "A model contract is the vendor's documented interface for one model id, read from the cited "
@@ -27,12 +29,20 @@ MODEL_CONTRACT_CLAIM_BOUNDARY: Final[str] = (
     "behavior comes only from the runtime that actually ran the model."
 )
 
+MODEL_CONTRACT_PROJECTION_CLAIM_BOUNDARY: Final[str] = (
+    "A model contract projection records how OMH interprets one explicitly declared catalog id. "
+    "It is not evidence that a provider advertises or serves the requested id, that an account is "
+    "entitled to it, or that execution occurred. The host/runtime owns any wire translation."
+)
+
 # Compatibility outcomes a contract can hand the route resolver.
 EFFORT_FLOOR_KIND: Final[str] = "floor_raised"
 
 _GPT_6_ASTRA: Final[dict[str, object]] = {
     "schema_version": MODEL_CONTRACT_SCHEMA_VERSION,
     "model_id": "gpt-6-astra",
+    "reasoning_mode": "standard",
+    "service_tier": "standard",
     "family": "gpt",
     "generation": "gpt-6",
     "released": "2026-09-03",
@@ -106,18 +116,89 @@ MODEL_CONTRACTS: Final[dict[str, Mapping[str, object]]] = {
     "gpt-6-astra": _GPT_6_ASTRA,
 }
 
+# Catalog aliases whose relationship to an exact contract is explicitly
+# declared. The spelling and composition order are part of the contract: a
+# future suffix does not inherit until it gets its own row and evidence.
+DECLARED_MODEL_CONTRACT_PROJECTIONS: Final[dict[str, Mapping[str, str]]] = {
+    "gpt-6-astra-fast": {
+        "contract_model_id": "gpt-6-astra",
+        "reasoning_mode": "standard",
+        "service_tier": "fast",
+    },
+    "gpt-6-astra-flex": {
+        "contract_model_id": "gpt-6-astra",
+        "reasoning_mode": "standard",
+        "service_tier": "flex",
+    },
+    "gpt-6-astra-pro": {
+        "contract_model_id": "gpt-6-astra",
+        "reasoning_mode": "pro",
+        "service_tier": "standard",
+    },
+    "gpt-6-astra-pro-fast": {
+        "contract_model_id": "gpt-6-astra",
+        "reasoning_mode": "pro",
+        "service_tier": "fast",
+    },
+    "gpt-6-astra-pro-flex": {
+        "contract_model_id": "gpt-6-astra",
+        "reasoning_mode": "pro",
+        "service_tier": "flex",
+    },
+}
 
-def contract_model_id(model_id: str) -> str:
-    """Normalize a served or provider-qualified id to the contract key."""
+
+def _unqualified_model_id(model_id: str) -> str:
     normalized = str(model_id or "").strip().casefold()
     if "/" in normalized:
         normalized = normalized.rsplit("/", 1)[1]
     return normalized
 
 
+def model_contract_projection(model_id: str) -> dict[str, str] | None:
+    """Resolve an exact or explicitly inherited contract without guessing."""
+    requested = str(model_id or "").strip()
+    canonical = _unqualified_model_id(requested)
+    if not canonical:
+        return None
+    contract = MODEL_CONTRACTS.get(canonical)
+    declared = DECLARED_MODEL_CONTRACT_PROJECTIONS.get(canonical)
+    if contract is not None:
+        contract_id = canonical
+        reasoning_mode = str(contract.get("reasoning_mode", "standard"))
+        service_tier = str(contract.get("service_tier", "standard"))
+        provenance = "exact"
+    elif declared is not None:
+        contract_id = str(declared["contract_model_id"])
+        if contract_id not in MODEL_CONTRACTS:
+            return None
+        reasoning_mode = str(declared["reasoning_mode"])
+        service_tier = str(declared["service_tier"])
+        provenance = "declared_inheritance"
+    else:
+        return None
+    return {
+        "schema_version": MODEL_CONTRACT_PROJECTION_SCHEMA_VERSION,
+        "requested_model": requested,
+        "canonical_model_id": canonical,
+        "contract_model_id": contract_id,
+        "reasoning_mode": reasoning_mode,
+        "service_tier": service_tier,
+        "provenance": provenance,
+        "claim_boundary": MODEL_CONTRACT_PROJECTION_CLAIM_BOUNDARY,
+    }
+
+
+def contract_model_id(model_id: str) -> str:
+    """Return the exact/declared contract key, or the normalized unknown id."""
+    projection = model_contract_projection(model_id)
+    return str(projection["contract_model_id"]) if projection is not None else _unqualified_model_id(model_id)
+
+
 def model_contract(model_id: str) -> Mapping[str, object] | None:
-    """Return the documented contract for an exact model id, or None."""
-    return MODEL_CONTRACTS.get(contract_model_id(model_id))
+    """Return the exact or explicitly inherited documented contract, or None."""
+    projection = model_contract_projection(model_id)
+    return MODEL_CONTRACTS.get(str(projection["contract_model_id"])) if projection is not None else None
 
 
 def contract_effort_floor(model_id: str, effort: str) -> tuple[str, str] | None:
@@ -195,12 +276,16 @@ def dynamic_effort_guidance(model_id: str, executor_profile: str) -> dict[str, o
 
 
 __all__ = [
+    "DECLARED_MODEL_CONTRACT_PROJECTIONS",
     "EFFORT_FLOOR_KIND",
     "MODEL_CONTRACTS",
     "MODEL_CONTRACT_CLAIM_BOUNDARY",
+    "MODEL_CONTRACT_PROJECTION_CLAIM_BOUNDARY",
+    "MODEL_CONTRACT_PROJECTION_SCHEMA_VERSION",
     "MODEL_CONTRACT_SCHEMA_VERSION",
     "contract_effort_floor",
     "contract_model_id",
     "dynamic_effort_guidance",
     "model_contract",
+    "model_contract_projection",
 ]

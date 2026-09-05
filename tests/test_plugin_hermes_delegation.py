@@ -15,9 +15,12 @@ import time
 import unittest
 from pathlib import Path
 
+from omh.coding.model_contracts import MODEL_CONTRACTS
+from omh.plugin_bundle.omh import hermes_delegation as hermes_delegation_module
 from omh.plugin_bundle.omh.hermes_delegation import (
     COMPLETED_LINGER_SECONDS,
     DELEGATION_ROUTE_PROVENANCE_SCHEMA_VERSION,
+    DECLARED_MODEL_ALIAS_PROJECTIONS,
     HERMES_MIXTURE_CATEGORY_CHAINS,
     MIXTURE_CHAIN_OVERRIDES_SCHEMA_VERSION,
     RECENT_ACTIVITY_SECONDS,
@@ -28,6 +31,7 @@ from omh.plugin_bundle.omh.hermes_delegation import (
     mixture_category_for,
     mixture_chain_overrides_path,
     parse_model_provider_routes,
+    provider_serves_alias,
     read_hermes_native_subagents,
 )
 
@@ -136,6 +140,45 @@ def _write_manifest(
 
 
 class MixtureCategoryProjectionTest(unittest.TestCase):
+    def test_exact_contract_mirror_stays_in_parity_with_core(self) -> None:
+        self.assertEqual(
+            getattr(hermes_delegation_module, "EXACT_MODEL_CONTRACT_ALIASES", frozenset()),
+            frozenset(MODEL_CONTRACTS),
+        )
+
+    def test_future_exact_child_stops_inheriting_stale_plugin_metadata(self) -> None:
+        from unittest import mock
+
+        exact_aliases = frozenset((*MODEL_CONTRACTS, "gpt-6-astra-pro"))
+        with mock.patch.object(
+            hermes_delegation_module,
+            "EXACT_MODEL_CONTRACT_ALIASES",
+            exact_aliases,
+            create=True,
+        ):
+            self.assertIsNone(provider_serves_alias("gpt-6-astra-pro", "openai"))
+            self.assertEqual(mixture_category_for("gpt-6-astra-pro", "xhigh"), "")
+
+    def test_future_exact_child_stops_legacy_speed_suffix_category_fallback(self) -> None:
+        from unittest import mock
+
+        exact_aliases = frozenset((*MODEL_CONTRACTS, "gpt-6-astra-fast"))
+        with mock.patch.object(
+            hermes_delegation_module,
+            "EXACT_MODEL_CONTRACT_ALIASES",
+            exact_aliases,
+        ):
+            self.assertEqual(mixture_category_for("gpt-6-astra-fast", "xhigh"), "")
+
+    def test_unknown_astra_speed_suffixes_do_not_gain_a_category(self) -> None:
+        for alias in (
+            "gpt-6-astra-ultrafast",
+            "gpt-6-astra-highspeed",
+            "gpt-6-astra-pro-ultrafast",
+        ):
+            with self.subTest(alias=alias):
+                self.assertEqual(mixture_category_for(alias, "xhigh"), "")
+
     def test_a_child_on_the_parent_model_is_labeled_inherit(self):
         self.assertEqual(
             mixture_category_for("gpt-5.6-sol", "medium", parent_model="gpt-5.6-sol"),
@@ -232,6 +275,32 @@ class MixtureCategoryProjectionTest(unittest.TestCase):
             mixture_category_for("claude-fable-5", "xhigh", parent_model="kimi-k3"),
             "architect",
         )
+
+    def test_declared_astra_forms_inherit_category_and_provider_eligibility(self):
+        from omh.coding.model_contracts import DECLARED_MODEL_CONTRACT_PROJECTIONS
+
+        expected = {
+            model_id: (
+                projection["contract_model_id"],
+                projection["reasoning_mode"],
+                projection["service_tier"],
+            )
+            for model_id, projection in DECLARED_MODEL_CONTRACT_PROJECTIONS.items()
+        }
+        self.assertEqual(DECLARED_MODEL_ALIAS_PROJECTIONS, expected)
+        for model_id in ("gpt-6-astra", *expected):
+            requested = f"openai/{model_id}"
+            with self.subTest(model_id=model_id):
+                self.assertEqual(
+                    mixture_category_for(requested, "xhigh", parent_model="kimi-k3"),
+                    "ultrabrain",
+                )
+                self.assertIs(provider_serves_alias(requested, "openai"), True)
+                self.assertIs(provider_serves_alias(requested, "anthropic"), False)
+
+        unknown = "openai/gpt-6-astra-pro-turbo"
+        self.assertEqual(mixture_category_for(unknown, "xhigh", parent_model="kimi-k3"), "")
+        self.assertIsNone(provider_serves_alias(unknown, "openai"))
 
 
 def _write_overrides(omh_home: Path, document: object) -> Path:
@@ -477,6 +546,56 @@ class HermesNativeSubagentReaderTest(unittest.TestCase):
             row["cost_usd"],
             (10_000 * 1.25 + 30_000 * 0.125 + 4_000 * 10.0) / 1_000_000,
         )
+
+    def test_inherited_base_price_override_keeps_operator_provenance(self):
+        price_path = self.home / "routing" / "model-prices.json"
+        price_path.parent.mkdir(parents=True)
+        price_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "model_price_overrides/v1",
+                    "models": {
+                        "gpt-6-astra": {
+                            "input_per_mtok": 2.0,
+                            "output_per_mtok": 3.0,
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        _build_state_db(
+            self.home,
+            [
+                {
+                    "id": "20260818_100100_pricebase",
+                    "model": "gpt-6-astra-fast",
+                    "started_at": NOW - 60,
+                    "usage": {
+                        "input_tokens": 1_000_000,
+                        "output_tokens": 1_000_000,
+                        "last_seen": NOW - 5,
+                    },
+                }
+            ],
+        )
+        _write_manifest(
+            self.home,
+            "deleg_pricebase",
+            ["price provenance lane"],
+            started=NOW - 65,
+            log_mtime=NOW - 5,
+        )
+
+        row = read_hermes_native_subagents(
+            self.home,
+            now=NOW,
+            omh_home=self.home,
+        )["rows"][0]
+
+        self.assertTrue(row["cost_approximate"])
+        self.assertTrue(row["cost_override"])
+        self.assertAlmostEqual(row["cost_usd"], 10.0)
 
     def test_solar_pro2_unrecorded_cost_is_approximated_at_list_price(self):
         _build_state_db(

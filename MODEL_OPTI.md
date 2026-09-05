@@ -78,12 +78,18 @@ family's:
 - **`MODEL_CONTRACTS`** in `src/coding/model_contracts.py` records what the
   vendor documents about one exact id — effort ladder and floor, limits,
   tool-calling API, unsupported parameters, dynamic-effort mechanism, list
-  price, sources and the date they were read. `omh coding model-contract
-  --model <id>` prints it. The route resolver consults it before the
-  catalog: a requested effort the contract documents as unsupported is
-  raised to the documented floor and the route says so
-  (`effort_change.kind = floor_raised`), on every executor profile, so an
-  unsupported rung never reaches a provider silently. A model without a
+  price, sources and the date they were read. A bounded
+  `DECLARED_MODEL_CONTRACT_PROJECTIONS` table may map a provider catalog's
+  explicitly named mode/service-tier alias onto that contract; it never strips
+  an arbitrary suffix. `omh coding model-contract --model <id>` prints the
+  resolved record. The route resolver consults it before the catalog: a
+  requested effort the contract documents as unsupported is raised to the
+  documented floor and the route says so (`effort_change.kind =
+  floor_raised`), on every executor profile, so an unsupported rung never
+  reaches a provider silently. Route receipts retain the requested id plus the
+  canonical contract id, reasoning mode, service tier, and exact-versus-
+  declared provenance. None of that claims catalog availability, entitlement,
+  wire translation, or execution. A model without an exact or declared
   contract is treated exactly as before — by family and catalog alone.
 - **`MODEL_HIGH_EFFORT_CALIBRATIONS` / `MODEL_COMPOSITION_CALIBRATIONS`**
   in `src/coding/unit_prompt_protocol.py` are calibration overrides keyed by
@@ -94,10 +100,27 @@ family's:
   byte-stable when a new generation gets its own counter. The two tables
   share one key set (parity-tested) and every key has a contract.
 
-The keys are served ids after the provider prefix is stripped, so
-`openai/gpt-6-astra` and `gpt-6-astra` resolve alike. Bare chat names are
-not aliased for GPT generations (`astra`, like `sol`, classifies `unknown`);
-users name the served id.
+The exact contract key is the served id after the provider prefix is stripped,
+so `openai/gpt-6-astra` and `gpt-6-astra` resolve alike. An explicitly declared
+catalog variant keeps its full requested/provider-qualified identity while it
+inherits the canonical contract. Bare chat names are not aliased for GPT
+generations (`astra`, like `sol`, classifies `unknown`); users name the served
+id.
+
+`omh coding model-contract-audit --inventory <path|-> --json` compares a
+bounded local JSON inventory with those contracts without network access or
+configuration writes. Each stable `model_contract_coverage/v1` row reports
+family recognition, contract and effort coverage, model-specific calibration,
+provider-family and category projection, price source or absence, and docs
+coverage. Pass `--required-model` or `--recommended-model` repeatedly to make
+missing required, recommended, and optional-discovery rows operationally
+distinct; `--intentional-exclusion` records a deliberate non-contract row.
+The comparison body has no timestamp and carries both the supplied inventory
+source/digest and its own canonical digest, so onboarding, doctor, or release
+workflows can hash-compare reports. A cold or unavailable inventory remains
+explicitly different from an observed empty inventory. The audit is advisory:
+it does not discover models, prove provider availability, change a route, or
+create an issue.
 
 ## Universal protocols (every model, every family)
 
@@ -258,17 +281,24 @@ pairing so a benchmark claim can never mix in other prompt changes.
 ### `gpt-6-astra` (GPT-6 Astra, exact-model override on the `gpt` family)
 
 - **Documented contract:** `gpt-6-astra` (released 2026-09-03, staged
-  rollout); 1,050,000-token context, 922,000 max input, 128,000 max output,
-  knowledge cutoff 2026-04-30; reasoning effort `low`, `medium`, `high`,
-  `xhigh`, `max` — `none` returns HTTP 400 and the migration guide sends
-  `none`/`minimal` callers to `low`, so `low` is the floor OMH raises
-  `off`/`minimal` requests to (recorded as `floor_raised`); no default
-  effort, so a route names one; tool calling on the Responses API only;
-  `temperature`, `top_p`, `top_logprobs` unsupported; `configuration_update`
-  can change effort between responses in standard single-agent mode only,
-  not alongside automatic compaction or truncation. Full record and sources
-  in `src/coding/model_contracts.py`; `omh coding model-contract --model
-  gpt-6-astra` prints it.
+  rollout) is the exact contract. The active host catalog's declared aliases
+  are `gpt-6-astra-fast`, `gpt-6-astra-flex`, `gpt-6-astra-pro`,
+  `gpt-6-astra-pro-fast`, and `gpt-6-astra-pro-flex`: `pro` selects the
+  reasoning mode, while `fast` and `flex` select the service tier. They inherit
+  only through explicit rows, keep the requested provider-qualified id in
+  receipts, and resolve to canonical contract `gpt-6-astra`; an unknown or
+  malformed suffix does not inherit. The shared contract records a
+  1,050,000-token context, 922,000 max input, 128,000 max output, knowledge
+  cutoff 2026-04-30; reasoning effort `low`, `medium`, `high`, `xhigh`, `max`
+  — `none` returns HTTP 400 and the migration guide sends `none`/`minimal`
+  callers to `low`, so `low` is the floor OMH raises `off`/`minimal` requests
+  to (recorded as `floor_raised`); no default effort, so a route names one;
+  tool calling on the Responses API only; `temperature`, `top_p`,
+  `top_logprobs` unsupported; `configuration_update` can change effort between
+  responses in standard single-agent mode only, not alongside automatic
+  compaction or truncation. Full record and sources in
+  `src/coding/model_contracts.py`; `omh coding model-contract --model <id>`
+  prints the exact or declared projection.
 - **Model trait (official, latest-model guide):** asks a clarifying question
   more readily when more input could materially change the result; follows
   instructions more strictly and may pause on unclear or conflicting
@@ -315,10 +345,14 @@ pairing so a benchmark claim can never mix in other prompt changes.
   generation rule as GLM 5.2 behind 5.3); the Terra and Luna lanes are
   cost-tier picks and stay as they were. An account the staged rollout has
   not reached gets a provider rejection and the chain falls through.
-- **Pricing:** `APPROX_PRICE_PER_MTOK` carries the documented 10/50 (cached
-  input at the default tenth). The $12.5/M cache-write rate and the 2x
-  input / 1.5x output multiplier above 272K input tokens have no column in
-  that table and are documented in the contract instead of flattened.
+- **Pricing:** exact operator `model-prices.json` rows win first. A declared
+  alias without an exact row inherits the base Astra 10/50 list rates; `fast`
+  applies the documented 2x service-tier multiplier and `flex` 0.5x. `pro` is
+  a reasoning mode and has no fabricated multiplier. Cached input stays at
+  the documented default tenth. The $12.5/M cache-write rate and the 2x input
+  / 1.5x output multiplier above 272K input tokens have no column in
+  `APPROX_PRICE_PER_MTOK` and remain visible in the inherited contract rather
+  than being flattened.
 - **Measured (2026-09-05, subagent block):** four arms on
   `benchmarks/live-model-tools/v1`, evaluation split (30 instances, corpus
   digest `c4ea899a…`), `hermes_current_session` path, `openai-codex` /
@@ -738,7 +772,8 @@ gate requires a completed paired run on the intended execution surface.
 | Family | Recognized | Calibrated (both tables) | Status |
 | --- | --- | --- | --- |
 | `gpt`, `claude`, `gemini`, `grok`, `kimi`, `glm`, `qwen`, `deepseek`, `mistral`, `llama`, `codestral`, `solar` | yes | yes | full guidance, provenance above (#1051/#1052 closed the last four) |
-| `gpt-6-astra` (exact-model override) | yes → `gpt` | yes, both override tables, resolved before the family block | documented contract plus counters for the four official traits; paired measurement is the named follow-up |
+| `gpt-6-astra` (exact-model override) | yes → `gpt` | yes, both override tables, resolved before the family block | exact documented contract plus counters for the four official traits; paired measurement is the named follow-up |
+| five declared Astra mode/tier aliases | yes → `gpt` | yes, inherited from canonical `gpt-6-astra` | bounded declared inheritance for contract, effort, calibration, provider/category metadata, and price; unknown suffixes remain missing |
 | `openai-gpt-`, `anthropic-claude-` (design-qualified aliases) | yes → `gpt` / `claude` | yes, through the design family | concrete models.dev/OpenCode serving ids carry these sub-prefixes; their catalog `base_model` fields establish the underlying design family |
 | other `openai-`, `anthropic-` vendor-qualified ids | recognized as model targets, family `unknown` | no → `generic` | vendor qualification alone does not establish a design; O-series, image, and emerging ids remain uncalibrated |
 | `minimax` | yes | no → `generic` | prefix landed in #1304 (`MiniMax-M3`, released 2026-05-31, and `MiniMax-M2.7`, 2026-03-18, per minimax.io release notes and the platform.minimax.io model list); the calibration pair waits on an observed failure mode or a provider-stated characteristic worth countering |
