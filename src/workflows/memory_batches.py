@@ -178,24 +178,39 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
         for index, target in enumerate(scopes, start=1)
     ]
 
-    def write_scope(_: OmhPaths, step: dict[str, str]) -> None:
-        if step["action"] != "write_batch_scope":
-            raise ValueError("unexpected batch apply operation")
-        if write_hook:
-            write_hook(step["name"])
+    def assert_precondition(check_paths: OmhPaths, step: dict[str, str]) -> None:
         if (
             _scope_precondition_digest(
-                _scope_snapshot_by_target(paths, step["target"]),
+                _scope_snapshot_by_target(check_paths, step["target"]),
                 candidate["items"],
                 step["target"],
             )
             != step["revision"]
         ):
             raise _ScopePreconditionChanged("reviewed scope changed before apply")
-        _apply_scope(paths, candidate, reviews, step["target"])
+
+    def preflight(check_paths: OmhPaths) -> None:
+        for step in steps:
+            assert_precondition(check_paths, step)
+
+    def write_scope(check_paths: OmhPaths, step: dict[str, str]) -> None:
+        if step["action"] != "write_batch_scope":
+            raise ValueError("unexpected batch apply operation")
+        if write_hook:
+            write_hook(step["name"])
+        assert_precondition(check_paths, step)
+        _apply_scope(check_paths, candidate, reviews, step["target"])
 
     try:
-        operation = run_memory_operation(paths, operation_id=str(candidate["apply_operation_id"]), operation_type="apply_memory_batch", steps=steps, step_writer=write_scope, now=now)
+        operation = run_memory_operation(
+            paths,
+            operation_id=str(candidate["apply_operation_id"]),
+            operation_type="apply_memory_batch",
+            steps=steps,
+            step_writer=write_scope,
+            preflight=preflight,
+            now=now,
+        )
     except _ScopePreconditionChanged:
         return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "review_required", "reason_code": "scope_precondition_changed", "applied": False, "batch_id": batch_id}
     receipt = {key: operation["receipt"][key] for key in _RECEIPT_KEYS if key in operation.get("receipt", {})}

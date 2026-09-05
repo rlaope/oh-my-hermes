@@ -39,7 +39,7 @@ _BLOCKED_PATTERNS = (
 )
 
 _CREDENTIAL_REVIEW_PATTERN = re.compile(
-    r"\b(?:credential|access[_ -]?token|private[_ -]?key|secret|token|api[_ -]?key)\s*[:=]\s*\S{12,}",
+    r"\b(?:credential|session|access|key|access[_ -]?token|private[_ -]?key|secret|token|api[_ -]?key)\s*[:=]\s*\S{12,}",
     re.IGNORECASE,
 )
 _NEEDS_REVIEW_PATTERNS = (
@@ -69,23 +69,43 @@ _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
     r"(?:(?:[A-Z]{2,}(?=[A-Z][a-z]{2,}))|(?:[A-Z][a-z]{2,}(?:\d+)?)|(?:[A-Z]\d+)){2,}"
 )
 _WINDOWS_ABSOLUTE_PATH_PATTERN = re.compile(r"^(?:[A-Za-z]:\\|\\\\)[^\r\n]+$")
+_SAFE_DIGEST_QUERY_KEYS = frozenset(
+    {"artifact", "artifact_id", "checksum", "commit", "digest", "hash", "id", "rev", "revision", "sha", "sha1", "sha224", "sha256", "sha384", "sha512"}
+)
 _SAFE_REASON_SEGMENT = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
+def _looks_like_structured_identifier(segment: str) -> bool:
+    return bool(_VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(segment)) or bool(
+        re.fullmatch(r"[A-Za-z][A-Za-z0-9]+", segment)
+        and any(char.isupper() for char in segment)
+        and len(re.findall(r"[a-z]{2,}", segment)) >= 2
+    )
+
+
 def _looks_like_safe_path_segment(segment: str) -> bool:
+    if " " in segment:
+        words = segment.split()
+        return bool(words) and all(_looks_like_safe_path_segment(word) for word in words)
+    stem, dot, suffix = segment.rpartition(".")
+    if dot and suffix and re.fullmatch(r"[a-z0-9]{1,16}", suffix) and (
+        _looks_like_structured_identifier(stem)
+        or bool(re.fullmatch(r"[A-Z][A-Z0-9_]{1,31}", stem))
+    ):
+        return True
     if (
         re.fullmatch(r"\.?[a-z0-9][a-z0-9._-]*", segment)
         or re.fullmatch(r"[A-Z][a-z]{2,}", segment)
         or re.fullmatch(r"[A-Z]", segment)
         or _HEX_DIGEST_PATTERN.fullmatch(segment)
-        or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(segment)
+        or _looks_like_structured_identifier(segment)
         or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d+Z-[a-z0-9-]+(?:\.[a-z0-9]+)?", segment)
     ):
         return True
     parts = segment.split("-")
     return len(parts) > 1 and all(
         bool(re.fullmatch(r"[a-z0-9][a-z0-9._]*", part))
-        or bool(_VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(part))
+        or _looks_like_structured_identifier(part)
         for part in parts
     )
 
@@ -108,15 +128,38 @@ def _looks_like_safe_digest_query_token(token: str, content: str) -> bool:
     if "://" not in content or token.count("=") != 1:
         return False
     key, value = token.split("=", 1)
-    return bool(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,31}", key)) and bool(
-        _HEX_DIGEST_PATTERN.fullmatch(value)
+    return key.lower() in _SAFE_DIGEST_QUERY_KEYS and bool(_HEX_DIGEST_PATTERN.fullmatch(value))
+
+
+def _has_opaque_character_mix(token: str) -> bool:
+    has_lower = any(char.islower() for char in token)
+    has_upper = any(char.isupper() for char in token)
+    has_digit = any(char.isdigit() for char in token)
+    has_encoding_punctuation = any(char in "+=" for char in token)
+    return (has_lower and has_upper and (has_digit or ("_" in token and "-" in token))) or (
+        has_encoding_punctuation
+        and sum((has_lower, has_upper, has_digit, has_encoding_punctuation)) >= 3
     )
+
+
+def _windows_path_has_split_opaque_value(content: str) -> bool:
+    unsafe_run: list[str] = []
+    for segment in (
+        segment for segment in content.split("\\") if segment and not re.fullmatch(r"[A-Za-z]:", segment)
+    ):
+        if _looks_like_safe_path_segment(segment):
+            if _has_opaque_character_mix("".join(unsafe_run)):
+                return True
+            unsafe_run = []
+        else:
+            unsafe_run.append(segment)
+    return _has_opaque_character_mix("".join(unsafe_run))
 
 
 def _looks_like_opaque_token(content: str) -> bool:
     """Recognize encoded opaque values without consuming common identifiers."""
-    windows_path = _looks_like_safe_windows_path(content)
-    if _WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content) and not windows_path:
+    windows_path = bool(_WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content))
+    if windows_path and _windows_path_has_split_opaque_value(content):
         return True
     for match in _OPAQUE_TOKEN_PATTERN.finditer(content):
         token = match.group(0)
@@ -133,21 +176,10 @@ def _looks_like_opaque_token(content: str) -> bool:
             or _looks_like_safe_digest_query_token(token, content)
         ):
             continue
-        has_lower = any(char.islower() for char in token)
-        has_upper = any(char.isupper() for char in token)
-        has_digit = any(char.isdigit() for char in token)
-        has_encoding_punctuation = any(char in "+=" for char in token)
         # Mixed-case alphanumeric material is a conservative opaque-value
         # signal. Base64 punctuation can substitute for one alphanumeric
         # class, while ordinary lowercase path/package separators do not.
-        if (
-            has_lower
-            and has_upper
-            and (has_digit or ("_" in token and "-" in token))
-        ) or (
-            has_encoding_punctuation
-            and sum((has_lower, has_upper, has_digit, has_encoding_punctuation)) >= 3
-        ):
+        if _has_opaque_character_mix(token):
             return True
     return False
 
