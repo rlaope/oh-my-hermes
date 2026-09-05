@@ -2,29 +2,6 @@
   <img src="assets/oh-my-hermes-wordmark.png" alt="OH-MY-HERMES" width="100%" style="display:block;max-width:none;height:auto">
 </p>
 
-<table align="center">
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/hermes-desktop.gif" alt="Hermes Desktop running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes デスクトップ、oh-my-hermes とともに。</b><br>ワークフローを選ぶと、作る前に確認します。</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/hermes-cli.gif" alt="Hermes CLI running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes CLI、oh-my-hermes とともに。</b><br>使っているターミナルで同じワークフローを。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/hermes-messenger.gif" alt="Hermes messenger app running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes メッセンジャーアプリ、oh-my-hermes とともに。</b><br>スレッドで依頼すると同じスレッドに返ります。</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/omh-setup.gif" alt="omh setup installing the OMH workflows" width="380" height="266"><br>
-      <sub><b><code>omh setup</code>、コマンド一つで。</b><br>ワークフローをインストールし、Hermes に接続します。</sub>
-    </td>
-  </tr>
-</table>
-
 # oh-my-hermes
 
 <p align="center">
@@ -314,6 +291,29 @@ OMH ワークフローの実行中にターミナルが表示するもの:
   項目は常に一つ、各 phase ヘッダー下にインデントされた task、サブタスクの
   ネスト、7 行を超えると折りたたみ。
 
+<table align="center">
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/hermes-desktop.gif" alt="Hermes Desktop running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes デスクトップ、oh-my-hermes とともに。</b><br>ワークフローを選ぶと、作る前に確認します。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/hermes-cli.gif" alt="Hermes CLI running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes CLI、oh-my-hermes とともに。</b><br>使っているターミナルで同じワークフローを。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/hermes-messenger.gif" alt="Hermes messenger app running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes メッセンジャーアプリ、oh-my-hermes とともに。</b><br>スレッドで依頼すると同じスレッドに返ります。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/omh-setup.gif" alt="omh setup installing the OMH workflows" width="380" height="266"><br>
+      <sub><b><code>omh setup</code>、コマンド一つで。</b><br>ワークフローをインストールし、Hermes に接続します。</sub>
+    </td>
+  </tr>
+</table>
+
 <br>
 
 ## 推奨モデル
@@ -405,29 +405,30 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 
 ## OMH が追加するもの
 
-OMH は、モデル選択とコーディングの所有者を別の判断として扱い、準備を実行として
-報告しません。人が理解しやすい capability family は引き続き入口であり、精密な
-制御・runtime 境界・証拠ルールは wrapper や operator が必要なときに確認
-できます。完全な catalog、trigger、harness、証拠ルールは
-[Workflow Reference](docs/WORKFLOWS.md) にあります。
+Hermes Agent はすでにループを回しています。OMH はそのループに何を入れるかを
+決めます。どの lane にどのモデルと推論強度を与えるか、コード変更の owner は
+誰か、どのスキルを適用するか、何を完了とみなすかです。どこでも二つの
+ルールが守られます。モデル選択とコーディングの所有権は別々の決定であり、
+準備されたものを実行済みとして報告することは決してありません。生成
+カタログ、trigger、証拠ルールは [Workflow Reference](docs/WORKFLOWS.md)
+にあります。
 
 **ハイライト**
 
 | インテリジェンス | OMH が追加するもの |
 | --- | --- |
-| 🧭 **Mixture-of-models ルーティング** | 委譲される lane ごとにカテゴリ(モデル + 推論強度)を dispatch 単位で適用し、provider がモデルを拒否したら編集可能な fallback chain に沿って前進します — 仕事をしなかった子は正直に `failed` と表示されます。 |
-| 🖥️ **ネイティブ TUI サーフェス** | OMH HUD(カテゴリ・ターン・コスト・キャッシュ付きのライブ delegation 行)、プロンプト上の phase todo チェックリスト、`parallel shot ×N` 表示、full-row diff バンド、管理されたスキン — すべて Hermes の隣にインストールされ、Hermes 本体にはパッチしません。 |
-| 📋 **Phase 構造のプラン** | `todo init` がエンジン作業の前に phase と task を宣言し、実行を開かれた推論ループではなく有界のチェックリストにします。 |
-| ⚡ **観測可能な並列作業** | 独立した作業を所有権の分かれた fanout unit に分割し、進行状況と verification gate を観測します。 |
-| 🎼 **Maestro handoff** | 隠れた executor にならず、準備を実行として扱わずに、明示的な coding owner と runtime profile への handoff を準備します。 |
-| 🧠 **コンテキストインテリジェンス** | 隠れた記憶を捏造したり選択済み route を密かに変えたりせず、レビュー済み repository context をコンパクトに投影します。 |
-| 📚 **JIT learning** | 現在の blocker に最も価値のある学習対象を選び、学習済みと主張せずに、情報源に基づく即時適用可能なガイダンスを準備します。 |
-| 🔍 **証拠に基づく delivery** | coding・review・CI・merge 全体で、準備された意図、観測された runtime 活動、検証済み結果を分離します。 |
-| 🔎 **構造的コード検索** | 実測に基づく `ast-grep` プレイブック — 28 言語の構造クエリ、body-capture の禁止、grep フォールバック — を executor がコードを検索する場面に注入します。OMH はバイナリの存在だけを検知し、自分では実行しません。 |
-| 🗄️ **プロジェクトメモリシステム** | Hermes がロードできる決定的なファイルベース memory provider、レビュー型プロジェクトメモリコマンド(inspect・pack・domain capture)、consolidation スケジューリング brief、メモリレビュー用スキル — Hermes の不透明な内部メモリは読みも書きもしません。 |
-| 🛠️ **コーディングハーネス & ガードレール** | executor readiness probe、準備済み handoff に付く capability snapshot と owner-fit レポート、`execute_code` 結果への code-mode discipline、ルール違反の tool call をルール本文で遮断するユーザー作成 toolcall rules。 |
-| ♾️ **ウルトラワークフローエンジン** | 所有権を分離した並列デリバリーレーン、ledger と実際の完了 gate で回る計測ループ、エンジン実行前に意図を明確化する decision-frontier インタビュー — エンジンの一覧は下のウルトラスキル節にあります。 |
-| 📦 **決定的なスキルカタログ** | 120 個超のインストール可能な workflow スキル、バイト単位で検証される生成カタログ、否定ケースを含む routing precision コーパス、一文字のドリフトでも CI を失敗させる drift gate。 |
+| 🧭 **Mixture-of-models ルーティング** | 委譲される lane ごとに、dispatch 時点でカテゴリ（モデル + 推論強度）が付きます。provider がモデルを拒否すれば chain を下り、仕事をしなかった子は緑の行ではなく `failed` と表示されます。 |
+| 🎛️ **モデル系列ごとのキャリブレーション** | GPT-6 Astra、GPT-5.6、Claude 5.1、GLM 5.3、Kimi、Gemini、Qwen、DeepSeek など、系列と世代ごとにプロンプティングを調整し、ベンチマークのペアが効果を示す間だけ維持します。 |
+| 🗂️ **自分で所有するカテゴリ** | executor ごとに 9 つの標準カテゴリ、`omh model-chains set` による並べ替え、マシンごとに chain を並べ替える entitlement インタビュー、実行前にリクエストがどこへルーティングされるかを示すライブビュー。 |
+| 🖥️ **ネイティブ TUI サーフェス** | OMH HUD（カテゴリ・ターン・コスト・キャッシュ付きのライブ行）、プロンプト上の phase todo、`parallel shot ×N`、full-row diff バンド、管理されたスキン。Hermes の隣にインストールされ、Hermes にパッチは当てません。 |
+| ⚡ **観測できる並列作業** | 独立した作業を、ファイル所有権が重ならない fanout unit に分割し、provider 負荷に応じた admission control、型付きの結果 sidecar、返ってきた結果を読む verification gate を付けます。 |
+| 🎼 **Maestro handoff** | Codex、Claude Code、その他の CLI のための明示的な第二 lane。readiness probe、capability snapshot、owner-fit レポート、実行ごとのモデルと強度の指定。opt-in であり、既定の経路ではありません。 |
+| 💸 **価格付きコストテレメトリ** | すべての HUD 行と run summary にトークン数とドル金額を表示します。出典を明記した料金表で計算し、計算できない run は `$0` ではなく `unknown` と読めます。 |
+| 🧠 **長期プロジェクトメモリ** | Hermes が読み込むファイルベースの memory provider、admission と retention のポリシー、レビュアーが承認する書き込み、freshness と budget を持つ recall pack。Hermes 自身のメモリには触れません。 |
+| 🔎 **構造的コード検索** | 計測に基づく `ast-grep` プレイブック（28 言語、grep フォールバック）と、リポジトリ全体のアーキテクチャ図を描く `omh codegraph uml` を、executor がコードを読む地点に注入します。 |
+| 🛡️ **自分で書くガードレール** | ルールを外れた tool call を自分のルール文で遮断する toolcall rules、stub やスキップされたテストを証拠と認めない completion-integrity gate、危険な操作のための approval tier。 |
+| ♾️ **ウルトラワークフローエンジン** | 並列デリバリー lane、ledger と実際の完了 gate で回る計測ループ、エンジン実行前の decision-frontier インタビュー。一覧は上のウルトラスキルにあります。 |
+| 📦 **決定的なカタログ** | 一つのソースから生成される 100 以上のインストール可能なスキル、ネガティブケースを含む routing precision コーパス、1 バイトのずれで CI が失敗する drift gate。 |
 
 ## 主張より証拠
 

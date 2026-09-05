@@ -2,29 +2,6 @@
   <img src="assets/oh-my-hermes-wordmark.png" alt="OH-MY-HERMES" width="100%" style="display:block;max-width:none;height:auto">
 </p>
 
-<table align="center">
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/hermes-desktop.gif" alt="Hermes Desktop running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes 桌面端，搭配 oh-my-hermes。</b><br>选一个工作流，它会先确认再构建。</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/hermes-cli.gif" alt="Hermes CLI running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes CLI，搭配 oh-my-hermes。</b><br>在你已在用的终端里运行同样的工作流。</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/hermes-messenger.gif" alt="Hermes messenger app running an OMH workflow" width="380" height="266"><br>
-      <sub><b>Hermes 消息应用，搭配 oh-my-hermes。</b><br>在话题里提出请求，结果回到同一个话题。</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/omh-setup.gif" alt="omh setup installing the OMH workflows" width="380" height="266"><br>
-      <sub><b><code>omh setup</code>，一条命令。</b><br>安装工作流并连接到 Hermes。</sub>
-    </td>
-  </tr>
-</table>
-
 # oh-my-hermes
 
 <p align="center">
@@ -303,6 +280,29 @@ OMH 工作流运行时,终端会展示:
   (`todo init`),渲染为提示符上方的清单:单一活动项、每个 phase 标题下
   缩进的任务、子任务嵌套、超过七行后折叠。
 
+<table align="center">
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/hermes-desktop.gif" alt="Hermes Desktop running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes 桌面端，搭配 oh-my-hermes。</b><br>选一个工作流，它会先确认再构建。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/hermes-cli.gif" alt="Hermes CLI running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes CLI，搭配 oh-my-hermes。</b><br>在你已在用的终端里运行同样的工作流。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/hermes-messenger.gif" alt="Hermes messenger app running an OMH workflow" width="380" height="266"><br>
+      <sub><b>Hermes 消息应用，搭配 oh-my-hermes。</b><br>在话题里提出请求，结果回到同一个话题。</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/omh-setup.gif" alt="omh setup installing the OMH workflows" width="380" height="266"><br>
+      <sub><b><code>omh setup</code>，一条命令。</b><br>安装工作流并连接到 Hermes。</sub>
+    </td>
+  </tr>
+</table>
+
 <br>
 
 ## 推荐模型
@@ -394,28 +394,27 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 
 ## OMH 提供什么
 
-OMH 把模型选择和编码所有权作为两个独立决策，并且绝不把准备报告为执行。
-容易理解的能力族仍然是入口；精确控制、runtime 边界和证据规则会在 wrapper
-或 operator 需要时保持可查。完整 catalog、trigger、harness 和证据规则位于
-[Workflow Reference](docs/WORKFLOWS.md)。
+Hermes Agent 已经在跑循环。OMH 决定往循环里放什么：每条 lane 用哪个模型和
+推理强度、代码变更由谁负责、应用哪些技能、什么算完成。两条规则处处成立：
+模型选择与编码归属是两个独立决定，准备好的东西绝不当作已执行来报告。生成的
+目录、trigger 与证据规则见 [Workflow Reference](docs/WORKFLOWS.md)。
 
 **亮点**
 
-| 智能层 | OMH 提供什么 |
+| 智能 | OMH 提供什么 |
 | --- | --- |
-| 🧭 **Mixture-of-models 路由** | 每条委派 lane 按类别(模型 + 推理强度)在每次 dispatch 时应用,provider 拒绝某个模型时沿可编辑的 fallback chain 前进 — 没有做任何工作的子代理会诚实地标记为 `failed`。 |
-| 🖥️ **原生 TUI 表面** | OMH HUD(带类别、轮次、成本、缓存的实时 delegation 行)、提示符上方的 phase todo 清单、`parallel shot ×N` 标注、整行 diff 色带、受管理的皮肤 — 全部安装在 Hermes 旁边,绝不修改 Hermes 本体。 |
-| 📋 **Phase 结构化计划** | `todo init` 在引擎工作开始前声明 phase 和 task,让运行沿有界清单推进,而不是陷入开放式推理循环。 |
-| ⚡ **可观测的并行工作** | 把独立工作拆成所有权隔离的 fanout unit,并观测进度和 verification gate。 |
-| 🎼 **Maestro handoff** | 在不成为隐藏 executor、也不把准备当作执行的前提下,为明确的 coding owner 和 runtime profile 准备 handoff。 |
-| 🧠 **上下文智能** | 在不虚构隐藏记忆、也不暗中改变已选 route 的前提下,投影紧凑且经过审查的仓库上下文。 |
-| 📚 **JIT learning** | 为当前 blocker 选择最有价值的学习目标,并在不声称已经学会的前提下准备有来源、可立即应用的指导。 |
-| 🔍 **证据约束的交付** | 在 coding、review、CI 和 merge 全程分开已准备意图、已观测 runtime 活动与已验证结果。 |
-| 🔎 **结构化代码搜索** | 基于实测的 `ast-grep` 手册 — 覆盖 28 种语言的结构查询、禁止 body-capture、grep 回退 — 注入到 executor 搜索代码的场景。OMH 只检测二进制是否存在,从不亲自执行。 |
-| 🗄️ **项目记忆系统** | Hermes 可加载的确定性文件型 memory provider、可审查的项目记忆命令(inspect、pack、domain capture)、consolidation 调度 brief 以及记忆审查技能 — 从不读取或修改 Hermes 不透明的内部记忆。 |
-| 🛠️ **编码 harness 与护栏** | executor readiness 探测、附在已准备 handoff 上的 capability snapshot 与 owner-fit 报告、作用于 `execute_code` 结果的 code-mode discipline,以及用规则文本拦截越界 tool call 的用户自定义 toolcall rules。 |
-| ♾️ **Ultra 工作流引擎** | 所有权彼此隔离的并行交付 lane、带 ledger 和真实完成 gate 的计量循环,以及在任何引擎运行前先澄清意图的 decision-frontier 访谈 — 引擎列表见下方 Ultra 技能一节。 |
-| 📦 **确定性技能目录** | 120+ 可安装的 workflow 技能、逐字节校验的生成目录、包含负向用例的 routing precision 语料,以及一字符漂移即令 CI 失败的 drift gate。 |
+| 🧭 **Mixture-of-models 路由** | 每条委派 lane 在 dispatch 时落到一个类别（模型 + 推理强度）。provider 拒绝模型时沿 chain 下落，没做事的子任务显示 `failed`，而不是一行绿色。 |
+| 🎛️ **按模型家族校准** | 按家族和代次调校提示词：GPT-6 Astra、GPT-5.6、Claude 5.1、GLM 5.3、Kimi、Gemini、Qwen、DeepSeek 等，只在基准对照证明有效时才保留。 |
+| 🗂️ **你自己掌控的类别** | 每个 executor 九个内置类别，`omh model-chains set` 调整顺序，按机器重排 chain 的 entitlement 访谈，以及运行前就能看到请求会路由到哪里的实时视图。 |
+| 🖥️ **原生 TUI 界面** | OMH HUD（带类别、轮次、成本、缓存的实时行）、提示符上方的 phase todo、`parallel shot ×N`、整行 diff 色带与托管皮肤，安装在 Hermes 旁边，绝不打补丁。 |
+| ⚡ **可观测的并行工作** | 把独立工作拆成文件归属互不重叠的 fanout unit，带 provider 压力下的 admission control、有类型的结果 sidecar，以及读取返回结果的 verification gate。 |
+| 🎼 **Maestro 交接** | 为 Codex、Claude Code 或其他 CLI 准备的显式第二 lane：readiness 探测、capability 快照、owner-fit 报告、按次指定模型与强度。需要主动开启，从不是默认路径。 |
+| 💸 **带价格的成本遥测** | 每一行 HUD 和 run summary 都显示 token 数与美元金额，按注明来源的价目表计算；无法计价的 run 显示 `unknown`，而不是 `$0`。 |
+| 🧠 **长期项目记忆** | Hermes 可加载的文件型 memory provider、admission 与 retention 策略、审阅者把关的写入、带新鲜度与预算的 recall pack。Hermes 自身的记忆不被触碰。 |
+| 🔎 **结构化代码搜索** | 经测量的 `ast-grep` 手册（28 种语言，grep 回退）和绘制整个仓库架构图的 `omh codegraph uml`，注入到 executor 读代码的位置。 |
+| 🛡️ **你自己写的护栏** | 用你的规则文本拦截越界 tool call 的 toolcall rules、拒绝把 stub 和跳过的测试当证据的 completion-integrity gate，以及高风险操作的 approval tier。 |
+| ♾️ **Ultra 工作流引擎** | 并行交付 lane、带 ledger 与真实完成 gate 的度量循环、引擎运行前的 decision-frontier 访谈。列表见上方 Ultra 技能。 |
+| 📦 **确定性目录** | 由同一来源生成的一百多个可安装技能、含负例的 routing precision 语料，以及一个字节偏差就让 CI 失败的 drift gate。 |
 
 ## 证据先于声明
 
