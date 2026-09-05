@@ -89,6 +89,12 @@ jobs:
           path: results/result-linux-${{ matrix.python-version }}-${{ matrix.shard }}.json
       # Non-test gates run once per python-version (shard 0) instead of once
       # per shard; sharding them would duplicate cost without new signal.
+      # The live-model-tools framework tests live outside tests/ with their own
+      # sys.path shim, so unittest discovery never sees them; every one is
+      # offline (the paid-live guard is one of them). Issue #1314.
+      - name: Benchmark framework tests (offline)
+        if: matrix.shard == 0
+        run: python benchmarks/live-model-tools/v1/tests/test_framework.py
       - name: Static analysis (ruff)
         if: matrix.python-version == '3.11' && matrix.shard == 0
         run: uv run --group lint ruff check src tests tools packaging
@@ -189,6 +195,9 @@ jobs:
         with:
           name: shard-result-windows-3.12-${{ matrix.shard }}
           path: results/result-windows-3.12-${{ matrix.shard }}.json
+      - name: Benchmark framework tests (offline)
+        if: matrix.shard == 0
+        run: python benchmarks/live-model-tools/v1/tests/test_framework.py
       - name: Compile package
         if: matrix.shard == 0
         run: python -m compileall src
