@@ -3698,8 +3698,11 @@ class RouterContentTests(unittest.TestCase):
             # edited-category block, ~26 lines, owner-directed) landed in
             # every language, and from 340 when the Be with us table with the
             # Discord community invite (~29 lines, owner-directed) landed in
-            # every language; it still sits below README.md's length.
-            self.assertLess(len(localized_readme.splitlines()), 370)
+            # every language, and from 370 when the five-item "What you get"
+            # showcase (h2 + five h3 blocks with a card each, ~47 lines,
+            # owner-directed) landed in every language; it still sits below
+            # README.md's length.
+            self.assertLess(len(localized_readme.splitlines()), 430)
             # The trust surface is the evidence table, not the wire token that
             # used to stand in for it. Pinning the token meant a README could
             # satisfy this by naming a value no reader could decode; pinning
@@ -4281,6 +4284,7 @@ class RouterContentTests(unittest.TestCase):
         # so natural, non-mechanical per-language translation is allowed.
         readme_section_translations = (
             ("## Quick Start", {"ko": "## 빠른 시작", "ja": "## クイックスタート", "zh": "## 快速开始"}),
+            ("## What you get", {"ko": "## 얻는 것", "ja": "## 得られるもの", "zh": "## 你能得到什么"}),
             (
                 "## The OH-MY-HERMES terminal",
                 {

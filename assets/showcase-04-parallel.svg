@@ -1,133 +1,103 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="468" viewBox="0 0 1520 468" role="img" aria-label="ulw-work · parallel lanes, typed results">
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="720" viewBox="0 0 2200 720" role="img" aria-label="an ulw-work fan-out: the transcript, three lanes on a wall-clock timeline against the serial run, and one dock row per unit">
 <defs>
-  <radialGradient id="aura" cx="78%" cy="0%" r="75%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.55"/><stop offset="40%" stop-color="#38bdf8" stop-opacity="0.18"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
-  <radialGradient id="aura2" cx="10%" cy="100%" r="60%"><stop offset="0%" stop-color="#818cf8" stop-opacity="0.30"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/></radialGradient>
-  <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.9"/><stop offset="100%" stop-color="#312e81" stop-opacity="0.6"/></linearGradient>
-  <clipPath id="clip"><rect x="0" y="0" width="1520" height="468" rx="18"/></clipPath>
+  <radialGradient id="aura" cx="85%" cy="0%" r="70%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.16"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+  <radialGradient id="aura2" cx="0%" cy="100%" r="55%"><stop offset="0%" stop-color="#6366f1" stop-opacity="0.10"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+  <clipPath id="clip"><rect x="0" y="0" width="2200" height="720" rx="12"/></clipPath>
 </defs>
 <g clip-path="url(#clip)">
-  <rect width="1520" height="468" fill="#060a19"/>
-  <rect width="1520" height="468" fill="url(#aura)"/>
-  <rect width="1520" height="468" fill="url(#aura2)"/>
-  <circle cx="579.2" cy="108.0" r="0.8" fill="#e0f2fe" opacity="0.84"/>
-<circle cx="586.2" cy="419.5" r="1.0" fill="#e0f2fe" opacity="0.61"/>
-<circle cx="583.0" cy="342.4" r="1.7" fill="#e0f2fe" opacity="0.26"/>
-<circle cx="378.6" cy="467.0" r="0.6" fill="#e0f2fe" opacity="0.54"/>
-<circle cx="235.7" cy="70.1" r="1.0" fill="#e0f2fe" opacity="0.36"/>
-<circle cx="995.1" cy="290.5" r="0.6" fill="#e0f2fe" opacity="0.33"/>
-<circle cx="893.4" cy="202.5" r="1.0" fill="#e0f2fe" opacity="0.80"/>
-<circle cx="328.1" cy="339.9" r="1.3" fill="#e0f2fe" opacity="0.33"/>
-<circle cx="1018.3" cy="57.9" r="0.8" fill="#e0f2fe" opacity="0.70"/>
-<circle cx="1489.6" cy="25.1" r="1.0" fill="#e0f2fe" opacity="0.40"/>
-<circle cx="39.6" cy="270.4" r="1.3" fill="#e0f2fe" opacity="0.83"/>
-<circle cx="1286.7" cy="141.1" r="0.8" fill="#e0f2fe" opacity="0.32"/>
-<circle cx="142.1" cy="10.1" r="1.3" fill="#e0f2fe" opacity="0.81"/>
-<circle cx="350.2" cy="40.2" r="0.6" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="1106.9" cy="199.2" r="1.0" fill="#e0f2fe" opacity="0.60"/>
-<circle cx="1338.1" cy="306.6" r="1.0" fill="#e0f2fe" opacity="0.36"/>
-<circle cx="1226.9" cy="335.2" r="0.6" fill="#e0f2fe" opacity="0.89"/>
-<circle cx="1071.8" cy="418.8" r="1.3" fill="#e0f2fe" opacity="0.68"/>
-<circle cx="1139.4" cy="285.0" r="1.3" fill="#e0f2fe" opacity="0.64"/>
-<circle cx="151.2" cy="442.4" r="0.8" fill="#e0f2fe" opacity="0.53"/>
-<circle cx="1114.8" cy="318.2" r="1.3" fill="#e0f2fe" opacity="0.76"/>
-<circle cx="126.1" cy="312.9" r="1.7" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="1042.9" cy="129.6" r="1.0" fill="#e0f2fe" opacity="0.78"/>
-<circle cx="946.5" cy="368.6" r="1.0" fill="#e0f2fe" opacity="0.74"/>
-<circle cx="1112.7" cy="100.3" r="0.8" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="342.8" cy="219.4" r="0.8" fill="#e0f2fe" opacity="0.29"/>
-<circle cx="360.6" cy="265.4" r="0.8" fill="#e0f2fe" opacity="0.57"/>
-<circle cx="185.4" cy="179.8" r="0.6" fill="#e0f2fe" opacity="0.78"/>
-<circle cx="679.8" cy="346.3" r="0.8" fill="#e0f2fe" opacity="0.61"/>
-<circle cx="756.7" cy="454.3" r="1.0" fill="#e0f2fe" opacity="0.78"/>
-<circle cx="45.4" cy="275.9" r="0.8" fill="#e0f2fe" opacity="0.66"/>
-<circle cx="779.7" cy="304.1" r="0.8" fill="#e0f2fe" opacity="0.52"/>
-<circle cx="1478.5" cy="450.0" r="0.6" fill="#e0f2fe" opacity="0.58"/>
-<circle cx="904.8" cy="164.7" r="1.3" fill="#e0f2fe" opacity="0.85"/>
-<circle cx="1377.4" cy="144.0" r="0.8" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="577.2" cy="107.9" r="0.6" fill="#e0f2fe" opacity="0.81"/>
-<circle cx="424.8" cy="274.9" r="1.0" fill="#e0f2fe" opacity="0.51"/>
-<circle cx="747.1" cy="398.2" r="0.6" fill="#e0f2fe" opacity="0.58"/>
-<circle cx="903.1" cy="109.1" r="0.8" fill="#e0f2fe" opacity="0.84"/>
-<circle cx="443.0" cy="115.6" r="1.3" fill="#e0f2fe" opacity="0.86"/>
-<circle cx="1255.5" cy="25.4" r="1.7" fill="#e0f2fe" opacity="0.27"/>
-<circle cx="1155.0" cy="91.5" r="1.3" fill="#e0f2fe" opacity="0.46"/>
-<circle cx="557.3" cy="80.6" r="0.6" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="1326.7" cy="240.5" r="0.8" fill="#e0f2fe" opacity="0.27"/>
-<circle cx="897.0" cy="175.5" r="0.8" fill="#e0f2fe" opacity="0.79"/>
-<circle cx="411.8" cy="11.2" r="1.7" fill="#e0f2fe" opacity="0.72"/>
-<circle cx="586.4" cy="87.1" r="1.7" fill="#e0f2fe" opacity="0.46"/>
-<circle cx="775.6" cy="86.2" r="0.6" fill="#e0f2fe" opacity="0.62"/>
-<circle cx="1095.6" cy="88.8" r="0.8" fill="#e0f2fe" opacity="0.43"/>
-<circle cx="132.7" cy="308.3" r="1.3" fill="#e0f2fe" opacity="0.26"/>
-<circle cx="471.8" cy="142.5" r="0.6" fill="#e0f2fe" opacity="0.60"/>
-<circle cx="1356.4" cy="149.2" r="1.3" fill="#e0f2fe" opacity="0.74"/>
-<circle cx="565.8" cy="372.0" r="0.6" fill="#e0f2fe" opacity="0.30"/>
-<circle cx="591.5" cy="75.1" r="1.3" fill="#e0f2fe" opacity="0.36"/>
-<circle cx="241.9" cy="41.8" r="0.6" fill="#e0f2fe" opacity="0.46"/>
-<circle cx="1372.7" cy="146.5" r="0.6" fill="#e0f2fe" opacity="0.38"/>
-<circle cx="1371.8" cy="455.7" r="0.6" fill="#e0f2fe" opacity="0.83"/>
-<circle cx="1389.8" cy="451.1" r="1.0" fill="#e0f2fe" opacity="0.59"/>
-<circle cx="1420.2" cy="128.1" r="0.8" fill="#e0f2fe" opacity="0.74"/>
-<circle cx="1326.7" cy="361.0" r="1.3" fill="#e0f2fe" opacity="0.56"/>
-<circle cx="383.8" cy="321.0" r="1.7" fill="#e0f2fe" opacity="0.71"/>
-<circle cx="870.3" cy="75.5" r="0.8" fill="#e0f2fe" opacity="0.77"/>
-<circle cx="38.8" cy="129.1" r="0.6" fill="#e0f2fe" opacity="0.38"/>
-<circle cx="1010.7" cy="131.7" r="1.0" fill="#e0f2fe" opacity="0.85"/>
-<circle cx="444.2" cy="133.8" r="0.6" fill="#e0f2fe" opacity="0.80"/>
-<circle cx="1512.2" cy="142.9" r="1.3" fill="#e0f2fe" opacity="0.82"/>
-<circle cx="831.9" cy="336.4" r="1.0" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="355.2" cy="434.8" r="1.3" fill="#e0f2fe" opacity="0.64"/>
-<circle cx="1010.1" cy="196.5" r="0.8" fill="#e0f2fe" opacity="0.27"/>
-<circle cx="308.1" cy="138.6" r="1.0" fill="#e0f2fe" opacity="0.26"/>
-<circle cx="752.6" cy="323.0" r="1.7" fill="#e0f2fe" opacity="0.62"/>
-<circle cx="1463.7" cy="401.2" r="1.7" fill="#e0f2fe" opacity="0.28"/>
-<circle cx="1285.2" cy="56.0" r="1.3" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="125.2" cy="418.0" r="0.6" fill="#e0f2fe" opacity="0.78"/>
-<circle cx="1457.0" cy="454.9" r="0.6" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="1036.9" cy="128.4" r="1.3" fill="#e0f2fe" opacity="0.50"/>
-<circle cx="1361.1" cy="71.6" r="1.7" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="1407.7" cy="381.4" r="1.7" fill="#e0f2fe" opacity="0.51"/>
-<circle cx="538.8" cy="93.5" r="1.7" fill="#e0f2fe" opacity="0.85"/>
-<circle cx="1365.8" cy="243.3" r="1.7" fill="#e0f2fe" opacity="0.35"/>
-<circle cx="1053.1" cy="96.7" r="1.0" fill="#e0f2fe" opacity="0.77"/>
-<circle cx="737.7" cy="344.3" r="0.8" fill="#e0f2fe" opacity="0.59"/>
-<circle cx="243.5" cy="388.0" r="0.6" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="1364.6" cy="438.2" r="1.0" fill="#e0f2fe" opacity="0.77"/>
-<circle cx="1452.2" cy="81.7" r="1.0" fill="#e0f2fe" opacity="0.35"/>
-<circle cx="533.8" cy="3.4" r="1.3" fill="#e0f2fe" opacity="0.30"/>
-<circle cx="110.9" cy="329.7" r="0.6" fill="#e0f2fe" opacity="0.76"/>
-<circle cx="984.6" cy="42.5" r="1.0" fill="#e0f2fe" opacity="0.49"/>
-<circle cx="1443.2" cy="68.2" r="1.0" fill="#e0f2fe" opacity="0.30"/>
-<circle cx="244.9" cy="31.9" r="1.3" fill="#e0f2fe" opacity="0.41"/>
-<circle cx="323.1" cy="223.7" r="1.0" fill="#e0f2fe" opacity="0.30"/>
-<circle cx="774.4" cy="194.6" r="1.0" fill="#e0f2fe" opacity="0.54"/>
-<circle cx="1384.0" cy="366.3" r="1.7" fill="#e0f2fe" opacity="0.75"/>
-<circle cx="225.2" cy="44.7" r="1.3" fill="#e0f2fe" opacity="0.35"/>
-<circle cx="659.0" cy="214.2" r="0.8" fill="#e0f2fe" opacity="0.87"/>
-<circle cx="1241.4" cy="430.9" r="0.8" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="125.3" cy="253.0" r="1.0" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="364.5" cy="156.1" r="0.6" fill="#e0f2fe" opacity="0.58"/>
-<circle cx="1367.5" cy="246.8" r="1.7" fill="#e0f2fe" opacity="0.53"/>
-<circle cx="105.2" cy="327.4" r="1.3" fill="#e0f2fe" opacity="0.40"/>
-<circle cx="150.5" cy="200.7" r="1.3" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="836.7" cy="43.9" r="1.3" fill="#e0f2fe" opacity="0.64"/>
-<circle cx="295.9" cy="448.5" r="1.0" fill="#e0f2fe" opacity="0.88"/>
-<circle cx="605.8" cy="333.2" r="1.3" fill="#e0f2fe" opacity="0.44"/>
-<circle cx="603.0" cy="202.8" r="1.0" fill="#e0f2fe" opacity="0.38"/>
-<circle cx="524.7" cy="395.9" r="1.7" fill="#e0f2fe" opacity="0.66"/>
-<circle cx="51.6" cy="153.1" r="1.3" fill="#e0f2fe" opacity="0.71"/>
-<circle cx="1318.2" cy="23.2" r="1.7" fill="#e0f2fe" opacity="0.56"/>
-<circle cx="640.0" cy="439.1" r="1.7" fill="#e0f2fe" opacity="0.54"/>
-<circle cx="679.2" cy="360.2" r="0.8" fill="#e0f2fe" opacity="0.77"/>
-<path d="M767 60 L768.3 65.7 L774 67 L768.3 68.9 L767 74 L765.1 68.9 L760 67 L765.1 65.7 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M343 160 L344.3 165.5 L350 167 L344.3 168.7 L343 174 L341.1 168.7 L336 167 L341.1 165.5 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M159 177 L160.4 182.6 L166 184 L160.4 185.8 L159 191 L157.2 185.8 L152 184 L157.2 182.6 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M1221 290 L1222.9 295.0 L1228 297 L1222.9 298.2 L1221 304 L1219.7 298.2 L1214 297 L1219.7 295.0 Z" fill="#bae6fd" opacity="0.8"/>
-  <rect x="0" y="0" width="1520" height="56" fill="#0b1226" opacity="0.92"/>
-  <circle cx="30" cy="28" r="7" fill="#fb7185"/><circle cx="54" cy="28" r="7" fill="#fbbf24"/><circle cx="78" cy="28" r="7" fill="#4ade80"/>
-  <text x="760" y="34" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#64748b">ulw-work · parallel lanes, typed results</text>
-  <text x="48" y="88" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#7dd3fc" opacity="0.9">omh coding fanout dispatch --run-verification  ·  HUD: parallel shot ×3</text>
-  <text x="48" y="116" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#67e8f9">$ </tspan><tspan fill="#f8fafc">ulw work: split the migration into parallel lanes and verify each</tspan></text><text x="48" y="140" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">fanout_contract/v2  </tspan><tspan fill="#cbd5e1">3 units · base 29e56872 · merge order frozen</tspan></text><text x="48" y="188" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">  unit  </tspan><tspan fill="#64748b">owner        </tspan><tspan fill="#64748b">files                         </tspan><tspan fill="#64748b">state</tspan></text><text x="48" y="212" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">  u1    </tspan><tspan fill="#7dd3fc">hermes       </tspan><tspan fill="#cbd5e1">src/routing/chat.py           </tspan><tspan fill="#4ade80">integration_ready</tspan></text><text x="48" y="236" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">  u2    </tspan><tspan fill="#7dd3fc">codex        </tspan><tspan fill="#cbd5e1">src/coding/fanout.py          </tspan><tspan fill="#4ade80">unit_verification_observed</tspan></text><text x="48" y="260" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">  u3    </tspan><tspan fill="#7dd3fc">claude-code  </tspan><tspan fill="#cbd5e1">src/plugin_bundle/omh/hud.py  </tspan><tspan fill="#fbbf24">process_succeeded</tspan><tspan fill="#64748b"> → unchecked</tspan></text><text x="48" y="308" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">  worktrees  </tspan><tspan fill="#cbd5e1">.omh/worktrees/u1  u2  u3</tspan><tspan fill="#64748b">   one branch each, from one pinned SHA</tspan></text><text x="48" y="332" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">  tool calls </tspan><tspan fill="#cbd5e1">read_file ×3 · search_files ×2 · patch ×1 · terminal ×1</tspan><tspan fill="#64748b">  one turn</tspan></text><text x="48" y="356" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">  receipts   </tspan><tspan fill="#cbd5e1">verification_plan/v2 · 2 checks reused, 1 run · immutable</tspan></text><text x="48" y="404" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#fbbf24">Four states, never one "done". </tspan><tspan fill="#cbd5e1">Exit 0 with no evidence stays unchecked until a gate runs.</tspan></text>
+  <rect width="2200" height="720" fill="#0b111c"/>
+  <rect width="2200" height="720" fill="url(#aura)"/><rect width="2200" height="720" fill="url(#aura2)"/>
+  <circle cx="838.2" cy="166.1" r="0.7" fill="#9fd8e6" opacity="0.51"/>
+<circle cx="848.4" cy="645.4" r="0.9" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="843.8" cy="526.8" r="0.5" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="1455.5" cy="604.3" r="1.2" fill="#9fd8e6" opacity="0.53"/>
+<circle cx="2170.7" cy="705.6" r="0.9" fill="#9fd8e6" opacity="0.22"/>
+<circle cx="1440.2" cy="447.0" r="0.5" fill="#9fd8e6" opacity="0.20"/>
+<circle cx="1293.1" cy="311.5" r="0.9" fill="#9fd8e6" opacity="0.49"/>
+<circle cx="474.9" cy="522.9" r="1.2" fill="#9fd8e6" opacity="0.20"/>
+<circle cx="1473.9" cy="89.1" r="0.7" fill="#9fd8e6" opacity="0.43"/>
+<circle cx="2156.0" cy="38.5" r="0.9" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="57.4" cy="416.0" r="1.2" fill="#9fd8e6" opacity="0.51"/>
+<circle cx="1862.4" cy="217.0" r="0.7" fill="#9fd8e6" opacity="0.19"/>
+<circle cx="205.7" cy="15.5" r="1.2" fill="#9fd8e6" opacity="0.49"/>
+<circle cx="506.9" cy="61.8" r="0.5" fill="#9fd8e6" opacity="0.33"/>
+<circle cx="1602.1" cy="306.5" r="0.9" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="1936.8" cy="471.7" r="0.9" fill="#9fd8e6" opacity="0.22"/>
+<circle cx="1775.7" cy="515.7" r="0.5" fill="#9fd8e6" opacity="0.54"/>
+<circle cx="1551.4" cy="644.3" r="1.2" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="1649.2" cy="438.5" r="1.2" fill="#9fd8e6" opacity="0.39"/>
+<circle cx="218.9" cy="680.6" r="0.7" fill="#9fd8e6" opacity="0.32"/>
+<circle cx="1613.5" cy="489.6" r="1.2" fill="#9fd8e6" opacity="0.47"/>
+<circle cx="182.6" cy="481.3" r="0.7" fill="#9fd8e6" opacity="0.52"/>
+<circle cx="547.5" cy="271.6" r="0.9" fill="#9fd8e6" opacity="0.47"/>
+<circle cx="1369.9" cy="567.1" r="0.9" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="1610.4" cy="154.3" r="0.7" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="496.2" cy="337.5" r="0.7" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="521.9" cy="408.3" r="0.7" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="268.3" cy="276.6" r="0.5" fill="#9fd8e6" opacity="0.48"/>
+<circle cx="983.9" cy="532.7" r="0.7" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="1095.2" cy="698.9" r="0.9" fill="#9fd8e6" opacity="0.48"/>
+<circle cx="65.7" cy="424.5" r="0.7" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="1128.6" cy="467.8" r="0.7" fill="#9fd8e6" opacity="0.31"/>
+<circle cx="2139.9" cy="692.3" r="0.5" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="1309.5" cy="253.5" r="1.2" fill="#9fd8e6" opacity="0.52"/>
+<circle cx="1993.6" cy="221.6" r="0.7" fill="#9fd8e6" opacity="0.25"/>
+<circle cx="835.4" cy="166.0" r="0.5" fill="#9fd8e6" opacity="0.50"/>
+<circle cx="614.8" cy="422.9" r="0.9" fill="#9fd8e6" opacity="0.31"/>
+<circle cx="1081.3" cy="612.6" r="0.5" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="1307.1" cy="167.8" r="0.7" fill="#9fd8e6" opacity="0.51"/>
+<circle cx="641.1" cy="177.9" r="1.2" fill="#9fd8e6" opacity="0.53"/>
+<circle cx="1817.2" cy="39.1" r="0.5" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="1387.0" cy="297.0" r="1.2" fill="#9fd8e6" opacity="0.28"/>
+<circle cx="806.6" cy="124.0" r="0.5" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="1920.2" cy="369.9" r="0.7" fill="#9fd8e6" opacity="0.16"/>
+<circle cx="1298.3" cy="270.0" r="0.7" fill="#9fd8e6" opacity="0.48"/>
+<circle cx="596.0" cy="17.2" r="0.7" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="409.7" cy="379.4" r="0.7" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="1249.2" cy="519.0" r="0.7" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="608.5" cy="62.9" r="1.2" fill="#9fd8e6" opacity="0.16"/>
+<circle cx="682.9" cy="219.2" r="0.5" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="1963.2" cy="229.5" r="1.2" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="818.9" cy="572.3" r="0.5" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="856.1" cy="115.5" r="1.2" fill="#9fd8e6" opacity="0.22"/>
+<circle cx="350.1" cy="64.4" r="0.5" fill="#9fd8e6" opacity="0.28"/>
+<circle cx="1986.8" cy="225.4" r="0.5" fill="#9fd8e6" opacity="0.23"/>
+<circle cx="1985.5" cy="701.0" r="0.5" fill="#9fd8e6" opacity="0.51"/>
+<circle cx="2011.5" cy="693.9" r="0.9" fill="#9fd8e6" opacity="0.36"/>
+<circle cx="2055.6" cy="197.1" r="0.7" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="1920.2" cy="555.4" r="1.2" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="555.5" cy="493.9" r="0.9" fill="#9fd8e6" opacity="0.38"/>
+<circle cx="354.9" cy="675.3" r="0.5" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="1149.4" cy="139.2" r="0.9" fill="#9fd8e6" opacity="0.26"/>
+<circle cx="551.7" cy="614.5" r="0.9" fill="#9fd8e6" opacity="0.26"/>
+<circle cx="148.2" cy="190.3" r="0.9" fill="#9fd8e6" opacity="0.21"/>
+<circle cx="1927.9" cy="394.0" r="0.5" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="2093.0" cy="269.0" r="1.2" fill="#9fd8e6" opacity="0.39"/>
+<circle cx="1461.9" cy="302.3" r="0.7" fill="#9fd8e6" opacity="0.17"/>
+<circle cx="445.9" cy="213.3" r="0.9" fill="#9fd8e6" opacity="0.16"/>
+<circle cx="1089.3" cy="496.9" r="1.2" fill="#9fd8e6" opacity="0.49"/>
+<circle cx="1368.3" cy="706.9" r="0.5" fill="#9fd8e6" opacity="0.40"/>
+<circle cx="1006.1" cy="59.3" r="0.5" fill="#9fd8e6" opacity="0.48"/>
+<circle cx="2108.9" cy="699.8" r="0.5" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="1500.7" cy="197.5" r="1.2" fill="#9fd8e6" opacity="0.31"/>
+<circle cx="1970.0" cy="110.2" r="0.5" fill="#9fd8e6" opacity="0.52"/>
+<circle cx="1792.9" cy="563.8" r="1.2" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="1035.1" cy="266.8" r="0.5" fill="#9fd8e6" opacity="0.51"/>
+<circle cx="1143.5" cy="367.9" r="0.9" fill="#9fd8e6" opacity="0.23"/>
+<circle cx="2075.7" cy="457.8" r="0.9" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="1618.7" cy="176.2" r="0.7" fill="#9fd8e6" opacity="0.21"/>
+<circle cx="1824.1" cy="58.9" r="0.9" fill="#9fd8e6" opacity="0.52"/>
+<circle cx="717.3" cy="177.5" r="0.7" fill="#9fd8e6" opacity="0.20"/>
+<circle cx="555.4" cy="123.3" r="0.5" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="178.5" cy="52.5" r="0.5" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="1425.0" cy="65.3" r="0.9" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="2088.8" cy="105.0" r="0.9" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="354.5" cy="49.1" r="1.2" fill="#9fd8e6" opacity="0.25"/>
+<circle cx="467.7" cy="344.1" r="0.9" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="1120.8" cy="299.4" r="0.9" fill="#9fd8e6" opacity="0.33"/>
+<circle cx="2003.2" cy="563.5" r="0.9" fill="#9fd8e6" opacity="0.21"/>
+<circle cx="210.0" cy="321.8" r="0.9" fill="#9fd8e6" opacity="0.32"/>
+  <text x="28" y="40" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">↳ </tspan><tspan fill="#5b6b80">/ulw-work split the migration into parallel lanes and verify each</tspan></text><text x="28" y="70" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">│ </tspan><tspan fill="#5fd4e0">ulw-work</tspan><tspan fill="#c9d4e2">로 전환합니다. 파일 소유권이 겹치지 않는 3개 lane으로 계획을 확정한 뒤 dispatch합니다.</tspan></text><text x="28" y="100" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">└ ▾ Tool calls (</tspan><tspan fill="#5b6b80">4</tspan><tspan fill="#5b6b80">)</tspan></text><text x="44" y="121" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">├ ● </tspan><tspan fill="#c9d4e2">Skill View("ulw-work")</tspan><tspan fill="#5b6b80"> (0.1s)</tspan></text><text x="44" y="142" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">├ ● </tspan><tspan fill="#c9d4e2">Tool Describe("omh_delegate_route")</tspan><tspan fill="#5b6b80"> (0.0s)</tspan></text><text x="44" y="163" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">├ ● </tspan><tspan fill="#c9d4e2">Tool omh_fanout("prepare", units=3)</tspan><tspan fill="#5b6b80"> (0.2s)</tspan></text><text x="44" y="184" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">├ ● </tspan><tspan fill="#c9d4e2">Tool omh_fanout("dispatch", confirm=true)</tspan><tspan fill="#5b6b80"> (0.4s)</tspan></text><text x="28" y="218" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">fanout_contract/v2  </tspan><tspan fill="#c9d4e2">3 units · base 29e56872 · disjoint files · merge order frozen · one worktree each</tspan></text><text x="28" y="250" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">lane timeline (wall clock, minutes)</tspan></text><text x="44" y="276" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">u1  hermes       src/routing/chat.py</tspan></text><rect x="470" y="265" width="480.0" height="14" rx="2" fill="#1e3a5a" opacity="0.35"/><rect x="470.0" y="265" width="252.0" height="14" rx="2" fill="#5ad07a" opacity="0.9"/><text x="962.0" y="276" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5ad07a">integration_ready</tspan></text><text x="44" y="300" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">u2  codex        src/coding/fanout.py</tspan></text><rect x="470" y="289" width="480.0" height="14" rx="2" fill="#1e3a5a" opacity="0.35"/><rect x="470.0" y="289" width="300.0" height="14" rx="2" fill="#5ad07a" opacity="0.9"/><text x="962.0" y="300" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5ad07a">unit_verification_observed</tspan></text><text x="44" y="324" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">u3  claude-code  src/plugin_bundle/omh/hud.py</tspan></text><rect x="470" y="313" width="480.0" height="14" rx="2" fill="#1e3a5a" opacity="0.35"/><rect x="470.0" y="313" width="186.0" height="14" rx="2" fill="#e0b34a" opacity="0.9"/><text x="962.0" y="324" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#e0b34a">process_succeeded → unchecked</tspan></text><text x="44" y="348" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">serial, same three units</tspan></text><rect x="470" y="337" width="480.0" height="14" rx="2" fill="#1e3a5a" opacity="0.35"/><rect x="470" y="337" width="480.0" height="14" rx="2" fill="#e06c6c" opacity="0.55"/><text x="962.0" y="348" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">12.3 min → 5.0 min in parallel</tspan></text><text x="466.0" y="374" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">0</tspan></text><text x="586.0" y="374" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">2</tspan></text><text x="706.0" y="374" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">4</tspan></text><text x="826.0" y="374" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">6</tspan></text><text x="946.0" y="374" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="12" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">8</tspan></text><text x="28" y="412" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">tool calls in one turn  </tspan><tspan fill="#c9d4e2">read_file ×3 · search_files ×2 · patch ×1 · terminal ×1</tspan><tspan fill="#5b6b80">      receipts  </tspan><tspan fill="#c9d4e2">verification_plan/v2 · 2 reused, 1 run</tspan></text><text x="28" y="452" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">— ready</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5b6b80">gpt 5.6 sol</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5b6b80">205.9k/272k</tspan><tspan fill="#3d4a5c">  │  [</tspan><tspan fill="#2fb8c6">████████</tspan><tspan fill="#3d4a5c">░░</tspan><tspan fill="#5b6b80">] 76%</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5b6b80">19h 14m</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5ad07a">✓ 1m 50s</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#e06c6c">cmp 10</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5fd4e0">1 session</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5b6b80">↩ resumes when 3 subagents finish</tspan></text><text x="28" y="478" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">[Plan] </tspan><tspan fill="#5b6b80">migrate the session store</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#e0b34a">2/4</tspan><tspan fill="#5b6b80">  ·  6 phases ...</tspan></text><text x="28" y="500" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">Research       </tspan><tspan fill="#5b6b80">[x]</tspan><tspan fill="#c9d4e2"> Freeze file ownership and acceptance criteria</tspan></text><text x="28" y="522" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">Implementation </tspan><tspan fill="#5ad07a">[•]</tspan><tspan fill="#5ad07a"> Dispatch three disjoint lanes and verify each</tspan></text><text x="28" y="544" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">Review         </tspan><tspan fill="#5b6b80">[ ]</tspan><tspan fill="#c9d4e2"> Independent review before integration</tspan></text><text x="28" y="566" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">Delivery       </tspan><tspan fill="#5b6b80">[ ]</tspan><tspan fill="#c9d4e2"> Integrate in frozen merge order</tspan></text><text x="28" y="590" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">› </tspan><tspan fill="#eef3f8"></tspan><tspan fill="#eef3f8">▌</tspan></text><line x1="0" y1="616" x2="2200" y2="616" stroke="#3d4a5c" stroke-opacity="0.5" stroke-width="1"/><text x="28" y="638" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">⊤ </tspan><tspan fill="#5fd4e0">[OMH]</tspan><tspan fill="#5b6b80"> v2.0.1 </tspan><tspan fill="#3d4a5c">│ </tspan><tspan fill="#e0b34a">3 agents · 3 running · parallel shot ×3 · $0.019 · ctx 205.9k/272k</tspan></text><text x="28" y="662" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">u1a3f0  </tspan><tspan fill="#c9d4e2">Move route parsing to the new schema</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:inherit(gpt-5.6-sol:xhigh)</tspan><tspan fill="#5b6b80">  ·  turn 7  ·  $0.0000  ·  cache 68.6%  ·  </tspan><tspan fill="#5ad07a">running</tspan><tspan fill="#5b6b80">  ·  2m</tspan></text><text x="28" y="686" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">u2b7c9  </tspan><tspan fill="#c9d4e2">Port the fanout contract writer</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:deep(gpt-5-codex:high)</tspan><tspan fill="#5b6b80">  ·  turn 6  ·  $0.0000  ·  cache 67.3%  ·  </tspan><tspan fill="#5ad07a">running</tspan><tspan fill="#5b6b80">  ·  2m</tspan></text><text x="28" y="710" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">u3c1d2  </tspan><tspan fill="#c9d4e2">Update the HUD row projection</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:visual-engineering(claude-fable-5-1:high)</tspan><tspan fill="#5b6b80">  ·  turn 3  ·  $0.0187  ·  cache 52.0%  ·  </tspan><tspan fill="#5ad07a">running</tspan><tspan fill="#5b6b80">  ·  1m</tspan></text>
 </g>
-<rect x="0.75" y="0.75" width="1518.5" height="466.5" rx="18" fill="none" stroke="url(#edge)" stroke-width="1.5"/>
+<rect x="0.75" y="0.75" width="2198.5" height="718.5" rx="12" fill="none" stroke="#2fb8c6" stroke-opacity="0.55" stroke-width="1.5"/>
 </svg>

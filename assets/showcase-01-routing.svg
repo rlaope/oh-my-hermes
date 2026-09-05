@@ -1,133 +1,103 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="516" viewBox="0 0 1520 516" role="img" aria-label="omh coding complexity · decided before anything runs">
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="700" viewBox="0 0 2200 700" role="img" aria-label="hermes chat: OMH scores two requests, routes each to its lane, and the measured Astra comparison as bars">
 <defs>
-  <radialGradient id="aura" cx="78%" cy="0%" r="75%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.55"/><stop offset="40%" stop-color="#38bdf8" stop-opacity="0.18"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
-  <radialGradient id="aura2" cx="10%" cy="100%" r="60%"><stop offset="0%" stop-color="#818cf8" stop-opacity="0.30"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/></radialGradient>
-  <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.9"/><stop offset="100%" stop-color="#312e81" stop-opacity="0.6"/></linearGradient>
-  <clipPath id="clip"><rect x="0" y="0" width="1520" height="516" rx="18"/></clipPath>
+  <radialGradient id="aura" cx="85%" cy="0%" r="70%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.16"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+  <radialGradient id="aura2" cx="0%" cy="100%" r="55%"><stop offset="0%" stop-color="#6366f1" stop-opacity="0.10"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+  <clipPath id="clip"><rect x="0" y="0" width="2200" height="700" rx="12"/></clipPath>
 </defs>
 <g clip-path="url(#clip)">
-  <rect width="1520" height="516" fill="#060a19"/>
-  <rect width="1520" height="516" fill="url(#aura)"/>
-  <rect width="1520" height="516" fill="url(#aura2)"/>
-  <circle cx="687.6" cy="288.8" r="1.3" fill="#e0f2fe" opacity="0.54"/>
-<circle cx="1299.7" cy="98.0" r="1.7" fill="#e0f2fe" opacity="0.56"/>
-<circle cx="933.2" cy="96.1" r="1.3" fill="#e0f2fe" opacity="0.45"/>
-<circle cx="137.8" cy="417.8" r="0.6" fill="#e0f2fe" opacity="0.64"/>
-<circle cx="602.2" cy="233.7" r="1.7" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="947.2" cy="429.2" r="0.6" fill="#e0f2fe" opacity="0.29"/>
-<circle cx="289.1" cy="124.8" r="0.6" fill="#e0f2fe" opacity="0.76"/>
-<circle cx="496.0" cy="304.9" r="0.8" fill="#e0f2fe" opacity="0.59"/>
-<circle cx="973.2" cy="257.9" r="0.6" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="422.8" cy="514.8" r="0.6" fill="#e0f2fe" opacity="0.71"/>
-<circle cx="479.2" cy="118.5" r="1.0" fill="#e0f2fe" opacity="0.27"/>
-<circle cx="856.0" cy="55.7" r="0.6" fill="#e0f2fe" opacity="0.80"/>
-<circle cx="587.5" cy="494.3" r="0.6" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="1409.1" cy="27.0" r="1.3" fill="#e0f2fe" opacity="0.89"/>
-<circle cx="604.1" cy="37.7" r="0.8" fill="#e0f2fe" opacity="0.76"/>
-<circle cx="410.1" cy="45.0" r="1.0" fill="#e0f2fe" opacity="0.26"/>
-<circle cx="623.3" cy="476.2" r="0.8" fill="#e0f2fe" opacity="0.41"/>
-<circle cx="153.6" cy="30.9" r="1.3" fill="#e0f2fe" opacity="0.37"/>
-<circle cx="850.1" cy="230.9" r="0.8" fill="#e0f2fe" opacity="0.89"/>
-<circle cx="1169.7" cy="216.3" r="1.3" fill="#e0f2fe" opacity="0.33"/>
-<circle cx="639.5" cy="109.8" r="1.0" fill="#e0f2fe" opacity="0.81"/>
-<circle cx="1481.8" cy="305.9" r="0.6" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="599.3" cy="440.9" r="1.7" fill="#e0f2fe" opacity="0.32"/>
-<circle cx="1503.7" cy="110.0" r="1.0" fill="#e0f2fe" opacity="0.26"/>
-<circle cx="927.7" cy="428.4" r="1.3" fill="#e0f2fe" opacity="0.30"/>
-<circle cx="137.0" cy="300.7" r="0.8" fill="#e0f2fe" opacity="0.26"/>
-<circle cx="560.4" cy="321.0" r="0.8" fill="#e0f2fe" opacity="0.87"/>
-<circle cx="735.3" cy="296.5" r="1.3" fill="#e0f2fe" opacity="0.37"/>
-<circle cx="234.3" cy="468.7" r="1.7" fill="#e0f2fe" opacity="0.41"/>
-<circle cx="288.5" cy="381.5" r="1.7" fill="#e0f2fe" opacity="0.38"/>
-<circle cx="1444.2" cy="455.2" r="1.7" fill="#e0f2fe" opacity="0.30"/>
-<circle cx="72.1" cy="56.3" r="1.7" fill="#e0f2fe" opacity="0.88"/>
-<circle cx="362.4" cy="363.6" r="1.0" fill="#e0f2fe" opacity="0.52"/>
-<circle cx="1375.3" cy="253.4" r="1.7" fill="#e0f2fe" opacity="0.36"/>
-<circle cx="1094.9" cy="35.5" r="0.8" fill="#e0f2fe" opacity="0.56"/>
-<circle cx="993.3" cy="317.8" r="0.6" fill="#e0f2fe" opacity="0.43"/>
-<circle cx="1394.4" cy="105.3" r="0.6" fill="#e0f2fe" opacity="0.29"/>
-<circle cx="625.4" cy="128.5" r="0.6" fill="#e0f2fe" opacity="0.36"/>
-<circle cx="560.6" cy="295.2" r="0.8" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="210.4" cy="232.4" r="1.0" fill="#e0f2fe" opacity="0.68"/>
-<circle cx="1050.7" cy="301.6" r="0.8" fill="#e0f2fe" opacity="0.63"/>
-<circle cx="1403.9" cy="245.0" r="1.0" fill="#e0f2fe" opacity="0.71"/>
-<circle cx="1463.4" cy="11.0" r="0.6" fill="#e0f2fe" opacity="0.56"/>
-<circle cx="1110.4" cy="164.6" r="0.6" fill="#e0f2fe" opacity="0.30"/>
-<circle cx="830.1" cy="380.3" r="0.8" fill="#e0f2fe" opacity="0.77"/>
-<circle cx="1390.8" cy="181.5" r="1.3" fill="#e0f2fe" opacity="0.84"/>
-<circle cx="1324.1" cy="215.3" r="0.6" fill="#e0f2fe" opacity="0.81"/>
-<circle cx="870.7" cy="322.5" r="1.3" fill="#e0f2fe" opacity="0.50"/>
-<circle cx="18.9" cy="37.3" r="0.6" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="1509.8" cy="454.0" r="1.0" fill="#e0f2fe" opacity="0.50"/>
-<circle cx="1117.3" cy="299.8" r="1.3" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="822.7" cy="267.6" r="1.7" fill="#e0f2fe" opacity="0.27"/>
-<circle cx="914.0" cy="248.2" r="0.8" fill="#e0f2fe" opacity="0.87"/>
-<circle cx="171.6" cy="402.5" r="1.3" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="17.2" cy="155.3" r="1.7" fill="#e0f2fe" opacity="0.38"/>
-<circle cx="257.8" cy="467.4" r="1.3" fill="#e0f2fe" opacity="0.57"/>
-<circle cx="367.1" cy="208.9" r="1.0" fill="#e0f2fe" opacity="0.38"/>
-<circle cx="655.0" cy="415.9" r="0.8" fill="#e0f2fe" opacity="0.82"/>
-<circle cx="584.3" cy="300.9" r="1.0" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="204.5" cy="181.0" r="0.6" fill="#e0f2fe" opacity="0.71"/>
-<circle cx="1444.0" cy="142.8" r="0.8" fill="#e0f2fe" opacity="0.32"/>
-<circle cx="716.5" cy="477.7" r="1.3" fill="#e0f2fe" opacity="0.50"/>
-<circle cx="790.4" cy="346.8" r="1.7" fill="#e0f2fe" opacity="0.54"/>
-<circle cx="113.5" cy="16.2" r="1.7" fill="#e0f2fe" opacity="0.28"/>
-<circle cx="1077.1" cy="294.4" r="1.0" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="857.3" cy="330.7" r="1.3" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="37.6" cy="428.1" r="0.8" fill="#e0f2fe" opacity="0.76"/>
-<circle cx="1211.2" cy="507.8" r="0.6" fill="#e0f2fe" opacity="0.54"/>
-<circle cx="957.5" cy="338.0" r="1.0" fill="#e0f2fe" opacity="0.87"/>
-<circle cx="1040.4" cy="102.9" r="1.3" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="1085.6" cy="389.6" r="1.7" fill="#e0f2fe" opacity="0.71"/>
-<circle cx="272.2" cy="140.5" r="1.0" fill="#e0f2fe" opacity="0.60"/>
-<circle cx="1439.2" cy="258.2" r="0.8" fill="#e0f2fe" opacity="0.51"/>
-<circle cx="1203.7" cy="467.6" r="0.6" fill="#e0f2fe" opacity="0.52"/>
-<circle cx="1356.8" cy="200.2" r="1.3" fill="#e0f2fe" opacity="0.54"/>
-<circle cx="950.8" cy="469.5" r="1.3" fill="#e0f2fe" opacity="0.61"/>
-<circle cx="992.1" cy="259.4" r="1.0" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="990.0" cy="105.7" r="0.6" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="1368.0" cy="505.9" r="1.0" fill="#e0f2fe" opacity="0.60"/>
-<circle cx="1202.0" cy="165.3" r="0.6" fill="#e0f2fe" opacity="0.48"/>
-<circle cx="125.8" cy="227.5" r="1.7" fill="#e0f2fe" opacity="0.52"/>
-<circle cx="418.4" cy="474.6" r="0.8" fill="#e0f2fe" opacity="0.78"/>
-<circle cx="97.4" cy="412.7" r="0.8" fill="#e0f2fe" opacity="0.60"/>
-<circle cx="1043.6" cy="472.7" r="1.3" fill="#e0f2fe" opacity="0.35"/>
-<circle cx="785.1" cy="373.4" r="1.3" fill="#e0f2fe" opacity="0.86"/>
-<circle cx="748.7" cy="489.8" r="0.6" fill="#e0f2fe" opacity="0.74"/>
-<circle cx="667.9" cy="288.3" r="1.7" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="794.6" cy="435.3" r="1.7" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="1020.4" cy="492.7" r="1.7" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="1293.2" cy="499.7" r="1.7" fill="#e0f2fe" opacity="0.43"/>
-<circle cx="756.4" cy="212.1" r="0.6" fill="#e0f2fe" opacity="0.58"/>
-<circle cx="919.9" cy="14.3" r="0.6" fill="#e0f2fe" opacity="0.59"/>
-<circle cx="608.9" cy="413.4" r="1.7" fill="#e0f2fe" opacity="0.33"/>
-<circle cx="141.7" cy="86.1" r="1.7" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="1399.6" cy="413.0" r="1.3" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="719.2" cy="65.5" r="1.3" fill="#e0f2fe" opacity="0.84"/>
-<circle cx="1422.2" cy="474.7" r="1.7" fill="#e0f2fe" opacity="0.46"/>
-<circle cx="291.0" cy="318.8" r="1.0" fill="#e0f2fe" opacity="0.33"/>
-<circle cx="1184.5" cy="11.8" r="0.8" fill="#e0f2fe" opacity="0.35"/>
-<circle cx="18.0" cy="146.6" r="1.0" fill="#e0f2fe" opacity="0.41"/>
-<circle cx="758.2" cy="257.8" r="1.7" fill="#e0f2fe" opacity="0.33"/>
-<circle cx="775.9" cy="129.3" r="0.8" fill="#e0f2fe" opacity="0.71"/>
-<circle cx="1335.7" cy="12.0" r="1.3" fill="#e0f2fe" opacity="0.79"/>
-<circle cx="936.0" cy="277.7" r="1.7" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="805.0" cy="439.2" r="1.7" fill="#e0f2fe" opacity="0.63"/>
-<circle cx="207.4" cy="472.0" r="1.0" fill="#e0f2fe" opacity="0.84"/>
-<circle cx="480.1" cy="162.5" r="0.8" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="1517.5" cy="458.0" r="0.8" fill="#e0f2fe" opacity="0.83"/>
-<circle cx="201.5" cy="45.5" r="1.3" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="1264.9" cy="217.6" r="0.8" fill="#e0f2fe" opacity="0.38"/>
-<path d="M934 369 L935.7 374.7 L941 376 L935.7 377.9 L934 383 L932.5 377.9 L927 376 L932.5 374.7 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M211 279 L212.2 284.1 L218 286 L212.2 287.3 L211 293 L209.0 287.3 L204 286 L209.0 284.1 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M566 378 L567.9 383.5 L573 385 L567.9 386.7 L566 392 L564.7 386.7 L559 385 L564.7 383.5 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M571 332 L573.0 337.5 L578 339 L573.0 340.7 L571 346 L569.8 340.7 L564 339 L569.8 337.5 Z" fill="#bae6fd" opacity="0.8"/>
-  <rect x="0" y="0" width="1520" height="56" fill="#0b1226" opacity="0.92"/>
-  <circle cx="30" cy="28" r="7" fill="#fb7185"/><circle cx="54" cy="28" r="7" fill="#fbbf24"/><circle cx="78" cy="28" r="7" fill="#4ade80"/>
-  <text x="760" y="34" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#64748b">omh coding complexity · decided before anything runs</text>
-  <text x="48" y="88" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#7dd3fc" opacity="0.9">~/work/app  ·  hermes + oh-my-hermes</text>
-  <text x="48" y="116" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#67e8f9">$ </tspan><tspan fill="#f8fafc">omh coding complexity "Find every reference to RouteDecision, return exact locations"</tspan></text><text x="48" y="140" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">Complexity: </tspan><tspan fill="#fbbf24">standard</tspan><tspan fill="#64748b"> (score 4)</tspan></text><text x="48" y="164" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  +4  exhaustive_search: </tspan><tspan fill="#cbd5e1">every reference, find every</tspan></text><text x="48" y="188" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">Recommended model class: </tspan><tspan fill="#fbbf24">unspecified-high</tspan><tspan fill="#64748b"> at effort medium</tspan></text><text x="48" y="236" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#67e8f9">$ </tspan><tspan fill="#f8fafc">omh coding complexity "Rename DEFAULT_RETRY_LIMIT to MAX_RETRY_ATTEMPTS in prod and tests"</tspan></text><text x="48" y="260" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">Complexity: </tspan><tspan fill="#4ade80">light</tspan><tspan fill="#64748b"> (score -2)</tspan></text><text x="48" y="284" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  -2  simple_request: </tspan><tspan fill="#cbd5e1">rename</tspan></text><text x="48" y="308" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">Recommended model class: </tspan><tspan fill="#4ade80">quick</tspan><tspan fill="#64748b"> at effort low  → </tspan><tspan fill="#cbd5e1">glm-5.2-ultrafast</tspan></text><text x="48" y="356" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">Same 30 tasks · same GPT-6 Astra · 2026-09-05</tspan></text><text x="48" y="380" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">                     solved     cost     wall clock</tspan></text><text x="48" y="404" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">  Astra, plain       18 / 30   $4.29     23.3 min</tspan></text><text x="48" y="428" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">  Astra + OMH        18 / 30   </tspan><tspan fill="#4ade80">$0.66</tspan><tspan fill="#cbd5e1">      </tspan><tspan fill="#4ade80">5.0 min</tspan></text><text x="48" y="452" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">  </tspan><tspan fill="#fbbf24">6.5× cheaper · 4.7× faster · identical answers</tspan></text>
+  <rect width="2200" height="700" fill="#0b111c"/>
+  <rect width="2200" height="700" fill="url(#aura)"/><rect width="2200" height="700" fill="url(#aura2)"/>
+  <circle cx="995.2" cy="391.8" r="1.2" fill="#9fd8e6" opacity="0.33"/>
+<circle cx="1881.1" cy="132.9" r="1.2" fill="#9fd8e6" opacity="0.40"/>
+<circle cx="1744.5" cy="65.9" r="0.9" fill="#9fd8e6" opacity="0.21"/>
+<circle cx="1185.1" cy="623.3" r="0.5" fill="#9fd8e6" opacity="0.39"/>
+<circle cx="871.6" cy="317.1" r="0.7" fill="#9fd8e6" opacity="0.40"/>
+<circle cx="1829.7" cy="44.2" r="0.5" fill="#9fd8e6" opacity="0.23"/>
+<circle cx="532.3" cy="21.1" r="1.2" fill="#9fd8e6" opacity="0.28"/>
+<circle cx="1300.1" cy="136.7" r="0.7" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="1099.5" cy="463.7" r="1.2" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="894.9" cy="385.9" r="0.5" fill="#9fd8e6" opacity="0.43"/>
+<circle cx="693.6" cy="160.8" r="0.9" fill="#9fd8e6" opacity="0.16"/>
+<circle cx="1238.9" cy="75.5" r="0.5" fill="#9fd8e6" opacity="0.49"/>
+<circle cx="850.3" cy="670.6" r="0.5" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="2039.5" cy="36.6" r="1.2" fill="#9fd8e6" opacity="0.54"/>
+<circle cx="874.3" cy="51.1" r="0.7" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="593.5" cy="61.0" r="0.9" fill="#9fd8e6" opacity="0.16"/>
+<circle cx="902.1" cy="646.0" r="0.7" fill="#9fd8e6" opacity="0.25"/>
+<circle cx="222.3" cy="41.9" r="1.2" fill="#9fd8e6" opacity="0.22"/>
+<circle cx="1230.4" cy="313.2" r="0.7" fill="#9fd8e6" opacity="0.54"/>
+<circle cx="1692.9" cy="293.5" r="1.2" fill="#9fd8e6" opacity="0.20"/>
+<circle cx="925.7" cy="149.0" r="0.9" fill="#9fd8e6" opacity="0.50"/>
+<circle cx="2144.7" cy="414.9" r="0.5" fill="#9fd8e6" opacity="0.23"/>
+<circle cx="867.4" cy="598.1" r="0.5" fill="#9fd8e6" opacity="0.17"/>
+<circle cx="322.0" cy="309.1" r="0.5" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="723.7" cy="207.4" r="0.5" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="459.2" cy="445.6" r="0.5" fill="#9fd8e6" opacity="0.39"/>
+<circle cx="817.7" cy="317.2" r="1.2" fill="#9fd8e6" opacity="0.48"/>
+<circle cx="298.6" cy="270.3" r="0.7" fill="#9fd8e6" opacity="0.27"/>
+<circle cx="502.4" cy="427.3" r="0.7" fill="#9fd8e6" opacity="0.21"/>
+<circle cx="1383.8" cy="387.8" r="1.2" fill="#9fd8e6" opacity="0.50"/>
+<circle cx="1327.8" cy="295.0" r="0.5" fill="#9fd8e6" opacity="0.19"/>
+<circle cx="1127.2" cy="178.6" r="1.2" fill="#9fd8e6" opacity="0.25"/>
+<circle cx="1812.2" cy="417.5" r="0.9" fill="#9fd8e6" opacity="0.36"/>
+<circle cx="2044.3" cy="684.0" r="0.7" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="1230.6" cy="596.7" r="0.5" fill="#9fd8e6" opacity="0.26"/>
+<circle cx="2018.2" cy="142.8" r="0.5" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="905.1" cy="174.3" r="0.5" fill="#9fd8e6" opacity="0.22"/>
+<circle cx="811.3" cy="400.5" r="0.7" fill="#9fd8e6" opacity="0.19"/>
+<circle cx="304.5" cy="315.2" r="0.9" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="1520.7" cy="409.1" r="0.7" fill="#9fd8e6" opacity="0.39"/>
+<circle cx="2031.9" cy="332.4" r="0.9" fill="#9fd8e6" opacity="0.43"/>
+<circle cx="2118.1" cy="14.9" r="0.5" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="1607.1" cy="223.2" r="0.5" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="1201.4" cy="515.9" r="0.7" fill="#9fd8e6" opacity="0.47"/>
+<circle cx="2013.0" cy="246.3" r="1.2" fill="#9fd8e6" opacity="0.51"/>
+<circle cx="1916.4" cy="292.0" r="0.5" fill="#9fd8e6" opacity="0.50"/>
+<circle cx="1260.2" cy="437.5" r="1.2" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="27.4" cy="50.6" r="0.5" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="2185.3" cy="615.9" r="0.9" fill="#9fd8e6" opacity="0.31"/>
+<circle cx="1617.1" cy="406.7" r="1.2" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="1190.8" cy="363.1" r="0.5" fill="#9fd8e6" opacity="0.27"/>
+<circle cx="193.0" cy="15.6" r="0.5" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="1351.9" cy="644.3" r="0.9" fill="#9fd8e6" opacity="0.51"/>
+<circle cx="809.5" cy="100.3" r="0.7" fill="#9fd8e6" opacity="0.36"/>
+<circle cx="1658.3" cy="239.8" r="1.2" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="531.3" cy="283.3" r="0.9" fill="#9fd8e6" opacity="0.23"/>
+<circle cx="948.0" cy="564.2" r="0.7" fill="#9fd8e6" opacity="0.50"/>
+<circle cx="845.7" cy="408.2" r="0.9" fill="#9fd8e6" opacity="0.23"/>
+<circle cx="296.0" cy="245.5" r="0.5" fill="#9fd8e6" opacity="0.43"/>
+<circle cx="2090.0" cy="193.8" r="0.7" fill="#9fd8e6" opacity="0.20"/>
+<circle cx="1037.0" cy="648.0" r="1.2" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="1143.9" cy="470.5" r="1.2" fill="#9fd8e6" opacity="0.28"/>
+<circle cx="1823.2" cy="194.7" r="0.5" fill="#9fd8e6" opacity="0.42"/>
+<circle cx="618.4" cy="248.0" r="0.5" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="891.4" cy="132.9" r="0.9" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="309.9" cy="32.9" r="0.5" fill="#9fd8e6" opacity="0.33"/>
+<circle cx="1385.9" cy="458.5" r="0.9" fill="#9fd8e6" opacity="0.53"/>
+<circle cx="1505.9" cy="139.5" r="1.2" fill="#9fd8e6" opacity="0.25"/>
+<circle cx="1571.3" cy="528.5" r="0.5" fill="#9fd8e6" opacity="0.22"/>
+<circle cx="599.2" cy="242.0" r="0.7" fill="#9fd8e6" opacity="0.31"/>
+<circle cx="1742.3" cy="634.4" r="0.5" fill="#9fd8e6" opacity="0.31"/>
+<circle cx="1963.8" cy="271.6" r="1.2" fill="#9fd8e6" opacity="0.33"/>
+<circle cx="1376.2" cy="637.0" r="1.2" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="1435.9" cy="351.9" r="0.9" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="1432.9" cy="143.4" r="0.5" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="1980.0" cy="686.3" r="0.9" fill="#9fd8e6" opacity="0.36"/>
+<circle cx="1739.7" cy="224.3" r="0.5" fill="#9fd8e6" opacity="0.29"/>
+<circle cx="182.1" cy="308.6" r="1.2" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="1072.4" cy="19.9" r="0.5" fill="#9fd8e6" opacity="0.32"/>
+<circle cx="77.2" cy="373.2" r="0.7" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="2199.6" cy="630.4" r="1.2" fill="#9fd8e6" opacity="0.53"/>
+<circle cx="1083.7" cy="664.4" r="0.5" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="966.7" cy="391.1" r="0.7" fill="#9fd8e6" opacity="0.36"/>
+<circle cx="1856.0" cy="392.0" r="0.9" fill="#9fd8e6" opacity="0.42"/>
+<circle cx="2100.5" cy="609.0" r="0.7" fill="#9fd8e6" opacity="0.27"/>
+<circle cx="310.5" cy="381.3" r="0.9" fill="#9fd8e6" opacity="0.38"/>
+<circle cx="442.1" cy="375.1" r="0.5" fill="#9fd8e6" opacity="0.39"/>
+<circle cx="61.1" cy="678.6" r="1.2" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="2176.7" cy="85.4" r="0.5" fill="#9fd8e6" opacity="0.43"/>
+<circle cx="145.0" cy="377.1" r="1.2" fill="#9fd8e6" opacity="0.52"/>
+  <text x="28" y="40" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">↳ </tspan><tspan fill="#5b6b80">/omh Find every reference to RouteDecision, excluding comments and strings, with exact locations</tspan></text><text x="28" y="70" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">│ </tspan><tspan fill="#c9d4e2">scored </tspan><tspan fill="#e0b34a">standard</tspan><tspan fill="#c9d4e2"> (score 4)  +4 exhaustive_search: every reference, find every</tspan></text><text x="28" y="92" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">│ </tspan><tspan fill="#c9d4e2">lane </tspan><tspan fill="#e0b34a">unspecified-high</tspan><tspan fill="#c9d4e2">  →  gpt-6-astra xhigh  ·  6/6 on this shape; the quick head was 2/6</tspan></text><text x="28" y="126" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">↳ </tspan><tspan fill="#5b6b80">/omh Rename DEFAULT_RETRY_LIMIT to MAX_RETRY_ATTEMPTS in prod and tests, same behavior</tspan></text><text x="28" y="156" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">│ </tspan><tspan fill="#c9d4e2">scored </tspan><tspan fill="#5ad07a">light</tspan><tspan fill="#c9d4e2"> (score -2)  -2 simple_request: rename</tspan></text><text x="28" y="178" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#3d4a5c">│ </tspan><tspan fill="#c9d4e2">lane </tspan><tspan fill="#5ad07a">quick</tspan><tspan fill="#c9d4e2">  →  glm-5.2-ultrafast low  ·  same answer as Astra, 1% of the cost</tspan></text><text x="28" y="222" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">Same 30 tasks · same GPT-6 Astra · same day · validator-graded · 18 / 30 solved in both</tspan></text><text x="28" y="252" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">cost        </tspan><tspan fill="#c9d4e2">Astra plain</tspan></text><rect x="300" y="241" width="520.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="300" y="241" width="520.0" height="14" rx="2" fill="#e06c6c" opacity="0.85"/><text x="834" y="252" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">$4.29</tspan></text><text x="28" y="274" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80"></tspan><tspan fill="#5ad07a">            Astra + OMH</tspan></text><rect x="300" y="263" width="520.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="300" y="263" width="80.0" height="14" rx="2" fill="#5ad07a" opacity="0.95"/><text x="834" y="274" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5ad07a">$0.66  ·  6.5× cheaper</tspan></text><text x="28" y="304" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">wall clock  </tspan><tspan fill="#c9d4e2">Astra plain</tspan></text><rect x="300" y="293" width="520.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="300" y="293" width="520.0" height="14" rx="2" fill="#e06c6c" opacity="0.85"/><text x="834" y="304" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">23.3 min</tspan></text><text x="28" y="326" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80"></tspan><tspan fill="#5ad07a">            Astra + OMH</tspan></text><rect x="300" y="315" width="520.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="300" y="315" width="111.6" height="14" rx="2" fill="#5ad07a" opacity="0.95"/><text x="834" y="326" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5ad07a">5.0 min  ·  4.7× faster</tspan></text><text x="28" y="356" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">tool calls  </tspan><tspan fill="#c9d4e2">Astra plain</tspan></text><rect x="300" y="345" width="520.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="300" y="345" width="520.0" height="14" rx="2" fill="#e06c6c" opacity="0.85"/><text x="834" y="356" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">310</tspan></text><text x="28" y="378" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80"></tspan><tspan fill="#5ad07a">            Astra + OMH</tspan></text><rect x="300" y="367" width="520.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="300" y="367" width="417.7" height="14" rx="2" fill="#5ad07a" opacity="0.95"/><text x="834" y="378" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5ad07a">249  ·  −20%</tspan></text><text x="28" y="430" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">— ready</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5b6b80">gpt 5.6 sol</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5b6b80">205.9k/272k</tspan><tspan fill="#3d4a5c">  │  [</tspan><tspan fill="#2fb8c6">████████</tspan><tspan fill="#3d4a5c">░░</tspan><tspan fill="#5b6b80">] 76%</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5b6b80">19h 14m</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5ad07a">✓ 1m 50s</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#e06c6c">cmp 10</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5fd4e0">1 session</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#5b6b80">↩ resumes when 3 subagents finish</tspan></text><text x="28" y="456" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">[Plan] </tspan><tspan fill="#5b6b80">route 30 tasks by request shape</tspan><tspan fill="#3d4a5c">  │  </tspan><tspan fill="#e0b34a">2/2</tspan><tspan fill="#5b6b80">  ·  6 phases ...</tspan></text><text x="28" y="478" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">Research       </tspan><tspan fill="#5b6b80">[x]</tspan><tspan fill="#c9d4e2"> Score every request; name every signal</tspan></text><text x="28" y="500" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">Delivery       </tspan><tspan fill="#5b6b80">[x]</tspan><tspan fill="#c9d4e2"> Dispatch each task to its lane; grade with the validator</tspan></text><text x="28" y="538" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">› </tspan><tspan fill="#eef3f8"></tspan><tspan fill="#eef3f8">▌</tspan></text><line x1="0" y1="564" x2="2200" y2="564" stroke="#3d4a5c" stroke-opacity="0.5" stroke-width="1"/><text x="28" y="586" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">⊤ </tspan><tspan fill="#5fd4e0">[OMH]</tspan><tspan fill="#5b6b80"> v2.0.1 </tspan><tspan fill="#3d4a5c">│ </tspan><tspan fill="#e0b34a">3 agents · 2 running · 1 done · $0.004 · ctx 205.9k/272k</tspan></text><text x="28" y="610" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">a41e0c  </tspan><tspan fill="#c9d4e2">Find every reference to RouteDecision</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:unspecified-high(gpt-6-astra:xhigh)</tspan><tspan fill="#5b6b80">  ·  turn 6  ·  $0.0000  ·  cache 71.2%  ·  </tspan><tspan fill="#5ad07a">running</tspan><tspan fill="#5b6b80">  ·  38s</tspan></text><text x="28" y="634" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">b9f2d1  </tspan><tspan fill="#c9d4e2">Rename DEFAULT_RETRY_LIMIT to MAX_RETRY_ATTEMPTS</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:quick(glm-5.2-ultrafast:low)</tspan><tspan fill="#5b6b80">  ·  turn 4  ·  $0.0019  ·  cache 64.0%  ·  </tspan><tspan fill="#5ad07a">running</tspan><tspan fill="#5b6b80">  ·  4s</tspan></text><text x="28" y="658" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">c07e55  </tspan><tspan fill="#c9d4e2">Read the configuration implementation and report its facts</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:quick(glm-5.2-ultrafast:low)</tspan><tspan fill="#5b6b80">  ·  turn 5  ·  $0.0021  ·  cache 66.8%  ·  </tspan><tspan fill="#c9d4e2">done</tspan><tspan fill="#5b6b80">  ·  5s</tspan></text>
 </g>
-<rect x="0.75" y="0.75" width="1518.5" height="514.5" rx="18" fill="none" stroke="url(#edge)" stroke-width="1.5"/>
+<rect x="0.75" y="0.75" width="2198.5" height="698.5" rx="12" fill="none" stroke="#2fb8c6" stroke-opacity="0.55" stroke-width="1.5"/>
 </svg>

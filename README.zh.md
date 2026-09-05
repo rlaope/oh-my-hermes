@@ -163,6 +163,60 @@ omh doctor
 把 `--full` 安装收敛回 core 这类维护路径，见
 [Installation](docs/INSTALLATION.md#reconciling-an-existing-full-install-back-to-core)。
 
+## 你能得到什么
+
+### 01 · 每个请求匹配正确的模型，在执行之前就决定
+
+每个请求在派发前都会被打分，推动分数的每个信号都有名字。重命名判为 light，走 quick 通道；“找出所有引用 X 的地方”触发 exhaustive-search 信号，交给不会漏掉任何一处的模型。用同一个 GPT-6 Astra 跑 30 个编码任务：裸 Hermes 解出 18 个，花 $4.29、23 分钟；经过 OMH，同样的 18 个只花 $0.66、5 分钟。
+
+<p align="center">
+  <img src="assets/showcase-01-routing.svg" alt="omh coding complexity 为两个请求打分的结果，以及 Astra 的测量表" width="1080">
+</p>
+
+[阅读基准测试 ↗](benchmarks/live-model-tools/v1/README.md)
+
+### 02 · 类别按执行器归你所有
+
+`ultrabrain`、`deep`、`architect`、`quick`、`writing`、`visual-engineering`：每一个都是按编码执行器划分的模型+effort 链，在一个文件里即可查看和覆盖。提供方拒绝某个模型时链会前进；一次会继承无法提供该模型的提供方的派发会被拒绝，而不是悄悄降级。setup 会询问你的提供方，并按当前这台机器重排链。
+
+<p align="center">
+  <img src="assets/showcase-02-categories.svg" alt="omh coding category-maestro show：按执行器的类别链、一处操作者覆盖、一次被拒绝的派发" width="1080">
+</p>
+
+[阅读路由文档 ↗](docs/FANOUT.md)
+
+### 03 · 按模型家族调校的提示，并且经过测量
+
+13 个模型家族，每个家族一个校准块，每一句都针对该家族有文档记载的一个特性：告诉 Claude 清单已经完整，告诉 Gemini 没有工具输出的断言不算证据，告诉 Qwen3-Coder 永远不要输出 thinking 标签，告诉 DeepSeek 版本和 thinking 模式是契约字段。GPT-6 Astra 有自己的精确模型契约和校准块。有路由的地方就测量：Astra 的初稿让它在解不出的任务上继续硬做，同样的答案多花 10% token，于是按这个数字被删掉。
+
+<p align="center">
+  <img src="assets/showcase-03-calibration.svg" alt="每个模型家族一行校准、gpt-6-astra 模型契约、经测量的修订" width="1080">
+</p>
+
+[阅读 MODEL_OPTI.md ↗](MODEL_OPTI.md)
+
+### 04 · 只在安全的地方并行，回来时带着类型
+
+`ulw-work` 把已批准的计划拆成互不共享文件的单元，给每个单元一个从同一个固定 SHA 分出的工作树，并允许单元在一轮里发出全部工具调用。每个单元以四状态的类型化结果返回：进程已退出、schema 有效、已观察到验证、可集成。没有证据的 exit 0 在门禁检查之前一直停在 `reported done`，验证回执只在版本、命令、环境全部一致时复用。
+
+<p align="center">
+  <img src="assets/showcase-04-parallel.svg" alt="一次 ulw-work 扇出：三个文件互不重叠的单元、每单元一个工作树、类型化状态、一轮内发出的工具调用" width="1080">
+</p>
+
+[阅读扇出契约 ↗](docs/FANOUT.md)
+
+### 05 · 只展示能证明之事的 HUD
+
+每条委派通道一行：模型、effort、轮次、token、成本，实时更新。成本为零只在主机确认时才显示；无法定价的调用显示 `unknown`，而不是 `$0`。进程存在之前是 `Plan · not run`，执行器自称完成时是 `Code · reported done`，只有门禁通过后才是 `Test · verified`。提示框上方的阶段待办是这次运行自己的清单，不是事后写的摘要。
+
+<p align="center">
+  <img src="assets/showcase-05-hud.svg" alt="OMH HUD：每条通道的模型、effort、轮次、token、成本来源、证据状态，以及阶段待办" width="1080">
+</p>
+
+[阅读证据规则 ↗](docs/CAPABILITY_IMPACT.md)
+
+<br>
+
 ## OH-MY-HERMES 终端
 
 只需输入 `omh`,即可从与 `hermes` 相同的入口,打开带有 OMH 标识的 Hermes:

@@ -160,6 +160,60 @@ omh doctor
 [Installation](docs/INSTALLATION.md#reconciling-an-existing-full-install-back-to-core)
 にあります。
 
+## 得られるもの
+
+### 01 · リクエストごとに正しいモデルを、実行前に決める
+
+すべてのリクエストはディスパッチ前にスコアリングされ、スコアを動かしたシグナルには必ず名前が付く。リネームは light と判定されて quick レーンへ、「X の参照をすべて見つけろ」は exhaustive-search シグナルに掛かり、取りこぼさないモデルへ行く。同じ GPT-6 Astra でコーディングタスク 30 件を測った結果: 素の Hermes は 18 件を $4.29・23 分で、OMH 経由では同じ 18 件を $0.66・5 分で解いた。
+
+<p align="center">
+  <img src="assets/showcase-01-routing.svg" alt="omh coding complexity が 2 つのリクエストを採点した結果と Astra の測定表" width="1080">
+</p>
+
+[ベンチマークを読む ↗](benchmarks/live-model-tools/v1/README.md)
+
+### 02 · カテゴリはエグゼキュータごとにあなたが所有する
+
+`ultrabrain`、`deep`、`architect`、`quick`、`writing`、`visual-engineering`。それぞれがコーディングエグゼキュータごとのモデル+effort チェーンで、1 つのファイルで読み、上書きできる。プロバイダがモデルを拒否すればチェーンは次へ進み、提供できないプロバイダを引き継ぐディスパッチは黙ってダウングレードされずに拒否される。setup がプロバイダをインタビューし、このマシン向けにチェーンを並べ替える。
+
+<p align="center">
+  <img src="assets/showcase-02-categories.svg" alt="omh coding category-maestro show: エグゼキュータ別カテゴリチェーン、オペレータのオーバーライド、拒否されたディスパッチ" width="1080">
+</p>
+
+[ルーティングのドキュメントを読む ↗](docs/FANOUT.md)
+
+### 03 · モデルファミリーごとに調整したプロンプティング、そして測定
+
+13 のモデルファミリー、ファミリーごとに 1 つのキャリブレーションブロック、すべての文はそのファミリーの文書化された性質 1 つに向けて書かれている。Claude にはチェックリストが完全であると、Gemini にはツール出力のない主張は証拠ではないと、Qwen3-Coder には thinking タグを出さないよう、DeepSeek にはバージョンと thinking モードは契約フィールドだと伝える。GPT-6 Astra は独自のモデル契約とブロックを持つ。ルートがある場所ではブロックを測定する。Astra の初稿は解けないタスクに固執させ、同じ答えにトークンを 10% 多く使ったので、その数字で削られた。
+
+<p align="center">
+  <img src="assets/showcase-03-calibration.svg" alt="ファミリーごとのキャリブレーション 1 行、gpt-6-astra のモデル契約、測定に基づく改訂" width="1080">
+</p>
+
+[MODEL_OPTI.md を読む ↗](MODEL_OPTI.md)
+
+### 04 · 安全な場所でだけ並列に、戻るときは型付きで
+
+`ulw-work` は承認済みの計画を、ファイルを共有しないユニットに分割し、各ユニットに 1 つの固定 SHA から分岐したワークツリーを与え、ユニットがツール呼び出しを 1 ターンにまとめて出せるようにする。ユニットは 4 状態の型付き結果として戻る: プロセス終了、スキーマ有効、検証観測済み、統合準備完了。証拠のない exit 0 はゲートが確認するまで `reported done` に留まり、検証レシートはリビジョン・コマンド・環境がすべて一致するときだけ再利用される。
+
+<p align="center">
+  <img src="assets/showcase-04-parallel.svg" alt="ulw-work のファンアウト: ファイルが重ならない 3 ユニット、ユニットごとのワークツリー、型付き状態、1 ターンで出したツール呼び出し" width="1080">
+</p>
+
+[ファンアウト契約を読む ↗](docs/FANOUT.md)
+
+### 05 · 証明できることだけを見せる HUD
+
+委譲レーンごとに 1 行: モデル、effort、ターン、トークン、コスト、ライブ更新。コスト 0 はホストが確認したときだけ表示され、価格不明の呼び出しは `$0` ではなく `unknown` と言う。プロセスが存在するまでは `Plan · not run`、エグゼキュータが完了を告げれば `Code · reported done`、ゲートを通過して初めて `Test · verified`。プロンプト上の phase todo は後から書いた要約ではなく、その実行自身のチェックリストだ。
+
+<p align="center">
+  <img src="assets/showcase-05-hud.svg" alt="OMH HUD: レーンごとのモデル・effort・ターン・トークン・コスト出所・証拠状態と phase todo" width="1080">
+</p>
+
+[証拠ルールを読む ↗](docs/CAPABILITY_IMPACT.md)
+
+<br>
+
 ## OH-MY-HERMES ターミナル
 
 `omh` と入力するだけで、`hermes` と同じ入口から、OMH のアイデンティティをまとった

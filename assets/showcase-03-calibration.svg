@@ -1,133 +1,103 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="588" viewBox="0 0 1520 588" role="img" aria-label="unit_prompt_protocol · one block per model family">
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="700" viewBox="0 0 2200 700" role="img" aria-label="one calibration line per model family, the four measured Astra arms as token bars, and dock rows carrying different families at once">
 <defs>
-  <radialGradient id="aura" cx="78%" cy="0%" r="75%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.55"/><stop offset="40%" stop-color="#38bdf8" stop-opacity="0.18"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
-  <radialGradient id="aura2" cx="10%" cy="100%" r="60%"><stop offset="0%" stop-color="#818cf8" stop-opacity="0.30"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/></radialGradient>
-  <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.9"/><stop offset="100%" stop-color="#312e81" stop-opacity="0.6"/></linearGradient>
-  <clipPath id="clip"><rect x="0" y="0" width="1520" height="588" rx="18"/></clipPath>
+  <radialGradient id="aura" cx="85%" cy="0%" r="70%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.16"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+  <radialGradient id="aura2" cx="0%" cy="100%" r="55%"><stop offset="0%" stop-color="#6366f1" stop-opacity="0.10"/><stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+  <clipPath id="clip"><rect x="0" y="0" width="2200" height="700" rx="12"/></clipPath>
 </defs>
 <g clip-path="url(#clip)">
-  <rect width="1520" height="588" fill="#060a19"/>
-  <rect width="1520" height="588" fill="url(#aura)"/>
-  <rect width="1520" height="588" fill="url(#aura2)"/>
-  <circle cx="1036.6" cy="53.9" r="1.7" fill="#e0f2fe" opacity="0.68"/>
-<circle cx="1135.1" cy="373.0" r="0.6" fill="#e0f2fe" opacity="0.66"/>
-<circle cx="561.2" cy="310.5" r="0.6" fill="#e0f2fe" opacity="0.89"/>
-<circle cx="694.4" cy="467.8" r="1.3" fill="#e0f2fe" opacity="0.88"/>
-<circle cx="643.3" cy="84.9" r="0.6" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="114.2" cy="169.7" r="1.0" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="657.2" cy="345.6" r="1.0" fill="#e0f2fe" opacity="0.67"/>
-<circle cx="871.1" cy="20.0" r="1.7" fill="#e0f2fe" opacity="0.65"/>
-<circle cx="767.9" cy="37.1" r="0.6" fill="#e0f2fe" opacity="0.68"/>
-<circle cx="1383.5" cy="40.3" r="1.7" fill="#e0f2fe" opacity="0.40"/>
-<circle cx="492.3" cy="310.2" r="0.6" fill="#e0f2fe" opacity="0.72"/>
-<circle cx="1362.7" cy="128.2" r="1.0" fill="#e0f2fe" opacity="0.70"/>
-<circle cx="776.2" cy="538.7" r="1.7" fill="#e0f2fe" opacity="0.28"/>
-<circle cx="414.4" cy="119.7" r="0.8" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="939.1" cy="28.4" r="1.3" fill="#e0f2fe" opacity="0.32"/>
-<circle cx="986.1" cy="156.9" r="0.8" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="987.6" cy="200.6" r="0.6" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="227.0" cy="339.7" r="1.7" fill="#e0f2fe" opacity="0.68"/>
-<circle cx="1242.8" cy="169.7" r="0.6" fill="#e0f2fe" opacity="0.62"/>
-<circle cx="826.3" cy="173.0" r="0.8" fill="#e0f2fe" opacity="0.32"/>
-<circle cx="252.1" cy="340.9" r="1.7" fill="#e0f2fe" opacity="0.85"/>
-<circle cx="12.9" cy="163.1" r="1.7" fill="#e0f2fe" opacity="0.79"/>
-<circle cx="340.8" cy="100.9" r="1.3" fill="#e0f2fe" opacity="0.46"/>
-<circle cx="295.5" cy="568.5" r="0.6" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="356.3" cy="258.4" r="1.7" fill="#e0f2fe" opacity="0.71"/>
-<circle cx="527.4" cy="323.4" r="1.7" fill="#e0f2fe" opacity="0.28"/>
-<circle cx="1291.9" cy="396.0" r="0.8" fill="#e0f2fe" opacity="0.72"/>
-<circle cx="1283.5" cy="376.1" r="1.0" fill="#e0f2fe" opacity="0.63"/>
-<circle cx="1327.6" cy="153.1" r="1.3" fill="#e0f2fe" opacity="0.39"/>
-<circle cx="1506.5" cy="486.4" r="1.0" fill="#e0f2fe" opacity="0.88"/>
-<circle cx="1321.9" cy="505.8" r="0.6" fill="#e0f2fe" opacity="0.80"/>
-<circle cx="739.8" cy="40.2" r="1.3" fill="#e0f2fe" opacity="0.64"/>
-<circle cx="854.0" cy="97.9" r="1.7" fill="#e0f2fe" opacity="0.72"/>
-<circle cx="431.0" cy="187.2" r="1.3" fill="#e0f2fe" opacity="0.34"/>
-<circle cx="65.7" cy="430.9" r="1.3" fill="#e0f2fe" opacity="0.64"/>
-<circle cx="132.9" cy="434.6" r="0.8" fill="#e0f2fe" opacity="0.34"/>
-<circle cx="561.4" cy="545.9" r="0.8" fill="#e0f2fe" opacity="0.36"/>
-<circle cx="354.5" cy="187.7" r="0.6" fill="#e0f2fe" opacity="0.36"/>
-<circle cx="1248.6" cy="472.3" r="1.0" fill="#e0f2fe" opacity="0.56"/>
-<circle cx="150.1" cy="566.6" r="1.0" fill="#e0f2fe" opacity="0.61"/>
-<circle cx="1440.4" cy="91.9" r="1.3" fill="#e0f2fe" opacity="0.76"/>
-<circle cx="113.7" cy="321.3" r="1.0" fill="#e0f2fe" opacity="0.40"/>
-<circle cx="379.1" cy="396.3" r="0.6" fill="#e0f2fe" opacity="0.52"/>
-<circle cx="754.9" cy="157.5" r="0.8" fill="#e0f2fe" opacity="0.79"/>
-<circle cx="882.2" cy="270.5" r="1.7" fill="#e0f2fe" opacity="0.76"/>
-<circle cx="309.4" cy="37.5" r="0.8" fill="#e0f2fe" opacity="0.57"/>
-<circle cx="683.9" cy="144.4" r="0.8" fill="#e0f2fe" opacity="0.32"/>
-<circle cx="235.0" cy="485.3" r="0.6" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="729.0" cy="93.6" r="0.8" fill="#e0f2fe" opacity="0.86"/>
-<circle cx="1370.2" cy="542.7" r="1.7" fill="#e0f2fe" opacity="0.56"/>
-<circle cx="57.7" cy="16.7" r="0.8" fill="#e0f2fe" opacity="0.28"/>
-<circle cx="962.2" cy="346.0" r="1.0" fill="#e0f2fe" opacity="0.61"/>
-<circle cx="369.7" cy="288.2" r="1.0" fill="#e0f2fe" opacity="0.48"/>
-<circle cx="1117.0" cy="287.7" r="1.7" fill="#e0f2fe" opacity="0.57"/>
-<circle cx="606.7" cy="300.1" r="1.7" fill="#e0f2fe" opacity="0.29"/>
-<circle cx="1201.3" cy="361.1" r="0.8" fill="#e0f2fe" opacity="0.46"/>
-<circle cx="1321.1" cy="210.8" r="1.7" fill="#e0f2fe" opacity="0.33"/>
-<circle cx="644.6" cy="99.0" r="1.3" fill="#e0f2fe" opacity="0.81"/>
-<circle cx="616.1" cy="170.0" r="1.3" fill="#e0f2fe" opacity="0.80"/>
-<circle cx="377.7" cy="132.6" r="1.3" fill="#e0f2fe" opacity="0.68"/>
-<circle cx="675.7" cy="439.7" r="1.0" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="760.6" cy="36.4" r="0.8" fill="#e0f2fe" opacity="0.80"/>
-<circle cx="135.8" cy="181.3" r="0.6" fill="#e0f2fe" opacity="0.28"/>
-<circle cx="418.1" cy="486.9" r="0.6" fill="#e0f2fe" opacity="0.64"/>
-<circle cx="1277.3" cy="514.3" r="1.3" fill="#e0f2fe" opacity="0.48"/>
-<circle cx="966.3" cy="385.3" r="0.8" fill="#e0f2fe" opacity="0.72"/>
-<circle cx="969.4" cy="238.5" r="1.0" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="523.6" cy="546.1" r="1.7" fill="#e0f2fe" opacity="0.72"/>
-<circle cx="1241.1" cy="453.8" r="1.0" fill="#e0f2fe" opacity="0.75"/>
-<circle cx="303.2" cy="316.3" r="1.3" fill="#e0f2fe" opacity="0.52"/>
-<circle cx="1362.2" cy="211.2" r="1.7" fill="#e0f2fe" opacity="0.69"/>
-<circle cx="98.1" cy="539.1" r="1.3" fill="#e0f2fe" opacity="0.60"/>
-<circle cx="1455.6" cy="520.8" r="1.7" fill="#e0f2fe" opacity="0.33"/>
-<circle cx="891.1" cy="3.7" r="1.7" fill="#e0f2fe" opacity="0.72"/>
-<circle cx="1206.7" cy="7.8" r="0.8" fill="#e0f2fe" opacity="0.38"/>
-<circle cx="852.9" cy="168.4" r="1.3" fill="#e0f2fe" opacity="0.57"/>
-<circle cx="263.6" cy="377.2" r="1.3" fill="#e0f2fe" opacity="0.68"/>
-<circle cx="494.1" cy="176.9" r="0.6" fill="#e0f2fe" opacity="0.73"/>
-<circle cx="795.2" cy="327.2" r="1.3" fill="#e0f2fe" opacity="0.62"/>
-<circle cx="1200.8" cy="91.9" r="1.3" fill="#e0f2fe" opacity="0.37"/>
-<circle cx="1453.9" cy="140.9" r="0.6" fill="#e0f2fe" opacity="0.73"/>
-<circle cx="103.8" cy="577.7" r="1.0" fill="#e0f2fe" opacity="0.75"/>
-<circle cx="181.4" cy="523.7" r="0.6" fill="#e0f2fe" opacity="0.44"/>
-<circle cx="481.0" cy="352.3" r="1.0" fill="#e0f2fe" opacity="0.35"/>
-<circle cx="1474.8" cy="337.8" r="1.3" fill="#e0f2fe" opacity="0.31"/>
-<circle cx="371.5" cy="31.5" r="1.3" fill="#e0f2fe" opacity="0.80"/>
-<circle cx="411.8" cy="481.0" r="1.7" fill="#e0f2fe" opacity="0.49"/>
-<circle cx="438.7" cy="334.1" r="1.3" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="802.0" cy="438.4" r="1.7" fill="#e0f2fe" opacity="0.48"/>
-<circle cx="1130.3" cy="262.1" r="1.0" fill="#e0f2fe" opacity="0.42"/>
-<circle cx="1480.0" cy="265.3" r="0.8" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="687.6" cy="266.7" r="0.8" fill="#e0f2fe" opacity="0.56"/>
-<circle cx="1276.2" cy="583.3" r="1.7" fill="#e0f2fe" opacity="0.45"/>
-<circle cx="1021.6" cy="188.1" r="1.3" fill="#e0f2fe" opacity="0.85"/>
-<circle cx="565.6" cy="364.9" r="0.8" fill="#e0f2fe" opacity="0.79"/>
-<circle cx="573.1" cy="35.5" r="1.7" fill="#e0f2fe" opacity="0.52"/>
-<circle cx="1031.8" cy="324.5" r="1.3" fill="#e0f2fe" opacity="0.48"/>
-<circle cx="615.3" cy="40.6" r="1.3" fill="#e0f2fe" opacity="0.79"/>
-<circle cx="1156.8" cy="167.5" r="1.0" fill="#e0f2fe" opacity="0.62"/>
-<circle cx="497.8" cy="244.0" r="1.7" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="1460.7" cy="75.7" r="0.6" fill="#e0f2fe" opacity="0.55"/>
-<circle cx="775.6" cy="337.9" r="0.8" fill="#e0f2fe" opacity="0.66"/>
-<circle cx="867.7" cy="145.6" r="1.3" fill="#e0f2fe" opacity="0.75"/>
-<circle cx="966.3" cy="387.9" r="0.8" fill="#e0f2fe" opacity="0.52"/>
-<circle cx="507.6" cy="286.4" r="1.0" fill="#e0f2fe" opacity="0.88"/>
-<circle cx="256.7" cy="366.1" r="1.0" fill="#e0f2fe" opacity="0.38"/>
-<circle cx="565.4" cy="513.8" r="0.8" fill="#e0f2fe" opacity="0.49"/>
-<circle cx="594.0" cy="193.3" r="0.6" fill="#e0f2fe" opacity="0.54"/>
-<circle cx="651.3" cy="117.7" r="1.0" fill="#e0f2fe" opacity="0.65"/>
-<circle cx="1324.1" cy="562.9" r="0.8" fill="#e0f2fe" opacity="0.44"/>
-<path d="M1079 90 L1080.3 95.4 L1086 97 L1080.3 98.6 L1079 104 L1077.1 98.6 L1072 97 L1077.1 95.4 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M464 388 L465.6 393.7 L471 395 L465.6 396.9 L464 402 L462.4 396.9 L457 395 L462.4 393.7 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M1123 77 L1124.4 81.9 L1130 84 L1124.4 85.1 L1123 91 L1121.2 85.1 L1116 84 L1121.2 81.9 Z" fill="#bae6fd" opacity="0.8"/>
-<path d="M757 145 L758.3 150.0 L764 152 L758.3 153.2 L757 159 L755.1 153.2 L750 152 L755.1 150.0 Z" fill="#bae6fd" opacity="0.8"/>
-  <rect x="0" y="0" width="1520" height="56" fill="#0b1226" opacity="0.92"/>
-  <circle cx="30" cy="28" r="7" fill="#fb7185"/><circle cx="54" cy="28" r="7" fill="#fbbf24"/><circle cx="78" cy="28" r="7" fill="#4ade80"/>
-  <text x="760" y="34" text-anchor="middle" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#64748b">unit_prompt_protocol · one block per model family</text>
-  <text x="48" y="88" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#7dd3fc" opacity="0.9">src/coding/unit_prompt_protocol.py  ·  MODEL_OPTI.md</text>
-  <text x="48" y="116" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">13 families · 1 exact-model override · every block counters one documented trait</tspan></text><text x="48" y="164" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  gpt        </tspan><tspan fill="#cbd5e1">act on the decisive fact; a passed criterion is settled evidence</tspan></text><text x="48" y="188" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#fbbf24">  gpt-6-astra</tspan><tspan fill="#cbd5e1"> criteria are the whole job; ask once, only if it changes the answer</tspan></text><text x="48" y="212" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  claude     </tspan><tspan fill="#cbd5e1">the numbered criteria are the complete checklist; never grow it mid-run</tspan></text><text x="48" y="236" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  gemini     </tspan><tspan fill="#cbd5e1">a claim without the tool output that proves it is not evidence</tspan></text><text x="48" y="260" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  deepseek   </tspan><tspan fill="#cbd5e1">version and thinking mode are contract fields; no legacy R1 prompting</tspan></text><text x="48" y="284" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  qwen       </tspan><tspan fill="#cbd5e1">Qwen3-Coder is non-thinking; never ask for reasoning tags</tspan></text><text x="48" y="308" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  glm        </tspan><tspan fill="#cbd5e1">interleave reasoning only where it improves the next tool decision</tspan></text><text x="48" y="332" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#7dd3fc">  kimi       </tspan><tspan fill="#cbd5e1">decompose-compare-verify for the hard parts; mechanical steps run direct</tspan></text><text x="48" y="356" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">  grok · mistral · llama · codestral · solar · generic</tspan></text><text x="48" y="404" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#67e8f9">$ </tspan><tspan fill="#f8fafc">omh coding model-contract --model gpt-6-astra</tspan></text><text x="48" y="428" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">- reasoning efforts: low, medium, high, xhigh, max </tspan><tspan fill="#fbbf24">(floor `low`)</tspan></text><text x="48" y="452" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">- tool calling: responses API only · unsupported: temperature, top_p, top_logprobs</tspan></text><text x="48" y="476" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#cbd5e1">- context 1,050,000 · input 922,000 · output 128,000 · sources cited 2026-09-04</tspan></text><text x="48" y="524" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#cbd5e1"><tspan fill="#64748b">measured 2026-09-05: </tspan><tspan fill="#4ade80">draft +10% tokens, same answers → one clause cut</tspan><tspan fill="#cbd5e1"> · shipped: −5% turns</tspan></text>
+  <rect width="2200" height="700" fill="#0b111c"/>
+  <rect width="2200" height="700" fill="url(#aura)"/><rect width="2200" height="700" fill="url(#aura2)"/>
+  <circle cx="1500.4" cy="64.1" r="0.5" fill="#9fd8e6" opacity="0.40"/>
+<circle cx="812.3" cy="369.6" r="0.5" fill="#9fd8e6" opacity="0.54"/>
+<circle cx="1005.1" cy="556.9" r="1.2" fill="#9fd8e6" opacity="0.54"/>
+<circle cx="931.1" cy="101.1" r="0.5" fill="#9fd8e6" opacity="0.19"/>
+<circle cx="165.3" cy="202.0" r="0.9" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="951.2" cy="411.5" r="0.9" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="1260.8" cy="23.8" r="0.7" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="138.6" cy="5.3" r="0.9" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="1276.1" cy="16.4" r="0.9" fill="#9fd8e6" opacity="0.36"/>
+<circle cx="1806.0" cy="15.2" r="0.5" fill="#9fd8e6" opacity="0.51"/>
+<circle cx="479.5" cy="503.2" r="0.7" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="2015.6" cy="437.4" r="0.9" fill="#9fd8e6" opacity="0.26"/>
+<circle cx="447.9" cy="100.2" r="0.9" fill="#9fd8e6" opacity="0.40"/>
+<circle cx="106.2" cy="314.3" r="0.5" fill="#9fd8e6" opacity="0.26"/>
+<circle cx="526.1" cy="310.3" r="0.7" fill="#9fd8e6" opacity="0.29"/>
+<circle cx="64.8" cy="699.5" r="0.5" fill="#9fd8e6" opacity="0.38"/>
+<circle cx="1381.8" cy="460.4" r="0.9" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="1268.4" cy="380.5" r="0.9" fill="#9fd8e6" opacity="0.20"/>
+<circle cx="246.3" cy="116.1" r="0.5" fill="#9fd8e6" opacity="0.29"/>
+<circle cx="149.7" cy="585.5" r="0.7" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="882.9" cy="221.5" r="0.7" fill="#9fd8e6" opacity="0.19"/>
+<circle cx="683.2" cy="152.1" r="0.7" fill="#9fd8e6" opacity="0.43"/>
+<circle cx="1974.5" cy="490.9" r="0.9" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="615.4" cy="418.9" r="0.7" fill="#9fd8e6" opacity="0.44"/>
+<circle cx="1857.8" cy="447.8" r="0.9" fill="#9fd8e6" opacity="0.38"/>
+<circle cx="1921.5" cy="182.2" r="1.2" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="2180.5" cy="579.0" r="0.9" fill="#9fd8e6" opacity="0.54"/>
+<circle cx="1913.3" cy="602.1" r="0.5" fill="#9fd8e6" opacity="0.49"/>
+<circle cx="1070.7" cy="47.9" r="1.2" fill="#9fd8e6" opacity="0.39"/>
+<circle cx="1236.1" cy="116.5" r="0.5" fill="#9fd8e6" opacity="0.26"/>
+<circle cx="700.5" cy="343.8" r="0.5" fill="#9fd8e6" opacity="0.44"/>
+<circle cx="691.0" cy="319.1" r="0.5" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="2064.8" cy="101.4" r="0.9" fill="#9fd8e6" opacity="0.42"/>
+<circle cx="2078.5" cy="115.8" r="0.7" fill="#9fd8e6" opacity="0.53"/>
+<circle cx="1840.8" cy="118.7" r="0.5" fill="#9fd8e6" opacity="0.26"/>
+<circle cx="482.0" cy="12.4" r="0.5" fill="#9fd8e6" opacity="0.29"/>
+<circle cx="5.6" cy="518.2" r="0.9" fill="#9fd8e6" opacity="0.50"/>
+<circle cx="1050.7" cy="378.3" r="0.5" fill="#9fd8e6" opacity="0.53"/>
+<circle cx="500.3" cy="174.6" r="0.5" fill="#9fd8e6" opacity="0.32"/>
+<circle cx="1092.7" cy="187.5" r="0.7" fill="#9fd8e6" opacity="0.48"/>
+<circle cx="1276.9" cy="322.1" r="0.7" fill="#9fd8e6" opacity="0.54"/>
+<circle cx="335.3" cy="346.2" r="1.2" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="1739.0" cy="79.2" r="0.7" fill="#9fd8e6" opacity="0.38"/>
+<circle cx="1516.4" cy="180.1" r="1.2" fill="#9fd8e6" opacity="0.28"/>
+<circle cx="1640.4" cy="659.1" r="1.2" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="173.1" cy="362.8" r="0.7" fill="#9fd8e6" opacity="0.17"/>
+<circle cx="1392.7" cy="411.9" r="0.9" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="535.1" cy="343.1" r="0.9" fill="#9fd8e6" opacity="0.29"/>
+<circle cx="1616.8" cy="342.4" r="1.2" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="1338.4" cy="410.4" r="0.5" fill="#9fd8e6" opacity="0.38"/>
+<circle cx="1581.1" cy="351.6" r="0.9" fill="#9fd8e6" opacity="0.35"/>
+<circle cx="2092.4" cy="457.5" r="0.5" fill="#9fd8e6" opacity="0.36"/>
+<circle cx="152.5" cy="347.5" r="1.2" fill="#9fd8e6" opacity="0.50"/>
+<circle cx="891.8" cy="202.4" r="1.2" fill="#9fd8e6" opacity="0.49"/>
+<circle cx="546.7" cy="157.8" r="1.2" fill="#9fd8e6" opacity="0.41"/>
+<circle cx="978.0" cy="523.5" r="0.9" fill="#9fd8e6" opacity="0.19"/>
+<circle cx="1100.9" cy="43.3" r="0.7" fill="#9fd8e6" opacity="0.49"/>
+<circle cx="196.5" cy="215.8" r="0.5" fill="#9fd8e6" opacity="0.17"/>
+<circle cx="605.1" cy="579.6" r="0.5" fill="#9fd8e6" opacity="0.39"/>
+<circle cx="1848.7" cy="612.2" r="1.2" fill="#9fd8e6" opacity="0.29"/>
+<circle cx="1398.5" cy="458.7" r="0.7" fill="#9fd8e6" opacity="0.44"/>
+<circle cx="1403.1" cy="283.9" r="0.9" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="757.9" cy="650.1" r="0.9" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="438.9" cy="376.5" r="1.2" fill="#9fd8e6" opacity="0.32"/>
+<circle cx="1971.6" cy="251.4" r="0.9" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="2017.1" cy="541.5" r="1.2" fill="#9fd8e6" opacity="0.47"/>
+<circle cx="1680.3" cy="502.5" r="0.5" fill="#9fd8e6" opacity="0.22"/>
+<circle cx="1411.2" cy="125.3" r="0.7" fill="#9fd8e6" opacity="0.47"/>
+<circle cx="29.1" cy="162.5" r="1.2" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="630.1" cy="683.5" r="1.2" fill="#9fd8e6" opacity="0.53"/>
+<circle cx="3.1" cy="118.2" r="0.9" fill="#9fd8e6" opacity="0.33"/>
+<circle cx="346.1" cy="83.3" r="0.7" fill="#9fd8e6" opacity="0.37"/>
+<circle cx="1091.4" cy="470.9" r="0.7" fill="#9fd8e6" opacity="0.30"/>
+<circle cx="407.6" cy="669.6" r="0.7" fill="#9fd8e6" opacity="0.54"/>
+<circle cx="1609.1" cy="47.8" r="0.9" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="262.6" cy="623.5" r="0.5" fill="#9fd8e6" opacity="0.26"/>
+<circle cx="696.2" cy="419.4" r="0.9" fill="#9fd8e6" opacity="0.21"/>
+<circle cx="2134.6" cy="402.1" r="1.2" fill="#9fd8e6" opacity="0.18"/>
+<circle cx="537.7" cy="37.5" r="1.2" fill="#9fd8e6" opacity="0.49"/>
+<circle cx="596.0" cy="572.6" r="0.9" fill="#9fd8e6" opacity="0.47"/>
+<circle cx="1246.2" cy="464.6" r="0.9" fill="#9fd8e6" opacity="0.31"/>
+<circle cx="2184.5" cy="238.8" r="0.9" fill="#9fd8e6" opacity="0.45"/>
+<circle cx="2135.5" cy="330.9" r="0.9" fill="#9fd8e6" opacity="0.32"/>
+<circle cx="256.0" cy="116.0" r="0.7" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="995.2" cy="317.5" r="0.7" fill="#9fd8e6" opacity="0.34"/>
+<circle cx="1847.1" cy="694.4" r="0.9" fill="#9fd8e6" opacity="0.46"/>
+<circle cx="51.7" cy="229.2" r="1.2" fill="#9fd8e6" opacity="0.52"/>
+<circle cx="818.7" cy="434.4" r="0.7" fill="#9fd8e6" opacity="0.48"/>
+<circle cx="829.5" cy="42.3" r="1.2" fill="#9fd8e6" opacity="0.24"/>
+<circle cx="1149.7" cy="353.6" r="0.9" fill="#9fd8e6" opacity="0.18"/>
+  <text x="28" y="40" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">one prompting block per model family · 13 families · 1 exact-model override · every sentence counters a documented trait</tspan></text><text x="44" y="70" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">gpt          </tspan><tspan fill="#c9d4e2">act on the decisive fact; a passed criterion is settled evidence</tspan></text><text x="44" y="91" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#e0b34a">gpt-6-astra  </tspan><tspan fill="#c9d4e2">criteria are the whole job; ask once, only if it changes the answer; size tests to the change</tspan></text><text x="44" y="112" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">claude       </tspan><tspan fill="#c9d4e2">the numbered criteria are the complete checklist; never grow it mid-run</tspan></text><text x="44" y="133" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">gemini       </tspan><tspan fill="#c9d4e2">a claim without the tool output that proves it is not evidence</tspan></text><text x="44" y="154" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">deepseek     </tspan><tspan fill="#c9d4e2">version and thinking mode are contract fields; no legacy R1 prompting</tspan></text><text x="44" y="175" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">qwen         </tspan><tspan fill="#c9d4e2">Qwen3-Coder is non-thinking; never ask for reasoning tags</tspan></text><text x="44" y="196" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">glm          </tspan><tspan fill="#c9d4e2">interleave reasoning only where it improves the next tool decision</tspan></text><text x="44" y="217" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">kimi         </tspan><tspan fill="#c9d4e2">decompose-compare-verify for the hard parts; mechanical steps run direct</tspan></text><text x="44" y="238" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">grok · mistral · llama · codestral · solar · generic</tspan></text><text x="28" y="286" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">measured 2026-09-05 · gpt-6-astra xhigh · same 30 tasks · every arm 18 / 30</tspan></text><text x="28" y="314" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">          no block</tspan></text><rect x="203" y="303" width="380.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="203" y="303" width="351.6" height="14" rx="2" fill="#c9d4e2" opacity="0.95"/><text x="595" y="314" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">1,550,904 tokens</tspan></text><text x="28" y="336" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">      family block</tspan></text><rect x="203" y="325" width="380.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="203" y="325" width="343.1" height="14" rx="2" fill="#c9d4e2" opacity="0.95"/><text x="595" y="336" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">1,513,367</tspan></text><text x="28" y="358" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">    draft override</tspan></text><rect x="203" y="347" width="380.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="203" y="347" width="380.0" height="14" rx="2" fill="#e06c6c" opacity="0.95"/><text x="595" y="358" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">1,675,942  ·  +10% for the same answers → clause cut</tspan></text><text x="28" y="380" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">  shipped override</tspan></text><rect x="203" y="369" width="380.0" height="14" rx="2" fill="#1e3a5a" opacity="0.45"/><rect x="203" y="369" width="347.4" height="14" rx="2" fill="#5ad07a" opacity="0.95"/><text x="595" y="380" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#c9d4e2">1,532,241  ·  −5% turns vs no block</tspan></text><text x="28" y="418" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">contract </tspan><tspan fill="#e0b34a">gpt-6-astra</tspan><tspan fill="#c9d4e2">  efforts low…max (floor low, no none)  ·  responses-only tool calls  ·  ctx 1,050,000  ·  $10 / $50 per MTok, source cited</tspan></text><text x="28" y="470" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" font-weight="normal" fill="#c9d4e2"><tspan fill="#5fd4e0">› </tspan><tspan fill="#eef3f8"></tspan><tspan fill="#eef3f8">▌</tspan></text><line x1="0" y1="496" x2="2200" y2="496" stroke="#3d4a5c" stroke-opacity="0.5" stroke-width="1"/><text x="28" y="518" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#5b6b80">⊤ </tspan><tspan fill="#5fd4e0">[OMH]</tspan><tspan fill="#5b6b80"> v2.0.1 </tspan><tspan fill="#3d4a5c">│ </tspan><tspan fill="#e0b34a">3 agents · 2 running · 1 done · $0.032 · ctx 188.4k/272k</tspan></text><text x="28" y="542" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">7c1d9a  </tspan><tspan fill="#c9d4e2">Rewrite the parser with the new grammar</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:ultrabrain(gpt-6-astra:xhigh)</tspan><tspan fill="#5b6b80">  ·  turn 6  ·  $0.0000  ·  cache 71.2%  ·  </tspan><tspan fill="#5ad07a">running</tspan><tspan fill="#5b6b80">  ·  1m</tspan></text><text x="28" y="566" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">8e4f02  </tspan><tspan fill="#c9d4e2">Explain the failing diagnostics</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:deep(claude-fable-5-1:high)</tspan><tspan fill="#5b6b80">  ·  turn 4  ·  $0.0312  ·  cache 55.9%  ·  </tspan><tspan fill="#5ad07a">running</tspan><tspan fill="#5b6b80">  ·  33s</tspan></text><text x="28" y="590" xml:space="preserve" font-family="SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" font-weight="normal" fill="#c9d4e2"><tspan fill="#2fb8c6">▸ </tspan><tspan fill="#5b6b80">9a77bd  </tspan><tspan fill="#c9d4e2">Draft the release note</tspan><tspan fill="#3d4a5c">  ·  </tspan><tspan fill="#5fd4e0">category:writing(kimi-k3:medium)</tspan><tspan fill="#5b6b80">  ·  turn 2  ·  $0.0004  ·  cache 38.0%  ·  </tspan><tspan fill="#c9d4e2">done</tspan><tspan fill="#5b6b80">  ·  9s</tspan></text>
 </g>
-<rect x="0.75" y="0.75" width="1518.5" height="586.5" rx="18" fill="none" stroke="url(#edge)" stroke-width="1.5"/>
+<rect x="0.75" y="0.75" width="2198.5" height="698.5" rx="12" fill="none" stroke="#2fb8c6" stroke-opacity="0.55" stroke-width="1.5"/>
 </svg>
