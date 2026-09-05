@@ -146,6 +146,44 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                 self.assertEqual(governance.classify_memory_admission(content)["status"], "safe")
         self.assertEqual(governance.classify_memory_admission("token-based auth uses rotating tokens")["status"], "safe")
 
+    def test_bare_credential_shapes_are_blocked_and_unknown_opaque_values_need_review(self) -> None:
+        aws = "AK" + "IA" + "A" * 16
+        github = "gh" + "p_" + "a" * 36
+        openai = "sk" + "-" + "a" * 48
+        for content in (
+            aws,
+            github,
+            openai,
+            "https://user:pass@example.com",
+            "-----BEGIN RSA PRIVATE KEY-----",
+        ):
+            with self.subTest(content_kind=content[:4]):
+                self.assertEqual(governance.classify_memory_admission(content)["status"], "blocked")
+
+        self.assertEqual(governance.classify_memory_admission(f"safe {aws} and {github}")["status"], "blocked")
+        self.assertEqual(governance.classify_memory_admission("akia" + "a" * 16)["status"], "blocked")
+        for content in (
+            "AK" + "IA" + "A" * 15,
+            "gh" + "p_" + "a" * 15,
+            "sk" + "-" + "a" * 15,
+        ):
+            with self.subTest(short_shape=content[:4]):
+                self.assertEqual(governance.classify_memory_admission(content)["status"], "safe")
+
+        unknown = "credential: " + "Ab3_" * 12
+        self.assertEqual(governance.classify_memory_admission(unknown)["status"], "needs_review")
+        self.assertEqual(governance.classify_memory_admission("Ab3_" * 12)["status"], "needs_review")
+
+        for content in (
+            "token-based parsing",
+            "secret-management policy",
+            "API key rotation",
+            "Store the API token rotation runbook",
+            "A normal release identifier has no credential shape.",
+        ):
+            with self.subTest(ordinary=content):
+                self.assertEqual(governance.classify_memory_admission(content)["status"], "safe")
+
     def test_scope_invalid_and_scope_mismatch_are_distinct_fail_closed_results(self) -> None:
         with self.assertRaises(ValueError):
             governance.canonical_memory_scope({"kind": "project", "ref": "default", "unexpected": "field"})

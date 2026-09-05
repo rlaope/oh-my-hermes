@@ -3311,9 +3311,16 @@ def _build_project_memory_candidate(
 ) -> dict[str, object]:
     normalized_type = _normalize_record_type(record_type)
     scope = _scope_for_project_memory(scope_kind, scope_ref)
-    normalized_tags = _normalize_tags(tags)
+    raw_tags = _normalize_tags(tags, redact_sensitive=False)
+    normalized_tags = _normalize_tags(raw_tags)
     content_text = str(content or "")
-    safety = _project_memory_safety(summary, content_text, tags=normalized_tags)
+    safety = _project_memory_safety(
+        summary,
+        content_text,
+        tags=raw_tags,
+        source=str(source or "cli"),
+        source_ref=str(source_ref or ""),
+    )
     now = utc_now()
     if expires_at_value:
         # An absolute expiry carries no day count -- the date IS the policy.
@@ -3357,7 +3364,7 @@ def _build_project_memory_candidate(
         "summary": _redact(summary.strip())[:500],
         "scope": scope,
         "tags": normalized_tags,
-        "source": str(source or "cli"),
+        "source": _redact(str(source or "cli")),
         "source_ref": stored_source_ref,
         **({"source_evidence": source_evidence} if source_evidence else {}),
         "created_at": now,
@@ -3473,7 +3480,7 @@ def _record_from_candidate(
         "summary": _redact(str(candidate.get("summary", "")))[:500],
         "scope": scope,
         "tags": _normalize_tags(candidate.get("tags", [])),
-        "source": str(candidate.get("source", "cli")),
+        "source": _redact(str(candidate.get("source", "cli"))),
         "source_class": "omh_local",
         "source_ref": _redact(str(candidate.get("source_ref", "")))[:160],
         # The digest is carried over as observed at capture, never recomputed
@@ -4088,8 +4095,15 @@ def _source_evidence_state(record: dict[str, Any]) -> str:
     return "unchanged" if current == recorded else "changed"
 
 
-def _project_memory_safety(summary: str, content: str, *, tags: list[str]) -> dict[str, object]:
-    classification = classify_memory_admission("\n".join([summary, content, " ".join(tags)]))
+def _project_memory_safety(
+    summary: str,
+    content: str,
+    *,
+    tags: list[str],
+    source: str = "",
+    source_ref: str = "",
+) -> dict[str, object]:
+    classification = classify_memory_admission("\n".join([summary, content, " ".join(tags), source, source_ref]))
     status = str(classification.get("status", "blocked"))
     return {
         "schema_version": "project_memory_safety/v2",
@@ -4323,7 +4337,7 @@ def _scope_for_project_memory(kind: str, ref: str) -> dict[str, str]:
     return scope
 
 
-def _normalize_tags(values: Any) -> list[str]:
+def _normalize_tags(values: Any, *, redact_sensitive: bool = True) -> list[str]:
     if not isinstance(values, (list, tuple)):
         return []
     tags: list[str] = []
@@ -4332,6 +4346,8 @@ def _normalize_tags(values: Any) -> list[str]:
         tag = unicodedata.normalize("NFC", str(value)).strip().lower()
         if not tag or not _SAFE_TAG.match(tag):
             continue
+        if redact_sensitive and _looks_sensitive(tag):
+            tag = "[redacted]"
         if tag not in seen:
             tags.append(tag)
             seen.add(tag)
@@ -4891,7 +4907,9 @@ def _redact(value: str) -> str:
 
 def _looks_sensitive(value: str) -> bool:
     lowered = value.lower()
-    return any(marker in lowered for marker in ("secret", "token", "password", "private-key", "api_key", "apikey"))
+    if any(marker in lowered for marker in ("secret", "token", "password", "private-key", "api_key", "apikey")):
+        return True
+    return classify_memory_admission(value).get("status") == "blocked"
 
 
 def _validate_allowed_keys(value: dict[str, Any], allowed: set[str], errors: list[str], label: str) -> None:

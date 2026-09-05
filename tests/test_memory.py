@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from _local_package import load_local_package
 from _platform_support import requires_posix, requires_posix_permissions
+from _credential_fixtures import AWS_ACCESS_KEY_ID
 
 load_local_package()
 from omh.coding_delegation import build_coding_delegation_payload
@@ -131,6 +132,39 @@ class MemoryContractTests(unittest.TestCase):
             needs_review = capture_project_memory_candidate(paths, "PR #123 fixed this temporarily", record_type="lesson")
             self.assertEqual(needs_review["candidate"]["safety"]["status"], "safe")
             self.assertEqual(needs_review["candidate"]["safety"]["review_reasons"], [])
+
+    def test_project_memory_bare_credentials_are_blocked_and_redacted_before_review(self) -> None:
+        credentials = (
+            AWS_ACCESS_KEY_ID,
+            "gh" + "p_" + "a" * 36,
+            "sk" + "-" + "a" * 48,
+            "https://user:pass@example.com",
+            "-----BEGIN PRIVATE KEY-----",
+        )
+        for credential in credentials:
+            with self.subTest(credential_kind=credential[:4]), TemporaryDirectory() as tmp:
+                paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+                write_setup_profile(paths, memory_mode="auto-safe")
+
+                captured = capture_project_memory_candidate(
+                    paths,
+                    f"Observed {credential}",
+                    tags=[credential],
+                    source=credential,
+                    source_ref=credential,
+                )
+                candidate = captured["candidate"]
+                serialized = json.dumps(captured, sort_keys=True)
+                self.assertEqual(candidate["status"], "blocked_review_required")
+                self.assertFalse(captured["auto_approved"])
+                self.assertNotIn(credential, serialized)
+                self.assertNotIn(credential, json.dumps(build_project_memory_review(paths), sort_keys=True))
+
+                with self.assertRaises(ValueError):
+                    approve_project_memory_candidate(paths, candidate["candidate_id"])
+                rejected = reject_project_memory_candidate(paths, candidate["candidate_id"], reason=f"blocked {credential}")
+                self.assertNotIn(credential, json.dumps(rejected, sort_keys=True))
+                self.assertFalse((paths.memory_dir / "records").exists())
 
     def test_project_memory_auto_safe_policy_auto_approves_safe_candidates(self) -> None:
         with TemporaryDirectory() as tmp:

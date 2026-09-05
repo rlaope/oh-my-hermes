@@ -44,7 +44,7 @@ PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION = "project_memory_review_record/v2"
 
 # Governance policy and classifier versions
 MEMORY_GOVERNANCE_POLICY_VERSION = "governance/v2"
-MEMORY_CLASSIFIER_VERSION = "classifier/v2"
+MEMORY_CLASSIFIER_VERSION = "classifier/v3"
 
 # Retention classes
 RETENTION_CLASSES = frozenset({"volatile", "standard", "durable"})
