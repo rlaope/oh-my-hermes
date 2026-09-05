@@ -184,7 +184,9 @@ def _has_single_case_alphanumeric_opaque_mix(token: str) -> bool:
     if any(char.islower() for char in letters) and any(char.isupper() for char in letters):
         return False
     if not digits:
-        return len(token) >= 32 and all(char.isupper() for char in letters)
+        if all(char.isupper() for char in letters):
+            return len(token) >= 32
+        return len(token) >= 32 and len(token) % 4 == 0 and len(set(token)) >= 8
     if len(token) >= 32 and all(char.isupper() for char in letters):
         return True
     if len(digits) < 3:
@@ -208,7 +210,7 @@ def _has_embedded_opaque_value(content: str) -> bool:
 
 
 def _has_separator_split_opaque_value(content: str) -> bool:
-    """Catch one opaque value split into equal-sized path/package fragments."""
+    """Catch one opaque value split into path or package fragments."""
     for match in _SEPARATOR_SPLIT_OPAQUE_PATTERN.finditer(content):
         fragments = re.findall(r"[A-Za-z0-9]+", match.group(0))
         for start in range(len(fragments)):
@@ -216,15 +218,20 @@ def _has_separator_split_opaque_value(content: str) -> bool:
                 window = fragments[start:end]
                 lengths = [len(fragment) for fragment in window]
                 combined = "".join(window)
-                equal_short_chunks = len(window) >= 4 and min(lengths) >= 4 and max(lengths) - min(lengths) <= 2
-                equal_long_chunks = len(window) >= 2 and min(lengths) >= 12 and max(lengths) - min(lengths) <= 4
-                if len(combined) < 32 or not (equal_short_chunks or equal_long_chunks):
+                chunked = (len(window) >= 4 and min(lengths) >= 4) or (
+                    len(window) >= 2 and min(lengths) >= 12
+                )
+                if len(combined) < 32 or not chunked:
                     continue
                 if _HEX_DIGEST_PATTERN.fullmatch(combined) or _looks_like_structured_identifier(combined):
                     continue
                 mixed = _has_opaque_character_mix(combined)
                 uppercase_fragments = sum(any(char.isupper() for char in fragment) for fragment in window)
-                if (mixed and uppercase_fragments >= 2) or _has_single_case_alphanumeric_opaque_mix(combined):
+                every_fragment_has_uppercase = uppercase_fragments == len(window)
+                single_case_with_signal = _has_single_case_alphanumeric_opaque_mix(combined) and (
+                    any(char.isdigit() for char in combined) or combined.isupper()
+                )
+                if (mixed and every_fragment_has_uppercase) or single_case_with_signal:
                     return True
     return False
 

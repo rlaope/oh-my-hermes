@@ -296,13 +296,17 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "ABCDEFGHabcdIJKLMNOPQRSTUVWXwxyz",
             "ABCDabcdEFGHijklMNOPqrstUVWXYZAB",
             "ABCDabcdEFGHijklMNOPqrstUVWXyzab",
+            "abcdefghijklmnopqrstuvwxyzaaaaaa",
+            "abcdefghijklmnopqrstuvwxyzaaaaaaaaaa",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZaBcdef",
         )
         uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
         split_opaque = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"
+        uneven_parts = ("ABCDE", "FGHIJ", "KLMNO", "PQRSTUVWXYZaBcdef")
 
         for opaque in (*low_transition_base64, uppercase_alphanumeric):
             if opaque in low_transition_base64:
-                self.assertEqual(len(base64.b64decode(opaque, validate=True)), 24)
+                self.assertEqual(len(base64.b64decode(opaque, validate=True)), len(opaque) // 4 * 3)
             with self.subTest(opaque=opaque):
                 self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
             for container in (
@@ -324,6 +328,17 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                 f"C:\\safe\\{value}\\artifact.txt",
             ):
                 with self.subTest(separator=separator, container=container):
+                    self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
+
+            uneven = separator.join(uneven_parts)
+            for container in (
+                uneven,
+                f"/safe/{uneven}/artifact.txt",
+                f"https://example.com/{uneven}/artifact",
+                f"@scope/{uneven}",
+                f"C:\\safe\\{uneven}\\artifact.txt",
+            ):
+                with self.subTest(separator=separator, uneven_container=container):
                     self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
 
         for semantic_identifier in (
