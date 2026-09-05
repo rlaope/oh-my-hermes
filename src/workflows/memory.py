@@ -4417,7 +4417,7 @@ def _normalize_tags(values: Any, *, redact_sensitive: bool = True) -> list[str]:
             continue
         if raw_tag == "[redacted]":
             tag = raw_tag
-        elif redact_sensitive and _looks_sensitive(raw_tag):
+        elif redact_sensitive and contains_credential_like_material(raw_tag):
             tag = "[redacted]"
         else:
             tag = raw_tag.lower()

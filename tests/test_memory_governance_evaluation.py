@@ -253,6 +253,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "0123456789abcdef0123456789abcdef01234567",
             "123e4567-e89b-12d3-a456-426614174000",
             "01890f3e-8b5a-7cc2-98c7-2f9c0b6a1d43",
+            "01890f3e-8b5a-7cC2-98c7-2f9c0b6a1d43",
             "DeterministicProjectConfigurationManager",
             "DeterministicProjectConfigurationManagerV2",
             "AlicePlatformReviewer2026Account",
@@ -260,6 +261,9 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "@scope/hermes-agent-runtime-v2-package",
             "packages/hermes-agent-runtime-v2-package/src",
             "https://example.com/releases/hermes-agent-v2-package",
+            "@scope/HermesAgent-runtime-v2-package",
+            "packages/HermesAgent-runtime-v2-package/src",
+            "https://github.com/NousResearch/HermesAgent-runtime-v2-package",
             "project-2026-memory-hardening-identifier",
             "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/memory",
             (

@@ -55,7 +55,7 @@ _NEEDS_REVIEW_PATTERNS = (
 _OPAQUE_TOKEN_PATTERN = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9+/=_-]{32,}(?![A-Za-z0-9])")
 _HEX_DIGEST_PATTERN = re.compile(r"(?:[0-9A-Fa-f]{32}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{96}|[0-9A-Fa-f]{128})")
 _UUID_PATTERN = re.compile(
-    r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-5][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}"
+    r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-8][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}"
 )
 _DIGEST_ASSIGNMENT_PATTERN = re.compile(
     r"(?:md5|sha(?:1|224|256|384|512))=(?:[0-9A-Fa-f]{32}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{56}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{96}|[0-9A-Fa-f]{128})",
@@ -83,7 +83,8 @@ def _looks_like_opaque_token(content: str) -> bool:
                 "/" in token
                 and not any(char in "+=" for char in token)
                 and (
-                    (token.startswith("/") and token.count("/") >= 2)
+                    "-" in token
+                    or (token.startswith("/") and token.count("/") >= 2)
                     or (
                         match.start() > 0
                         and content[match.start() - 1] == "."
