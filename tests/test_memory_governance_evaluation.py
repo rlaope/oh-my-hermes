@@ -303,6 +303,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "abcdefghijklmnopqrstuvwxyzaaaaaaaa",
             "abcdefghijklmnopqrstuvwxyzaaaaaaaaa",
             "ABCDEFGHIJKLMNOPQRSTUVWXYZaBcdef",
+            "J" + "j" * 9 + "K" + "k" * 9 + "L" + "l" * 11,
         )
         uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
         split_opaque = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"

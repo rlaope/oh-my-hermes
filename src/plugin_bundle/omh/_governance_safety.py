@@ -69,7 +69,10 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
 _CAMEL_WORD = r"[A-Z][a-z]{2,}(?:\d+)?"
 _VERSION_COMPONENT = r"V\d+"
 _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
-    rf"(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
+    rf"(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{4,}}"
+)
+_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
+    rf"(?:{_CAMEL_WORD}){{2}}Observation"
 )
 _LOWER_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
     rf"[a-z]{{2,}}(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
@@ -93,6 +96,7 @@ def _looks_like_structured_identifier(segment: str) -> bool:
         pattern.fullmatch(segment)
         for pattern in (
             _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN,
+            _THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIER_PATTERN,
             _LOWER_CAMEL_CASE_IDENTIFIER_PATTERN,
             _ACRONYM_VERSION_IDENTIFIER_PATTERN,
         )
