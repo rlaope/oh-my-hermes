@@ -57,7 +57,10 @@ def run_memory_operation(
     normalized = build_memory_operation(operation_id, operation_type, steps, _stamp(now))
     with file_lock(paths.memory_index_path, private=True):
         ensure_dir(paths.memory_operations_dir, private=True)
-        _recover_unlocked(paths, rebuild_index, step_writer, now, skip=operation_id)
+        # A candidate-bound writer can only interpret its own operation. Passing
+        # it to unrelated interrupted records can poison their recovery state.
+        if step_writer is None:
+            _recover_unlocked(paths, rebuild_index, None, now, skip=operation_id)
         path = _operation_path(paths, operation_id)
         if path.is_symlink():
             return {"operation_id": operation_id, "state": "corrupt"}
@@ -209,6 +212,12 @@ def _recover_unlocked(paths: OmhPaths, rebuild: IndexRebuilder | None, writer: S
             else:
                 results.append({"operation_id": "", "state": "corrupt"})
         else:
+            if writer is None and record.get("state") not in {"completed", "failed", "corrupt"} and any(
+                step.get("action") not in {"copy", "delete", "move", "rewrite_jsonl", "write_json"}
+                for step in record.get("steps", [])
+                if isinstance(step, Mapping)
+            ):
+                continue
             results.append(_resume_unlocked(paths, record, rebuild, writer, now))
     return results
 

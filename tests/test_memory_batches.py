@@ -490,6 +490,149 @@ class MemoryBatchTests(TestCase):
             self.assertEqual(result["reason_code"], "scope_precondition_changed")
             self.assertEqual(source_path.read_bytes(), source_bytes)
 
+    def test_multiscope_post_preflight_drift_does_not_remove_source(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            source_path = paths.memory_dir / "scopes" / "project.json"
+            source_path.parent.mkdir(parents=True)
+            source = {
+                "schema_version": "omh_memory_scope/v2",
+                "scope": {"kind": "project", "ref": "default"},
+                "items": {
+                    "live-target": {
+                        "item_id": "live-item",
+                        "revision": 1,
+                        "key": "live_key",
+                        "summary": "Original reviewed value",
+                        "value": "original",
+                    }
+                },
+                "tombstones": {},
+            }
+            source_path.write_text(json.dumps(source, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = _batch("live-target")
+            updates = batch["updates"]
+            if not isinstance(updates, list) or not isinstance(updates[0], dict):
+                self.fail("batch fixture updates must contain a mapping")
+            updates[0].update(
+                {
+                    "op": "change_scope",
+                    "from_scope": {"kind": "project", "ref": "default"},
+                    "to_scope": {"kind": "run", "ref": "destination"},
+                }
+            )
+            staged = self._stage_and_remember(paths, batch)
+            source_bytes = source_path.read_bytes()
+            destination_path = paths.memory_dir / "scopes" / "runs" / "destination.json"
+            calls = 0
+
+            def drift_destination_after_preflight(_name: str) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    destination_path.parent.mkdir(parents=True)
+                    destination_path.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "omh_memory_scope/v2",
+                                "scope": {"kind": "run", "ref": "destination"},
+                                "items": {"live-item": {"item_id": "live-item", "value": "concurrent"}},
+                                "tombstones": {},
+                            },
+                            indent=2,
+                            sort_keys=True,
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+
+            result = apply_approved_memory_update_batch(
+                paths,
+                staged["batch_id"],
+                write_hook=drift_destination_after_preflight,
+            )
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "scope_precondition_changed")
+            self.assertEqual(source_path.read_bytes(), source_bytes)
+
+    def test_concurrent_add_of_same_logical_target_rejects_second_candidate(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            first = self._stage_and_remember(paths, _batch("shared-target"))
+            second = self._stage_and_remember(paths, _batch("shared-target"))
+
+            self.assertEqual(
+                apply_approved_memory_update_batch(paths, first["batch_id"])["status"],
+                "applied",
+            )
+            rejected = apply_approved_memory_update_batch(paths, second["batch_id"])
+
+            self.assertFalse(rejected["applied"])
+            self.assertEqual(rejected["reason_code"], "scope_precondition_changed")
+            scope = json.loads((paths.memory_dir / "scopes" / "project.json").read_text(encoding="utf-8"))
+            matching = [item for item in scope["items"].values() if item.get("key") == "shared_target"]
+            first_items = first["items"]
+            if not isinstance(first_items, list) or not isinstance(first_items[0], dict):
+                self.fail("staged batch items must contain a mapping")
+            self.assertEqual(len(matching), 1)
+            self.assertEqual(matching[0]["item_id"], first_items[0]["item_id"])
+
+    def test_unrelated_batch_does_not_poison_interrupted_batch_recovery(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            first_batch = {
+                "schema_version": "memory_update_batch/v1",
+                "source_surface": "test",
+                "updates": [
+                    {
+                        "op": "update",
+                        "item_id": "project-item",
+                        "scope": {"kind": "project", "ref": "default"},
+                        "key": "project_item",
+                        "value": "project value",
+                        "summary": "Project item",
+                    },
+                    {
+                        "op": "update",
+                        "item_id": "thread-item",
+                        "scope": {"kind": "thread", "ref": "thread-1"},
+                        "key": "thread_item",
+                        "value": "thread value",
+                        "summary": "Thread item",
+                    },
+                ],
+            }
+            first = self._stage_and_remember(paths, first_batch)
+            calls = 0
+
+            def interrupt_second(_name: str) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise RuntimeError("injected interruption")
+
+            with self.assertRaisesRegex(RuntimeError, "injected interruption"):
+                apply_approved_memory_update_batch(paths, first["batch_id"], write_hook=interrupt_second)
+            operation_paths = list((paths.memory_dir / "operations").glob("op_apply_*.json"))
+            self.assertEqual(len(operation_paths), 1)
+            operation_path = operation_paths[0]
+
+            second = self._stage_and_remember(
+                paths,
+                _batch("run-item", scope={"kind": "run", "ref": "run-2"}),
+            )
+            self.assertEqual(
+                apply_approved_memory_update_batch(paths, second["batch_id"])["status"],
+                "applied",
+            )
+            interrupted = json.loads(operation_path.read_text(encoding="utf-8"))
+            self.assertEqual(interrupted["state"], "interrupted")
+            self.assertEqual(
+                apply_approved_memory_update_batch(paths, first["batch_id"])["status"],
+                "applied",
+            )
+
     def test_stage_rejects_credential_shaped_legacy_item_id_without_echo(self) -> None:
         credential = "gh" + "u_" + "a" * 36
         with TemporaryDirectory() as home:

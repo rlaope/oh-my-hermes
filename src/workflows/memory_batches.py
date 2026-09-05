@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ..plugin_bundle.omh.memory_governance import MEMORY_GOVERNANCE_POLICY_VERSION, MEMORY_SCOPE_SCHEMA_VERSION, PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION, SOURCE_CLASSES, build_retention, canonical_memory_scope, canonical_payload_digest, classify_memory_admission, evaluate_renderable_strings, stable_artifact_identity
-from ..system.local_store import atomic_write_json, ensure_dir, file_lock, read_json_object_result, utc_now
+from ..system.local_store import atomic_write_json, ensure_dir, file_lock, read_json_object_result
 from ..system.paths import OmhPaths
 from ._memory_store_validation import safe_token
 from .memory_store import run_memory_operation
@@ -173,8 +173,8 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
     if any(review["decision"] != "remember" for review in reviews.values()):
         return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "review_required", "reason_code": "review_required", "applied": False, "batch_id": batch_id}
     scopes = sorted({_relative_scope(scope) for item in candidate["items"] for scope in _item_scopes(item)})
-    steps = [
-        {"name": f"write_scope_{index}", "action": "write_batch_scope", "source": _candidate_relative(batch_id), "target": target, "revision": preconditions[target]}
+    scope_steps = [
+        {"name": f"write_scope_{index}", "action": "write_batch_scope", "target": target, "revision": preconditions[target]}
         for index, target in enumerate(scopes, start=1)
     ]
 
@@ -190,16 +190,37 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
             raise _ScopePreconditionChanged("reviewed scope changed before apply")
 
     def preflight(check_paths: OmhPaths) -> None:
-        for step in steps:
-            assert_precondition(check_paths, step)
+        for scope_step in scope_steps:
+            assert_precondition(check_paths, scope_step)
 
-    def write_scope(check_paths: OmhPaths, step: dict[str, str]) -> None:
-        if step["action"] != "write_batch_scope":
+    def write_scopes(check_paths: OmhPaths, step: dict[str, str]) -> str:
+        if step["action"] != "write_batch_scopes":
             raise ValueError("unexpected batch apply operation")
+        # Run every interruption/drift hook before rechecking any target so a
+        # later target cannot fail after an earlier scope has been mutated.
         if write_hook:
-            write_hook(step["name"])
-        assert_precondition(check_paths, step)
-        _apply_scope(check_paths, candidate, reviews, step["target"])
+            for scope_step in scope_steps:
+                write_hook(scope_step["name"])
+        for scope_step in scope_steps:
+            assert_precondition(check_paths, scope_step)
+        for scope_step in scope_steps:
+            _apply_scope(
+                check_paths,
+                candidate,
+                reviews,
+                scope_step["target"],
+                updated_at=step["revision"],
+            )
+        return "written"
+
+    steps = [
+        {
+            "name": "write_reviewed_scopes",
+            "action": "write_batch_scopes",
+            "target": _candidate_relative(batch_id),
+            "revision": _stamp(_utc(now)),
+        }
+    ]
 
     try:
         operation = run_memory_operation(
@@ -207,7 +228,7 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
             operation_id=str(candidate["apply_operation_id"]),
             operation_type="apply_memory_batch",
             steps=steps,
-            step_writer=write_scope,
+            step_writer=write_scopes,
             preflight=preflight,
             now=now,
         )
@@ -269,7 +290,14 @@ def _proposal(
     return {"item_id": item_id, "candidate_revision": 1, "review_id": _opaque("review"), "op": op, "target_ref": target_ref, "scope": scope, "from_scope": from_scope, "retention": retention, "artifact": artifact, "artifact_identity": stable_artifact_identity(artifact), "payload_digest": canonical_payload_digest(artifact), "batch_id": batch_id}
 
 
-def _apply_scope(paths: OmhPaths, candidate: dict[str, Any], reviews: dict[str, dict[str, Any]], target: str) -> None:
+def _apply_scope(
+    paths: OmhPaths,
+    candidate: dict[str, Any],
+    reviews: dict[str, dict[str, Any]],
+    target: str,
+    *,
+    updated_at: str,
+) -> None:
     matching = [item for item in candidate["items"] if target in {_relative_scope(scope) for scope in _item_scopes(item)}]
     if not matching:
         return
@@ -291,13 +319,13 @@ def _apply_scope(paths: OmhPaths, candidate: dict[str, Any], reviews: dict[str, 
             data["items"].pop(item["target_ref"], None)
         elif op == "forget":
             data["items"].pop(item["target_ref"], None)
-            data["tombstones"][item["target_ref"]] = {"item_id": item["target_ref"], "operation_id": candidate["apply_operation_id"], "candidate_item_id": item["item_id"], "review_id": item["review_id"], "tombstoned_at": utc_now()}
+            data["tombstones"][item["target_ref"]] = {"item_id": item["target_ref"], "operation_id": candidate["apply_operation_id"], "candidate_item_id": item["item_id"], "review_id": item["review_id"], "tombstoned_at": updated_at}
         else:
             if data["items"].get(item["item_id"], {}).get("candidate_item_id") == item["item_id"]:
                 continue
             data["items"].pop(item["target_ref"], None)
             data["items"][item["item_id"]] = _approved_item(candidate, item, reviews[item["item_id"]])
-    data["updated_at"] = utc_now()
+    data["updated_at"] = updated_at
     atomic_write_json(path, data, private=True)
 
 
@@ -543,10 +571,14 @@ def _scope_precondition_digest(
         if isinstance(item, Mapping) and target in {_relative_scope(scope) for scope in _item_scopes(item)}
     ]
     item_keys: set[str] = set()
+    logical_keys: set[str] = set()
     tombstone_keys: set[str] = set()
     for item in matching:
         target_ref = str(item.get("target_ref", ""))
         item_id = str(item.get("item_id", ""))
+        artifact = item.get("artifact")
+        if isinstance(artifact, Mapping):
+            logical_keys.add(str(artifact.get("key", "")))
         item_keys.add(target_ref)
         if not (
             item.get("op") == "forget"
@@ -568,6 +600,15 @@ def _scope_precondition_digest(
             {key: current_tombstones.get(key) for key in sorted(tombstone_keys)}
             if isinstance(current_tombstones, Mapping)
             else current_tombstones
+        ),
+        "logical_items": (
+            {
+                str(item_id): item
+                for item_id, item in sorted(current_items.items(), key=lambda pair: str(pair[0]))
+                if isinstance(item, Mapping) and str(item.get("key", "")) in logical_keys
+            }
+            if isinstance(current_items, Mapping)
+            else current_items
         ),
     }
     canonical = json.dumps(projection, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
