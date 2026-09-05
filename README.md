@@ -235,9 +235,10 @@ Astra: the same answers for $0.66 instead of $4.29, in 5 minutes instead of
 
 ### 02 · Categories you own, per executor
 
-`ultrabrain`, `deep`, `architect`, `quick`, `writing`, `visual-engineering`:
-each is a chain of model + effort, per coding executor, that you can read and
-override in one file. A chain advances when a provider rejects a model, and a
+`ultrabrain`, `deep`, `architect`, `unspecified-high`, `unspecified-low`,
+`quick`, `writing`, `visual-engineering`, `artistry`: each is an editable
+chain of model + effort, the same nine listed under Recommended models below,
+read and overridden in one file. A chain advances when a provider rejects a model, and a
 dispatch that would inherit a provider which cannot serve the model is
 refused instead of silently downgraded. Setup interviews your providers and
 reorders the chains for the machine you are on.
