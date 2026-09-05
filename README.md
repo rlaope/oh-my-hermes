@@ -571,6 +571,11 @@ dimensions rather than collapsed into one marketing score. See
 - [Workflow reference](docs/WORKFLOWS.md)
 - [Roles](docs/ROLES.md)
 - [Application cases](docs/APPLICATION_CASES.md)
+- [Model routing, fan-out contracts, and request scoring](docs/FANOUT.md)
+- [Per-model calibration map](MODEL_OPTI.md)
+- [Evidence rules and capability impact](docs/CAPABILITY_IMPACT.md)
+- [Long-term memory model](docs/MEMORY.md)
+- [Live model benchmark and measured results](benchmarks/live-model-tools/v1/README.md)
 - [Release and development](docs/RELEASE.md)
 
 <br>
