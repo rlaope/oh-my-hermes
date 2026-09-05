@@ -32,6 +32,12 @@ except ImportError:  # running as a standalone script from tools/package_manager
 PYPROJECT_VERSION_PATTERN = re.compile(r'^version = "([^"]+)"$', re.MULTILINE)
 SOURCE_VERSION_PATTERN = re.compile(r'^__version__ = "([^"]+)"$', re.MULTILINE)
 PLUGIN_VERSION_PATTERN = re.compile(r'^version: "([^"]+)"$', re.MULTILINE)
+# The landing page's hero badge: one static line in index.html plus one string
+# per locale in i18n.js. Both are gated against __version__ by
+# VersionSurfaceParityTests, so a bump that skipped them would fail the suite
+# the release workflow runs on the bumped tree.
+SITE_BADGE_PATTERN = re.compile(r'(data-i18n="hero\.badge">[^<]*?· v)(\d+\.\d+\.\d+)(</span>)')
+SITE_I18N_BADGE_PATTERN = re.compile(r'((?:en|ko|ja|zh): "[^"\n]*?· v)(\d+\.\d+\.\d+)(")')
 STABLE_CHANNEL = "stable"
 
 
@@ -61,6 +67,27 @@ def _rewrite_one_version(
             f"{surface} must carry exactly one literal version line"
         )
     return pattern.sub(replacement, content, count=1)
+
+
+def _rewrite_badge_versions(
+    path: Path,
+    pattern: re.Pattern[str],
+    new_version: str,
+    *,
+    surface: str,
+    expected: int,
+) -> str:
+    """Rewrite every hero-badge version in one site file, requiring exactly `expected` of them."""
+    try:
+        content = path.read_text()
+    except OSError as exc:
+        raise DistributionError(f"could not read {surface}") from exc
+    matches = pattern.findall(content)
+    if len(matches) != expected:
+        raise DistributionError(
+            f"{surface} must carry exactly {expected} hero-badge version string(s)"
+        )
+    return pattern.sub(lambda match: f"{match.group(1)}{new_version}{match.group(3)}", content)
 
 
 def bump_version_surfaces(
@@ -109,6 +136,20 @@ def bump_version_surfaces(
             PLUGIN_VERSION_PATTERN,
             f'version: "{new_version}"',
             surface="src/plugin_bundle/omh/plugin.yaml",
+        ),
+        project_root / "site" / "index.html": _rewrite_badge_versions(
+            project_root / "site" / "index.html",
+            SITE_BADGE_PATTERN,
+            new_version,
+            surface="site/index.html",
+            expected=1,
+        ),
+        project_root / "site" / "i18n.js": _rewrite_badge_versions(
+            project_root / "site" / "i18n.js",
+            SITE_I18N_BADGE_PATTERN,
+            new_version,
+            surface="site/i18n.js",
+            expected=4,
         ),
     }
     if dry_run:
