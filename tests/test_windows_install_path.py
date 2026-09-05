@@ -78,6 +78,25 @@ class WindowsInstallerPresenceTests(unittest.TestCase):
         self.assertNotIn(b"\r\n", INSTALL_PS1.read_bytes())
 
 
+class WindowsInstallerRedirectResponseTests(unittest.TestCase):
+    def test_redirect_headers_and_invocation_guard_are_capability_checked(self) -> None:
+        powershell = INSTALL_PS1.read_text(encoding="utf-8")
+
+        # PowerShell 7's HttpResponseHeaders has no indexer, while the other
+        # supported response shapes do. The installer must hand both response
+        # paths to one accessor that probes what the actual object supports.
+        self.assertNotIn("$OmhLatestResponse.Headers['Location']", powershell)
+        self.assertNotIn("$OmhLatestError.Headers['Location']", powershell)
+        self.assertEqual(powershell.count("Get-OmhRedirectLocation $OmhLatest"), 2)
+        self.assertIn("PSObject.Properties['Headers']", powershell)
+        self.assertIn("PSObject.Properties['Location']", powershell)
+
+        # `irm | iex` has no MyCommand.Path. StrictMode makes touching that
+        # absent property a terminating error, so the exit guard must probe it.
+        self.assertNotIn("$MyInvocation.MyCommand.Path", powershell)
+        self.assertIn("PSObject.Properties['Path']", powershell)
+
+
 class WindowsInstallerContractParityTests(unittest.TestCase):
     """install.ps1 must accept the same inputs install.sh does."""
 
