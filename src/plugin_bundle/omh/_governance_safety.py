@@ -64,18 +64,23 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
 _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
     r"(?:[A-Z][a-z]{2,}(?:\d+)*){2,}(?:[A-Z](?:[a-z]{2,})?\d+)?"
 )
+_WINDOWS_ABSOLUTE_PATH_PATTERN = re.compile(r"^(?:[A-Za-z]:\\|\\\\)[^\r\n]+$")
 _SAFE_REASON_SEGMENT = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
 def _looks_like_opaque_token(content: str) -> bool:
     """Recognize encoded opaque values without consuming common identifiers."""
+    windows_path = bool(_WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content)) and not any(
+        char in "+=" for char in content
+    )
     for match in _OPAQUE_TOKEN_PATTERN.finditer(content):
         token = match.group(0)
         # Common immutable identifiers and explicit digest assignments are
         # evidence metadata, not credential evidence. A trailing Base64
         # padding marker is not an assignment and must remain review-gated.
         if (
-            _HEX_DIGEST_PATTERN.fullmatch(token)
+            windows_path
+            or _HEX_DIGEST_PATTERN.fullmatch(token)
             or _UUID_PATTERN.fullmatch(token)
             or _DIGEST_ASSIGNMENT_PATTERN.fullmatch(token)
             or _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN.fullmatch(token)

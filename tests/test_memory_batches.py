@@ -5,12 +5,14 @@ import multiprocessing
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 from _local_package import load_local_package
 from _platform_support import requires_fcntl_locks
 
 load_local_package()
 from omh.paths import resolve_paths
+from omh.workflows import memory_batches as memory_batches_workflow
 from omh.workflows.memory import (
     _memory_snapshots,
     apply_approved_memory_update_batch,
@@ -249,6 +251,174 @@ class MemoryBatchTests(TestCase):
             candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
             candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
             candidate["items"][0]["retention"]["class"] = "durable"
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "review_linkage_invalid")
+            self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_rejects_a_stored_review_whose_decision_was_changed(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            staged = stage_memory_update_batch(paths, _batch("tampered-review-decision"))
+            item_id = staged["items"][0]["item_id"]
+            reviewed = review_memory_update_batch(
+                paths,
+                staged["batch_id"],
+                {item_id: "refuse"},
+                reviewer_label="operator-label",
+            )
+            review_path = paths.memory_dir / "reviews" / f"{reviewed['items'][0]['review_id']}.json"
+            review = json.loads(review_path.read_text(encoding="utf-8"))
+            review["decision"] = "remember"
+            review_path.write_text(json.dumps(review, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "review_linkage_invalid")
+            self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_rejects_changed_stored_review_metadata(self) -> None:
+        mutations = {
+            "reviewer_label": "forged-reviewer",
+            "reviewed_at": "2027-01-01T00:00:00Z",
+            "policy_version": "forged-policy",
+            "forged_authorization": "accepted",
+        }
+        for field, value in mutations.items():
+            with self.subTest(field=field), TemporaryDirectory() as home:
+                paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+                staged = stage_memory_update_batch(paths, _batch(f"tampered-review-{field}"))
+                item_id = staged["items"][0]["item_id"]
+                reviewed = review_memory_update_batch(
+                    paths,
+                    staged["batch_id"],
+                    {item_id: "remember"},
+                    reviewer_label="operator-label",
+                )
+                review_path = paths.memory_dir / "reviews" / f"{reviewed['items'][0]['review_id']}.json"
+                review = json.loads(review_path.read_text(encoding="utf-8"))
+                review[field] = value
+                review_path.write_text(json.dumps(review, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+                result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+                self.assertFalse(result["applied"])
+                self.assertEqual(result["reason_code"], "review_linkage_invalid")
+                self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_binds_candidate_control_metadata_before_any_write(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            staged = self._stage_and_remember(paths, _batch("tampered-apply-operation"))
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["apply_operation_id"] = "op_apply_forged"
+            candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "review_linkage_invalid")
+            self.assertFalse((paths.memory_dir / "scopes").exists())
+            self.assertFalse((paths.memory_dir / "operations" / "op_apply_forged.json").exists())
+
+    def test_review_retry_overwrites_unsealed_orphan_authorization(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            staged = stage_memory_update_batch(paths, _batch("interrupted-review"))
+            item_id = staged["items"][0]["item_id"]
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            real_write = memory_batches_workflow.atomic_write_json
+
+            def interrupt_seal(path, payload, **kwargs):
+                if Path(path) == candidate_path and isinstance(payload, dict) and "review_seals" in payload:
+                    raise RuntimeError("injected candidate seal interruption")
+                return real_write(path, payload, **kwargs)
+
+            with patch.object(memory_batches_workflow, "atomic_write_json", side_effect=interrupt_seal):
+                with self.assertRaisesRegex(RuntimeError, "candidate seal interruption"):
+                    review_memory_update_batch(
+                        paths,
+                        staged["batch_id"],
+                        {item_id: "remember"},
+                        reviewer_label="operator-label",
+                    )
+
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            self.assertNotIn("review_seals", candidate)
+            review_path = paths.memory_dir / "reviews" / f"{candidate['items'][0]['review_id']}.json"
+            orphan = json.loads(review_path.read_text(encoding="utf-8"))
+            orphan["reviewed_at"] = "2030-01-01T00:00:00Z"
+            orphan["forged_authorization"] = "accepted"
+            review_path.write_text(json.dumps(orphan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            review_memory_update_batch(
+                paths,
+                staged["batch_id"],
+                {item_id: "remember"},
+                reviewer_label="operator-label",
+            )
+            stored = json.loads(review_path.read_text(encoding="utf-8"))
+
+            self.assertNotEqual(stored["reviewed_at"], "2030-01-01T00:00:00Z")
+            self.assertNotIn("forged_authorization", stored)
+            self.assertTrue(apply_approved_memory_update_batch(paths, staged["batch_id"])["applied"])
+
+    def test_apply_rejects_missing_wrong_or_extra_review_seals_before_any_write(self) -> None:
+        for mutation in ("missing", "wrong", "extra"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as home:
+                paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+                staged = self._stage_and_remember(paths, _batch(f"{mutation}-review-seal"))
+                candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+                item_id = staged["items"][0]["item_id"]
+                seals = candidate["review_seals"]
+                self.assertIsInstance(seals, dict)
+                if mutation == "missing":
+                    seals.pop(item_id)
+                elif mutation == "wrong":
+                    seals[item_id] = "0" * 64
+                else:
+                    seals["phantom-item"] = "0" * 64
+                candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+                result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+                self.assertFalse(result["applied"])
+                self.assertEqual(result["reason_code"], "review_linkage_invalid")
+                self.assertFalse((paths.memory_dir / "scopes").exists())
+
+    def test_apply_binds_full_candidate_item_membership_before_any_write(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            batch = _batch("remember-membership")
+            updates = batch["updates"]
+            if not isinstance(updates, list):
+                self.fail("batch fixture updates must be a list")
+            updates.append(
+                {
+                    "op": "update",
+                    "item_id": "defer-membership",
+                    "scope": {"kind": "project", "ref": "default"},
+                    "key": "defer_membership",
+                    "value": "value for deferred membership",
+                    "summary": "Remember deferred membership",
+                }
+            )
+            staged = stage_memory_update_batch(paths, batch)
+            decisions = {
+                staged["items"][0]["item_id"]: "remember",
+                staged["items"][1]["item_id"]: "defer",
+            }
+            review_memory_update_batch(paths, staged["batch_id"], decisions, reviewer_label="operator-label")
+            candidate_path = paths.memory_dir / "candidates" / f"{staged['batch_id']}.json"
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            removed = candidate["items"].pop()
+            candidate["review_seals"].pop(removed["item_id"])
             candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
             result = apply_approved_memory_update_batch(paths, staged["batch_id"])

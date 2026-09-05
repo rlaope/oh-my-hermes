@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import secrets
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
@@ -28,6 +30,18 @@ _REVIEW_BOUND_ITEM_KEYS = (
     "retention",
     "artifact_identity",
     "payload_digest",
+)
+_REVIEW_KEYS = frozenset(
+    {
+        "schema_version",
+        "batch_id",
+        "candidate_digest",
+        *_REVIEW_BOUND_ITEM_KEYS,
+        "decision",
+        "reviewer_label",
+        "policy_version",
+        "reviewed_at",
+    }
 )
 
 
@@ -61,22 +75,49 @@ def stage_memory_update_batch(paths: OmhPaths, batch: Mapping[str, object], *, n
 
 
 def review_memory_update_batch(paths: OmhPaths, batch_id: str, decisions: Mapping[str, object] | list[Mapping[str, object]], *, reviewer_label: str = "operator", now: datetime | None = None) -> dict[str, object]:
-    candidate = _candidate(paths, batch_id)
-    decision_map = _decisions(candidate, decisions)
     label = _label(reviewer_label)
     reviewed_at = _stamp(_utc(now))
-    reviews = [_review_record(candidate, item, decision_map[item["item_id"]], label, reviewed_at) for item in candidate["items"]]
     with file_lock(paths.memory_index_path, private=True):
+        candidate = _candidate(paths, batch_id)
+        decision_map = _decisions(candidate, decisions)
+        reviews = [_review_record(candidate, item, decision_map[item["item_id"]], label, reviewed_at) for item in candidate["items"]]
         ensure_dir(_reviews_dir(paths), private=True)
+        existing_seals = candidate.get("review_seals", {})
+        if not isinstance(existing_seals, dict):
+            raise ValueError("batch review linkage is corrupt")
+        seals: dict[str, str] = {}
+        items_by_review = {str(item["review_id"]): item for item in candidate["items"]}
+        expected_item_ids = {str(item["item_id"]) for item in candidate["items"]}
+        if existing_seals and set(existing_seals) != expected_item_ids:
+            raise ValueError("batch review is immutable")
         for review in reviews:
             path = _reviews_dir(paths) / f"{review['review_id']}.json"
-            present, error = read_json_object_result(path)
-            if error:
-                raise ValueError("batch review is corrupt")
-            if present is not None and not _same_review(present, review):
-                raise ValueError("batch review is immutable")
-            if present is None:
+            item = items_by_review[str(review["review_id"])]
+            if existing_seals:
+                present, error = read_json_object_result(path)
+                if (
+                    error
+                    or present is None
+                    or not _review_base_matches(present, candidate, item)
+                    or present.get("decision") != review.get("decision")
+                    or present.get("reviewer_label") != review.get("reviewer_label")
+                    or existing_seals.get(str(item["item_id"])) != _review_digest(present)
+                ):
+                    raise ValueError("batch review is immutable")
+                sealed = dict(present)
+            else:
+                # Unsealed reviews are interrupted-write debris, not
+                # executable authorization. Replace them before committing
+                # the complete seal set on the candidate.
                 atomic_write_json(path, review, private=True)
+                sealed = review
+            seals[str(item["item_id"])] = _review_digest(sealed)
+
+        if existing_seals and existing_seals != seals:
+            raise ValueError("batch review is immutable")
+        sealed_candidate = {**candidate, "review_seals": seals}
+        if sealed_candidate != candidate:
+            atomic_write_json(paths.memory_dir / _candidate_relative(batch_id), sealed_candidate, private=True)
     return {"schema_version": BATCH_REVIEW_SCHEMA_VERSION, "status": "reviewed", "batch_id": candidate["batch_id"], "reviewer_label": label, "items": [{"item_id": item["item_id"], "review_id": item["review_id"], "decision": decision_map[item["item_id"]]} for item in candidate["items"]]}
 
 
@@ -189,8 +230,15 @@ def _approved_item(candidate: Mapping[str, object], item: Mapping[str, object], 
 
 
 def _approved_reviews(paths: OmhPaths, candidate: Mapping[str, object]) -> dict[str, dict[str, Any]]:
+    seals = candidate.get("review_seals")
+    items = candidate.get("items")
+    if not isinstance(items, list) or not all(isinstance(item, Mapping) for item in items):
+        raise ValueError("batch candidate items are malformed")
+    expected_item_ids = {str(item.get("item_id", "")) for item in items}
+    if not isinstance(seals, Mapping) or set(seals) != expected_item_ids:
+        raise ValueError("exact immutable batch review seals are required")
     reviews: dict[str, dict[str, Any]] = {}
-    for item in candidate["items"]:
+    for item in items:
         value, error = read_json_object_result(_reviews_dir(paths) / f"{item['review_id']}.json")
         if error or not isinstance(value, dict) or not _review_matches(value, candidate, item):
             raise ValueError("exact immutable batch review is required")
@@ -244,7 +292,7 @@ def _review_record(candidate: Mapping[str, object], item: Mapping[str, object], 
     return {
         "schema_version": PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION,
         "batch_id": candidate["batch_id"],
-        "candidate_digest": canonical_payload_digest(dict(candidate)),
+        "candidate_digest": _candidate_digest(candidate),
         **{key: item.get(key) for key in _REVIEW_BOUND_ITEM_KEYS},
         "decision": decision,
         "reviewer_label": label,
@@ -254,20 +302,48 @@ def _review_record(candidate: Mapping[str, object], item: Mapping[str, object], 
 
 
 def _review_matches(review: Mapping[str, object], candidate: Mapping[str, object], item: Mapping[str, object]) -> bool:
+    seals = candidate.get("review_seals")
     return (
-        review.get("schema_version") == PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION
-        and all(review.get(key) == item.get(key) for key in _REVIEW_BOUND_ITEM_KEYS)
-        and review.get("batch_id") == candidate.get("batch_id")
-        and review.get("candidate_digest") == canonical_payload_digest(dict(candidate))
-        and review.get("decision") in _DECISIONS
-        and isinstance(review.get("reviewer_label"), str)
-        and bool(review["reviewer_label"])
+        _review_base_matches(review, candidate, item)
+        and isinstance(seals, Mapping)
+        and seals.get(str(item.get("item_id", ""))) == _review_digest(review)
     )
 
 
-def _same_review(left: Mapping[str, object], right: Mapping[str, object]) -> bool:
-    keys = (*_REVIEW_BOUND_ITEM_KEYS, "batch_id", "candidate_digest", "decision", "reviewer_label")
-    return all(left.get(key) == right.get(key) for key in keys)
+def _review_base_matches(review: Mapping[str, object], candidate: Mapping[str, object], item: Mapping[str, object]) -> bool:
+    return (
+        set(review) == _REVIEW_KEYS
+        and review.get("schema_version") == PROJECT_MEMORY_REVIEW_RECORD_SCHEMA_VERSION
+        and all(review.get(key) == item.get(key) for key in _REVIEW_BOUND_ITEM_KEYS)
+        and review.get("batch_id") == candidate.get("batch_id")
+        and review.get("candidate_digest") == _candidate_digest(candidate)
+        and review.get("decision") in _DECISIONS
+        and isinstance(review.get("reviewer_label"), str)
+        and bool(review["reviewer_label"])
+        and classify_memory_admission(str(review["reviewer_label"]))["status"] == "safe"
+        and review.get("policy_version") == MEMORY_GOVERNANCE_POLICY_VERSION
+        and _canonical_review_time(review.get("reviewed_at"))
+    )
+
+
+def _candidate_digest(candidate: Mapping[str, object]) -> str:
+    payload = {str(key): value for key, value in candidate.items() if key != "review_seals"}
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _review_digest(review: Mapping[str, object]) -> str:
+    canonical = json.dumps(dict(review), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _canonical_review_time(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        return _stamp(_parse_time(value)) == value
+    except (TypeError, ValueError):
+        return False
 
 
 def _decisions(candidate: Mapping[str, object], raw: Mapping[str, object] | list[Mapping[str, object]]) -> dict[str, str]:

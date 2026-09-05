@@ -230,6 +230,21 @@ class MemoryContractTests(unittest.TestCase):
             self.assertNotIn(credential, json.dumps(recall, sort_keys=True))
             self.assertEqual(record_path.read_bytes(), legacy_bytes)
 
+    def test_replay_projection_uses_sanitized_source_class_from_evaluation(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        projection = memory_workflow._replay_evaluation(
+            {
+                "schema_version": "project_memory_record/v3",
+                "record_id": "safe-record",
+                "revision": 1,
+                "source_class": credential,
+            },
+            {"source_class": "redacted", "eligible": False, "reason_code": "unsupported_schema"},
+        )
+
+        self.assertEqual(projection["source_class"], "redacted")
+        self.assertNotIn(credential, json.dumps(projection, sort_keys=True))
+
     def test_legacy_candidate_review_and_rejection_mask_protected_fields(self) -> None:
         credential = "gh" + "u_" + "a" * 36
         with TemporaryDirectory() as tmp:
@@ -248,7 +263,11 @@ class MemoryContractTests(unittest.TestCase):
             candidate["source_ref"] = credential
             candidate["source_evidence"] = {credential: {"nested": credential}}
             candidate["scope"]["ref"] = credential
-            candidate["perspective"] = {"observer": "hermes", "observed": credential}
+            candidate["perspective"] = {
+                "observer": "hermes",
+                "observed": credential,
+                credential: "safe nested perspective value",
+            }
             candidate["safety"]["detail"] = credential
             candidate[credential] = credential
             candidate_path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -314,6 +333,25 @@ class MemoryContractTests(unittest.TestCase):
             self.assertNotIn(credential, json.dumps(recall, sort_keys=True))
             self.assertEqual(record_path.read_bytes(), legacy_bytes)
 
+    def test_archived_recall_exclusion_masks_a_legacy_credential_record_id(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+            captured = capture_project_memory_candidate(paths, "Archived identity fixture")
+            record_id = captured["record"]["record_id"]
+            record_path = paths.memory_dir / "records" / f"{record_id}.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["record_id"] = credential
+            record["attention"] = {"tier": "archive"}
+            record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            recall = build_project_memory_recall_pack(paths, "archived identity fixture")
+
+            self.assertEqual(recall["record_count"], 0)
+            self.assertEqual(recall["excluded_records"][0]["reason"], "archived_tier")
+            self.assertNotIn(credential, json.dumps(recall, sort_keys=True))
+
     def test_legacy_record_inspection_views_mask_structural_credentials(self) -> None:
         credential = "gh" + "u_" + "a" * 36
         with TemporaryDirectory() as tmp:
@@ -330,12 +368,39 @@ class MemoryContractTests(unittest.TestCase):
             record["derived_from"] = [credential]
             record["perspective"] = {"observer": "hermes", "observed": credential}
             record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            scope_path = paths.memory_dir / "scopes" / "project.json"
+            scope_path.parent.mkdir(parents=True, exist_ok=True)
+            scope_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": memory_governance.MEMORY_SCOPE_SCHEMA_VERSION,
+                        "scope": {"kind": "project", "ref": credential},
+                        "items": {
+                            "safe-item": {
+                                "item_id": "safe-item",
+                                "revision": 1,
+                                "key": "safe_item",
+                                "summary": "Safe legacy scope item",
+                                "value": "safe value",
+                            }
+                        },
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
             lineage = memory_workflow.build_memory_lineage(paths, record_id)
             perspectives = memory_workflow.build_memory_perspectives(paths)
+            inspection = build_memory_inspection(paths)
+            summary_inspection = build_memory_inspection(paths, summary=True)
 
             self.assertNotIn(credential, json.dumps(lineage, sort_keys=True))
             self.assertNotIn(credential, json.dumps(perspectives, sort_keys=True))
+            self.assertNotIn(credential, json.dumps(inspection, sort_keys=True))
+            self.assertNotIn(credential, json.dumps(summary_inspection, sort_keys=True))
 
             wrapper = {
                 "schema_version": "memory_snapshot/v1",
@@ -366,6 +431,7 @@ class MemoryContractTests(unittest.TestCase):
                             "item_id": "safe-wrapper-item",
                             "key": "safe_wrapper_item",
                             "summary": "Safe wrapper item",
+                            "value": "token-based metadata",
                             "scope": {"kind": "project", "ref": scope_ref},
                         }
                     ],
@@ -376,6 +442,7 @@ class MemoryContractTests(unittest.TestCase):
 
                 self.assertEqual(snapshot["scope"]["ref"], scope_ref)
                 self.assertEqual(snapshot["items"][0]["scope"]["ref"], scope_ref)
+                self.assertEqual(snapshot["items"][0]["value"], "token-based metadata")
 
     def test_project_memory_auto_safe_policy_auto_approves_safe_candidates(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -398,10 +465,14 @@ class MemoryContractTests(unittest.TestCase):
                 paths,
                 summary,
                 tags=["token-based", "secret-management"],
+                source="token-service",
+                source_ref="https://example.com/secret-management",
             )
 
             self.assertTrue(captured["auto_approved"])
             self.assertEqual(captured["candidate"]["summary"], summary)
+            self.assertEqual(captured["candidate"]["source"], "token-service")
+            self.assertEqual(captured["candidate"]["source_ref"], "https://example.com/secret-management")
             self.assertEqual(captured["record"]["summary"], summary)
             self.assertEqual(captured["record"]["tags"], ["token-based", "secret-management"])
             recall = build_project_memory_recall_pack(paths, "parsing policy")
@@ -1879,6 +1950,37 @@ class UnreadableRecordVisibilityTests(unittest.TestCase):
             # approved v1 record still counts and still fails closed on replay.
             self.assertEqual(status["counts"]["approved_records"], 1)
             self.assertEqual(status["counts"]["review_required_legacy"], 1)
+
+    def test_unreadable_record_filename_is_redacted_when_it_has_a_credential_shape(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            records_dir = paths.memory_dir / "records"
+            records_dir.mkdir(parents=True, exist_ok=True)
+            (records_dir / f"{credential}.json").write_text("{", encoding="utf-8")
+
+            status = build_project_memory_status(paths)
+
+            self.assertEqual(status["counts"]["unreadable_records"], 1)
+            self.assertNotIn(credential, json.dumps(status, sort_keys=True))
+            self.assertEqual(status["unreadable_records"][0]["path_name"], "[redacted]")
+
+    def test_unreadable_record_schema_is_redacted_when_it_has_a_credential_shape(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            records_dir = paths.memory_dir / "records"
+            records_dir.mkdir(parents=True, exist_ok=True)
+            (records_dir / "future.json").write_text(
+                json.dumps({"schema_version": credential}),
+                encoding="utf-8",
+            )
+
+            status = build_project_memory_status(paths)
+
+            self.assertEqual(status["counts"]["unreadable_records"], 1)
+            self.assertNotIn(credential, json.dumps(status, sort_keys=True))
+            self.assertEqual(status["unreadable_records"][0]["schema_version"], "[redacted]")
 
     def test_a_healthy_store_reports_nothing_unreadable(self) -> None:
         # Overroute guard: the count must stay zero for an ordinary store, or

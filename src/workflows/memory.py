@@ -1287,7 +1287,7 @@ def build_project_memory_recall_pack(
             # what the archive is holding back.
             excluded.append(
                 {
-                    "record_id": str(record.get("record_id", "")),
+                    "record_id": _redacted_metadata_label(record.get("record_id", "")),
                     "reason": "archived_tier",
                     "staleness": {"state": "not_checked"},
                 }
@@ -3421,7 +3421,7 @@ def _build_project_memory_candidate(
     # Digest the ref exactly as it will be stored, not as it was passed:
     # redaction and truncation can change the string, and the freshness check
     # later reads the stored one.
-    stored_source_ref = _redact(str(source_ref or ""))[:160]
+    stored_source_ref = _redact_admitted_text(str(source_ref or ""))[:160]
     source_evidence = _source_evidence(stored_source_ref, captured_at=now)
     return {
         "schema_version": PROJECT_MEMORY_CANDIDATE_SCHEMA_VERSION,
@@ -3431,7 +3431,7 @@ def _build_project_memory_candidate(
         "summary": _redact_admitted_text(summary.strip())[:500],
         "scope": scope,
         "tags": normalized_tags,
-        "source": _redact(str(source or "cli")),
+        "source": _redact_admitted_text(str(source or "cli")),
         "source_ref": stored_source_ref,
         **({"source_evidence": source_evidence} if source_evidence else {}),
         "created_at": now,
@@ -3547,9 +3547,9 @@ def _record_from_candidate(
         "summary": _redact_admitted_text(str(candidate.get("summary", "")))[:500],
         "scope": scope,
         "tags": _normalize_tags(candidate.get("tags", [])),
-        "source": _redact(str(candidate.get("source", "cli"))),
+        "source": _redact_admitted_text(str(candidate.get("source", "cli"))),
         "source_class": "omh_local",
-        "source_ref": _redact(str(candidate.get("source_ref", "")))[:160],
+        "source_ref": _redact_admitted_text(str(candidate.get("source_ref", "")))[:160],
         # The digest is carried over as observed at capture, never recomputed
         # here: approval must not silently re-bless a source that changed
         # while the candidate sat in the review queue.
@@ -3915,7 +3915,7 @@ def _replay_evaluation(artifact: dict[str, Any], result: dict[str, object]) -> d
         "artifact_identity": identity,
         "revision": int(artifact.get("revision", 0) or 0),
         "admission_mode": str(result.get("admission_mode") or ""),
-        "source_class": str(artifact.get("source_class", "")),
+        "source_class": str(result.get("source_class") or ""),
         "retention_class": str(result.get("retention_class") or _retention_class(artifact)),
         "evaluated_at": str(result.get("evaluated_at", "")),
         "eligible": bool(result.get("eligible", False)),
@@ -4473,10 +4473,12 @@ def scan_project_memory_records(paths: OmhPaths) -> tuple[list[dict[str, Any]], 
     unreadable: list[dict[str, str]] = []
     directory = _memory_records_dir(paths)
     for record, path_name in _read_memory_record_files(paths, directory):
+        safe_path_name = _redact_admitted_text(path_name)
         if record is None:
-            unreadable.append({"path_name": path_name, "reason": "unreadable_file", "schema_version": ""})
+            unreadable.append({"path_name": safe_path_name, "reason": "unreadable_file", "schema_version": ""})
             continue
         schema_version = str(record.get("schema_version", "") or "")
+        safe_schema_version = _redact_admitted_text(schema_version)
         if schema_version == PROJECT_MEMORY_RECORD_SCHEMA_VERSION:
             records.append(record)
         elif schema_version == LEGACY_PROJECT_MEMORY_RECORD_SCHEMA_VERSION:
@@ -4485,9 +4487,9 @@ def scan_project_memory_records(paths: OmhPaths) -> tuple[list[dict[str, Any]], 
                 # will fail them closed as review_required_legacy before replay.
                 records.append(record)
             else:
-                unreadable.append({"path_name": path_name, "reason": "legacy_review_status_missing", "schema_version": schema_version})
+                unreadable.append({"path_name": safe_path_name, "reason": "legacy_review_status_missing", "schema_version": safe_schema_version})
         else:
-            unreadable.append({"path_name": path_name, "reason": "unsupported_record_schema", "schema_version": schema_version})
+            unreadable.append({"path_name": safe_path_name, "reason": "unsupported_record_schema", "schema_version": safe_schema_version})
     return records, unreadable
 
 
@@ -4925,7 +4927,7 @@ def _normalize_wrapper_snapshot(snapshot: dict[str, Any]) -> dict[str, object]:
 
 
 def _snapshot(source: str, scope: Any, items: list[dict[str, object]], *, claim_boundary: str = "") -> dict[str, object]:
-    normalized_scope = _normalize_scope(scope)
+    normalized_scope = _redacted_scope(scope)
     return {
         "schema_version": MEMORY_SNAPSHOT_SCHEMA_VERSION,
         "source": source,
@@ -4976,7 +4978,7 @@ def _safe_to_expose_value(key: str, value: Any, item: dict[str, Any]) -> bool:
     text = str(value)
     if key in _PROMPTISH_KEYS:
         return False
-    if _looks_sensitive(text):
+    if contains_credential_like_material(text):
         return False
     return len(text) <= 240
 
@@ -5015,18 +5017,15 @@ def _sanitize_project_memory_candidate(candidate: dict[str, Any]) -> dict[str, A
     sanitized = nested if isinstance(nested, dict) else {}
     sanitized["summary"] = _redact_admitted_text(str(candidate.get("summary", "")))[:500]
     sanitized["tags"] = _normalize_tags(candidate.get("tags", []))
-    sanitized["source"] = _redact(str(candidate.get("source", "")))
-    sanitized["source_ref"] = _redact(str(candidate.get("source_ref", "")))[:160]
+    sanitized["source"] = _redact_admitted_text(str(candidate.get("source", "")))
+    sanitized["source_ref"] = _redact_admitted_text(str(candidate.get("source_ref", "")))[:160]
     sanitized["scope"] = _redacted_scope(candidate.get("scope", _scope("project", "default")))
     if "derived_from" in candidate:
         sanitized["derived_from"] = [
             _redacted_metadata_label(ref) for ref in _string_list(candidate.get("derived_from", []))
         ]
     if isinstance(candidate.get("perspective"), dict):
-        sanitized["perspective"] = {
-            str(key): _redacted_metadata_label(value)
-            for key, value in candidate["perspective"].items()
-        }
+        sanitized["perspective"] = _redact_nested_metadata(candidate["perspective"])
     if isinstance(candidate.get("source_evidence"), dict):
         sanitized["source_evidence"] = _redact_nested_metadata(candidate["source_evidence"])
     return sanitized
