@@ -73,10 +73,6 @@
 > <p align="center">
 >   <img src="assets/omh-terminal-boot-banner.png" alt="OH-MY-HERMES terminal banner listing available tools, grouped skills, OMH specialists, infrastructure, and the model pool on Hermes Agent" width="1080">
 > </p>
->
-> <p align="center">
->   <img src="assets/friren-agent-omh-callout.png" alt="Friren Agent explaining OMH in Art&Engine" width="720">
-> </p>
 
 > [!TIP]
 > 加入我们！
