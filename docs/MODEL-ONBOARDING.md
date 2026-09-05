@@ -37,9 +37,53 @@ vocabulary that differs from the family's (GPT-6 Astra: `none` is HTTP 400,
 `low` is the floor), record it as an exact-model contract in
 `src/coding/model_contracts.py` and probe the unsupported rungs too — the
 route must answer `floor_raised`, never pass the rung through;
-`omh coding model-contract --model <id>` prints the record. A bare name that classifies `unknown` gets
-generic discipline; add it to `_CLAUDE_TIER_ALIASES` (Claude) or the prefix
-tables in `src/coding/model_routing.py`, with a `model_family` test.
+`omh coding model-contract --model <id>` prints the record.
+
+When the vendor or host exposes multiple spellings for one documented model,
+do not infer inheritance by stripping suffixes. Add only the reviewed catalog
+ids to `DECLARED_MODEL_CONTRACT_PROJECTIONS`, preserve the requested/provider-
+qualified id in the route receipt, and resolve a separate canonical contract
+id, reasoning mode, service tier, and `exact`/`declared_inheritance`
+provenance. Keep the plugin bundle's explicit mirror parity-tested for
+provider eligibility, category projection, and approximate pricing. The host
+or runtime owns wire translation. A catalog row is neither entitlement nor
+execution evidence, and a malformed or future suffix remains uncontracted
+until it receives an explicit declaration.
+
+A bare name that classifies `unknown` gets generic discipline; add it to
+`_CLAUDE_TIER_ALIASES` (Claude) or the prefix tables in
+`src/coding/model_routing.py`, with a `model_family` test.
+
+### Contract coverage audit
+
+Capture or supply a local inventory, then run the deterministic audit before
+and after the onboarding change:
+
+```sh
+uv run python -m omh.cli coding model-inventory --json > /tmp/model-inventory.json
+uv run python -m omh.cli coding model-contract-audit \
+  --inventory /tmp/model-inventory.json \
+  --required-model <provider/model-id> \
+  --recommended-model <provider/secondary-id> \
+  --json
+```
+
+`--inventory -` reads stdin. Each flag is repeatable; use
+`--intentional-exclusion <id>` only for a reviewed model that is deliberately
+outside OMH's contract scope. Input is bounded local JSON (1 MiB maximum), and
+the command performs no network calls, configuration writes, route changes,
+or issue creation. Its stable `model_contract_coverage/v1` comparison body has
+no timestamps and includes inventory source/digest plus per-id exact,
+`declared_inheritance`, `intentional_exclusion`, or `missing` status. The
+per-id dimensions cover family recognition, contract, effort, high-effort and
+composition calibration, provider eligibility, category projection, price
+source/absence, and docs. Required missing contracts return nonzero;
+recommended and optional discoveries remain advisory. Cold/unavailable
+inventories remain distinct from observed empty inventories.
+
+Use the digest diff and missing rows as inputs to model optimization,
+onboarding, doctor triage, or a release checklist. They are evidence-bounded
+work items, not automatic route changes or provider-readiness claims.
 
 ## 2. Research, official first
 
@@ -108,8 +152,14 @@ Files that move together (grep the old id to find every site):
 
 `APPROX_PRICE_PER_MTOK` takes the vendor's first-party list price with the
 source and month in a comment. A model or tier without a documented price
-gets no entry; absence renders no estimate. Check the existing family rows
-while you are there — the Claude 5 rows were stale until the 5.1 pass.
+gets no entry; absence renders no estimate. For an explicitly declared alias,
+an exact user `model-prices.json` row wins first, then a base-contract row may
+be inherited. Documented service-tier multipliers apply to inherited rates
+(Astra Fast 2x, Flex 0.5x); a reasoning-mode label such as Astra Pro gets no
+fabricated multiplier. Keep cached-input, cache-write, and long-context
+caveats in the contract when the approximation table cannot represent them.
+Check the existing family rows while you are there — the Claude 5 rows were
+stale until the 5.1 pass.
 
 ## 6. Machine placement stays provider-neutral
 
@@ -138,6 +188,9 @@ through, which is exactly why the older generation stays behind the new one.
 
 ```sh
 PYTHONPATH=tests uv run python -m unittest discover -s tests
+uv run python -m compileall -q src tests
+uv run --group lint ruff check src tests
+uv run python -m omh.cli coding model-contract-audit --inventory <fixture.json> --json
 uv run python -m omh.cli docs workflows --check
 uv run python -m omh.cli docs roles --check
 uv run python -m omh.cli docs capability-families --check

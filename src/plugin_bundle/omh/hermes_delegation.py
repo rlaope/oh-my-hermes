@@ -295,6 +295,37 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     "qwen3-coder": ("qwen-oauth", "openrouter", "opencode"),
 }
 
+# Standalone mirror of coding.model_contracts' exact keys. Keep this separate
+# from declared aliases so a newly documented child contract stops inheriting
+# stale provider/category metadata until its own rows are added here.
+EXACT_MODEL_CONTRACT_ALIASES: frozenset[str] = frozenset({"gpt-6-astra"})
+
+# Standalone mirror of coding.model_contracts' bounded declared projections.
+# This plugin is copied into Hermes and cannot import the source package; the
+# parity test fails if either table changes alone. Values are
+# (contract/base alias, reasoning mode, service tier).
+DECLARED_MODEL_ALIAS_PROJECTIONS: dict[str, tuple[str, str, str]] = {
+    "gpt-6-astra-fast": ("gpt-6-astra", "standard", "fast"),
+    "gpt-6-astra-flex": ("gpt-6-astra", "standard", "flex"),
+    "gpt-6-astra-pro": ("gpt-6-astra", "pro", "standard"),
+    "gpt-6-astra-pro-fast": ("gpt-6-astra", "pro", "fast"),
+    "gpt-6-astra-pro-flex": ("gpt-6-astra", "pro", "flex"),
+}
+
+
+def _unqualified_model_alias(alias: object) -> str:
+    key = str(alias or "").strip().casefold()
+    return key.rsplit("/", 1)[-1]
+
+
+def _projected_model_alias(alias: object) -> tuple[str, str]:
+    """Return (declared base alias, service tier), without suffix guessing."""
+    key = _unqualified_model_alias(alias)
+    if key in EXACT_MODEL_CONTRACT_ALIASES:
+        return key, "standard"
+    projection = DECLARED_MODEL_ALIAS_PROJECTIONS.get(key)
+    return (projection[0], projection[2]) if projection is not None else (key, "standard")
+
 
 def is_provider_id_token(value: object) -> bool:
     """Whether ``value`` is a provider id the entitlement document accepts."""
@@ -380,15 +411,17 @@ def alias_is_served(
     providers = entitlements.get("providers", {})
     if not isinstance(providers, Mapping) or not providers:
         return True
-    key = str(alias or "").strip().casefold()
+    requested_key = str(alias or "").strip().casefold()
+    canonical_key = _unqualified_model_alias(alias)
     if routes:
-        route = routes.get(key) or routes.get(alias)
+        route = routes.get(requested_key) or routes.get(canonical_key) or routes.get(alias)
         if route:
             return route[0] in providers
     kinds = set(str(kind) for kind in providers.values())
     if kinds & MULTI_VENDOR_PROVIDER_KINDS:
         return True
-    families = HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES.get(key)
+    projected_key, _tier = _projected_model_alias(canonical_key)
+    families = HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES.get(projected_key)
     if families is None:
         return True
     return bool(kinds & set(families))
@@ -433,7 +466,8 @@ def provider_serves_alias(
     family = provider_family_for(provider_id, entitlements)
     if not family or family in MULTI_VENDOR_PROVIDER_KINDS:
         return None
-    families = HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES.get(str(alias or "").strip().casefold())
+    projected_key, _tier = _projected_model_alias(alias)
+    families = HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES.get(projected_key)
     if families is None:
         return None
     return family in families
@@ -452,7 +486,8 @@ def providers_serving_alias(
     providers = (entitlements or {}).get("providers", {})
     if not isinstance(providers, Mapping):
         return ()
-    families = HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES.get(str(alias or "").strip().casefold())
+    projected_key, _tier = _projected_model_alias(alias)
+    families = HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES.get(projected_key)
     candidates = []
     for provider_id, kind in providers.items():
         if not isinstance(provider_id, str) or not isinstance(kind, str):
@@ -971,32 +1006,82 @@ def _approximate_cost_usd(
     cache_read_tokens: float,
     overrides: Mapping[str, tuple[float, float, float | None]] | None = None,
 ) -> float | None:
-    key = _text(model).casefold()
-    override = (overrides or {}).get(key)
-    if override is not None:
+    if (input_tokens + output_tokens) <= 0:
+        return None
+    requested_key = _text(model).casefold()
+    canonical_key = _unqualified_model_alias(requested_key)
+    base_key, service_tier = _projected_model_alias(canonical_key)
+    provider, separator, _model = requested_key.rpartition("/")
+    provider_base_key = f"{provider}/{base_key}" if separator else ""
+    override_key = _model_price_override_key(requested_key, overrides)
+    if override_key:
+        override = (overrides or {})[override_key]
         input_price, output_price, override_ratio = override
-        if (input_tokens + output_tokens) <= 0:
-            return None
         cache_ratio = (
             override_ratio
             if override_ratio is not None
-            else APPROX_CACHE_READ_RATIO.get(key, _DEFAULT_CACHE_READ_RATIO)
+            else APPROX_CACHE_READ_RATIO.get(
+                canonical_key,
+                APPROX_CACHE_READ_RATIO.get(base_key, _DEFAULT_CACHE_READ_RATIO),
+            )
         )
-        return (
+        multiplier = (
+            _service_tier_price_multiplier(service_tier)
+            if override_key in {provider_base_key, base_key} and canonical_key != base_key
+            else 1.0
+        )
+        return multiplier * (
             input_tokens * input_price
             + cache_read_tokens * input_price * cache_ratio
             + output_tokens * output_price
         ) / 1_000_000
-    prices = APPROX_PRICE_PER_MTOK.get(key)
-    if not prices or (input_tokens + output_tokens) <= 0:
+    price_key = canonical_key if canonical_key in APPROX_PRICE_PER_MTOK else base_key
+    prices = APPROX_PRICE_PER_MTOK.get(price_key)
+    if not prices:
         return None
     input_price, output_price = prices
-    cache_ratio = APPROX_CACHE_READ_RATIO.get(key, _DEFAULT_CACHE_READ_RATIO)
-    return (
+    cache_ratio = APPROX_CACHE_READ_RATIO.get(
+        canonical_key,
+        APPROX_CACHE_READ_RATIO.get(base_key, _DEFAULT_CACHE_READ_RATIO),
+    )
+    multiplier = (
+        _service_tier_price_multiplier(service_tier)
+        if price_key == base_key and canonical_key != base_key
+        else 1.0
+    )
+    return multiplier * (
         input_tokens * input_price
         + cache_read_tokens * input_price * cache_ratio
         + output_tokens * output_price
     ) / 1_000_000
+
+
+def _model_price_override_key(
+    model: str,
+    overrides: Mapping[str, tuple[float, float, float | None]] | None,
+) -> str:
+    """Return the exact or inherited override key cost resolution will use."""
+    requested_key = _text(model).casefold()
+    canonical_key = _unqualified_model_alias(requested_key)
+    base_key, _service_tier = _projected_model_alias(canonical_key)
+    provider, separator, _model = requested_key.rpartition("/")
+    provider_base_key = f"{provider}/{base_key}" if separator else ""
+    return next(
+        (
+            key
+            for key in dict.fromkeys(
+                (requested_key, canonical_key, provider_base_key, base_key)
+            )
+            if key and (overrides or {}).get(key) is not None
+        ),
+        "",
+    )
+
+
+def _service_tier_price_multiplier(service_tier: str) -> float:
+    # OpenAI documents Fast at 2x and Flex/Batch at 0.5x. Pro is a reasoning
+    # mode, not a price tier, so it deliberately has no multiplier.
+    return {"fast": 2.0, "flex": 0.5}.get(service_tier, 1.0)
 
 
 # A child is "running" while its newest observable signal (live transcript
@@ -1043,24 +1128,35 @@ def mixture_category_for(
     breaks position ties); a chain entry that declares a reasoning effort
     only matches that effort.
     """
-    observed_model = _text(model).casefold()
+    observed_model = _unqualified_model_alias(_text(model))
     observed_effort = _text(effort, limit=40).casefold()
     if not observed_model:
         return ""
-    if parent_model and observed_model == _text(parent_model).casefold():
+    parent_key = _unqualified_model_alias(_text(parent_model))
+    if parent_key and observed_model == parent_key:
         return "inherit"
 
-    # Providers serve some chain models through speed variants (e.g. the
-    # OpenGateway Ultrafast tier: kimi-k3 -> kimi-k3-ultrafast, or Z.ai's own
-    # glm-5.3 -> glm-5.3-highspeed / gateway "-fast" tiers). A variant the
-    # chains do not name explicitly still projects onto its base model's
-    # category instead of leaving the HUD row unlabeled; explicitly-named
-    # variants (glm-5.2-ultrafast) match themselves first and are unaffected.
+    # Some explicitly declared catalog aliases represent a model contract plus
+    # a reasoning mode/service tier. Project only those rows onto the contract
+    # alias before retaining the older generic speed-tier category behavior.
+    # Unknown suffixes therefore do not gain an Astra contract/category merely
+    # because their spelling looks similar.
     candidates = [observed_model]
-    for speed_suffix in ("-ultrafast", "-highspeed", "-fast"):
-        if observed_model.endswith(speed_suffix):
-            candidates.append(observed_model[: -len(speed_suffix)])
-            break
+    projected_model, _service_tier = _projected_model_alias(observed_model)
+    if projected_model != observed_model:
+        candidates.append(projected_model)
+    if observed_model not in EXACT_MODEL_CONTRACT_ALIASES:
+        for speed_suffix in ("-ultrafast", "-highspeed", "-fast"):
+            if observed_model.endswith(speed_suffix):
+                speed_base = observed_model[: -len(speed_suffix)]
+                if (
+                    speed_base in EXACT_MODEL_CONTRACT_ALIASES
+                    or speed_base in DECLARED_MODEL_ALIAS_PROJECTIONS
+                ) and observed_model not in DECLARED_MODEL_ALIAS_PROJECTIONS:
+                    break
+                if speed_base not in candidates:
+                    candidates.append(speed_base)
+                break
     active_chains = HERMES_MIXTURE_CATEGORY_CHAINS if chains is None else chains
 
     def _entry_matches(entry: tuple[str, str], model: str) -> bool:
@@ -1427,7 +1523,7 @@ def read_hermes_native_subagents(
         # our shipped ballpark are both approximations, but they are not
         # equally arguable: only the first is a number the operator chose.
         # The row says which, so a surface can tell them apart.
-        cost_override = _text(child["model"]).casefold() in price_overrides
+        cost_override = bool(_model_price_override_key(child["model"], price_overrides))
         if not cost and cost_provenance is None:
             approx = _approximate_cost_usd(
                 child["model"], input_tokens, output_tokens, cache_read, price_overrides
