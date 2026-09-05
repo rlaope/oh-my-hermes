@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import multiprocessing
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -81,8 +82,16 @@ class MemoryBatchTests(TestCase):
             self.assertTrue(staged["batch_id"].startswith("batch_"))
             self.assertNotIn(item["item_id"], {row["item_id"] for row in build_handoff_context_pack(paths)["included_context"]})
 
-            applied = apply_approved_memory_update_batch(paths, staged["batch_id"])
-            repeated = apply_approved_memory_update_batch(paths, staged["batch_id"])
+            applied = apply_approved_memory_update_batch(
+                paths,
+                staged["batch_id"],
+                now=datetime(2026, 9, 6, 1, 0, tzinfo=timezone.utc),
+            )
+            repeated = apply_approved_memory_update_batch(
+                paths,
+                staged["batch_id"],
+                now=datetime(2026, 9, 6, 2, 0, tzinfo=timezone.utc),
+            )
             handoff = build_handoff_context_pack(paths)
             receipt = applied["receipt"]
 
@@ -94,6 +103,36 @@ class MemoryBatchTests(TestCase):
             self.assertNotIn("summary", json.dumps(receipt))
             self.assertNotIn("hash", json.dumps(receipt))
             self.assertNotIn(str(paths.memory_dir), json.dumps(receipt))
+
+    def test_later_reviewed_update_replaces_an_item_written_by_an_earlier_batch(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            first = self._stage_and_remember(paths, _batch("first-record"))
+            self.assertTrue(apply_approved_memory_update_batch(paths, first["batch_id"])["applied"])
+            item_id = first["items"][0]["item_id"]
+
+            second_batch = _batch(item_id)
+            second_updates = second_batch["updates"]
+            self.assertIsInstance(second_updates, list)
+            assert isinstance(second_updates, list)
+            second_update = second_updates[0]
+            self.assertIsInstance(second_update, dict)
+            assert isinstance(second_update, dict)
+            second_update.update(
+                {
+                    "key": "first_record",
+                    "value": "second synthetic value",
+                    "summary": "Replace the first synthetic value",
+                }
+            )
+            second = self._stage_and_remember(paths, second_batch)
+
+            applied = apply_approved_memory_update_batch(paths, second["batch_id"])
+            scope = json.loads((paths.memory_dir / "scopes" / "project.json").read_text(encoding="utf-8"))
+
+            self.assertTrue(applied["applied"])
+            self.assertEqual(scope["items"][item_id]["value"], "second synthetic value")
+            self.assertEqual(scope["items"][item_id]["batch_id"], second["batch_id"])
 
     def test_stage_rejects_unsafe_content_without_writing_a_candidate(self) -> None:
         with TemporaryDirectory() as home:
@@ -331,6 +370,40 @@ class MemoryBatchTests(TestCase):
             self.assertFalse((paths.memory_dir / "scopes").exists())
             self.assertFalse((paths.memory_dir / "operations" / "op_apply_forged.json").exists())
 
+    def test_apply_rejects_operation_id_owned_by_another_reviewed_batch(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            first = self._stage_and_remember(paths, _batch("first-operation-owner"))
+            second = stage_memory_update_batch(
+                paths,
+                _batch(
+                    "second-operation-owner",
+                    scope={"kind": "thread", "ref": "second-thread"},
+                ),
+            )
+            second_path = paths.memory_dir / "candidates" / f"{second['batch_id']}.json"
+            second_candidate = json.loads(second_path.read_text(encoding="utf-8"))
+            second_candidate["apply_operation_id"] = first["operation_id"]
+            second_path.write_text(
+                json.dumps(second_candidate, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            review_memory_update_batch(
+                paths,
+                second["batch_id"],
+                {second["items"][0]["item_id"]: "remember"},
+                reviewer_label="operator-label",
+            )
+            self.assertTrue(apply_approved_memory_update_batch(paths, first["batch_id"])["applied"])
+
+            result = apply_approved_memory_update_batch(paths, second["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "operation_identity_conflict")
+            self.assertFalse(
+                (paths.memory_dir / "scopes" / "threads" / "second-thread.json").exists()
+            )
+
     def test_review_retry_overwrites_unsealed_orphan_authorization(self) -> None:
         with TemporaryDirectory() as home:
             paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
@@ -437,6 +510,56 @@ class MemoryBatchTests(TestCase):
             self.assertFalse(result["applied"])
             self.assertEqual(result["reason_code"], "scope_precondition_changed")
             self.assertEqual(scope_path.read_bytes(), changed_bytes)
+
+    def test_change_scope_rejects_source_scope_identity_drift_after_review(self) -> None:
+        with TemporaryDirectory() as home:
+            paths = resolve_paths(Path(home) / ".omh", Path(home) / ".hermes")
+            source_path = paths.memory_dir / "scopes" / "project.json"
+            source_path.parent.mkdir(parents=True)
+            source = {
+                "schema_version": "omh_memory_scope/v2",
+                "scope": {"kind": "project", "ref": "default"},
+                "items": {
+                    "move-target": {
+                        "item_id": "move-item",
+                        "revision": 1,
+                        "key": "move_key",
+                        "summary": "Move reviewed value",
+                        "value": "move value",
+                    }
+                },
+                "tombstones": {},
+            }
+            source_path.write_text(json.dumps(source, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = _batch("move-target")
+            updates = batch["updates"]
+            self.assertIsInstance(updates, list)
+            assert isinstance(updates, list)
+            update = updates[0]
+            self.assertIsInstance(update, dict)
+            assert isinstance(update, dict)
+            update.update(
+                {
+                    "op": "change_scope",
+                    "from_scope": {"kind": "project", "ref": "default"},
+                    "to_scope": {"kind": "thread", "ref": "destination"},
+                    "key": "move_key",
+                    "summary": "Move reviewed value",
+                    "value": "move value",
+                }
+            )
+            staged = self._stage_and_remember(paths, batch)
+            drifted = json.loads(source_path.read_text(encoding="utf-8"))
+            drifted["scope"] = {"kind": "thread", "ref": "other-thread"}
+            source_path.write_text(json.dumps(drifted, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            drifted_bytes = source_path.read_bytes()
+
+            result = apply_approved_memory_update_batch(paths, staged["batch_id"])
+
+            self.assertFalse(result["applied"])
+            self.assertEqual(result["reason_code"], "scope_precondition_changed")
+            self.assertEqual(source_path.read_bytes(), drifted_bytes)
+            self.assertFalse((paths.memory_dir / "scopes" / "threads" / "destination.json").exists())
 
     def test_multiscope_preflight_rejects_all_drift_before_removing_source(self) -> None:
         with TemporaryDirectory() as home:

@@ -31,6 +31,7 @@ _BLOCKED_PATTERNS = (
     re.compile(r"\bnpm_[A-Za-z0-9]{16,}\b", re.IGNORECASE),
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b", re.IGNORECASE),
     re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b", re.IGNORECASE),
+    re.compile(r"\brk_(?:live|test)_[A-Za-z0-9]{16,}\b", re.IGNORECASE),
     re.compile(r"\bya29\.[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
     re.compile(r"\bAIza[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
     re.compile(r"\bxox[a-z]?-[A-Za-z0-9-]{16,}\b", re.IGNORECASE),
@@ -68,7 +69,7 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
 _CAMEL_WORD = r"[A-Z][a-z]{2,}(?:\d+)?"
 _VERSION_COMPONENT = r"V\d+"
 _VERSIONED_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
-    rf"(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{4,}}"
+    rf"(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"
 )
 _LOWER_CAMEL_CASE_IDENTIFIER_PATTERN = re.compile(
     rf"[a-z]{{2,}}(?:{_CAMEL_WORD}|{_VERSION_COMPONENT}){{3,}}"

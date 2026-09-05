@@ -15,7 +15,7 @@ from ..plugin_bundle.omh.memory_governance import MEMORY_GOVERNANCE_POLICY_VERSI
 from ..system.local_store import atomic_write_json, ensure_dir, file_lock, read_json_object_result
 from ..system.paths import OmhPaths
 from ._memory_store_validation import safe_token
-from .memory_store import run_memory_operation
+from .memory_store import MemoryOperationIdentityError, run_memory_operation
 
 BATCH_CANDIDATE_SCHEMA_VERSION, BATCH_REVIEW_SCHEMA_VERSION, BATCH_RECEIPT_SCHEMA_VERSION = "memory_update_batch_candidate/v1", "memory_update_batch_review/v1", "memory_update_batch_receipt/v1"
 _LEGACY_BATCH_SCHEMA_VERSION, _OPS, _DECISIONS = "memory_update_batch/v1", frozenset({"keep", "forget", "update", "change_scope", "dismiss_conflict"}), frozenset({"remember", "refuse", "defer"})
@@ -226,12 +226,13 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
             )
         return "written"
 
+    apply_revision = min(str(review["reviewed_at"]) for review in reviews.values())
     steps = [
         {
             "name": "write_reviewed_scopes",
             "action": "write_batch_scopes",
             "target": _candidate_relative(batch_id),
-            "revision": _stamp(_utc(now)),
+            "revision": apply_revision,
         }
     ]
 
@@ -247,6 +248,8 @@ def apply_approved_memory_update_batch(paths: OmhPaths, batch_id: str, *, now: d
         )
     except _ScopePreconditionChanged:
         return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "review_required", "reason_code": "scope_precondition_changed", "applied": False, "batch_id": batch_id}
+    except MemoryOperationIdentityError:
+        return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "review_required", "reason_code": "operation_identity_conflict", "applied": False, "batch_id": batch_id}
     receipt = {key: operation["receipt"][key] for key in _RECEIPT_KEYS if key in operation.get("receipt", {})}
     return {"schema_version": BATCH_RECEIPT_SCHEMA_VERSION, "status": "applied" if operation.get("state") == "completed" else str(operation.get("state")), "applied": operation.get("state") == "completed", "batch_id": batch_id, "receipt": receipt}
 
@@ -342,10 +345,11 @@ def _apply_scope(
             data["items"].pop(item["target_ref"], None)
             data["tombstones"][item["target_ref"]] = {"item_id": item["target_ref"], "operation_id": candidate["apply_operation_id"], "candidate_item_id": item["item_id"], "review_id": item["review_id"], "tombstoned_at": updated_at}
         else:
-            if data["items"].get(item["item_id"], {}).get("candidate_item_id") == item["item_id"]:
+            approved = _approved_item(candidate, item, reviews[item["item_id"]])
+            if data["items"].get(item["item_id"]) == approved:
                 continue
             data["items"].pop(item["target_ref"], None)
-            data["items"][item["item_id"]] = _approved_item(candidate, item, reviews[item["item_id"]])
+            data["items"][item["item_id"]] = approved
     data["updated_at"] = updated_at
     _checked_scope_path(paths, target)
     atomic_write_json(path, data, private=True)
@@ -749,9 +753,19 @@ def _scope_precondition_digest(
         ):
             tombstone_keys.add(target_ref)
     data = dict(value) if isinstance(value, Mapping) else None
-    current_items = data.get("items", {}) if data else {}
-    current_tombstones = data.get("tombstones", {}) if data else {}
+    current_items = data.get("items", {}) if data is not None else {}
+    current_tombstones = data.get("tombstones", {}) if data is not None else {}
+    expected_scope = next(
+        scope
+        for item in matching
+        for scope in _item_scopes(item)
+        if _relative_scope(scope) == target
+    )
     projection = {
+        "schema_version": (
+            data.get("schema_version") if data is not None else MEMORY_SCOPE_SCHEMA_VERSION
+        ),
+        "scope": data.get("scope") if data is not None else dict(expected_scope),
         "items": (
             {key: current_items.get(key) for key in sorted(item_keys)}
             if isinstance(current_items, Mapping)

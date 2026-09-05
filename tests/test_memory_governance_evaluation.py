@@ -197,12 +197,14 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         github = "gh" + "p_" + "a" * 36
         openai = "sk" + "-" + "a" * 48
         stripe = "sk_" + "live_" + "a" * 32
+        stripe_restricted = "rk_" + "live_" + "a" * 32
         google_oauth = "ya29." + "a" * 40
         for content in (
             aws,
             github,
             openai,
             stripe,
+            stripe_restricted,
             google_oauth,
             f"C:\\safe\\{github}\\artifact.txt",
             "https://user:pass@example.com",
@@ -402,6 +404,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "DeterministicProjectConfigurationManagerV2",
             "HTTPServerConfigurationV2ProjectManager",
             "AlicePlatformReviewer2026Account",
+            "AuthenticatedMaintainerObservation",
             "direview_dprof_e9da83f21e46282d3a9ae020_r1",
             "@scope/hermes-agent-runtime-v2-package",
             "@scope/HermesAgentRuntimeV2PackageManager",

@@ -28,11 +28,18 @@ _INDEX_DIRS = (("scope_files", "scopes"), ("candidate_files", "candidates"), ("r
 StepWriter = Callable[[OmhPaths, dict[str, Any]], str | None]
 IndexRebuilder = Callable[[OmhPaths], None]
 OperationPreflight = Callable[[OmhPaths], None]
+
+
+class MemoryOperationIdentityError(ValueError):
+    pass
+
+
 __all__ = [
     "MEMORY_OPERATION_SCHEMA_VERSION",
     "MEMORY_OPERATION_STATES",
     "MEMORY_RECEIPT_FIELDS",
     "MEMORY_TOMBSTONE_SCHEMA_VERSION",
+    "MemoryOperationIdentityError",
     "apply_memory_operation_step",
     "prune_expired_memory_evidence",
     "recover_memory_operations",
@@ -73,6 +80,10 @@ def run_memory_operation(
             record = normalized
             atomic_write_json(path, record, private=True)
         else:
+            if not _operation_request_matches(existing, normalized):
+                raise MemoryOperationIdentityError(
+                    "memory operation id is already bound to a different request"
+                )
             record = existing
         return _resume_unlocked(paths, record, rebuild_index, step_writer, now)
 
@@ -87,6 +98,23 @@ def recover_memory_operations(
     with file_lock(paths.memory_index_path, private=True):
         ensure_dir(paths.memory_operations_dir, private=True)
         return _recover_unlocked(paths, rebuild_index, step_writer, now)
+
+
+def _operation_request_matches(existing: Mapping[str, object], requested: Mapping[str, object]) -> bool:
+    def request_steps(value: Mapping[str, object]) -> list[dict[str, object]] | None:
+        steps = value.get("steps")
+        if not isinstance(steps, list) or not all(isinstance(step, Mapping) for step in steps):
+            return None
+        return [
+            {str(key): item for key, item in step.items() if key not in {"state", "outcome"}}
+            for step in steps
+        ]
+
+    return (
+        existing.get("operation_id") == requested.get("operation_id")
+        and existing.get("operation_type") == requested.get("operation_type")
+        and request_steps(existing) == request_steps(requested)
+    )
 
 
 def apply_memory_operation_step(paths: OmhPaths, step: dict[str, Any]) -> str:

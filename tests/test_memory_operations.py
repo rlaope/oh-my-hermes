@@ -100,6 +100,49 @@ class MemoryOperationTests(unittest.TestCase):
             self.assertTrue((paths.memory_dir / "records/two.json").exists())
             self.assertFalse((paths.memory_dir / "staging/second.json").exists())
 
+    def test_operation_id_cannot_be_reused_for_a_different_request(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths(tmp)
+            _stage(paths, "first.json", {"entry": "first"})
+            _stage(paths, "second.json", {"entry": "second"})
+            operation_id = "op-request-binding"
+            run_memory_operation(
+                paths,
+                operation_id=operation_id,
+                operation_type="write",
+                steps=[
+                    {
+                        "name": "write_first",
+                        "action": "copy",
+                        "source": "staging/first.json",
+                        "target": "records/first.json",
+                    }
+                ],
+                now=NOW,
+            )
+            operation_path = paths.memory_operations_dir / f"{operation_id}.json"
+            completed_bytes = operation_path.read_bytes()
+
+            with self.assertRaisesRegex(ValueError, "already bound"):
+                run_memory_operation(
+                    paths,
+                    operation_id=operation_id,
+                    operation_type="write",
+                    steps=[
+                        {
+                            "name": "write_second",
+                            "action": "copy",
+                            "source": "staging/second.json",
+                            "target": "records/second.json",
+                        }
+                    ],
+                    now=NOW,
+                )
+
+            self.assertEqual(operation_path.read_bytes(), completed_bytes)
+            self.assertTrue((paths.memory_dir / "records" / "first.json").exists())
+            self.assertFalse((paths.memory_dir / "records" / "second.json").exists())
+
     def test_interrupted_named_write_recovers_once_without_duplicate_move(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = _paths(tmp)

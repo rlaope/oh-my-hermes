@@ -234,6 +234,25 @@ class MemoryContractTests(unittest.TestCase):
                 self.assertNotIn(encoded, candidate_path.read_text(encoding="utf-8"))
                 self.assertFalse((paths.memory_dir / "records").exists())
 
+    def test_restricted_provider_key_is_blocked_before_any_raw_persistence(self) -> None:
+        credential = "rk_" + "live_" + "a" * 32
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            write_setup_profile(paths, memory_mode="auto-safe")
+
+            captured = capture_project_memory_candidate(paths, credential, source="cli")
+
+            self.assertEqual(captured["candidate"]["safety"]["status"], "blocked")
+            self.assertFalse(captured["auto_approved"])
+            self.assertNotIn(credential, json.dumps(captured, sort_keys=True))
+            persisted = "\n".join(
+                path.read_text(encoding="utf-8")
+                for path in paths.memory_dir.rglob("*")
+                if path.is_file()
+            )
+            self.assertNotIn(credential, persisted)
+            self.assertFalse((paths.memory_dir / "records").exists())
+
     def test_separator_split_opaque_structural_selectors_fail_closed_without_echo(self) -> None:
         selector = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"
         with TemporaryDirectory() as tmp:
