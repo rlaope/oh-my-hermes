@@ -214,6 +214,7 @@ class MemoryContractTests(unittest.TestCase):
             "ABCDEFGHIJKLMNOPQRSTUVWX12345678",
             "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz",
             "abcdefghijklmnopqrstuvwxyzaaaaaa",
+            "abcdefghijklmnopqrstuvwxyzaaaaaaaa",
             "ABCDE.FGHIJ.KLMNO.PQRSTUVWXYZaBcdef",
         )
         for encoded in encoded_values:

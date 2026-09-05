@@ -298,6 +298,8 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "ABCDabcdEFGHijklMNOPqrstUVWXyzab",
             "abcdefghijklmnopqrstuvwxyzaaaaaa",
             "abcdefghijklmnopqrstuvwxyzaaaaaaaaaa",
+            "abcdefghijklmnopqrstuvwxyzaaaaaaaa",
+            "abcdefghijklmnopqrstuvwxyzaaaaaaaaa",
             "ABCDEFGHIJKLMNOPQRSTUVWXYZaBcdef",
         )
         uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
@@ -306,7 +308,8 @@ class SafetyAndEvaluationTests(unittest.TestCase):
 
         for opaque in (*low_transition_base64, uppercase_alphanumeric):
             if opaque in low_transition_base64:
-                self.assertEqual(len(base64.b64decode(opaque, validate=True)), len(opaque) // 4 * 3)
+                decoded = base64.b64decode(opaque + "=" * (-len(opaque) % 4), validate=True)
+                self.assertGreater(len(decoded), 0)
             with self.subTest(opaque=opaque):
                 self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
             for container in (
