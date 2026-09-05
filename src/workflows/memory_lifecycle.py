@@ -9,6 +9,7 @@ from datetime import datetime
 from ..plugin_bundle.omh.memory_governance import (
     PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
     canonical_memory_scope,
+    contains_credential_like_material,
     evaluate_renderable_strings,
 )
 from ..system.paths import OmhPaths
@@ -43,7 +44,27 @@ _ALLOWED_OUTCOMES = frozenset({"written", "moved", "rewritten", "removed", "alre
 def lifecycle_replay_status(record: Mapping[str, object], *, now: datetime) -> dict[str, object]:
     reason = _expiry_reason(record, now)
     state = _admission_state(record)
-    return {"record_id": str(record.get("record_id", "")), "revision": record.get("revision"), "scope": _scope(record), "admission_state": state, "retention_class": _retention_class(record), "replay_eligible": reason == "eligible" and state in {"approved_manual", "approved_auto_safe"}, "reason_code": reason if reason != "eligible" else ("eligible" if state in {"approved_manual", "approved_auto_safe"} else "review_required")}
+    scope_value = record.get("scope")
+    try:
+        scope = canonical_memory_scope(dict(scope_value) if isinstance(scope_value, Mapping) else {})
+    except (TypeError, ValueError):
+        scope = {"kind": "redacted", "ref": "redacted"}
+    public_scope = {key: _public_label(scope.get(key, "")) for key in ("kind", "ref")}
+    revision = record.get("revision")
+    return {
+        "record_id": _public_label(record.get("record_id", "")),
+        "revision": revision if isinstance(revision, int) and not isinstance(revision, bool) else None,
+        "scope": public_scope,
+        "admission_state": _public_label(state),
+        "retention_class": _public_label(_retention_class(record)),
+        "replay_eligible": reason == "eligible" and state in {"approved_manual", "approved_auto_safe"},
+        "reason_code": reason if reason != "eligible" else ("eligible" if state in {"approved_manual", "approved_auto_safe"} else "review_required"),
+    }
+
+
+def _public_label(value: object) -> str:
+    text = str(value or "")
+    return "redacted" if contains_credential_like_material(text) else text
 
 
 def build_memory_retirement(paths: OmhPaths, record_id: str, revision: int, *, now: datetime) -> LifecyclePlan:
@@ -101,6 +122,8 @@ def apply_memory_restore(paths: OmhPaths, plan: LifecyclePlan, *, transaction_ex
 
 
 def build_memory_reapproval(paths: OmhPaths, candidate_id: str, *, reviewer_claim: str, now: datetime) -> LifecyclePlan:
+    if not safe_token(candidate_id):
+        raise ValueError("unsafe_candidate_id")
     candidate, error = read_json(paths.memory_dir, f"candidates/{candidate_id}.json")
     if error or candidate is None or candidate.get("schema_version") != "project_memory_candidate/v2" or _admission_state(candidate) != "pending_review":
         return _rejected("reapprove", candidate_id, 0, now, "restore_candidate_not_pending")

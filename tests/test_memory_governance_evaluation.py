@@ -14,6 +14,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.plugin_bundle.omh import memory_governance as governance
+from omh.workflows.hermes_planning import build_plan_handoff_context_pack
 
 
 NOW = datetime(2026, 7, 30, 12, 0, 0, tzinfo=timezone.utc)
@@ -202,6 +203,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             openai,
             stripe,
             google_oauth,
+            f"C:\\safe\\{github}\\artifact.txt",
             "https://user:pass@example.com",
             "-----BEGIN RSA PRIVATE KEY-----",
         ):
@@ -249,6 +251,11 @@ class SafetyAndEvaluationTests(unittest.TestCase):
 
         self.assertEqual(governance.classify_memory_admission(padded_base64)["status"], "needs_review")
         self.assertEqual(governance.classify_memory_admission(unpadded_base64url)["status"], "needs_review")
+        self.assertEqual(
+            governance.classify_memory_admission(f"C:\\safe\\{padded_base64}\\artifact.txt")["status"],
+            "needs_review",
+        )
+
         for ordinary in (
             "0123456789abcdef0123456789abcdef01234567",
             "123e4567-e89b-12d3-a456-426614174000",
@@ -270,9 +277,40 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                 "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/plans/"
                 "2026-09-05T082831432517Z-implement-durable-observation-journal-with-tests-9f35ae.md"
             ),
+            (
+                "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\tmpmeqo2rx3\\.omh\\plans\\"
+                "2026-09-05T092408607631Z-risky-refactor-with-review-9f35ae.md"
+            ),
+            (
+                "D:\\a\\oh-my-hermes\\oh-my-hermes\\.hermes\\plans\\"
+                "2026-09-05T092408607631Z-implement-durable-observation-journal-with-tests-9f35ae.md"
+            ),
         ):
             with self.subTest(ordinary=ordinary):
                 self.assertEqual(governance.classify_memory_admission(ordinary)["status"], "safe")
+
+    def test_plan_handoff_accepts_literal_windows_paths_without_weakening_credential_checks(self) -> None:
+        artifact = {
+            "schema_version": "hermes_plan/v1",
+            "status": "accepted",
+            "sha256": "a" * 64,
+        }
+        safe_paths = (
+            "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\tmpmeqo2rx3\\.omh\\plans\\"
+            "2026-09-05T092408607631Z-risky-refactor-with-review-9f35ae.md",
+            "\\\\build-server\\workspace\\.omh\\plans\\"
+            "2026-09-05T092408607631Z-risky-refactor-with-review-9f35ae.md",
+        )
+        for path in safe_paths:
+            with self.subTest(path=path):
+                pack = build_plan_handoff_context_pack({**artifact, "path": path})
+                self.assertEqual(pack["metadata"]["plan_artifact_path"], path)
+
+        credential = "gh" + "u_" + "a" * 36
+        padded = "Ab3dEf4G" * 5 + "="
+        for unsafe_path in (f"C:\\safe\\{credential}\\artifact.txt", f"C:\\safe\\{padded}\\artifact.txt"):
+            with self.subTest(unsafe_path=unsafe_path), self.assertRaises(ValueError):
+                build_plan_handoff_context_pack({**artifact, "path": unsafe_path})
 
     def test_scope_invalid_and_scope_mismatch_are_distinct_fail_closed_results(self) -> None:
         with self.assertRaises(ValueError):
@@ -321,6 +359,18 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         self.assertEqual(governance.validate_replay_evaluation(result), [])
         self.assertEqual(governance.external_context_label("hermes_native")["admission_status"], "not_omh_reviewed")
         self.assertEqual(governance.external_context_label("provider")["reason_code"], "external_not_omh_reviewed")
+
+    def test_fail_closed_replay_result_masks_credential_shaped_source_class(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+
+        result = governance.evaluate_memory_replay(
+            {"schema_version": "unsupported/v1", "source_class": credential},
+            now=NOW,
+        )
+
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["reason_code"], "unsupported_schema")
+        self.assertNotIn(credential, json.dumps(result, sort_keys=True))
 
     def test_b1_safety_rescan_blocks_secrets_in_value_and_label(self) -> None:
         """B1: Evaluate all renderable fields (summary, value, label) for secrets."""

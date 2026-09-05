@@ -112,6 +112,18 @@ class MemoryLifecycleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 governance.build_retention("volatile", record_type="fact", admitted_at=NOW, ttl_days=ttl)
 
+    def test_lifecycle_replay_status_masks_credential_shaped_identity_and_scope(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        record, _ = _record("mem-safe", 1, "safe-scope", "volatile", admitted_at=NOW)
+        record["record_id"] = credential
+        record["scope"] = {"kind": "project", "ref": credential}
+
+        status = lifecycle_replay_status(record, now=NOW)
+
+        self.assertNotIn(credential, json.dumps(status, sort_keys=True))
+        self.assertEqual(status["record_id"], "redacted")
+        self.assertEqual(status["scope"]["ref"], "redacted")
+
     def test_retire_restore_reapprove_and_restore_conflict(self) -> None:
         with TemporaryDirectory() as tmp:
             paths, executor = _paths(tmp), _Executor()
@@ -241,6 +253,41 @@ class MemoryLifecycleTests(unittest.TestCase):
             self.assertEqual(plan.mutations, ())
             self.assertNotIn(credential, json.dumps(plan.report, sort_keys=True))
             self.assertTrue((paths.memory_dir / "records/mem-one.json").exists())
+
+    def test_lifecycle_candidate_ids_reject_credential_shapes_without_echo_or_write(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+        with TemporaryDirectory() as tmp:
+            paths, executor = _paths(tmp), _Executor()
+            _write_fixture(paths, retention="standard")
+
+            with self.assertRaises(ValueError) as correction_error:
+                build_memory_correction(
+                    paths,
+                    "mem-one",
+                    1,
+                    "safe corrected summary",
+                    now=NOW,
+                    candidate_id=credential,
+                )
+
+            self.assertNotIn(credential, str(correction_error.exception))
+            self.assertFalse((paths.memory_dir / "candidates" / f"{credential}.json").exists())
+
+            apply_memory_retirement(
+                paths,
+                build_memory_retirement(paths, "mem-one", 1, now=NOW),
+                transaction_executor=executor,
+            )
+            with self.assertRaises(ValueError) as restore_error:
+                build_memory_restore(paths, "mem-one", 1, now=NOW, candidate_id=credential)
+
+            self.assertNotIn(credential, str(restore_error.exception))
+            self.assertFalse((paths.memory_dir / "candidates" / f"{credential}.json").exists())
+
+            with self.assertRaises(ValueError) as reapproval_error:
+                build_memory_reapproval(paths, credential, reviewer_claim="reviewer", now=NOW)
+
+            self.assertNotIn(credential, str(reapproval_error.exception))
 
     def test_prune_is_scoped_and_manifest_mismatch_fails_closed(self) -> None:
         with TemporaryDirectory() as tmp:
