@@ -867,13 +867,12 @@ _DATA_BOUNDARY_STATEMENTS = {
         "the approval does not cover, so a prepared handoff cannot reach somewhere nobody approved."
     ),
     "runtime_filesystem_confinement": (
-        "Confining a running executor's filesystem access needs an OS-level confinement backend. The "
-        "cross-harness adapter lane builds one; no delegation or fanout lane places an executor under "
-        "it, so the limit is declared rather than applied."
+        "Fanout places its owner and dispatcher verification processes under the existing OS sandbox. "
+        "It confines writes, not reads. A particular run reports confinement only after its same-root probe was "
+        "refused outside the unit worktree."
     ),
     "runtime_network_confinement": (
-        "Confining a running executor's network access needs the same OS-level backend and the same "
-        "unused sandbox, so the limit is declared rather than applied."
+        "Fanout preserves its existing network behavior, so the OS sandbox is not requested to confine network access."
     ),
     "executor_honours_declared_targets": (
         "The declared targets are a statement the executor is trusted to honour. Nothing measures "

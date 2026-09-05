@@ -164,6 +164,32 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
         self.assertEqual((network.status, allowed.status, outside.status, allowed.network_allowed), ("observed_success", "observed_success", "observed_success", True))
 
     @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec is macOS-only")
+    def test_macos_default_process_exec_policy_remains_strict(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            child = ChildContext(
+                root,
+                root / "home",
+                root / "work",
+                root / "tmp",
+                root / "output",
+                root / "request.json",
+                root / "output" / "result.json",
+                "f" * 64,
+            )
+            policy = sandbox_command(
+                ("/bin/sh", "-c", "exit 0"), "sandbox-exec", (), child, False, {}
+            )[2]
+
+        self.assertNotIn("(allow process-exec*)", policy)
+        self.assertNotIn("(allow file-read*)", policy)
+        self.assertIn(
+            '(allow process-exec (literal "/bin/sh") (literal "/usr/bin/true") '
+            '(literal "/bin/bash"))',
+            policy,
+        )
+
+    @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec is macOS-only")
     def test_macos_session_and_process_group_escape_syscalls_are_denied(self) -> None:
         outcome = self._run("session-escape-denied", sandbox=True)
         self.assertEqual(outcome.status, "observed_success")

@@ -1194,7 +1194,7 @@ class ContractTests(unittest.TestCase):
         # The host_confinement rows still do move, which is the distinction.
         self.assertEqual(
             capable["runtime_network_confinement"]["blocked_by"],
-            "no_delegation_or_fanout_lane_places_an_executor_under_the_sandbox",
+            "fanout_lane_does_not_request_network_confinement",
         )
         self.assertEqual(
             bare["runtime_network_confinement"]["blocked_by"],

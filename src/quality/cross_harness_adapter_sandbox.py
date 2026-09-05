@@ -39,6 +39,7 @@ _MACOS_RUNTIME_ROOTS: Final = tuple(
     Path(item) for item in (
         "/usr/lib", "/System/Library", "/Library/Apple/System/Library",
         "/private/var/db/dyld",
+        "/private/var/select",
     )
 )
 PopenFactory = Callable[..., subprocess.Popen[bytes]]
@@ -253,12 +254,46 @@ def sandbox_command(
     allow_network: bool,
     environment: Mapping[str, str],
     backend_digest: str | None = None,
+    allow_broad_process_exec: bool = False,
+    macos_read_root_aliases: Sequence[Path] = (),
+    macos_read_literals: Sequence[Path] = (),
+    macos_write_data_literals: Sequence[Path] = (),
+    allow_broad_file_read: bool = False,
 ) -> tuple[str, ...]:
     if selected == "sandbox-exec":
-        literals = " ".join(f'(literal {json.dumps(str(Path(item).resolve()))})' for item in (argv[0], "/usr/bin/true"))
-        subpaths = " ".join(f'(subpath {json.dumps(str(root))})' for root in unique_roots((*roots, child.root)))
+        executables = (argv[0], "/usr/bin/true")
+        if Path(argv[0]).resolve() == Path("/bin/sh").resolve():
+            # macOS dispatches `/bin/sh` through `/bin/bash` after consulting
+            # `/private/var/select`; the same narrow allowance lets the
+            # confinement probe run without widening ordinary adapter argv.
+            executables += ("/bin/bash",)
+        literals = " ".join(
+            f'(literal {json.dumps(str(Path(item).resolve()))})'
+            for item in executables
+        )
+        process_exec = "(allow process-exec*)" if allow_broad_process_exec else f"(allow process-exec {literals})"
+        canonical_roots = unique_roots((*roots, child.root))
+        canonical_root_names = {str(root) for root in canonical_roots}
+        policy_roots = (
+            *canonical_roots,
+            *(root for root in macos_read_root_aliases if str(root) not in canonical_root_names),
+        )
+        subpaths = " ".join(f'(subpath {json.dumps(str(root))})' for root in policy_roots)
+        read_literals = " ".join(
+            f'(literal {json.dumps(str(root))})' for root in macos_read_literals
+        )
+        read_literal_clause = f" {read_literals}" if read_literals else ""
+        file_read = (
+            "(allow file-read*)"
+            if allow_broad_file_read
+            else f'(allow file-read* (literal "/") {literals}{read_literal_clause} {subpaths})'
+        )
+        write_data_literals = "".join(
+            f'(allow file-write-data (literal {json.dumps(str(root))}))'
+            for root in macos_write_data_literals
+        )
         network = "(allow network*)" if allow_network else ""
-        policy = f'(version 1)(deny default)(deny syscall-unix (syscall-number 147 82))(allow process-fork)(allow process-exec {literals})(allow sysctl-read)(allow file-read* (literal "/") {literals} {subpaths})(allow file-write* (subpath {json.dumps(str(child.root))})){network}'
+        policy = f'(version 1)(deny default)(deny syscall-unix (syscall-number 147 82))(allow process-fork){process_exec}(allow sysctl-read){file_read}{write_data_literals}(allow file-write* (subpath {json.dumps(str(child.root))})){network}'
         return ("/usr/bin/sandbox-exec", "-p", policy, *argv)
     tool = _trusted_bwrap(backend_digest)
     assert tool is not None

@@ -462,13 +462,13 @@ DATA_BOUNDARY_ENFORCEMENT_KINDS: Final = ("refused_before_handoff", "host_confin
 # Both of these used to name `#820`, which was a mis-citation even before that
 # issue landed. #820 is about two handoffs sharing one workspace, and it shipped
 # `workspace_binding_guard/v1` for exactly that -- a pre-dispatch reservation.
-# Neither of these limits is about reservations. Every `host_confinement` limit
-# is unenforced because no delegation or fanout lane places an executor under
-# the sandbox the cross-harness adapter lane already builds, which is real,
-# fileable work that #820 was never going to do. A host that *could* confine
-# still reports the limit as unenforced; it reports a different blocker from a
-# host that could not.
-_HOST_CONFINEMENT_BLOCKER: Final = "no_delegation_or_fanout_lane_places_an_executor_under_the_sandbox"
+# The fanout lane now places its owner and dispatcher verification processes
+# under the existing sandbox. A process-neutral handoff record still cannot
+# claim that a particular run was confined: only its same-run probe receipt can
+# do that. Network is deliberately separate because the fanout owner retains
+# its existing network behavior.
+_FANOUT_FILESYSTEM_CONFINEMENT_BLOCKER: Final = "no_observed_fanout_filesystem_confinement_probe_receipt"
+_RUNTIME_NETWORK_CONFINEMENT_BLOCKER: Final = "fanout_lane_does_not_request_network_confinement"
 # The advisory limit is not fileable at all. Measuring whether a running
 # executor stayed inside its declared targets needs the same OS-level
 # confinement the host owns; on this side of the wall there is nothing to
@@ -516,14 +516,15 @@ DATA_BOUNDARY_LIMITS: Final = (
         (
             "omh.quality.cross_harness_adapter_sandbox.sandbox_command",
             "omh.quality.cross_harness_adapter_sandbox.read_roots_are_safe",
+            "omh.coding.fanout_confinement.prepare_fanout_filesystem_confinement",
         ),
-        _HOST_CONFINEMENT_BLOCKER,
+        _FANOUT_FILESYSTEM_CONFINEMENT_BLOCKER,
     ),
     (
         "runtime_network_confinement",
         "host_confinement",
         ("omh.quality.cross_harness_adapter_sandbox.sandbox_command",),
-        _HOST_CONFINEMENT_BLOCKER,
+        _RUNTIME_NETWORK_CONFINEMENT_BLOCKER,
     ),
     (
         "executor_honours_declared_targets",
@@ -699,11 +700,12 @@ def data_boundary_enforcement_facts() -> dict[str, object]:
       blocker on every host: no host fact bears on them, so a missing
       confinement backend is not an explanation for one.
 
-    Today every `host_confinement` limit is still unenforced even where the
-    host is capable, because no delegation or fanout lane places an executor
-    under the sandbox the cross-harness adapter lane builds. The capability flag
-    is what separates "the host could, once a lane does that" from "this host
-    never could", and that separation is the deliverable.
+    Fanout now supplies filesystem confinement, but this process-neutral fact
+    surface has no run receipt to inspect. Its filesystem row therefore remains
+    declared until a particular dispatch records a successful same-run probe;
+    the network row remains declared because fanout preserves network access.
+    The capability flag separates a host that can produce such a receipt from
+    one that cannot.
 
     Deliberately not part of `safety_rule_profile()`: the answer differs per
     machine, and a host-dependent digest would read as profile drift on every
