@@ -8318,6 +8318,11 @@ def _content_operator_guard_applies(normalized_query: str, query_tokens: set[str
 
 
 def _visual_summary_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    # `prepare_routing_text` emits this cue only for bounded Apple-style
+    # product-visual library intent, which must reach the Apple specialist
+    # before generic image-card intake.
+    if _contains_phrase(normalized_query, ("apple product visual",)):
+        return False
     if _is_short_visual_summary_request(normalized_query):
         return True
     if _gateway_intent_guard_applies(normalized_query, query_tokens):

@@ -3387,6 +3387,40 @@ _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
             "deployment",
         ],
     },
+    "apple-design": {
+        "kind": "apple_design",
+        "headline": "I can prepare an Apple platform-aware design brief.",
+        "body": (
+            "I will prepare the mode, target platform and convention, current tokens, applicable source records, "
+            "observed-versus-hypothesized findings, remediation owners, and missing checks. Implementation, accessibility "
+            "PASS, visual QA, and Apple certification stay observed-only."
+        ),
+        "phase": "apple_design_prepared",
+        "next_action": "prepare_design_orchestration",
+        "artifact_schema": "apple_design_brief/v1",
+        "claim_boundary_suffix": "It is not implementation, accessibility PASS, visual QA, Apple certification, review, CI, or delivery evidence.",
+        "actions": [
+            {"id": "prepare_design_orchestration", "label": "Prepare Apple design brief", "style": "primary"},
+            {"id": "prepare_accessibility_audit", "label": "Prepare accessibility audit", "style": "secondary"},
+            {"id": "prepare_visual_qa", "label": "Prepare visual QA", "style": "secondary"},
+            {"id": "show_status", "label": "Show status", "style": "secondary"},
+        ],
+        "recommended_flow": [
+            "scope_mode_platform_and_convention",
+            "separate_observations_from_hypotheses",
+            "prepare_platform_aware_remediation",
+            "route_missing_checks_to_existing_owners",
+        ],
+        "evidence_not_observed": [
+            "implementation",
+            "accessibility PASS",
+            "visual QA",
+            "Apple certification",
+            "review",
+            "CI",
+            "delivery",
+        ],
+    },
     "design-orchestration": {
         "kind": "design_orchestration",
         "headline": "I can prepare a design orchestration contract for this.",

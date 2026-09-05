@@ -14,6 +14,7 @@ Trigger phrases and the role registry live in `references/workflow-registry.md`;
 - `omh-agent-evaluation`: [omh] Hermes Agent Evaluation workflow: compare executor or agent choices on reproducible tasks using quality, cost, time, tool, and evidence metrics.
 - `omh-agent-ops-review`: [omh] Hermes agent ops review workflow: help managers inspect AI-agent progress, blockers, quality gates, and throughput levers.
 - `omh-ai-slop-cleaner`: [omh] Hermes AI slop cleaner workflow: delete AI-generated slop, dead code, and duplication while observable behavior stays identical.
+- `omh-apple-design`: [omh] Hermes Apple design workflow: prepare native Apple UI or Apple marketing product-visual direction, review, and improvement briefs with evidence-backed remediation handoffs.
 - `omh-ask`: [omh] Hermes adaptation for consulting an external advisor when configured.
 - `omh-automation-blueprint`: [omh] Hermes Scheduled Ops Blueprint workflow: design recurring Hermes operations with schedule, delivery, silence policy, context chain, and prepared-vs-observed status.
 - `omh-autoresearch-goal`: [omh] Hermes adaptation for durable research-goal execution.

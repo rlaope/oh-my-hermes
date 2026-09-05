@@ -15,6 +15,7 @@ from .domain_signals import (
 )
 from .intent import scrub_diagnostic_status_text
 from .localization import normalized_phrase, prepare_routing_text, routing_tokens
+from .visual_qa_cues import contains_cue_phrase
 from .missed_route import is_missed_route_feedback
 from .omh_help import is_omh_docs_question
 from .trigger_language_packs import (
@@ -580,6 +581,17 @@ _SKILL_POLICIES = {
             "language/aspect metadata, and visual_observation/v1 evidence requirements. Show generate action only "
             "when image_generation_capability/v1 is connected; otherwise route to image_generation_setup/v1 to choose "
             "a GPT image tool, existing Hermes connector, generic image tool, or prompt-only path."
+        ),
+    ),
+    "apple-design": RecommendationPolicy(
+        next_action="prepare_design_orchestration",
+        evidence_boundary=(
+            "An Apple design brief is prepared guidance, not Apple certification, implementation, accessibility PASS, visual QA, "
+            "browser evidence, review, CI, deployment, or merge evidence."
+        ),
+        wrapper_guidance=(
+            "Prepare apple_design_brief/v1 with mode, explicit visual target, platform convention, target/version/framework/input/surface/state, current tokens, "
+            "applicable source records, observation-versus-hypothesis findings, remediation owners, and visual_status not_observed unless supplied evidence proves otherwise. For product visuals, prepare apple_visual_direction/v1 and name the available image-generator, renderer, or frontend execution boundary without claiming generation or rendering; when image generation is unavailable, use an authorized available renderer or selected coding owner before prompt-only preparation."
         ),
     ),
     "design-quality-gate": RecommendationPolicy(
@@ -2240,6 +2252,9 @@ def _score_definition(
         score += 72
         matched.update(f"domain_action:{cue}" for cue in domain_operator_override.matched_cues)
 
+    if definition.name == "apple-design" and _apple_design_offers_itself(normalized_query, query_tokens):
+        score += 30
+        matched.add("direct:apple_design_specialist")
     if definition.name == "adversarial-consensus" and _adversarial_consensus_explicit_match(normalized_query):
         score += 30
         matched.add("direct:adversarial_consensus")
@@ -2872,6 +2887,38 @@ def _failure_signal_audit_explicit_match(normalized_query: str) -> bool:
     return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _FAILURE_SIGNAL_AUDIT_EXPLICIT_PHRASES)
 
 
+
+_APPLE_DESIGN_SPECIALIST_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "apple design",
+        "apple ui design",
+        "apple hig",
+        "human interface guidelines",
+        "ios design guidelines",
+        "macos app design",
+        "apple-inspired web",
+        "liquid glass review",
+        "liquid glass design",
+        "apple 3d hero",
+        "apple-style 3d",
+        "apple product render",
+        "apple product visual",
+        "apple studio lighting",
+        "apple-style landing visual",
+        "apple product page",
+    )
+)
+_APPLE_DESIGN_PLATFORM_TOKENS = frozenset({"apple", "human", "ios", "macos", "liquid"})
+
+
+def _apple_design_offers_itself(normalized_query: str, query_tokens: set[str]) -> bool:
+    """Require an explicit Apple design or product-visual phrase, not a product-name or glass token alone."""
+    return bool(query_tokens & _APPLE_DESIGN_PLATFORM_TOKENS) and contains_cue_phrase(
+        normalized_query, _APPLE_DESIGN_SPECIALIST_PHRASES
+    )
+
+
 def _accessibility_audit_explicit_match(normalized_query: str) -> bool:
     return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _ACCESSIBILITY_AUDIT_EXPLICIT_PHRASES)
 
@@ -3105,6 +3152,7 @@ def _omh_docs_offers_itself(normalized_query: str, query_tokens: set[str]) -> bo
 # as blockers upstream and keep that phrasing in the wrappers above rather than
 # being rewritten, so the predicates here are the same ones as before.
 _SKILL_OFFERS_ITSELF: dict[str, Callable[[str, set[str]], bool]] = {
+    "apple-design": _apple_design_offers_itself,
     "codebase-uml": _codebase_uml_offers_itself,
     "context": _context_alignment_offers_itself,
     "product-docs": _omh_docs_offers_itself,

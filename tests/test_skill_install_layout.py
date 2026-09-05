@@ -28,12 +28,13 @@ load_local_package()
 from omh.installer import (
     install_skill_pack,
     installed_skill_directories,
+    uninstall_skill_pack,
     skill_directory_name,
     skill_install_relative_dir,
 )
 from omh.maintenance.doctor import run_doctor
 from omh.paths import resolve_paths
-from omh.skill_pack import builtin_skill_templates, installable_skill_names
+from omh.skill_pack import builtin_skill_reference_templates, builtin_skill_templates, installable_skill_names
 from omh.skills.catalog import (
     ULTRAWORK_HERMES_CATEGORY,
     ULW_ENGINE_SKILL_NAMES,
@@ -145,6 +146,29 @@ class InstalledLayoutTests(unittest.TestCase):
             references = sorted(paths.skills_dir.glob("*/*/references/*.md"))
             self.assertTrue(references, "the catalog ships skill reference files")
             self.assertEqual(sorted(paths.skills_dir.glob("*/references/*.md")), [])
+
+    def test_local_source_install_refreshes_and_removes_apple_references(self) -> None:
+        expected = {
+            template.relative_path: template.content
+            for template in builtin_skill_reference_templates()
+            if template.skill_name == "apple-design"
+        }
+        self.assertEqual(len(expected), 5)
+
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths, source="local", source_dir=Path.cwd(), profile="full")
+            apple_dir = paths.skills_dir / omh_skill_install_path("apple-design")
+            for relative_path, content in expected.items():
+                self.assertEqual((apple_dir / relative_path).read_text(encoding="utf-8"), content)
+
+            missing_reference = apple_dir / "references/web-production-libraries.md"
+            missing_reference.unlink()
+            install_skill_pack(paths, source="local", source_dir=Path.cwd(), profile="full")
+            self.assertEqual(missing_reference.read_text(encoding="utf-8"), expected["references/web-production-libraries.md"])
+
+            uninstall_skill_pack(paths, remove_files=True)
+            self.assertFalse(apple_dir.exists())
 
     def test_the_manifest_records_the_categorized_path(self) -> None:
         with TemporaryDirectory() as tmp:

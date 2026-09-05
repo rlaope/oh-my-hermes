@@ -189,7 +189,8 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # public-chat issue intake workflow with a bounded interview, duplicate
 # search, and confirmation-gated connector handoff); one new capability
 # section for one new workflow, not per-section padding; warranted growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 390713
+# 390713 -> 394961: apple-design adds one platform-aware design/review/improve capability row.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 394961
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -218,7 +219,8 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # `docs` routing exception and preserves display-name symmetry.
 # 110519 -> 111483: one standalone capability row for the new
 # `github-issue-intake` skill; warranted growth.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 111483
+# 111483 -> 112443: apple-design adds one standalone capability row.
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 112443
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the
@@ -656,7 +658,9 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # 890777 -> 891138: the final template, security-redirect, privacy-projection,
 # authenticated-maintainer, and idempotent-handoff rules complete that same
 # workflow contract; one bounded workflow correction, not padding.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 891138
+# 891138 -> 899556: apple-design adds a concise platform brief and progressive
+# references; detailed production and library guidance stays out of the body.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 899556
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

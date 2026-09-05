@@ -80,6 +80,7 @@ _FAMILY_DEFINITIONS = (
             "content-operator",
             "media-input-operator",
             "design-orchestration",
+            "apple-design",
         ),
         "next_action": "prepare_material_or_visual_card",
         "example_prompt": "Make a PR summary card for reviewers.",

@@ -286,7 +286,9 @@ class RouterContentTests(unittest.TestCase):
         # 21,400 -> 22,000: the `inference-serving` and `tech-debt-audit`
         # catalog rows (21,406 measured) joined the index; one name-and-hook
         # line per new skill, ~2.7% headroom kept.
-        self.assertLess(len(rendered.encode("utf-8")), 22_000)
+        # 22,000 -> 22,700: `apple-design` adds one platform-design index
+        # line (22,038 measured); this retains ~3% headroom.
+        self.assertLess(len(rendered.encode("utf-8")), 22_700)
         for line in rendered.splitlines():
             self.assertLess(len(line.encode("utf-8")), 400, line)
 
@@ -491,8 +493,10 @@ class RouterContentTests(unittest.TestCase):
         # (measured 61,841). Raised to 64,000 alongside the route-payload
         # raise above for the same `chunked_body_texts` duplicate in every
         # embedded messenger rendering (measured 63,474). Deliberate, named,
-        # not room for silent growth.
-        self.assertLess(len(json.dumps(context_payload, sort_keys=True)), 64_000)
+        # not room for silent growth. Raised to 65,000 when `apple-design`
+        # added its prepared-only platform guidance (measured 64,061), leaving
+        # bounded headroom for a future named catalog change.
+        self.assertLess(len(json.dumps(context_payload, sort_keys=True)), 65_000)
 
     def test_role_surface_docs_match_catalog_and_avoid_runtime_claims(self) -> None:
         roles_doc = Path("docs/ROLES.md").read_text(encoding="utf-8")
@@ -1526,6 +1530,7 @@ class RouterContentTests(unittest.TestCase):
                 "img-summary",
                 "design-orchestration",
                 "design-quality-gate",
+                "apple-design",
                 "frontend",
                 "accessibility-audit",
                 "visual-qa",
@@ -3925,8 +3930,8 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("`deep-interview`, `ralplan`, `loop`", docs_readme)
         # Retired engines must not be presented as current planning skills.
         self.assertNotIn("`ultragoal`", docs_readme)
-        # omh-docs and github-issue-intake raise the measured catalog to 118.
-        self.assertIn("**118 installable skills**", docs_readme)
+        # omh-docs and github-issue-intake raise the measured catalog to 119.
+        self.assertIn("**119 installable skills**", docs_readme)
         self.assertIn("**Retain knowledge**", docs_readme)
         # The unit suite runs through the deterministic sharding tools (issue
         # #1294): plan once, run per shard plus the serial quarantine, then
@@ -4046,7 +4051,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("People ask. Agents orchestrate.", site_docs)
         self.assertIn("Agent and operator control plane", site_docs)
         self.assertIn("Agent / maintainer reference.", site_docs)
-        self.assertIn("One front door for 82 skills.", site_docs)
+        self.assertIn("One front door for 83 skills.", site_docs)
         self.assertIn('id="families"', site_docs)
         self.assertIn('id="wrappers"', site_docs)
         self.assertIn('id="memory"', site_docs)

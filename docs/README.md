@@ -40,6 +40,7 @@ references rather than normal user steps.
 | Inspect the runtime-readable capability map | [Capabilities](CAPABILITIES.md) |
 | Understand measured and unproven impact claims | [Capability Impact](CAPABILITY_IMPACT.md) |
 | Browse all generated skills and harness metadata | [Workflow Reference](WORKFLOWS.md) |
+| Apply Apple UI design/review/improvement guidance | [Apple Design Guidance](APPLE-DESIGN.md) |
 | Track the external skill sources our skills reconstruct | [Skill Upstream Sources](SKILL-SOURCES.md) |
 | Prepare coding work for a selected executor | [Delegation-First Completeness](DELEGATION_FIRST_COMPLETENESS.md) |
 | Integrate OMH into a Hermes wrapper | [Hermes Agent Integration Runbook](HERMES_AGENT_INTEGRATION_RUNBOOK.md) |
@@ -54,7 +55,7 @@ Hermes memory, skills, tools, gateway surfaces, and OMH's role, see the
 
 ## Six Capability Families
 
-The public front door groups **118 installable skills** by user intent. Exact
+The public front door groups **119 installable skills** by user intent. Exact
 skill names remain available for deterministic routing, wrapper rendering, and
 operator control.
 

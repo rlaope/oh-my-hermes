@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>OMH Design Workspace — Apple-inspired design example</title>
+<meta name="description" content="Self-contained Apple-inspired design example for the omh-apple-design skill. Static sample data, no backend.">
+<style>
+/* ============================================================
+   OMH Design Workspace — Apple-inspired web example
+   Static sample. No JS, no external assets, no network.
+   Tokens are specified in DESIGN.md; keep both in sync.
+   ============================================================ */
+
+/* ---------- TOKENS-LIGHT (default) ---------- */
+:root {
+  --canvas: #f5f5f7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --bar-tint: rgba(245, 245, 247, .78);
+  --bar-opaque: #eff0f3;
+  --line: #d9dade;
+  --line-strong: #c2c3ca;
+  --ink: #1c1d22;
+  --ink-2: #4b4d57;
+  --ink-3: #6a6c75;
+  --accent: #0b5fd7;
+  --on-accent: #ffffff;
+  --accent-tint: #e7effc;
+  --accent-deep: #0a4ab0;
+  --ok: #177241;
+  --ok-tint: #e2f3e7;
+  --ok-deep: #155e33;
+  --warn-tint: #faf0da;
+  --warn-deep: #6e4a00;
+  --crit: #b3273a;
+  --crit-tint: #fbe9ea;
+  --crit-deep: #a02532;
+  --stage-a: #cfe0f8;
+  --stage-b: #e8d9ee;
+  --stage-c: #d4ecdd;
+
+  --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --fs-display: clamp(1.85rem, 1.35rem + 2vw, 2.55rem);
+  --fs-title1: 1.375rem;
+  --fs-title2: 1.0625rem;
+  --fs-body: 0.9375rem;
+  --fs-foot: 0.8125rem;
+  --fs-cap: 0.6875rem;
+
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  --r-s: 6px; --r-m: 10px; --r-l: 14px; --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(12, 14, 20, .06);
+  --shadow-2: 0 12px 32px rgba(12, 14, 20, .12);
+
+  color-scheme: light;
+}
+
+/* ---------- TOKENS-DARK (auto via system) ----------
+   Kept identical to the forced-dark block below. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #101114;
+    --surface: #1b1c20;
+    --surface-raised: #222329;
+    --bar-tint: rgba(23, 24, 28, .72);
+    --bar-opaque: #17181c;
+    --line: #2e2f36;
+    --line-strong: #3c3d45;
+    --ink: #f0f1f4;
+    --ink-2: #b4b7c0;
+    --ink-3: #969aa4;
+    --accent: #6ea6ff;
+    --on-accent: #071023;
+    --accent-tint: #12233f;
+    --accent-deep: #a8c7ff;
+    --ok: #7fd6a0;
+    --ok-tint: #11291b;
+    --ok-deep: #7fd6a0;
+    --warn-tint: #2b2110;
+    --warn-deep: #e5b567;
+    --crit: #f2919c;
+    --crit-tint: #341418;
+    --crit-deep: #f2919c;
+    --stage-a: #1d2b45;
+    --stage-b: #33223c;
+    --stage-c: #1b3325;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-2: 0 12px 32px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+  /* Forced LIGHT while system is dark (modern browsers with :has()).
+     Kept identical to TOKENS-LIGHT above. */
+  :root:has(#app-light:checked) {
+    --canvas: #f5f5f7;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --bar-tint: rgba(245, 245, 247, .78);
+    --bar-opaque: #eff0f3;
+    --line: #d9dade;
+    --line-strong: #c2c3ca;
+    --ink: #1c1d22;
+    --ink-2: #4b4d57;
+    --ink-3: #6a6c75;
+    --accent: #0b5fd7;
+    --on-accent: #ffffff;
+    --accent-tint: #e7effc;
+    --accent-deep: #0a4ab0;
+    --ok: #177241;
+    --ok-tint: #e2f3e7;
+    --ok-deep: #155e33;
+    --warn-tint: #faf0da;
+    --warn-deep: #6e4a00;
+    --crit: #b3273a;
+    --crit-tint: #fbe9ea;
+    --crit-deep: #a02532;
+    --stage-a: #cfe0f8;
+    --stage-b: #e8d9ee;
+    --stage-c: #d4ecdd;
+    --shadow-1: 0 1px 2px rgba(12, 14, 20, .06);
+    --shadow-2: 0 12px 32px rgba(12, 14, 20, .12);
+    color-scheme: light;
+  }
+}
+
+/* Forced DARK while system is light (modern browsers with :has()).
+   Kept identical to TOKENS-DARK above. */
+:root:has(#app-dark:checked) {
+  --canvas: #101114;
+  --surface: #1b1c20;
+  --surface-raised: #222329;
+  --bar-tint: rgba(23, 24, 28, .72);
+  --bar-opaque: #17181c;
+  --line: #2e2f36;
+  --line-strong: #3c3d45;
+  --ink: #f0f1f4;
+  --ink-2: #b4b7c0;
+  --ink-3: #969aa4;
+  --accent: #6ea6ff;
+  --on-accent: #071023;
+  --accent-tint: #12233f;
+  --accent-deep: #a8c7ff;
+  --ok: #7fd6a0;
+  --ok-tint: #11291b;
+  --ok-deep: #7fd6a0;
+  --warn-tint: #2b2110;
+  --warn-deep: #e5b567;
+  --crit: #f2919c;
+  --crit-tint: #341418;
+  --crit-deep: #f2919c;
+  --stage-a: #1d2b45;
+  --stage-b: #33223c;
+  --stage-c: #1b3325;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 12px 32px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, p, dl, ul, ol, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-s);
+}
+code, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+/* visually hidden, still focusable/announced */
+.vh {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--sp-4); top: -100px;
+  z-index: 100;
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-s);
+  box-shadow: var(--shadow-1);
+}
+.skip-link:focus-visible { top: var(--sp-3); }
+
+/* ---------- Toolbar (translucent navigation layer only) ---------- */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  min-height: 52px;
+  padding: var(--sp-2) var(--sp-5);
+  background: var(--bar-opaque);
+  border-bottom: 1px solid var(--line);
+}
+@supports (backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px)) {
+  .toolbar {
+    background: var(--bar-tint);
+    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    backdrop-filter: saturate(1.4) blur(14px);
+  }
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.brand-mark {
+  flex: none;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  display: grid;
+  place-items: center;
+  color: var(--on-accent);
+}
+:root:has(#app-dark:checked) .brand-mark { color: #071023; }
+.brand-name {
+  font-size: var(--fs-title2);
+  font-weight: 600;
+  letter-spacing: -0.006em;
+}
+.brand-name .app-area {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+.sample-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 3px var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-foot);
+  color: var(--ink-2);
+  background: var(--surface);
+}
+.sample-badge .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--warn-deep);
+  flex: none;
+}
+.toolbar-spacer { flex: 1 1 0; min-width: 0; }
+
+/* ---------- Segmented controls (appearance + platform) ---------- */
+.seg {
+  border: 0; padding: 0; margin: 0;
+  display: inline-flex;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 2px;
+  gap: 2px;
+}
+.seg label {
+  padding: 3px var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-foot);
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg input:checked + label {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+  border: 1px solid var(--line);
+  padding: 2px calc(var(--sp-3) - 1px);
+}
+.seg input:focus-visible + label {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Shell ---------- */
+.shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: var(--sp-5);
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--sp-5);
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  align-self: start;
+  position: sticky;
+  top: 76px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: var(--bar-opaque);
+}
+@supports (backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px)) {
+  .sidebar {
+    background: var(--bar-tint);
+    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    backdrop-filter: saturate(1.4) blur(14px);
+  }
+}
+.side-group-label {
+  font-size: var(--fs-cap);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  padding: 0 var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.side-nav ul { display: flex; flex-direction: column; gap: 2px; }
+.side-nav a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px var(--sp-2);
+  border-radius: var(--r-s);
+  color: var(--ink-2);
+  font-size: var(--fs-foot);
+  font-weight: 500;
+}
+.side-nav a:hover {
+  background: var(--accent-tint);
+  color: var(--accent-deep);
+  text-decoration: none;
+}
+.side-nav a[aria-current] {
+  background: var(--accent-tint);
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+.side-nav a[aria-current]::before {
+  content: "";
+  position: absolute;
+  left: -6px; top: 6px; bottom: 6px;
+  width: 3px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+.side-nav svg { flex: none; color: var(--ink-3); }
+.side-nav a[aria-current] svg,
+.side-nav a:hover svg { color: currentColor; }
+
+.side-static li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 6px var(--sp-2);
+  font-size: var(--fs-foot);
+  color: var(--ink-2);
+  border-radius: var(--r-s);
+}
+.side-static .count {
+  font-size: var(--fs-cap);
+  font-weight: 600;
+  color: var(--ink-3);
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 0 var(--sp-2);
+}
+.side-foot {
+  margin-top: auto;
+  padding: var(--sp-2);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-cap);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  line-height: 1.6;
+}
+
+/* ---------- Content plane ---------- */
+.content {
+  min-width: 0;
+  max-width: 1120px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-1);
+}
+.eyebrow {
+  font-size: var(--fs-cap);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: var(--sp-2);
+}
+.section-title {
+  font-size: var(--fs-title1);
+  font-weight: 600;
+  letter-spacing: -0.014em;
+  line-height: 1.2;
+  margin-bottom: var(--sp-2);
+}
+.card-title {
+  font-size: var(--fs-title2);
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  line-height: 1.3;
+}
+.muted { color: var(--ink-2); }
+.faint { color: var(--ink-3); font-size: var(--fs-foot); }
+
+/* ---------- Hero ---------- */
+.hero h1 {
+  font-size: var(--fs-display);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.12;
+  margin-bottom: var(--sp-3);
+  max-width: 24ch;
+}
+.hero p.lede {
+  max-width: 62ch;
+  color: var(--ink-2);
+  margin-bottom: var(--sp-4);
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--sp-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-foot);
+  font-weight: 500;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  background: var(--surface);
+}
+.chip.mono { font-family: var(--font-mono); font-size: var(--fs-cap); }
+.chip-accent { background: var(--accent-tint); color: var(--accent-deep); border-color: transparent; }
+.chip-ok    { background: var(--ok-tint);    color: var(--ok-deep);    border-color: transparent; }
+.chip-warn  { background: var(--warn-tint);  color: var(--warn-deep);  border-color: transparent; }
+.chip-crit  { background: var(--crit-tint);  color: var(--crit-deep);  border-color: transparent; }
+
+/* ---------- Asymmetric rows ---------- */
+.row-brief, .row-review {
+  display: grid;
+  gap: var(--sp-5);
+  align-items: start;
+}
+.row-brief { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+.row-review { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+
+/* ---------- Brief ---------- */
+.brief-dl {
+  display: grid;
+  /* minmax(auto, max-content): label column may shrink (dt wraps) under
+     text enlargement instead of forcing value glyphs past the viewport */
+  grid-template-columns: minmax(auto, max-content) minmax(0, 1fr);
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-4);
+}
+.brief-dl dt {
+  font-size: var(--fs-foot);
+  font-weight: 600;
+  color: var(--ink-3);
+  padding-top: 1px;
+}
+.brief-dl dd {
+  margin: 0;
+  font-size: var(--fs-foot);
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+.directions { margin-top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.direction {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  font-size: var(--fs-foot);
+}
+.direction.chosen {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+.direction .d-name { font-weight: 600; }
+.direction.chosen .d-name { color: var(--accent-deep); }
+.direction p { color: var(--ink-2); min-width: 0; }
+.direction.chosen p { color: var(--accent-deep); }
+
+/* ---------- Platform choice ---------- */
+.platform-seg { margin-top: var(--sp-4); }
+.platform-note {
+  margin-top: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 3px solid var(--accent);
+  background: var(--canvas);
+  border-radius: 0 var(--r-m) var(--r-m) 0;
+  font-size: var(--fs-foot);
+  color: var(--ink-2);
+}
+.platform-note strong { color: var(--ink); }
+/* modern browsers: show only the note for the checked platform */
+:root:has(#plat-ios:checked) .platform-note:not(#note-ios),
+:root:has(#plat-mac:checked) .platform-note:not(#note-mac),
+:root:has(#plat-web:checked) .platform-note:not(#note-web) { display: none; }
+
+/* ---------- Specimen (the generated result) ---------- */
+.specimen {
+  border-radius: var(--r-l);
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.specimen-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-5) var(--sp-5) 0;
+}
+.specimen-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--sp-5);
+  padding: var(--sp-5);
+}
+.type-ramp { display: flex; flex-direction: column; }
+.type-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: baseline;
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+.type-row:last-child { border-bottom: 0; }
+.type-meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-cap);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.t-display { font-size: var(--fs-display); font-weight: 700; letter-spacing: -0.022em; line-height: 1.12; }
+.t-title1  { font-size: var(--fs-title1); font-weight: 600; letter-spacing: -0.014em; line-height: 1.2; }
+.t-title2  { font-size: var(--fs-title2); font-weight: 600; letter-spacing: -0.006em; line-height: 1.3; }
+.t-body    { font-size: var(--fs-body); line-height: 1.55; }
+.t-foot    { font-size: var(--fs-foot); color: var(--ink-2); line-height: 1.45; }
+.t-cap     { font-size: var(--fs-cap); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+
+.specimen-side { display: flex; flex-direction: column; gap: var(--sp-5); min-width: 0; }
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--sp-3);
+}
+.swatch .well {
+  height: 44px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--line);
+  margin-bottom: var(--sp-1);
+}
+.swatch .s-name { font-size: var(--fs-foot); font-weight: 600; }
+.swatch .s-hex {
+  font-family: var(--font-mono);
+  font-size: var(--fs-cap);
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.stage {
+  position: relative;
+  border-radius: var(--r-m);
+  border: 1px solid var(--line);
+  padding: var(--sp-4);
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  background:
+    radial-gradient(120% 90% at 12% 8%, var(--stage-a), transparent 55%),
+    radial-gradient(110% 100% at 92% 18%, var(--stage-b), transparent 60%),
+    radial-gradient(130% 110% at 55% 100%, var(--stage-c), transparent 60%),
+    var(--canvas);
+}
+.material-chip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-m);
+  border: 1px solid var(--line);
+  background: var(--bar-opaque);
+  font-size: var(--fs-foot);
+  font-weight: 500;
+  color: var(--ink);
+}
+@supports (backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px)) {
+  .material-chip.translucent {
+    background: var(--bar-tint);
+    -webkit-backdrop-filter: saturate(1.4) blur(10px);
+    backdrop-filter: saturate(1.4) blur(10px);
+  }
+}
+.material-chip.opaque { background: var(--surface); }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px var(--sp-4);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-foot);
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.btn:hover { text-decoration: none; }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-primary:active { filter: brightness(.94); }
+.btn-quiet {
+  background: var(--surface);
+  color: var(--accent);
+  border-color: var(--line-strong);
+}
+.btn-quiet:hover { background: var(--accent-tint); color: var(--accent-deep); }
+
+/* ---------- Review ---------- */
+.finding {
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  padding: var(--sp-4);
+}
+.finding + .finding { margin-top: var(--sp-3); }
+.finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.finding h4 { font-size: var(--fs-body); font-weight: 600; }
+.finding-facts {
+  display: grid;
+  grid-template-columns: minmax(auto, max-content) minmax(0, 1fr);
+  gap: 2px var(--sp-3);
+  font-size: var(--fs-foot);
+  margin: var(--sp-2) 0;
+}
+.finding-facts dt { color: var(--ink-3); font-weight: 600; }
+.finding-facts dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.finding details {
+  margin-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-2);
+}
+.finding summary {
+  cursor: pointer;
+  font-size: var(--fs-foot);
+  font-weight: 600;
+  color: var(--accent);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border-radius: var(--r-s);
+  width: fit-content;
+  padding: 2px var(--sp-1);
+}
+.finding summary::-webkit-details-marker { display: none; }
+.finding summary::before {
+  content: "";
+  width: 0; height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+.finding details[open] summary::before { transform: rotate(90deg); }
+.finding details p {
+  font-size: var(--fs-foot);
+  color: var(--ink-2);
+  margin-top: var(--sp-2);
+  max-width: 60ch;
+}
+.sources-rail .card-title { margin-bottom: var(--sp-3); }
+.source-item {
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-foot);
+}
+.source-item:last-child { border-bottom: 0; }
+.source-item a { font-weight: 600; overflow-wrap: anywhere; }
+.source-item p { color: var(--ink-2); margin-top: 2px; }
+
+/* ---------- Handoff ---------- */
+.handoff-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--sp-5);
+  margin-top: var(--sp-4);
+}
+.hand-list li {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  font-size: var(--fs-foot);
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
+  align-items: baseline;
+}
+.hand-list li:last-child { border-bottom: 0; }
+.hand-list .mark { flex: none; font-weight: 700; }
+.hand-list .mark.ok { color: var(--ok); }
+.hand-list .mark.todo { color: var(--ink-3); }
+
+/* ---------- Footer ---------- */
+.site-foot {
+  border-top: 1px solid var(--line);
+  margin-top: var(--sp-6);
+  padding: var(--sp-5);
+  font-size: var(--fs-foot);
+  color: var(--ink-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.site-foot a { overflow-wrap: anywhere; }
+
+/* ---------- Motion (opt-in only) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .seg label, .btn, .side-nav a, .chip { transition: background-color .14s ease, color .14s ease, filter .14s ease; }
+  .finding summary::before { transition: transform .14s ease; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  .content > * { animation: rise .4s ease both; }
+  .content > *:nth-child(2) { animation-delay: .05s; }
+  .content > *:nth-child(3) { animation-delay: .1s; }
+  .content > *:nth-child(4) { animation-delay: .15s; }
+  .content > *:nth-child(5) { animation-delay: .2s; }
+}
+
+/* ---------- Preference fallbacks ---------- */
+@media (prefers-reduced-transparency: reduce) {
+  .toolbar, .sidebar, .material-chip.translucent {
+    background: var(--bar-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  :root { --line: var(--line-strong); --ink-3: var(--ink-2); }
+  .toolbar, .sidebar, .material-chip.translucent {
+    background: var(--bar-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .card, .finding, .direction { border-color: var(--line-strong); }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1099px) {
+  .row-brief, .row-review, .specimen-body, .handoff-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell { grid-template-columns: 200px minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--sp-4);
+    gap: var(--sp-4);
+  }
+  .sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    flex-direction: column;
+    gap: var(--sp-2);
+    padding: var(--sp-3);
+  }
+  .side-nav ul { flex-direction: row; flex-wrap: wrap; gap: var(--sp-1); }
+  .side-nav a { padding: 5px var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-pill); }
+  .side-nav a[aria-current]::before { display: none; }
+  .side-nav svg { display: none; }
+  .side-static, .side-foot, .side-group-label { display: none; }
+  .toolbar { padding: var(--sp-2) var(--sp-4); }
+  .type-row { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
+  .card { padding: var(--sp-4); }
+  .specimen-head { padding: var(--sp-4) var(--sp-4) 0; }
+  .specimen-body { padding: var(--sp-4); }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="toolbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">
+      <!-- Original OMH mark: two overlapping lens circles -->
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="6" cy="8" r="4.4" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="10" cy="8" r="4.4" stroke="currentColor" stroke-width="1.6" opacity=".55"/>
+      </svg>
+    </span>
+    <span class="brand-name">OMH Design <span class="app-area">/ Workspace</span></span>
+  </div>
+  <p class="sample-badge"><span class="dot" aria-hidden="true"></span>Design example · Sample data · Not connected</p>
+  <div class="toolbar-spacer"></div>
+  <fieldset class="seg" aria-describedby="appearance-hint">
+    <legend class="vh">Appearance</legend>
+    <input class="vh" type="radio" name="appearance" id="app-auto" checked>
+    <label for="app-auto">Auto</label>
+    <input class="vh" type="radio" name="appearance" id="app-light">
+    <label for="app-light">Light</label>
+    <input class="vh" type="radio" name="appearance" id="app-dark">
+    <label for="app-dark">Dark</label>
+  </fieldset>
+  <p id="appearance-hint" class="vh">Switches this page between system, light, and dark appearance. In browsers without CSS :has() support the page follows the system appearance.</p>
+</header>
+
+<div class="shell">
+  <aside class="sidebar" aria-label="Workspace sidebar">
+    <nav class="side-nav" aria-label="On this page">
+      <h2 class="side-group-label">Aurora onboarding</h2>
+      <ul>
+        <li><a href="#overview" aria-current="true">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5.4" stroke="currentColor" stroke-width="1.5"/><circle cx="7" cy="7" r="1.6" fill="currentColor"/></svg>
+          Overview</a></li>
+        <li><a href="#brief">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><rect x="2.2" y="1.6" width="9.6" height="10.8" rx="1.6" stroke="currentColor" stroke-width="1.5"/><path d="M4.6 5h4.8M4.6 7.5h4.8M4.6 10h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Design brief</a></li>
+        <li><a href="#platform">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><rect x="1.6" y="2.4" width="10.8" height="7.6" rx="1.4" stroke="currentColor" stroke-width="1.5"/><path d="M5 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Platform</a></li>
+        <li><a href="#specimen">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="5.4" cy="5.4" r="3.6" stroke="currentColor" stroke-width="1.5"/><circle cx="8.8" cy="8.8" r="3.6" stroke="currentColor" stroke-width="1.5" opacity=".55"/></svg>
+          Specimen</a></li>
+        <li><a href="#review">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.4 7.2l2.8 2.8 6-6.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Review</a></li>
+        <li><a href="#handoff">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2 11V8.6c0-2 1.4-3.4 3.4-3.4h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 2.8l2.6 2.4L8 7.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Handoff</a></li>
+      </ul>
+    </nav>
+
+    <section class="side-static" aria-label="Library (static sample list)">
+      <h2 class="side-group-label">Library · sample</h2>
+      <ul>
+        <li>Keynote refresh <span class="count">3</span></li>
+        <li>Field app icons <span class="count">12</span></li>
+        <li>HIG source notes <span class="count">5</span></li>
+      </ul>
+    </section>
+
+    <p class="side-foot">Design example<br>Sample data · Not connected</p>
+  </aside>
+
+  <main id="main" class="content">
+
+    <!-- ============ Overview / hero ============ -->
+    <section class="hero" id="overview" aria-labelledby="hero-title">
+      <p class="eyebrow">apple_design_brief/v1 · sample</p>
+      <h1 id="hero-title">Aurora onboarding, prepared the Apple way.</h1>
+      <p class="lede">A worked example of the <strong>omh-apple-design</strong> workflow:
+        one fictional onboarding surface taken from brief to platform choice,
+        a source-backed review, and a handoff that keeps prepared work separate
+        from observed evidence. Everything on this page is deterministic sample
+        content rendered from the design tokens in <code>DESIGN.md</code>.</p>
+      <div class="chip-row">
+        <span class="chip chip-accent">Prepared</span>
+        <span class="chip mono">visual_status: not_observed</span>
+        <span class="chip chip-warn">Sample data</span>
+        <span class="chip">Not connected</span>
+      </div>
+    </section>
+
+    <!-- ============ Brief + Platform (asymmetric row) ============ -->
+    <div class="row-brief">
+      <section class="card" id="brief" aria-labelledby="brief-title">
+        <h2 class="section-title" id="brief-title">Design brief</h2>
+        <p class="faint">Required inputs recorded before any visual work. Sample values.</p>
+        <dl class="brief-dl">
+          <dt>Mode</dt><dd>design → review</dd>
+          <dt>Target</dt><dd>Apple-inspired web · current desktop and mobile browsers</dd>
+          <dt>Framework</dt><dd>Static HTML + CSS (this page, no JS)</dd>
+          <dt>Input</dt><dd>Keyboard, pointer, touch</dd>
+          <dt>Surface / state</dt><dd>Onboarding overview, default state</dd>
+          <dt>Brand tokens</dt><dd>OMH blue accent on neutral canvas — see the specimen below</dd>
+          <dt>Evidence supplied</dt><dd>Static sample mock only; no rendered captures yet</dd>
+        </dl>
+        <h3 class="card-title" style="margin-top: var(--sp-5);">Directions considered</h3>
+        <div class="directions">
+          <div class="direction chosen">
+            <span class="d-name">1 · Quiet operational ✓</span>
+            <p>Dense source-list workspace, bright content plane, blue reserved for selection and action.</p>
+          </div>
+          <div class="direction">
+            <span class="d-name">2 · Editorial</span>
+            <p>Whitespace-led reading page. Rejected: the workspace needs density and evidence tables.</p>
+          </div>
+          <div class="direction">
+            <span class="d-name">3 · Deep glass</span>
+            <p>Translucency everywhere. Rejected: HIG puts glass on the control layer, not on content.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="platform" aria-labelledby="platform-title">
+        <h2 class="section-title" id="platform-title">Platform convention</h2>
+        <p class="faint">Pick a target to see the convention note this brief records.</p>
+        <fieldset class="seg platform-seg">
+          <legend class="vh">Platform convention</legend>
+          <input class="vh" type="radio" name="platform" id="plat-ios">
+          <label for="plat-ios">iOS</label>
+          <input class="vh" type="radio" name="platform" id="plat-mac">
+          <label for="plat-mac">macOS</label>
+          <input class="vh" type="radio" name="platform" id="plat-web" checked>
+          <label for="plat-web">Web</label>
+        </fieldset>
+        <div class="platform-note" id="note-ios">
+          <strong>Native iOS / iPadOS.</strong> System controls, semantic adaptive
+          colors, text styles with Dynamic Type, safe areas, VoiceOver — built
+          with the current SDK, not recreated in CSS.
+        </div>
+        <div class="platform-note" id="note-mac">
+          <strong>Native macOS.</strong> AppKit/SwiftUI system styles, menus,
+          full keyboard access, adaptive layout. macOS has no Dynamic Type;
+          it uses system styles and app text scaling.
+        </div>
+        <div class="platform-note" id="note-web">
+          <strong>Apple-inspired web — this page.</strong> System-font fallback
+          stack, semantic HTML, visible focus, zoom and reflow, reduced motion
+          and transparency honored, opaque fallback for every blur. Inspiration,
+          not native equivalence: no SwiftUI, no real Liquid Glass.
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ Specimen: the generated result ============ -->
+    <section class="specimen" id="specimen" aria-labelledby="specimen-title">
+      <div class="specimen-head">
+        <div>
+          <p class="eyebrow">Generated result · visual specimen</p>
+          <h2 class="section-title" id="specimen-title">What the tokens produce</h2>
+        </div>
+        <p class="faint">Rendered live from this page's design tokens — switch the appearance above and the specimen follows.</p>
+      </div>
+      <div class="specimen-body">
+        <div class="type-ramp" role="group" aria-label="Type hierarchy specimen">
+          <div class="type-row">
+            <span class="type-meta">display<br>clamp · 700</span>
+            <span class="t-display">Begin with clarity.</span>
+          </div>
+          <div class="type-row">
+            <span class="type-meta">title 1<br>22px · 600</span>
+            <span class="t-title1">Hierarchy carries the room</span>
+          </div>
+          <div class="type-row">
+            <span class="type-meta">title 2<br>17px · 600</span>
+            <span class="t-title2">Sections earn their weight</span>
+          </div>
+          <div class="type-row">
+            <span class="type-meta">body<br>15px · 400</span>
+            <span class="t-body">Body text stays quiet and readable, sized in rem so browser
+              zoom and text settings reflow the layout instead of clipping it.</span>
+          </div>
+          <div class="type-row">
+            <span class="type-meta">locale<br>ko · CJK stack</span>
+            <span class="t-body" lang="ko">온보딩을 시작합니다 — 차분한 위계와 명확한 초점.</span>
+          </div>
+          <div class="type-row">
+            <span class="type-meta">footnote<br>13px · 400</span>
+            <span class="t-foot">Footnotes annotate without competing. Locale line above is a
+              type specimen, not UI translation.</span>
+          </div>
+          <div class="type-row">
+            <span class="type-meta">caption<br>11px · 600</span>
+            <span class="t-cap">Group label · uppercase</span>
+          </div>
+        </div>
+
+        <div class="specimen-side">
+          <div>
+            <h3 class="card-title" style="margin-bottom: var(--sp-3);">Color tokens</h3>
+            <ul class="swatches">
+              <li class="swatch">
+                <div class="well" style="background: var(--accent);"></div>
+                <div class="s-name">Accent</div>
+                <div class="s-hex">L #0b5fd7 · D #6ea6ff</div>
+              </li>
+              <li class="swatch">
+                <div class="well" style="background: var(--accent-tint);"></div>
+                <div class="s-name">Accent tint</div>
+                <div class="s-hex">L #e7effc · D #12233f</div>
+              </li>
+              <li class="swatch">
+                <div class="well" style="background: var(--canvas);"></div>
+                <div class="s-name">Canvas</div>
+                <div class="s-hex">L #f5f5f7 · D #101114</div>
+              </li>
+              <li class="swatch">
+                <div class="well" style="background: var(--surface);"></div>
+                <div class="s-name">Surface</div>
+                <div class="s-hex">L #ffffff · D #1b1c20</div>
+              </li>
+              <li class="swatch">
+                <div class="well" style="background: var(--ink);"></div>
+                <div class="s-name">Ink</div>
+                <div class="s-hex">L #1c1d22 · D #f0f1f4</div>
+              </li>
+              <li class="swatch">
+                <div class="well" style="background: var(--ok);"></div>
+                <div class="s-name">Positive</div>
+                <div class="s-hex">L #177241 · D #7fd6a0</div>
+              </li>
+              <li class="swatch">
+                <div class="well" style="background: var(--warn-deep);"></div>
+                <div class="s-name">Caution</div>
+                <div class="s-hex">L #6e4a00 · D #e5b567</div>
+              </li>
+              <li class="swatch">
+                <div class="well" style="background: var(--crit);"></div>
+                <div class="s-name">Critical</div>
+                <div class="s-hex">L #b3273a · D #f2919c</div>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 class="card-title" style="margin-bottom: var(--sp-3);">Materials</h3>
+            <div class="stage">
+              <span class="material-chip translucent">Bar material — translucent, blurred</span>
+              <span class="material-chip opaque">Content card — always opaque</span>
+            </div>
+            <p class="faint" style="margin-top: var(--sp-2);">Blur is limited to the
+              navigation layer and falls back to opaque under reduced
+              transparency, increased contrast, or missing backdrop support.
+              This is a CSS approximation, not native Liquid Glass.</p>
+          </div>
+
+          <div>
+            <h3 class="card-title" style="margin-bottom: var(--sp-3);">Actions</h3>
+            <div class="btn-row">
+              <a class="btn btn-primary" href="#handoff">Open handoff</a>
+              <a class="btn btn-quiet" href="#review">Read review</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Review (asymmetric row) ============ -->
+    <div class="row-review" id="review">
+      <section class="card" aria-labelledby="review-title">
+        <h2 class="section-title" id="review-title">Source-backed review</h2>
+        <p class="faint" style="margin-bottom: var(--sp-4);">Three sample findings
+          in <code>apple_design_finding/v1</code> shape, written against the
+          fictional Aurora mock. Sample data — no compliance score is claimed.</p>
+
+        <article class="finding">
+          <div class="finding-head">
+            <span class="chip chip-crit">High</span>
+            <h4>Content cards rendered as glass</h4>
+          </div>
+          <dl class="finding-facts">
+            <dt>Evidence</dt><dd>Supplied sample mock, overview cards (observation)</dd>
+            <dt>Impact</dt><dd>Text legibility varies with whatever scrolls beneath the card</dd>
+            <dt>Source</dt><dd>HIG Materials; Adopting Liquid Glass — glass belongs to the control and navigation layer</dd>
+            <dt>Fix</dt><dd>Keep content cards opaque; reserve translucency for the toolbar and sidebar</dd>
+            <dt>Owner</dt><dd>frontend</dd>
+            <dt>Missing check</dt><dd>Rendered captures over light and dark content → visual-qa</dd>
+          </dl>
+          <details>
+            <summary>Review note</summary>
+            <p>Apple's transient interactive-control exception does not extend to
+              persistent content cards. The 35% dimming example in Materials is
+              conditional guidance for bright content behind glass, not a
+              universal CSS opacity token — so the fix is material choice, not
+              a dimming overlay.</p>
+          </details>
+        </article>
+
+        <article class="finding">
+          <div class="finding-head">
+            <span class="chip chip-warn">Medium</span>
+            <h4>macOS point sizes reused as CSS pixels</h4>
+          </div>
+          <dl class="finding-facts">
+            <dt>Evidence</dt><dd>Mock stylesheet copies a native point ramp verbatim (observation)</dd>
+            <dt>Impact</dt><dd>Small text under browser zoom; layout clips instead of reflowing</dd>
+            <dt>Source</dt><dd>HIG Typography — platform-specific; points do not equal CSS pixels</dd>
+            <dt>Fix</dt><dd>Rem-based scale with reflow, as in this page's specimen ramp</dd>
+            <dt>Owner</dt><dd>frontend</dd>
+            <dt>Missing check</dt><dd>200% zoom reflow observation → accessibility-audit</dd>
+          </dl>
+          <details>
+            <summary>Review note</summary>
+            <p>Dynamic Type is an iOS/iPadOS API and macOS explicitly does not
+              support it; the web analogue is browser zoom and text settings.
+              Claiming a CSS scale "implements Dynamic Type" would overstate the
+              guidance — the finding asks only for zoomable, reflowing units.</p>
+          </details>
+        </article>
+
+        <article class="finding">
+          <div class="finding-head">
+            <span class="chip chip-ok">Low</span>
+            <h4>Sidebar selection shown by color alone</h4>
+          </div>
+          <dl class="finding-facts">
+            <dt>Evidence</dt><dd>Selected row differs only in tint (observation); users may miss it (hypothesis)</dd>
+            <dt>Impact</dt><dd>Selection state can disappear for low-vision and color-blind users</dd>
+            <dt>Source</dt><dd>HIG Accessibility; WCAG 1.4.1 Use of Color (web applicability)</dd>
+            <dt>Fix</dt><dd>Pair the tint with weight and a leading indicator bar — as this page's sidebar does</dd>
+            <dt>Owner</dt><dd>frontend</dd>
+            <dt>Missing check</dt><dd>Assistive-technology pass → accessibility-audit</dd>
+          </dl>
+          <details>
+            <summary>Review note</summary>
+            <p>Apple guidance and WCAG are named separately on purpose: HIG
+              covers Apple-platform expectations, WCAG covers web conformance.
+              Neither is claimed as a PASS here — the check stays open until the
+              accessibility lane records observed evidence.</p>
+          </details>
+        </article>
+      </section>
+
+      <aside class="card sources-rail" aria-labelledby="sources-title">
+        <h2 class="card-title" id="sources-title">Sources on record</h2>
+        <p class="faint">Checked 2026-09-05 per <code>docs/APPLE-DESIGN.md</code>. Links open external documentation.</p>
+        <div class="source-item">
+          <a href="https://developer.apple.com/design/human-interface-guidelines/materials" rel="external">HIG · Materials</a>
+          <p>Glass on the control layer; standard materials behind content.</p>
+        </div>
+        <div class="source-item">
+          <a href="https://developer.apple.com/design/human-interface-guidelines/typography" rel="external">HIG · Typography</a>
+          <p>Platform-specific type; Dynamic Type is iOS/iPadOS, not macOS or web.</p>
+        </div>
+        <div class="source-item">
+          <a href="https://developer.apple.com/design/human-interface-guidelines/accessibility" rel="external">HIG · Accessibility</a>
+          <p>Reduce Transparency, Increase Contrast, keyboard and VoiceOver paths.</p>
+        </div>
+        <div class="source-item">
+          <a href="https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass" rel="external">Adopting Liquid Glass</a>
+          <p>Native adoption guide — approximated here in CSS, never claimed as native.</p>
+        </div>
+        <div class="source-item">
+          <a href="https://www.w3.org/WAI/standards-guidelines/wcag/" rel="external">W3C · WCAG</a>
+          <p>The conformance standard for the web surface; Apple guidance is not one.</p>
+        </div>
+      </aside>
+    </div>
+
+    <!-- ============ Handoff ============ -->
+    <section class="card" id="handoff" aria-labelledby="handoff-title">
+      <h2 class="section-title" id="handoff-title">Handoff — prepared vs. observed</h2>
+      <p class="faint">The workflow's core distinction: what this workspace prepared,
+        and what only downstream observation can turn into evidence.</p>
+      <div class="handoff-cols">
+        <div>
+          <h3 class="card-title" style="margin-bottom: var(--sp-2);">Prepared in this workspace</h3>
+          <ul class="hand-list">
+            <li><span class="mark ok" aria-hidden="true">✓</span><span><span class="vh">Done: </span>Brief recorded with mode, target, framework, input, surface, and brand tokens</span></li>
+            <li><span class="mark ok" aria-hidden="true">✓</span><span><span class="vh">Done: </span>Three directions weighed; quiet-operational chosen with reasons</span></li>
+            <li><span class="mark ok" aria-hidden="true">✓</span><span><span class="vh">Done: </span>Findings drafted with severity, evidence, source, fix, and owner</span></li>
+            <li><span class="mark ok" aria-hidden="true">✓</span><span><span class="vh">Done: </span>Remediation routed: <strong>frontend</strong> · <strong>accessibility-audit</strong> · <strong>visual-qa</strong></span></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="card-title" style="margin-bottom: var(--sp-2);">Not yet evidence</h3>
+          <ul class="hand-list">
+            <li><span class="mark todo" aria-hidden="true">○</span><span><span class="vh">Open: </span><code>visual_status: not_observed</code> — no rendered captures reviewed</span></li>
+            <li><span class="mark todo" aria-hidden="true">○</span><span><span class="vh">Open: </span>No accessibility PASS — awaiting the accessibility-audit lane</span></li>
+            <li><span class="mark todo" aria-hidden="true">○</span><span><span class="vh">Open: </span>No visual PASS — awaiting the visual-qa lane</span></li>
+            <li><span class="mark todo" aria-hidden="true">○</span><span><span class="vh">Open: </span>No runtime execution, cost, or measurement claims — this page is a static sample</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="site-foot">
+  <p><strong>OMH design example.</strong> Static sample data · not connected to any
+    backend · no scripts, no external assets, no tracking. Apple, the Apple HIG,
+    SF Symbols, and Liquid Glass are Apple Inc. properties referenced as
+    documentation sources only; this page is not affiliated with or endorsed by
+    Apple and ships no Apple assets or fonts.</p>
+  <p>Guidance: <code>skills/omh-apple-design</code> · comparison and source record in
+    <code>docs/APPLE-DESIGN.md</code> (sources checked 2026-09-05) ·
+    tokens and rationale in <code>DESIGN.md</code> beside this file.</p>
+</footer>
+</body>
+</html>

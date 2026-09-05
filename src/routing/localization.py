@@ -5,6 +5,8 @@ from functools import lru_cache
 import re
 import unicodedata
 
+from .visual_qa_cues import contains_cue_phrase
+
 
 _TOKEN_RE = re.compile(r"[^\W_][^\W_'-]*(?:-[^\W_][^\W_'-]*)?", re.UNICODE)
 _STOPWORDS = {
@@ -63,7 +65,13 @@ _CANONICAL_SOURCE_FINDER = (
     "source-finder find source candidates papers datasets github repository public pdf links "
     "presentation materials arxiv doi acquisition status downstream workflow"
 )
-
+_APPLE_STYLE_PRODUCT_VISUAL_PHRASES = ("apple-style", "apple style")
+_APPLE_PRODUCT_VISUAL_LIBRARY_TERMS = ("gsap", "liquid-logo", "liquid-glass-js")
+_APPLE_PRODUCT_VISUAL_LIBRARY_TOKEN_SETS = (
+    frozenset(("gsap",)),
+    frozenset(("liquid-logo",)),
+    frozenset(("liquid-glass",)),
+)
 
 @dataclass(frozen=True)
 class LocaleAlias:
@@ -667,8 +675,21 @@ def _prepare_routing_text_cached(value: str) -> RoutingText:
         if any(phrase in folded for phrase in folded_phrases):
             additions.append(alias.canonical)
             matches.append(f"{alias.locale}:{alias.label}")
+    if _apple_style_product_visual_library_intent(folded):
+        additions.append("apple product visual")
     scoring_text = " ".join((original, *additions)).strip()
     return RoutingText(original=original, scoring_text=scoring_text, locale_matches=tuple(sorted(set(matches))))
+
+
+def _apple_style_product_visual_library_intent(value: str) -> bool:
+    normalized = normalized_phrase(value)
+    tokens = routing_tokens(normalized)
+    return (
+        {"apple", "style"}.issubset(tokens)
+        and contains_cue_phrase(normalized, _APPLE_STYLE_PRODUCT_VISUAL_PHRASES)
+        and contains_cue_phrase(normalized, _APPLE_PRODUCT_VISUAL_LIBRARY_TERMS)
+        and any(required.issubset(tokens) for required in _APPLE_PRODUCT_VISUAL_LIBRARY_TOKEN_SETS)
+    )
 
 
 @lru_cache(maxsize=1)

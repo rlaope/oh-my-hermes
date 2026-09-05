@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en" data-omh-hero="pending">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OMH — Work, in harmony. · 3D hero before/after</title>
+<style>
+  /* Tokens — aligned with examples/apple-design/index.html (OMH design workspace) */
+  :root{
+    --canvas:#f4f4f6;        /* page ground, tuned to the shader backdrop */
+    --ink:#1c1d22;
+    --ink-2:#4b4d57;
+    --ink-3:#6a6c75;
+    --line:#d9dade;
+    --sp-1:.25rem; --sp-2:.5rem; --sp-3:1rem; --sp-4:1.5rem; --sp-5:2.5rem; --sp-6:4rem;
+    --fs-hero:clamp(2.1rem, 4.4vw, 3.4rem);
+    --fs-sub:clamp(1rem, 1.5vw, 1.1875rem);
+    --fs-cap:.8125rem;
+    --fs-micro:.6875rem;
+    --track-caps:.14em;
+    --font-ui:-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+              "Helvetica Neue", "Segoe UI", sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html{ height:100%; }
+  body{
+    margin:0; min-height:100vh; display:flex; flex-direction:column;
+    background:var(--canvas); color:var(--ink); font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  .masthead{
+    position:relative; text-align:center;
+    padding:var(--sp-5) var(--sp-6) var(--sp-4);
+  }
+  .wordmark{
+    position:absolute; left:var(--sp-6); top:var(--sp-5);
+    display:flex; align-items:center; gap:var(--sp-2);
+    font-size:var(--fs-cap); font-weight:700; letter-spacing:var(--track-caps);
+    color:var(--ink-2);
+  }
+  .wordmark svg{ display:block; }
+  .masthead h1{
+    margin:0; font-size:var(--fs-hero); font-weight:600; letter-spacing:-.022em;
+  }
+  .masthead .kicker{
+    margin:var(--sp-2) 0 0; color:var(--ink-2); font-size:var(--fs-sub);
+    letter-spacing:-.01em;
+  }
+  .panels{
+    flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:2px;
+  }
+  .panel{ position:relative; margin:0; min-height:420px; overflow:hidden; }
+  .panel canvas{
+    position:absolute; inset:0; width:100%; height:100%; display:block;
+    background:var(--canvas);
+  }
+  .panel figcaption{
+    position:absolute; left:0; right:0; bottom:var(--sp-4);
+    text-align:center; pointer-events:none;
+  }
+  .panel .tag{
+    display:block; font-size:var(--fs-cap); font-weight:600;
+    letter-spacing:var(--track-caps); text-transform:uppercase; color:var(--ink);
+  }
+  .panel .note{
+    display:block; margin-top:var(--sp-1);
+    font-size:var(--fs-micro); color:var(--ink-2); letter-spacing:.01em;
+  }
+  /* Explicit missing-renderer state — never a fake completed image. */
+  .nogl{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:var(--sp-2);
+    padding:var(--sp-5); text-align:center;
+    background:var(--canvas); border:1px dashed var(--line);
+  }
+  .nogl[hidden]{ display:none; }
+  .nogl strong{ font-size:var(--fs-cap); letter-spacing:var(--track-caps); text-transform:uppercase; }
+  .nogl span{ max-width:34ch; font-size:var(--fs-cap); color:var(--ink-2); }
+  .nogl .nogl-detail{ font-size:var(--fs-micro); color:var(--ink-3); }
+  .foot{
+    padding:var(--sp-3) var(--sp-4); text-align:center;
+    font-size:var(--fs-micro); color:var(--ink-3); letter-spacing:.02em;
+  }
+  @media (max-width:760px){
+    .masthead{ padding:var(--sp-4) var(--sp-3) var(--sp-3); }
+    .wordmark{ position:static; justify-content:center; margin-bottom:var(--sp-3); }
+    .panels{ grid-template-columns:1fr; grid-auto-rows:minmax(420px, 1fr); }
+  }
+</style>
+</head>
+<body>
+  <header class="masthead">
+    <span class="wordmark" aria-label="OMH">
+      <svg width="18" height="14" viewBox="0 0 18 14" fill="none" aria-hidden="true">
+        <rect x="1.2" y="1.2" width="9.6" height="11.6" rx="3.4" stroke="currentColor" stroke-width="1.6"/>
+        <rect x="7.2" y="1.2" width="9.6" height="11.6" rx="3.4" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+      OMH
+    </span>
+    <h1>Work, in harmony.</h1>
+    <p class="kicker">Same scene. Different craft.</p>
+  </header>
+
+  <section class="panels" aria-label="Before and after render comparison">
+    <figure class="panel">
+      <canvas id="gl-before" aria-label="Before: baseline render, blue satin polymer sculpture in flat studio light"></canvas>
+      <figcaption>
+        <span class="tag">Before</span>
+        <span class="note">Baseline — satin polymer, flat fill light</span>
+      </figcaption>
+      <div class="nogl" role="alert" hidden>
+        <strong>3D renderer unavailable</strong>
+        <span>This hero is drawn live by a local WebGL ray-marcher. WebGL is
+        disabled or failed in this browser, so no image can be shown.</span>
+        <span class="nogl-detail"></span>
+      </div>
+    </figure>
+    <figure class="panel">
+      <canvas id="gl-after" aria-label="After: crafted render, machined aluminum and cool-blue glass sculpture under sculpted studio light"></canvas>
+      <figcaption>
+        <span class="tag">After</span>
+        <span class="note">Crafted — machined aluminum, optical glass, sculpted key</span>
+      </figcaption>
+      <div class="nogl" role="alert" hidden>
+        <strong>3D renderer unavailable</strong>
+        <span>This hero is drawn live by a local WebGL ray-marcher. WebGL is
+        disabled or failed in this browser, so no image can be shown.</span>
+        <span class="nogl-detail"></span>
+      </div>
+    </figure>
+  </section>
+
+  <footer class="foot">Illustrative baseline · Local 3D render · Sample, not a shipped Apple product.</footer>
+
+  <noscript>
+    <style>.nogl{ display:flex !important; }</style>
+  </noscript>
+  <script src="renderer.js"></script>
+</body>
+</html>

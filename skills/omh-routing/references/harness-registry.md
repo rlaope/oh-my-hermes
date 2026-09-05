@@ -48,6 +48,7 @@ Legend: Tier `quality-tier` is in each harness definition; Ladder: evidence step
 - `critic`: Challenge plan consistency, quality criteria, and.... L: `review_scope_loaded` -> `findings_recorded` -> `verdict_recorded` -> `+1 more`. A: `show_findings`, `request_changes`, `approve_plan`.
 - `qa-specialist`: Design adversarial scenarios and verify.... L: `scenario_matrix_defined` -> `checks_run` -> `pass_fail_recorded` -> `+1 more`. A: `show_status`, `record_check`, `record_blocker`.
 - `docs-specialist`: Keep public docs accurate, installable, and aligned.... L: `claims_scoped` -> `docs_updated` -> `generated_docs_checked` -> `+1 more`. A: `show_docs`, `record_claim_check`, `show_status`.
+- `apple-design`: Apple platform-aware design/review/improvement.... L: `target_scoped` -> `source_applicability_prepared` -> `findings_prepared` -> `+1 more`. A: `prepare_design_orchestration`, `choose_executor`, `prepare_accessibility_audit`, `prepare_visual_qa`.
 - `design-orchestration`: Direction.. L: `intent` -> `direction` -> `visual_when_available`. A: `prepare_design_orchestration`, `choose_executor`, `prepare_visual_qa`.
 - `github-event-ops`: Route GitHub PR, issue, CI, and review events into.... L: `event_received` -> `event_classified` -> `route_card_prepared` -> `+1 more`. A: `show_event_card`, `prepare_review`, `prepare_label`, `+2 more`.
 - `agent-board`: Coordinate multi-Hermes-agent or profile work as.... L: `board_scoped` -> `cards_prepared` -> `heartbeat_recorded_when_available` -> `+1 more`. A: `show_board`, `move_card`, `record_heartbeat`, `+2 more`.

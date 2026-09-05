@@ -164,7 +164,7 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="chat_card_case_count",
             describe="Chat card coverage cases",
             live=_chat_card_case_count,
-            expected=83,
+            expected=84,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -175,7 +175,7 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="route_hint_case_count",
             describe="Route hint alignment cases",
             live=_route_hint_case_count,
-            expected=203,
+            expected=204,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -187,7 +187,7 @@ def count_metrics() -> tuple[CountMetric, ...]:
             describe="Routing precision cases",
             live=_routing_precision_case_count,
             # omh-docs adds four measured generic, negated, and descriptive negative controls.
-            expected=167,
+            expected=171,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -199,8 +199,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="routing_precision_intervention_case_count",
             describe="Routing precision intervention cases",
             live=_routing_precision_intervention_case_count,
-            # omh-docs adds five interventions; github-issue-intake adds four.
-            expected=295,
+            # Apple-style library/product controls add three specialist and three generic-lane cases.
+            expected=309,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -212,8 +212,8 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="installable_skill_count",
             describe="Installable workflow skills quoted in reference surfaces",
             live=_installable_skill_count,
-            # omh-docs and github-issue-intake raise the installable catalog to 118.
-            expected=118,
+            # omh-docs and github-issue-intake raise the installable catalog to 119.
+            expected=119,
             sites=(
                 "docs/README.md",
             ),

@@ -2368,6 +2368,17 @@ _HARNESSES = [
 
 _FEATURE_SURFACE_HARNESSES = (
     _feature_surface_harness(
+        "apple-design",
+        "Apple platform-aware design/review/improvement direction.",
+        "Use for Apple-specific UI design, review, or improvement briefs before implementation or observed verification.",
+        ("mode", "platform convention", "target/version/framework/input/surface/state", "current tokens", "supplied evidence"),
+        ("apple_design_brief/v1", "apple_design_finding/v1", "existing-lane remediation route"),
+        quality_tier="apple-design-gated",
+        evidence_ladder=("target_scoped", "source_applicability_prepared", "findings_prepared", "visual_when_observed"),
+        wrapper_actions=("prepare_design_orchestration", "choose_executor", "prepare_accessibility_audit", "prepare_visual_qa"),
+        overclaim_guard="An Apple design brief is not certification, implementation, accessibility PASS, or visual-QA evidence.",
+    ),
+    _feature_surface_harness(
         "design-orchestration",
         "Direction.",
         "Use for design.",
@@ -3229,6 +3240,7 @@ _PRIMARY_HARNESSES = {
     "img-summary": "img-summary",
     "design-quality-gate": "design-quality-gate",
     "design-orchestration": "design-orchestration",
+    "apple-design": "apple-design",
     "frontend": "frontend",
     "accessibility-audit": "accessibility-audit",
     "visual-qa": "visual-qa",
