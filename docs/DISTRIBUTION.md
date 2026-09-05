@@ -120,7 +120,8 @@ version at all.
 `.github/workflows/auto-release.yml` (Actions → *Cut Release* → Run workflow)
 performs the release mechanics once a maintainer asks for one. It bumps every
 version surface to the next patch with `tools/package_manager/bump_version.py`
-(pyproject, `src/omh/version.py`, the plugin manifest, and `.release-channel`
+(pyproject, `src/omh/version.py`, the plugin manifest, the landing page's
+`hero.badge` in `site/index.html` and `site/i18n.js`, and `.release-channel`
 back to `stable`), runs the full test suite on the bumped tree, pushes the
 commit and `vX.Y.Z` tag to `main` atomically, and dispatches the distribution
 workflow for that tag.
