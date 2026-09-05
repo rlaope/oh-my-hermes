@@ -2785,12 +2785,12 @@ def _lineage_card(record: dict[str, Any], *, depth: int, due_soon_days: int | No
     return {
         "record_id": _redacted_metadata_label(record.get("record_id", "")),
         "depth": depth,
-        "record_type": str(record.get("record_type", "")),
+        "record_type": _redact_admitted_text(str(record.get("record_type", ""))),
         "summary": _redact_admitted_text(str(record.get("summary", "")))[:500],
         "scope": _redacted_scope(record.get("scope", _scope("project", "default"))),
         "tags": _normalize_tags(record.get("tags", [])),
-        "approved_at": str(record.get("approved_at", "")),
-        "staleness": _record_staleness(record, due_soon_days=due_soon_days),
+        "approved_at": _redact_admitted_text(str(record.get("approved_at", ""))),
+        "staleness": _redact_nested_metadata(_record_staleness(record, due_soon_days=due_soon_days)),
         "derived_from": [
             _redacted_metadata_label(ref) for ref in _string_list(record.get("derived_from", []))
         ],
@@ -3702,13 +3702,13 @@ def _recall_item(
     evidence = _replay_evaluation(record, evaluation)
     return {
         "record_id": _redacted_metadata_label(record.get("record_id", "")),
-        "record_type": str(record.get("record_type", "")),
+        "record_type": _redact_admitted_text(str(record.get("record_type", ""))),
         "summary": _redact_admitted_text(str(record.get("summary", "")))[:500],
         "scope": _normalize_scope(record.get("scope", _scope("project", "default"))),
         "tags": _normalize_tags(record.get("tags", [])),
         "source": str(record.get("source", "")),
-        "approved_at": str(record.get("approved_at", "")),
-        "staleness": staleness,
+        "approved_at": _redact_admitted_text(str(record.get("approved_at", ""))),
+        "staleness": _redact_nested_metadata(staleness),
         "score": int(score),
         "attention_tier": attention_tier,
         "derived_from": _string_list(record.get("derived_from", [])),
@@ -3728,7 +3728,7 @@ def _recall_exclusion(
     return {
         "record_id": _redacted_metadata_label(record.get("record_id", "")),
         "reason": reason or str(evidence["reason_code"]),
-        "staleness": staleness,
+        "staleness": _redact_nested_metadata(staleness),
         **_recall_evidence_fields(evidence),
     }
 
@@ -4981,7 +4981,7 @@ def _redacted_metadata_label(value: Any) -> str:
 
 def _redact_nested_metadata(value: Any) -> Any:
     if isinstance(value, str):
-        return _redact(value)
+        return _redact_admitted_text(value)
     if isinstance(value, dict):
         sanitized: dict[str, Any] = {}
         for index, (key, nested) in enumerate(value.items()):
