@@ -97,6 +97,7 @@ from ..skills.catalog import (
     primary_harness_for_skill,
     retained_delegation_skill_names,
 )
+from ..skills.catalog_types import omh_skill_display_name
 
 
 SCHEMA_VERSION = "coding_delegation/v1"
@@ -662,6 +663,9 @@ def _build_coding_delegation_payload_native(
         # The same condition `_attach_visible_message` is called under below, so
         # the flag states what the artifact will carry.
         raw_content_included=include_message and message_context_mode == "full",
+        # `build_plan_handoff_message` embeds this OMH-generated metadata path
+        # in the prompt; it is context, not a user-selected filesystem target.
+        plan_artifact_path=str(plan_artifact.get("path", "")) if plan_artifact else "",
         intent=delegation.intent,
         action=delegation.action,
     )
@@ -1161,61 +1165,129 @@ def _safety_preflight_evaluator() -> Any:
     return evaluate_safety_preflight
 
 
-def _path_anchor_start(token: str, start: int) -> int:
-    """Extend a file match back over its filesystem anchor and nothing else.
-
-    The file regex stops at the first non-path character, which drops a leading
-    `/`, `\\`, or `~`. Re-attaching the anchor keeps an absolute path absolute:
-    laundering it into a relative one would hide it from the very rule that is
-    supposed to see it. A Windows drive prefix is part of the same anchor, so
-    `C:\\Windows\\loader.py` stays the path the caller wrote instead of
-    collapsing to `\\Windows\\loader.py`.
-    """
-    while start > 0 and token[start - 1] in "/\\~":
-        start -= 1
-    if start == 2 and token[1] == ":" and token[0].isalpha():
-        return 0
-    return start
-
-
-def _is_preflight_remote_location(lowered: str) -> bool:
-    """`_is_external_location_fragment`, minus its dot-segment false positive.
-
-    That predicate reads any first component containing a dot as a host, which
-    is right for `github.com/...` and wrong for `../../etc/loader.py`. A
-    relative path that leaves the project has to reach the containment rule
-    instead of being filtered out as a remote location, so leading dot segments
-    are excluded from the host test here. The routing predicate keeps its own
-    behaviour: widening it would change which messages count as code references.
-    """
-    if lowered.replace("\\", "/").split("/", 1)[0] in {".", ".."}:
-        return False
-    return _is_external_location_fragment(lowered)
+def _preflight_location_tokens(message: str) -> list[str]:
+    """Split location-like text without shell parsing or backslash expansion."""
+    tokens: list[str] = []
+    index = 0
+    while index < len(message):
+        if message[index].isspace() or message[index] == ",":
+            index += 1
+            continue
+        if message[index] in {'"', "'"}:
+            quote = message[index]
+            start = index + 1
+            end = message.find(quote, start)
+            if end < 0:
+                tokens.append(message[start:])
+                break
+            tokens.append(message[start:end])
+            index = end + 1
+            continue
+        start = index
+        while index < len(message) and not message[index].isspace() and message[index] != ",":
+            index += 1
+        tokens.append(message[start:index])
+    return tokens
 
 
-def _safety_preflight_target_paths(message: str) -> list[str]:
-    """Filesystem targets the user named in the message, and nothing else.
+@lru_cache(maxsize=1)
+def _preflight_command_tokens() -> frozenset[str]:
+    """Complete installed slash commands, never broad prefix-shaped paths."""
+    return frozenset(
+        {"/ulw-write"}
+        | {f"/{omh_skill_display_name(definition.name)}" for definition in routable_definitions()}
+    )
 
-    Scanning is per whitespace token so an anchor is only ever restored from
-    inside the token that carries the file reference. `_CODE_REFERENCE_FILE_RE`
-    cannot match a URL scheme, so on a pasted link the match starts after
-    `https://` and a message-wide backward walk would swallow the scheme's `//`
-    and hand the preflight `//github.com/.../chat.py` -- an absolute path that
-    denies. External locations are skipped outright, by the same predicate
-    `_has_code_reference` already uses, because a URL is not a filesystem
-    target and pasting one is a normal way to open a coding request.
+
+def _preflight_path_candidate(token: str) -> str:
+    """Preserve the RHS filesystem anchor of an assignment or label."""
+    if "=" in token:
+        _, value = token.split("=", 1)
+        if value:
+            return value
+    label, separator, value = token.partition(":")
+    if separator and value and "/" not in label and "\\" not in label and not (
+        len(token) > 1 and token[0].isalpha() and token[1] == ":"
+    ):
+        return value
+    return token
+
+
+def _preflight_file_uri_path(token: str) -> str | None:
+    """Map a local file URI to its filesystem spelling without resolving it."""
+    if not token.lower().startswith("file:"):
+        return None
+    remainder = token[5:]
+    if not remainder:
+        return "/"
+    if not remainder.startswith("//"):
+        return remainder
+    authority_and_path = remainder[2:]
+    authority, separator, location = authority_and_path.partition("/")
+    if not authority or authority.lower() == "localhost":
+        return f"/{location}" if separator else "/"
+    return f"//{authority}/{location}" if separator else f"//{authority}"
+
+
+def _is_preflight_remote_location(token: str) -> bool:
+    """Recognize only token-start network locations that do not traverse locally."""
+    normalized = token.replace("\\", "/")
+    if re.match(r"^[a-z][a-z0-9+.-]*://", normalized, re.IGNORECASE):
+        return True
+    return normalized.lower().startswith("www.") and ".." not in normalized.split("/")
+
+
+def _has_preflight_name_component(token: str) -> bool:
+    """Require a path component that names something beyond anchors or separators."""
+    for component in token.replace("\\", "/").split("/"):
+        if component.strip(".~") and not re.fullmatch(r"[a-z]:", component, re.IGNORECASE):
+            return True
+    return False
+
+
+def _is_preflight_filesystem_target(token: str) -> bool:
+    """Recognize a named local spelling without restricting it to source extensions."""
+    return token not in _preflight_command_tokens() and _has_preflight_name_component(token) and (
+        token == "Makefile"
+        or token.startswith((".", "/", "\\", "~"))
+        or (len(token) > 1 and token[0].isalpha() and token[1] == ":")
+        or "/" in token
+        or "\\" in token
+        or "." in token
+    )
+
+
+def _safety_preflight_target_paths(message: str, *, excluded_path: str = "") -> list[str]:
+    """Filesystem targets the user named in the message, before prompt expansion.
+
+    This parser accepts path syntax rather than code-file extensions: workspace
+    boundaries apply equally to configuration, dotfiles, extensionless files,
+    and source. It preserves quoted spaces and Windows backslashes, treats only
+    explicit network URLs as remote, and turns file URIs into the corresponding
+    local spelling so they reach the existing containment rule.
     """
     paths: list[str] = []
-    for raw_token in message.split():
+    for raw_token in _preflight_location_tokens(message):
         token = raw_token.rstrip(_CODE_REFERENCE_TRIM_CHARS).lstrip(_CODE_REFERENCE_OPENING_TRIM_CHARS)
-        if not token or _is_preflight_remote_location(token.lower()):
+        if not token:
             continue
-        for match in _CODE_REFERENCE_FILE_RE.finditer(token):
-            fragment = token[_path_anchor_start(token, match.start()) : match.end()]
-            if fragment not in paths:
-                paths.append(fragment)
-            if len(paths) >= _SAFETY_PREFLIGHT_TARGET_PATH_SCAN_LIMIT:
-                return paths
+        file_path = _preflight_file_uri_path(token)
+        if file_path is None:
+            if _is_preflight_remote_location(token):
+                continue
+            token = _preflight_path_candidate(token)
+            file_path = _preflight_file_uri_path(token)
+            if file_path is None and _is_preflight_remote_location(token):
+                continue
+        if file_path is not None:
+            token = file_path
+        # The plan artifact is OMH-generated context. Skip only its exact path
+        # before it can consume the scan slot reserved for a real user target.
+        if token == excluded_path or not _is_preflight_filesystem_target(token) or token in paths:
+            continue
+        paths.append(token)
+        if len(paths) >= _SAFETY_PREFLIGHT_TARGET_PATH_SCAN_LIMIT:
+            return paths
     return paths
 
 
@@ -1263,6 +1335,7 @@ def _safety_preflight_request(
     workflow: str,
     message_context_mode: str,
     raw_content_included: bool,
+    plan_artifact_path: str = "",
     intent: str = "",
     action: str = "",
 ) -> dict[str, object]:
@@ -1282,7 +1355,10 @@ def _safety_preflight_request(
     reason the lane names no remote target: nothing here reaches one, and an
     empty approval approves nothing rather than everything.
     """
-    target_paths = _safety_preflight_target_paths(message)
+    # The supplied plan artifact already travels as metadata and context-pack
+    # state. Exclude only that exact generated path during extraction so it
+    # cannot consume a bounded scan slot; every other message path remains live.
+    target_paths = _safety_preflight_target_paths(message, excluded_path=plan_artifact_path)
     return {
         "owner": owner,
         "approved_scope": f"coding/{workflow}",

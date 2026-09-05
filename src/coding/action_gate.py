@@ -688,7 +688,7 @@ _STATIC_SAFETY_BOUNDARIES: tuple[tuple[str, str, str, tuple[str, ...], str], ...
     ),
     (
         "file",
-        "Target paths are bounded, project-relative, and contained: an absolute or home-anchored path, a "
+        "Declared target paths are bounded, project-relative, and contained: an absolute or home-anchored path, a "
         "path that escapes the project, an over-long path, or more paths than the bound allows is denied "
         "before a handoff is prepared.",
         "enforced",
