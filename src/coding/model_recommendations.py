@@ -93,25 +93,19 @@ _FABLE_5 = _candidate(
     ("ccapi", "anthropic", "openrouter"),
     reasoning="Editorial visual-work recommendation; not a benchmark claim.",
 )
-# The Claude vendor order inside every chain is Fable 5.1 -> Mythos 5.1 ->
-# Opus 5 (owner decision, 2026-09-02). Mythos 5.1 is the same model as Fable
-# 5.1 served only to Project Glasswing-approved organizations; an unapproved
-# account gets a provider rejection, which the chain treats like any other
-# unavailable candidate and falls through. It therefore never heads a chain
-# and always sits directly behind Fable 5.1. Fable 5 stays as fall-through
-# behind both so a machine whose provider only serves 5 keeps resolving to
-# the Claude ecosystem instead of skipping it (same rule as GLM 5.2 behind 5.3).
+# The Claude vendor order inside every chain is Fable 5.1 -> the older Claude
+# entry (owner decision, 2026-09-06). Claude Mythos 5.1 is the same model as
+# Fable 5.1 served only to Project Glasswing-approved organizations, so a
+# shipped chain naming it would read as a second model most accounts cannot
+# reach; a user who explicitly names it is still recognized and routed. Fable 5
+# stays as fall-through behind Fable 5.1 so a machine whose provider only
+# serves 5 keeps resolving to the Claude ecosystem instead of skipping it
+# (same rule as GLM 5.2 behind 5.3).
 _FABLE_51 = _candidate(
     "claude-fable-5-1",
     "claude",
     ("ccapi", "anthropic", "openrouter"),
     reasoning="Editorial most-capable Claude recommendation; not a benchmark claim.",
-)
-_MYTHOS_51 = _candidate(
-    "claude-mythos-5-1",
-    "claude",
-    ("ccapi", "anthropic", "openrouter"),
-    reasoning="Editorial Fable 5.1 sibling for Project Glasswing-approved accounts; not a benchmark claim.",
 )
 _SOL = _candidate(
     "gpt-5.6-sol",
@@ -223,7 +217,6 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         # end-to-end — the category IS "design at full depth".
         "architect": [
             _with_effort(_FABLE_51, "xhigh"),
-            _with_effort(_MYTHOS_51, "xhigh"),
             _with_effort(_FABLE_5, "xhigh"),
             _with_effort(_ASTRA, "xhigh"),
             _with_effort(_SOL, "xhigh"),
@@ -253,7 +246,6 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
             _with_effort(_KIMI_K3, "low"),
             _with_effort(_LUNA, "low"),
             _with_effort(_FABLE_51, "low"),
-            _with_effort(_MYTHOS_51, "low"),
             _with_effort(_FABLE_5, "low"),
         ],
         "writing": [
@@ -263,14 +255,12 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         ],
         "visual-engineering": [
             _with_effort(_FABLE_51, "high"),
-            _with_effort(_MYTHOS_51, "high"),
             _with_effort(_FABLE_5, "high"),
             _with_effort(_KIMI_K3, "high"),
         ],
         "artistry": [
             _with_effort(_GEMINI, "high"),
             _with_effort(_FABLE_51, "high"),
-            _with_effort(_MYTHOS_51, "high"),
             _with_effort(_FABLE_5, "high"),
             _with_effort(_KIMI_K3, "high"),
         ],
@@ -279,7 +269,6 @@ SHIPPED_MODEL_RECOMMENDATIONS: Final[dict[str, object]] = {
         "main": [
             deepcopy(_KIMI_K3),
             deepcopy(_FABLE_51),
-            deepcopy(_MYTHOS_51),
             deepcopy(_OPUS_5),
             deepcopy(_FABLE_5),
             deepcopy(_ASTRA),

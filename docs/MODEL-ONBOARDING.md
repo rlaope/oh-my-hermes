@@ -147,11 +147,12 @@ Rules that have held across every onboarding so far:
   the old id keeps resolving to the ecosystem (GLM 5.2 behind 5.3, Fable 5
   behind 5.1).
 - An access-restricted sibling (Mythos 5.1 = Fable 5.1 under Project
-  Glasswing) sits directly behind its public twin and never heads a chain;
-  an unapproved account's provider rejection falls the chain through.
-- The Claude vendor order inside any chain is Fable 5.1 → Mythos 5.1 → Opus
-  5 (owner decision, 2026-09-02). The Hermes lane and the Maestro lane are
-  different surfaces and both follow it.
+  Glasswing) stays out of every shipped chain: naming a model most accounts
+  cannot reach reads as a second model in the public tables. Keep it
+  recognized, priced, and routable for a user who asks for it by name.
+- The Claude vendor order inside any chain is Fable 5.1 → Opus 5 (owner
+  decision, 2026-09-06). The Hermes lane and the Maestro lane are different
+  surfaces and both follow it.
 - Shipped defaults change only with explicit owner approval; the operator's
   own placement goes through `omh model-chains set` and
   `omh coding category-maestro set`, never by hand-editing the JSON.
@@ -200,7 +201,7 @@ alias that is genuinely served somewhere else than the default.
 
 ```sh
 omh model-chains show
-omh model-chains set architect "claude-fable-5-1:xhigh, claude-mythos-5-1:xhigh, claude-fable-5:xhigh, ..."
+omh model-chains set architect "claude-fable-5-1:xhigh, claude-fable-5:xhigh, ..."
 ```
 
 `dispatch-models.json` (the Claude Code profile's `--model`) is gated on the

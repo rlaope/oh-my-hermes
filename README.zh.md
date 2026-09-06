@@ -313,13 +313,13 @@ OMH 随附以下可编辑的有序 recommendation chain。guided model setup 只
 | --- | --- | --- |
 | `ultrabrain` | 最深度推理 | GPT-6 Astra，其次 GPT-5.6 Sol (xhigh) |
 | `deep` | 强力默认层 | GPT-5.6 Terra，其次 DeepSeek V3.2 (high) |
-| `architect` | 架构与系统设计 | Claude Fable 5.1，其次 Claude Mythos 5.1，其次 Claude Fable 5，其次 GPT-6 Astra，其次 GPT-5.6 Sol，其次 Kimi K3 (xhigh) |
+| `architect` | 架构与系统设计 | Claude Fable 5.1，其次 Claude Fable 5，其次 GPT-6 Astra，其次 GPT-5.6 Sol，其次 Kimi K3 (xhigh) |
 | `unspecified-high` | 默认工作模型 | Kimi K3，其次 Claude Opus 5 (medium) |
 | `unspecified-low` | 低成本回退 | GLM 5.3，其次 GLM 5.2，其次 GLM 5.2 Ultrafast，其次 DeepSeek V3.2，其次 Claude Opus 5 (low) |
-| `quick` | 短任务 | GLM 5.3 Flash，其次 GLM 5.2 Ultrafast，其次 Kimi K3，其次 GPT-5.6 Luna，其次 Claude Fable 5.1，其次 Claude Mythos 5.1，其次 Claude Fable 5 (low) |
+| `quick` | 短任务 | GLM 5.3 Flash，其次 GLM 5.2 Ultrafast，其次 Kimi K3，其次 GPT-5.6 Luna，其次 Claude Fable 5.1，其次 Claude Fable 5 (low) |
 | `writing` | 文章与文档 | Kimi K3，其次 Qwen3-Coder，其次 Gemini 3.1 Pro (medium) |
-| `visual-engineering` | 前端与视觉 | Claude Fable 5.1，其次 Claude Mythos 5.1，其次 Claude Fable 5，其次 Kimi K3 (high) |
-| `artistry` | 非常规创作 | Gemini 3.1 Pro，其次 Claude Fable 5.1，其次 Claude Mythos 5.1，其次 Claude Fable 5，其次 Kimi K3 (high) |
+| `visual-engineering` | 前端与视觉 | Claude Fable 5.1，其次 Claude Fable 5，其次 Kimi K3 (high) |
+| `artistry` | 非常规创作 | Gemini 3.1 Pro，其次 Claude Fable 5.1，其次 Claude Fable 5，其次 Kimi K3 (high) |
 
 想试试 Ultrafast 档? Kimi K3 Ultrafast(300 TPS)与 GLM 5.2 Ultrafast(600 TPS)都在 [OpenGateway](https://opengateway.ai/) 上提供。
 

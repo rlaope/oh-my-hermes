@@ -123,11 +123,11 @@ CODING_MODEL_ROUTE_CLAIM_BOUNDARY: Final[str] = (
 # through unvalidated — the catalog is a default candidate list, not an
 # allowlist. The Fable-tier rows are concrete ids on purpose: the CLI's
 # `fable` alias exists but cannot express the owner-ordered Claude chain
-# (Fable 5.1 -> Mythos 5.1 -> Opus, 2026-09-02), which needs the two
-# Fable-tier ids named exactly so Mythos sits behind Fable. Mythos 5.1
-# is the same model as Fable 5.1 served only to Project Glasswing-approved
-# organizations; an unapproved account gets a provider rejection and the
-# chain falls through to the next entry, which is why it never heads a chain.
+# (Fable 5.1 -> Opus, 2026-09-06), which needs the Fable-tier id named
+# exactly. Claude Mythos 5.1 stays listed here as a recognized candidate for
+# a user who names it: it is the same model as Fable 5.1 served only to
+# Project Glasswing-approved organizations, so an unapproved account gets a
+# provider rejection and no shipped chain recommends it.
 MODEL_CATALOG_KIND: Final[str] = "built_in_defaults"
 
 # Closed vocabulary for a route's catalog basis. `local_inventory` marks a
@@ -318,7 +318,7 @@ CATEGORY_SCALE_SOURCES: Final[dict[str, tuple[str, ...]]] = {
 # The built-in category->model table, the fallback for a profile with no local
 # inventory. Codex takes vendor model ids; Claude Code takes concrete ids for
 # the Fable tier (no alias tracks it) and the `opus` alias for the Opus tier.
-CLAUDE_FRONTIER_CHAIN_MODELS: Final[tuple[str, ...]] = ("claude-fable-5-1", "claude-mythos-5-1", "opus")
+CLAUDE_FRONTIER_CHAIN_MODELS: Final[tuple[str, ...]] = ("claude-fable-5-1", "opus")
 
 
 def _CLAUDE_FRONTIER_CHAIN(effort: str) -> tuple[dict[str, str], ...]:
@@ -354,11 +354,11 @@ BUILTIN_CATEGORY_MODELS: Final[dict[str, dict[str, tuple[dict[str, str], ...]]]]
         "artistry": ({"model_id": "gpt-5.6-sol", "reasoning_effort": ""},),
     },
     # Claude Code: every frontier category runs the owner-ordered Claude chain
-    # (Fable 5.1 -> Mythos 5.1 -> Opus, 2026-09-02). Mythos 5.1 is Fable 5.1
-    # under Project Glasswing access; where the account is not approved the
-    # CLI's provider rejection falls the chain through to `opus`, so the tail
-    # keeps the previous out-of-the-box behavior. The sonnet/haiku lanes are
-    # cost-tier picks below the ordered chain and stay as they were.
+    # (Fable 5.1 -> Opus, 2026-09-06). Fable 5.1 is the most capable widely
+    # released tier; where a provider does not serve it the CLI's rejection
+    # falls the chain through to `opus`, so the tail keeps the previous
+    # out-of-the-box behavior. The sonnet/haiku lanes are cost-tier picks
+    # below the ordered chain and stay as they were.
     "claude-code": {
         "ultrabrain": _CLAUDE_FRONTIER_CHAIN("xhigh"),
         "deep": _CLAUDE_FRONTIER_CHAIN("high"),

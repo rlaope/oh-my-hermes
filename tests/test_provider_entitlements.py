@@ -47,6 +47,18 @@ def _write(path: Path, document: object) -> None:
 class ParityTests(unittest.TestCase):
     """The plugin bundle cannot import src/coding, so it embeds two mirrors."""
 
+    # Aliases the router recognizes but no shipped chain recommends. Claude
+    # Mythos 5.1 is Claude Fable 5.1 served only to Project Glasswing-approved
+    # accounts, so it left the chains (owner decision, 2026-09-06) while
+    # staying routable for a user who names it — and that user is exactly who
+    # needs "which of my providers serves this" answered rather than unknown.
+    # The exception is a named list, not a loosened comparison: an alias may
+    # sit here only while it is genuinely absent from every shipped chain, so
+    # a chain entry that silently disappears still fails this gate.
+    _RECOGNITION_ONLY_ALIAS_FAMILIES: dict[str, tuple[str, ...]] = {
+        "claude-mythos-5-1": ("ccapi", "anthropic", "openrouter"),
+    }
+
     def _catalog_families(self) -> dict[str, tuple[str, ...]]:
         families: dict[str, tuple[str, ...]] = {}
         for section in ("categories", "role_suggestions", "domain_affinities", "last_resort"):
@@ -59,11 +71,21 @@ class ParityTests(unittest.TestCase):
         return families
 
     def test_alias_families_mirror_the_catalog(self) -> None:
-        self.assertEqual(HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES, self._catalog_families())
+        catalog = self._catalog_families()
+        for alias in self._RECOGNITION_ONLY_ALIAS_FAMILIES:
+            self.assertNotIn(alias, catalog, alias)
+        self.assertEqual(
+            HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES,
+            {**catalog, **self._RECOGNITION_ONLY_ALIAS_FAMILIES},
+        )
 
     def test_family_vocabulary_is_the_catalog_union(self) -> None:
         union = sorted({family for families in self._catalog_families().values() for family in families})
         self.assertEqual(list(PROVIDER_FAMILY_VOCABULARY), union)
+        # A recognition-only alias may only name families the catalog already
+        # describes; it never widens the vocabulary the setup interview knows.
+        for alias, families in self._RECOGNITION_ONLY_ALIAS_FAMILIES.items():
+            self.assertEqual(sorted(set(families) - set(union)), [], alias)
 
 
 class ParseTests(unittest.TestCase):

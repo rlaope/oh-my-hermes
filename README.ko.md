@@ -318,13 +318,13 @@ OMH에는 다음과 같이 편집 가능한 순서형 recommendation chain이 �
 | --- | --- | --- |
 | `ultrabrain` | 가장 깊은 추론 | GPT-6 Astra, 다음 GPT-5.6 Sol (xhigh) |
 | `deep` | 강력한 기본 티어 | GPT-5.6 Terra, 다음 DeepSeek V3.2 (high) |
-| `architect` | 아키텍처·시스템 설계 | Claude Fable 5.1, 다음 Claude Mythos 5.1, 다음 Claude Fable 5, 다음 GPT-6 Astra, 다음 GPT-5.6 Sol, 다음 Kimi K3 (xhigh) |
+| `architect` | 아키텍처·시스템 설계 | Claude Fable 5.1, 다음 Claude Fable 5, 다음 GPT-6 Astra, 다음 GPT-5.6 Sol, 다음 Kimi K3 (xhigh) |
 | `unspecified-high` | 기본 작업 모델 | Kimi K3, 다음 Claude Opus 5 (medium) |
 | `unspecified-low` | 저비용 폴백 | GLM 5.3, 다음 GLM 5.2, 다음 GLM 5.2 Ultrafast, 다음 DeepSeek V3.2, 다음 Claude Opus 5 (low) |
-| `quick` | 짧은 작업 | GLM 5.3 Flash, 다음 GLM 5.2 Ultrafast, 다음 Kimi K3, 다음 GPT-5.6 Luna, 다음 Claude Fable 5.1, 다음 Claude Mythos 5.1, 다음 Claude Fable 5 (low) |
+| `quick` | 짧은 작업 | GLM 5.3 Flash, 다음 GLM 5.2 Ultrafast, 다음 Kimi K3, 다음 GPT-5.6 Luna, 다음 Claude Fable 5.1, 다음 Claude Fable 5 (low) |
 | `writing` | 문서·산문 | Kimi K3, 다음 Qwen3-Coder, 다음 Gemini 3.1 Pro (medium) |
-| `visual-engineering` | 프론트엔드·비주얼 | Claude Fable 5.1, 다음 Claude Mythos 5.1, 다음 Claude Fable 5, 다음 Kimi K3 (high) |
-| `artistry` | 비정형 창작 | Gemini 3.1 Pro, 다음 Claude Fable 5.1, 다음 Claude Mythos 5.1, 다음 Claude Fable 5, 다음 Kimi K3 (high) |
+| `visual-engineering` | 프론트엔드·비주얼 | Claude Fable 5.1, 다음 Claude Fable 5, 다음 Kimi K3 (high) |
+| `artistry` | 비정형 창작 | Gemini 3.1 Pro, 다음 Claude Fable 5.1, 다음 Claude Fable 5, 다음 Kimi K3 (high) |
 
 Ultrafast 티어가 궁금하다면 — Kimi K3 Ultrafast(300 TPS), GLM 5.2 Ultrafast(600 TPS) — [OpenGateway](https://opengateway.ai/)에서 만나볼 수 있습니다.
 
