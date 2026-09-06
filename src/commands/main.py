@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from ..version import __version__
+from ..maintenance.build_identity import build_identity_summary, probe_build_identity
 from ..installer import OmhError
 from .achievements import (
     _add_achievements_commands,
@@ -333,7 +334,7 @@ Start:
   omh doctor             Check local OMH health and registration
   omh quickstart         Show what to do next in Hermes
   omh update             Refresh managed skills and update metadata
-  omh --version          Print the installed command version
+  omh --version          Print the command version and its build identity
 
 First five minutes:
   1. Run `omh setup` and accept the recommended choices.
@@ -569,7 +570,11 @@ def _launch_hermes_tui(args: argparse.Namespace) -> int | None:
 def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     if raw_argv in (["--version"], ["-V"]):
-        print(f"omh {__version__}")
+        # The semantic version still leads the line, so every consumer that
+        # reads a version out of this output keeps working. The build identity
+        # follows it, because two same-version checkouts are exactly the case
+        # the version alone cannot tell apart.
+        print(build_identity_summary(probe_build_identity()))
         return 0
     parser = build_parser()
     args = parser.parse_args(raw_argv)

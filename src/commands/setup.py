@@ -56,6 +56,7 @@ from ..config_adapter import (
 )
 from ..install.compression_defaults import ensure_compression_defaults
 from ..doctor import DEFAULT_DOCTOR_NEXT_ACTION, doctor_ok, recommended_next_action, run_doctor
+from ..maintenance.build_identity import probe_build_identity
 from ..maintenance.doctor import run_doctor_advisories
 from ..executors import CODING_EXECUTOR_TARGETS
 from ..hashutil import sha256_file
@@ -1962,6 +1963,11 @@ def _doctor_result(args: argparse.Namespace) -> dict[str, object]:
         "state_log": state_log,
         "recommended_next_action": next_action,
         "advisories": advisories.to_dict(),
+        # Diagnostic provenance for the command that produced this report. It
+        # is deliberately not a doctor check: an installed artifact with no
+        # stamped identity is a normal state, not a health failure, so it must
+        # not move the doctor status, the issue counts, or the exit code.
+        "build_identity": probe_build_identity(),
         "language": _resolve_language(args),
     }
 
@@ -3175,6 +3181,9 @@ def _print_doctor_summary(payload: dict[str, object], *, language: str = "en") -
     print(
         f"  {tr(language, 'doctor_issue_counts', blocking=summary.get('blocking', 0), warnings=summary.get('warnings', 0))}"
     )
+    build_identity = payload.get("build_identity", {})
+    if isinstance(build_identity, dict) and build_identity.get("summary"):
+        print(f"  {tr(language, 'doctor_build_identity', identity=build_identity['summary'])}")
     groups = summary.get("groups", [])
     if isinstance(groups, list):
         for group in groups:
