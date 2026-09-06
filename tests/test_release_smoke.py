@@ -151,6 +151,24 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertFalse(items["tag_and_publish"]["required"])
         self.assertIn('git tag -a v1.0.0 -m "Release v1.0.0"', items["tag_and_publish"]["command"])
         self.assertTrue(items["tag_and_publish"]["requires_release_authority"])
+        # A cut ends at the tag; a machine still runs whatever it installed.
+        # The 2.0.1 release moved the tag and npm `latest` while the
+        # maintainer's own HUD kept showing v2.0.0, because nothing had run
+        # `omh update` there. The checklist carries that as a post-release
+        # follow-up, never as a pre-tag gate.
+        self.assertIn("machine_sync_after_cut", items)
+        self.assertEqual(items["machine_sync_after_cut"]["phase"], "post-release-sync")
+        self.assertFalse(items["machine_sync_after_cut"]["required"])
+        self.assertTrue(items["machine_sync_after_cut"]["mutates_profile"])
+        self.assertFalse(items["machine_sync_after_cut"]["requires_release_authority"])
+        self.assertEqual(
+            items["machine_sync_after_cut"]["command"],
+            "/tmp/omh update && /tmp/omh --version && /tmp/omh doctor",
+        )
+        self.assertIn("1.0.0", items["machine_sync_after_cut"]["evidence_required"])
+        self.assertIn("HUD footer", items["machine_sync_after_cut"]["evidence_required"])
+        self.assertIn("no installed machine changes", items["machine_sync_after_cut"]["proof_boundary"])
+        self.assertIn("~/.hermes/plugins", items["machine_sync_after_cut"]["proof_boundary"])
         self.assertGreaterEqual(payload["required_item_count"], 18)
 
     def test_release_readiness_checklist_rejects_unsafe_versions_and_quotes_command_paths(self) -> None:

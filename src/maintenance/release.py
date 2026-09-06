@@ -1191,6 +1191,25 @@ def release_readiness_checklist(
             "This checklist does not create tags, GitHub releases, or production artifacts by itself.",
             True,
         ),
+        ReleaseChecklistItem(
+            "machine_sync_after_cut",
+            "Sync each machine to the published release and confirm the version it reports",
+            f"{omh_display} update && {omh_display} --version && {omh_display} doctor",
+            "post-release-sync",
+            False,
+            True,
+            (
+                f"The installed command reports {release_version}, doctor passes, and the Hermes TUI HUD footer shows "
+                f"v{release_version} after the terminal is restarted."
+            ),
+            (
+                "Tagging and publishing move the tag and the package registries only; no installed machine changes until it "
+                "updates itself. Every version an operator sees -- `omh --version`, the plugin manifest, and the TUI HUD "
+                "footer -- is the installed version, never the newest published tag. Never hand-copy files into "
+                "~/.hermes/plugins or ~/.hermes/tui-widgets to close the gap: that drifts from the install manifests and "
+                "makes the next update refuse."
+            ),
+        ),
     ]
     return {
         "schema_version": RELEASE_CHECKLIST_SCHEMA,

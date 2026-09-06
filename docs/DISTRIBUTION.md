@@ -145,6 +145,10 @@ Boundaries:
 - To bump by hand instead, run `uv run tools/package_manager/bump_version.py`
   (`--set X.Y.Z` for a minor or major, `--dry-run` to preview) and follow the
   Required Checks in [Release](RELEASE.md).
+- Publishing changes no installed machine. The tag and the registries move;
+  `omh --version`, the plugin manifest, and the Hermes TUI HUD footer keep
+  reporting the version each machine installed until it runs `omh update`.
+  [Release](RELEASE.md), "After the Cut", owns that step.
 
 ## Resume and rollback
 

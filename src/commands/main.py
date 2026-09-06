@@ -407,7 +407,7 @@ def _run_startup_update_check(args: argparse.Namespace) -> None:
     except (OSError, ValueError, json.JSONDecodeError):
         return
     if result.get("should_auto_update"):
-        _run_auto_update(args, paths)
+        _run_auto_update(args, paths, result)
         return
     # Only a fresh probe prints a notice. Reusing the cache inside the same
     # interval would otherwise reprint the same "behind"/"inconclusive" line
@@ -426,7 +426,41 @@ def _run_startup_update_check(args: argparse.Namespace) -> None:
 _AUTO_UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 600.0
 
 
-def _run_auto_update(args: argparse.Namespace, paths) -> None:
+def _auto_update_started_line(result: dict[str, object]) -> str:
+    """What `auto` says before it spends the launch on an update.
+
+    `notify` mode already prints why the launch is not current
+    (`maintenance/update_check.py:format_notice_line`); `auto` used to print
+    nothing at all and simply hold the terminal for however long `omh
+    update` took, which reads as a hung launch rather than as a running
+    update. Same sentence shape as the `notify` notice, so the two modes
+    read as one voice.
+    """
+    local = str(result.get("local_commit", ""))[:7] or "unknown"
+    remote = str(result.get("remote_commit", ""))[:7] or "unknown"
+    channel = str(result.get("channel", "")) or "unknown"
+    return f"OMH Auto Update: {local} -> {remote} ({channel} channel); running `omh update`."
+
+
+def _auto_update_complete_line(paths) -> str:
+    """What `auto` says once the update subprocess has succeeded.
+
+    The version comes from the record `omh update` just rewrote
+    (`commands/setup.py`), not from this process: this process is still
+    running the pre-update package, and its own `__version__` would report
+    the version the update just replaced. That record is also what the TUI
+    HUD renders (`plugin_bundle/omh/runtime_reader.py:_package_version`), so
+    the line names exactly the version the terminal is about to show.
+    """
+    from ..maintenance.update_check_state import read_runtime_state
+
+    version = str(read_runtime_state(paths).get("version", "") or "").strip()
+    if version:
+        return f"OMH Auto Update complete: omh {version} is installed."
+    return "OMH Auto Update complete."
+
+
+def _run_auto_update(args: argparse.Namespace, paths, result: dict[str, object]) -> None:
     """Auto mode: reuse `omh update`'s own code path, never a reimplementation.
 
     Spawns `omh update --no-interactive` as a real subprocess rather than
@@ -449,6 +483,11 @@ def _run_auto_update(args: argparse.Namespace, paths) -> None:
     non-forcing `ensure_tui_interface`/`ensure_omh_skin` path instead of the
     forcing `activate_*` one, so an existing explicit choice is preserved.
 
+    The attempt announces itself on stdout and says so again when it lands
+    (`_auto_update_started_line`, `_auto_update_complete_line`), because the
+    launch is held for the whole subprocess: an unannounced wait of minutes
+    is indistinguishable from a hung launch.
+
     A non-blocking lock keeps two simultaneous launches from auto-updating at
     once; losing the race is a silent skip, not a retry. A failed update is
     reported once (so the user is not left guessing) and never retried before
@@ -464,6 +503,9 @@ def _run_auto_update(args: argparse.Namespace, paths) -> None:
 
     try:
         with acquire_auto_update_lock(paths):
+            # Announced only after the lock is held: a launch that loses the
+            # race skips silently and must not claim an update it never ran.
+            print(_auto_update_started_line(result))
             # --omh-home/--hermes-home/--scope are TOP-LEVEL parser options
             # (defined before `add_subparsers`), so they must precede the
             # "update" subcommand token, not follow it.
@@ -484,6 +526,7 @@ def _run_auto_update(args: argparse.Namespace, paths) -> None:
             )
             if completed.returncode == 0:
                 refresh_cache_after_auto_update(paths)
+                print(_auto_update_complete_line(paths))
             else:
                 print(
                     f"omh: update-check auto-update failed (exit {completed.returncode})",

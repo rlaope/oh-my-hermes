@@ -1040,6 +1040,15 @@ external agent named `choose`/`ask`:
 
 A quiet no-run line looks like
 `[omh] v1.0.6 | plugin:ready | target:single | coding-agent:not-selected`.
+
+That version is the **installed** version, never the newest published
+release: it is what `omh --version` prints, and for the TUI widget it is the
+version `omh install`/`omh update` recorded, because the widget runs the
+plugin-bundle reader without being able to import the `omh` package. A
+machine that has not run `omh update` since a release keeps showing the
+version it installed, and an already-open terminal keeps showing it until the
+TUI restarts. See [Release](RELEASE.md), "After the Cut".
+
 The plugin also exposes `omh_context` for a compact OMH mental model plus
 generic-tool checkpoint, `omh_memory` for a metadata-only comparison of Hermes
 memory against OMH's approved records, `omh_interact` for shell-free chat responses and
@@ -2232,9 +2241,29 @@ the same interval. `notify` never blocks or delays the launch either way.
 run as a real subprocess so its own re-entry sees a normal `omh update`
 argv), and by design that means the launch waits for that subprocess -- a
 command-package refresh can take minutes on the preview channel, the same
-wait `omh update` always has. A non-blocking lock keeps two simultaneous
-launches from auto-updating at once, and a failed or already-applied attempt
-is never retried before the next interval. Either mode spends at most one curl
+wait `omh update` always has. Because the launch is held for that whole
+wait, `auto` says what it is doing. It prints one line before it starts:
+
+```
+OMH Auto Update: 3f2a1c9 -> 9b7e21d (preview channel); running `omh update`.
+```
+
+and one when the update lands, naming the version now installed:
+
+```
+OMH Auto Update complete: omh 2.0.1 is installed.
+```
+
+That completion version is read back from the record `omh update` just
+rewrote, which is the same record the Hermes TUI HUD footer renders, so the
+line names the version the terminal that opens next will show. A failure
+still prints `omh: update-check auto-update failed` on stderr and nothing
+else changes. `off` and `notify` never print either line. A non-blocking lock
+keeps two simultaneous launches from auto-updating at once -- the launch that
+loses that race prints nothing, because it ran no update -- and a failed or
+already-applied attempt is never retried before the next interval.
+
+Either mode spends at most one curl
 subprocess per `interval_hours`, carrying two requests: the conditional,
 ETag-cached GET against the GitHub commits API that has always been there, and a
 repository-metadata read that names the current default branch. Each transfer is

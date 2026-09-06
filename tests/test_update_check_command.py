@@ -264,6 +264,8 @@ class StartupCheckLaunchIntegrationTests(unittest.TestCase):
             output = buffer.getvalue()
             self.assertIn("OMH update available:", output)
             self.assertIn("omh update", output)
+            # `notify` reports; only `auto` updates, and only `auto` says so.
+            self.assertNotIn("Auto Update", output)
 
     def test_auto_mode_spawns_omh_update_no_interactive_as_a_real_subprocess(self) -> None:
         # Regression for the P1-b defect: `_run_auto_update` used to call
@@ -278,16 +280,25 @@ class StartupCheckLaunchIntegrationTests(unittest.TestCase):
             paths = _paths(root)
             write_update_check_policy(paths, mode="auto")
             paths.runtime_dir.mkdir(parents=True, exist_ok=True)
-            atomic_write_json(paths.runtime_state_path, {"release_source_commit": "a" * 40})
+            atomic_write_json(
+                paths.runtime_state_path,
+                {"release_source_commit": "a" * 40, "release_channel": "preview", "version": "9.9.8"},
+            )
             args = self._args(root)
             buffer = io.StringIO()
 
             def fake_run(argv, timeout=None):
                 # Simulate a successful `omh update` converging on the remote
-                # identity the auto-update was triggered by.
+                # identity the auto-update was triggered by, and recording the
+                # version it installed the way `commands/setup.py` does.
                 atomic_write_json(
                     paths.runtime_state_path,
-                    {"release_source_commit": "b" * 40, "last_update": {"status": "ok"}},
+                    {
+                        "release_source_commit": "b" * 40,
+                        "release_channel": "preview",
+                        "version": "9.9.9",
+                        "last_update": {"status": "ok"},
+                    },
                 )
                 return subprocess.CompletedProcess(argv, 0)
 
@@ -319,6 +330,16 @@ class StartupCheckLaunchIntegrationTests(unittest.TestCase):
             # same interval reads it as resolved, not still "behind".
             self.assertEqual(read_update_check_cache(paths)["outcome"], "up_to_date")
 
+            # The launch is held for the whole update, so it says what it is
+            # doing and what it landed on. The completion version is read
+            # back from the record the update just rewrote -- this process is
+            # still running the pre-update package -- and that same record is
+            # what the TUI HUD footer renders.
+            output = buffer.getvalue()
+            self.assertIn("OMH Auto Update: aaaaaaa -> bbbbbbb (preview channel)", output)
+            self.assertIn("OMH Auto Update complete: omh 9.9.9 is installed.", output)
+            self.assertNotIn("9.9.8", output)
+
     def test_auto_mode_reports_a_failed_subprocess_without_crashing_the_launch(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -341,6 +362,10 @@ class StartupCheckLaunchIntegrationTests(unittest.TestCase):
                 main_module._run_startup_update_check(args)
 
             self.assertIn("update-check auto-update failed", err_buffer.getvalue())
+            # The attempt is still announced -- the wait happened either way --
+            # but a failed update never claims to have completed.
+            self.assertIn("OMH Auto Update:", out_buffer.getvalue())
+            self.assertNotIn("Auto Update complete", out_buffer.getvalue())
             cache = read_update_check_cache(paths)
             # A failed attempt never claims convergence.
             self.assertNotEqual(cache.get("outcome"), "up_to_date")
@@ -359,6 +384,9 @@ class StartupCheckLaunchIntegrationTests(unittest.TestCase):
                     main_module._run_startup_update_check(args)
             state = read_json_object(paths.runtime_state_path) or {}
             self.assertNotIn("last_update", state)
+            # Silent skip means silent: the launch that loses the race must
+            # not announce an Auto Update it never ran.
+            self.assertEqual(buffer.getvalue(), "")
 
     def test_notify_prints_the_rewrite_line_even_when_no_update_qualifies(self) -> None:
         # Issue #1282: an unreachable cursor must surface the classification

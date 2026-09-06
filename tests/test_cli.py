@@ -4562,6 +4562,9 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         self.assertIn("profile-mutating", stdout)
         self.assertIn("Manual release-authority actions", stdout)
         self.assertIn("tag_and_publish [release-authority; release authority]", stdout)
+        self.assertIn("Optional follow-ups", stdout)
+        self.assertIn("machine_sync_after_cut [post-release-sync; profile-mutating]", stdout)
+        self.assertIn("/tmp/omh update && /tmp/omh --version && /tmp/omh doctor", stdout)
         self.assertIn("For machine-readable output", stdout)
         with self.assertRaises(json.JSONDecodeError):
             json.loads(stdout)
