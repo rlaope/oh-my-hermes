@@ -186,8 +186,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="routing_precision_case_count",
             describe="Routing precision cases",
             live=_routing_precision_case_count,
-            # omh-docs adds four measured generic, negated, and descriptive negative controls.
-            expected=171,
+            # The public-board contract adds three negative controls: a concept
+            # question, a disclosure question, and a team's own board.
+            expected=174,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -199,8 +200,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             name="routing_precision_intervention_case_count",
             describe="Routing precision intervention cases",
             live=_routing_precision_intervention_case_count,
-            # Apple-style library/product controls add three specialist and three generic-lane cases.
-            expected=309,
+            # The public-board contract adds two LLM-build interventions and the
+            # agent-board cross-lane guard.
+            expected=312,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",

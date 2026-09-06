@@ -14,7 +14,7 @@ from .domain_signals import (
     specialist_domain_route_signal,
 )
 from .intent import scrub_diagnostic_status_text
-from .localization import normalized_phrase, prepare_routing_text, routing_tokens
+from .localization import normalized_phrase, prepare_routing_text, routing_terms, routing_tokens
 from .visual_qa_cues import contains_cue_phrase
 from .missed_route import is_missed_route_feedback
 from .omh_help import is_omh_docs_question
@@ -256,6 +256,42 @@ _LLM_APP_DEV_EXPLICIT_PHRASES = tuple(
         "프롬프트 버전 관리",
         "llm 평가셋",
     )
+)
+# A public board is a publication destination. The OMH agent board and the
+# coding status board are coordination surfaces that happen to share the word,
+# and "what is a public message board?" is a concept question. So the match
+# needs both halves: a public-board destination phrase and the model-powered
+# product that would publish to it. Neither half is creditable on its own,
+# which is also why this stays a matcher rather than a trigger phrase: a
+# `public board` trigger would put `public`, `board`, and `posting` into this
+# workflow's trigger tokens, which is the same class of generic vocabulary the
+# `llm-app-dev` token hold-back below already exists to keep out of it.
+#
+# English only: the destination vocabulary belongs in the trigger language
+# packs the way every other non-English phrase does, and no pack carries this
+# intent yet. A non-English public-board request still reaches the workflow
+# through its existing LLM-app-development pack phrases.
+_PUBLIC_BOARD_DESTINATION_PHRASES = tuple(
+    normalized_phrase(phrase)
+    for phrase in (
+        "public board",
+        "public message board",
+        "public bulletin board",
+        "public posting board",
+        "public discussion board",
+        "public forum board",
+        "posting board",
+    )
+)
+_PUBLIC_BOARD_PRODUCT_TERMS = frozenset(
+    {
+        "agent",
+        "agents",
+        "assistant",
+        "bot",
+        "chatbot",
+        "llm",
+    }
 )
 _FAILURE_SIGNAL_AUDIT_EXPLICIT_PHRASES = tuple(
     normalized_phrase(phrase)
@@ -2261,6 +2297,9 @@ def _score_definition(
     if definition.name == "llm-app-dev" and _llm_app_dev_explicit_match(normalized_query):
         score += 30
         matched.add("direct:llm_app_dev")
+    if definition.name == "llm-app-dev" and _llm_app_dev_public_board_match(normalized_query):
+        score += 30
+        matched.add("direct:llm_app_dev_public_board")
     if definition.name == "product-docs" and _omh_docs_offers_itself(normalized_query, query_tokens):
         score += 30
         matched.add("direct:omh_docs_self_knowledge")
@@ -2871,6 +2910,22 @@ def _adversarial_consensus_explicit_match(normalized_query: str) -> bool:
 
 def _llm_app_dev_explicit_match(normalized_query: str) -> bool:
     return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _LLM_APP_DEV_EXPLICIT_PHRASES)
+
+
+def _llm_app_dev_public_board_match(normalized_query: str) -> bool:
+    """A model-powered product publishing to a public board is an LLM build.
+
+    Both halves are required. The destination phrase alone is a concept
+    question or somebody else's board; the product term alone is every
+    sentence about agents.
+
+    The product term is read off `routing_terms` rather than `routing_tokens`
+    because `agent` is a routing stopword, so the token set the scorer already
+    holds cannot see the most common way this request is phrased.
+    """
+    if not any(_explicit_phrase_match(normalized_query, phrase) for phrase in _PUBLIC_BOARD_DESTINATION_PHRASES):
+        return False
+    return bool(routing_terms(normalized_query) & _PUBLIC_BOARD_PRODUCT_TERMS)
 
 
 def _memory_interview_explicit_match(normalized_query: str) -> bool:

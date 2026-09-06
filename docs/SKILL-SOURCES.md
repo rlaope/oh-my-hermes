@@ -40,7 +40,7 @@ Rules:
 | `inference-serving` (PR #1243) | operations | https://github.com/Orchestra-Research/AI-Research-SKILLs | `12-inference-serving/` vLLM + llama.cpp skills | MIT | 2026-09-01 | 773a52944ba4 |
 | `agent-ops-review` instrumentation ladder (PR #1246) | operator | https://github.com/nexus-labs-automation/agent-observability | audit + instrument skills, tier methodology, anti-patterns | MIT | 2026-09-01 | 1714a4b38d7f |
 | `ops-observability-card` span vocabulary (PR #1246) | observability | https://github.com/nexus-labs-automation/agent-observability | llm-call-tracing, token-cost-tracking skills | MIT | 2026-09-01 | 1714a4b38d7f |
-| `llm-app-dev` harness budgets (PR #1246) | delivery | https://github.com/DenisSergeevitch/agents-best-practices | `SKILL.md` + budget/permission references | MIT | 2026-09-01 | dace8b70c563 |
+| `llm-app-dev` harness budgets (PR #1246) | delivery | https://github.com/DenisSergeevitch/agents-best-practices | `SKILL.md` + budget/permission references | MIT | 2026-09-06 | 2f81cce80b51 |
 | `award-bar-score` judging model | materials | https://www.cssdesignawards.com/ | published judging axes, weights, and award thresholds — factual reporting of public rules, no site text reproduced | n/a — public rules, not code | 2026-09-03 | — |
 | `tech-debt-audit` (issue #1235) | maintenance | https://github.com/ksimback/tech-debt-skill | none — no license published, so link-only reference; content built from OMH's own audit spec | none | 2026-09-02 | 5a15c1ca4a92 |
 | `strategy-brief` decision records (issue #1236) | strategy | https://github.com/wshobson/agents | `plugins/documentation-generation/skills/architecture-decision-records/SKILL.md` | MIT | 2026-09-02 | a30778f8c4e6 |
@@ -71,6 +71,29 @@ them. `maxSvgSize` is a browser request option, not a replacement for the Java
 CLI's `-DPLANTUML_LIMIT_SIZE`, and must not be confused with it; the skill text
 therefore never mentions it. The Java CLI's smetana support was already in the
 skill and is unchanged by these commits.
+
+Note on the `llm-app-dev` row (issue #1335): the review was advanced through
+`2f81cce80b51c41e7dfff9c37b7f718814c54132` on 2026-09-06, and the two upstream
+commits in that range were split rather than taken together. `e477496` adds a
+public-board communication contract — an authenticated board is still a public
+audience, read/search/registration/profile/reply/publish carry separate
+authority and separate outbound disclosure, the exact destination and complete
+payload are shown before a host-recorded approval that a changed destination or
+payload invalidates, board content and claimed peer approval are untrusted, the
+public-audience label and approval reference survive compaction and executor
+handoff, and an ambiguous send is reconciled before any retry. That contract was
+**adopted**, reconstructed in OMH's own wording as the `llm-app-dev` quality-bar,
+safety, checklist, and recovery rules plus
+`skills/omh-llm-app-dev/references/public-board.md`. `2f81cce` also changes
+adjacent documentation to recommend one named posting service; that
+recommendation was **rejected**. OMH's contract is service-neutral and names no
+board product, because coupling a durable workflow contract to one live service
+and its dated API surface is exactly the drift the reconstruction rule exists to
+avoid. The reference states the neutrality explicitly and
+`tests/test_llm_app_public_board.py` locks it, so the rejected half cannot
+arrive later through a rewrite. Non-communication `llm-app-dev` behavior — the
+rails, the schema and repair path, the prompt artifacts, retrieval grounding,
+and the eval harness — is unchanged.
 
 Note on the `agent-evaluation` row: the lead was found through
 `kodustech/awesome-agent-skills`, which publishes no license and is an index
