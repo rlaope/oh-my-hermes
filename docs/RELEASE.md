@@ -535,6 +535,49 @@ packaged `omh` console script imports and runs from a source checkout. This
 check is local command importability only; it is not Hermes chat visibility,
 plugin load, executor dispatch, review, CI, merge, or delivery evidence.
 
+## After the Cut
+
+Tagging and publishing move the tag, the GitHub release, and the package
+registries. **They change no installed machine.** A machine keeps running the
+version it installed until it updates itself, so the release is not done when
+the tag exists; it is done when the machines that should run it report it.
+
+Every version an operator can see is the *installed* version, never the newest
+published tag:
+
+| Surface | What it reports |
+| --- | --- |
+| `omh --version` | the `omh` package on PATH |
+| `~/.hermes/plugins/omh/plugin.yaml` | the plugin bundle the last install/update wrote |
+| The Hermes TUI HUD footer (` v2.0.1`) | the version recorded by the last install/update, read by the plugin-bundle reader the widget spawns |
+
+The 2.0.1 cut is the worked example: the tag was pushed and npm `latest`
+moved, and the maintainer's own HUD kept showing `v2.0.0` for as long as the
+machine kept the 2.0.0 install. Nothing was broken; nothing had been updated.
+
+Sync each machine that should run the release:
+
+```sh
+omh update
+omh --version          # must print the released version
+omh doctor
+```
+
+Then restart the Hermes TUI and confirm the HUD footer shows the new version.
+The widget reads the installed plugin bundle, so a terminal that was already
+open keeps rendering the version it started with.
+
+Never hand-copy files into `~/.hermes/plugins/` or `~/.hermes/tui-widgets/` to
+close that gap. Hand-copied artifacts drift from the install manifests and
+make the next `omh update` refuse or demand `--force`.
+
+`omh release checklist` carries this as `machine_sync_after_cut`, a
+post-release follow-up rather than a pre-tag gate. Machines that opted into
+`omh update-check set --mode auto` sync themselves on the next bare `omh`
+launch and print an `OMH Auto Update` line while they do; every other machine
+syncs only when someone runs `omh update`. See
+[Installation](INSTALLATION.md), "Startup update check".
+
 ## Release Notes Must Include
 
 - Release version and channel.
@@ -551,6 +594,8 @@ plugin load, executor dispatch, review, CI, merge, or delivery evidence.
 - Plugin bundle status when `omh setup` changed.
 - GitHub Pages workflow status when public site copy changed.
 - Known manual Hermes checks that could not be automated.
+- Machine sync status after the cut: which machines ran `omh update` and what
+  version they now report, or that none has synced yet.
 - Any public claim that depends on wrapper evidence rather than Hermes-native
   capability evidence.
 

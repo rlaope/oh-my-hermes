@@ -820,6 +820,42 @@ class HudCliTests(unittest.TestCase):
             self.assertNotIn("executor:", stdout)
             self.assertNotIn("handoff:", stdout)
 
+    def test_hud_version_is_the_installed_package_not_a_stale_record(self) -> None:
+        # The 2.0.1 cut: the tag moved and npm `latest` moved, and the HUD
+        # footer kept showing v2.0.0 because the machine had not run `omh
+        # update`. The HUD version is the INSTALLED version by design -- what
+        # this locks is which installed version it names. A caller that can
+        # import the running package (`surfaces/hud.py`) wins over the
+        # version `omh install`/`omh update` last recorded in state.json, so
+        # `omh hud` can never report a version older than `omh --version`.
+        # The reader the TUI widget spawns cannot import `omh` at all
+        # (`python -I` with only ~/.hermes/plugins on sys.path), so for it
+        # the recorded version is the whole answer -- and `omh update`
+        # rewrites that record.
+        from omh.plugin_bundle.omh.runtime_reader import read_omh_hud
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            (omh_home / "runtime").mkdir(parents=True, exist_ok=True)
+            (omh_home / "runtime" / "state.json").write_text(
+                json.dumps({"schema_version": 1, "package": "oh-my-hermes", "version": "0.0.1"}),
+                encoding="utf-8",
+            )
+
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "hud", "--json"]
+            )
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(json.loads(stdout)["version"], omh_version)
+            self.assertNotEqual(omh_version, "0.0.1")
+
+            widget_payload = read_omh_hud(omh_home=str(omh_home), hermes_home=str(hermes_home))
+            self.assertEqual(widget_payload["version"], "0.0.1")
+
     def test_hud_shows_recorded_executor_preference_without_a_run(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

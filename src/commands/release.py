@@ -389,7 +389,8 @@ def _print_release_checklist_summary(payload: dict[str, object]) -> None:
         print("")
         print("Optional follow-ups after evidence is attached:")
         for item in non_authority_items:
-            print(f"  - {item['id']} [{item['phase']}]")
+            marker = "profile-mutating" if item.get("mutates_profile") else "local"
+            print(f"  - {item['id']} [{item['phase']}; {marker}]")
             print(f"    {item['command']}")
     print("")
     print(f"Next: {payload['recommended_next_action']}")
