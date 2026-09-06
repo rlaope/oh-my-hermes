@@ -56,13 +56,12 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     # low/high, so at xhigh `mixture_category_for` labels them architect;
     # Sol at xhigh stays labeled ultrabrain (its canonical head), which is
     # the honest projection when the chain falls through to it.
-    # Claude vendor order (owner decision, 2026-09-02): Fable 5.1 -> Mythos
-    # 5.1 -> Fable 5 fall-through. Mythos 5.1 is Fable 5.1 under Project
-    # Glasswing access; an unapproved account's provider rejection falls the
-    # chain through, so it never heads a chain.
+    # Claude vendor order (owner decision, 2026-09-06): Fable 5.1 -> Fable 5
+    # fall-through. Claude Mythos 5.1 is Fable 5.1 under Project Glasswing
+    # access, so no shipped chain names it; it stays recognized, priced, and
+    # routable for a user who asks for it by name.
     "architect": (
         ("claude-fable-5-1", "xhigh"),
-        ("claude-mythos-5-1", "xhigh"),
         ("claude-fable-5", "xhigh"),
         ("gpt-6-astra", "xhigh"),
         ("gpt-5.6-sol", "xhigh"),
@@ -88,7 +87,6 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
         ("kimi-k3", "low"),
         ("gpt-5.6-luna", "low"),
         ("claude-fable-5-1", "low"),
-        ("claude-mythos-5-1", "low"),
         ("claude-fable-5", "low"),
     ),
     "writing": (
@@ -98,14 +96,12 @@ HERMES_MIXTURE_CATEGORY_CHAINS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "visual-engineering": (
         ("claude-fable-5-1", "high"),
-        ("claude-mythos-5-1", "high"),
         ("claude-fable-5", "high"),
         ("kimi-k3", "high"),
     ),
     "artistry": (
         ("gemini-3.1-pro", "high"),
         ("claude-fable-5-1", "high"),
-        ("claude-mythos-5-1", "high"),
         ("claude-fable-5", "high"),
         ("kimi-k3", "high"),
     ),
@@ -280,6 +276,9 @@ HERMES_MIXTURE_ALIAS_PROVIDER_FAMILIES: dict[str, tuple[str, ...]] = {
     "claude-opus-5": ("ccapi", "anthropic", "openrouter"),
     "claude-fable-5": ("ccapi", "anthropic", "openrouter"),
     "claude-fable-5-1": ("ccapi", "anthropic", "openrouter"),
+    # Recognition-only: no shipped chain names Claude Mythos 5.1, but a user
+    # who asks for it still deserves "which of my providers serves this"
+    # answered rather than unknown. The parity gate lists it explicitly.
     "claude-mythos-5-1": ("ccapi", "anthropic", "openrouter"),
     "gpt-6-astra": ("openai-codex", "openai"),
     "gpt-5.6-sol": ("openai-codex", "openai"),

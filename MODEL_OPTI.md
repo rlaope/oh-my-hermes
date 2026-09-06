@@ -430,8 +430,8 @@ pairing so a benchmark claim can never mix in other prompt changes.
   verification instructions does not apply to 5.1 — the single verification
   pass stays. `claude-mythos-5-1` is the same model as `claude-fable-5-1`
   served only to Project Glasswing-approved organizations; it takes the same
-  calibration and sits directly behind Fable 5.1 in every chain so an
-  unapproved account's provider rejection falls through.
+  calibration, and no shipped chain names it — a user who asks for it by
+  name is still recognized and routed.
 - **Source:** the original checklist/fan-out counters are adapted research
   (same origin as `gpt`), the composer block was added after observing
   over-fan-out in live composition; the 5.1 additions follow the official

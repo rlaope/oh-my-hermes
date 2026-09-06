@@ -390,13 +390,13 @@ credential, dispatch, or execution evidence:
 | --- | --- | --- |
 | `ultrabrain` | Deepest reasoning | GPT-6 Astra, then GPT-5.6 Sol (xhigh) |
 | `deep` | Strong default tier | GPT-5.6 Terra, then DeepSeek V3.2 (high) |
-| `architect` | Architecture and system design | Claude Fable 5.1, then Claude Mythos 5.1, then Claude Fable 5, then GPT-6 Astra, then GPT-5.6 Sol, then Kimi K3 (xhigh) |
+| `architect` | Architecture and system design | Claude Fable 5.1, then Claude Fable 5, then GPT-6 Astra, then GPT-5.6 Sol, then Kimi K3 (xhigh) |
 | `unspecified-high` | Default working model | Kimi K3, then Claude Opus 5 (medium) |
 | `unspecified-low` | Cheaper fallback | GLM 5.3, then GLM 5.2, then GLM 5.2 Ultrafast, then DeepSeek V3.2, then Claude Opus 5 (low) |
-| `quick` | Short tasks | GLM 5.3 Flash, then GLM 5.2 Ultrafast, then Kimi K3, then GPT-5.6 Luna, then Claude Fable 5.1, then Claude Mythos 5.1, then Claude Fable 5 (low) |
+| `quick` | Short tasks | GLM 5.3 Flash, then GLM 5.2 Ultrafast, then Kimi K3, then GPT-5.6 Luna, then Claude Fable 5.1, then Claude Fable 5 (low) |
 | `writing` | Prose and docs | Kimi K3, then Qwen3-Coder, then Gemini 3.1 Pro (medium) |
-| `visual-engineering` | Frontend and visual | Claude Fable 5.1, then Claude Mythos 5.1, then Claude Fable 5, then Kimi K3 (high) |
-| `artistry` | Unconventional work | Gemini 3.1 Pro, then Claude Fable 5.1, then Claude Mythos 5.1, then Claude Fable 5, then Kimi K3 (high) |
+| `visual-engineering` | Frontend and visual | Claude Fable 5.1, then Claude Fable 5, then Kimi K3 (high) |
+| `artistry` | Unconventional work | Gemini 3.1 Pro, then Claude Fable 5.1, then Claude Fable 5, then Kimi K3 (high) |
 
 Want to try the Ultrafast tier — Kimi K3 Ultrafast (300 TPS) and
 GLM 5.2 Ultrafast (600 TPS)? They are served on

@@ -185,7 +185,7 @@ class RecommendationCatalogTests(unittest.TestCase):
             return [entry["model_alias"] for entry in catalog[section][name]]
 
         self.assertEqual(aliases("role_suggestions", "main"), [
-            "kimi-k3", "claude-fable-5-1", "claude-mythos-5-1", "claude-opus-5", "claude-fable-5",
+            "kimi-k3", "claude-fable-5-1", "claude-opus-5", "claude-fable-5",
             "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra",
         ])
         # A chain that would otherwise sit in one provider ecosystem ends on
@@ -204,13 +204,13 @@ class RecommendationCatalogTests(unittest.TestCase):
         self.assertEqual(aliases("categories", "deep"), ["gpt-5.6-terra", "deepseek-v3.2"])
         self.assertEqual(
             aliases("categories", "architect"),
-            ["claude-fable-5-1", "claude-mythos-5-1", "claude-fable-5", "gpt-6-astra", "gpt-5.6-sol", "kimi-k3"],
+            ["claude-fable-5-1", "claude-fable-5", "gpt-6-astra", "gpt-5.6-sol", "kimi-k3"],
         )
         self.assertEqual(
             aliases("categories", "quick"),
             [
                 "glm-5.3-flash", "glm-5.2-ultrafast", "kimi-k3", "gpt-5.6-luna",
-                "claude-fable-5-1", "claude-mythos-5-1", "claude-fable-5",
+                "claude-fable-5-1", "claude-fable-5",
             ],
         )
         self.assertEqual(
@@ -219,27 +219,27 @@ class RecommendationCatalogTests(unittest.TestCase):
         )
         self.assertEqual(
             aliases("categories", "visual-engineering"),
-            ["claude-fable-5-1", "claude-mythos-5-1", "claude-fable-5", "kimi-k3"],
+            ["claude-fable-5-1", "claude-fable-5", "kimi-k3"],
         )
         self.assertEqual(
             aliases("categories", "artistry"),
-            ["gemini-3.1-pro", "claude-fable-5-1", "claude-mythos-5-1", "claude-fable-5", "kimi-k3"],
+            ["gemini-3.1-pro", "claude-fable-5-1", "claude-fable-5", "kimi-k3"],
         )
         self.assertEqual(
             aliases("categories", "visual-engineering"),
-            ["claude-fable-5-1", "claude-mythos-5-1", "claude-fable-5", "kimi-k3"],
+            ["claude-fable-5-1", "claude-fable-5", "kimi-k3"],
         )
         self.assertEqual(
             aliases("categories", "quick"),
             [
                 "glm-5.3-flash", "glm-5.2-ultrafast", "kimi-k3", "gpt-5.6-luna",
-                "claude-fable-5-1", "claude-mythos-5-1", "claude-fable-5",
+                "claude-fable-5-1", "claude-fable-5",
             ],
         )
         self.assertEqual(aliases("categories", "writing"), ["kimi-k3", "qwen3-coder", "gemini-3.1-pro"])
         self.assertEqual(
             aliases("categories", "artistry"),
-            ["gemini-3.1-pro", "claude-fable-5-1", "claude-mythos-5-1", "claude-fable-5", "kimi-k3"],
+            ["gemini-3.1-pro", "claude-fable-5-1", "claude-fable-5", "kimi-k3"],
         )
         self.assertEqual(aliases("domain_affinities", "x_platform_data"), [
             "grok-code-fast", "kimi-k3", "gemini-3.1-pro",
@@ -560,7 +560,6 @@ class LastResortFallbackTests(unittest.TestCase):
                 "kimi-k3",
                 "gpt-5.6-luna",
                 "claude-fable-5-1",
-                "claude-mythos-5-1",
                 "claude-fable-5",
                 "gpt-5.6-sol",
             ],
@@ -612,7 +611,6 @@ class LastResortFallbackTests(unittest.TestCase):
                 "kimi-k3",
                 "gpt-5.6-luna",
                 "claude-fable-5-1",
-                "claude-mythos-5-1",
                 "claude-fable-5",
                 "claude-opus-5",
                 "gpt-5.6-sol",
