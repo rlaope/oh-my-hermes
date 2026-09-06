@@ -339,6 +339,12 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         lowercase_uneven_parts = ("abcde", "fghij", "klmno", "pqrstuvwxyzabcdefgh")
         three_part_camel = ("Qwertyuiopa", "Asdfghjklm", "Observation")
         uppercase_base32_parts = ("JBSWYDPE",) * 4
+        uneven_uppercase_base32_parts = (
+            "JBSWYDP",
+            "EJBSWYDPE",
+            "JBSWYDPE",
+            "JBSWYDPE",
+        )
 
         for opaque in (*low_transition_base64, uppercase_alphanumeric):
             if opaque in low_transition_base64:
@@ -356,7 +362,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                 with self.subTest(container=container):
                     self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
 
-        for separator in ("/", ".", "-", " "):
+        for separator in ("/", ".", "-", "_", " "):
             value = separator.join(split_opaque.split("."))
             for container in (
                 value,
@@ -391,7 +397,11 @@ class SafetyAndEvaluationTests(unittest.TestCase):
                     with self.subTest(separator=separator, lowercase_container=container):
                         self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
 
-            for split_variant in (three_part_camel, uppercase_base32_parts):
+            for split_variant in (
+                three_part_camel,
+                uppercase_base32_parts,
+                uneven_uppercase_base32_parts,
+            ):
                 opaque_split = separator.join(split_variant)
                 for container in (
                     opaque_split,

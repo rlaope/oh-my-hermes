@@ -72,11 +72,59 @@ _IDENTIFIER_COMPONENT_PATTERN = re.compile(
 _SEMANTIC_IDENTIFIER_CONNECTORS = frozenset(
     {"a", "an", "and", "as", "at", "by", "for", "from", "in", "is", "not", "of", "on", "or", "the", "to", "v", "with"}
 )
+_SEMANTIC_IDENTIFIER_ACRONYMS = frozenset(
+    {
+        "API",
+        "CI",
+        "CLI",
+        "CPU",
+        "CSS",
+        "DCO",
+        "DNS",
+        "DOM",
+        "FAQ",
+        "FQDN",
+        "GPU",
+        "HTML",
+        "HTTP",
+        "HTTPS",
+        "ID",
+        "IO",
+        "JSON",
+        "JSONRPC",
+        "JWT",
+        "LLM",
+        "MCP",
+        "OMH",
+        "OS",
+        "PR",
+        "RPC",
+        "SDK",
+        "SHA",
+        "SQL",
+        "SSH",
+        "TLS",
+        "TOML",
+        "TTL",
+        "UI",
+        "ULW",
+        "URL",
+        "UUID",
+        "UX",
+        "W3C",
+        "XML",
+        "YAML",
+    }
+)
+_COMMON_IDENTIFIER_BIGRAMS = frozenset(
+    "AC AD AG AI AL AN AP AR AS AT BE BI BO BR CA CE CH CK CO CT DA DE DI DO ED EE EL EM EN ER ES ET EV EX FI FO GE GL GR HA HE HI HO IC ID IE IL IM IN IO IS IT KE LA LD LE LI LL LO LY MA ME MI MO NA NC ND NE NG NI NO NS NT OD OF OL OM ON OP OR OT OU OW PA PE PI PL PO PR QU RA RC RE RI RO RS RT SE SH SI SO SS ST SU TA TE TH TI TO TR TS TT TW UL UN UP UR US UT VE WA WE WH WI YO".split()
+)
 _SEMANTIC_IDENTIFIER_WORDS = frozenset(
     {
         "account",
         "action",
         "adapter",
+        "after",
         "agent",
         "alice",
         "application",
@@ -99,10 +147,12 @@ _SEMANTIC_IDENTIFIER_WORDS = frozenset(
         "controller",
         "data",
         "decision",
+        "declared",
         "deterministic",
         "directory",
         "dispatcher",
         "document",
+        "effect",
         "engine",
         "end",
         "english",
@@ -117,13 +167,14 @@ _SEMANTIC_IDENTIFIER_WORDS = frozenset(
         "file",
         "finder",
         "gateway",
-        "handler",
         "handle",
+        "handler",
         "hermes",
         "identifier",
         "index",
         "input",
         "interview",
+        "job",
         "lifecycle",
         "loader",
         "maintainer",
@@ -133,6 +184,7 @@ _SEMANTIC_IDENTIFIER_WORDS = frozenset(
         "migration",
         "model",
         "observation",
+        "object",
         "operation",
         "output",
         "package",
@@ -141,13 +193,15 @@ _SEMANTIC_IDENTIFIER_WORDS = frozenset(
         "platform",
         "policy",
         "project",
+        "projections",
         "protocol",
         "provenance",
         "provider",
-        "reader",
         "read",
+        "reader",
         "reading",
         "record",
+        "recommendations",
         "recoverable",
         "recovery",
         "reference",
@@ -156,12 +210,17 @@ _SEMANTIC_IDENTIFIER_WORDS = frozenset(
         "response",
         "reviewer",
         "router",
+        "rhythm",
         "runtime",
+        "safety",
         "schema",
+        "seconds",
         "server",
         "service",
         "session",
+        "shipped",
         "source",
+        "stale",
         "state",
         "status",
         "store",
@@ -217,17 +276,30 @@ def _looks_like_semantic_identifier_component(component: str) -> bool:
     if lowered in _SEMANTIC_IDENTIFIER_CONNECTORS or lowered in _SEMANTIC_IDENTIFIER_WORDS:
         return True
     if component.isupper():
-        return 2 <= len(component) <= 8
+        return component in _SEMANTIC_IDENTIFIER_ACRONYMS
     return False
+
+
+def _looks_like_semantic_upper_identifier_word(part: str) -> bool:
+    if part.isdigit() or part in _SEMANTIC_IDENTIFIER_ACRONYMS:
+        return True
+    if not part.isalpha() or not part.isupper():
+        return False
+    if part.lower() in _SEMANTIC_IDENTIFIER_CONNECTORS or part.lower() in _SEMANTIC_IDENTIFIER_WORDS:
+        return True
+    if not any(char in "AEIOUY" for char in part):
+        return False
+    bigram_count = sum(
+        part[index : index + 2] in _COMMON_IDENTIFIER_BIGRAMS
+        for index in range(len(part) - 1)
+    )
+    return bigram_count * 4 >= len(part) - 1
 
 
 def _looks_like_semantic_upper_snake_identifier(segment: str) -> bool:
     if not _UPPER_SNAKE_IDENTIFIER_PATTERN.fullmatch(segment):
         return False
-    parts = segment.split("_")
-    vowel_parts = sum(any(char in "AEIOU" for char in part) for part in parts)
-    letters = "".join(parts)
-    return vowel_parts >= len(parts) - 1 and len(set(letters)) * 100 < len(letters) * 70
+    return all(_looks_like_semantic_upper_identifier_word(part) for part in segment.split("_"))
 
 
 def _looks_like_path_identifier(segment: str) -> bool:
@@ -374,17 +446,7 @@ def _has_separator_split_opaque_value(content: str) -> bool:
                     window_start < snake_end and snake_start < window_end
                     for snake_start, snake_end in semantic_snake_spans
                 )
-                chunked_base32 = (
-                    len(window) >= 4
-                    and len(set(lengths)) == 1
-                    and lengths[0] == 8
-                    and combined.isalpha()
-                    and combined.isupper()
-                    and set(combined) <= set("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
-                )
-                if any(_looks_like_structured_identifier(fragment) for fragment in window) or (
-                    semantic_snake_overlap and not chunked_base32
-                ):
+                if any(_looks_like_structured_identifier(fragment) for fragment in window) or semantic_snake_overlap:
                     continue
                 mixed = _has_opaque_character_mix(combined)
                 uppercase_fragments = sum(any(char.isupper() for char in fragment) for fragment in window)
