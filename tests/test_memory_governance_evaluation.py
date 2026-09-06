@@ -269,6 +269,15 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "safe",
         )
 
+    def test_source_syntax_is_not_reclassified_as_credential_material(self) -> None:
+        for source_line in (
+            'key = str(update.get("key", item_id))',
+            "default=DEFAULT_ARTIFACT_SCAN_LIMIT",
+            "class ExecutorGuidanceCompatibilityError(ValueError):",
+        ):
+            with self.subTest(source_line=source_line):
+                self.assertEqual(governance.classify_memory_admission(source_line)["status"], "safe")
+
     def test_single_case_alphanumeric_opaque_values_need_review(self) -> None:
         uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
         uppercase_letters_only_base32 = "JBSWYDPF" * 4
@@ -430,6 +439,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
 
     def test_opaque_values_need_review_without_reclassifying_common_identifiers(self) -> None:
         padded_base64 = "Ab3dEf4G" * 5 + "="
+        opaque = padded_base64.rstrip("=")
         unpadded_base64url = "Ab3d_Ef4Gh5Ij6Kl7Mn8Op9Qr0St1Uv2"
         split_opaque = "Ab3dEf4Gh5Ij6Kl7Mn8/Op9Qr0St1Uv2WxYz"
 
@@ -439,9 +449,9 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             split_opaque,
             f"https://example.com/{split_opaque}",
             r"C:\safe\Ab3dEf4Gh5Ij6Kl7Mn8\Op9Qr0St1Uv2WxYz",
-            "https://example.com/artifact?session=" + "a" * 64,
-            "https://example.com/artifact?access=" + "b" * 64,
-            "https://example.com/artifact?key=" + "c" * 64,
+            "https://example.com/artifact?session=" + opaque,
+            "https://example.com/artifact?access=" + opaque,
+            "https://example.com/artifact?key=" + opaque,
         ):
             with self.subTest(normalized_bypass=normalized_bypass):
                 self.assertEqual(governance.classify_memory_admission(normalized_bypass)["status"], "needs_review")

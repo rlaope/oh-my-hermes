@@ -276,8 +276,8 @@ class MemoryContractTests(unittest.TestCase):
                     action(paths, selector)
                 self.assertNotIn(selector, str(candidate_error.exception))
 
-    def test_unknown_credential_label_is_redacted_before_candidate_and_review_persistence(self) -> None:
-        credential = "credential:" + "a" * 40
+    def test_qualified_credential_label_is_redacted_before_candidate_and_review_persistence(self) -> None:
+        credential = "access_key:" + "a" * 40
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
             write_setup_profile(paths, memory_mode="auto-safe")

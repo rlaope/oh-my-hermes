@@ -40,7 +40,7 @@ _BLOCKED_PATTERNS = (
 )
 
 _CREDENTIAL_REVIEW_PATTERN = re.compile(
-    r"\b(?:credential|session|access|key|access[_ -]?token|private[_ -]?key|secret|token|api[_ -]?key)\s*[:=]\s*\S{12,}",
+    r"\b(?:(?:api|access|private|secret)[_ -]?key|(?:session|access)[_ -]?token)\s*[:=]\s*\S{12,}",
     re.IGNORECASE,
 )
 _NEEDS_REVIEW_PATTERNS = (
@@ -68,6 +68,10 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
 )
 _IDENTIFIER_COMPONENT_PATTERN = re.compile(
     r"[A-Z]+(?=[A-Z][a-z]|\d|$)|[A-Z]?[a-z]+|\d+"
+)
+_IDENTIFIER_MORPHOLOGY_SUFFIX = re.compile(
+    r"(?:ation|ition|sion|tion|ions|ment|ness|ity|ence|ance|able|ible|ship|form|ount|point|ish|ary|ives|ents|er|or|al|ic|ive|ous|ful|less|ed|ing)$",
+    re.IGNORECASE,
 )
 _SEMANTIC_IDENTIFIER_CONNECTORS = frozenset(
     {"a", "an", "and", "as", "at", "by", "for", "from", "in", "is", "not", "of", "on", "or", "the", "to", "v", "with"}
@@ -248,7 +252,35 @@ _UPPER_SNAKE_IDENTIFIER_PATTERN = re.compile(r"[A-Z][A-Z0-9]{1,15}(?:_[A-Z][A-Z0
 _SEPARATOR_SPLIT_OPAQUE_PATTERN = re.compile(
     r"(?<![A-Za-z0-9])(?:[A-Za-z0-9]{4,20}[./\\ _-]){1,}[A-Za-z0-9]{4,20}(?![A-Za-z0-9])"
 )
+_COMPACT_SPLIT_CREDENTIAL_PATTERN = re.compile(
+    "(?:" + "|".join(
+        (
+            r"(?:AKIA|ASIA)[A-Z0-9]{16}",
+            r"(?:gh[oprsu]|githubpat|glpat)[A-Za-z0-9]{16,}",
+            r"hf[A-Za-z0-9]{16,}",
+            r"npm[A-Za-z0-9]{16,}",
+            r"sk(?:proj)?[A-Za-z0-9]{16,}",
+            r"rk(?:live|test)[A-Za-z0-9]{16,}",
+            r"sk(?:live|test)[A-Za-z0-9]{16,}",
+            r"ya29[A-Za-z0-9]{20,}",
+            r"AIza[A-Za-z0-9]{20,}",
+            r"xox[a-z]?[A-Za-z0-9]{16,}",
+        )
+    ) + ")",
+    re.IGNORECASE,
+)
+_CREDENTIAL_SPLIT_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9_-]{2,20}[./\\]){2,}[A-Za-z0-9_-]{2,20}(?![A-Za-z0-9])"
+)
+_CREDENTIAL_SPLIT_PREFIX_PATTERN = re.compile(
+    r"(?:AKIA|ASIA|gh[oprsu][_-]|github_|glpat-|hf_|npm_|sk[-_]|rk_|ya29\.|AIza|xox[a-z]?-)",
+    re.IGNORECASE,
+)
 _WINDOWS_ABSOLUTE_PATH_PATTERN = re.compile(r"^(?:[A-Za-z]:\\|\\\\)[^\r\n]+$")
+_SAFE_SOURCE_REVISION_URL_PATTERN = re.compile(
+    r"https?://[^/\s]+(?:/[^/\s]+)*/(?:blob|tree)/[0-9A-Fa-f]{7,40}/",
+    re.IGNORECASE,
+)
 _SAFE_DIGEST_QUERY_KEYS = frozenset(
     {"artifact", "artifact_id", "checksum", "commit", "digest", "hash", "id", "rev", "revision", "sha", "sha1", "sha224", "sha256", "sha384", "sha512"}
 )
@@ -262,23 +294,32 @@ def _looks_like_structured_identifier(segment: str) -> bool:
         return False
     components = _IDENTIFIER_COMPONENT_PATTERN.findall(segment)
     alpha_components = [component for component in components if component.isalpha()]
+    title_components = [
+        component
+        for component in alpha_components
+        if re.fullmatch(r"[A-Z][a-z]{2,}", component)
+    ]
     return (
         "".join(components) == segment
         and len(alpha_components) >= 3
-        and all(_looks_like_semantic_identifier_component(component) for component in components)
+        and len(title_components) >= 2
+        and all(
+            component.isdigit()
+            or component.isupper()
+            or bool(re.fullmatch(r"[A-Z][a-z]+|[a-z]{2,}", component))
+            for component in components
+        )
+        and (
+            sum(bool(_IDENTIFIER_MORPHOLOGY_SUFFIX.search(component)) for component in title_components) >= 2
+            or (
+                len(title_components) >= 5
+                and any(
+                    component == "V" and index + 1 < len(components) and components[index + 1].isdigit()
+                    for index, component in enumerate(components)
+                )
+            )
+        )
     )
-
-
-def _looks_like_semantic_identifier_component(component: str) -> bool:
-    if component.isdigit():
-        return True
-    lowered = component.lower()
-    if lowered in _SEMANTIC_IDENTIFIER_CONNECTORS or lowered in _SEMANTIC_IDENTIFIER_WORDS:
-        return True
-    if component.isupper():
-        return component in _SEMANTIC_IDENTIFIER_ACRONYMS
-    return False
-
 
 def _looks_like_semantic_upper_identifier_word(part: str) -> bool:
     if part.isdigit() or part in _SEMANTIC_IDENTIFIER_ACRONYMS:
@@ -360,10 +401,12 @@ def _looks_like_safe_digest_query_token(token: str, content: str) -> bool:
 
 
 def _has_opaque_character_mix(token: str) -> bool:
+    if "=" in token and "/" in token.split("=", 1)[1]:
+        return False
     has_lower = any(char.islower() for char in token)
     has_upper = any(char.isupper() for char in token)
     has_digit = any(char.isdigit() for char in token)
-    has_encoding_punctuation = any(char in "+=" for char in token)
+    has_encoding_punctuation = "+" in token or token.endswith("=")
     if has_lower and has_upper and token.isalpha():
         return len(token) >= 32
     return (has_lower and has_upper and (has_digit or ("_" in token and "-" in token))) or (
@@ -408,10 +451,29 @@ def _has_embedded_opaque_value(content: str) -> bool:
     """Detect opaque runs before a path or URL container can exempt them."""
     for match in re.finditer(r"[A-Za-z0-9]{32,}", content):
         segment = match.group(0)
-        if _HEX_DIGEST_PATTERN.fullmatch(segment) or _looks_like_structured_identifier(segment):
+        if (
+            _HEX_DIGEST_PATTERN.fullmatch(segment)
+            or _SAFE_SOURCE_REVISION_URL_PATTERN.search(content)
+            or _looks_like_structured_identifier(segment)
+        ):
             continue
         if _has_opaque_character_mix(segment) or _has_single_case_alphanumeric_opaque_mix(segment):
             return True
+    return False
+
+
+def _has_separator_split_blocked_credential(content: str) -> bool:
+    """Recognize known credential prefixes after three or more split fragments."""
+    for match in _CREDENTIAL_SPLIT_PATTERN.finditer(content):
+        matched = match.group(0)
+        if not _CREDENTIAL_SPLIT_PREFIX_PATTERN.match(matched):
+            continue
+        fragments = re.findall(r"[A-Za-z0-9]+", matched)
+        for start in range(len(fragments)):
+            for end in range(start + 3, min(len(fragments), start + 8) + 1):
+                compact = "".join(fragments[start:end])
+                if _COMPACT_SPLIT_CREDENTIAL_PATTERN.fullmatch(compact):
+                    return True
     return False
 
 
@@ -421,6 +483,8 @@ def _has_separator_split_opaque_value(content: str) -> bool:
         matched = match.group(0)
         fragment_matches = list(re.finditer(r"[A-Za-z0-9]+", matched))
         fragments = [fragment.group(0) for fragment in fragment_matches]
+        if _looks_like_structured_identifier("".join(fragments)):
+            continue
         semantic_snake_spans = [
             snake.span()
             for snake in _UPPER_SNAKE_IDENTIFIER_PATTERN.finditer(matched)
@@ -514,6 +578,7 @@ def contains_credential_like_material(content: str) -> bool:
         return True
     return (
         any(pattern.search(content) for pattern in _BLOCKED_PATTERNS)
+        or _has_separator_split_blocked_credential(content)
         or bool(_CREDENTIAL_REVIEW_PATTERN.search(content))
         or _looks_like_opaque_token(content)
     )
@@ -551,6 +616,8 @@ def classify_memory_admission(content: str) -> dict[str, object]:
     for pattern in _BLOCKED_PATTERNS:
         if pattern.search(content):
             return {"status": "blocked"}
+    if _has_separator_split_blocked_credential(content):
+        return {"status": "blocked"}
 
     for pattern in _NEEDS_REVIEW_PATTERNS:
         if pattern.search(content):
