@@ -31,6 +31,7 @@ from .catalog_types import (
     DELEGATE_PROMPT_DISPLAY_RULE,
     DELEGATE_RESUMABLE_SESSION_RULE,
     DEEP_INTERVIEW_MAX_ROUNDS,
+    EXECUTION_WAIT_DISCIPLINE_RULE,
     HarnessDefinition,
 )
 
@@ -96,6 +97,7 @@ _HARNESSES = [
             DELEGATE_PROMPT_DISPLAY_RULE,
             DELEGATE_RESUMABLE_SESSION_RULE,
             DELEGATE_PERMISSION_PREFLIGHT_RULE,
+            EXECUTION_WAIT_DISCIPLINE_RULE,
             "Embed the delegation protocol (omh coding composition-guide) into EVERY delegated or reviewer prompt — runtime-native spawns included: goal echo-back before tool use, numbered pre-declared done criteria, exactly one mandatory verification pass with a two fix-and-verify cycle cap, and a two-round re-review cap — after two review rounds, stop and report the criterion-cited blockers instead of starting another reviewer.",
         ),
         evidence_ladder=(

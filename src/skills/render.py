@@ -30,6 +30,7 @@ from .catalog_types import (
     ADVERSARIAL_CONSENSUS_PERSPECTIVES,
     ADVERSARIAL_CONSENSUS_ROUNDS,
     DELEGATION_TRANSPARENCY_RULES,
+    EXECUTION_WAIT_DISCIPLINE_RULE,
     LLM_APP_DEV_EVAL_DELIVERABLES,
     LLM_APP_DEV_PUBLIC_BOARD_ACTIONS,
     LLM_APP_DEV_RAILS,
@@ -48,6 +49,11 @@ from .procedure_rendering import (
     procedure_step_payloads,
 )
 from ..catalogs.awesome_hermes_agent import awesome_hermes_catalog
+from ..coding.wait_strategy import (
+    EXECUTION_WAIT_STRATEGY_SCHEMA_VERSION,
+    MIDPOINT_PEEK_BUDGET,
+    WAIT_TERMINAL_STATES,
+)
 from ..plugin_bundle.omh.awareness import (
     awareness_shared_context_markdown,
     awareness_workflow_context_markdown,
@@ -605,6 +611,10 @@ def _router_skill_common_rail_reference() -> str:
     translations = "\n".join(f"- {item}," for item in RUNTIME_MECHANISM_TRANSLATIONS[:-1])
     translations = f"{translations}\n- {RUNTIME_MECHANISM_TRANSLATIONS[-1]}."
     execution_rules = "\n".join(f"{index}. {rule}" for index, rule in enumerate(EXECUTION_RULES, start=1))
+    # Interpolated from the contract's own vocabulary rather than retyped, so a
+    # terminal state added to `omh_execution_wait_strategy/v1` cannot leave the
+    # rail describing a shorter list than the schema accepts.
+    terminal_states = ", ".join(f"`{state}`" for state in WAIT_TERMINAL_STATES)
     return f"""# OMH Skill Common Rail
 
 Every generated OMH workflow skill shares this policy. It is kept here once instead of
@@ -649,6 +659,30 @@ preparation, not execution, review, CI, merge-readiness, or merge evidence.
 ## Delegation Transparency
 
 {delegation_transparency}
+
+## Waiting On Long-Running Work
+
+{EXECUTION_WAIT_DISCIPLINE_RULE}
+
+Pick the row that matches the work, then the best mechanism the host actually supports. Degrade down the
+column and say which capability was missing; never degrade silently, and never substitute a status loop for a
+row you cannot satisfy.
+
+| Work | Preferred | If unavailable | Last resort |
+| --- | --- | --- | --- |
+| Command finishing inside one tool call | one foreground call with a duration-sized timeout | background run with completion notification | one bounded watcher, then adaptive backoff |
+| Longer terminal command | background run with completion notification | one bounded watcher with a hard deadline | adaptive backoff outside model turns |
+| Delegated lane | the lane's delivered final result | background run with completion notification | one bounded watcher, then adaptive backoff |
+| CI, PR, deploy, file, port, log line, external session | the host's monitor or subscription | ONE bounded watcher with a hard deadline | adaptive backoff outside model turns |
+
+Every armed wait carries a hard deadline, a cancellation path, and a fallback, and closes in exactly one
+terminal state: {terminal_states}. Consume the completion once; a repeated notification does not reopen a
+closed wait. The midpoint-peek budget is {MIDPOINT_PEEK_BUDGET} per wait, spendable only on a peek whose
+result changes a decision; a user-requested status check is always allowed and never charged against it.
+
+`{EXECUTION_WAIT_STRATEGY_SCHEMA_VERSION}` is the metadata-only record of that choice — the observed handle,
+the condition, the mechanism, the deadline, the cancellation path, and the fallback. Selecting or arming one
+is preparation; it is never dispatch, execution, review, CI, merge-readiness, or merge evidence.
 
 ## Follow-On Engine Gate
 

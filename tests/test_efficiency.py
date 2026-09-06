@@ -230,7 +230,12 @@ class EfficiencyContractTests(unittest.TestCase):
         # 878,000 -> 902,000: omh-docs and github-issue-intake take the
         # combined full profile to the exact release ratchet below 891k.
         # The ceiling preserves roughly 11k standing headroom.
-        self.assertLess(full["skill_body"]["bytes"], 902_000)
+        # 902,000 -> 915,000: the shared execution-wait discipline takes the
+        # full profile to 904,072 bytes on this tree. The ceiling restores the
+        # ~11k standing headroom this gate is meant to carry rather than
+        # clearing the measurement by a hair; the exact value stays ratcheted in
+        # `FULL_PROFILE_SKILL_BODY_CHAR_LIMIT`.
+        self.assertLess(full["skill_body"]["bytes"], 915_000)
         self.assertLess(full["repeated"]["share_percent"], 38.0)
 
         # References are progressive disclosure, counted outside the always-loaded body.

@@ -59,6 +59,30 @@ preparation, not execution, review, CI, merge-readiness, or merge evidence.
 - Capture a resumable session or thread id at dispatch and report it in the status message: for non-interactive Claude Code pass `--output-format json` and read `session_id` from the result (resume with `claude -p --resume <session-id>`); for Codex pass `--json` and read `thread_id` (resume with `codex exec resume <thread-id>`, repeating `--skip-git-repo-check` outside a git repo). Never leave a delegate run with no recorded way to resume or steer it — a plain-text one-shot that hides its session id strands the work when the run stalls or times out.
 - Before dispatch, grant the executor session every permission the task will need — file write/edit, command/test execution, and the working directory — on the dispatch command itself, not through settings-file guesses: for non-interactive Claude Code pass `--permission-mode acceptEdits` or an explicit `--allowedTools` list (`--dangerously-skip-permissions` only inside an isolated worktree or sandbox), and the equivalent sandbox/approval flags for other CLIs. `acceptEdits: true` is not a settings key and `~/.claude/settings.local.json` is not a file Claude Code reads — user scope is `~/.claude/settings.json` and project scope is `<dispatch cwd>/.claude/settings.local.json` with rules under `permissions.allow`. Prove the grant with a bounded scratch-edit probe run before the real dispatch: a permission denial in a non-interactive run recurs identically on retry, so never redispatch until a changed grant is proven, and surface an ungrantable permission as a blocker before dispatch, not after minutes of silence.
 
+## Waiting On Long-Running Work
+
+Choose the wait strategy before starting long-running work and bind it to a completion signal the host exposes, never to a status loop: a command that fits one tool call runs once in the foreground with a duration-sized timeout; a longer terminal command runs in the background with completion notification armed and no process-status polling; a delegated lane relies on its delivered result while the parent continues independent work or ends the turn; a CI, PR, deploy, file, port, log-line, or external-session condition uses the host's monitor when observed, else exactly ONE bounded watcher or adaptive backoff outside model turns. Record the handle and observation mode at dispatch; every armed wait needs a hard deadline, a cancellation path, and a fallback naming the missing capability. Each wait closes in one terminal state with bounded evidence; an unbounded idle or busy-wait is a defect and a lost notification times out. One decision-changing midpoint peek and any user-requested status check stay allowed; neither is the wait mechanism. Ladder and terminal states: shared rail.
+
+Pick the row that matches the work, then the best mechanism the host actually supports. Degrade down the
+column and say which capability was missing; never degrade silently, and never substitute a status loop for a
+row you cannot satisfy.
+
+| Work | Preferred | If unavailable | Last resort |
+| --- | --- | --- | --- |
+| Command finishing inside one tool call | one foreground call with a duration-sized timeout | background run with completion notification | one bounded watcher, then adaptive backoff |
+| Longer terminal command | background run with completion notification | one bounded watcher with a hard deadline | adaptive backoff outside model turns |
+| Delegated lane | the lane's delivered final result | background run with completion notification | one bounded watcher, then adaptive backoff |
+| CI, PR, deploy, file, port, log line, external session | the host's monitor or subscription | ONE bounded watcher with a hard deadline | adaptive backoff outside model turns |
+
+Every armed wait carries a hard deadline, a cancellation path, and a fallback, and closes in exactly one
+terminal state: `completed`, `failed`, `cancelled`, `timed_out`, `lost_handle`. Consume the completion once; a repeated notification does not reopen a
+closed wait. The midpoint-peek budget is 1 per wait, spendable only on a peek whose
+result changes a decision; a user-requested status check is always allowed and never charged against it.
+
+`omh_execution_wait_strategy/v1` is the metadata-only record of that choice — the observed handle,
+the condition, the mechanism, the deadline, the cancellation path, and the fallback. Selecting or arming one
+is preparation; it is never dispatch, execution, review, CI, merge-readiness, or merge evidence.
+
 ## Follow-On Engine Gate
 
 Finishing one workflow never authorizes starting the next one. An accepted plan, a clarified
