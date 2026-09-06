@@ -278,6 +278,31 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             with self.subTest(source_line=source_line):
                 self.assertEqual(governance.classify_memory_admission(source_line)["status"], "safe")
 
+    def test_split_google_token_prefixes_are_blocked(self) -> None:
+        for content in (
+            "ya29./f1/f2",
+            "AIza/f1/f2",
+            "AIza.f1.f2",
+        ):
+            with self.subTest(content=content):
+                self.assertEqual(governance.classify_memory_admission(content)["status"], "blocked")
+
+    def test_windows_and_unc_paths_are_safe(self) -> None:
+        for path in (
+            r"C:\Users\kim\AppData\Local\Programs\Python\Python313\python.exe",
+            r"\\server\share\AppData\Local\Programs\Python\Python313\python.exe",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(governance.classify_memory_admission(path)["status"], "safe")
+
+    def test_test_class_identifiers_are_safe(self) -> None:
+        for source_line in (
+            "class CategoryMaestroSetupIntegrationTests(unittest.TestCase):",
+            "class RuntimeArtifactShowShapeCliTests(unittest.TestCase):",
+        ):
+            with self.subTest(source_line=source_line):
+                self.assertEqual(governance.classify_memory_admission(source_line)["status"], "safe")
+
     def test_single_case_alphanumeric_opaque_values_need_review(self) -> None:
         uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
         uppercase_letters_only_base32 = "JBSWYDPF" * 4

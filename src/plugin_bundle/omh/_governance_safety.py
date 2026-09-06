@@ -70,7 +70,7 @@ _IDENTIFIER_COMPONENT_PATTERN = re.compile(
     r"[A-Z]+(?=[A-Z][a-z]|\d|$)|[A-Z]?[a-z]+|\d+"
 )
 _IDENTIFIER_MORPHOLOGY_SUFFIX = re.compile(
-    r"(?:ation|ition|sion|tion|ions|ment|ness|ity|ence|ance|able|ible|ship|form|ount|point|ish|ary|ives|ents|er|or|al|ic|ive|ous|ful|less|ed|ing)$",
+    r"(?:ation|ition|sion|tion|ions|ment|ness|ity|ence|ance|able|ible|ship|form|ount|point|ish|ary|ives|ents|out|er|or|al|ic|ive|ous|ful|less|ed|ing)$",
     re.IGNORECASE,
 )
 _SEMANTIC_IDENTIFIER_CONNECTORS = frozenset(
@@ -270,7 +270,11 @@ _COMPACT_SPLIT_CREDENTIAL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _CREDENTIAL_SPLIT_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9_-]{2,20}[./\\]){2,}[A-Za-z0-9_-]{2,20}(?![A-Za-z0-9])"
+    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9_-]{2,20}[./\\-]){1,}[A-Za-z0-9_-]{2,20}(?![A-Za-z0-9])"
+)
+_GOOGLE_SPLIT_CREDENTIAL_PATTERN = re.compile(
+    r"\b(?:ya29\.|AIza)(?:[./\\][A-Za-z0-9_-]{2,20})+",
+    re.IGNORECASE,
 )
 _CREDENTIAL_SPLIT_PREFIX_PATTERN = re.compile(
     r"(?:AKIA|ASIA|gh[oprsu][_-]|github_|glpat-|hf_|npm_|sk[-_]|rk_|ya29\.|AIza|xox[a-z]?-)",
@@ -281,6 +285,7 @@ _SAFE_SOURCE_REVISION_URL_PATTERN = re.compile(
     r"https?://[^/\s]+(?:/[^/\s]+)*/(?:blob|tree)/[0-9A-Fa-f]{7,40}/",
     re.IGNORECASE,
 )
+_SAFE_TIMESTAMP_IDENTIFIER_PATTERN = re.compile(r"(?:\d{8}|\d{4}-\d{2}-\d{2})T\d+Z-[a-z0-9-]+(?:\.[a-z0-9]{1,16})?")
 _SAFE_DIGEST_QUERY_KEYS = frozenset(
     {"artifact", "artifact_id", "checksum", "commit", "digest", "hash", "id", "rev", "revision", "sha", "sha1", "sha224", "sha256", "sha384", "sha512"}
 )
@@ -311,12 +316,11 @@ def _looks_like_structured_identifier(segment: str) -> bool:
         )
         and (
             sum(bool(_IDENTIFIER_MORPHOLOGY_SUFFIX.search(component)) for component in title_components) >= 2
+            or title_components[-1] in {"Test", "Tests", "Setup", "Maestro"}
+            or sum(len(component) >= 4 for component in title_components) >= 5
             or (
-                len(title_components) >= 5
-                and any(
-                    component == "V" and index + 1 < len(components) and components[index + 1].isdigit()
-                    for index, component in enumerate(components)
-                )
+                sum(len(component) >= 4 for component in title_components) >= 4
+                and any(len(component) == 3 for component in title_components)
             )
         )
     )
@@ -390,7 +394,16 @@ def _looks_like_safe_windows_path(content: str) -> bool:
     if not _WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content) or any(char in "+=" for char in content):
         return False
     segments = [segment for segment in content.split("\\") if segment and not re.fullmatch(r"[A-Za-z]:", segment)]
-    return bool(segments) and all(_looks_like_safe_path_segment(segment) for segment in segments)
+    return bool(segments) and all(
+        _looks_like_safe_path_segment(segment)
+        and (
+            bool(re.fullmatch(r"[A-Z][a-z]+\d*", segment))
+            or not _has_opaque_character_mix(segment)
+        )
+        and not _has_single_case_alphanumeric_opaque_mix(segment)
+        and not _has_separator_split_opaque_value(segment)
+        for segment in segments
+    )
 
 
 def _looks_like_safe_digest_query_token(token: str, content: str) -> bool:
@@ -401,8 +414,16 @@ def _looks_like_safe_digest_query_token(token: str, content: str) -> bool:
 
 
 def _has_opaque_character_mix(token: str) -> bool:
-    if "=" in token and "/" in token.split("=", 1)[1]:
-        return False
+    if "=" in token:
+        key, value = token.split("=", 1)
+        if "/" in value or (
+            re.fullmatch(r"[a-z][a-z0-9_]*", key)
+            and re.fullmatch(r"[A-Z][A-Z0-9_]*", value)
+        ) or (
+            re.fullmatch(r"[A-Z][A-Z0-9_]*", key)
+            and re.fullmatch(r"[a-z][a-z0-9-]*", value)
+        ):
+            return False
     has_lower = any(char.islower() for char in token)
     has_upper = any(char.isupper() for char in token)
     has_digit = any(char.isdigit() for char in token)
@@ -463,14 +484,16 @@ def _has_embedded_opaque_value(content: str) -> bool:
 
 
 def _has_separator_split_blocked_credential(content: str) -> bool:
-    """Recognize known credential prefixes after three or more split fragments."""
+    """Recognize known credential prefixes after separator-split fragments."""
+    if _GOOGLE_SPLIT_CREDENTIAL_PATTERN.search(content):
+        return True
     for match in _CREDENTIAL_SPLIT_PATTERN.finditer(content):
         matched = match.group(0)
         if not _CREDENTIAL_SPLIT_PREFIX_PATTERN.match(matched):
             continue
         fragments = re.findall(r"[A-Za-z0-9]+", matched)
         for start in range(len(fragments)):
-            for end in range(start + 3, min(len(fragments), start + 8) + 1):
+            for end in range(start + 2, min(len(fragments), start + 8) + 1):
                 compact = "".join(fragments[start:end])
                 if _COMPACT_SPLIT_CREDENTIAL_PATTERN.fullmatch(compact):
                     return True
@@ -483,7 +506,9 @@ def _has_separator_split_opaque_value(content: str) -> bool:
         matched = match.group(0)
         fragment_matches = list(re.finditer(r"[A-Za-z0-9]+", matched))
         fragments = [fragment.group(0) for fragment in fragment_matches]
-        if _looks_like_structured_identifier("".join(fragments)):
+        if _looks_like_structured_identifier("".join(fragments)) or (
+            " " in matched and all(_looks_like_semantic_upper_identifier_word(fragment) for fragment in fragments)
+        ):
             continue
         semantic_snake_spans = [
             snake.span()
@@ -544,6 +569,8 @@ def _windows_path_has_split_opaque_value(content: str) -> bool:
 
 def _looks_like_opaque_token(content: str) -> bool:
     """Recognize encoded opaque values without consuming common identifiers."""
+    if _looks_like_safe_windows_path(content):
+        return False
     if _has_embedded_opaque_value(content) or _has_separator_split_opaque_value(content):
         return True
     windows_path = bool(_WINDOWS_ABSOLUTE_PATH_PATTERN.fullmatch(content))
@@ -556,6 +583,7 @@ def _looks_like_opaque_token(content: str) -> bool:
         # padding marker is not an assignment and must remain review-gated.
         if (
             windows_path
+            or _SAFE_TIMESTAMP_IDENTIFIER_PATTERN.fullmatch(token)
             or _HEX_DIGEST_PATTERN.fullmatch(token)
             or _UUID_PATTERN.fullmatch(token)
             or _DIGEST_ASSIGNMENT_PATTERN.fullmatch(token)
