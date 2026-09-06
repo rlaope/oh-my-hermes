@@ -1006,6 +1006,33 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_directly",
         "direct_answer",
     ),
+    # Public-board half of the same shield. The destination phrase alone is a
+    # concept question, a disclosure question, or somebody else's standup
+    # board; only a destination plus the model-powered product that would
+    # publish to it is an LLM build request.
+    RoutingPrecisionCase(
+        "public-board-concept-question",
+        "A public-board concept question stays a direct answer, not an app build handoff",
+        "what is a public message board?",
+        "answer_directly",
+        "direct_answer",
+    ),
+    RoutingPrecisionCase(
+        "public-board-disclosure-concept-question",
+        "A public-disclosure question about boards stays out of the LLM app build handoff",
+        "is posting to a public board considered public disclosure?",
+        "answer_clarification",
+        "",
+        "llm-app-dev",
+    ),
+    RoutingPrecisionCase(
+        "team-public-board-mention",
+        "Mentioning the team's own public board does not open an LLM app build handoff",
+        "our team uses a public board for standups",
+        "answer_clarification",
+        "",
+        "llm-app-dev",
+    ),
     # Ask bare-token retirement: "claude code가 뭐야" previously reached `ask` via
     # the now-removed bare `claude` trigger at score 9. With that token gone the
     # top catalog matches tie at score 4, so this pins the honest new
@@ -3854,6 +3881,38 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "llm-app-dev",
         "prepare_llm_app_build",
         "llm_app_build",
+    ),
+    # Public-board communication is a build decision inside the LLM feature,
+    # so the request that names a public destination and the product that
+    # would publish to it belongs in the build handoff rather than in a plan
+    # or a coordination board. The third case is the cross-lane guard: the
+    # OMH agent board shares the word and must keep its own workflow.
+    RoutingInterventionCase(
+        "public-board-posting-feature-request",
+        "A public-board posting feature opens the LLM app build handoff",
+        "add a public board posting feature to our llm assistant",
+        "dispatch",
+        "llm-app-dev",
+        "prepare_llm_app_build",
+        "llm_app_build",
+    ),
+    RoutingInterventionCase(
+        "public-board-read-and-reply-feature-request",
+        "A public-board read-and-reply feature opens the LLM app build handoff",
+        "our agent should read and reply on the public message board",
+        "dispatch",
+        "llm-app-dev",
+        "prepare_llm_app_build",
+        "llm_app_build",
+    ),
+    RoutingInterventionCase(
+        "agent-board-request-keeps-agent-board",
+        "An agent board request keeps the agent board, not the LLM app build handoff",
+        "show me the agent board",
+        "dispatch",
+        "agent-board",
+        "prepare_agent_board_card",
+        "agent_board",
     ),
     # The other half of the llm-app-dev guard. Its triggers carry `eval`, and
     # comparing executors is `agent-evaluation`'s subject, not this workflow's;

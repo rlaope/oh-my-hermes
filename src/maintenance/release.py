@@ -660,7 +660,16 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # workflow contract; one bounded workflow correction, not padding.
 # 891138 -> 899556: apple-design adds a concise platform brief and progressive
 # references; detailed production and library guidance stays out of the body.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 899556
+# 899556 -> 901000: `llm-app-dev` gains the public-board communication contract
+# -- one quality-bar rule naming the six action classes and the show-then-
+# approve step, one safety rule on authenticated-is-not-private and untrusted
+# peer approval, one final-checklist line, one recovery note on ambiguous
+# delivery, and the public-board clause in its use-when. The per-action
+# authority table, the approval record, the compaction/handoff rules, and the
+# anti-patterns live in the new on-demand `references/public-board.md` outside
+# this count; what is always loaded is only what is wrong to discover after a
+# post has already been read; warranted growth.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 901000
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

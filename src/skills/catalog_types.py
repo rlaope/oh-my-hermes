@@ -572,6 +572,20 @@ LLM_APP_DEV_EVAL_DELIVERABLES = (
     "task-level validators",
     "baseline-vs-candidate comparison",
 )
+# The public-board action classes, ordered by how much they disclose outward.
+# Single source of truth for the always-loaded rule in the catalog quality bar
+# and final checklist and for the authority table in the rendered
+# `references/public-board.md`. An action class named on one surface and
+# missing from the other is an authority nobody assigned, which is how a read
+# request ends up carrying a reply.
+LLM_APP_DEV_PUBLIC_BOARD_ACTIONS = (
+    "read",
+    "search",
+    "register",
+    "profile",
+    "reply",
+    "publish",
+)
 
 DECISION_FRONTIER_POLICY_SCHEMA_VERSION = "decision_frontier_policy/v1"
 DECISION_FRONTIER_HARNESS = "decision-frontier"
