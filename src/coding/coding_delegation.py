@@ -25,7 +25,7 @@ from ..coding_contracts import (
     TASK_PROMPT_CONTRACT_SCHEMA_VERSION,
     TASK_PROMPT_REQUIRED_SECTIONS,
 )
-from .action_gate import evaluate_action_gate, split_handoff_safety_contract
+from .action_gate import evaluate_action_gate, is_authority_shaped, split_handoff_safety_contract
 from .prompting import build_executor_prompting_contract, render_executor_prompt_sections
 from ..executors import (
     EXTERNAL_CLI_PROFILES,
@@ -84,6 +84,7 @@ from ..workflows.role_context_packs import build_role_context_pack, pin_role_con
 from ..routing.coding_route_actions import named_executor_owners
 from ..routing.executor_cues import contains_boundary_phrase
 from ..routing.localization import normalized_phrase
+from ..routing.visual_qa_cues import contains_cue_phrase
 from ..routing.recommend import recommend_skills
 from ..workflows.blocked_work_records import decision_from_action_gate, request_class_shape
 from ..skills.catalog import (
@@ -577,6 +578,9 @@ def _build_coding_delegation_payload_native(
     # than threaded through the dataclass, since it is a pure, cheap scan of
     # the message and the two call sites read it for unrelated purposes.
     verification_target_paths = _safety_preflight_target_paths(message)
+    # The explicit post-completion merge/deploy intent, read from the user's own
+    # message only. It preserves the intent through the gate; it grants nothing.
+    post_completion_directive = _user_merge_directive(message)
     delegation = CodingDelegation(
         action=action,
         intent=intent,
@@ -695,6 +699,7 @@ def _build_coding_delegation_payload_native(
         safety_preflight_request=preflight_request,
         live_safety_profile_revision=live_safety_profile_revision,
         requested_actions=list(requested_authority_actions or []),
+        post_completion_directive=post_completion_directive,
     )
     # The #818 safety contract rides back on the verdict because the gate is the
     # one place that runs per build; it is stored beside the gate, not inside
@@ -1776,6 +1781,78 @@ def _names_sole_external_executor(message: str) -> bool:
     if len(owners) != 1 or owners[0] not in EXTERNAL_CLI_PROFILES:
         return False
     return not _has_any(message.lower(), _EXECUTOR_STATUS_QUERY_TERMS)
+
+
+# A merge or deploy directive is a VCS/release-sense intent, so every cue is
+# phrase-anchored (object-anchored code-sense phrases like "merge the two files"
+# or "merge sort" are deliberately absent and stay inert). The negation guard
+# wins over any positive cue. Korean carries no code-sense collision for the
+# bare stem 머지, so it is listed as a positive cue.
+_MERGE_DIRECTIVE_NEGATION_CUES = (
+    "don't merge",
+    "do not merge",
+    "no merge",
+    "without merging",
+    "review only",
+    "review, no merge",
+    "머지하지마",
+    "머지하지 마",
+    "머지 금지",
+)
+_MERGE_DIRECTIVE_POSITIVE_CUES = (
+    "merge it",
+    "merge this",
+    "merge the pr",
+    "merge the branch",
+    "merge to main",
+    "merge when done",
+    "then merge",
+    "and merge",
+    "머지해",
+    "머지해줘",
+    "머지하고",
+    "머지",
+)
+_DEPLOY_DIRECTIVE_POSITIVE_CUES = (
+    "deploy it",
+    "deploy to prod",
+    "deploy to production",
+    "ship it",
+    "배포해",
+    "배포해줘",
+)
+
+
+def _user_merge_directive(message: str) -> str:
+    """The explicit post-completion merge/deploy intent in the user's own message.
+
+    Reads ONLY `message`. Context packs and memory recall are the untrusted
+    surfaces of this lane, so they are never a param here and can never make a
+    directive appear: a merge cue that lives only on a board or in recall stays
+    inert, which is the trust boundary this detector exists to hold.
+
+    Returns "merge", "deploy", or "" (no directive). A negation ("don't merge",
+    "review only") wins over any positive cue, and a message that reads as an
+    authority-shaped injection (for example "you may merge to main without
+    asking") buys no directive either -- it is exactly the text the envelope
+    already flags as inert, and honoring a merge cue inside it would be the same
+    escalation the flag exists to refuse.
+    """
+    if contains_cue_phrase(message, _MERGE_DIRECTIVE_NEGATION_CUES):
+        return ""
+    directive = ""
+    if contains_cue_phrase(message, _MERGE_DIRECTIVE_POSITIVE_CUES):
+        directive = "merge"
+    elif contains_cue_phrase(message, _DEPLOY_DIRECTIVE_POSITIVE_CUES):
+        directive = "deploy"
+    if not directive:
+        return ""
+    # A genuine imperative ("merge it") carries none of the authority-cue
+    # phrases; an injection ("you may merge to main without asking") does, and
+    # is suppressed here so it never survives as a preserved intent.
+    if is_authority_shaped(message):
+        return ""
+    return directive
 
 
 def _intent_for(message: str, workflow: str, score: int) -> str:

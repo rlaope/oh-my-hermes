@@ -684,6 +684,10 @@ _ACTION_GATE_REASONS: Final[dict[str, str]] = {
     "not_required_by_task": "The task does not require this action, so the envelope never granted it.",
     "outside_permission_profile": "The active permission profile does not include this action.",
     "safety_preflight_denied": "The safety preflight denied the request before any authority was granted.",
+    "user_authorized_pending_verification": (
+        "The user authorized this action as a post-verification step; it stays a separate observed "
+        "action gated on receipt evidence and the envelope never grants it."
+    ),
     "withheld_pending_approval": "The action is withheld until an operator answers the confirmation it requires.",
 }
 
@@ -696,6 +700,10 @@ _RECOVERY_BY_REASON_CODE: Final[dict[str, str]] = {
     "outside_permission_profile": "request_approval",
     "narrowed_by_request": "narrow_declared_scope",
     "not_required_by_task": "no_recovery_available",
+    # The merge is not blocked by policy; it waits on the receipt evidence the
+    # verification step produces, so recovery is to record that observed
+    # evidence -- the closest existing recovery vocabulary to this reason.
+    "user_authorized_pending_verification": "record_observed_evidence",
 }
 _RECOVERY_BY_DOMAIN: Final[dict[str, str]] = {
     REASON_DOMAIN_ACTION_GATE: "request_approval",

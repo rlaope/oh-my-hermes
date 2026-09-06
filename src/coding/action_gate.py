@@ -99,6 +99,7 @@ classification rides as a report and ``action_risk.enforcement`` /
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any
@@ -131,8 +132,18 @@ EXCLUSION_REASON_CODES = (
     "not_required_by_task",
     "outside_permission_profile",
     "safety_preflight_denied",
+    "user_authorized_pending_verification",
     "withheld_pending_approval",
 )
+# A prepared post-verification INTENT record, never an authority grant. When the
+# user explicitly asks for a merge or a deploy as the final step, OMH preserves
+# that intent through the delegation boundary so a downstream owner stops
+# downgrading "user wants merge" into "no merge". It changes no allowed action:
+# `merge_authority` stays disabled, `merge` stays blocked, and the receipt gate
+# in `runtime.claims` still governs whether anything actually merged. `deploy`
+# has no `LOOP_ACTIONS` action, so a deploy directive lives only in the field.
+POST_COMPLETION_DIRECTIVE_ACTIONS = ("merge", "deploy")
+POST_COMPLETION_DIRECTIVE_STATE = "user_authorized_pending_verification"
 # Precedence order, not an alphabetical list. `risky_action` sits between the
 # profile question and the dispatch go-ahead on purpose: widening the envelope
 # is a bigger question than confirming one risky act inside it, and confirming
@@ -1132,6 +1143,15 @@ def _explanation(action: str, reason_code: str, profile: str) -> str:
         return f"`{action}` was withdrawn because the safety preflight denied this request."
     if reason_code == "outside_permission_profile":
         return f"`{action}` is not granted by the `{profile}` permission profile, so it stays an approval checkpoint."
+    if reason_code == "user_authorized_pending_verification":
+        # No "omh " token here for the same card reason as the fallthrough
+        # below; "this wrapper" carries the boundary without the command-shaped
+        # string. Preserving the intent is not granting the action: `merge`
+        # stays blocked and gated on receipt evidence.
+        return (
+            f"`{action}` was authorized by the user as a post-verification step; this wrapper never "
+            "merges, so it stays a separate observed action gated on receipt evidence."
+        )
     # Deliberately no "omh " token: chat cards assert they never surface an
     # internal command-shaped string, and this text is rendered onto them.
     return f"`{action}` is outside the task scope derived from the request, so the handoff never carries it."
@@ -1224,6 +1244,7 @@ def build_task_authority_envelope(
     safety_profile_revision: str = "",
     narrow_to: set[str] | frozenset[str] | None = None,
     withheld: set[str] | frozenset[str] | None = None,
+    post_completion_directive: str = "",
 ) -> dict[str, Any]:
     """Derive the task-scoped authority envelope from intent and policy only.
 
@@ -1286,6 +1307,14 @@ def build_task_authority_envelope(
             reason_code = "safety_preflight_denied"
         elif action in required:
             reason_code = "outside_permission_profile"
+        elif action == "merge" and post_completion_directive == "merge" and not denied:
+            # Ordered below the safety and profile denials on purpose: those
+            # keep precedence. A denied run never reaches the post-verification
+            # step, so the directive is suppressed there too. This only relabels
+            # the `not_required_by_task` case for `merge` when the user
+            # explicitly asked for it. The action is still blocked; only the
+            # reason it is blocked carries the intent.
+            reason_code = "user_authorized_pending_verification"
         else:
             reason_code = "not_required_by_task"
         exclusions.append(
@@ -1296,7 +1325,7 @@ def build_task_authority_envelope(
             }
         )
 
-    return {
+    envelope: dict[str, Any] = {
         "schema_version": TASK_AUTHORITY_ENVELOPE_SCHEMA_VERSION,
         "status": "prepared_not_observed",
         "permission_profile": profile,
@@ -1329,6 +1358,63 @@ def build_task_authority_envelope(
         "safety_profile_revision": str(safety_profile_revision or ""),
         "claim_boundary": ENVELOPE_CLAIM_BOUNDARY,
     }
+    # Optional by construction. When the user gave no explicit merge/deploy
+    # directive the key is omitted, so every existing envelope stays
+    # byte-identical and the shape fixtures never move. When present, it is a
+    # prepared post-verification intent record and nothing more: no allowed
+    # action changed above, and `authority_effect` says so in the record. A
+    # denied run never reaches the post-verification step, so it carries no
+    # directive -- the denial is the whole story there.
+    if post_completion_directive in ("merge", "deploy") and not denied:
+        action_word = post_completion_directive
+        envelope["post_completion_directive"] = {
+            "action": action_word,
+            "state": POST_COMPLETION_DIRECTIVE_STATE,
+            "authority_effect": "none",
+            "source": "user_intent",
+            "executed_by": "operator_or_reviewing_agent",
+            "requires_before_effect": ["verification", "review", "ci", "external_effect_receipt"],
+            "note": (
+                f"User explicitly requested {action_word} as the final step. Preserve this intent "
+                "downstream; do not downgrade it to 'no merge'. This wrapper never merges; the "
+                f"{action_word} stays a separate observed action gated on receipt evidence."
+            ),
+        }
+    return envelope
+
+
+_POST_COMPLETION_DIRECTIVE_KEYS = (
+    "action",
+    "state",
+    "authority_effect",
+    "source",
+    "executed_by",
+    "requires_before_effect",
+    "note",
+)
+
+
+def _post_completion_directive_errors(value: Any, label: str) -> list[str]:
+    """Validate the optional directive record's shape; absence is always valid."""
+    if not isinstance(value, dict) or set(value) != set(_POST_COMPLETION_DIRECTIVE_KEYS):
+        return [f"{label} post_completion_directive keys are invalid"]
+    errors: list[str] = []
+    if value.get("action") not in POST_COMPLETION_DIRECTIVE_ACTIONS:
+        errors.append(f"{label} post_completion_directive.action is unsupported")
+    if value.get("state") != POST_COMPLETION_DIRECTIVE_STATE:
+        errors.append(f"{label} post_completion_directive.state is invalid")
+    if value.get("authority_effect") != "none":
+        errors.append(f"{label} post_completion_directive.authority_effect must be none")
+    if value.get("source") != "user_intent":
+        errors.append(f"{label} post_completion_directive.source must be user_intent")
+    errors.extend(
+        _string_list_errors(value.get("requires_before_effect"), f"{label} post_completion_directive.requires_before_effect")
+    )
+    if not str(value.get("executed_by", "")).strip():
+        errors.append(f"{label} post_completion_directive.executed_by is required")
+    if not str(value.get("note", "")).strip():
+        errors.append(f"{label} post_completion_directive.note is required")
+    return errors
 
 
 def _declared_strings(request: dict[str, Any] | None, key: str) -> list[str]:
@@ -1828,8 +1914,15 @@ def build_task_handoff_safety_contract(envelope: dict[str, Any]) -> dict[str, An
     Reading the envelope rather than re-deriving from intent and policy is
     deliberate: a contract that recomputed its own numbers could disagree with
     the envelope it describes, and the validator would have nothing to compare.
+
+    The optional `post_completion_directive` rides through here too, unchanged,
+    so the brief author reading the contract sees the merge boundary and the
+    user's preserved intent side by side rather than only the prohibited-actions
+    list. It is omitted when absent, so every existing contract stays
+    byte-identical.
     """
-    return {
+    directive = envelope.get("post_completion_directive")
+    contract: dict[str, Any] = {
         "schema_version": HANDOFF_SAFETY_CONTRACT_SCHEMA_VERSION,
         "status": "prepared_not_observed",
         "produced_offline": True,
@@ -1863,6 +1956,9 @@ def build_task_handoff_safety_contract(envelope: dict[str, Any]) -> dict[str, An
         "safety_profile_revision": str(envelope.get("safety_profile_revision", "")),
         "claim_boundary": HANDOFF_CONTRACT_CLAIM_BOUNDARY,
     }
+    if isinstance(directive, dict):
+        contract["post_completion_directive"] = deepcopy(directive)
+    return contract
 
 
 def split_handoff_safety_contract(gate: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -2054,6 +2150,7 @@ def evaluate_action_gate(
     account_references: dict[str, str] | None = None,
     run_id: str = "",
     now: str = "",
+    post_completion_directive: str = "",
 ) -> dict[str, Any]:
     """The single decision path: preflight, envelope, risk, and one ladder.
 
@@ -2113,6 +2210,7 @@ def evaluate_action_gate(
         context_pack=context_pack,
         memory_recall_pack=memory_recall_pack,
         safety_profile_revision=preflight["safety_profile_revision"],
+        post_completion_directive=post_completion_directive,
     )
     expansion_requested = bool(requested - set(unnarrowed["allowed_actions"]))
     narrow_to = None if expansion_requested or not requested else set(requested)
@@ -2134,6 +2232,7 @@ def evaluate_action_gate(
             safety_profile_revision=preflight["safety_profile_revision"],
             narrow_to=narrow_to,
             withheld=withheld,
+            post_completion_directive=post_completion_directive,
         )
 
     envelope = unnarrowed if narrow_to is None else _envelope()
@@ -2241,8 +2340,15 @@ def validate_task_authority_envelope(
     if not isinstance(value, dict):
         return [f"{label} must be an object"]
     errors: list[str] = []
-    if set(value) != set(TASK_AUTHORITY_ENVELOPE_KEYS):
+    # `post_completion_directive` is the one optional key: its ABSENCE must stay
+    # valid and byte-identical, so it is excluded from the required-key set and
+    # its shape is only checked when it is present.
+    missing = set(TASK_AUTHORITY_ENVELOPE_KEYS) - set(value)
+    extra = set(value) - set(TASK_AUTHORITY_ENVELOPE_KEYS) - {"post_completion_directive"}
+    if missing or extra:
         errors.append(f"{label} keys are invalid")
+    if "post_completion_directive" in value:
+        errors.extend(_post_completion_directive_errors(value.get("post_completion_directive"), label))
     if value.get("schema_version") != TASK_AUTHORITY_ENVELOPE_SCHEMA_VERSION:
         errors.append(f"{label} schema_version is invalid")
     if value.get("status") != "prepared_not_observed":
@@ -2624,8 +2730,14 @@ def validate_handoff_safety_contract(
     if not isinstance(value, dict):
         return [f"{label} must be an object"]
     errors: list[str] = []
-    if set(value) != set(HANDOFF_SAFETY_CONTRACT_KEYS):
+    # `post_completion_directive` is the one optional key here, mirroring the
+    # envelope: absent by default (byte-identical), shape-checked when present.
+    missing = set(HANDOFF_SAFETY_CONTRACT_KEYS) - set(value)
+    extra = set(value) - set(HANDOFF_SAFETY_CONTRACT_KEYS) - {"post_completion_directive"}
+    if missing or extra:
         errors.append(f"{label} keys are invalid")
+    if "post_completion_directive" in value:
+        errors.extend(_post_completion_directive_errors(value.get("post_completion_directive"), label))
     if value.get("schema_version") != HANDOFF_SAFETY_CONTRACT_SCHEMA_VERSION:
         errors.append(f"{label} schema_version is invalid")
     if value.get("status") != "prepared_not_observed":
@@ -2654,6 +2766,11 @@ def validate_handoff_safety_contract(
         ):
             if value.get(contract_key) != envelope.get(envelope_key):
                 errors.append(f"{label} {contract_key} must match the authority envelope {envelope_key}")
+        # The directive is a copy of the envelope's, so the same stale-copy rule
+        # applies: it must match, and it must be present in the contract exactly
+        # when the envelope carries it.
+        if value.get("post_completion_directive") != envelope.get("post_completion_directive"):
+            errors.append(f"{label} post_completion_directive must match the authority envelope")
     return errors
 
 
