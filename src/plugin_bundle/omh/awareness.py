@@ -1195,7 +1195,7 @@ WORKFLOW_CONTEXT_CARDS = (
             "ultraqa",
         ),
         "user_examples": ("Turn this issue into a PR-ready plan", "Is the Codex run done yet?"),
-        "first_response_shape": "State the selected coding owner or choice point, prepare the handoff/status, and keep dispatch, result, review, CI, and merge evidence separate.",
+        "first_response_shape": "State the selected coding owner or choice point, prepare the handoff/status, and keep dispatch, result, review, CI, and merge evidence separate; when the user explicitly authorized merge or deploy, carry that forward as a prepared post-verification step rather than downgrading it to 'no merge', still gated on observed receipt evidence.",
         "not_evidence_until_observed": ("dispatch", "implementation", "review", "CI", "merge"),
     },
 )
