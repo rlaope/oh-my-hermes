@@ -138,6 +138,7 @@ NEXT_ACTION_LABELS: dict[str, str] = {
     "show_context_brief": "showing the OMH context brief",
     "show_agent_ops_review": "showing agent-ops status",
     "show_coding_handoff_status": "showing coding-agent progress",
+    "surface_executor_cancellation": "surfacing the cancelled coding-agent run",
     "show_prompt_handoff": "showing the prompt handoff",
     "show_rejected_decision_recall": "showing scoped rejected-decision context",
     "show_run_efficiency_report": "showing the supplied local run efficiency report",

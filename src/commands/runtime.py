@@ -54,6 +54,7 @@ from ..runtime.artifacts import (
     RUN_STATUSES,
     RUNTIME_OBSERVABLE_EVENTS,
     RUNTIME_OBSERVATION_STATUSES,
+    WRAPPER_COMPLETION_STATUSES,
     create_run,
     export_runtime,
     list_runs,
@@ -1364,7 +1365,7 @@ def _add_runtime_commands(sub) -> None:
     runtime_wrapper.add_argument("--prompt-dispatched", action="store_true")
     runtime_wrapper.add_argument("--response-observed", action="store_true")
     runtime_wrapper.add_argument("--verification-observed", action="store_true")
-    runtime_wrapper.add_argument("--completion-status", choices=("started", "completed", "blocked", "failed", "unknown"), default="unknown")
+    runtime_wrapper.add_argument("--completion-status", choices=WRAPPER_COMPLETION_STATUSES, default="unknown")
     runtime_wrapper.add_argument("--gap", action="append")
     runtime_wrapper.add_argument("--message", default="")
     runtime_wrapper.set_defaults(func=cmd_runtime_wrapper)

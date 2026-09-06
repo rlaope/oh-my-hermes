@@ -1621,6 +1621,46 @@ observed evidence, and keep review or verification gaps visible in
 verification, review, CI, merge-ready, and merged steps. Wrappers can render
 that card directly instead of inferring progress from prose.
 
+#### Observed terminal results
+
+An observed executor run ends in exactly one of four terminal results:
+`completed`, `blocked`, `failed`, or `cancelled`. They are four different
+claims, and OMH keeps them apart everywhere a result is recorded and everywhere
+one is read. `failed` says the work ran and did not work. `blocked` says
+something outside the work is in the way and the run may continue once it
+clears. `cancelled` says someone or something stopped the run before it reached
+an answer, so there is no verdict about the work at all and the next step is a
+decision about re-dispatching it. The vocabulary is shared by the run record
+(`RUN_STATUSES`), the delegation record (`DELEGATION_RESULTS`,
+`OBSERVED_RESULTS`), the wrapper record (`WRAPPER_COMPLETION_STATUSES`), the
+executor session (`EXECUTOR_SESSION_RESULTS`), and the work report
+(`REPORT_STATUSES`), and every command that records a result offers all four.
+
+`cancelled` is an OBSERVED result. Recording it needs the same evidence every
+other observed result needs: OMH records that a cancellation was observed --
+process termination, or an authoritative executor result -- never that one was
+requested, and never that OMH performed it. OMH terminates only the process
+groups its own fanout dispatcher spawned; process-control capability over any
+other executor is adapter- and host-specific and the shared contract records
+only the observed outcome. Cancelling a PREPARED wrapper plan before any
+executor ran is a different fact and stays where it is, on the wrapper session's
+own status.
+
+A cancellation satisfies no evidence gate. It stops the runtime claim ladder at
+`executor_dispatched`, so execution, verification, review, CI, merge-readiness,
+and merge are all blocked; the wrapper refuses to record verification over it;
+and the delegated-coding status answers `surface_executor_cancellation` rather
+than `surface_executor_blocker`, because a cancellation has no blocker to clear.
+
+The enum is additive and no schema version moved: every record written before
+`cancelled` existed still validates unchanged, and there is no migration. The
+compatibility direction that needs care is a newer record read by an older
+plugin bundle, since the bundle is installed and updated separately from the
+writer. The shipped reader decides "has this target ended" from the record's
+`observed` flag rather than by matching the result against a list it knows, so a
+result word added after that bundle shipped degrades to terminal-with-unknown-
+kind and never to "still running".
+
 `omh chat session status` also exposes `coding_briefing/v1` as a sibling to the
 compact status card. The briefing is the richer Hermes-facing report surface for
 delegated coding work: it combines persisted route/plan metadata, compact handoff

@@ -11,6 +11,7 @@ from ..coding.routing_observation import (
     validate_routing_observation,
 )
 from ..paths import OmhPaths
+from ..runtime.records import OBSERVED_RESULTS
 from .continuity_state import journey_state as _journey_state
 from .sessions import build_wrapper_session_status, read_wrapper_session
 
@@ -106,7 +107,7 @@ def _routing_observation(
         **runtime_observation,
         **executor_progress,
         **latest_event,
-        "status": (result if result in {"completed", "blocked", "failed"} else None)
+        "status": (result if result in OBSERVED_RESULTS else None)
         or latest_event.get("status")
         or runtime_observation.get("status")
         or ("running" if executor_status.get("dispatch") == "observed" else None),
@@ -177,6 +178,11 @@ def _recovery(journey_state: str, conformance: dict[str, object]) -> dict[str, o
             return {"status": "running_observed", "resume_safe": False, "next_action": next_action}
         case "runtime_running_observed":
             return {"status": "running_observed", "resume_safe": False, "next_action": next_action}
+        case "executor_cancelled":
+            # Its own recovery status. `recovery_blocked` reads as "something is
+            # in the way", and the answer to a cancellation is a decision about
+            # re-dispatching, not a blocker to clear.
+            return {"status": "cancelled_observed", "resume_safe": False, "next_action": next_action}
         case "executor_blocked" | "executor_failed" | "runtime_recovery_blocked" | "invalid_runtime_evidence":
             return {"status": "recovery_blocked", "resume_safe": False, "next_action": next_action}
         case "handoff_prepared":

@@ -153,6 +153,7 @@ VISIBLE_ACTIONS = (
     "show_coding_handoff_status",
     "record_executor_completed",
     "record_executor_blocked",
+    "record_executor_cancelled",
     "record_executor_failed",
     "ask_hermes_verify",
     "show_quickstart",
@@ -673,6 +674,12 @@ _STATUS_COPY = {
         "The executor reported a blocker.",
         "I will surface the blocker instead of claiming completion.",
         "Blocked executor work is not complete.",
+    ),
+    "surface_executor_cancellation": (
+        "blocker",
+        "The executor run was cancelled.",
+        "I will report the cancellation and what re-dispatching it would need, instead of claiming any outcome.",
+        "Cancelled executor work is not complete, not failed, and not blocked on anything clearable.",
     ),
     "record_review_evidence": (
         "status",
@@ -10313,6 +10320,7 @@ def _phase_for_next_action(next_action: str) -> str:
         "show_runtime_handoff": "runtime_handoff_prepared",
         "wait_for_executor_evidence": "dispatched",
         "surface_executor_blocker": "blocked",
+        "surface_executor_cancellation": "cancelled",
         "surface_review_blocker": "blocked",
         "surface_ci_blocker": "blocked",
         "surface_merge_blocker": "blocked",
@@ -10327,6 +10335,8 @@ def _phase_for_next_action(next_action: str) -> str:
 
 
 def _status_card_severity(next_action: str) -> str:
+    if next_action == "surface_executor_cancellation":
+        return "cancelled"
     if next_action.startswith("surface_"):
         return "blocked"
     if next_action in {"report_merge_ready", "report_merged", "report_completion_with_evidence"}:

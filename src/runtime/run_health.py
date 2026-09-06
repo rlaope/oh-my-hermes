@@ -150,6 +150,11 @@ _PHASE_BY_NORMALIZED_EVENT: Final[dict[str, str]] = {
     "executor_completed": "completion",
     "executor_blocked": "completion",
     "executor_failed": "completion",
+    # A cancellation ends the run at the same rung the other three end it. It
+    # is deliberately absent from `_FAILURE_CLASS_BY_NORMALIZED_EVENT`: a run
+    # someone stopped observed no failure, and reporting one would attribute a
+    # defect to work that was never allowed to reach a verdict.
+    "executor_cancelled": "completion",
 }
 
 # Only phases that a LATER phase can close get a duration. `verification_outcome`

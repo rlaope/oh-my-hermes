@@ -613,7 +613,12 @@ def _legacy_lifecycle_projection(shown: dict[str, Any]) -> dict[str, Any]:
         "merge_observed": bool(merge.get("merged", False)),
         "blocked": delegation.get("result") == "blocked" or wrapper.get("completion_status") == "blocked",
         "failed": delegation.get("result") == "failed" or wrapper.get("completion_status") == "failed",
-        "cancelled": False,
+        # Read from the record like its two neighbours, rather than being
+        # hard-coded false. While it was a constant the journal projection was
+        # the only surface that could ever report a cancellation, so a
+        # cancellation recorded through the run or wrapper record alone
+        # projected as neither cancelled nor anything else.
+        "cancelled": delegation.get("result") == "cancelled" or wrapper.get("completion_status") == "cancelled",
         "observation_status": observation_status,
         "journal_event_count": 0,
         "latest_event_id": "",
@@ -859,10 +864,10 @@ def _compact_executor_progress_report(report: dict[str, Any]) -> dict[str, Any]:
 
 def _executor_progress_show_state(target_dir: Path, binding: dict[str, Any]) -> str:
     delegation = read_json_object(target_dir / "delegation.json") or {}
-    if bool(delegation.get("observed")) and str(delegation.get("result", "")) in {"completed", "blocked", "failed"}:
+    if bool(delegation.get("observed")) and str(delegation.get("result", "")) in OBSERVED_RESULTS:
         return "closed"
     executor_session = read_json_object(target_dir / "executor_session.json") or {}
-    if bool(executor_session.get("result_observed")) and str(executor_session.get("result", "")) in {"completed", "blocked", "failed"}:
+    if bool(executor_session.get("result_observed")) and str(executor_session.get("result", "")) in OBSERVED_RESULTS:
         return "closed"
     return str(binding.get("state", ""))
 
@@ -1371,6 +1376,8 @@ def _delegated_harness_progress(
 def _executor_progress_state(observed: bool, status: str) -> str:
     if not observed:
         return "pending"
+    if status == "cancelled":
+        return "cancelled"
     if status in {"blocked", "failed"}:
         return "blocked"
     return "complete"
@@ -1806,6 +1813,11 @@ def _delegated_status_next_action(
         return "dispatch_to_executor"
     if not execution_observed:
         return "wait_for_executor_evidence"
+    # Ahead of the blocker branch, and its own action. "Surface the blocker"
+    # tells a reader to go clear something; a cancelled run has nothing to
+    # clear and needs a decision about re-dispatch instead.
+    if execution_status == "cancelled":
+        return "surface_executor_cancellation"
     if execution_status in {"blocked", "failed"}:
         return "surface_executor_blocker"
     if not verification_observed:
@@ -1859,6 +1871,11 @@ def _delegated_status_summary(
         return f"A {executor_target} coding handoff is prepared, but wrapper dispatch is not observed yet."
     if not execution_observed:
         return f"A {executor_target} coding handoff was dispatched, but executor completion is not observed yet."
+    if execution_status == "cancelled":
+        return (
+            f"The {executor_target} executor run was cancelled before it reported a result; "
+            "re-dispatch or resume it before claiming any outcome."
+        )
     if execution_status in {"blocked", "failed"}:
         return f"The {executor_target} executor reported {execution_status}; do not claim completion."
     if not verification_observed:

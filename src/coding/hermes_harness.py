@@ -196,7 +196,10 @@ def validate_hermes_coding_harness(harness: Any) -> list[str]:
         errors.append("hermes_coding_harness schema_version is invalid")
     if harness.get("selected_owner") != "hermes":
         errors.append("hermes_coding_harness selected_owner must be hermes")
-    if harness.get("status") not in {"prepared_not_observed", "in_progress", "blocked", "completed", "failed"}:
+    # `cancelled` is a member because `_harness_status` already returns it. A
+    # status the builder can produce and the validator rejects is a harness that
+    # fails to validate the moment a run is cancelled.
+    if harness.get("status") not in {"prepared_not_observed", "in_progress", "blocked", "cancelled", "completed", "failed"}:
         errors.append("hermes_coding_harness status is invalid")
     if harness.get("start_mode") not in {"solo", "durable_goal", "team", "swarm"}:
         errors.append("hermes_coding_harness start_mode is invalid")
@@ -604,7 +607,7 @@ def _runtime_requirements() -> list[dict[str, str]]:
             "event_type": event,
             "record_schema": "runtime_observation/v1",
             "record_with": "omh runtime observe --session <wrapper-session-id> --runtime-profile hermes --event "
-            f"{event} --status <observed|blocked|failed|not_observed> --summary <observed metadata>",
+            f"{event} --status <observed|blocked|cancelled|failed|not_observed> --summary <observed metadata>",
         }
         for event in HERMES_CODING_TEAM_STATUS_LADDER
     ]

@@ -100,16 +100,40 @@ from ..workflows.workspace_bindings import (
 
 
 SCHEMA_VERSION = 1
-RUN_STATUSES = ("started", "prepared", "completed", "blocked", "failed", "unknown")
+# Compatibility strategy for `cancelled`, which appears in five tuples below.
+#
+# It is an ADDITIVE enum member and nothing else changes: `SCHEMA_VERSION` is
+# not bumped, no field is added, renamed, or given a new meaning, and no
+# existing value's meaning moves. Every record written before `cancelled`
+# existed still validates byte-for-byte against these validators, because
+# validation is membership in a tuple that only grew. There is no migration and
+# no rewrite of stored records -- a record that never said `cancelled` still
+# does not.
+#
+# The direction that DOES need care is a newer record read by an older bundle,
+# which is a real shape here because `plugin_bundle/omh/runtime_reader.py` is
+# copied onto a machine and updated separately from the writer. An older reader
+# that hard-codes the three terminal results sees `cancelled` as a value it does
+# not know. The requirement on that reader is that an unknown result on an
+# `observed` record degrades to "terminal, kind unknown" and never to "still
+# active" -- a stopped run that reads as running is the exact failure this whole
+# state exists to end. The shipped reader does that by asking whether the record
+# is observed rather than by matching the result against a list.
+RUN_STATUSES = ("started", "prepared", "completed", "blocked", "failed", "cancelled", "unknown")
 PRIVACY_MODES = ("metadata_only",)
 RUN_ARTIFACT_KINDS = ("workflow_run", "prepared_coding_delegation")
 RUN_PHASES = ("runtime", "prepared", "unknown")
 RUN_OBSERVATION_STATUSES = ("unknown", "observed", "not_observed", "prepared_not_observed")
-DELEGATION_RESULTS = ("completed", "blocked", "failed", "not_available", "not_observed")
-OBSERVED_RESULTS = ("completed", "blocked", "failed")
+DELEGATION_RESULTS = ("completed", "blocked", "failed", "cancelled", "not_available", "not_observed")
+# `cancelled` is an OBSERVED result, not an unobserved one. Recording it still
+# requires the same `observed=True` evidence every other terminal result
+# requires: OMH records that a cancellation was observed (process termination or
+# an authoritative executor result), never that one was requested. A request to
+# cancel is not a terminal result and has no member here.
+OBSERVED_RESULTS = ("completed", "blocked", "failed", "cancelled")
 UNOBSERVED_RESULTS = ("not_available", "not_observed")
 EVENT_LEVELS = ("debug", "info", "warning", "error")
-WRAPPER_COMPLETION_STATUSES = ("started", "completed", "blocked", "failed", "unknown")
+WRAPPER_COMPLETION_STATUSES = ("started", "completed", "blocked", "failed", "cancelled", "unknown")
 REVIEW_STATUSES = ("not_required", "pending", "passed", "failed", "blocked", "not_observed")
 CI_STATUSES = ("not_required", "pending", "passed", "failed", "blocked", "not_observed")
 CI_CHECK_STATUSES = ("passed", "failed", "blocked", "pending", "not_required")
@@ -719,7 +743,7 @@ def build_event_record(event: dict[str, Any]) -> dict[str, Any]:
 
 def validate_delegation_result(observed: bool, result: str) -> None:
     if observed and result not in OBSERVED_RESULTS:
-        raise ValueError("observed delegation requires result completed, blocked, or failed")
+        raise ValueError("observed delegation requires result completed, blocked, failed, or cancelled")
     if not observed and result not in UNOBSERVED_RESULTS:
         raise ValueError("unobserved delegation requires result not_available or not_observed")
 
@@ -2363,7 +2387,11 @@ def validate_runtime_observation_record(observation: dict[str, Any]) -> list[str
     else:
         _require(observation.get("observed") is True, errors, "runtime_observation observed status requires observed=true")
         has_evidence = bool(observation.get("evidence_refs")) or bool(str(observation.get("summary", "")).strip())
-        _require(has_evidence, errors, "runtime_observation observed/blocked/failed status requires summary or evidence_refs")
+        _require(
+            has_evidence,
+            errors,
+            "runtime_observation observed/blocked/cancelled/failed status requires summary or evidence_refs",
+        )
     if observation.get("event_type") in {"worktree_creation"} and observation.get("status") == "observed":
         _require(bool(str(observation.get("worktree_ref", "")).strip()), errors, "runtime_observation worktree_creation requires worktree_ref")
     if observation.get("event_type") in {"worker_dispatch", "worker_result"} and observation.get("status") == "observed":

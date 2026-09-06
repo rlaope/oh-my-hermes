@@ -91,10 +91,18 @@ EXECUTOR_PROGRESS_EVENT_TYPES = {
     "executor_completed",
     "executor_blocked",
     "executor_failed",
+    "executor_cancelled",
     "reported_change_not_observed",
     "progress_observed",
     "unmapped_source_event",
 }
+# Hand-copied from `omh.workflows.observation_journal` (the non-`observed`
+# members of `OBSERVATION_STATUSES`) and `omh.runtime.records`
+# (`OBSERVED_RESULTS` minus `completed`); the bundle cannot import from src.
+# These are the statuses that END a target. `cancelled` belongs to both because
+# a run someone stopped is over: leaving it out is what made a cancelled run
+# read as one that had merely not got there yet.
+TERMINAL_JOURNAL_STATUSES = {"blocked", "failed", "cancelled"}
 EXECUTOR_PROGRESS_PROFILES = {"codex", "claude_code", "hermes_local", "omo_runtime"}
 EXECUTOR_PROGRESS_BINDING_STATES = {"active", "stale", "expired", "closed"}
 # Hand-copied from `omh.workflows.external_effect_receipts` and
@@ -576,7 +584,7 @@ def _receipt_backed_effect_kinds(receipts: list[dict[str, Any]], run_id: str) ->
 
 def _demote_observation_status(status: str, backed: set[str]) -> str:
     """Walk an observation status down to the highest rung it can still claim."""
-    if status in {"blocked", "failed", "cancelled"}:
+    if status in TERMINAL_JOURNAL_STATUSES:
         return status
     try:
         index = OBSERVATION_STATUS_ORDER.index(status)
@@ -657,7 +665,7 @@ def _journal_projection_for_run(
         if event.get("plan_status"):
             projection["plan_status"] = str(event.get("plan_status", ""))
         if status != "observed":
-            if status in {"blocked", "failed"}:
+            if status in TERMINAL_JOURNAL_STATUSES:
                 projection["observation_status"] = status
             continue
         if name == "prepared_handoff_created":
@@ -714,7 +722,7 @@ def _apply_lifecycle_to_run_summary(summary: dict[str, Any], lifecycle: dict[str
 
 def _later_status(current: str, candidate: str) -> str:
     order = list(OBSERVATION_STATUS_ORDER)
-    if current in {"blocked", "failed", "cancelled"}:
+    if current in TERMINAL_JOURNAL_STATUSES:
         return current
     try:
         return candidate if order.index(candidate) >= order.index(current) else current
@@ -734,8 +742,9 @@ def _ordered_activity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     def observed(row: dict[str, Any]) -> str:
         return str(row.get("observed_at", ""))
 
-    running = [row for row in rows if str(row.get("state", "running")) not in {"blocked", "failed", "done"}]
-    blocked = [row for row in rows if str(row.get("state", "")) in {"blocked", "failed"}]
+    settled_states = {"blocked", "failed", "cancelled"}
+    running = [row for row in rows if str(row.get("state", "running")) not in settled_states | {"done"}]
+    blocked = [row for row in rows if str(row.get("state", "")) in settled_states]
     done = [row for row in rows if str(row.get("state", "")) == "done"]
     blocked.sort(key=observed, reverse=True)
     done.sort(key=observed, reverse=True)
@@ -1537,11 +1546,14 @@ def _hud_subagent_summary(status: dict[str, Any]) -> dict[str, Any]:
     progress_rows = status.get("latest_progress_events", [])
     progress = progress_rows if isinstance(progress_rows, list) else []
     blocked = 0
+    cancelled = 0
     for row in active:
         event = row.get("latest_event", {}) if isinstance(row, dict) else {}
         event_type = str(event.get("event_type", "")) if isinstance(event, dict) else ""
         event_status = str(event.get("status", "")) if isinstance(event, dict) else ""
-        if event_type in {"executor_blocked", "executor_failed"} or event_status in {"blocked", "failed"}:
+        if _hud_row_state(event_type, event_status) == "cancelled":
+            cancelled += 1
+        elif event_type in {"executor_blocked", "executor_failed"} or event_status in {"blocked", "failed"}:
             blocked += 1
     completed = sum(
         1
@@ -1567,12 +1579,7 @@ def _hud_subagent_summary(status: dict[str, Any]) -> dict[str, Any]:
         event = event if isinstance(event, dict) else {}
         event_type = str(event.get("event_type", ""))
         event_status = str(event.get("status", ""))
-        state = (
-            "blocked"
-            if event_type in {"executor_blocked", "executor_failed"}
-            or event_status in {"blocked", "failed"}
-            else "running"
-        )
+        state = _hud_row_state(event_type, event_status)
         projected = {
             "state": state,
             "task_id": _hud_text(row.get("target_id", ""), limit=80)[:8],
@@ -1628,14 +1635,34 @@ def _hud_subagent_summary(status: dict[str, Any]) -> dict[str, Any]:
         "hidden_rows": hidden_rows,
         "status": "observed" if active or stale or progress else "idle",
         "active": len(active),
-        "running": max(0, len(active) - blocked),
+        "running": max(0, len(active) - blocked - cancelled),
         "blocked": blocked,
+        # Counted apart from `blocked` because the two ask for different things:
+        # a blocked executor is waiting on something a reader may be able to
+        # clear, and a cancelled one is over and will only run again if someone
+        # re-dispatches it.
+        "cancelled": cancelled,
         "completed": completed,
         "stale": len(stale),
         "latest_action": latest_action,
         "rows": subagent_rows,
         "maestro_rows": maestro_rows,
     }
+
+
+def _hud_row_state(event_type: str, event_status: str) -> str:
+    """The display state one executor row is in: cancelled, blocked, or running.
+
+    Cancellation is tested first. A cancelled executor whose event also carries
+    a failed process status would otherwise render as blocked, which is the
+    conflation #808 AC2 rules out and which sends a reader looking for a blocker
+    to clear on work that someone deliberately stopped.
+    """
+    if event_type == "executor_cancelled" or event_status == "cancelled":
+        return "cancelled"
+    if event_type in {"executor_blocked", "executor_failed"} or event_status in {"blocked", "failed"}:
+        return "blocked"
+    return "running"
 
 
 def _hud_executor_role(row: dict[str, Any]) -> str:
@@ -2419,6 +2446,17 @@ def _projected_binding_state(runtime_dir: Path, binding: dict[str, Any]) -> str:
 
 
 def _target_has_terminal_result(runtime_dir: Path, target_type: str, target_id: str) -> bool:
+    """Whether the run or wrapper session behind a binding has already ended.
+
+    Asks whether the record is OBSERVED and carries any result, rather than
+    matching the result against a list of the ones this bundle happens to know.
+    A bundle is copied onto a machine and updated separately from the writer, so
+    it will meet result words added after it shipped; matching a list made every
+    such word read as "not terminal", which projects a target that stopped as
+    one still running. Unobserved results (`not_observed`, `not_available`)
+    cannot reach an observed record, so the observed flag is the whole test, and
+    a result this bundle cannot name degrades to terminal-with-unknown-kind.
+    """
     if (
         not target_id
         or target_id in {".", ".."}
@@ -2429,10 +2467,10 @@ def _target_has_terminal_result(runtime_dir: Path, target_type: str, target_id: 
         return False
     if target_type == "run":
         delegation = _read_json(runtime_dir / "runs" / target_id / "delegation.json")
-        return bool(delegation.get("observed")) and str(delegation.get("result", "")) in {"completed", "blocked", "failed"}
+        return bool(delegation.get("observed")) and bool(str(delegation.get("result", "")).strip())
     if target_type == "wrapper_session":
         record = _read_json(runtime_dir / "wrapper_sessions" / target_id / "executor_session.json")
-        return bool(record.get("result_observed")) and str(record.get("result", "")) in {"completed", "blocked", "failed"}
+        return bool(record.get("result_observed")) and bool(str(record.get("result", "")).strip())
     return False
 
 
