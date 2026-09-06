@@ -268,7 +268,16 @@ class InterruptedDispatchTests(unittest.TestCase):
             # Both units surface in the rollup — nothing silently vanishes as
             # if it were never planned.
             self.assertEqual(set(statuses), {"one", "two"})
-            self.assertIn("interrupted", set(statuses.values()))
+            # A unit a cancelled batch never spawned says exactly that. It is
+            # not `failed` (nothing ran) and not the older undifferentiated
+            # `interrupted` (which said nothing about whether a process had
+            # started), so a resume knows there is nothing to preserve.
+            self.assertEqual(set(statuses.values()), {"not_started_cancelled"})
+            rollup = summary["cancellation"]
+            self.assertEqual(sorted(rollup["never_started"]), ["one", "two"])
+            self.assertEqual(rollup["cancelled"], [])
+            self.assertEqual(rollup["outcome_unknown"], [])
+            self.assertEqual(rollup["blocked_by_cancelled_dependency"], [])
 
     def test_system_exit_re_raises_after_the_summary_is_written(self) -> None:
         with TemporaryDirectory() as tmp:

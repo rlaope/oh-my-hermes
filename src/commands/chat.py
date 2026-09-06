@@ -23,6 +23,7 @@ from ..runtime.artifacts import create_run, summarize_delegated_coding_status, w
 from ..targets import TARGET_METADATA_KEYS, build_target_change_notice, inspect_target_observation, record_target_observation
 from ..wrapper.contract import INTERACTION_MODES, RENDER_PROFILES, build_chat_interaction_payload, build_chat_status_interaction
 from ..wrapper.executor_sessions import (
+    EXECUTOR_SESSION_OBSERVED_RESULTS,
     ExecutorSessionError,
     attach_executor_session,
     open_executor_session,
@@ -1358,7 +1359,7 @@ def _add_chat_commands(sub) -> None:
 
     session_record_executor = session_sub.add_parser("record-executor")
     session_record_executor.add_argument("session_id")
-    session_record_executor.add_argument("--result", choices=("completed", "blocked", "failed"), required=True)
+    session_record_executor.add_argument("--result", choices=EXECUTOR_SESSION_OBSERVED_RESULTS, required=True)
     session_record_executor.add_argument("--evidence-ref", action="append")
     session_record_executor.add_argument("--summary", default="")
     session_record_executor.add_argument("--codex-log-jsonl", default=None, help="Observed Codex JSONL/process output to summarize; raw events are not echoed.")

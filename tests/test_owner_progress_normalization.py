@@ -157,8 +157,8 @@ class NormalizationRecordShapeTests(unittest.TestCase):
     def test_the_normalized_vocabulary_is_the_shipped_one_plus_the_unmapped_value(self) -> None:
         self.assertEqual(PROGRESS_EVENT_TYPES, NORMALIZED_PROGRESS_EVENT_TYPES)
         self.assertEqual(NORMALIZED_PROGRESS_EVENT_TYPES[-1], UNMAPPED_NORMALIZED_EVENT)
-        self.assertEqual(len(NORMALIZED_PROGRESS_EVENT_TYPES), 13)
-        self.assertEqual(len(set(NORMALIZED_PROGRESS_EVENT_TYPES)), 13)
+        self.assertEqual(len(NORMALIZED_PROGRESS_EVENT_TYPES), 14)
+        self.assertEqual(len(set(NORMALIZED_PROGRESS_EVENT_TYPES)), 14)
 
     def test_the_unmapped_value_never_ends_a_binding(self) -> None:
         """An unrecognized word settles nothing, so it must not close or exempt."""

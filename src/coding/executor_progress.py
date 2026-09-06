@@ -10,6 +10,7 @@ from typing import Any
 
 from ..local_store import atomic_write_json, ensure_dir, ensure_file, read_json_object, read_jsonl_objects, utc_now
 from ..paths import OmhPaths
+from ..runtime.records import OBSERVED_RESULTS as RUNTIME_OBSERVED_RESULTS
 from .context_safety import sanitize_user_facing_progress_text
 from .owner_progress_normalization import (
     NORMALIZED_PROGRESS_EVENT_TYPES,
@@ -47,6 +48,7 @@ TERMINAL_EVENT_TYPES = {
     "executor_completed",
     "executor_blocked",
     "executor_failed",
+    "executor_cancelled",
     "tests_failed",
     "tests_passed",
     "reported_change_not_observed",
@@ -54,11 +56,33 @@ TERMINAL_EVENT_TYPES = {
 # Observations that end a binding's life. Kept as its own name rather than
 # reusing TERMINAL_EVENT_TYPES: `tests_failed` and `tests_passed` are reportable
 # end states but the executor may still be working, so they must not close.
+#
+# `executor_cancelled` closes. A cancelled executor is not going to send
+# anything else, and a binding left open after one is the "still looks active
+# until it goes stale" reading a cancellation is supposed to replace: staleness
+# says nobody has heard from this in a while, which is a different and weaker
+# claim than "this stopped".
 CLOSING_EVENT_TYPES = {
     "executor_completed",
     "executor_blocked",
     "executor_failed",
+    "executor_cancelled",
     "reported_change_not_observed",
+}
+# What one closed binding means for the wait it was armed against. The wait
+# contract (`wait_strategy.WAIT_TERMINAL_STATES`) and this vocabulary are two
+# names for one ending, so the mapping is stated once here rather than being
+# re-derived by every caller that holds both.
+# The observed terminal results a run or wrapper session can hold, mirrored from
+# `runtime.records.OBSERVED_RESULTS` and imported rather than restated so a
+# fifth terminal result cannot appear there and leave a binding open here.
+_OBSERVED_TERMINAL_RESULTS = frozenset(RUNTIME_OBSERVED_RESULTS)
+_WAIT_OUTCOME_BY_CLOSING_EVENT = {
+    "executor_completed": "completed",
+    "executor_blocked": "failed",
+    "executor_failed": "failed",
+    "executor_cancelled": "cancelled",
+    "reported_change_not_observed": "failed",
 }
 # Where a progress summary came from. Only a summary this repo derived itself,
 # by parsing an executor stream it also hashed, can corroborate that executor's
@@ -538,6 +562,20 @@ _CHANGE_CLAIM_ACTIVITY = {"Codex applied a file change."}
 _CHANGE_CLAIM_EVENT_TYPES = {"diff_started"}
 _SUCCESS_PROCESS_STATUSES = {"completed", "complete", "done", "success", "succeeded", "exited_zero"}
 _FAILURE_PROCESS_STATUSES = {"failed", "failure", "error", "errored", "exited_nonzero"}
+# Process outcomes the HOST observed, not words an executor chose. Each one
+# names a stop that something outside the executor performed: the operator
+# interrupted the batch, a supervisor sent a signal, the dispatcher terminated
+# the unit group. This is the only corroboration a cancellation can have --
+# nothing an executor says about itself reaches `executor_cancelled` without one
+# of these, exactly as no executor reaches `executor_completed` on its own word.
+_CANCELLED_PROCESS_STATUSES = {
+    "cancelled",
+    "canceled",
+    "interrupted",
+    "killed",
+    "signal_terminated",
+    "terminated",
+}
 _BLOCKED_PROCESS_STATUSES = {"blocked", "blocker"}
 
 # Everything that can corroborate an owner's own end-state narration, and
@@ -553,6 +591,7 @@ _END_STATE_PROCESS_STATUSES = {
     *_SUCCESS_PROCESS_STATUSES,
     *_FAILURE_PROCESS_STATUSES,
     *_BLOCKED_PROCESS_STATUSES,
+    *_CANCELLED_PROCESS_STATUSES,
 }
 # Past tense only. "Codex is running tests." says a run started, which cannot
 # corroborate that one finished.
@@ -788,6 +827,14 @@ def infer_progress_event_type(signal: dict[str, Any]) -> str:
     # nothing about it needs corroborating.
     narrated = "" if self_reported_end_state else normalized_latest
     verdict = "" if self_reported_end_state and progress_status in _END_STATE_PROGRESS_STATUSES else progress_status
+    # Ahead of blocked and failed, because an observed cancellation explains
+    # both of the shapes they would otherwise claim. A group-terminated child
+    # exits non-zero, so a lane reading only the exit code files an operator's
+    # own stop as a model failure and sends the next reader looking for a defect
+    # that does not exist. Only the host's observed process outcome gets here:
+    # `narrated` is already blank whenever the word was the executor's alone.
+    if process_status in _CANCELLED_PROCESS_STATUSES or narrated == "executor_cancelled":
+        return "executor_cancelled"
     if narrated == "executor_blocked" or verdict == "blocked" or process_status in _BLOCKED_PROCESS_STATUSES:
         return "executor_blocked"
     if verdict == "failed_or_error_observed" or narrated == "tests_failed":
@@ -912,6 +959,19 @@ def summary_for_signal(signal: dict[str, Any], event_type: str) -> str:
     }:
         return _compact_text(_sanitize_progress_copy(visible) or _summary_for_event_type(event_type), 240)
     return _summary_for_event_type(event_type)
+
+
+def wait_outcome_for_progress_event(event_type: str) -> str:
+    """The `omh_execution_wait_strategy/v1` terminal state one closing event means.
+
+    Returns "" for an event that does not close a binding, so a caller can tell
+    "this progress event ends the wait" from "this one does not" without
+    restating `CLOSING_EVENT_TYPES`. The two contracts describe one ending from
+    two sides: a cancelled executor closes its progress binding here and closes
+    its wait as `cancelled` there, and they must not be able to disagree about
+    which of the two it was.
+    """
+    return _WAIT_OUTCOME_BY_CLOSING_EVENT.get(str(event_type), "")
 
 
 def observe_executor_progress(
@@ -1174,7 +1234,7 @@ def refresh_binding_freshness(
 ) -> dict[str, Any]:
     _require_valid("binding", validate_progress_binding(binding))
     updated = dict(binding)
-    if result_status in {"completed", "blocked", "failed"} or updated.get("state") == "closed":
+    if result_status in _OBSERVED_TERMINAL_RESULTS or updated.get("state") == "closed":
         updated["state"] = "closed"
         return updated
     reference = str(updated.get("last_observed_at") or updated.get("updated_at") or updated.get("created_at") or "")
@@ -1378,13 +1438,13 @@ def _terminal_result_status(paths: OmhPaths, binding: dict[str, Any]) -> str:
         delegation = read_json_object(paths.runtime_runs_dir / target_id / "delegation.json") or {}
         if bool(delegation.get("observed")):
             result = str(delegation.get("result", ""))
-            if result in {"completed", "blocked", "failed"}:
+            if result in _OBSERVED_TERMINAL_RESULTS:
                 return result
     if target_type == "wrapper_session":
         record = read_json_object(paths.runtime_wrapper_sessions_dir / target_id / "executor_session.json") or {}
         if bool(record.get("result_observed")):
             result = str(record.get("result", ""))
-            if result in {"completed", "blocked", "failed"}:
+            if result in _OBSERVED_TERMINAL_RESULTS:
                 return result
     return ""
 

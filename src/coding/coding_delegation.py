@@ -2089,7 +2089,11 @@ def _executor_handoff(
             "evidence_required": "Record separate wrapper/runtime evidence before marking review observed.",
         },
         "report_contract": {
-            "allowed_statuses": ["completed", "blocked", "failed"],
+            # `cancelled` is offered so an executor that was stopped has a
+            # truthful status to report. Without it the only shapes on offer
+            # were `failed`, which blames the work, and `blocked`, which
+            # promises the work resumes when something clears.
+            "allowed_statuses": ["completed", "blocked", "cancelled", "failed"],
             "required_fields": [
                 "status",
                 "changed_files",
@@ -2295,7 +2299,7 @@ def _runtime_handoff(
             "record_with": (
                 "omh runtime observe --session <wrapper-session-id> --runtime-profile "
                 f"{profile} --event <runtime_start|worktree_creation|worker_dispatch|worker_result|verification|review|ci|merge_readiness|merge> "
-                "--status <observed|blocked|failed|not_observed> --summary <observed metadata>"
+                "--status <observed|blocked|cancelled|failed|not_observed> --summary <observed metadata>"
             ),
             "allowed_events": [
                 "runtime_start",

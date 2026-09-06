@@ -145,6 +145,41 @@ FANOUT_DISPATCH_SCHEMA_VERSION = "fanout_dispatch_summary/v1"
 # launcher uses the same 10s window before re-raising on itself.
 UNIT_TERMINATE_GRACE_SECONDS = 10.0
 
+# Unit statuses for a batch that was stopped. Four words, because the four
+# facts an operator has to act on differently used to arrive as one
+# (`interrupted`) or as `failed`:
+#
+#   cancelled                       -- this unit's process was running and the
+#                                      dispatcher terminated its group. It may
+#                                      have left a dirty worktree, so a resume
+#                                      still asks the replay-safety question.
+#   cancelled_outcome_unknown       -- the unit was in flight and its worker did
+#                                      not come back within the terminate grace.
+#                                      Whether it wrote anything is not known,
+#                                      and saying so is the honest answer.
+#   not_started_cancelled           -- the unit never spawned. Nothing exists to
+#                                      preserve, so a resume re-attempts it.
+#   blocked_by_cancelled_dependency -- the unit was admissible only behind a
+#                                      unit that was cancelled. It is not a
+#                                      failure of this unit and not the same as
+#                                      being blocked behind one that failed.
+#
+# OMH records these; it does not claim it can cancel every external executor.
+# The dispatcher can only terminate the process groups it spawned itself, and
+# these words describe what it OBSERVED of that termination.
+UNIT_STATUS_CANCELLED = "cancelled"
+UNIT_STATUS_CANCELLED_OUTCOME_UNKNOWN = "cancelled_outcome_unknown"
+UNIT_STATUS_NOT_STARTED_CANCELLED = "not_started_cancelled"
+UNIT_STATUS_BLOCKED_BY_CANCELLED_DEPENDENCY = "blocked_by_cancelled_dependency"
+CANCELLED_UNIT_STATUSES = frozenset(
+    {
+        UNIT_STATUS_CANCELLED,
+        UNIT_STATUS_CANCELLED_OUTCOME_UNKNOWN,
+        UNIT_STATUS_NOT_STARTED_CANCELLED,
+        UNIT_STATUS_BLOCKED_BY_CANCELLED_DEPENDENCY,
+    }
+)
+
 # Live unit process groups, registered by the signal-safe default runner so
 # an interrupt terminates them instead of orphaning them to pid 1. OMO
 # shipped exactly this incident: a launcher blocked in spawnSync died on
@@ -1928,7 +1963,7 @@ def dispatch_fanout(
         # pool, or parked on the owner gate while the batch died — must not
         # start a fresh agent CLI nobody will ever collect.
         if _INTERRUPT_FLAG.is_set():
-            return _skipped(unit, "interrupted")
+            return _skipped(unit, UNIT_STATUS_NOT_STARTED_CANCELLED)
         gate = owner_gates.get(str(unit.get("owner") or "choose"))
         if gate is None:
             if health_events is not None:
@@ -1936,7 +1971,7 @@ def dispatch_fanout(
             return _dispatch_unit(paths, unit, **kwargs)
         with gate:
             if _INTERRUPT_FLAG.is_set():
-                return _skipped(unit, "interrupted")
+                return _skipped(unit, UNIT_STATUS_NOT_STARTED_CANCELLED)
             if health_events is not None:
                 health_events.started(str(unit["unit_id"]))
             return _dispatch_unit(paths, unit, **kwargs)
@@ -2051,26 +2086,37 @@ def dispatch_fanout(
                 results[unit_id] = result
                 if admission is not None:
                     admission.observe(unit_id, result)
-            except (
-                FuturesCancelledError,
-                FuturesTimeoutError,
-                KeyboardInterrupt,
-                SystemExit,
-            ):
-                results[unit_id] = _skipped(units[unit_id], "interrupted")
+            except (FuturesCancelledError, KeyboardInterrupt, SystemExit):
+                # `shutdown(cancel_futures=True)` cancels only futures the pool
+                # never started, so a cancelled future is a unit that never
+                # spawned: there is nothing on disk to preserve.
+                results[unit_id] = _skipped(units[unit_id], UNIT_STATUS_NOT_STARTED_CANCELLED)
+            except FuturesTimeoutError:
+                # It was in flight and did not come back inside the terminate
+                # grace. Whether it wrote anything is genuinely unknown, and a
+                # resume has to ask rather than assume either way.
+                results[unit_id] = _skipped(units[unit_id], UNIT_STATUS_CANCELLED_OUTCOME_UNKNOWN)
             if unit_id in pending:
                 pending.remove(unit_id)
         for unit_id in list(pending):
             if unit_id not in results:
-                results[unit_id] = _skipped(units[unit_id], "interrupted")
+                results[unit_id] = _skipped(units[unit_id], UNIT_STATUS_NOT_STARTED_CANCELLED)
             pending.remove(unit_id)
-        # A group-terminated unit exits with a negative signal code and would
-        # otherwise read as a genuine model failure in the merged summary;
-        # the flag keeps a re-dispatch decision from blaming the model.
+        # A group-terminated unit exits with a negative signal code. Reported as
+        # `failed` it reads as a genuine model failure in the merged summary and
+        # sends the next reader hunting a defect that does not exist, so the
+        # observed termination is recorded as the terminal state it was. The
+        # failure classification goes with it: a stop is not a crash, and a
+        # cancelled unit's `failure_kind` would otherwise steer the recovery
+        # interview toward a fault nobody observed.
         for entry in results.values():
             exit_code = entry.get("exit_code")
             if isinstance(exit_code, int) and exit_code < 0:
                 entry["interrupted"] = True
+                entry["status"] = UNIT_STATUS_CANCELLED
+                entry.pop("failure_kind", None)
+                entry.pop("limit_shaped", None)
+                entry.pop("limit_pattern", None)
     finally:
         # Idempotent after the success/interrupt shutdowns; without it, a
         # worker exception re-raised by future.result() leaks live pool
@@ -2244,9 +2290,14 @@ def dispatch_fanout(
         summary["resume"] = {**resume_plan, "counts": resume_counts(resume_plan["decisions"])}
     if interrupted_by is not None:
         # A cut-short batch says so; units that never started carry the
-        # `interrupted` status rather than silently vanishing from the
+        # `not_started_cancelled` status rather than silently vanishing from the
         # rollup as if they were never planned.
         summary["interrupted"] = True
+        # Which units ended in which cancellation state, so the summary answers
+        # "what happened to each of them" without a reader re-deriving it from
+        # per-unit rows. Present only on a cancelled batch: an ordinary dispatch
+        # has nothing to say here and should not carry an empty section.
+        summary["cancellation"] = _cancellation_rollup(summary_units)
     if not dry_run and fanout_id:
         from .fanout_artifacts import fanout_dispatch_summary_path, fanout_run_journal_path
 
@@ -2659,6 +2710,36 @@ def _with_carried_recovery(
     return carried
 
 
+def _cancellation_rollup(units: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Which units this cancelled batch stopped, never started, or lost track of.
+
+    Metadata only: unit ids and the closed status words above, never output,
+    prompts, or signal detail. `operator_initiated_cancel` is deliberately
+    false-by-construction wording rather than a field: OMH RECORDS an observed
+    cancellation, and the only cancellation it performs is of the process groups
+    its own dispatcher spawned.
+    """
+    by_status: dict[str, list[str]] = {status: [] for status in sorted(CANCELLED_UNIT_STATUSES)}
+    for entry in units:
+        if not isinstance(entry, Mapping):
+            continue
+        status = str(entry.get("status", ""))
+        if status in by_status:
+            by_status[status].append(str(entry.get("unit_id", "")))
+    return {
+        "cancelled": by_status[UNIT_STATUS_CANCELLED],
+        "outcome_unknown": by_status[UNIT_STATUS_CANCELLED_OUTCOME_UNKNOWN],
+        "never_started": by_status[UNIT_STATUS_NOT_STARTED_CANCELLED],
+        "blocked_by_cancelled_dependency": by_status[UNIT_STATUS_BLOCKED_BY_CANCELLED_DEPENDENCY],
+        "claim_boundary": (
+            "A cancellation rollup records the terminal state each unit reached when this dispatch was "
+            "stopped. OMH terminates only the process groups its own dispatcher spawned; it is not a "
+            "claim that any external executor was cancelled, and it is not execution, verification, "
+            "review, CI, merge-readiness, or merge evidence."
+        ),
+    }
+
+
 def _recovery_available(units: Sequence[Mapping[str, Any]]) -> list[str]:
     return [
         str(entry.get("unit_id"))
@@ -2933,9 +3014,19 @@ def _close_fanout_progress_binding(
     try:
         telemetry = parse_unit_telemetry(owner, stdout_text)
         cost_usd = telemetry.get("cost_usd")
+        # A dispatcher-terminated unit closes its binding as cancelled, not as
+        # failed. `_INTERRUPT_FLAG` is the host's own observation that it sent
+        # the signal, which is the corroboration the progress lane requires
+        # before it will accept a cancellation at all.
+        if exit_code == 0:
+            observed_process_status = "completed"
+        elif _INTERRUPT_FLAG.is_set():
+            observed_process_status = "cancelled"
+        else:
+            observed_process_status = "failed"
         signal = build_safe_progress_signal(
             executor_profile=str(binding.get("executor_profile", "")),
-            process_status="completed" if exit_code == 0 else "failed",
+            process_status=observed_process_status,
             routed_model=routed_model,
             routed_reasoning_effort=routed_effort,
             explicit_summary=title,
@@ -4536,6 +4627,12 @@ def _dependency_failed(result: dict[str, Any] | None) -> bool:
         "capability_snapshot_invalid",
         "failed",
         "blocked_by_dependency",
+        # A cancelled dependency produced nothing a dependent can build on. It
+        # is admitted as a prerequisite by neither this predicate's opposite
+        # (`_dependency_satisfied`, which requires an observed exit-0) nor by
+        # any other path, and naming it here is what lets the dependent say
+        # WHICH unit it is waiting on rather than blocking on nothing.
+        *CANCELLED_UNIT_STATUSES,
         "executor_not_ready",
         "unsupported_for_local_dispatch",
         "worktree_failed",
@@ -4550,8 +4647,20 @@ def _dependency_failed(result: dict[str, Any] | None) -> bool:
 
 
 def _blocked(unit: Mapping[str, Any], results: Mapping[str, dict[str, Any]]) -> dict[str, Any]:
-    entry = _skipped(unit, "blocked_by_dependency")
     deps = [str(dep) for dep in unit.get("depends_on", []) or []]
+    cancelled_deps = [
+        dep
+        for dep in deps
+        if str((results.get(dep) or {}).get("status", "")) in CANCELLED_UNIT_STATUSES
+    ]
+    # A dependent held behind a cancelled unit is not held behind a defect. The
+    # two read the same in a rollup that has only `blocked_by_dependency`, and
+    # they call for different next steps: one waits on a fix, the other waits on
+    # a decision to re-dispatch.
+    entry = _skipped(
+        unit,
+        UNIT_STATUS_BLOCKED_BY_CANCELLED_DEPENDENCY if cancelled_deps else "blocked_by_dependency",
+    )
     failed = [dep for dep in deps if _dependency_failed(results.get(dep))]
     # A dependency stuck in a non-terminal verdict (for example
     # model_choice_required) is neither satisfied nor failed; the entry must

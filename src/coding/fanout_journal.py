@@ -91,6 +91,13 @@ TERMINAL_FAILED = "failed"
 TERMINAL_DECLINED = "declined"
 TERMINAL_SKIPPED_BY_DEPENDENCY = "skipped_by_dependency"
 TERMINAL_NOT_ATTEMPTED = "not_attempted"
+# A unit whose process was running when the dispatch was stopped, or that was in
+# flight and never reported back. Kept apart from `failed` because a resume acts
+# on it differently: nothing about the unit's own work is known to be wrong, so
+# the question is whether to run it again, not what to fix. It still goes
+# through the replay-safety gate -- a killed unit can leave a dirty worktree
+# exactly as a crashed one can.
+TERMINAL_CANCELLED = "cancelled"
 
 # The journal's own name for a decline in `failure_class`, kept apart from
 # every class `fanout_retry` owns: a decline was never classified by the
@@ -115,6 +122,10 @@ RESUME_HOLD_DECLINED = "hold_declined_conclusive"
 # name so the resume record says the unit is being re-attempted because someone
 # asked for exactly that, not because a failure happened to be replay-safe.
 RESUME_RERUN_AWAITING_RETRY = "rerun_awaiting_retry"
+# The prior run was stopped while this unit was running. It is re-dispatched
+# under its own action name so a resume record says the unit is being attempted
+# again because someone stopped it, not because it failed replay-safely.
+RESUME_RERUN_CANCELLED = "rerun_cancelled"
 
 RESUME_HOLD_ACTIONS = frozenset(
     {RESUME_HOLD_SUCCEEDED, RESUME_HOLD_REPLAY_UNSAFE, RESUME_HOLD_BLOCKED_DEPENDENCY, RESUME_HOLD_DECLINED}
@@ -125,6 +136,7 @@ RESUME_RERUN_ACTIONS = frozenset(
         RESUME_RERUN_NOT_ATTEMPTED,
         RESUME_UNSKIP_DEPENDENT,
         RESUME_RERUN_AWAITING_RETRY,
+        RESUME_RERUN_CANCELLED,
     }
 )
 
@@ -143,6 +155,10 @@ _NEVER_SPAWNED_STATUSES = frozenset(
     {
         "not_selected",
         "interrupted",
+        # The dispatcher's own word for a unit a cancelled batch never spawned.
+        # `interrupted` stays a member so a journal written before the
+        # cancellation states existed still resumes the way it always did.
+        "not_started_cancelled",
         "model_choice_required",
         "spawn_ceiling_reached",
         "review_dispatch_budget_exhausted",
@@ -436,6 +452,22 @@ def _unit_resume_decision(
             reason=f"never attempted in the prior run (status {row.get('status') or 'unknown'})",
             row=row,
         )
+    if prior_state == TERMINAL_CANCELLED:
+        # After the replay-safety and blocker gates above, which apply to a
+        # cancelled unit exactly as they apply to a failed one: a unit killed
+        # mid-write is held with its side effect named, not re-dispatched over
+        # the work it left behind.
+        return _decision(
+            unit_id,
+            prior_state=prior_state,
+            action=RESUME_RERUN_CANCELLED,
+            reason=(
+                f"the prior run was stopped while this unit was in flight (status "
+                f"{row.get('status') or 'unknown'}) with no observed side effect, so re-dispatching "
+                "it destroys nothing"
+            ),
+            row=row,
+        )
     return _decision(
         unit_id,
         prior_state=prior_state,
@@ -486,8 +518,10 @@ def _carried_forward(entry: Mapping[str, Any]) -> dict[str, Any] | None:
 def _terminal_state(entry: Mapping[str, Any]) -> str:
     if entry.get("status") in _SUCCEEDED_STATUSES or bool(entry.get("process_succeeded")):
         return TERMINAL_SUCCEEDED
-    if entry.get("status") == "blocked_by_dependency":
+    if entry.get("status") in {"blocked_by_dependency", "blocked_by_cancelled_dependency"}:
         return TERMINAL_SKIPPED_BY_DEPENDENCY
+    if entry.get("status") in {"cancelled", "cancelled_outcome_unknown"}:
+        return TERMINAL_CANCELLED
     if "exit_code" not in entry and entry.get("status") in _NEVER_SPAWNED_STATUSES:
         return TERMINAL_NOT_ATTEMPTED
     if _unit_result_declined(entry):
@@ -528,6 +562,8 @@ def _failure_classification(entry: Mapping[str, Any], *, state: str = "") -> dic
     re-matching here would be guessing. Only a failure the retry ladder never
     saw falls back to the exit-code-only classification.
 
+    A cancelled unit skips both as well, with an empty class: nothing failed.
+
     A declined unit skips both: its class is the journal's own
     `FAILURE_CLASS_DECLINED_CONCLUSIVE`, never `fanout_retry`'s
     `terminal_failure`, because the retry ladder never asked "is this
@@ -537,6 +573,11 @@ def _failure_classification(entry: Mapping[str, Any], *, state: str = "") -> dic
     """
     if state == TERMINAL_DECLINED:
         return {"failure_class": FAILURE_CLASS_DECLINED_CONCLUSIVE, "failure_label": ""}
+    if state == TERMINAL_CANCELLED:
+        # A cancelled unit observed no failure. Classifying its signal exit code
+        # would attribute a fault to work that was never allowed to reach a
+        # verdict, and the recovery interview reads this field.
+        return {"failure_class": "", "failure_label": ""}
     retry = entry.get("retry")
     if isinstance(retry, Mapping):
         decisions = retry.get("decisions")

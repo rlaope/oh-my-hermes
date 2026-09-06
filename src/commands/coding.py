@@ -47,6 +47,7 @@ from ..plugin_bundle.omh.hermes_delegation import effective_mixture_category_cha
 from ..routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 from ..routing.localization import normalized_phrase, routing_tokens
 from ..runtime.artifacts import append_journal_observation, create_prepared_coding_delegation_run, write_coding_delegation
+from ..runtime.records import OBSERVED_RESULTS, WRAPPER_COMPLETION_STATUSES
 from ..system.paths import OmhPaths
 from ..workflows.blocked_work_records import mint_blocked_work_record
 from ..workflows.role_context_packs import validate_accepted_role_context, write_role_context_pack
@@ -3398,14 +3399,14 @@ def _add_coding_commands(sub) -> None:
 
     lifecycle_result = lifecycle_sub.add_parser("result")
     lifecycle_result.add_argument("--run", dest="run_id", required=True)
-    lifecycle_result.add_argument("--result", choices=("completed", "blocked", "failed"), required=True)
+    lifecycle_result.add_argument("--result", choices=OBSERVED_RESULTS, required=True)
     lifecycle_result.add_argument("--participants", default="codex")
     lifecycle_result.add_argument("--evidence-ref", action="append")
     lifecycle_result.set_defaults(func=cmd_coding_lifecycle_result)
 
     lifecycle_verify = lifecycle_sub.add_parser("verify")
     lifecycle_verify.add_argument("--run", dest="run_id", required=True)
-    lifecycle_verify.add_argument("--completion-status", choices=("completed", "blocked", "failed", "unknown"), default="completed")
+    lifecycle_verify.add_argument("--completion-status", choices=tuple(v for v in WRAPPER_COMPLETION_STATUSES if v != "started"), default="completed")
     lifecycle_verify.add_argument("--gap", action="append")
     lifecycle_verify.set_defaults(func=cmd_coding_lifecycle_verify)
 

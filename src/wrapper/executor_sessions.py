@@ -53,8 +53,16 @@ EXECUTOR_SESSION_SCHEMA_VERSION = "executor_session/v1"
 EXECUTOR_SESSION_STATUS_SCHEMA_VERSION = "executor_session_status/v1"
 EXECUTOR_LAUNCH_SCHEMA_VERSION = "executor_launch/v1"
 EXECUTOR_SESSION_RECORD_TYPE = "executor_session"
-EXECUTOR_SESSION_STATUSES = ("not_started", "prepared", "running", "completed", "blocked", "failed")
-EXECUTOR_SESSION_RESULTS = ("not_observed", "completed", "blocked", "failed")
+# Additive: `cancelled` joins both tuples and nothing else moves, so every
+# executor-session record written before it existed still validates unchanged.
+# The wrapper's own `session["status"] == "cancelled"` is a different fact and
+# stays where it is -- that one cancels a PREPARED PLAN before any executor ran,
+# and `record_executor_session_result` still refuses to file a result on such a
+# session. This one is an observed executor cancellation, which can only exist
+# after a dispatch was observed.
+EXECUTOR_SESSION_STATUSES = ("not_started", "prepared", "running", "completed", "blocked", "cancelled", "failed")
+EXECUTOR_SESSION_RESULTS = ("not_observed", "completed", "blocked", "cancelled", "failed")
+EXECUTOR_SESSION_OBSERVED_RESULTS = ("completed", "blocked", "cancelled", "failed")
 EXECUTOR_SESSION_VERIFICATION_STATUSES = ("not_requested", "requested", "observed")
 EXECUTOR_SESSION_ACTION_IDS = (
     "prepare_worktree",
@@ -63,6 +71,7 @@ EXECUTOR_SESSION_ACTION_IDS = (
     "refresh_executor_status",
     "record_executor_completed",
     "record_executor_blocked",
+    "record_executor_cancelled",
     "record_executor_failed",
     "ask_hermes_verify",
 )
@@ -103,7 +112,7 @@ class _ExecutorSessionObservationAdapter:
                 }
             )
         result = str(status.get("result", "not_observed"))
-        if result in {"completed", "blocked", "failed"}:
+        if result in EXECUTOR_SESSION_OBSERVED_RESULTS:
             observations.append(
                 {
                     "event": "result",
@@ -394,6 +403,13 @@ def build_executor_session_actions(
             payload={**base_payload, "backend_action": "record-executor", "result": "blocked", "disabled_reason": status_blocker},
         ),
         _action(
+            "record_executor_cancelled",
+            "Record cancelled",
+            "secondary",
+            enabled=not status_blocker and bool(attached or dispatch_observed) and result_status == "not_observed",
+            payload={**base_payload, "backend_action": "record-executor", "result": "cancelled", "disabled_reason": status_blocker},
+        ),
+        _action(
             "record_executor_failed",
             "Record failed",
             "secondary",
@@ -570,8 +586,8 @@ def record_executor_session_result(
     summary: str = "",
     codex_progress_summary: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    if result not in {"completed", "blocked", "failed"}:
-        raise ExecutorSessionError("executor result must be completed, blocked, or failed")
+    if result not in EXECUTOR_SESSION_OBSERVED_RESULTS:
+        raise ExecutorSessionError("executor result must be completed, blocked, cancelled, or failed")
     session = _existing_session(paths, session_id)
     require_not_terminal(
         session,
@@ -1205,6 +1221,7 @@ def _progress_event_for_result(result: str) -> str:
         "completed": "executor_completed",
         "blocked": "executor_blocked",
         "failed": "executor_failed",
+        "cancelled": "executor_cancelled",
     }.get(result, "progress_observed")
 
 
@@ -1321,7 +1338,7 @@ def _verification_status(record: dict[str, Any], linked_status: dict[str, Any], 
 
 
 def _agent_state(record: dict[str, Any], dispatch_observed: bool, result_status: str) -> str:
-    if result_status in {"completed", "blocked", "failed"}:
+    if result_status in EXECUTOR_SESSION_OBSERVED_RESULTS:
         return result_status
     if dispatch_observed or bool(record.get("attached", False)):
         return "running"
@@ -1782,6 +1799,8 @@ def _executor_action_label(executor_status: dict[str, object], action_id: str) -
 
 
 def _executor_status_card_severity(result: str, verification: str) -> str:
+    if result == "cancelled":
+        return "cancelled"
     if result in {"blocked", "failed"}:
         return "blocked"
     if result == "completed" and verification == "observed":
@@ -1796,6 +1815,10 @@ def _card_step(step_id: str, label: str, state: str, detail: str) -> dict[str, o
 
 
 def _result_step_state(result: str) -> str:
+    # `cancelled` is its own card state, not a shade of `blocked`: the card is
+    # exactly where #808 AC2 requires the four to stay apart.
+    if result == "cancelled":
+        return "cancelled"
     if result in {"blocked", "failed"}:
         return "blocked"
     if result == "completed":

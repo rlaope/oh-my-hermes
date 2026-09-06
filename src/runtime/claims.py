@@ -59,7 +59,7 @@ RUNTIME_CLAIM_LABELS: Final = {
 RUNTIME_CLAIM_BLOCK_REASONS: Final = {
     Claim.HANDOFF_PREPARED: "prepared coding handoff metadata is not available",
     Claim.EXECUTOR_DISPATCHED: "wrapper dispatch evidence is not observed",
-    Claim.EXECUTION_OBSERVED: "executor result evidence is not observed",
+    Claim.EXECUTION_OBSERVED: "executor result evidence is not observed, or the run was cancelled before it reached one",
     Claim.VERIFICATION_OBSERVED: "verification evidence is not observed",
     Claim.REVIEW_OBSERVED: (
         "review evidence is not observed, or no external effect receipt from runtime_review_record "
@@ -118,7 +118,17 @@ def _claim_allowed(claim: Claim, status: Mapping[str, JsonValue]) -> bool:
         case Claim.EXECUTOR_DISPATCHED:
             return _bool_value(_mapping_value(status, "wrapper"), "prompt_dispatched")
         case Claim.EXECUTION_OBSERVED:
-            return _bool_value(_mapping_value(status, "execution"), "observed")
+            execution = _mapping_value(status, "execution")
+            # This rung's own block reason names what it stands for: "executor
+            # result evidence is observed". A cancelled run has none -- it was
+            # stopped before it reached one -- so it stops here, and every rung
+            # above it (verification, review, CI, merge-readiness, merge) is
+            # blocked by the ladder's break rather than by a separate check.
+            # Blocked and failed results are NOT excluded: each of those IS the
+            # executor's answer about the work, however unwelcome.
+            if _string_value(execution, "status") == "cancelled":
+                return False
+            return _bool_value(execution, "observed")
         case Claim.VERIFICATION_OBSERVED:
             return _bool_value(_mapping_value(status, "verification"), "observed")
         case Claim.REVIEW_OBSERVED:

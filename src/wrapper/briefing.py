@@ -10,6 +10,7 @@ from ..coding.executor_capabilities import (
 from ..coding.executor_capability_snapshots import validate_executor_capability_snapshot
 from ..coding.executor_local_workflow import validate_executor_local_workflow
 from ..coding.handoff_input_manifest import input_manifest_summary
+from ..runtime.records import OBSERVED_RESULTS
 
 CODING_BRIEFING_SCHEMA_VERSION = "coding_briefing/v1"
 
@@ -336,7 +337,7 @@ def _progress_steps(
     isolation_status = _object(executor_status.get("workspace_isolation"))
     dispatch_observed = _bool_path(runtime_status, "execution", "observed") or str(executor_status.get("dispatch")) == "observed"
     result = str(executor_status.get("result") or _object(runtime_status.get("execution")).get("status") or "not_observed")
-    result_observed = result in {"completed", "blocked", "failed"}
+    result_observed = result in OBSERVED_RESULTS
     verification_observed = bool(_object(runtime_status.get("verification")).get("observed")) or str(executor_status.get("verification")) in {
         "observed",
         "satisfied",

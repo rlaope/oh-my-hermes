@@ -139,7 +139,7 @@ def record_codex_result(
     if str(status.get("next_action")) != "wait_for_executor_evidence":
         raise CodingLifecycleError(f"cannot record Codex result while next_action is {status.get('next_action')}")
     if result not in OBSERVED_RESULTS:
-        raise CodingLifecycleError("Codex result must be completed, blocked, or failed")
+        raise CodingLifecycleError("executor result must be completed, blocked, failed, or cancelled")
     delegation = write_delegation(
         run_dir,
         {
@@ -176,8 +176,10 @@ def record_codex_verification(
     execution = status.get("execution", {})
     if not isinstance(execution, dict) or not execution.get("observed"):
         raise CodingLifecycleError("cannot record verification before executor evidence is observed")
-    if execution.get("status") in {"blocked", "failed"}:
-        raise CodingLifecycleError("cannot record successful verification for blocked or failed executor result")
+    if execution.get("status") in {"blocked", "cancelled", "failed"}:
+        raise CodingLifecycleError(
+            "cannot record successful verification for a blocked, cancelled, or failed executor result"
+        )
     unobserved_gaps = list(gaps or [])
     verification_observed = completion_status == "completed" and not unobserved_gaps
     wrapper = write_wrapper_contract(
@@ -320,6 +322,7 @@ def _progress_event_for_result(result: str) -> str:
         "completed": "executor_completed",
         "blocked": "executor_blocked",
         "failed": "executor_failed",
+        "cancelled": "executor_cancelled",
     }.get(result, "progress_observed")
 
 
@@ -338,6 +341,7 @@ def _lifecycle_status(next_action: str) -> str:
         "dispatch_to_executor": "prepared",
         "wait_for_executor_evidence": "dispatched",
         "surface_executor_blocker": "blocked",
+        "surface_executor_cancellation": "cancelled",
         "surface_review_blocker": "blocked",
         "surface_ci_blocker": "blocked",
         "surface_merge_blocker": "blocked",
@@ -359,6 +363,7 @@ def _blocking_reason(next_action: str) -> str:
         "dispatch_to_executor": "executor/runtime dispatch is not observed",
         "wait_for_executor_evidence": "executor evidence is not observed",
         "surface_executor_blocker": "executor reported blocked or failed",
+        "surface_executor_cancellation": "executor run was cancelled and must be re-dispatched or resumed before any outcome is claimed",
         "surface_review_blocker": "review failed or blocked completion",
         "surface_ci_blocker": "CI failed or blocked completion",
         "surface_merge_blocker": "merge is blocked",

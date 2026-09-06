@@ -3073,6 +3073,7 @@ def first_use_status_smoke_plan(
                     "attach_executor_session",
                     "record_executor_completed",
                     "record_executor_blocked",
+                    "record_executor_cancelled",
                     "record_executor_failed",
                     "ask_hermes_verify",
                 ],

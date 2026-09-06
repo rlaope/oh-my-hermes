@@ -142,6 +142,13 @@ NORMALIZED_PROGRESS_EVENT_TYPES: Final[tuple[str, ...]] = (
     "executor_completed",
     "executor_blocked",
     "executor_failed",
+    # An observed cancellation. It sits beside the other three end-state words
+    # rather than folding into `executor_failed`, because "this ran and did not
+    # work" and "someone stopped this" call for different recovery. The lane
+    # (`executor_progress.infer_progress_event_type`) is what decides whether a
+    # word this table translates is CORROBORATED; a run whose process was never
+    # observed to stop cannot reach this event by narration alone.
+    "executor_cancelled",
     "reported_change_not_observed",
     "progress_observed",
     UNMAPPED_NORMALIZED_EVENT,
@@ -178,6 +185,7 @@ _TIER_BY_NORMALIZED_EVENT: Final[dict[str, str]] = {
     "executor_completed": "result_claimed",
     "executor_blocked": "result_claimed",
     "executor_failed": "result_claimed",
+    "executor_cancelled": "result_claimed",
     "tests_passed": "verified",
     "tests_failed": "verified",
 }
@@ -301,6 +309,9 @@ _SOURCE_EVENT_EVIDENCE_TIERS: Final[dict[str, str]] = {
     "executor_completed": "result_claimed",
     "executor_blocked": "result_claimed",
     "executor_failed": "result_claimed",
+    "executor_cancelled": "result_claimed",
+    "run_cancelled": "result_claimed",
+    "workflow_cancelled": "result_claimed",
     "workflow_completed": "result_claimed",
     "failure_discovered": "result_claimed",
     "blocker_encountered": "result_claimed",
@@ -343,12 +354,20 @@ _SHARED_DIALECT: Final[dict[str, str]] = {
     "executor_completed": "executor_completed",
     "executor_blocked": "executor_blocked",
     "executor_failed": "executor_failed",
+    "executor_cancelled": "executor_cancelled",
     "reported_change_not_observed": "reported_change_not_observed",
     "progress_observed": "progress_observed",
     # Workflow vocabulary.
     "workflow_started": UNMAPPED_NORMALIZED_EVENT,
     "dispatch_to_executor": "executor_dispatched",
     "workflow_completed": "executor_completed",
+    # Two owner spellings of the same end state. They translate here; whether
+    # the lane ACCEPTS the translation still depends on corroboration, so a
+    # host that narrates a cancellation it did not observe gets the same
+    # `self_reported_end_state_not_corroborated` answer any other end-state
+    # word gets.
+    "run_cancelled": "executor_cancelled",
+    "workflow_cancelled": "executor_cancelled",
     "status_update": "progress_observed",
     "bug_discovered": "progress_observed",
     "failure_discovered": "executor_failed",

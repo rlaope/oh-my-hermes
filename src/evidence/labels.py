@@ -182,6 +182,7 @@ _PHASE_BY_NEXT_ACTION: Final[dict[str, str]] = {
     "accept_or_revise_plan": PHASE_PLAN,
     "wait_for_executor_evidence": PHASE_CODE,
     "report_completion_with_evidence": PHASE_CODE,
+    "surface_executor_cancellation": PHASE_CODE,
 }
 
 

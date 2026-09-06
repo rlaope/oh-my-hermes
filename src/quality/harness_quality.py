@@ -20,7 +20,13 @@ HARNESS_QUALITY_KEYS = (
     "overclaim_guards",
 )
 HARNESS_PROGRESS_SCHEMA_VERSION = "harness_progress/v1"
-HARNESS_PROGRESS_STATES = ("pending", "complete", "blocked", "not_required")
+# `cancelled` is a member so a stopped step cannot be reported as `blocked`.
+# The two ask for different things -- a blocked step is waiting on something,
+# a cancelled one is over -- and it is not `complete` or `not_required` either,
+# so it counts as unfinished in `build_harness_progress` exactly as `blocked`
+# does. `_progress_state` folds anything outside this tuple to `pending`, which
+# is why a state has to be admitted here before a step can report it.
+HARNESS_PROGRESS_STATES = ("pending", "complete", "blocked", "cancelled", "not_required")
 
 
 def build_harness_quality_contract(
@@ -77,7 +83,7 @@ def build_harness_progress(contract: dict[str, object], step_states: dict[str, s
         for step in ladder_steps
     ]
     completed = sum(1 for step in steps if step["state"] in {"complete", "not_required"})
-    next_step = next((str(step["id"]) for step in steps if step["state"] in {"blocked", "pending"}), "")
+    next_step = next((str(step["id"]) for step in steps if step["state"] in {"blocked", "cancelled", "pending"}), "")
     return {
         "schema_version": HARNESS_PROGRESS_SCHEMA_VERSION,
         "harness": contract.get("harness", "unknown"),

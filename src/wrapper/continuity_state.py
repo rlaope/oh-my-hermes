@@ -8,6 +8,7 @@ StateValue: TypeAlias = (
 )
 JourneyState: TypeAlias = Literal[
     "executor_blocked",
+    "executor_cancelled",
     "executor_failed",
     "execution_observed",
     "invalid_runtime_evidence",
@@ -31,6 +32,7 @@ def journey_state(
     if execution.get("observed") is True:
         observed_states: dict[str, JourneyState] = {
             "blocked": "executor_blocked",
+            "cancelled": "executor_cancelled",
             "failed": "executor_failed",
             "completed": "execution_observed",
         }
@@ -86,6 +88,7 @@ def resume_status_from_evidence(evidence: Mapping[str, StateValue]) -> ResumeSta
         "not_observed",
         "completed",
         "blocked",
+        "cancelled",
         "failed",
     }:
         return "blocked"
@@ -110,6 +113,11 @@ def resume_status_from_evidence(evidence: Mapping[str, StateValue]) -> ResumeSta
             return "conversation_safe"
         case (
             "executor_blocked"
+            # A cancelled run is not conversation-safe and not reattachable:
+            # nothing is still running to reattach to, and no result was
+            # reached to continue from. It needs a re-dispatch decision, which
+            # is what `blocked` means on this axis.
+            | "executor_cancelled"
             | "executor_failed"
             | "runtime_recovery_blocked"
             | "invalid_runtime_evidence"
