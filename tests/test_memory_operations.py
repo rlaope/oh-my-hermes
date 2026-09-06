@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from _local_package import load_local_package
-from _platform_support import requires_fcntl_locks
+from _platform_support import requires_fcntl_locks, requires_symlinks
 
 load_local_package()
 from omh.local_store import atomic_write_json, ensure_dir, read_json_object_result
@@ -67,6 +67,164 @@ class MemoryOperationTests(unittest.TestCase):
             self.assertEqual(paths.memory_history_dir, paths.memory_dir / "history")
             self.assertEqual(paths.memory_archive_dir, paths.memory_dir / "archive")
 
+    def test_generic_operation_and_tombstone_writers_reject_credential_material_before_writes(self) -> None:
+        unsafe_values = (
+            "QwertyuiopaAsdfghjklmObservation",
+            "QwertyuiopaAsdfghjklmObservationContext",
+            "rk_" + "live_" + "a" * 32,
+        )
+        for unsafe in unsafe_values:
+            with self.subTest(unsafe=unsafe[:8]), TemporaryDirectory() as tmp:
+                paths = _paths(tmp)
+                safe_step = {
+                    "name": "write_safe",
+                    "action": "write_json",
+                    "target": "records/safe.json",
+                    "payload": {"summary": "safe value"},
+                }
+                attempts = (
+                    {
+                        "operation_id": unsafe,
+                        "operation_type": "write",
+                        "steps": [safe_step],
+                    },
+                    {
+                        "operation_id": "op-safe-target",
+                        "operation_type": "write",
+                        "steps": [{**safe_step, "target": f"records/{unsafe}.json"}],
+                    },
+                    {
+                        "operation_id": "op-safe-payload",
+                        "operation_type": "write",
+                        "steps": [{**safe_step, "payload": {"summary": unsafe}}],
+                    },
+                )
+                for request in attempts:
+                    with self.assertRaises(ValueError) as operation_error:
+                        run_memory_operation(paths, now=NOW, **request)
+                    self.assertNotIn(unsafe, str(operation_error.exception))
+
+                for field in ("tombstone_id", "record_id"):
+                    tombstone = {
+                        "tombstone_id": "tomb-safe",
+                        "record_id": "record-safe",
+                        "revision": 1,
+                        "tombstoned_at": NOW.isoformat().replace("+00:00", "Z"),
+                    }
+                    tombstone[field] = unsafe
+                    with self.assertRaises(ValueError) as tombstone_error:
+                        write_memory_tombstone(paths, tombstone)
+                    self.assertNotIn(unsafe, str(tombstone_error.exception))
+
+                persisted = "\n".join(
+                    path.read_text(encoding="utf-8")
+                    for path in paths.memory_dir.rglob("*")
+                    if path.is_file()
+                ) if paths.memory_dir.exists() else ""
+                self.assertNotIn(unsafe, persisted)
+                self.assertFalse((paths.memory_dir / "records").exists())
+                self.assertFalse(paths.memory_operations_dir.exists())
+                self.assertFalse(paths.memory_tombstones_dir.exists())
+
+    def test_copy_and_move_reject_credential_material_in_source_objects(self) -> None:
+        unsafe = "QwertyuiopaAsdfghjklmObservationContext"
+        for action in ("copy", "move"):
+            with self.subTest(action=action), TemporaryDirectory() as tmp:
+                paths = _paths(tmp)
+                source = paths.memory_dir / "records" / "source.json"
+                atomic_write_json(source, {"summary": unsafe}, private=True)
+
+                with self.assertRaises(ValueError) as error:
+                    run_memory_operation(
+                        paths,
+                        operation_id=f"op-safe-{action}",
+                        operation_type=action,
+                        steps=[
+                            {
+                                "name": f"{action}_safe",
+                                "action": action,
+                                "source": "records/source.json",
+                                "target": f"records/{action}-target.json",
+                            }
+                        ],
+                        now=NOW,
+                    )
+
+                self.assertNotIn(unsafe, str(error.exception))
+                self.assertTrue(source.exists())
+                self.assertFalse((paths.memory_dir / "records" / f"{action}-target.json").exists())
+                operation_files = list(paths.memory_operations_dir.glob("*.json"))
+                self.assertEqual(len(operation_files), 1)
+                self.assertNotIn(unsafe, operation_files[0].read_text(encoding="utf-8"))
+
+    def test_index_rebuild_omits_preexisting_unsafe_record_paths(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths(tmp)
+            unsafe = "QwertyuiopaAsdfghjklmObservation"
+            unsafe_path = paths.memory_dir / "records" / f"{unsafe}.json"
+            atomic_write_json(unsafe_path, {"summary": "synthetic fixture"}, private=True)
+
+            run_memory_operation(
+                paths,
+                operation_id="op-safe-index",
+                operation_type="write",
+                steps=[
+                    {
+                        "name": "write_safe",
+                        "action": "write_json",
+                        "target": "records/safe.json",
+                        "payload": {"summary": "safe value"},
+                    }
+                ],
+                now=NOW,
+            )
+            index = json.loads(paths.memory_index_path.read_text(encoding="utf-8"))
+
+            self.assertNotIn(unsafe, json.dumps(index, sort_keys=True))
+            self.assertEqual(index["record_files"], ["records/safe.json"])
+
+    @requires_symlinks
+    def test_operation_and_tombstone_parent_symlinks_cannot_escape_memory_store(self) -> None:
+        for directory_name in ("operations", "tombstones"):
+            with self.subTest(directory=directory_name), TemporaryDirectory() as tmp:
+                paths = _paths(tmp)
+                paths.memory_dir.mkdir(parents=True)
+                outside = Path(tmp) / "outside"
+                outside.mkdir()
+                (paths.memory_dir / directory_name).symlink_to(
+                    outside,
+                    target_is_directory=True,
+                )
+
+                with self.assertRaises(ValueError):
+                    if directory_name == "operations":
+                        run_memory_operation(
+                            paths,
+                            operation_id="op-symlink-parent",
+                            operation_type="write",
+                            steps=[
+                                {
+                                    "name": "write_safe",
+                                    "action": "write_json",
+                                    "target": "records/safe.json",
+                                    "payload": {"summary": "safe value"},
+                                }
+                            ],
+                            now=NOW,
+                        )
+                    else:
+                        write_memory_tombstone(
+                            paths,
+                            {
+                                "tombstone_id": "tomb-safe",
+                                "record_id": "record-safe",
+                                "revision": 1,
+                                "tombstoned_at": NOW.isoformat().replace("+00:00", "Z"),
+                            },
+                        )
+
+                self.assertEqual(list(outside.iterdir()), [])
+
     def test_multi_step_operation_completes_with_one_metadata_receipt(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = _paths(tmp)
@@ -99,6 +257,49 @@ class MemoryOperationTests(unittest.TestCase):
             self.assertTrue((paths.memory_dir / "candidates/one.json").exists())
             self.assertTrue((paths.memory_dir / "records/two.json").exists())
             self.assertFalse((paths.memory_dir / "staging/second.json").exists())
+
+    def test_operation_id_cannot_be_reused_for_a_different_request(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths(tmp)
+            _stage(paths, "first.json", {"entry": "first"})
+            _stage(paths, "second.json", {"entry": "second"})
+            operation_id = "op-request-binding"
+            run_memory_operation(
+                paths,
+                operation_id=operation_id,
+                operation_type="write",
+                steps=[
+                    {
+                        "name": "write_first",
+                        "action": "copy",
+                        "source": "staging/first.json",
+                        "target": "records/first.json",
+                    }
+                ],
+                now=NOW,
+            )
+            operation_path = paths.memory_operations_dir / f"{operation_id}.json"
+            completed_bytes = operation_path.read_bytes()
+
+            with self.assertRaisesRegex(ValueError, "already bound"):
+                run_memory_operation(
+                    paths,
+                    operation_id=operation_id,
+                    operation_type="write",
+                    steps=[
+                        {
+                            "name": "write_second",
+                            "action": "copy",
+                            "source": "staging/second.json",
+                            "target": "records/second.json",
+                        }
+                    ],
+                    now=NOW,
+                )
+
+            self.assertEqual(operation_path.read_bytes(), completed_bytes)
+            self.assertTrue((paths.memory_dir / "records" / "first.json").exists())
+            self.assertFalse((paths.memory_dir / "records" / "second.json").exists())
 
     def test_interrupted_named_write_recovers_once_without_duplicate_move(self) -> None:
         with TemporaryDirectory() as tmp:

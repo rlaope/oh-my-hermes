@@ -18,6 +18,7 @@ from ._memory_store_validation import (
     parse_time,
     relative_memory_json_path,
     relative_memory_jsonl_path,
+    safe_json_value,
     safe_token,
     valid_memory_operation,
     validate_memory_receipt,
@@ -27,12 +28,23 @@ from ._memory_store_validation import (
 _INDEX_DIRS = (("scope_files", "scopes"), ("candidate_files", "candidates"), ("record_files", "records"), ("review_files", "reviews"))
 StepWriter = Callable[[OmhPaths, dict[str, Any]], str | None]
 IndexRebuilder = Callable[[OmhPaths], None]
+OperationPreflight = Callable[[OmhPaths], None]
+
+
+class MemoryOperationIdentityError(ValueError):
+    pass
+
+
 __all__ = [
     "MEMORY_OPERATION_SCHEMA_VERSION",
     "MEMORY_OPERATION_STATES",
     "MEMORY_RECEIPT_FIELDS",
     "MEMORY_TOMBSTONE_SCHEMA_VERSION",
+    "MemoryOperationIdentityError",
     "apply_memory_operation_step",
+    "checked_memory_directory",
+    "checked_memory_json_path",
+    "ensure_memory_directory",
     "prune_expired_memory_evidence",
     "recover_memory_operations",
     "run_memory_operation",
@@ -50,12 +62,16 @@ def run_memory_operation(
     steps: Sequence[Mapping[str, object]],
     rebuild_index: IndexRebuilder | None = None,
     step_writer: StepWriter | None = None,
+    preflight: OperationPreflight | None = None,
     now: datetime | str | None = None,
 ) -> dict[str, Any]:
     normalized = build_memory_operation(operation_id, operation_type, steps, _stamp(now))
+    ensure_memory_directory(paths, "operations")
     with file_lock(paths.memory_index_path, private=True):
-        ensure_dir(paths.memory_operations_dir, private=True)
-        _recover_unlocked(paths, rebuild_index, step_writer, now, skip=operation_id)
+        # A candidate-bound writer can only interpret its own operation. Passing
+        # it to unrelated interrupted records can poison their recovery state.
+        if step_writer is None:
+            _recover_unlocked(paths, rebuild_index, None, now, skip=operation_id)
         path = _operation_path(paths, operation_id)
         if path.is_symlink():
             return {"operation_id": operation_id, "state": "corrupt"}
@@ -63,9 +79,15 @@ def run_memory_operation(
         if error or existing is None or not valid_memory_operation(existing):
             if path.exists():
                 return _mark_corrupt_operation(paths, operation_id, now)
+            if preflight is not None:
+                preflight(paths)
             record = normalized
             atomic_write_json(path, record, private=True)
         else:
+            if not _operation_request_matches(existing, normalized):
+                raise MemoryOperationIdentityError(
+                    "memory operation id is already bound to a different request"
+                )
             record = existing
         return _resume_unlocked(paths, record, rebuild_index, step_writer, now)
 
@@ -77,9 +99,26 @@ def recover_memory_operations(
     step_writer: StepWriter | None = None,
     now: datetime | str | None = None,
 ) -> list[dict[str, Any]]:
+    ensure_memory_directory(paths, "operations")
     with file_lock(paths.memory_index_path, private=True):
-        ensure_dir(paths.memory_operations_dir, private=True)
         return _recover_unlocked(paths, rebuild_index, step_writer, now)
+
+
+def _operation_request_matches(existing: Mapping[str, object], requested: Mapping[str, object]) -> bool:
+    def request_steps(value: Mapping[str, object]) -> list[dict[str, object]] | None:
+        steps = value.get("steps")
+        if not isinstance(steps, list) or not all(isinstance(step, Mapping) for step in steps):
+            return None
+        return [
+            {str(key): item for key, item in step.items() if key not in {"state", "outcome"}}
+            for step in steps
+        ]
+
+    return (
+        existing.get("operation_id") == requested.get("operation_id")
+        and existing.get("operation_type") == requested.get("operation_type")
+        and request_steps(existing) == request_steps(requested)
+    )
 
 
 def apply_memory_operation_step(paths: OmhPaths, step: dict[str, Any]) -> str:
@@ -109,6 +148,9 @@ def apply_memory_operation_step(paths: OmhPaths, step: dict[str, Any]) -> str:
     source_value = step.get("source", "")
     if not isinstance(source_value, str) or not source_value:
         raise ValueError("operation step has no source")
+    raw_source = paths.memory_dir / source_value
+    if raw_source.is_symlink():
+        raise ValueError("operation source is a symlink")
     source = _memory_path(paths, source_value)
     if source.is_symlink():
         raise ValueError("operation source is a symlink")
@@ -116,11 +158,18 @@ def apply_memory_operation_step(paths: OmhPaths, step: dict[str, Any]) -> str:
         payload, error = read_json_object_result(source)
         if error or payload is None:
             raise ValueError("operation source is not a JSON object")
+        if not safe_json_value(payload):
+            raise ValueError("operation source contains unsafe content")
         atomic_write_json(target, payload, private=True)
         return "copied"
     if action == "move":
         if not source.exists():
             raise FileNotFoundError("operation source is missing")
+        payload, error = read_json_object_result(source)
+        if error or payload is None:
+            raise ValueError("operation source is not a JSON object")
+        if not safe_json_value(payload):
+            raise ValueError("operation source contains unsafe content")
         ensure_dir(target.parent, private=True)
         os.replace(source, target)
         target.chmod(0o600)
@@ -134,9 +183,10 @@ def write_memory_tombstone(paths: OmhPaths, tombstone: Mapping[str, object]) -> 
     errors = validate_memory_tombstone(value)
     if errors:
         raise ValueError("; ".join(errors))
+    ensure_memory_directory(paths, "tombstones")
     with file_lock(paths.memory_index_path, private=True):
-        ensure_dir(paths.memory_tombstones_dir, private=True)
-        atomic_write_json(paths.memory_tombstones_dir / f"{value['tombstone_id']}.json", value, private=True)
+        target = checked_memory_json_path(paths, f"tombstones/{value['tombstone_id']}.json")
+        atomic_write_json(target, value, private=True)
     return value
 
 
@@ -145,12 +195,12 @@ def prune_expired_memory_evidence(
 ) -> dict[str, Any]:
     if isinstance(retention_days, bool) or not isinstance(retention_days, int) or retention_days < 1:
         raise ValueError("retention_days must be positive")
+    operations_dir = ensure_memory_directory(paths, "operations")
+    tombstones_dir = ensure_memory_directory(paths, "tombstones")
     with file_lock(paths.memory_index_path, private=True):
-        ensure_dir(paths.memory_operations_dir, private=True)
-        ensure_dir(paths.memory_tombstones_dir, private=True)
         current = _as_utc(now)
-        operations = _prune_dir(paths.memory_operations_dir, MEMORY_OPERATION_SCHEMA_VERSION, "operation_id", "created_at", current, retention_days)
-        tombstones = _prune_dir(paths.memory_tombstones_dir, MEMORY_TOMBSTONE_SCHEMA_VERSION, "tombstone_id", "tombstoned_at", current, retention_days)
+        operations = _prune_dir(operations_dir, MEMORY_OPERATION_SCHEMA_VERSION, "operation_id", "created_at", current, retention_days)
+        tombstones = _prune_dir(tombstones_dir, MEMORY_TOMBSTONE_SCHEMA_VERSION, "tombstone_id", "tombstoned_at", current, retention_days)
     return {"schema_version": "memory_evidence_prune/v1", "removed_operations": operations, "removed_tombstones": tombstones, "retention_days": retention_days}
 
 
@@ -205,6 +255,12 @@ def _recover_unlocked(paths: OmhPaths, rebuild: IndexRebuilder | None, writer: S
             else:
                 results.append({"operation_id": "", "state": "corrupt"})
         else:
+            if writer is None and record.get("state") not in {"completed", "failed", "corrupt"} and any(
+                step.get("action") not in {"copy", "delete", "move", "rewrite_jsonl", "write_json"}
+                for step in record.get("steps", [])
+                if isinstance(step, Mapping)
+            ):
+                continue
             results.append(_resume_unlocked(paths, record, rebuild, writer, now))
     return results
 
@@ -227,12 +283,29 @@ def _write_operation(paths: OmhPaths, record: dict[str, Any]) -> None:
 
 
 def _operation_path(paths: OmhPaths, operation_id: str) -> Path:
-    return paths.memory_operations_dir / f"{operation_id}.json"
+    return checked_memory_json_path(paths, f"operations/{operation_id}.json")
 
 
 def _rebuild_index(paths: OmhPaths) -> None:
-    files = {key: [path.relative_to(paths.memory_dir).as_posix() for path in sorted((paths.memory_dir / directory).rglob("*.json")) if path.is_file() and not path.is_symlink()] for key, directory in _INDEX_DIRS}
+    files = {
+        key: [
+            path.relative_to(paths.memory_dir).as_posix()
+            for path in sorted((paths.memory_dir / directory).rglob("*.json"))
+            if _indexable_memory_file(paths, path)
+        ]
+        for key, directory in _INDEX_DIRS
+    }
     atomic_write_json(paths.memory_index_path, {"schema_version": "omh_memory_index/v1", "updated_at": utc_now(), **files, "claim_boundary": "OMH local memory only; this index is not Hermes internal memory."}, private=True)
+
+
+def _indexable_memory_file(paths: OmhPaths, path: Path) -> bool:
+    if not path.is_file() or path.is_symlink():
+        return False
+    try:
+        relative = path.relative_to(paths.memory_dir).as_posix()
+    except ValueError:
+        return False
+    return relative_memory_json_path(relative)
 
 
 def _receipt(record: dict[str, Any]) -> dict[str, Any]:
@@ -256,9 +329,46 @@ def _prune_dir(directory: Path, schema: str, id_key: str, timestamp_key: str, no
 def _memory_path(paths: OmhPaths, relative: str) -> Path:
     if not (relative_memory_json_path(relative) or relative_memory_jsonl_path(relative)):
         raise ValueError("memory path must be relative and contained")
-    root, path = paths.memory_dir.resolve(strict=False), paths.memory_dir / relative
-    resolved = path.resolve(strict=False)
-    if root != resolved and root not in resolved.parents:
+    return _checked_memory_relative_path(paths, relative)
+
+
+def checked_memory_json_path(paths: OmhPaths, relative: str) -> Path:
+    if not relative_memory_json_path(relative):
+        raise ValueError("memory path must be relative and contained")
+    return _checked_memory_relative_path(paths, relative)
+
+
+def ensure_memory_directory(paths: OmhPaths, relative: str) -> Path:
+    directory = checked_memory_directory(paths, relative)
+    ensure_dir(directory, private=True)
+    return directory
+
+
+def checked_memory_directory(paths: OmhPaths, relative: str) -> Path:
+    path = Path(relative)
+    if (
+        not relative
+        or path.is_absolute()
+        or ".." in path.parts
+        or not all(safe_token(part) for part in path.parts)
+    ):
+        raise ValueError("memory directory must be relative and contained")
+    return _checked_memory_relative_path(paths, relative)
+
+
+def _checked_memory_relative_path(paths: OmhPaths, relative: str) -> Path:
+    root = paths.memory_dir
+    if root.is_symlink():
+        raise ValueError("memory path escapes store")
+    path = root / relative
+    cursor = root
+    for part in Path(relative).parts:
+        cursor /= part
+        if cursor.is_symlink():
+            raise ValueError("memory path escapes store")
+    resolved_root = root.resolve(strict=False)
+    resolved_path = path.resolve(strict=False)
+    if resolved_root != resolved_path and resolved_root not in resolved_path.parents:
         raise ValueError("memory path escapes store")
     return path
 

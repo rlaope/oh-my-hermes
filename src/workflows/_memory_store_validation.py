@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ..plugin_bundle.omh.memory_governance import contains_credential_like_material
+
 MEMORY_OPERATION_SCHEMA_VERSION = "memory_operation/v1"
 MEMORY_TOMBSTONE_SCHEMA_VERSION = "memory_tombstone/v1"
 MEMORY_OPERATION_STATES = frozenset({"prepared", "applying", "interrupted", "completed", "failed", "corrupt"})
@@ -94,6 +96,10 @@ def safe_token(value: str) -> bool:
     return _safe_token(value)
 
 
+def safe_json_value(value: object) -> bool:
+    return _json_value(value)
+
+
 def relative_memory_json_path(value: str) -> bool:
     return _relative_memory_path(value, ".json")
 
@@ -163,12 +169,19 @@ def _valid_step(step: object, names: set[str]) -> bool:
 
 
 def _json_value(value: object) -> bool:
-    if value is None or isinstance(value, (bool, str, int)):
+    if value is None or isinstance(value, (bool, int)):
         return True
+    if isinstance(value, str):
+        return not contains_credential_like_material(value)
     if isinstance(value, float):
         return value == value and value not in {float("inf"), float("-inf")}
     if isinstance(value, Mapping):
-        return all(isinstance(key, str) and _json_value(item) for key, item in value.items())
+        return all(
+            isinstance(key, str)
+            and not contains_credential_like_material(key)
+            and _json_value(item)
+            for key, item in value.items()
+        )
     return isinstance(value, list) and all(_json_value(item) for item in value)
 
 
@@ -186,4 +199,8 @@ def _metadata_errors(value: Mapping[str, object], allowed: frozenset[str]) -> li
 
 
 def _safe_token(value: object) -> bool:
-    return isinstance(value, str) and bool(_SAFE_TOKEN.fullmatch(value))
+    return (
+        isinstance(value, str)
+        and bool(_SAFE_TOKEN.fullmatch(value))
+        and not contains_credential_like_material(value)
+    )

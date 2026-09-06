@@ -6,6 +6,7 @@ scope validation, legacy artifact handling, and metadata-only results.
 
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime, timezone
 import unittest
@@ -14,6 +15,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.plugin_bundle.omh import memory_governance as governance
+from omh.workflows.hermes_planning import build_plan_handoff_context_pack
 
 
 NOW = datetime(2026, 7, 30, 12, 0, 0, tzinfo=timezone.utc)
@@ -123,6 +125,71 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         result = _evaluate(artifact, review)
         self.assertEqual(result["reason_code"], "safety_needs_review_in_summary")
 
+    def test_safety_rescan_covers_source_metadata_and_tags(self) -> None:
+        cases = (
+            ("source", "gh" + "u_" + "a" * 36, "safety_blocked_in_source"),
+            ("source_ref", "Ab3dEf4G" * 5 + "=", "safety_needs_review_in_source_ref"),
+            ("tags", ["Ab3d_Ef4Gh5Ij6Kl7Mn8Op9Qr0St1Uv2"], "safety_needs_review_in_tags"),
+            (
+                "source_evidence",
+                {"source_ref": "gh" + "u_" + "a" * 36},
+                "safety_blocked_in_source_evidence.source_ref",
+            ),
+            (
+                "scope",
+                {"kind": "project", "ref": "gh" + "u_" + "a" * 36},
+                "safety_blocked_in_scope.ref",
+            ),
+            ("derived_from", ["gh" + "u_" + "a" * 36], "safety_blocked_in_derived_from"),
+        )
+        for field, value, reason_code in cases:
+            with self.subTest(field=field):
+                artifact, review = _approved_artifact()
+                artifact[field] = value
+                digest = governance.canonical_payload_digest(artifact)
+                admission = artifact["admission"]
+                self.assertIsInstance(admission, dict)
+                assert isinstance(admission, dict)
+                admission["payload_digest"] = digest
+                review["payload_digest"] = digest
+                if field == "scope":
+                    identity = governance.stable_artifact_identity(artifact)
+                    admission["artifact_identity"] = identity
+                    review["artifact_identity"] = identity
+                    assert isinstance(value, dict)
+                    result = governance.evaluate_memory_replay(
+                        artifact,
+                        now=NOW,
+                        requested_scope=value,
+                        review_resolver={str(admission["review_id"]): review},
+                    )
+                else:
+                    result = _evaluate(artifact, review)
+
+                self.assertFalse(result["eligible"])
+                self.assertEqual(result["reason_code"], reason_code)
+
+    def test_invalid_admission_state_fails_closed_without_echoing_unsafe_input(self) -> None:
+        unsafe_states = (
+            "QwertyuiopaAsdfghjklmObservationContext",
+            "rk_" + "live_" + "a" * 32,
+            "Ab3dEf4G" * 5 + "=",
+        )
+        for unsafe_state in unsafe_states:
+            with self.subTest(unsafe_state=unsafe_state[:8]):
+                artifact, review = _approved_artifact()
+                admission = artifact["admission"]
+                self.assertIsInstance(admission, dict)
+                assert isinstance(admission, dict)
+                admission["state"] = unsafe_state
+
+                result = _evaluate(artifact, review)
+
+                self.assertFalse(result["eligible"])
+                self.assertEqual(result["reason_code"], "admission_state_invalid")
+                self.assertIsNone(result["admission_state"])
+                self.assertNotIn(unsafe_state, json.dumps(result, sort_keys=True))
+
     def test_secret_token_forms_are_blocked_to_meet_the_remember_refuse_contract(self) -> None:
         """Hyphenated secret-token compounds are blocked; ordinary hyphenated prose is never admission-blocked."""
         for content in (
@@ -145,6 +212,383 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             with self.subTest(content=content):
                 self.assertEqual(governance.classify_memory_admission(content)["status"], "safe")
         self.assertEqual(governance.classify_memory_admission("token-based auth uses rotating tokens")["status"], "safe")
+
+    def test_bare_credential_shapes_are_blocked_and_unknown_opaque_values_need_review(self) -> None:
+        aws = "AK" + "IA" + "A" * 16
+        github = "gh" + "p_" + "a" * 36
+        openai = "sk" + "-" + "a" * 48
+        stripe = "sk_" + "live_" + "a" * 32
+        stripe_restricted = "rk_" + "live_" + "a" * 32
+        google_oauth = "ya29." + "a" * 40
+        for content in (
+            aws,
+            github,
+            openai,
+            stripe,
+            stripe_restricted,
+            google_oauth,
+            f"C:\\safe\\{github}\\artifact.txt",
+            "https://user:pass@example.com",
+            "-----BEGIN RSA PRIVATE KEY-----",
+        ):
+            with self.subTest(content_kind=content[:4]):
+                self.assertEqual(governance.classify_memory_admission(content)["status"], "blocked")
+
+        self.assertEqual(governance.classify_memory_admission(f"safe {aws} and {github}")["status"], "blocked")
+        self.assertEqual(governance.classify_memory_admission("akia" + "a" * 16)["status"], "blocked")
+        for content in (
+            "AK" + "IA" + "A" * 15,
+            "gh" + "p_" + "a" * 15,
+            "sk" + "-" + "a" * 15,
+        ):
+            with self.subTest(short_shape=content[:4]):
+                self.assertEqual(governance.classify_memory_admission(content)["status"], "safe")
+
+        unknown = "credential: " + "Ab3_" * 12
+        self.assertEqual(governance.classify_memory_admission(unknown)["status"], "needs_review")
+        self.assertEqual(governance.classify_memory_admission("Ab3_" * 12)["status"], "needs_review")
+
+        for content in (
+            "token-based parsing",
+            "secret-management policy",
+            "API key rotation",
+            "Store the API token rotation runbook",
+            "A normal release identifier has no credential shape.",
+        ):
+            with self.subTest(ordinary=content):
+                self.assertEqual(governance.classify_memory_admission(content)["status"], "safe")
+
+    def test_source_host_token_prefixes_do_not_consume_ordinary_npm_prose(self) -> None:
+        github_user_token = "gh" + "u_" + "a" * 36
+        npm_token = "npm_" + "a" * 36
+
+        self.assertEqual(governance.classify_memory_admission(github_user_token)["status"], "blocked")
+        self.assertEqual(governance.classify_memory_admission(npm_token)["status"], "blocked")
+        self.assertEqual(
+            governance.classify_memory_admission("npm-package-name-with-long-suffix")["status"],
+            "safe",
+        )
+
+    def test_source_syntax_is_not_reclassified_as_credential_material(self) -> None:
+        for source_line in (
+            'key = str(update.get("key", item_id))',
+            "default=DEFAULT_ARTIFACT_SCAN_LIMIT",
+            "class ExecutorGuidanceCompatibilityError(ValueError):",
+        ):
+            with self.subTest(source_line=source_line):
+                self.assertEqual(governance.classify_memory_admission(source_line)["status"], "safe")
+
+    def test_split_google_token_prefixes_are_blocked(self) -> None:
+        for content in (
+            "ya29./f1/f2",
+            "AIza/f1/f2",
+            "AIza.f1.f2",
+        ):
+            with self.subTest(content=content):
+                self.assertEqual(governance.classify_memory_admission(content)["status"], "blocked")
+
+    def test_windows_and_unc_paths_are_safe(self) -> None:
+        for path in (
+            r"C:\Users\kim\AppData\Local\Programs\Python\Python313\python.exe",
+            r"\\server\share\AppData\Local\Programs\Python\Python313\python.exe",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(governance.classify_memory_admission(path)["status"], "safe")
+
+    def test_test_class_identifiers_are_safe(self) -> None:
+        for source_line in (
+            "class CategoryMaestroSetupIntegrationTests(unittest.TestCase):",
+            "class RuntimeArtifactShowShapeCliTests(unittest.TestCase):",
+        ):
+            with self.subTest(source_line=source_line):
+                self.assertEqual(governance.classify_memory_admission(source_line)["status"], "safe")
+
+    def test_single_case_alphanumeric_opaque_values_need_review(self) -> None:
+        uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
+        uppercase_letters_only_base32 = "JBSWYDPF" * 4
+        mixed_case_letters_only_base64 = "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV"
+        mixed_case_base64_with_lower_runs = "abCDefGHijKLmnOPqrSTuvWXyzABcDEF"
+        lowercase_alphanumeric = "a9b8c7d6e5f4g3h2j1k0m9n8p7q6r5s4"
+
+        for opaque in (
+            uppercase_base32,
+            uppercase_letters_only_base32,
+            mixed_case_letters_only_base64,
+            mixed_case_base64_with_lower_runs,
+            lowercase_alphanumeric,
+        ):
+            with self.subTest(opaque=opaque[:8]):
+                self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
+            for container in (
+                f"/safe/{opaque}/artifact.txt",
+                f"https://example.com/{opaque}/artifact",
+                f"@scope/{opaque}",
+                f"C:\\safe\\{opaque}\\artifact.txt",
+            ):
+                with self.subTest(opaque=opaque[:8], container=container[:16]):
+                    self.assertEqual(
+                        governance.classify_memory_admission(container)["status"],
+                        "needs_review",
+                    )
+
+        semantic_identifier = "project2026schema2migration3identifier"
+        for ordinary in (
+            semantic_identifier,
+            f"@scope/{semantic_identifier}",
+            f"/safe/{semantic_identifier}/artifact.txt",
+            f"C:\\safe\\{semantic_identifier}\\artifact.txt",
+            f"https://example.com/{semantic_identifier}/artifact",
+        ):
+            with self.subTest(ordinary=ordinary[:24]):
+                self.assertEqual(governance.classify_memory_admission(ordinary)["status"], "safe")
+
+        self.assertEqual(
+            governance.classify_memory_admission("project2026memoryhardeningidentifier")["status"],
+            "safe",
+        )
+
+    def test_low_transition_and_separator_split_opaque_values_need_review(self) -> None:
+        low_transition_base64 = (
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZABabcd",
+            "ABCDEFGHabcdIJKLMNOPQRSTUVWXwxyz",
+            "ABCDabcdEFGHijklMNOPqrstUVWXYZAB",
+            "ABCDabcdEFGHijklMNOPqrstUVWXyzab",
+            "abcdefghijklmnopqrstuvwxyzaaaaaa",
+            "abcdefghijklmnopqrstuvwxyzaaaaaaaaaa",
+            "abcdefghijklmnopqrstuvwxyzaaaaaaaa",
+            "abcdefghijklmnopqrstuvwxyzaaaaaaaaa",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZaBcdef",
+            "J" + "j" * 9 + "K" + "k" * 9 + "L" + "l" * 11,
+            "QwertyuiopaAsdfghjklmObservation",
+            "QwertyuiopaAsdfghjklmObservationV2",
+            "QwertyuiopaAsdfghjklmObservationContext",
+            "QwertyuiopaAsdefghijkObservationV2",
+            "QwertyuiopaAsdefghijkObservationContext",
+            "AbcDefGhiJklMnoPqrStuVwxYzaBcdEfgJkl",
+        )
+        uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
+        split_opaque = "ABCDEFGH.abcdIJKL.MNOPQRST.UVWXwxyz"
+        uneven_parts = ("ABCDE", "FGHIJ", "KLMNO", "PQRSTUVWXYZaBcdef")
+        lowercase_parts = ("abcdefgh", "ijklmnop", "qrstuvwx", "yzabcdef")
+        lowercase_uneven_parts = ("abcde", "fghij", "klmno", "pqrstuvwxyzabcdefgh")
+        three_part_camel = ("Qwertyuiopa", "Asdfghjklm", "Observation")
+        uppercase_base32_parts = ("JBSWYDPE",) * 4
+        uneven_uppercase_base32_parts = (
+            "JBSWYDP",
+            "EJBSWYDPE",
+            "JBSWYDPE",
+            "JBSWYDPE",
+        )
+
+        for opaque in (*low_transition_base64, uppercase_alphanumeric):
+            if opaque in low_transition_base64:
+                decoded = base64.b64decode(opaque + "=" * (-len(opaque) % 4), validate=True)
+                self.assertGreater(len(decoded), 0)
+            with self.subTest(opaque=opaque):
+                self.assertEqual(governance.classify_memory_admission(opaque)["status"], "needs_review")
+                self.assertTrue(governance.contains_credential_like_material(opaque))
+            for container in (
+                f"/safe/{opaque}/artifact.txt",
+                f"https://example.com/{opaque}/artifact",
+                f"@scope/{opaque}",
+                f"C:\\safe\\{opaque}\\artifact.txt",
+            ):
+                with self.subTest(container=container):
+                    self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
+
+        for separator in ("/", ".", "-", "_", " "):
+            value = separator.join(split_opaque.split("."))
+            for container in (
+                value,
+                f"/safe/{value}/artifact.txt",
+                f"https://example.com/{value}/artifact",
+                f"@scope/{value}",
+                f"C:\\safe\\{value}\\artifact.txt",
+            ):
+                with self.subTest(separator=separator, container=container):
+                    self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
+
+            uneven = separator.join(uneven_parts)
+            for container in (
+                uneven,
+                f"/safe/{uneven}/artifact.txt",
+                f"https://example.com/{uneven}/artifact",
+                f"@scope/{uneven}",
+                f"C:\\safe\\{uneven}\\artifact.txt",
+            ):
+                with self.subTest(separator=separator, uneven_container=container):
+                    self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
+
+            for lowercase_variant in (lowercase_parts, lowercase_uneven_parts):
+                lowercase_split = separator.join(lowercase_variant)
+                for container in (
+                    lowercase_split,
+                    f"/safe/{lowercase_split}/artifact.txt",
+                    f"https://example.com/{lowercase_split}/artifact",
+                    f"@scope/{lowercase_split}",
+                    f"C:\\safe\\{lowercase_split}\\artifact.txt",
+                ):
+                    with self.subTest(separator=separator, lowercase_container=container):
+                        self.assertEqual(governance.classify_memory_admission(container)["status"], "needs_review")
+
+            for split_variant in (
+                three_part_camel,
+                uppercase_base32_parts,
+                uneven_uppercase_base32_parts,
+            ):
+                opaque_split = separator.join(split_variant)
+                for container in (
+                    opaque_split,
+                    f"/safe/{opaque_split}/artifact.txt",
+                    f"https://example.com/{opaque_split}/artifact",
+                    f"@scope/{opaque_split}",
+                    f"C:\\safe\\{opaque_split}\\artifact.txt",
+                ):
+                    with self.subTest(separator=separator, opaque_split=container):
+                        self.assertEqual(
+                            governance.classify_memory_admission(container)["status"],
+                            "needs_review",
+                        )
+
+        for semantic_identifier in (
+            "projectMemorySchemaMigrationIdentifier",
+            "projectMemorySchemaMigrationIdentifierV2",
+            "DeterministicProjectConfigurationManager",
+            "HTTPServerConfigurationV2ProjectManager",
+            "JSONRPC2ServerConfigurationManager",
+            "TLS13ConnectionConfigurationManager",
+            "project2026schema2migration3identifier",
+        ):
+            with self.subTest(semantic_identifier=semantic_identifier):
+                self.assertEqual(governance.classify_memory_admission(semantic_identifier)["status"], "safe")
+
+    def test_opaque_values_need_review_without_reclassifying_common_identifiers(self) -> None:
+        padded_base64 = "Ab3dEf4G" * 5 + "="
+        opaque = padded_base64.rstrip("=")
+        unpadded_base64url = "Ab3d_Ef4Gh5Ij6Kl7Mn8Op9Qr0St1Uv2"
+        split_opaque = "Ab3dEf4Gh5Ij6Kl7Mn8/Op9Qr0St1Uv2WxYz"
+
+        self.assertEqual(governance.classify_memory_admission(padded_base64)["status"], "needs_review")
+        self.assertEqual(governance.classify_memory_admission(unpadded_base64url)["status"], "needs_review")
+        for normalized_bypass in (
+            split_opaque,
+            f"https://example.com/{split_opaque}",
+            r"C:\safe\Ab3dEf4Gh5Ij6Kl7Mn8\Op9Qr0St1Uv2WxYz",
+            "https://example.com/artifact?session=" + opaque,
+            "https://example.com/artifact?access=" + opaque,
+            "https://example.com/artifact?key=" + opaque,
+        ):
+            with self.subTest(normalized_bypass=normalized_bypass):
+                self.assertEqual(governance.classify_memory_admission(normalized_bypass)["status"], "needs_review")
+        self.assertEqual(
+            governance.classify_memory_admission(f"C:\\safe\\{padded_base64}\\artifact.txt")["status"],
+            "needs_review",
+        )
+
+        for ordinary in (
+            "0123456789abcdef0123456789abcdef01234567",
+            "0123456789AbCdEf0123456789aBcDeF0123456789AbCdEf01234567",
+            "123e4567-e89b-12d3-a456-426614174000",
+            "01890f3e-8b5a-7cc2-98c7-2f9c0b6a1d43",
+            "01890f3e-8b5a-7cC2-98c7-2f9c0b6a1d43",
+            "DeterministicProjectConfigurationManager",
+            "DeterministicProjectConfigurationManagerV2",
+            "HTTPServerConfigurationV2ProjectManager",
+            "AlicePlatformReviewer2026Account",
+            "AuthenticatedMaintainerObservation",
+            "/safe/AuthenticatedMaintainerObservation/artifact.txt",
+            "https://example.com/AuthenticatedMaintainerObservation/artifact",
+            "@scope/AuthenticatedMaintainerObservation",
+            "ABlockIsRecoverableAndNotTerminal",
+            "English-Canonical Interview Protocol",
+            "benchmarks/live-model-tools/v1/README.md",
+            "https://github.com/rlaope/oh-my-hermes/blob/main/docs/CAPABILITY_IMPACT.md",
+            "https://github.com/rlaope/oh-my-hermes/blob/6da2a3cac0ac854d475a930f8975208bc22b06c9/docs/CAPABILITY_IMPACT.md",
+            (
+                "https://github.com/rlaope/oh-my-hermes/blob/"
+                "0123456789abcdef0123456789abcdef01234567/docs/CAPABILITY_IMPACT.md"
+            ),
+            "direview_dprof_e9da83f21e46282d3a9ae020_r1",
+            "@scope/hermes-agent-runtime-v2-package",
+            "@scope/HermesAgentRuntimeV2PackageManager",
+            "JSONRPC2ServerConfigurationManager",
+            "TLS13ConnectionConfigurationManager",
+            "packages/hermes-agent-runtime-v2-package/src",
+            "packages/HermesAgentRuntimeV2PackageManager/src",
+            "https://example.com/releases/hermes-agent-v2-package",
+            "https://example.com/releases/HermesAgentRuntimeV2PackageManager",
+            (
+                "https://example.com/artifact?id="
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            ),
+            "@scope/HermesAgent-runtime-v2-package",
+            "packages/HermesAgent-runtime-v2-package/src",
+            "https://github.com/NousResearch/HermesAgent-runtime-v2-package",
+            "project-2026-memory-hardening-identifier",
+            "secret-tokenizer-library-for-python-projects",
+            "hf-transformers-inference-service-project",
+            "DECLARED_MODEL_CONTRACT_PROJECTIONS",
+            "CAPABILITY_EVIDENCE_STALE_AFTER_SECONDS",
+            "SOURCE_FINDER_OBSERVATION_PROVENANCE",
+            "let data = pipe.fileHandleForReading.readDataToEndOfFile()",
+            "Mirrors SHIPPED_MODEL_RECOMMENDATIONS categories in",
+            "Unresolved memory conflicts block this context pack from executor handoff attachment.",
+            "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/memory",
+            (
+                "/private/var/folders/21/8zb1drv53h1d0vm3tv0f6mym0000gn/T/tmpabcd/.omh/plans/"
+                "2026-09-05T082831432517Z-implement-durable-observation-journal-with-tests-9f35ae.md"
+            ),
+            (
+                "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\tmpmeqo2rx3\\.omh\\plans\\"
+                "2026-09-05T092408607631Z-risky-refactor-with-review-9f35ae.md"
+            ),
+            (
+                "D:\\a\\oh-my-hermes\\oh-my-hermes\\.hermes\\plans\\"
+                "2026-09-05T092408607631Z-implement-durable-observation-journal-with-tests-9f35ae.md"
+            ),
+            r"C:\Program Files\Hermes Agent\config.json",
+            r"C:\Users\Alice\myProject\README.md",
+            "packages/JSONRPC2ServerConfigurationManager/src",
+            "https://example.com/releases/TLS13ConnectionConfigurationManager",
+        ):
+            with self.subTest(ordinary=ordinary):
+                self.assertEqual(governance.classify_memory_admission(ordinary)["status"], "safe")
+
+    def test_plan_handoff_accepts_literal_windows_paths_without_weakening_credential_checks(self) -> None:
+        artifact = {
+            "schema_version": "hermes_plan/v1",
+            "status": "accepted",
+            "sha256": "a" * 64,
+        }
+        safe_paths = (
+            "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\tmpmeqo2rx3\\.omh\\plans\\"
+            "2026-09-05T092408607631Z-risky-refactor-with-review-9f35ae.md",
+            "\\\\build-server\\workspace\\.omh\\plans\\"
+            "2026-09-05T092408607631Z-risky-refactor-with-review-9f35ae.md",
+        )
+        for path in safe_paths:
+            with self.subTest(path=path):
+                pack = build_plan_handoff_context_pack({**artifact, "path": path})
+                self.assertEqual(pack["metadata"]["plan_artifact_path"], path)
+
+        credential = "gh" + "u_" + "a" * 36
+        padded = "Ab3dEf4G" * 5 + "="
+        uppercase_base32 = "JBSWY3DPEHPK3PXP" * 3
+        uppercase_letters_only_base32 = "JBSWYDPF" * 4
+        mixed_case_letters_only_base64 = "mQvHzLrNaPeTgWuYbJxDcFkSiOoUaZcV"
+        mixed_case_base64_with_lower_runs = "abCDefGHijKLmnOPqrSTuvWXyzABcDEF"
+        lowercase_alphanumeric = "a9b8c7d6e5f4g3h2j1k0m9n8p7q6r5s4"
+        for unsafe_path in (
+            f"C:\\safe\\{credential}\\artifact.txt",
+            f"C:\\safe\\{padded}\\artifact.txt",
+            f"C:\\safe\\{uppercase_base32}\\artifact.txt",
+            f"C:\\safe\\{uppercase_letters_only_base32}\\artifact.txt",
+            f"C:\\safe\\{mixed_case_letters_only_base64}\\artifact.txt",
+            f"C:\\safe\\{mixed_case_base64_with_lower_runs}\\artifact.txt",
+            f"C:\\safe\\{lowercase_alphanumeric}\\artifact.txt",
+        ):
+            with self.subTest(unsafe_path=unsafe_path), self.assertRaises(ValueError):
+                build_plan_handoff_context_pack({**artifact, "path": unsafe_path})
 
     def test_scope_invalid_and_scope_mismatch_are_distinct_fail_closed_results(self) -> None:
         with self.assertRaises(ValueError):
@@ -193,6 +637,18 @@ class SafetyAndEvaluationTests(unittest.TestCase):
         self.assertEqual(governance.validate_replay_evaluation(result), [])
         self.assertEqual(governance.external_context_label("hermes_native")["admission_status"], "not_omh_reviewed")
         self.assertEqual(governance.external_context_label("provider")["reason_code"], "external_not_omh_reviewed")
+
+    def test_fail_closed_replay_result_masks_credential_shaped_source_class(self) -> None:
+        credential = "gh" + "u_" + "a" * 36
+
+        result = governance.evaluate_memory_replay(
+            {"schema_version": "unsupported/v1", "source_class": credential},
+            now=NOW,
+        )
+
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["reason_code"], "unsupported_schema")
+        self.assertNotIn(credential, json.dumps(result, sort_keys=True))
 
     def test_b1_safety_rescan_blocks_secrets_in_value_and_label(self) -> None:
         """B1: Evaluate all renderable fields (summary, value, label) for secrets."""

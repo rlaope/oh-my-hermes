@@ -71,6 +71,7 @@ def evaluate_memory_replay(
         MEMORY_BLOCK_SCHEMA_VERSION,
         canonical_memory_scope,
         canonical_payload_digest,
+        contains_credential_like_material,
     )
     
     if now is None:
@@ -86,7 +87,11 @@ def evaluate_memory_replay(
         "admission_state": None,
         "admission_mode": None,
         "payload_digest": None,
-        "source_class": artifact.get('source_class'),
+        "source_class": (
+            "redacted"
+            if contains_credential_like_material(str(artifact.get("source_class", "")))
+            else artifact.get("source_class")
+        ),
         "retention_class": None,
     }
     
@@ -141,12 +146,12 @@ def evaluate_memory_replay(
         return result
     
     admission_state = admission.get("state")
-    result["admission_state"] = admission_state
-    
+
     from .memory_governance import ADMISSION_STATES
     if admission_state not in ADMISSION_STATES:
         result["reason_code"] = "admission_state_invalid"
         return result
+    result["admission_state"] = admission_state
     
     if admission_state in ("blocked", "rejected", "pending_review"):
         result["reason_code"] = {

@@ -6,6 +6,9 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+from ..plugin_bundle.omh.memory_governance import contains_credential_like_material
+
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$")
 
 
@@ -18,7 +21,11 @@ class ScanFinding:
 
 
 def safe_token(value: object) -> bool:
-    return isinstance(value, str) and bool(_SAFE_TOKEN.fullmatch(value))
+    return (
+        isinstance(value, str)
+        and bool(_SAFE_TOKEN.fullmatch(value))
+        and not contains_credential_like_material(value)
+    )
 
 
 def stamp(value: datetime) -> str:

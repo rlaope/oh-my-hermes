@@ -6,7 +6,12 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
-from ..plugin_bundle.omh.memory_governance import PROJECT_MEMORY_RECORD_SCHEMA_VERSION, canonical_memory_scope
+from ..plugin_bundle.omh.memory_governance import (
+    PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
+    canonical_memory_scope,
+    contains_credential_like_material,
+    evaluate_renderable_strings,
+)
 from ..system.paths import OmhPaths
 from ._memory_lifecycle_model import LifecycleMutation, LifecyclePlan, LifecycleTransactionExecutor, MAX_MANIFEST_TARGETS
 from ._memory_lifecycle_plans import (
@@ -39,7 +44,27 @@ _ALLOWED_OUTCOMES = frozenset({"written", "moved", "rewritten", "removed", "alre
 def lifecycle_replay_status(record: Mapping[str, object], *, now: datetime) -> dict[str, object]:
     reason = _expiry_reason(record, now)
     state = _admission_state(record)
-    return {"record_id": str(record.get("record_id", "")), "revision": record.get("revision"), "scope": _scope(record), "admission_state": state, "retention_class": _retention_class(record), "replay_eligible": reason == "eligible" and state in {"approved_manual", "approved_auto_safe"}, "reason_code": reason if reason != "eligible" else ("eligible" if state in {"approved_manual", "approved_auto_safe"} else "review_required")}
+    scope_value = record.get("scope")
+    try:
+        scope = canonical_memory_scope(dict(scope_value) if isinstance(scope_value, Mapping) else {})
+    except (TypeError, ValueError):
+        scope = {"kind": "redacted", "ref": "redacted"}
+    public_scope = {key: _public_label(scope.get(key, "")) for key in ("kind", "ref")}
+    revision = record.get("revision")
+    return {
+        "record_id": _public_label(record.get("record_id", "")),
+        "revision": revision if isinstance(revision, int) and not isinstance(revision, bool) else None,
+        "scope": public_scope,
+        "admission_state": _public_label(state),
+        "retention_class": _public_label(_retention_class(record)),
+        "replay_eligible": reason == "eligible" and state in {"approved_manual", "approved_auto_safe"},
+        "reason_code": reason if reason != "eligible" else ("eligible" if state in {"approved_manual", "approved_auto_safe"} else "review_required"),
+    }
+
+
+def _public_label(value: object) -> str:
+    text = str(value or "")
+    return "redacted" if contains_credential_like_material(text) else text
 
 
 def build_memory_retirement(paths: OmhPaths, record_id: str, revision: int, *, now: datetime) -> LifecyclePlan:
@@ -77,6 +102,9 @@ def build_memory_restore(paths: OmhPaths, record_id: str, revision: int, *, now:
     candidate_id = candidate_id or _lifecycle_candidate_id("restore", record_id, revision)
     if not safe_token(candidate_id):
         raise ValueError("unsafe_candidate_id")
+    safety = evaluate_renderable_strings(dict(archived))
+    if safety["status"] != "safe":
+        return _rejected("restore", record_id, revision, now, str(safety["reason_code"]))
     candidate = _pending_candidate(archived, candidate_id, revision + 1, "restore")
     manifest = _manifest(((f"archive:{record_id}:r{revision}", "archive", relative), (f"candidate:{candidate_id}", "candidate", f"candidates/{candidate_id}.json")))
     mutation = LifecycleMutation("write_restore_candidate", "write", f"candidates/{candidate_id}.json", f"candidate:{candidate_id}", "candidate", payload=candidate)
@@ -94,17 +122,25 @@ def apply_memory_restore(paths: OmhPaths, plan: LifecyclePlan, *, transaction_ex
 
 
 def build_memory_reapproval(paths: OmhPaths, candidate_id: str, *, reviewer_claim: str, now: datetime) -> LifecyclePlan:
+    if not safe_token(candidate_id):
+        raise ValueError("unsafe_candidate_id")
     candidate, error = read_json(paths.memory_dir, f"candidates/{candidate_id}.json")
     if error or candidate is None or candidate.get("schema_version") != "project_memory_candidate/v2" or _admission_state(candidate) != "pending_review":
         return _rejected("reapprove", candidate_id, 0, now, "restore_candidate_not_pending")
     record_id, revision = str(candidate.get("record_id", "")), candidate.get("candidate_revision")
     if not safe_token(record_id) or not isinstance(revision, int) or revision < 2:
         return _rejected("reapprove", candidate_id, 0, now, "restore_candidate_invalid")
+    reviewer_safety = evaluate_renderable_strings({"label": str(reviewer_claim or "")})
+    if reviewer_safety["status"] != "safe":
+        return _rejected("reapprove", record_id, revision, now, "unsafe_reviewer_claim")
     if (paths.memory_dir / f"records/{record_id}.json").exists():
         return _rejected("reapprove", record_id, revision, now, "newer_live_revision_conflict")
     replacement = candidate.get("replacement")
     if not isinstance(replacement, Mapping):
         return _rejected("reapprove", record_id, revision, now, "restore_candidate_invalid")
+    safety = evaluate_renderable_strings(dict(replacement))
+    if safety["status"] != "safe":
+        return _rejected("reapprove", record_id, revision, now, str(safety["reason_code"]))
     record = _approved_record(replacement, record_id, revision, reviewer_claim, now)
     review_id = str(record["admission"]["review_id"])
     review = _review(record, review_id, reviewer_claim)
@@ -128,9 +164,13 @@ def build_memory_correction(paths: OmhPaths, record_id: str, revision: int, summ
     candidate_id = candidate_id or _lifecycle_candidate_id("correct", record_id, revision)
     if not safe_token(candidate_id):
         raise ValueError("unsafe_candidate_id")
+    replacement = {**record, "summary": str(summary)[:500]}
+    safety = evaluate_renderable_strings(replacement)
+    if safety["status"] != "safe":
+        return _rejected("correct", record_id, revision, now, str(safety["reason_code"]))
     successor = {"schema_version": PROJECT_MEMORY_RECORD_SCHEMA_VERSION, "id": record_id, "id_key": "record_id", "revision": revision + 1, "scope": _scope(record)}
     history = {**record, "superseded_by": successor}
-    candidate = _pending_candidate({**record, "summary": str(summary)[:500]}, candidate_id, revision + 1, "correction")
+    candidate = _pending_candidate(replacement, candidate_id, revision + 1, "correction")
     manifest = _manifest(((f"record:{record_id}:r{revision}", "record", f"records/{record_id}.json"), (f"history:{record_id}:r{revision}", "history", f"history/{record_id}.r{revision}.json"), (f"candidate:{candidate_id}", "candidate", f"candidates/{candidate_id}.json")))
     mutations = (LifecycleMutation("write_superseded_history", "write", f"history/{record_id}.r{revision}.json", f"history:{record_id}:r{revision}", "history", payload=history), LifecycleMutation("remove_current_revision", "delete", f"records/{record_id}.json", f"record:{record_id}:r{revision}", "record"), LifecycleMutation("write_correction_candidate", "write", f"candidates/{candidate_id}.json", f"candidate:{candidate_id}", "candidate", payload=candidate))
     return _plan("correct", record_id, revision, _scope(record), now, manifest, mutations)
