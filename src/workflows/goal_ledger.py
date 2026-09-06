@@ -57,6 +57,36 @@ STORAGE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 RUNTIME_COMPLETION_ACTIONS = {"report_completion_with_evidence", "report_merge_ready", "report_merged"}
 
 
+MERGE_OBLIGATION_ACTIONS = ("merge", "deploy")
+MERGE_OBLIGATION_CRITERION_IDS = {"merge": "AC-MERGE", "deploy": "AC-DEPLOY"}
+
+
+def merge_obligation_criterion(obligation: str, ref: str = "") -> dict[str, Any]:
+    """A REQUIRED acceptance criterion for a post-verification merge/deploy.
+
+    The obligation is met only when the merge (or deploy) is *observed* through
+    an external-effect receipt -- a delegated subtask completing is not the
+    parent obligation being met. The criterion is required and carries no
+    evidence, so a fresh ledger stays not-ready until a checkpoint satisfies it
+    with observed evidence; the goal ledger's completion-integrity classifier
+    then refuses a hand-satisfying entry that names no observed command or
+    receipt (placeholder, self-referential, or prepared-not-observed evidence),
+    which is the reuse that keeps "merged" a claim rather than a proof.
+    """
+    if obligation not in MERGE_OBLIGATION_ACTIONS:
+        raise ValueError(f"merge obligation must be one of {MERGE_OBLIGATION_ACTIONS}")
+    target = re.sub(r"\s+", " ", str(ref)).strip()
+    scope = f" {target}" if target else ""
+    return {
+        "id": MERGE_OBLIGATION_CRITERION_IDS[obligation],
+        "summary": (
+            f"{obligation}{scope} observed via an external-effect {obligation} receipt "
+            "(a delegated subtask completing is not this obligation being met)"
+        ),
+        "required": True,
+    }
+
+
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return (slug or "goal")[:48].strip("-") or "goal"

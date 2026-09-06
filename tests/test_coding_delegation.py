@@ -499,5 +499,60 @@ class HermesNativeModelBindingTests(unittest.TestCase):
         self.assertEqual(binding["next_action"], "configure_hermes_native_alias")
 
 
+class DelegationContinuityBlockTests(unittest.TestCase):
+    """The `delegation_continuity` block appears only under a merge/deploy directive.
+
+    Goal 2 rides on Goal 1's `post_completion_directive`: when the user asked to
+    merge or deploy, the payload carries an OMH-owned continuity block naming the
+    goal-ledger record and the OMH-state-root write policy; otherwise the key is
+    omitted entirely so a plain coding delegation stays byte-identical.
+    """
+
+    _MESSAGE = "fix the broken login flow in src/auth.py and add a regression test"
+
+    def test_a_merge_directive_attaches_the_continuity_block(self) -> None:
+        payload = build_coding_delegation_payload(
+            f"{self._MESSAGE} then merge it", executor_target="codex"
+        )
+        block = payload["delegation_continuity"]
+        self.assertEqual(block["schema_version"], "omh_delegation_continuity/v1")
+        self.assertEqual(block["obligation"], "merge")
+        self.assertEqual(block["overall_outcome_state"], "open")
+        self.assertIs(block["subtask_is_not_goal"], True)
+        self.assertEqual(block["durable_record"]["kind"], "goal_ledger")
+        self.assertTrue(block["durable_record"]["goal_id"])
+        self.assertIn(".omo", block["write_location_policy"]["forbidden_targets"])
+        self.assertIn(".omx", block["write_location_policy"]["forbidden_targets"])
+
+    def test_a_deploy_directive_attaches_a_deploy_obligation(self) -> None:
+        payload = build_coding_delegation_payload(
+            f"{self._MESSAGE} then deploy it", executor_target="codex"
+        )
+        self.assertEqual(payload["delegation_continuity"]["obligation"], "deploy")
+
+    def test_a_plain_coding_delegation_omits_the_block(self) -> None:
+        payload = build_coding_delegation_payload(self._MESSAGE, executor_target="codex")
+        self.assertNotIn("delegation_continuity", payload)
+
+    def test_the_seam_coexists_with_goal_1_directive(self) -> None:
+        # Goal 1's post_completion_directive (on the handoff envelope) and Goal
+        # 2's delegation_continuity (top-level) must both be present, neither
+        # overwriting the other.
+        payload = build_coding_delegation_payload(
+            f"{self._MESSAGE} then merge it", executor_target="codex"
+        )
+        self.assertEqual(payload["delegation_continuity"]["obligation"], "merge")
+        for key in ("executor_handoff", "runtime_handoff", "prompt_handoff"):
+            handoff = payload.get(key)
+            if isinstance(handoff, dict):
+                envelope = handoff["task_authority_envelope"]
+                self.assertEqual(
+                    envelope["post_completion_directive"]["action"], "merge"
+                )
+                break
+        else:  # pragma: no cover - a dispatchable codex handoff always exists here
+            self.fail("no handoff carried the authority envelope")
+
+
 if __name__ == "__main__":  # pragma: no cover - unittest entry point
     unittest.main()

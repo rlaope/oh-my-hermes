@@ -1195,7 +1195,7 @@ WORKFLOW_CONTEXT_CARDS = (
             "ultraqa",
         ),
         "user_examples": ("Turn this issue into a PR-ready plan", "Is the Codex run done yet?"),
-        "first_response_shape": "State the selected coding owner or choice point, prepare the handoff/status, and keep dispatch, result, review, CI, and merge evidence separate; when the user explicitly authorized merge or deploy, carry that forward as a prepared post-verification step rather than downgrading it to 'no merge', still gated on observed receipt evidence.",
+        "first_response_shape": "State the selected coding owner or choice point, prepare the handoff/status, and keep dispatch, result, review, CI, and merge evidence separate; when the user explicitly authorized merge or deploy, carry that forward as a prepared post-verification step rather than downgrading it to 'no merge', still gated on observed receipt evidence. Record cross-delegation continuity and the outstanding merge/deploy obligation in the goal ledger under .omh/goals; a delegated subtask completing is not the parent goal completing, and never write continuity into the product repo's .omo/.omx runtime-evidence dirs.",
         "not_evidence_until_observed": ("dispatch", "implementation", "review", "CI", "merge"),
     },
 )
@@ -6089,6 +6089,10 @@ def awareness_primer_payload() -> dict[str, object]:
             {
                 "cue": "coding, risky changes, executor status, review, CI, or merge state",
                 "route": "ultrawork, coding handoff, code-review, or agent-ops-review with observed evidence boundaries",
+            },
+            {
+                "cue": "delegated coding continuity, an outstanding merge/deploy obligation, or where to record it",
+                "route": "record the obligation in the goal ledger under .omh/goals, never in the product repo's .omo/.omx runtime-evidence dirs; a delegated subtask completing is not the parent goal completing",
             },
             {
                 "cue": "workflow trace, skill improvement, regression corpus, or why-routing questions",

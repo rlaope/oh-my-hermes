@@ -430,6 +430,32 @@ class OmhPaths:
         return self.omh_home / "team-profile-packs"
 
 
+# Product-repo runtime-evidence directories that OMH delegation continuity must
+# never be written into. `.omo`/`.omx` are other oh-my products' runtime trees
+# and `.document-harness` is a product's own evidence dir; continuity is
+# OMH-owned durable state and belongs in the OMH state root's goal ledger, never
+# hand-written into a product repo. `continuity_write_target` resolves the only
+# allowed destination so a writer can never construct one of these instead.
+CONTINUITY_FORBIDDEN_TARGETS: tuple[str, ...] = (".omo", ".omx", ".document-harness")
+
+
+def continuity_write_target(paths: OmhPaths) -> dict[str, object]:
+    """The one allowed destination for OMH delegation-continuity state.
+
+    Returns the OMH state root, the goals directory continuity lives under, and
+    the forbidden product-repo runtime-evidence targets. A continuity writer
+    resolves its path from `goals_dir` here and can never assemble a
+    `.omo`/`.omx`/`.document-harness` path, because this is the only target it
+    is handed.
+    """
+    return {
+        "state_root": str(paths.omh_home),
+        "handoff_family": "goals",
+        "goals_dir": str(paths.goals_dir),
+        "forbidden_targets": list(CONTINUITY_FORBIDDEN_TARGETS),
+    }
+
+
 def expand_path(value: str | Path) -> Path:
     return Path(os.path.expandvars(str(value))).expanduser().resolve()
 
