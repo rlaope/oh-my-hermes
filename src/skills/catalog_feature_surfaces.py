@@ -9,7 +9,7 @@ the surface template.
 
 from __future__ import annotations
 
-from .catalog_types import _feature_surface_skill
+from .catalog_types import EXECUTION_WAIT_DISCIPLINE_RULE, _feature_surface_skill
 
 _FEATURE_SURFACE_SKILLS = (
     _feature_surface_skill(
@@ -495,6 +495,10 @@ _FEATURE_SURFACE_SKILLS = (
             "If the command is destructive, credentialed, networked, install/deploy-oriented, or production-affecting, require an explicit confirmation gate.",
             "If the user supplied failed command output and asks for root cause, route to build-failure-triage or agent-debug instead of preparing a fresh command.",
         ),
+        # The timeout and stop condition this surface already requires say when
+        # a command must give up. They do not say how the session learns that it
+        # finished, which is where a status loop gets invented.
+        extra_quality_bar=(EXECUTION_WAIT_DISCIPLINE_RULE,),
     ),
     _feature_surface_skill(
         "connector-operator",

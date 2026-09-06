@@ -6,6 +6,13 @@ from ..executors import (
     HERMES_CODING_TEAM_STATUS_LADDER,
     HERMES_CODING_TEAM_WRAPPER_ACTIONS,
 )
+from .wait_strategy import (
+    EXECUTION_WAIT_BINDING_SCHEMA_VERSION,
+    EXECUTION_WAIT_STRATEGY_SCHEMA_VERSION,
+    MIDPOINT_PEEK_BUDGET,
+    WAIT_OBSERVATION_MODES,
+    WAIT_TERMINAL_STATES,
+)
 
 
 HERMES_CODING_HARNESS_SCHEMA_VERSION = "hermes_coding_harness/v1"
@@ -144,6 +151,7 @@ def build_hermes_coding_harness(
         "docs_sync": docs_sync,
         "pr_preparation": pr_preparation,
         "wrapper_actions": _wrapper_actions(),
+        "wait_binding": _wait_binding_requirement(),
         "runtime_observation_requirements": _runtime_requirements(),
         "safe_status_lines": _safe_status_lines(
             status=status,
@@ -176,6 +184,7 @@ def validate_hermes_coding_harness(harness: Any) -> list[str]:
         "docs_sync",
         "pr_preparation",
         "wrapper_actions",
+        "wait_binding",
         "runtime_observation_requirements",
         "safe_status_lines",
         "claim_boundary",
@@ -212,9 +221,10 @@ def validate_hermes_coding_harness(harness: Any) -> list[str]:
     for key in ("gates", "wrapper_actions", "runtime_observation_requirements", "safe_status_lines"):
         if not isinstance(harness.get(key), list):
             errors.append(f"hermes_coding_harness {key} must be a list")
-    for key in ("verification_matrix", "docs_sync", "pr_preparation"):
+    for key in ("verification_matrix", "docs_sync", "pr_preparation", "wait_binding"):
         if not isinstance(harness.get(key), dict):
             errors.append(f"hermes_coding_harness {key} must be an object")
+    errors.extend(_validate_wait_binding(harness.get("wait_binding")))
     errors.extend(_validate_verification_matrix(harness.get("verification_matrix")))
     errors.extend(_validate_docs_sync(harness.get("docs_sync")))
     errors.extend(_validate_pr_preparation(harness.get("pr_preparation")))
@@ -242,10 +252,52 @@ def compact_hermes_coding_harness(value: Any) -> dict[str, Any]:
     for key in ("workflow_graph", "lanes", "gates", "wrapper_actions", "runtime_observation_requirements"):
         if isinstance(value.get(key), list):
             compact[key] = value[key]
-    for key in ("verification_matrix", "docs_sync", "pr_preparation"):
+    for key in ("verification_matrix", "docs_sync", "pr_preparation", "wait_binding"):
         if isinstance(value.get(key), dict):
             compact[key] = value[key]
     return compact
+
+
+def _wait_binding_requirement() -> dict[str, Any]:
+    """The precondition a lane that outlives its dispatching turn must satisfy.
+
+    This harness observes; it never dispatches. What it can do is state, in one
+    place a wrapper reads before starting a lane, that background work binds to
+    a completion primitive FIRST and records both the executor handle and the
+    observation mode it bound to. Without that record, the only way to learn
+    that a lane finished is to ask again -- which is the empty model turn the
+    bounded/unchanged projections can shrink but cannot prevent.
+    """
+    return {
+        "strategy_schema_version": EXECUTION_WAIT_STRATEGY_SCHEMA_VERSION,
+        "binding_schema_version": EXECUTION_WAIT_BINDING_SCHEMA_VERSION,
+        "precondition": "select_and_arm_the_wait_strategy_before_dispatching_a_background_lane",
+        "records": ["executor_handle", "observation_mode"],
+        "observation_modes": list(WAIT_OBSERVATION_MODES),
+        "terminal_states": list(WAIT_TERMINAL_STATES),
+        "completion_consumed_once": True,
+        "midpoint_peek_budget": MIDPOINT_PEEK_BUDGET,
+        "unbounded_idle_or_busy_wait_rejected": True,
+        "claim_boundary": (
+            "An armed wait records how this session will learn that a lane finished. It is not dispatch, "
+            "execution, verification, review, CI, merge-readiness, or merge evidence."
+        ),
+    }
+
+
+def _validate_wait_binding(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    errors: list[str] = []
+    if value.get("strategy_schema_version") != EXECUTION_WAIT_STRATEGY_SCHEMA_VERSION:
+        errors.append("hermes_coding_harness wait_binding strategy_schema_version is invalid")
+    if list(value.get("records", [])) != ["executor_handle", "observation_mode"]:
+        errors.append("hermes_coding_harness wait_binding must record the executor handle and observation mode")
+    if list(value.get("terminal_states", [])) != list(WAIT_TERMINAL_STATES):
+        errors.append("hermes_coding_harness wait_binding must carry the canonical terminal states")
+    if value.get("completion_consumed_once") is not True:
+        errors.append("hermes_coding_harness wait_binding must consume a completion exactly once")
+    return errors
 
 
 def _validate_verification_matrix(value: Any) -> list[str]:

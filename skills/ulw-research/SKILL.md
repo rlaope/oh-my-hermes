@@ -97,7 +97,7 @@ Quality bar:
 - Mark every figure as measured, assumed, or derived, and carry retrieval dates for time-sensitive facts.
 - Distill the dossier into a plan-feed block - decision drivers, viable options with evidence, rejected candidates with reasons, risks, and open questions - so planning consumes conclusions, not raw notes.
 - Reserve the end of the run for synthesis; an interrupted run must still leave a partial dossier rather than lost context.
-- A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or state exactly what the run is waiting on (for example, lanes still in flight that resume when their results return). Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it.
+- A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it.
 - Summarize the evidence or dossier before any planning or coding handoff; research is not implementation evidence.
 
 Handoff policy:

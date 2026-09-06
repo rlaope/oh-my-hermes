@@ -432,6 +432,54 @@ Raw logs, JSONL, command output, and transcripts stay in artifacts referenced by
 the event; the event itself is progress context, not execution/review/CI/merge
 evidence.
 
+### Binding A Wait To A Completion Signal
+
+Reporting events instead of polling only works if the wait itself is bound to
+something. `omh_execution_wait_strategy/v1` is that binding, chosen before the
+work starts and recorded as metadata: the observed handle, the condition, the
+selected mechanism, the hard deadline, the cancellation path, and the fallback.
+`coding_progress_reporting_policy/v1` carries the same selection in its
+`wait_strategy` block, and its `enforcement.wait_binding` block states the
+dispatch precondition, so a wrapper reads the contract rather than restating it.
+
+Pick the row that matches the work, then the leftmost mechanism the host
+actually exposes. Mechanism names are capability-shaped on purpose: no row names
+a tool, because a tool named here would be unfollowable on a harness that lacks
+it.
+
+| Work | Preferred mechanism | If that capability is absent | Last resort |
+| --- | --- | --- | --- |
+| Command expected to finish inside one tool call | `foreground_bounded_call`, timeout sized to the expected duration | `background_completion_notification` | `bounded_background_watcher`, then `adaptive_backoff_fallback` |
+| Longer terminal command | `background_completion_notification`, no process-status polling | `bounded_background_watcher` with a hard deadline | `adaptive_backoff_fallback` outside model turns |
+| Hermes-native delegated lane | `delegated_result_delivery`; the parent continues independent work or ends the turn | `background_completion_notification` | `bounded_background_watcher`, then `adaptive_backoff_fallback` |
+| CI, PR, deploy, file, port, log line, external executor session | `host_monitor_subscription` | one `bounded_background_watcher` with a hard deadline | `adaptive_backoff_fallback` outside model turns |
+
+Each mechanism fixes the `observation_mode` recorded into executor-progress
+metadata: `single_foreground_return`, `event_triggered_completion`,
+`delivered_result`, `subscribed_condition`, `bounded_watcher`, and
+`adaptive_backoff` respectively. Degrading down a row is allowed and is
+recorded: the payload names the missing capability in
+`selection.missing_capabilities` rather than presenting the fallback as the
+choice that was wanted.
+
+Every armed wait ends in exactly one terminal state — `completed`, `failed`,
+`cancelled`, `timed_out`, or `lost_handle` — each carrying a bounded summary,
+capped evidence refs, and a recovery action. The completion is consumed once; a
+duplicate notification is recorded as ignored instead of reopening a closed
+wait. A lost notification therefore times out rather than waiting forever, and
+`lost_handle` stays separate from `failed` because its recovery is to re-observe
+the handle, not to re-run the work.
+
+Diagnosis is still allowed and is not the wait mechanism. One decision-changing
+midpoint peek is permitted per wait, and a user-requested "check status now" is
+always available and never charged against that budget. A second
+agent-initiated status read before the completion event is
+`polling_loop_detected` — the defect this contract exists to prevent, not a
+style note.
+
+Selecting or arming a wait strategy is preparation. It is not dispatch,
+execution, verification, review, CI, merge-readiness, or merge evidence.
+
 That guidance now has a mechanical backstop, so a supervising session cannot
 grow its context without bound even if it ignores the advice:
 

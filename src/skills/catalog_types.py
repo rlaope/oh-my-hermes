@@ -350,6 +350,32 @@ DELEGATION_TRANSPARENCY_RULES = (
     DELEGATE_PERMISSION_PREFLIGHT_RULE,
 )
 
+# Waiting discipline: one maintained copy of how a long-running operation binds
+# to the host's own completion primitive. Composed into the shared coding rail,
+# the executing ULW engines, and the command-operator overlay, and rendered into
+# the shared `references/skill-common-rail.md`, so the rail, `ulw-work`, and
+# `ulw-loop` cannot drift into three different disciplines. The contract behind
+# the wording is `omh_execution_wait_strategy/v1`
+# (`src/coding/wait_strategy.py`), which owns the closed mechanism, observation
+# mode, and terminal-state vocabularies.
+#
+# The rule states the choice, not a tool: naming a specific call would make the
+# discipline unfollowable on a harness that does not have it, which is the
+# failure the capability-first wording exists to avoid.
+EXECUTION_WAIT_DISCIPLINE_RULE = (
+    "Choose the wait strategy before starting long-running work and bind it to a completion signal the host "
+    "exposes, never to a status loop: a command that fits one tool call runs once in the foreground with a "
+    "duration-sized timeout; a longer terminal command runs in the background with completion notification "
+    "armed and no process-status polling; a delegated lane relies on its delivered result while the parent "
+    "continues independent work or ends the turn; a CI, PR, deploy, file, port, log-line, or "
+    "external-session condition uses the host's monitor when observed, else exactly ONE bounded watcher or "
+    "adaptive backoff outside model turns. Record the handle and observation mode at dispatch; every armed "
+    "wait needs a hard deadline, a cancellation path, and a fallback naming the missing capability. Each "
+    "wait closes in one terminal state with bounded evidence; an unbounded idle or busy-wait is a defect and "
+    "a lost notification times out. One decision-changing midpoint peek and any user-requested status check "
+    "stay allowed; neither is the wait mechanism. Ladder and terminal states: shared rail."
+)
+
 # Follow-on engine gate: finishing one workflow (an accepted plan, a clarified
 # brief, a routing recommendation) is planning evidence, never permission to
 # start the next engine. Planning-lane skills compose the fit-recommendation
@@ -381,8 +407,8 @@ ENGINE_ENTRY_CONFIRMATION_RULE = (
 ENGINE_INTERJECTION_RESUME_RULE = (
     "A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, "
     "continue the run — re-read the phase todo when one is active and dispatch or advance the next "
-    "pending step, or state exactly what the run is waiting on (for example, lanes still in flight that "
-    "resume when their results return). Only the user's explicit stop or cancel, or the engine's own "
+    "pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- "
+    "instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own "
     "completion gate, ends the run; when the interjection changes scope, say so and update the declared "
     "plan or todo instead of silently abandoning it."
 )

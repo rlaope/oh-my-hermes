@@ -281,7 +281,15 @@ def build_coding_progress_reporting_policy(
     *,
     next_action: str = "",
     lifecycle_status: str = "",
+    wait_mechanism: str = "",
+    wait_observation_mode: str = "",
 ) -> dict[str, object]:
+    # Imported inside the function on purpose. `wait_strategy` depends on this
+    # module for its bounded-text and refused-vocabulary helpers, so the module
+    # dependency runs one way; the policy needs one block back from it, and a
+    # local import is what keeps that from becoming an import cycle.
+    from .wait_strategy import wait_strategy_policy_reference
+
     return {
         "schema_version": CODING_PROGRESS_REPORTING_POLICY_SCHEMA_VERSION,
         "mode": "event_triggered",
@@ -290,6 +298,14 @@ def build_coding_progress_reporting_policy(
         "timed_polling_rejected": True,
         "final_only_silence_rejected": True,
         "raw_log_dumping_rejected": True,
+        # The half of the anti-polling rule that has to be decided BEFORE the
+        # work starts. `timed_polling_rejected` says what not to do; this says
+        # what to do instead, in terms of the completion primitive the host
+        # actually exposed, and records which one this dispatch bound to.
+        "wait_strategy": wait_strategy_policy_reference(
+            mechanism=wait_mechanism,
+            observation_mode=wait_observation_mode,
+        ),
         "reportable_events": list(CODING_PROGRESS_REPORTABLE_EVENTS),
         "state_guidance": {
             "next_action": _normalize_token(next_action),
@@ -309,6 +325,7 @@ def build_coding_progress_reporting_policy(
             "final_only_silence_for_long_running_executor_work",
             "raw_log_dumping",
             "claiming_execution_review_ci_or_merge_without_observed_records",
+            "waiting_by_repeated_status_reads_instead_of_a_bound_completion_signal",
         ],
         "enforcement": coding_progress_policy_enforcement(),
     }
@@ -321,7 +338,20 @@ def coding_progress_policy_enforcement() -> dict[str, object]:
     observe surfaces themselves, not only by asking the agent nicely: run status
     projections emit a bounded tail, and repeated calls consume a per-run
     emission budget that degrades output to summary-only plus artifact pointers.
+
+    Those bounds act after a poll happened. The `wait_binding` block below is
+    the precondition that keeps the poll from happening at all: a dispatch binds
+    to a completion primitive first, records the handle and observation mode it
+    bound to, and consumes that completion exactly once into a terminal state.
     """
+    from .wait_strategy import (
+        EXECUTION_WAIT_BINDING_SCHEMA_VERSION,
+        EXECUTION_WAIT_STRATEGY_SCHEMA_VERSION,
+        MIDPOINT_PEEK_BUDGET,
+        WAIT_OBSERVATION_MODES,
+        WAIT_TERMINAL_STATES,
+    )
+
     return {
         "schema_version": CODING_PROGRESS_POLICY_ENFORCEMENT_SCHEMA_VERSION,
         "mechanism": "bounded_tail_plus_run_context_budget_ledger",
@@ -354,6 +384,17 @@ def coding_progress_policy_enforcement() -> dict[str, object]:
         "run_context_budget_bytes": RUN_CONTEXT_BUDGET_BYTES,
         "degraded_output": "summary_only_with_artifact_pointers",
         "full_history_opt_out": "--full",
+        "wait_binding": {
+            "strategy_schema_version": EXECUTION_WAIT_STRATEGY_SCHEMA_VERSION,
+            "binding_schema_version": EXECUTION_WAIT_BINDING_SCHEMA_VERSION,
+            "precondition": "select_and_arm_the_wait_strategy_before_dispatch",
+            "records": ["executor_handle", "observation_mode"],
+            "observation_modes": list(WAIT_OBSERVATION_MODES),
+            "completion_consumed_once": True,
+            "terminal_states": list(WAIT_TERMINAL_STATES),
+            "midpoint_peek_budget": MIDPOINT_PEEK_BUDGET,
+            "unbounded_idle_or_busy_wait_rejected": True,
+        },
         "declarative_only": False,
     }
 

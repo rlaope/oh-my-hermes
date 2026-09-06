@@ -190,7 +190,14 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # search, and confirmation-gated connector handoff); one new capability
 # section for one new workflow, not per-section padding; warranted growth.
 # 390713 -> 394961: apple-design adds one platform-aware design/review/improve capability row.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 394961
+# 394961 -> 395663: the shared execution-wait discipline reaches the capability
+# sections of the skills that carry it (the coding-handling harness bar, the
+# two executing engines, and the command-operator overlay). The
+# interjection-resume rule the six executing engines share got shorter in the
+# same pass -- naming the armed wait costs fewer chars than the example clause
+# it replaced -- so the net is one shared constant's worth of instruction lines,
+# not per-section padding; warranted growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 395663
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -669,7 +676,19 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # anti-patterns live in the new on-demand `references/public-board.md` outside
 # this count; what is always loaded is only what is wrong to discover after a
 # post has already been read; warranted growth.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 901000
+# 901000 -> 904072: the shared execution-wait discipline
+# (`EXECUTION_WAIT_DISCIPLINE_RULE`, one constant behind
+# `omh_execution_wait_strategy/v1`) is composed into the coding-handling harness
+# quality bar, the `ultrawork` and `loop` engines, and the command-operator
+# overlay, and the interjection-resume rule the six executing engines share now
+# names the armed wait instead of telling a run to say what it is waiting on.
+# It belongs in the always-loaded body because choosing the wait strategy is a
+# decision made BEFORE the work starts: a rule discovered after a sleep/status
+# loop has already been invented is a rule that arrives one wasted model turn
+# per check too late. The capability ladder table, the terminal-state list, and
+# the schema pointer live in the on-demand `references/skill-common-rail.md`,
+# outside this budget; warranted growth.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 904072
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 
