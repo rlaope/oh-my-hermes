@@ -9,6 +9,8 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.goal_ledger import (
+    MERGE_OBLIGATION_CRITERION_IDS,
+    merge_obligation_criterion,
     GOAL_COMPLETION_GATE_SCHEMA,
     GOAL_CONTINUATION_SCHEMA,
     GOAL_FAILURE_REASON_CODES,
@@ -810,6 +812,87 @@ class GoalLedgerDuplicateItemIdValidationTests(unittest.TestCase):
             stored = read_goal_ledger(paths, "goal-duplicate")
             self.assertEqual([item["quality_gate_id"] for item in stored["quality_gates"]], ["turn-1", "turn-2"])
             self.assertEqual(validate_goal_ledger(stored), {"ok": True, "errors": []})
+
+
+class MergeObligationCriterionTests(unittest.TestCase):
+    def test_the_constructor_builds_a_required_merge_criterion(self) -> None:
+        criterion = merge_obligation_criterion("merge", ref="#647")
+        self.assertEqual(criterion["id"], MERGE_OBLIGATION_CRITERION_IDS["merge"])
+        self.assertIs(criterion["required"], True)
+        self.assertIn("receipt", criterion["summary"])
+        self.assertIn("#647", criterion["summary"])
+
+    def test_deploy_is_a_distinct_criterion_id(self) -> None:
+        self.assertEqual(
+            merge_obligation_criterion("deploy")["id"], MERGE_OBLIGATION_CRITERION_IDS["deploy"]
+        )
+
+    def test_an_unsupported_obligation_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            merge_obligation_criterion("rebase")
+
+    def test_a_fresh_merge_obligation_ledger_stays_not_ready(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            create_goal_ledger(
+                paths,
+                "coding-delegation:merge:goal-obl",
+                [merge_obligation_criterion("merge")],
+                goal_id="goal-obl",
+                source="coding_delegation",
+            )
+            gate = build_goal_completion_gate(paths, "goal-obl")
+            self.assertFalse(gate["ready"])
+            self.assertEqual(
+                [c["id"] for c in gate["missing_required_criteria"]],
+                [MERGE_OBLIGATION_CRITERION_IDS["merge"]],
+            )
+
+    def test_hand_satisfying_without_a_receipt_stays_not_ready(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            create_goal_ledger(
+                paths,
+                "coding-delegation:merge:goal-hand",
+                [merge_obligation_criterion("merge")],
+                goal_id="goal-hand",
+                source="coding_delegation",
+            )
+            # A placeholder evidence value trips the existing completion-integrity
+            # refusal, so "merged" cannot check out without an observed receipt.
+            record_goal_checkpoint(
+                paths,
+                "goal-hand",
+                "recorded merge",
+                criteria_refs=[MERGE_OBLIGATION_CRITERION_IDS["merge"]],
+                evidence_refs=["pending"],
+                status="done",
+            )
+            gate = build_goal_completion_gate(paths, "goal-hand")
+            self.assertFalse(gate["ready"])
+            self.assertTrue(gate["integrity_refusals"])
+
+    def test_an_observed_receipt_ref_satisfies_the_obligation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            create_goal_ledger(
+                paths,
+                "coding-delegation:merge:goal-recv",
+                [merge_obligation_criterion("merge", ref="#647")],
+                goal_id="goal-recv",
+                source="coding_delegation",
+            )
+            record_goal_checkpoint(
+                paths,
+                "goal-recv",
+                "merge observed via receipt",
+                criteria_refs=[MERGE_OBLIGATION_CRITERION_IDS["merge"]],
+                evidence_refs=["observed: merge receipt merge:run-1 external_ref pr-647"],
+                status="done",
+            )
+            gate = build_goal_completion_gate(paths, "goal-recv")
+            self.assertTrue(gate["ready"])
+            self.assertEqual(gate["integrity_refusals"], [])
 
 
 if __name__ == "__main__":

@@ -76,6 +76,7 @@ from .context_safety import (
 from ..harness_quality import with_wrapper_actions
 from ..quality.specialist_work import build_specialist_work_quality_contract
 from ..quality.verification_tiering import sensitive_path_escalation
+from ..system.paths import CONTINUITY_FORBIDDEN_TARGETS
 from ..system.security_posture import STRICT_POSTURE, resolve_security_posture
 from ..ingress import CHAT_SOURCES, extract_message_text, extract_source_metadata
 from ..isolation import build_isolation_plan
@@ -103,6 +104,7 @@ from ..skills.catalog_types import omh_skill_display_name
 
 
 SCHEMA_VERSION = "coding_delegation/v1"
+DELEGATION_CONTINUITY_SCHEMA_VERSION = "omh_delegation_continuity/v1"
 DELEGATION_ACTIONS = ("delegate", "clarify", "fallback")
 DELEGATION_POLICY_SCHEMA_VERSION = "coding_delegation_policy/v1"
 INLINE_CODING_POLICY_STATEMENT = (
@@ -877,6 +879,7 @@ def _build_coding_delegation_payload_native(
     _attach_specialist_work_quality(payload, specialist_work_quality)
     _attach_role_context_pack(payload)
     _attach_task_authority_envelope(payload, authority_envelope)
+    _attach_delegation_continuity(payload, authority_envelope, message=message)
     _attach_governance_and_family(payload, governance, family_template, quality_harness)
     payload["harness_quality"] = _public_harness_quality(
         harness,
@@ -1135,6 +1138,80 @@ def _attach_governance_and_family(
             handoff["product_family_template"] = family_template
         if quality_harness:
             handoff["product_quality_harness"] = quality_harness
+
+
+def _delegation_continuity_goal_slug(message: str, obligation: str) -> str:
+    """A deterministic, offline goal-ledger slug for this obligation.
+
+    Derived from the obligation and the message so the same delegation always
+    proposes the same goal id -- the command layer creates the ledger under it,
+    or links an existing one, without minting a divergent id. No clock and no
+    secrets, so the prepared block stays byte-identical across builds. The
+    12-hex digest exposes no recoverable request text.
+    """
+    digest = hashlib.sha256(f"{obligation}\x00{message}".encode("utf-8")).hexdigest()[:12]
+    return f"coding-{obligation}-{digest}"
+
+
+def _attach_delegation_continuity(
+    payload: dict[str, object],
+    authority_envelope: Mapping[str, object],
+    *,
+    message: str,
+) -> None:
+    """Prepare (never write) the delegation-continuity block for a merge/deploy obligation.
+
+    The outstanding obligation is OMH-owned durable state. This builder only
+    prepares the metadata that names where the command layer must record it -- a
+    goal ledger in the OMH state root -- and never writes anything itself, so the
+    core stays offline. The obligation is read back from Goal 1's already-computed
+    `post_completion_directive` on the authority envelope; it is never recomputed
+    here. The key is omitted entirely when the user gave no explicit merge/deploy
+    directive (a denied run carries none), so every non-merge payload stays
+    byte-identical.
+
+    A delegated subtask completing is not the parent obligation completing:
+    `subtask_is_not_goal` states that, and the durable record's required
+    criterion keeps the goal open until the merge/deploy is observed. Continuity
+    lives only in the OMH goal ledger; `write_location_policy` forbids the
+    product-repo runtime-evidence dirs a prior agent hand-wrote markdown into.
+    """
+    directive = authority_envelope.get("post_completion_directive")
+    if not isinstance(directive, Mapping):
+        return
+    obligation = str(directive.get("action", "")).strip()
+    if obligation not in ("merge", "deploy"):
+        return
+    slug = _delegation_continuity_goal_slug(message, obligation)
+    payload["delegation_continuity"] = {
+        "schema_version": DELEGATION_CONTINUITY_SCHEMA_VERSION,
+        "obligation": obligation,
+        # A directive only rides a non-denied envelope, so the obligation is an
+        # active (open) goal here; a blocked ledger reads as "hold", set later by
+        # the command layer when it records a blocker.
+        "overall_outcome_state": "open",
+        "subtask_is_not_goal": True,
+        "durable_record": {
+            "kind": "goal_ledger",
+            # `<omh_home>` is a placeholder the offline builder cannot resolve;
+            # the command layer resolves the real state root via
+            # `continuity_write_target` before it writes.
+            "goal_ledger_path": f"<omh_home>/goals/{slug}/goal.json",
+            "goal_id": slug,
+            "required_criterion": (
+                f"{obligation} observed (external-effect {obligation} receipt)"
+            ),
+        },
+        "write_location_policy": {
+            "state_root": "<omh_home>",
+            "handoff_family": "goals",
+            "forbidden_targets": list(CONTINUITY_FORBIDDEN_TARGETS),
+            "note": (
+                "OMH delegation continuity lives in the OMH state root only. "
+                "Never write continuity into a product repo's runtime-evidence dirs."
+            ),
+        },
+    }
 
 
 def _attach_task_authority_envelope(payload: dict[str, object], envelope: dict[str, object]) -> None:

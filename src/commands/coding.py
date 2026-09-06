@@ -48,8 +48,14 @@ from ..routing.intent import META_OR_FEEDBACK_INTENTS, classify_workflow_intent
 from ..routing.localization import normalized_phrase, routing_tokens
 from ..runtime.artifacts import append_journal_observation, create_prepared_coding_delegation_run, write_coding_delegation
 from ..runtime.records import OBSERVED_RESULTS, WRAPPER_COMPLETION_STATUSES
-from ..system.paths import OmhPaths
+from ..system.paths import OmhPaths, continuity_write_target
 from ..workflows.blocked_work_records import mint_blocked_work_record
+from ..workflows.goal_ledger import (
+    create_goal_ledger,
+    goal_ledger_path,
+    merge_obligation_criterion,
+    record_goal_checkpoint,
+)
 from ..workflows.role_context_packs import validate_accepted_role_context, write_role_context_pack
 from ..wrapper.lifecycle import (
     CodingLifecycleError,
@@ -250,6 +256,13 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
         # to outlive the turn was the one that left nothing behind. The store is
         # runtime-wide precisely so it can hold a decision that has no run.
         payload["blocked_work_record"] = _record_coding_decision(paths, payload)
+        # An explicit merge/deploy obligation is OMH-owned durable state: record
+        # it in the OMH goal ledger here, beside the blocked-work decision and on
+        # the same unconditional path, so the obligation outlives the turn even
+        # when no run is created. A delegated subtask completing is not this
+        # obligation completing; the required merge criterion keeps the goal open
+        # until the merge/deploy is observed.
+        payload["delegation_continuity_record"] = _record_delegation_continuity(paths, payload)
         runtime_skip_reason = ""
         if args.record:
             runtime_skip_reason = _coding_delegate_record_readiness_skip_reason(
@@ -315,6 +328,11 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
                     },
                 )
             payload["runtime"] = {"run": run, "coding_delegation": record}
+            # The delegated run is a linked subtask of the obligation, never the
+            # obligation itself: record it as an in_progress checkpoint so the
+            # goal can be reconciled against it after resume without upgrading a
+            # subtask's completion into the parent goal's.
+            _link_delegation_continuity_run(paths, payload, str(run["run_id"]))
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         raise OmhError(str(exc)) from exc
     _print_json(payload)
@@ -347,6 +365,95 @@ def _record_coding_decision(paths: OmhPaths, payload: dict[str, object]) -> dict
         safety_profile_revision=str(decision.get("safety_profile_revision", "")),
         class_shape=[str(label) for label in decision.get("class_shape", []) or []],
     )
+
+
+def _record_delegation_continuity(paths: OmhPaths, payload: dict[str, object]) -> dict[str, object]:
+    """Persist an outstanding merge/deploy obligation as an OMH goal ledger.
+
+    The builder prepares the `delegation_continuity` block (obligation, prepared
+    goal slug, the OMH-state-root write policy); the durable write lives here, in
+    the command layer, so the builder stays offline. This mirrors
+    `_record_coding_decision`: it never fails the command over a store error, and
+    it re-derives the ledger's location from `continuity_write_target(paths)` so
+    it can only ever write under the OMH goals directory -- never into a product
+    repo's `.omo`/`.omx`/`.document-harness` runtime-evidence dirs.
+
+    The goal is created active with a REQUIRED merge/deploy criterion carrying no
+    evidence, so it stays open until the merge/deploy is observed. An existing
+    ledger under the prepared slug is linked, not overwritten, so a re-delegated
+    obligation keeps its in-progress history.
+    """
+    block = payload.get("delegation_continuity")
+    if not isinstance(block, dict):
+        return {"recorded": False, "reason": "no_delegation_continuity"}
+    obligation = str(block.get("obligation", "")).strip()
+    if not obligation:
+        return {"recorded": False, "reason": "no_obligation"}
+    durable = block.get("durable_record")
+    goal_id = str(durable.get("goal_id", "")).strip() if isinstance(durable, dict) else ""
+    if not goal_id:
+        return {"recorded": False, "reason": "no_goal_id"}
+    target = continuity_write_target(paths)
+    try:
+        path = goal_ledger_path(paths, goal_id)
+        if path.exists():
+            return {
+                "recorded": True,
+                "created": False,
+                "linked": True,
+                "goal_id": goal_id,
+                "goal_ledger_path": str(path),
+                "state_root": target["state_root"],
+            }
+        create_goal_ledger(
+            paths,
+            f"coding-delegation:{obligation}:{goal_id}",
+            [merge_obligation_criterion(obligation)],
+            goal_id=goal_id,
+            source="coding_delegation",
+            objective_summary=(
+                f"Outstanding {obligation} obligation from a coding delegation; a delegated "
+                "subtask completing is not this obligation being met."
+            ),
+        )
+    except (OSError, ValueError) as exc:
+        return {"recorded": False, "reason": "goal_ledger_write_failed", "error": str(exc)}
+    return {
+        "recorded": True,
+        "created": True,
+        "linked": False,
+        "goal_id": goal_id,
+        "goal_ledger_path": str(goal_ledger_path(paths, goal_id)),
+        "state_root": target["state_root"],
+    }
+
+
+def _link_delegation_continuity_run(paths: OmhPaths, payload: dict[str, object], run_id: str) -> None:
+    """Link the delegated run to the obligation goal as an in_progress checkpoint.
+
+    The checkpoint references no acceptance criterion and carries no evidence, so
+    linking a subtask never satisfies the required merge/deploy criterion: the
+    goal stays open until the merge/deploy is observed. Never fails the command
+    over a store error, mirroring the decision and continuity records above.
+    """
+    record = payload.get("delegation_continuity_record")
+    if not isinstance(record, dict) or not record.get("recorded"):
+        return
+    goal_id = str(record.get("goal_id", "")).strip()
+    if not goal_id or not run_id:
+        return
+    block = payload.get("delegation_continuity")
+    obligation = str(block.get("obligation", "")).strip() if isinstance(block, dict) else "merge"
+    try:
+        record_goal_checkpoint(
+            paths,
+            goal_id,
+            f"Delegated coding run linked to the outstanding {obligation} obligation.",
+            status="in_progress",
+            linked_runtime_run_id=run_id,
+        )
+    except (OSError, ValueError):
+        return
 
 
 def _coding_delegate_runtime_skip_reason(payload: dict[str, object]) -> str:
