@@ -66,14 +66,124 @@ _DIGEST_ASSIGNMENT_PATTERN = re.compile(
     r"(?:md5|sha(?:1|224|256|384|512))=(?:[0-9A-Fa-f]{32}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{56}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{96}|[0-9A-Fa-f]{128})",
     re.IGNORECASE,
 )
-_SAFE_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIERS = frozenset(
-    {"AuthenticatedMaintainerObservation"}
-)
 _IDENTIFIER_COMPONENT_PATTERN = re.compile(
     r"[A-Z]+(?=[A-Z][a-z]|\d|$)|[A-Z]?[a-z]+|\d+"
 )
 _SEMANTIC_IDENTIFIER_CONNECTORS = frozenset(
     {"a", "an", "and", "as", "at", "by", "for", "from", "in", "is", "not", "of", "on", "or", "the", "to", "v", "with"}
+)
+_SEMANTIC_IDENTIFIER_WORDS = frozenset(
+    {
+        "account",
+        "action",
+        "adapter",
+        "agent",
+        "alice",
+        "application",
+        "artifact",
+        "authenticated",
+        "batch",
+        "block",
+        "builder",
+        "cache",
+        "candidate",
+        "canonical",
+        "capability",
+        "client",
+        "command",
+        "component",
+        "configuration",
+        "connection",
+        "context",
+        "contract",
+        "controller",
+        "data",
+        "decision",
+        "deterministic",
+        "directory",
+        "dispatcher",
+        "document",
+        "engine",
+        "end",
+        "english",
+        "error",
+        "evaluator",
+        "event",
+        "evidence",
+        "execution",
+        "executor",
+        "factory",
+        "failure",
+        "file",
+        "finder",
+        "gateway",
+        "handler",
+        "handle",
+        "hermes",
+        "identifier",
+        "index",
+        "input",
+        "interview",
+        "lifecycle",
+        "loader",
+        "maintainer",
+        "manager",
+        "memory",
+        "metadata",
+        "migration",
+        "model",
+        "observation",
+        "operation",
+        "output",
+        "package",
+        "parser",
+        "path",
+        "platform",
+        "policy",
+        "project",
+        "protocol",
+        "provenance",
+        "provider",
+        "reader",
+        "read",
+        "reading",
+        "record",
+        "recoverable",
+        "recovery",
+        "reference",
+        "registry",
+        "request",
+        "response",
+        "reviewer",
+        "router",
+        "runtime",
+        "schema",
+        "server",
+        "service",
+        "session",
+        "source",
+        "state",
+        "status",
+        "store",
+        "stream",
+        "system",
+        "target",
+        "task",
+        "terminal",
+        "test",
+        "tests",
+        "thread",
+        "token",
+        "tool",
+        "update",
+        "user",
+        "validator",
+        "value",
+        "version",
+        "worker",
+        "workflow",
+        "writer",
+    }
 )
 _UPPER_SNAKE_IDENTIFIER_PATTERN = re.compile(r"[A-Z][A-Z0-9]{1,15}(?:_[A-Z][A-Z0-9]{1,15}){2,}")
 _SEPARATOR_SPLIT_OPAQUE_PATTERN = re.compile(
@@ -87,8 +197,6 @@ _SAFE_REASON_SEGMENT = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
 def _looks_like_structured_identifier(segment: str) -> bool:
-    if segment in _SAFE_THREE_PART_SEMANTIC_CAMEL_CASE_IDENTIFIERS:
-        return True
     if not segment.isalnum() or not any(char.islower() for char in segment) or not any(
         char.isupper() for char in segment
     ):
@@ -106,15 +214,11 @@ def _looks_like_semantic_identifier_component(component: str) -> bool:
     if component.isdigit():
         return True
     lowered = component.lower()
-    if lowered in _SEMANTIC_IDENTIFIER_CONNECTORS:
+    if lowered in _SEMANTIC_IDENTIFIER_CONNECTORS or lowered in _SEMANTIC_IDENTIFIER_WORDS:
         return True
     if component.isupper():
         return 2 <= len(component) <= 8
-    if not component.isalpha() or not 4 <= len(component) <= 16:
-        return False
-    if not any(char in "aeiouy" for char in lowered):
-        return False
-    return re.search(r"[^aeiouy]{5,}", lowered) is None
+    return False
 
 
 def _looks_like_semantic_upper_snake_identifier(segment: str) -> bool:

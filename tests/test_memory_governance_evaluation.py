@@ -328,6 +328,8 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "QwertyuiopaAsdfghjklmObservation",
             "QwertyuiopaAsdfghjklmObservationV2",
             "QwertyuiopaAsdfghjklmObservationContext",
+            "QwertyuiopaAsdefghijkObservationV2",
+            "QwertyuiopaAsdefghijkObservationContext",
             "AbcDefGhiJklMnoPqrStuVwxYzaBcdEfgJkl",
         )
         uppercase_alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWX12345678"
@@ -453,6 +455,7 @@ class SafetyAndEvaluationTests(unittest.TestCase):
             "https://example.com/AuthenticatedMaintainerObservation/artifact",
             "@scope/AuthenticatedMaintainerObservation",
             "ABlockIsRecoverableAndNotTerminal",
+            "English-Canonical Interview Protocol",
             "benchmarks/live-model-tools/v1/README.md",
             "https://github.com/rlaope/oh-my-hermes/blob/main/docs/CAPABILITY_IMPACT.md",
             "https://github.com/rlaope/oh-my-hermes/blob/6da2a3cac0ac854d475a930f8975208bc22b06c9/docs/CAPABILITY_IMPACT.md",
