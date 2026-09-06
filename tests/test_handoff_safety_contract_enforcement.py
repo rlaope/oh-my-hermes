@@ -288,6 +288,22 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "import no subprocess; this module spawns no agent, names no remote, and fails soft when "
         "git or a repository is absent."
     ),
+    "src/maintenance/build_identity.py": (
+        "the diagnostic build-identity probe behind two explicit operator commands, `omh --version` "
+        "(commands/main.py) and `omh doctor` (commands/setup.py `_doctor_result`); reached from no "
+        "prepared-handoff, routing, or chat path. It runs only the three local, read-only git "
+        "identity reads enumerated in GIT_ARGV_ALLOWLIST below (`git -c core.fsmonitor=false "
+        "rev-parse --show-toplevel`, `git -c core.fsmonitor=false rev-parse HEAD`, and `git -c "
+        "core.fsmonitor=false --no-optional-locks status --porcelain=v1 --untracked-files=all`), "
+        "each carrying the same single-purpose fsmonitor override so an identity-only read cannot "
+        "execute repo-configured hook-shaped config, each bounded by a 15-second timeout, and it "
+        "runs them with `cwd` set to the running package's own directory rather than the caller's, "
+        "so the probe cannot be pointed at an unrelated repository. Separate from the release-"
+        "identity lane above by design: this answers which code the current command executes, that "
+        "one answers which revision release evidence covers. Spawns no agent, names no remote, "
+        "writes nothing, and fails soft to `identity_status: unavailable` when git or a repository "
+        "is absent."
+    ),
     "src/maintenance/update_check_probe.py": (
         "transport owner for the opt-in `omh update-check` facade (mode defaults to off): bounded "
         "`curl` GETs of the public GitHub API for the watched branch head, repository metadata, "
@@ -489,6 +505,7 @@ PARSING_ONLY_URLLIB_REQUEST_FILES: dict[str, str] = {
     "src/workflows/visual_summary.py": "resolves screenshot `file://` references to local paths",
     "src/workflows/web_visual_qa_contracts.py": "resolves visual-QA `file://` references to local paths",
     "src/commands/setup.py": "resolves PEP 610 direct_url.json `file://` origins to local paths for update guidance",
+    "src/maintenance/build_identity.py": "resolves PEP 610 direct_url.json `file://` origins to local paths so an editable install of this checkout is labelled as one",
 }
 
 
@@ -729,6 +746,29 @@ GIT_ARGV_ALLOWLIST: dict[tuple[str, tuple[str, ...]], str] = {
         "`--untracked-files=all` fix the output format and the untracked-file visibility so repository "
         "config (status.showUntrackedFiles, status.porcelainFormat) cannot change what the probe "
         "reports. Read-only, names no remote, writes nothing"
+    ),
+    ("src/maintenance/build_identity.py", ("core.fsmonitor=false", "rev-parse")): (
+        "`git -c core.fsmonitor=false rev-parse --show-toplevel`, the first call of the diagnostic "
+        "build-identity probe, run with `cwd` set to the running package's own directory. It exists "
+        "to find out WHICH repository ships the code that is executing, before any revision is read, "
+        "so the identity can never be borrowed from the caller's working directory or from an "
+        "unrelated checkout a virtualenv happens to sit inside; the answer is discarded unless that "
+        "repository's pyproject declares this project. Read-only local lookup, same single-purpose "
+        "fsmonitor isolation as every other identity argv, names no remote"
+    ),
+    ("src/maintenance/build_identity.py", ("core.fsmonitor=false", "rev-parse", "HEAD")): (
+        "`git -c core.fsmonitor=false rev-parse HEAD` reads the full commit sha of the confirmed "
+        "work tree, the revision `omh --version` and `omh doctor` report as the identity of the "
+        "running command; read-only local object lookup, names no remote, and an unreadable HEAD "
+        "leaves identity unavailable rather than guessed"
+    ),
+    ("src/maintenance/build_identity.py", ("core.fsmonitor=false", "status")): (
+        "`git -c core.fsmonitor=false --no-optional-locks status --porcelain=v1 "
+        "--untracked-files=all` decides only whether the confirmed work tree is clean or dirty. "
+        "Nothing from the output is serialized -- the lines are counted, never named -- so no diff, "
+        "path, or file content reaches the identity record. `--no-optional-locks` keeps this "
+        "read-only probe off the index lock, and the porcelain/untracked flags stop repository "
+        "config from changing what dirty means. Read-only, names no remote, writes nothing"
     ),
     ("src/quality/evidence_records.py", ("rev-parse", "HEAD^{tree}")): (
         "`rev-parse --short HEAD^{tree}` reads the tree hash a quality-evidence observation is "

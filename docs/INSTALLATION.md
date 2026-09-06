@@ -944,6 +944,44 @@ non-blocking command availability warning for this case, so source checkouts,
 wrapper runtimes, and absolute-path installs can still verify Hermes
 registration without pretending the shell alias is ready.
 
+### Build identity
+
+`omh --version` and `omh doctor` both name the code behind the command that
+actually ran, because the semantic version alone cannot tell two same-version
+checkouts apart:
+
+```text
+omh 2.0.1 (source 6da2a3ca, clean)
+omh 2.0.1 (editable 6da2a3ca, dirty)
+omh 2.0.1 (build identity unavailable: installed package, no stamped identity)
+```
+
+`omh doctor` prints the same line, and `omh doctor --json` carries the full
+`build_identity/v1` block: semantic version, install kind (`source_checkout`,
+`editable_install`, `installed_package`, `standalone_artifact`, `unknown`), the
+resolved command path, identity status, identity source, the full commit SHA,
+dirty state, a reason when identity is unavailable, and a claim boundary.
+
+Read the fields with these boundaries in mind:
+
+- The revision is resolved from the running package's own source location, not
+  from the caller's working directory, and only from a repository whose
+  `pyproject.toml` declares this project. A wheel installed into a virtual
+  environment inside somebody else's checkout therefore reports `unavailable`
+  instead of borrowing that project's revision.
+- Only identity is serialized. No branch name, remote URL, diff, changed-file
+  list, or environment data appears in either output.
+- Dirty state is `unknown`, never guessed, when the revision came from reading
+  `.git` directly because no `git` binary was available.
+- Published OMH artifacts carry no stamped identity today, so a wheel, npm, or
+  Homebrew install reports `unavailable` with `no_stamped_identity`. That is
+  the explicit compatibility result: a packager that ships a
+  `build_identity_stamp/v1` `_build_identity.json` inside the package is read,
+  and an artifact without one is never given an invented revision.
+- The block is diagnostic provenance only. It is not evidence that the named
+  revision was tested, reviewed, passed CI, was published, or behaved
+  correctly at runtime, and it never changes the doctor status or exit code.
+
 Plugin support is installed by `omh setup` by default. It provides a thin
 Hermes plugin bridge in addition to the skill pack:
 
@@ -1511,10 +1549,11 @@ Hermes before claiming the skill is visible in chat.
 runtime state, Hermes registration, target topology, optional surfaces, command
 availability, issue counts, recommended next action, and the `last_doctor`
 state-log entry when the runtime directory is writable. `omh doctor --json`
-returns the full check payload plus `doctor_summary/v1`. `omh list` should show
-a concise managed skill summary plus workflow lanes by default. `omh list
---json` returns the managed manifest plus `omh_installed_skill_catalog_context/v1`
-and per-skill descriptions, routing hints, examples, and evidence boundaries.
+returns the full check payload plus `doctor_summary/v1` and `build_identity/v1`.
+`omh list` should show a concise managed skill summary plus workflow lanes by
+default. `omh list --json` returns the managed manifest plus
+`omh_installed_skill_catalog_context/v1` and per-skill descriptions, routing
+hints, examples, and evidence boundaries.
 The human-default commands are `omh setup`, `omh update`, and `omh doctor`.
 Several maintenance and catalog commands also print readable terminal summaries
 for advanced operators: `omh install`, `omh uninstall`, `omh apply`, `omh

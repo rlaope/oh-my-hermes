@@ -545,7 +545,10 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertEqual(stderr, "")
-        self.assertRegex(stdout.strip(), r"^omh \d+\.\d+\.\d+$")
+        # The semantic version still leads the single line; the build identity
+        # that follows it is what tells two same-version checkouts apart. Its
+        # full contract lives in tests/test_build_identity.py.
+        self.assertRegex(stdout.strip(), r"^omh \d+\.\d+\.\d+ \(.+\)$")
 
     def test_root_help_explains_command_lanes(self) -> None:
         help_text = build_parser().format_help()
