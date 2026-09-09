@@ -25,6 +25,8 @@ from _local_package import load_local_package
 load_local_package()
 from omh.quality.routing_precision import ROUTING_INTERVENTION_CASES, ROUTING_PRECISION_CASES
 from omh.routing.chat import route_chat_message
+from omh.routing.policy import REALTIME_VOICE_CONNECTOR_READINESS_PHRASES
+from omh.routing.recommend import _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS
 from omh.skills.catalog import builtin_definitions
 from omh.workflows.realtime_voice_trial_receipts import (
     ENVIRONMENT_FACETS,
@@ -679,6 +681,36 @@ class SeparatedStateTests(unittest.TestCase):
             "external tool trial for the weather plugin before adoption", source="discord"
         )
         self.assertNotIn("realtime_voice_trial", payload["chat_response"]["state"])
+
+    def test_the_memory_provider_lane_keeps_its_turns_when_voice_is_mentioned(self) -> None:
+        """Two capabilities share one readiness lane without sharing cards.
+
+        `external-connector-readiness` answers both realtime voice adoption
+        and optional memory-provider lifecycle, so a message naming one must
+        not acquire the other's card. Their vocabularies are disjoint -- the
+        memory lane's whole-phrase-only tokens and this lane's voice phrases
+        share no token -- and the direction at risk is a memory-provider
+        question that happens to say "voice": it reaches the lane, and it
+        stays a memory question.
+        """
+        for message in (
+            "memory provider readiness before we enable it",
+            "memory provider lifecycle and retention posture",
+            "memory provider readiness for the voice assistant",
+        ):
+            with self.subTest(message=message):
+                payload = build_chat_interaction_payload(message, source="discord")
+                self.assertEqual(payload["chat_response"]["kind"], "external_connector_readiness")
+                self.assertNotIn("realtime_voice_trial", payload["chat_response"]["state"])
+
+    def test_the_two_lanes_share_no_trigger_token(self) -> None:
+        held_back = _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS["external-connector-readiness"]
+        voice_tokens = {
+            token
+            for phrase in REALTIME_VOICE_CONNECTOR_READINESS_PHRASES
+            for token in phrase.replace("-", " ").split()
+        }
+        self.assertEqual(voice_tokens & held_back, set())
 
 
 class NeighbouringRecordTests(unittest.TestCase):
