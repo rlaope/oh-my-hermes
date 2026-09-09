@@ -23,7 +23,7 @@ jobs:
           mkdir -p timings-history
           cp tools/test_sharding/timings.json timings-history/timings.json
       - name: Restore bounded timing history
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: timings-history
           key: test-sharding-timings-${{ github.run_id }}
