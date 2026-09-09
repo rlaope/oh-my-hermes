@@ -251,23 +251,44 @@ def _collect_resource_records(root: Any, rel: Path, records: list[PluginFileReco
             records.append(PluginFileRecord(str(item_rel), sha256_text(item.read_text(encoding="utf-8"))))
 
 
+def _discard_path(path: Path) -> None:
+    """Remove *path* whether it is a symlink, a regular file, or a directory.
+
+    ``shutil.rmtree`` alone cannot remove a symbolic link — it errors (or
+    silently no-ops with ``ignore_errors=True``) and leaves the link behind.
+    A stale ``.omh.previous`` symlink from an older layout then causes the
+    subsequent ``target.rename(backup)`` to fail with ``ENOTDIR``, because
+    Linux ``rename(2)`` refuses to rename a directory over an existing
+    non-directory.  Every temporary/backup path in ``_copy_plugin_bundle``
+    goes through this helper so the install is robust against leftovers from
+    any prior layout.
+    """
+    if path.is_symlink():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+    elif path.exists():
+        path.unlink()
+
+
 def _copy_plugin_bundle(target: Path, file_records: list[dict[str, str]]) -> None:
     root = resources.files("omh.plugin_bundle.omh")
     parent = target.parent
     tmp = parent / f".{target.name}.installing"
     backup = parent / f".{target.name}.previous"
     ensure_dir(parent)
-    shutil.rmtree(tmp, ignore_errors=True)
-    shutil.rmtree(backup, ignore_errors=True)
+    _discard_path(tmp)
+    _discard_path(backup)
     try:
         _copy_resource_tree(root, tmp)
         atomic_write_json(tmp / PLUGIN_MANAGED_MANIFEST, _new_plugin_manifest(target, file_records))
-        if target.exists():
+        if target.exists() or target.is_symlink():
+            _discard_path(backup)
             target.rename(backup)
         tmp.rename(target)
-        shutil.rmtree(backup, ignore_errors=True)
+        _discard_path(backup)
     except OSError:
-        shutil.rmtree(tmp, ignore_errors=True)
+        _discard_path(tmp)
         if backup.exists() and not target.exists():
             backup.rename(target)
         raise

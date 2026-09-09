@@ -5,6 +5,7 @@ import importlib.resources as resources
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -1312,6 +1313,35 @@ class UpdateRefreshesTheBundleTests(unittest.TestCase):
             status, _, stderr = run_cli(base + ["update"])
             self.assertEqual(status, 0, stderr)
             self.assertEqual(marker.read_text(encoding="utf-8"), "# edited outside OMH\n")
+
+    def test_update_replaces_a_symlinked_bundle_without_crashing(self) -> None:
+        # Older OMH installs sometimes left the plugin directory as a symlink
+        # to a shared location.  A subsequent `omh update` renamed that symlink
+        # to ``.omh.previous``, but ``shutil.rmtree`` cannot unlink a symlink,
+        # so the stale backup survived.  The next update then hit
+        # ``rename(dir, symlink)`` → ``ENOTDIR`` and crashed.  The fix
+        # (``_discard_path``) removes symlink/file/directory leftovers before
+        # every rename, so two consecutive updates on a symlinked bundle both
+        # succeed and leave a real directory.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            run_cli(base + ["setup"])
+            bundle = self._bundle_dir(root / ".hermes")
+            shared = root / ".hermes" / "shared-omh"
+            shutil.move(str(bundle), str(shared))
+            bundle.symlink_to(shared)
+
+            status, _, stderr = run_cli(base + ["update"])
+            self.assertEqual(status, 0, stderr)
+            self.assertFalse(bundle.is_symlink())
+            self.assertTrue((bundle / "memory_provider.py").is_file())
+
+            # Second update proves the stale-symlink path is gone — no ENOTDIR.
+            status, _, stderr = run_cli(base + ["update"])
+            self.assertEqual(status, 0, stderr)
+            self.assertTrue((bundle / "memory_provider.py").is_file())
+            self.assertFalse((bundle.parent / ".omh.previous").is_symlink())
 
 
 class UpdateCarriesRegistrationTests(unittest.TestCase):
