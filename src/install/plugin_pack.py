@@ -34,12 +34,82 @@ class _SmokeContext:
     def __init__(self) -> None:
         self.tools: list[str] = []
         self.hooks: list[str] = []
+        self.tool_definitions: list[dict[str, object]] = []
 
     def register_tool(self, name: str, *args: object, **kwargs: object) -> None:
         self.tools.append(name)
+        toolset = args[0] if len(args) > 0 else None
+        schema = args[1] if len(args) > 1 else None
+        handler = args[2] if len(args) > 2 else None
+        description = kwargs.get("description")
+        if description is None and isinstance(schema, dict):
+            description = schema.get("description")
+        self.tool_definitions.append(
+            {
+                "name": name,
+                "toolset": toolset,
+                "schema": schema,
+                "handler": handler,
+                "description": description,
+            }
+        )
 
     def register_hook(self, name: str, *args: object, **kwargs: object) -> None:
         self.hooks.append(name)
+
+
+# Stable rule identifiers for `validate_tool_definitions` failures. These are
+# part of the contract callers (doctor, setup, tests) key off of, so treat
+# renames as breaking.
+TOOL_SCHEMA_RULE_NOT_A_MAPPING = "tool_schema_not_a_mapping"
+TOOL_SCHEMA_RULE_NAME_MISMATCH = "tool_schema_name_mismatch"
+TOOL_SCHEMA_RULE_DESCRIPTION_MISSING = "tool_description_missing"
+TOOL_SCHEMA_RULE_PARAMETERS_MISSING = "tool_parameters_missing"
+TOOL_SCHEMA_RULE_PARAMETERS_NOT_A_MAPPING = "tool_parameters_not_a_mapping"
+TOOL_SCHEMA_RULE_PARAMETERS_TYPE_NOT_OBJECT = "tool_parameters_type_not_object"
+TOOL_SCHEMA_RULE_REQUIRED_NOT_A_LIST = "tool_parameters_required_not_a_list"
+TOOL_SCHEMA_RULE_REQUIRED_FIELD_UNKNOWN = "tool_parameters_required_field_unknown"
+
+
+def validate_tool_definitions(tool_definitions: list[dict[str, object]]) -> list[dict[str, str]]:
+    """Validate captured tool registrations against the minimum Hermes tool contract.
+
+    Schema-only: never touches ``handler`` and never calls it. Each failure
+    carries a stable ``rule`` id plus the ``tool`` name so callers can surface
+    a bounded message without leaking handler internals or unrelated plugin
+    data.
+    """
+    failures: list[dict[str, str]] = []
+    for definition in tool_definitions:
+        name = str(definition.get("name", ""))
+        schema = definition.get("schema")
+        if not isinstance(schema, dict):
+            failures.append({"tool": name, "rule": TOOL_SCHEMA_RULE_NOT_A_MAPPING})
+            continue
+        if schema.get("name") != name:
+            failures.append({"tool": name, "rule": TOOL_SCHEMA_RULE_NAME_MISMATCH})
+        description = definition.get("description")
+        if not str(description or "").strip():
+            failures.append({"tool": name, "rule": TOOL_SCHEMA_RULE_DESCRIPTION_MISSING})
+        if "parameters" not in schema:
+            failures.append({"tool": name, "rule": TOOL_SCHEMA_RULE_PARAMETERS_MISSING})
+            continue
+        parameters = schema["parameters"]
+        if not isinstance(parameters, dict):
+            failures.append({"tool": name, "rule": TOOL_SCHEMA_RULE_PARAMETERS_NOT_A_MAPPING})
+            continue
+        if parameters.get("type") != "object":
+            failures.append({"tool": name, "rule": TOOL_SCHEMA_RULE_PARAMETERS_TYPE_NOT_OBJECT})
+        required = parameters.get("required")
+        if required is not None:
+            if not isinstance(required, (list, tuple)):
+                failures.append({"tool": name, "rule": TOOL_SCHEMA_RULE_REQUIRED_NOT_A_LIST})
+            else:
+                properties = parameters.get("properties")
+                known = set(properties) if isinstance(properties, dict) else set()
+                if any(field not in known for field in required):
+                    failures.append({"tool": name, "rule": TOOL_SCHEMA_RULE_REQUIRED_FIELD_UNKNOWN})
+    return failures
 
 
 def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool = False) -> dict[str, Any]:
@@ -73,6 +143,7 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
             "register_smoke": smoke["plugin_register_smoke"],
             "registered_tools": smoke["registered_tools"],
             "registered_hooks": smoke["registered_hooks"],
+            "tool_schema_failures": smoke["tool_schema_failures"],
         }
     )
     return result
@@ -111,6 +182,7 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
         errors.append(str(smoke["error"]))
     missing_tools = [str(item) for item in smoke.get("missing_registered_tools", [])]
     missing_hooks = [str(item) for item in smoke.get("missing_registered_hooks", [])]
+    schema_failures = [item for item in smoke.get("tool_schema_failures", []) if isinstance(item, dict)]
     if target.exists() and import_smoke and not register_smoke and (missing_tools or missing_hooks):
         detail = []
         if missing_tools:
@@ -118,6 +190,11 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
         if missing_hooks:
             detail.append(f"missing hooks={missing_hooks}")
         errors.append("plugin register smoke is incomplete: " + "; ".join(detail))
+    if target.exists() and import_smoke and schema_failures:
+        errors.append(
+            "plugin tool schema validation failed: "
+            + "; ".join(f"{item.get('tool', '')}={item.get('rule', '')}" for item in schema_failures)
+        )
     return {
         "schema_version": PLUGIN_SCHEMA_VERSION,
         "plugin_name": PLUGIN_NAME,
@@ -136,6 +213,7 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
         "registered_hooks": smoke.get("registered_hooks", []),
         "missing_registered_tools": missing_tools,
         "missing_registered_hooks": missing_hooks,
+        "tool_schema_failures": schema_failures,
         "plugin_distribution_ready": bool(
             target.exists()
             and manifest_current
@@ -359,13 +437,15 @@ def _register_smoke(plugin_dir: Path) -> dict[str, Any]:
         required_hooks = set(REQUIRED_HOOKS)
         missing_tools = sorted(required_tools.difference(ctx.tools))
         missing_hooks = sorted(required_hooks.difference(ctx.hooks))
+        schema_failures = validate_tool_definitions(ctx.tool_definitions)
         return {
             "import_smoke": True,
-            "register_smoke": not missing_tools and not missing_hooks,
+            "register_smoke": not missing_tools and not missing_hooks and not schema_failures,
             "registered_tools": sorted(ctx.tools),
             "registered_hooks": sorted(ctx.hooks),
             "missing_registered_tools": missing_tools,
             "missing_registered_hooks": missing_hooks,
+            "tool_schema_failures": schema_failures,
         }
     except Exception as exc:
         return {"import_smoke": False, "register_smoke": False, "error": f"plugin smoke failed: {exc}"}

@@ -23,6 +23,7 @@ from omh.commands import setup as _setup_module
 from omh.paths import resolve_paths
 from omh.install.plugin_loader_observation import observe_real_loader_registration
 from omh.plugin_pack import inspect_plugin_bundle
+from omh.install.plugin_pack import _SmokeContext, validate_tool_definitions
 from omh.plugin_bundle.omh.tools import evidence_tool
 from omh.plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS, TOOL_FILE_STEMS
 from omh.release_smoke_core import CommandResult
@@ -1236,6 +1237,133 @@ print(json.dumps(observed, ensure_ascii=False))
             self.assertIsNotNone(mid_session_role_context)
             self.assertIn("[OMH Role: planner]", mid_session_role_context["context"])
             self.assertNotIn("do not leak this mid-session prompt", mid_session_role_context["context"])
+
+
+class PluginToolSchemaValidationTests(unittest.TestCase):
+    """omh#1437: register_smoke must catch a malformed tool schema locally
+    instead of only failing later at Hermes model-request time.
+    """
+
+    def _register_real_bundle(self):
+        from omh.plugin_bundle import omh as bundled_omh
+
+        ctx = _SmokeContext()
+        bundled_omh.register(ctx)
+        return ctx
+
+    def test_all_bundled_tool_schemas_pass_validation_unchanged(self) -> None:
+        ctx = self._register_real_bundle()
+        self.assertEqual(sorted(ctx.tools), sorted(PROVIDED_TOOLS))
+        self.assertEqual(validate_tool_definitions(ctx.tool_definitions), [])
+
+    def test_tool_missing_parameters_entirely_fails_and_names_the_tool(self) -> None:
+        from omh.plugin_bundle.omh.tools import capability_tool
+
+        broken = dict(capability_tool.OMH_CAPABILITIES_SCHEMA)
+        del broken["parameters"]
+        with mock.patch.object(capability_tool, "OMH_CAPABILITIES_SCHEMA", broken):
+            ctx = self._register_real_bundle()
+        self.assertIn("omh_capabilities", ctx.tools)
+        self.assertEqual(
+            validate_tool_definitions(ctx.tool_definitions),
+            [{"tool": "omh_capabilities", "rule": "tool_parameters_missing"}],
+        )
+
+    def test_tool_parameters_null_fails_with_stable_rule_id(self) -> None:
+        from omh.plugin_bundle.omh.tools import capability_tool
+
+        broken = dict(capability_tool.OMH_CAPABILITIES_SCHEMA)
+        broken["parameters"] = None
+        with mock.patch.object(capability_tool, "OMH_CAPABILITIES_SCHEMA", broken):
+            ctx = self._register_real_bundle()
+        self.assertEqual(
+            validate_tool_definitions(ctx.tool_definitions),
+            [{"tool": "omh_capabilities", "rule": "tool_parameters_not_a_mapping"}],
+        )
+
+    def test_tool_parameters_list_fails_with_stable_rule_id(self) -> None:
+        from omh.plugin_bundle.omh.tools import capability_tool
+
+        broken = dict(capability_tool.OMH_CAPABILITIES_SCHEMA)
+        broken["parameters"] = ["not", "a", "mapping"]
+        with mock.patch.object(capability_tool, "OMH_CAPABILITIES_SCHEMA", broken):
+            ctx = self._register_real_bundle()
+        self.assertEqual(
+            validate_tool_definitions(ctx.tool_definitions),
+            [{"tool": "omh_capabilities", "rule": "tool_parameters_not_a_mapping"}],
+        )
+
+    def test_tool_parameters_non_object_schema_fails_with_stable_rule_id(self) -> None:
+        from omh.plugin_bundle.omh.tools import capability_tool
+
+        broken = dict(capability_tool.OMH_CAPABILITIES_SCHEMA)
+        broken["parameters"] = {"type": "string"}
+        with mock.patch.object(capability_tool, "OMH_CAPABILITIES_SCHEMA", broken):
+            ctx = self._register_real_bundle()
+        self.assertEqual(
+            validate_tool_definitions(ctx.tool_definitions),
+            [{"tool": "omh_capabilities", "rule": "tool_parameters_type_not_object"}],
+        )
+
+    def test_tool_schema_name_mismatch_fails_before_installation_is_reported_ready(self) -> None:
+        from omh.plugin_bundle.omh.tools import capability_tool
+
+        broken = dict(capability_tool.OMH_CAPABILITIES_SCHEMA)
+        broken["name"] = "omh_wrong_name"
+        with mock.patch.object(capability_tool, "OMH_CAPABILITIES_SCHEMA", broken):
+            ctx = self._register_real_bundle()
+        self.assertEqual(
+            validate_tool_definitions(ctx.tool_definitions),
+            [{"tool": "omh_capabilities", "rule": "tool_schema_name_mismatch"}],
+        )
+
+    def test_setup_and_doctor_surface_tool_schema_failure_and_withhold_distribution_ready(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            schema_failure = [{"tool": "omh_capabilities", "rule": "tool_parameters_missing"}]
+
+            with mock.patch("omh.install.plugin_pack.validate_tool_definitions", return_value=schema_failure):
+                status, stdout, stderr = run_cli(base + ["setup", "--with-plugin"])
+                self.assertEqual(stderr, "")
+                self.assertEqual(status, 0)
+                plugin = json.loads(stdout)["plugin_distribution"]
+                self.assertFalse(plugin["register_smoke"])
+                self.assertEqual(plugin["tool_schema_failures"], schema_failure)
+
+                inspection = inspect_plugin_bundle(resolve_paths(omh_home, hermes_home))
+                self.assertFalse(inspection["plugin_register_smoke"])
+                self.assertFalse(inspection["plugin_distribution_ready"])
+                self.assertEqual(inspection["tool_schema_failures"], schema_failure)
+                joined_errors = "; ".join(inspection["errors"])
+                self.assertIn("omh_capabilities", joined_errors)
+                self.assertIn("tool_parameters_missing", joined_errors)
+
+                doctor_status, doctor_stdout, doctor_stderr = run_cli(base + ["doctor"])
+                self.assertEqual(doctor_stderr, "")
+                self.assertEqual(doctor_status, 1)
+                checks = {check["name"]: check for check in json.loads(doctor_stdout)["checks"]}
+                self.assertFalse(checks["plugin_register_smoke"]["ok"])
+                self.assertIn("omh_capabilities", checks["plugin_register_smoke"]["message"])
+                self.assertIn("tool_parameters_missing", checks["plugin_register_smoke"]["message"])
+
+    def test_smoke_result_stays_evidence_bounded(self) -> None:
+        # Local schema/registration smoke must never be read as observed
+        # Hermes load or tool-use evidence -- it only proves the shape is
+        # locally coherent.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            status, stdout, stderr = run_cli(
+                ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home), "setup", "--with-plugin"]
+            )
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            plugin = json.loads(stdout)["plugin_distribution"]
+            self.assertIn("does not prove Hermes loaded or used the plugin", plugin["observed_scope"])
 
 
 class UpdateRefreshesTheBundleTests(unittest.TestCase):
