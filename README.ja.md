@@ -127,6 +127,11 @@ omh update
 omh doctor
 ```
 
+```sh
+# モデルのオンボーディングやモデルルーティングの設定には、Hermes でこのスキルを使ってください:
+/omh-model-setup
+```
+
 <details>
 <summary><b>その他のインストール方法</b> — Homebrew、Bun、npm、Hermes skill tap、手動フォールバック</summary>
 

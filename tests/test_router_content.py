@@ -3730,9 +3730,10 @@ class RouterContentTests(unittest.TestCase):
             # owner-directed) landed in every language, and from 450 when the
             # Quick Start took the English shape (script installers, setup,
             # doctor, then an "other installation paths" toggle, ~45 lines,
-            # owner-directed) in every language; it still sits below
-            # README.md's length.
-            self.assertLess(len(localized_readme.splitlines()), 490)
+            # owner-directed) in every language, and from 494 when a separate
+            # model-setup routing block was added to each localized Quick
+            # Start; it still sits below README.md's length.
+            self.assertLess(len(localized_readme.splitlines()), 495)
             # The trust surface is the evidence table, not the wire token that
             # used to stand in for it. Pinning the token meant a README could
             # satisfy this by naming a value no reader could decode; pinning
@@ -3821,7 +3822,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", quick_start)
         self.assertIn("omh setup", quick_start)
         # `omh doctor` belongs in its own block, never bundled into the install
-        # step: a first-time reader must not read a health check as part of setup.
+        # step: model setup guidance follows in a separate shell block.
         self.assertIn("```sh\nomh setup\n```", quick_start)
         self.assertIn("```sh\nomh update\n```", quick_start)
         self.assertIn("```sh\nomh doctor\n```", quick_start)

@@ -109,6 +109,23 @@ class ReadmeHighlightsTests(unittest.TestCase):
                 self.assertEqual(lines[details_index - 1], "")
                 self.assertEqual(lines[fence_index - 1], "")
 
+    def test_quick_start_points_model_routing_users_to_the_model_setup_skill(self) -> None:
+        comments = {
+            "README.md": "# To onboard models or configure model routing, use this skill in Hermes:",
+            "README.ko.md": "# 모델을 온보딩하거나 모델 라우팅을 설정하려면 Hermes에서 이 스킬을 사용하세요:",
+            "README.ja.md": "# モデルのオンボーディングやモデルルーティングの設定には、Hermes でこのスキルを使ってください:",
+            "README.zh.md": "# 如需接入模型或配置模型路由，请在 Hermes 中使用此技能：",
+        }
+        for rel, comment in comments.items():
+            text = Path(rel).read_text(encoding="utf-8")
+            expected = (
+                "```sh\nomh doctor\n```\n\n"
+                f"```sh\n{comment}\n/omh-model-setup\n```"
+            )
+            with self.subTest(readme=rel):
+                self.assertIn(expected, text)
+                self.assertNotIn("](", expected)
+
     def test_the_workflow_engines_are_advertised_with_their_ulw_label(self) -> None:
         # The ulw engines moved out of the Highlights table into a dedicated
         # Ultra-Skills section (one per README language). Every engine must be

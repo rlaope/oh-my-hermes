@@ -135,6 +135,11 @@ registration.
 omh doctor
 ```
 
+```sh
+# To onboard models or configure model routing, use this skill in Hermes:
+/omh-model-setup
+```
+
 <details>
 <summary><b>Other installation paths</b> — Homebrew, Bun, npm, Hermes skill tap, manual fallback</summary>
 

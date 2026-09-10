@@ -124,6 +124,11 @@ omh update
 omh doctor
 ```
 
+```sh
+# 如需接入模型或配置模型路由，请在 Hermes 中使用此技能：
+/omh-model-setup
+```
+
 <details>
 <summary><b>其他安装方式</b> — Homebrew、Bun、npm、Hermes skill tap、手动回退</summary>
 

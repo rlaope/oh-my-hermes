@@ -127,6 +127,11 @@ omh update
 omh doctor
 ```
 
+```sh
+# 모델을 온보딩하거나 모델 라우팅을 설정하려면 Hermes에서 이 스킬을 사용하세요:
+/omh-model-setup
+```
+
 <details>
 <summary><b>다른 설치 경로</b> — Homebrew, Bun, npm, Hermes skill tap, 수동 대체 경로</summary>
 
