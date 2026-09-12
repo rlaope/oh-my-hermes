@@ -459,3 +459,26 @@ def test_managed_winning_source_controls(fixture, monkeypatch, managed_kind):
                 resolve_homes()
         else:
             assert resolve_homes() == (public / 'state', public)
+
+
+@pytest.mark.parametrize('condition', ['invalid-config', 'missing-api'])
+def test_native_probe_override_rejects_before_binding_io(fixture, monkeypatch, condition):
+    root, public, private_store, public_store = fixture
+    baseline.load(public, 'general-first')
+    from gateway.run import _profile_runtime_scope
+    from tools.registry import registry
+    with _profile_runtime_scope(public):
+        if condition == 'invalid-config':
+            (public / 'config.yaml').write_text('invalid: [')
+        else:
+            import agent.runtime_cwd
+            monkeypatch.setattr(agent.runtime_cwd, 'resolve_context_cwd', None)
+        before = baseline.snapshot(public)
+        private_before = baseline.snapshot(private_store)
+        entry = registry.get_entry('omh_probe')
+        assert entry is not None
+        result = json.loads(entry.handler({'omh_home': str(private_store)}))
+        assert result['status'] == 'error'
+        assert str(private_store) not in json.dumps(result)
+        assert baseline.snapshot(public) == before
+        assert baseline.snapshot(private_store) == private_before

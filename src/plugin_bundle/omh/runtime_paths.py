@@ -225,7 +225,8 @@ def _overlay_config(user: dict, managed: dict) -> dict:
 
 def _configured_home(home: Path):
     config = import_module("hermes_cli.config")
-    # This host validator only reads. The normal behavioral loader deliberately
+    # This host validator preserves the source YAML (and may save a recovery
+    # copy when it is malformed). The normal behavioral loader deliberately
     # tolerates malformed/unreadable YAML and can reuse last-known-good data;
     # neither is safe for selecting a state owner. Validate before using it.
     try:

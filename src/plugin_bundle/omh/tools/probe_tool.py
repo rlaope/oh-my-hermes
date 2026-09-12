@@ -47,10 +47,10 @@ OMH_PROBE_SCHEMA = {
 def omh_probe_handler(args: dict, **kwargs) -> str:
     include_parity = bool(args.get("include_parity", False))
     include_roadmap = bool(args.get("include_roadmap", False))
-    omh_home = runtime_paths.plugin_home(args.get("omh_home"))
-    hermes_home = runtime_paths.plugin_home(args.get("hermes_home"), hermes=True)
     if error := runtime_paths.tool_home_error(args):
         return json.dumps(error, sort_keys=True)
+    omh_home = runtime_paths.plugin_home(args.get("omh_home"))
+    hermes_home = runtime_paths.plugin_home(args.get("hermes_home"), hermes=True)
     observation = observe_plugin_tool_call("omh_probe", args, kwargs)
     try:
         payload = _package_probe(

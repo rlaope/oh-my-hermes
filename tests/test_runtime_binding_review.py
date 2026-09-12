@@ -183,8 +183,10 @@ class RuntimeBindingReviewTests(unittest.TestCase):
             for file, (name, args) in tools.items():
                 module = importlib.import_module('omh.plugin_bundle.omh.tools.' + file + '_tool')
                 for field in ('omh_home', 'hermes_home'):
-                    with self.subTest(tool=name, field=field), patch.object(module, 'observe_plugin_tool_call') as observer:
+                    with self.subTest(tool=name, field=field), patch.object(module, 'observe_plugin_tool_call') as observer, \
+                            patch.object(paths, 'plugin_home', side_effect=AssertionError('home lookup before rejection')) as resolver:
                         result = json.loads(getattr(module, name + '_handler')({**args, field: 'PRIVATE_PATH'}))
+                    resolver.assert_not_called()
                     observer.assert_not_called()
                     self.assertIn('error', result)
                     self.assertNotIn('PRIVATE_PATH', json.dumps(result))
