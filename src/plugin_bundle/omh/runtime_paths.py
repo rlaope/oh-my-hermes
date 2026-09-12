@@ -128,6 +128,9 @@ def _overlay_config(user: dict, managed: dict) -> dict:
     # shadowed user template is not the provenance of a managed literal.
     result = dict(user)
     for key, value in managed.items():
+        # Native merging treats empty YAML sections as absent, not removals.
+        if isinstance(result.get(key), dict) and value is None:
+            continue
         result[key] = (_overlay_config(result[key], value)
                        if isinstance(result.get(key), dict) and isinstance(value, dict) else value)
     return result

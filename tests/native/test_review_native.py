@@ -28,6 +28,29 @@ def settings(home, values):
     path.write_text(json.dumps(config))
 
 
+@pytest.mark.parametrize('level', ['settings', 'entry'])
+def test_managed_null_section_preserves_native_winner(fixture, monkeypatch, level):
+    root, public, private_store, public_store = fixture
+    core()
+    settings(public, {'omh_home': str(public_store)})
+    entry = {'settings': None} if level == 'settings' else None
+    managed = root.parent / 'null-managed'
+    managed.mkdir()
+    (managed / 'config.yaml').write_text(json.dumps({'plugins': {'entries': {'omh': entry}}}))
+    monkeypatch.setenv('HERMES_MANAGED_DIR', str(managed))
+    from gateway.run import _profile_runtime_scope
+    from hermes_cli.config import load_config_readonly
+    from omh.plugin_bundle.omh.runtime_paths import resolve_homes
+    with _profile_runtime_scope(public):
+        effective = load_config_readonly()['plugins']['entries']['omh']['settings']['omh_home']
+        assert effective == str(public_store)
+        assert resolve_homes() == (public_store, public)
+    provider, manager = baseline.load(public, 'general-first')
+    assert manager._plugins['omh'].enabled
+    assert manager._plugins['omh'].error is None
+    assert provider._omh_home == public_store
+
+
 def observed(**row):
     print('REVIEW_OBSERVED=' + json.dumps(row, sort_keys=True))
 
