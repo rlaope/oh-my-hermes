@@ -103,7 +103,9 @@ class DelegationRouteHomeTest(unittest.TestCase):
             "hermes_constants": module,
             "agent.secret_scope": types.SimpleNamespace(is_multiplex_active=lambda: False,
                 current_secret_scope=lambda: {"OMH_HOME": str(self.omh_home)},
-                get_secret=lambda name: str(self.omh_home)),
+                get_secret=lambda name: str(self.omh_home),
+                build_profile_secret_scope=lambda home: {"OMH_HOME": str(self.omh_home)}),
+            "hermes_cli.managed_scope": types.SimpleNamespace(load_managed_config=lambda: {}),
             "hermes_cli.config": types.SimpleNamespace(require_readable_config_before_write=lambda path: {},
                 load_config_readonly=lambda: {}),
         }):

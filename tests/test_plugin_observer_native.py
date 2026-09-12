@@ -44,6 +44,7 @@ class NativeObserverTests(unittest.TestCase):
                             "hermes_constants": SimpleNamespace(get_hermes_home=lambda: paths.hermes_home),
                             "agent.secret_scope": SimpleNamespace(is_multiplex_active=lambda: False,
                                 current_secret_scope=lambda: None, get_secret=lambda name: str(paths.omh_home)),
+                            "hermes_cli.managed_scope": SimpleNamespace(load_managed_config=lambda: {}),
                             "hermes_cli.config": SimpleNamespace(
                                 require_readable_config_before_write=lambda path: {},
                                 load_config_readonly=lambda: {})}):

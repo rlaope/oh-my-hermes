@@ -91,7 +91,11 @@ def omh_evidence_handler(args: dict, **kwargs) -> str:
     if len(commands) > _MAX_COMMANDS:
         return _json(_with_observation({"error": f"too many commands: {len(commands)} > {_MAX_COMMANDS}"}, observation))
 
-    project_root = _project_root(args, kwargs)
+    try:
+        project_root = _project_root(args, kwargs)
+        workdir = _workdir(args, project_root)
+    except runtime_paths.RuntimeBindingError as exc:
+        return _json(_with_observation({"error": str(exc)}, observation))
     if not project_root.is_dir():
         return _json(
             _with_observation(
@@ -99,7 +103,6 @@ def omh_evidence_handler(args: dict, **kwargs) -> str:
                 observation,
             )
         )
-    workdir = _workdir(args, project_root)
     if isinstance(workdir, dict):
         return _json(_with_observation(workdir, observation))
 
@@ -157,12 +160,12 @@ def _project_root(args: dict, kwargs: dict) -> Path:
     value = args.get("project_root") or kwargs.get("project_root") or runtime_paths.runtime_cwd()
     if value is None:
         raise runtime_paths.RuntimeBindingError("OMH evidence requires a logical project root")
-    return runtime_paths.expand_path(value)
+    return runtime_paths.expand_input_path(value)
 
 
 def _workdir(args: dict, project_root: Path) -> Path | dict[str, str]:
     value = str(args.get("workdir") or project_root)
-    workdir = runtime_paths.expand_path(value)
+    workdir = runtime_paths.expand_input_path(value)
     try:
         workdir.relative_to(project_root)
     except ValueError:

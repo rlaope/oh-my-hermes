@@ -14,6 +14,6 @@ def pytest_configure(config):
 
 
 def pytest_ignore_collect(collection_path, config):
-    if collection_path.name == "test_profile_runtime.py" and not config.getoption("--native-source"):
+    if collection_path.name in {"test_profile_runtime.py", "test_review_native.py"} and not config.getoption("--native-source"):
         return True
     return None

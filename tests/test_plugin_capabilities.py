@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import textwrap
@@ -187,6 +188,9 @@ class PluginCapabilitiesTests(unittest.TestCase):
             root = Path(tmp)
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
+            # Observation metadata is not store authority. Bind this synthetic
+            # standalone host before registration, like an actual owner process.
+            self.enterContext(patch.dict(os.environ, {"OMH_HOME": str(omh_home), "HERMES_HOME": str(hermes_home)}))
             base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
             status, _, stderr = run_cli(base + ["setup", "--with-plugin"])
             self.assertEqual(status, 0, stderr)
@@ -607,6 +611,7 @@ merge_observed=false
 
             result = subprocess.run(
                 [sys.executable, "-S", "-c", script],
+                env={**os.environ, "OMH_HOME": str(omh_home), "HERMES_HOME": str(hermes_home)},
                 cwd=str(root),
                 text=True,
                 capture_output=True,

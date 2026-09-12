@@ -30,6 +30,36 @@ def _host():
         return None
 
 
+def _profile_variable(name: str, home: Path):
+    secrets = import_module("agent.secret_scope")
+    scope = secrets.current_secret_scope()
+    launch_home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser().resolve()
+    if scope is None:
+        if secrets.is_multiplex_active() or home != launch_home:
+            raise RuntimeBindingError("OMH requires an owned profile variable binding")
+        return secrets.get_secret(name)
+    value = scope.get(name)
+    if value is None and not secrets.is_multiplex_active() and home == launch_home:
+        # Single-owner native scopes remain dotenv overlays on their OWN process.
+        return secrets.get_secret(name)
+    if value is not None:
+        # Secret mappings carry no owner identity. A native manager may set only
+        # home while retaining its caller's mapping. Verify the selected value
+        # against the host's home-keyed snapshot (dotenv + hydrated sources),
+        # without hydrating sources, inspecting registries or changing scopes.
+        owned = secrets.build_profile_secret_scope(home).get(name)
+        if owned != value:
+            raise RuntimeBindingError("OMH profile variable ownership is unverified; configure an absolute home")
+    return value
+
+
+def expand_input_path(value: str | Path) -> Path:
+    """Observation/model paths are not a credential or environment lookup API."""
+    if _VARIABLE.search(str(value)) or "${" in str(value):
+        raise RuntimeBindingError("OMH input paths do not support variable references")
+    return expand_path(value)
+
+
 def expand_path(value: str | Path, *, hermes_home: Path | None = None, relative_to: Path | None = None) -> Path:
     if not isinstance(value, (str, Path)) or not str(value).strip() or "\0" in str(value):
         raise RuntimeBindingError("OMH runtime home must be a nonblank path")
@@ -39,8 +69,10 @@ def expand_path(value: str | Path, *, hermes_home: Path | None = None, relative_
         host = _host()
         if name == "HERMES_HOME":
             resolved = str(hermes_home or default_hermes_home())
+        elif name == "HOME":
+            resolved = str(Path.home())
         elif host is not None:
-            resolved = import_module("agent.secret_scope").get_secret(name)
+            resolved = _profile_variable(name, hermes_home or default_hermes_home())
         else:
             resolved = os.environ.get(name)
         if not isinstance(resolved, str) or not resolved.strip():
@@ -91,6 +123,16 @@ def _setting(config):
     return _MISSING
 
 
+def _overlay_config(user: dict, managed: dict) -> dict:
+    # Preserve the winning *raw* leaf, before native process expansion. A
+    # shadowed user template is not the provenance of a managed literal.
+    result = dict(user)
+    for key, value in managed.items():
+        result[key] = (_overlay_config(result[key], value)
+                       if isinstance(result.get(key), dict) and isinstance(value, dict) else value)
+    return result
+
+
 def _configured_home(home: Path):
     config = import_module("hermes_cli.config")
     # This host validator only reads. The normal behavioral loader deliberately
@@ -100,7 +142,7 @@ def _configured_home(home: Path):
         raw = config.require_readable_config_before_write(home / "config.yaml")
     except (RuntimeError, OSError, ValueError) as exc:
         raise RuntimeBindingError("OMH profile configuration is unreadable or invalid") from exc
-    original = _setting(raw)
+    original = _setting(_overlay_config(raw, import_module("hermes_cli.managed_scope").load_managed_config()))
     if original is not _MISSING:
         original_path = expand_path(original, hermes_home=home, relative_to=home)
     effective = _setting(config.load_config_readonly())
@@ -144,9 +186,7 @@ def resolve_homes(omh_home: str | Path | None = None, hermes_home: str | Path | 
     # secret scope must not inherit env even when multiplex is not yet active.
     if home != launch_home and scope is None:
         raise RuntimeBindingError("OMH home is not configured for this profile")
-    value = secrets.get_secret("OMH_HOME")
-    if scope is not None and home != launch_home and "OMH_HOME" not in scope:
-        value = None
+    value = _profile_variable("OMH_HOME", home)
     if value is not None:
         return expand_path(value, hermes_home=home, relative_to=home if multiplex or home != launch_home else None), home
     if multiplex or home != launch_home:

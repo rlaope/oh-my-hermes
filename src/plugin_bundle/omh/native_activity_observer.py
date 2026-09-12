@@ -104,8 +104,10 @@ class NativeObserver:
 
 def register(ctx: ObserverHost) -> NativeObserver:
     """Create a private profile key at registration, never on dispatch."""
-    home = runtime_paths.default_hermes_home()
-    omh_home, home = runtime_paths.resolve_homes(ctx.get_config("omh_home", None), home)
+    # In a native host omh_home is the common profile setting, not a separate
+    # programmatic override. Standalone adapter contexts retain their API.
+    override = ctx.get_config("omh_home", None) if runtime_paths._host() is None else None
+    omh_home, home = runtime_paths.resolve_homes(override)
     paths = OmhPaths(omh_home, home)
     key_path = paths.runtime_dir / "group-activity-keys" / f"{profile_slot(paths.hermes_home)}.key"
     with file_lock(key_path, private=True, timeout_seconds=1) as lock:

@@ -35,8 +35,12 @@ The copied plugin and package use the same stateless resolver, in this order:
 1. A trusted programmatic/CLI home pair (also supports offline operations).
 2. The active profile's `plugins.entries.omh.settings.omh_home`, with the
    existing legacy `config.omh_home` fallback.
-3. Legacy `OMH_HOME` from Hermes' active credential scope, never another routed
-   profile's process environment.
+3. Legacy `OMH_HOME` from Hermes' active credential scope, verified against
+   the host's profile-home-keyed snapshot (its `.env` plus already hydrated
+   external sources), never another routed profile's process environment.
+   Anonymous scope mappings have no owner identity: mismatching/unverifiable
+   values are refused before I/O. Use an absolute profile setting for bindings
+   supplied only through an ad hoc in-memory secret mapping.
 4. For standalone/launch-owner operation only, the legacy `OMH_HOME`/`~/.omh`
    default. The independent OMH CLI has no Hermes dependency and retains its
    explicit `--omh-home`, `--hermes-home`, and `--scope project` behavior.
@@ -47,7 +51,11 @@ an empty substitute store. Relative profile settings are anchored at that
 profile's Hermes home. `~` still names the OS user's home. Prefer absolute paths;
 `$HERMES_HOME` is expanded against the active profile, but an already-expanded
 native `${HERMES_HOME}` value that disagrees with that profile is rejected with
-an absolute-path diagnostic. Unresolved variables are rejected.
+an absolute-path diagnostic. Validation follows the winning raw configuration
+leaf, including administrator-managed precedence; a shadowed user template
+cannot veto a managed absolute setting. Unresolved variables are rejected.
+Evidence `project_root` and `workdir` accept literal paths (including `~`), not
+variable references: model paths never query credentials or environment values.
 
 Native tools/hooks do not treat home-looking model arguments or observation
 metadata as permission to choose another store. Provider and optional
@@ -60,16 +68,17 @@ launched TUI widget must likewise receive its owning process's home pair;
 Python context scopes do not cross process boundaries.
 
 This binding uses native `hermes_constants` profile APIs,
-`agent.secret_scope`, `agent.runtime_cwd`, and the read-only config loader plus
-its strict readability validator. A present but incompatible/broken host is
+`agent.secret_scope` (including `build_profile_secret_scope`),
+`agent.runtime_cwd`, `hermes_cli.managed_scope.load_managed_config`, and the
+read-only config loader plus its strict readability validator. A present but incompatible/broken host is
 not treated as standalone. Setup/profile synchronization does not stamp one
 profile's store into every child or migrate data; configure each routed
 profile explicitly before activation. Existing child settings are preserved.
 
 Maintainers can run the opt-in synthetic real-loader suite with a Hermes
 checkout's `scripts/run_tests.sh`, passing this repository's
-`tests/native/test_profile_runtime.py` and
-`--native-source=/absolute/path/to/hermes`. Use an explicit pytest root/cache
+`tests/native/test_profile_runtime.py`, `tests/native/test_review_native.py`,
+and `--native-source=/absolute/path/to/hermes`. Use an explicit pytest root/cache
 inside the test workspace. The ordinary OMH unittest suite needs no Hermes
 installation. These tests distinguish actual turn-start behavior from positive
 recall after the native background queue; this change does not alter upstream

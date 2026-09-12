@@ -28,11 +28,14 @@ class RuntimePathsTests(unittest.TestCase):
         secrets.get_secret = lambda key, default=None: values.get().get(key, default)
         config = types.ModuleType("hermes_cli.config")
         config.load_config_readonly = lambda: {}
+        managed = types.ModuleType("hermes_cli.managed_scope")
+        managed.load_managed_config = lambda: {}
+        secrets.build_profile_secret_scope = lambda owner: {"OMH_HOME": str(owner.parent / (owner.name + "-state"))}
         config.require_readable_config_before_write = lambda *args: {}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             modules = {"hermes_constants": constants, "agent.secret_scope": secrets,
-                       "hermes_cli.config": config}
+                       "hermes_cli.config": config, "hermes_cli.managed_scope": managed}
             async def read(label):
                 expected_home, expected_store = root / label, root / (label + "-state")
                 home.set(expected_home)
@@ -95,6 +98,61 @@ class RuntimePathsTests(unittest.TestCase):
             for name, host in (("a", host_a), ("b", host_b)):
                 with patch.object(runtime_paths, "default_hermes_home", return_value=root / name):
                     self.assertEqual(board.handler_identity(args, {"session_id": "session", "task_id": "task"}), host)
+
+
+    def test_untrusted_evidence_paths_cannot_expand_environment(self):
+        import json
+        from omh.plugin_bundle.omh.tools.evidence_tool import omh_evidence_handler
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with patch.dict("sys.modules", {"hermes_constants": None}), patch.dict("os.environ", {
+                "OMH_HOME": str(root / "state"), "HERMES_HOME": str(root / "profile"),
+                "SYNTHETIC_PATH_SECRET": "SYNTHETIC_NOT_FOR_OUTPUT",
+            }):
+                for field in ("project_root", "workdir"):
+                    for reference in ("$SYNTHETIC_PATH_SECRET", "${SYNTHETIC_PATH_SECRET}",
+                                      "${env:SYNTHETIC_PATH_SECRET}", "%SYNTHETIC_PATH_SECRET%"):
+                        with self.subTest(field=field, reference=reference):
+                            result = omh_evidence_handler({"commands": ["git diff --check"],
+                                "project_root": str(root), field: reference})
+                            self.assertNotIn("SYNTHETIC_NOT_FOR_OUTPUT", result)
+                            self.assertEqual(json.loads(result)["error"],
+                                             "OMH input paths do not support variable references")
+                # Evidence itself remains useful: literal paths still run the
+                # allowlisted local probe, with the same minimal environment.
+                with patch("subprocess.run") as child:
+                    child.return_value = types.SimpleNamespace(returncode=0, stdout="", stderr="")
+                    result = json.loads(omh_evidence_handler({"commands": ["git diff --check"],
+                                                             "project_root": str(root)}))
+                    self.assertTrue(result["all_pass"])
+                    self.assertNotIn("SYNTHETIC_PATH_SECRET", child.call_args.kwargs["env"])
+
+    def test_foreign_scope_is_not_a_profile_binding(self):
+        from omh.plugin_bundle.omh import runtime_paths as paths
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            private, public = root / "private", root / "public"
+            secrets = types.SimpleNamespace(is_multiplex_active=lambda: True,
+                current_secret_scope=lambda: {"OMH_HOME": str(private)},
+                build_profile_secret_scope=lambda home: {"OMH_HOME": str(public)})
+            with patch.dict("sys.modules", {"agent.secret_scope": secrets}):
+                with self.assertRaisesRegex(paths.RuntimeBindingError, "ownership is unverified"):
+                    paths._profile_variable("OMH_HOME", root / "profile")
+                secrets.current_secret_scope = lambda: {"OMH_HOME": str(public)}
+                self.assertEqual(paths._profile_variable("OMH_HOME", root / "profile"), str(public))
+
+    def test_managed_winning_raw_leaf_ignores_shadowed_user_template(self):
+        from omh.plugin_bundle.omh import runtime_paths as paths
+        def config(value):
+            return {"plugins": {"entries": {"omh": {"settings": {"omh_home": value}}}}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            managed = config(str(root / "managed"))
+            host = types.SimpleNamespace(require_readable_config_before_write=lambda path: config("$UNAVAILABLE_USER_PATH/state"),
+                                         load_config_readonly=lambda: managed)
+            with patch.dict("sys.modules", {"hermes_cli.config": host,
+                    "hermes_cli.managed_scope": types.SimpleNamespace(load_managed_config=lambda: managed)}):
+                self.assertEqual(paths._configured_home(root / "profile"), root / "managed")
 
 
 if __name__ == "__main__":
