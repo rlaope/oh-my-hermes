@@ -408,6 +408,82 @@ def test_positive_recall_after_real_turn_and_native_queue(fixture):
     assert (public_store / 'memory/dreaming.json').exists()
 
 
+@pytest.mark.parametrize('identity_source', ['explicit', 'remote', 'missing', 'absent-cwd'])
+def test_project_identity_stays_bound_across_profile_scopes(fixture, monkeypatch, identity_source):
+    root, public, private_store, public_store = fixture
+    private_project = root.parent / 'private' / 'same-name'
+    public_project = root.parent / 'public' / 'same-name'
+    private_identity = 'prj:' + 'b' * 64
+    public_identity = 'prj:' + 'a' * 64
+    for project, identity in ((private_project, private_identity), (public_project, public_identity)):
+        (project / '.omh').mkdir(parents=True)
+        (project / '.omh/project-identity.json').write_text(json.dumps({
+            'schema_version': 'project_identity_file/v1', 'identity': identity,
+            'created_at': '2026-01-01T00:00:00Z', 'resolver_version': 'project_identity/v2'}))
+    if identity_source in {'remote', 'missing'}:
+        (public_project / '.omh/project-identity.json').unlink()
+        (public_project / '.git').mkdir()
+        (public_project / '.git/config').write_text(
+            '[remote "origin"]\n url = git@EXAMPLE.test:team/public.git\n'
+            if identity_source == 'remote' else '[core]\n bare = false\n')
+        public_identity = ('repo:' + hashlib.sha256(b'example.test/team/public').hexdigest()[:32]
+                           if identity_source == 'remote' else '')
+    if identity_source == 'absent-cwd':
+        public_identity = ''
+    monkeypatch.chdir(private_project)
+    provider, _ = load(public, 'memory-first')
+    from gateway.run import _profile_runtime_scope
+    from agent.runtime_cwd import set_session_cwd, _SESSION_CWD, resolve_context_cwd
+    from agent.memory_manager import MemoryManager
+    sys.path.insert(0, str(REPO / 'src'))
+    from omh.paths import resolve_paths
+    from omh.workflows import memory as memory_api
+    with _profile_runtime_scope(public):
+        paths = resolve_paths(public_store, public)
+        records = {}
+        for label, identity in (('public', public_identity or 'prj:' + 'a' * 64), ('private', private_identity)):
+            candidate = memory_api.capture_project_memory_candidate(paths,
+                'Synthetic ' + label + ' project sentinel', scope_ref=identity, retention_class='durable')['candidate']
+            records[label] = memory_api.approve_project_memory_candidate(paths, candidate['candidate_id'])['record']['record_id']
+        from tools.terminal_scope import set_terminal_scope, reset_terminal_scope
+        terminal_token = set_terminal_scope({})
+        token = set_session_cwd(None if identity_source == 'absent-cwd' else str(public_project))
+        try:
+            assert resolve_context_cwd() == (None if identity_source == 'absent-cwd' else public_project)
+            before = snapshot(private_store), snapshot(private_project)
+            memory = MemoryManager()
+            memory.add_provider(provider)
+            memory.initialize_all('synthetic-identity', platform='cli', agent_context='primary')
+        finally:
+            _SESSION_CWD.reset(token)
+            reset_terminal_scope(terminal_token)
+    with _profile_runtime_scope(root):
+        token = set_session_cwd(str(private_project))
+        try:
+            # Both direct re-render and queued work must keep the initialized cwd;
+            # a genuinely absent public cwd must not re-resolve this foreign one.
+            pack = provider.render_pack()
+            provider.queue_prefetch()
+            pack += provider.prefetch()
+            receipt = provider.latest_prefetch_receipt()
+            assert receipt is not None
+            assert receipt['schema_version'] == 'omh_memory_prefetch_receipt/v3'
+            assert receipt['resolver_version'] == 'project_identity/v2'
+            assert receipt['project_identity'] == public_identity
+            assert records['private'] not in pack
+            if public_identity:
+                assert records['public'] in pack
+            else:
+                assert records['public'] not in pack
+                assert receipt['lens']['scope_allowlist'] == []
+            assert provider._project_home == (None if identity_source == 'absent-cwd' else public_project / '.omh')
+            assert provider._omh_home == public_store
+            assert (snapshot(private_store), snapshot(private_project)) == before
+        finally:
+            _SESSION_CWD.reset(token)
+            memory.shutdown_all()
+
+
 def test_project_home_uses_host_logical_cwd(fixture, monkeypatch):
     root, public, private_store, public_store = fixture
     private_project, public_project = root.parent / 'private-project', root.parent / 'public-project'

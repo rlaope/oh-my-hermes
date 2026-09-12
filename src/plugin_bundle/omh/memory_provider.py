@@ -210,9 +210,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._profile_ref = str(self._principal_context.get("profile_ref", "")) if self._principal_context is not None else str(kwargs.get("active_profile", "") or "")
         if self._shared_surface:
             self._principal_context = None
-        self._project_cwd = str(kwargs.get("cwd") or Path.cwd())
-        self._project_home = _project_omh_home(self._project_cwd)
-        self._project_resolution = resolve_project_identity(self._project_cwd)
+        cwd = runtime_paths.expand_path(kwargs["cwd"]) if kwargs.get("cwd") else runtime_paths.runtime_cwd()
+        self._project_cwd = str(cwd) if cwd is not None else None
+        self._project_home = _project_omh_home(cwd) if cwd is not None else None
         callback = kwargs.get("status_callback")
         self._status_callback = callback if callable(callback) else None
         self._pack = self.render_pack()
@@ -419,7 +419,11 @@ class OmhMemoryProvider(_MemoryProviderBase):
     def render_pack(self, *, now: datetime | None = None) -> str:
         """System blocks in full, reference blocks by label only, then the
         reviewed records the canonical selector chose for the queued query."""
-        self._project_resolution = resolve_project_identity(self._project_cwd)
+        # None is a bound absence, not permission to inspect the process cwd.
+        self._project_resolution = (
+            resolve_project_identity(self._project_cwd) if self._project_cwd is not None
+            else ProjectIdentityResolution(diagnostics=("outside_repository",))
+        )
         moment = now or datetime.now(timezone.utc)
         blocks = () if self._shared_surface else read_memory_blocks(self._omh_home)
         selection = self._block_selection(blocks=blocks, now=moment)
