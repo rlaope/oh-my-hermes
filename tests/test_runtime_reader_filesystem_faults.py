@@ -235,6 +235,34 @@ class ClassifyingHandlerReachTests(unittest.TestCase):
 
             self.assert_status_read_degradation(payload, "RuntimeError")
 
+    @requires_symlinks
+    def test_either_home_fault_stops_all_scoped_io_before_awareness(self) -> None:
+        from unittest.mock import patch
+        from omh.plugin_bundle.omh.hooks import llm_hooks
+
+        with TemporaryDirectory() as tmp:
+            loop = Path(tmp) / "private-loop"
+            loop.symlink_to(loop)
+            for home_key in ("omh_home", "hermes_home"):
+                for awareness in (False, True):
+                    with self.subTest(home=home_key, awareness=awareness):
+                        homes = {"omh_home": str(Path(tmp) / ".omh"), "hermes_home": str(Path(tmp) / ".hermes")}
+                        homes[home_key] = str(loop)
+                        with (
+                            patch.object(llm_hooks, "record_approval_bypass") as approval,
+                            patch.object(llm_hooks, "read_running_work_board") as board,
+                            patch.object(llm_hooks, "_record_delivery") as delivery,
+                            patch.object(llm_hooks, "observe_plugin_hook_call") as observation,
+                        ):
+                            payload = pre_llm_call(
+                                **homes, user_message="fix the GitHub PR", is_first_turn=True,
+                                include_omh_awareness=awareness,
+                            )
+                        self.assert_status_read_degradation(payload, "RuntimeError")
+                        self.assertNotIn(str(loop), str(payload))
+                        for downstream in (approval, board, delivery, observation):
+                            downstream.assert_not_called()
+
 
 class RoleCatalogProbeTests(unittest.TestCase):
     """The role-catalog probe is deliberately left tolerant."""

@@ -58,7 +58,8 @@ class RuntimePathsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             with patch.dict("sys.modules", {"hermes_constants": None}), patch.dict(os.environ, {
-                "HOME": str(root), "OMH_HOME": str(root / "state"), "HERMES_HOME": str(root / "profile")
+                "HOME": str(root), "USERPROFILE": str(root),
+                "OMH_HOME": str(root / "state"), "HERMES_HOME": str(root / "profile")
             }):
                 self.assertEqual(paths.resolve_homes(), (root / "state", root / "profile"))
                 self.assertEqual(paths.resolve_homes(root / "shared", root / "other"), (root / "shared", root / "other"))
