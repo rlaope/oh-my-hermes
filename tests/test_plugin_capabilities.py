@@ -188,9 +188,8 @@ class PluginCapabilitiesTests(unittest.TestCase):
             root = Path(tmp)
             omh_home = root / ".omh"
             hermes_home = root / ".hermes"
-            # Observation metadata is not store authority. Bind this synthetic
-            # standalone host before registration, like an actual owner process.
-            self.enterContext(patch.dict(os.environ, {"OMH_HOME": str(omh_home), "HERMES_HOME": str(hermes_home)}))
+            # These explicit standalone operator roots must outrank the
+            # environment; native observation metadata is tested separately.
             base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
             status, _, stderr = run_cli(base + ["setup", "--with-plugin"])
             self.assertEqual(status, 0, stderr)

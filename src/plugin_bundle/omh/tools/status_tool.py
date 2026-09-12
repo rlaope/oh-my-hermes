@@ -20,7 +20,7 @@ OMH_STATUS_SCHEMA = {
         "properties": {
             "omh_home": {
                 "type": "string",
-                "description": "Optional OMH_HOME override. Defaults to $OMH_HOME or ~/.omh.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "limit": {
                 "type": "integer",
@@ -34,6 +34,8 @@ OMH_STATUS_SCHEMA = {
 
 def omh_status_handler(args: dict, *, group_activity_enabled: bool = False,
                        group_activity_observer: Callable[[], dict[str, str | int]] | None = None, **kwargs) -> str:
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_status", args, kwargs)
     payload = read_omh_status(
         omh_home=runtime_paths.plugin_home(args.get("omh_home")),

@@ -24,11 +24,11 @@ OMH_HUD_SCHEMA = {
         "properties": {
             "omh_home": {
                 "type": "string",
-                "description": "Optional OMH_HOME override. Defaults to $OMH_HOME or ~/.omh.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "hermes_home": {
                 "type": "string",
-                "description": "Optional HERMES_HOME override. Defaults to $HERMES_HOME or ~/.hermes.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "preset": {
                 "type": "string",
@@ -66,6 +66,8 @@ OMH_HUD_SCHEMA = {
 
 
 def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_hud", args, kwargs)
     token_metadata = {
         key: args.get(key)

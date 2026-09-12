@@ -85,10 +85,7 @@ OMH_TODO_SCHEMA = {
             },
             "omh_home": {
                 "type": "string",
-                "description": (
-                    "Optional OMH_HOME override for action=show only. "
-                    "set and clear always use the configured OMH home."
-                ),
+                "description": "Standalone operator override for action=show only; set/clear reject overrides. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "observation": OBSERVATION_SCHEMA,
         },
@@ -98,6 +95,8 @@ OMH_TODO_SCHEMA = {
 
 
 def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_todo", args, kwargs)
     # Hermes passes its stable session/thread id as a keyword on every tool
     # call, so a plan declared in chat is stored for, and read back for, the

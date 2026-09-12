@@ -35,7 +35,8 @@ class RuntimePathsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             modules = {"hermes_constants": constants, "agent.secret_scope": secrets,
-                       "hermes_cli.config": config, "hermes_cli.managed_scope": managed}
+                       "hermes_cli.config": config, "hermes_cli.managed_scope": managed,
+                       "agent.runtime_cwd": types.SimpleNamespace(resolve_context_cwd=lambda: None, resolve_agent_cwd=Path.cwd)}
             async def read(label):
                 expected_home, expected_store = root / label, root / (label + "-state")
                 home.set(expected_home)

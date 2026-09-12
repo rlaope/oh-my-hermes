@@ -11,6 +11,7 @@ from importlib import import_module
 import os
 from pathlib import Path
 import re
+import sys
 
 
 class RuntimeBindingError(ValueError):
@@ -19,21 +20,108 @@ class RuntimeBindingError(ValueError):
 
 _VARIABLE = re.compile(r"\$(?:\{(?:env:)?([A-Za-z_][A-Za-z_0-9]*)\}|([A-Za-z_][A-Za-z_0-9]*))|%([A-Za-z_][A-Za-z_0-9]*)%")
 _MISSING = object()
+# Lifecycle marker only, never a current-profile/home/secret cache. Native
+# single-owner callbacks and the memory collector may run without task scopes.
+_NATIVE_REGISTERED = False
+
+
+def note_host_registration(ctx) -> None:
+    """Recognize actual native registration, not an importable installation.
+
+    Inspect already-loaded host types only. Standalone fake/operator contexts
+    neither import Hermes nor activate the native lane. Both supported native
+    loaders retain their normal lifecycle; no wrappers or host scopes are set.
+    """
+    global _NATIVE_REGISTERED
+    for module, name in (("hermes_cli.plugins", "PluginContext"),
+                         ("plugins.memory", "_ProviderCollector")):
+        native_type = getattr(sys.modules.get(module), name, None)
+        if isinstance(native_type, type) and isinstance(ctx, native_type):
+            _NATIVE_REGISTERED = True
+            return
+
+
+def _optional_module(name):
+    try:
+        return import_module(name)
+    except ModuleNotFoundError as exc:
+        if exc.name != name and not name.startswith(str(exc.name) + "."):
+            raise
+        return None
+
+
+def _require_api(module, *names):
+    if any(not callable(getattr(module, name, None)) for name in names):
+        raise RuntimeBindingError("OMH native runtime binding APIs are unavailable")
+    return module
 
 
 def _host():
-    try:
-        return import_module("hermes_constants")
-    except ModuleNotFoundError as exc:
-        if exc.name != "hermes_constants":
-            raise
+    host = _optional_module("hermes_constants")
+    if host is None:
+        # A partially missing native installation is not standalone while an
+        # already-loaded scope still says a profile/multiplexer is active.
+        secrets = sys.modules.get("agent.secret_scope")
+        scoped = getattr(secrets, "current_secret_scope", None)
+        multiplex = getattr(secrets, "is_multiplex_active", None)
+        if (_NATIVE_REGISTERED or (callable(scoped) and scoped() is not None)
+                or (callable(multiplex) and multiplex())):
+            raise RuntimeBindingError("OMH native runtime binding APIs are unavailable")
         return None
+    # Importability alone is not a native lifecycle. A colocated OMH CLI has
+    # neither a home override nor a secret scope/multiplexer. Probe these
+    # read-only signals first; an unprobeable host is ambiguous, not standalone.
+    _require_api(host, "get_hermes_home_override")
+    secrets = _require_api(_optional_module("agent.secret_scope"),
+                           "current_secret_scope", "is_multiplex_active")
+    if (not _NATIVE_REGISTERED and host.get_hermes_home_override() is None
+            and secrets.current_secret_scope() is None and not secrets.is_multiplex_active()):
+        return None
+    _require_api(host, "get_hermes_home")
+    _require_api(secrets, "get_secret", "build_profile_secret_scope")
+    _require_api(_optional_module("agent.runtime_cwd"), "resolve_context_cwd", "resolve_agent_cwd")
+    _require_api(_optional_module("hermes_cli.managed_scope"), "load_managed_config")
+    _require_api(_optional_module("hermes_cli.config"),
+                 "require_readable_config_before_write", "load_config_readonly")
+    return host
+
+
+def _canonical_path(value, *, relative_to=None):
+    try:
+        path = Path(value).expanduser()
+        if relative_to is not None and not path.is_absolute():
+            path = relative_to / path
+        return path.resolve()
+    except (OSError, RuntimeError):
+        raise RuntimeBindingError("OMH runtime path could not be resolved") from None
+
+
+def profile_is_routed() -> bool:
+    """Only routed profiles pin inferred project artifacts to their own store."""
+    if _host() is None:
+        return False
+    return (import_module("agent.secret_scope").is_multiplex_active()
+            or default_hermes_home() != _canonical_path(os.environ.get("HERMES_HOME") or "~/.hermes"))
+
+
+def tool_home_error(args) -> dict | None:
+    """Reject legacy model overrides before observers or tool readers do I/O.
+
+    Standalone operator callers retain their explicit API. Native callbacks
+    bind from the host, never from these fields (even an equal/blank value).
+    """
+    try:
+        if _host() is not None and any(key in args for key in ("omh_home", "hermes_home")):
+            return {"status": "error", "error": "OMH native tools do not accept runtime home overrides"}
+    except RuntimeBindingError:
+        return {"status": "error", "error": "OMH native runtime home binding is unavailable"}
+    return None
 
 
 def _profile_variable(name: str, home: Path):
     secrets = import_module("agent.secret_scope")
     scope = secrets.current_secret_scope()
-    launch_home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser().resolve()
+    launch_home = _canonical_path(os.environ.get("HERMES_HOME") or "~/.hermes")
     if scope is None:
         if secrets.is_multiplex_active() or home != launch_home:
             raise RuntimeBindingError("OMH requires an owned profile variable binding")
@@ -57,6 +145,8 @@ def expand_input_path(value: str | Path) -> Path:
     """Observation/model paths are not a credential or environment lookup API."""
     if _VARIABLE.search(str(value)) or "${" in str(value):
         raise RuntimeBindingError("OMH input paths do not support variable references")
+    if str(value).startswith("~") and str(value) != "~" and not str(value).startswith("~/"):
+        raise RuntimeBindingError("OMH input paths do not support named-user expansion")
     return expand_path(value)
 
 
@@ -82,10 +172,7 @@ def expand_path(value: str | Path, *, hermes_home: Path | None = None, relative_
     expanded = _VARIABLE.sub(replace, str(value))
     if _VARIABLE.search(expanded) or "${" in expanded:
         raise RuntimeBindingError("OMH runtime path contains an unresolved variable")
-    path = Path(expanded).expanduser()
-    if relative_to is not None and not path.is_absolute():
-        path = relative_to / path
-    return path.resolve()
+    return _canonical_path(expanded, relative_to=relative_to)
 
 
 def default_hermes_home() -> Path:
@@ -99,7 +186,7 @@ def default_hermes_home() -> Path:
     # environment lookup which could recursively select the launch profile.
     if not isinstance(value, (str, Path)) or not str(value).strip() or "\0" in str(value):
         raise RuntimeBindingError("Hermes runtime home is invalid")
-    return Path(value).expanduser().resolve()
+    return _canonical_path(value)
 
 
 def _setting(config):
@@ -149,13 +236,15 @@ def _configured_home(home: Path):
     if original is not _MISSING:
         original_path = expand_path(original, hermes_home=home, relative_to=home)
     effective = _setting(config.load_config_readonly())
+    if (original is _MISSING) != (effective is _MISSING):
+        raise RuntimeBindingError("OMH home configuration disagrees with the active profile")
     if effective is _MISSING:
         return _MISSING
     path = expand_path(effective, hermes_home=home, relative_to=home)
     # Native config currently expands ${HERMES_HOME} through the process env.
     # Reject an expansion that changed owner; bare $HERMES_HOME is expanded here
     # against the profile. Do not silently bypass managed/effective config.
-    if original is not _MISSING and _VARIABLE.search(str(original)) and path != original_path:
+    if original is not _MISSING and path != original_path:
         raise RuntimeBindingError("OMH home expansion disagrees with the active profile; use an absolute path")
     return path
 
@@ -184,7 +273,7 @@ def resolve_homes(omh_home: str | Path | None = None, hermes_home: str | Path | 
     if configured is not _MISSING:
         return configured, home
     scope = secrets.current_secret_scope()
-    launch_home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser().resolve()
+    launch_home = _canonical_path(os.environ.get("HERMES_HOME") or "~/.hermes")
     # Registration can carry only a home override. A foreign home with no
     # secret scope must not inherit env even when multiplex is not yet active.
     if home != launch_home and scope is None:
@@ -214,11 +303,13 @@ def plugin_home(value: object = None, *, hermes: bool = False) -> Path:
 
 def runtime_cwd() -> Path | None:
     """Use host context discovery; never fall back to a foreign launch repo."""
-    if _host() is None:
-        return Path.cwd()
-    cwd = import_module("agent.runtime_cwd")
-    secrets = import_module("agent.secret_scope")
-    launch_home = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser().resolve()
-    if secrets.is_multiplex_active() or default_hermes_home() != launch_home:
-        return cwd.resolve_context_cwd()
-    return cwd.resolve_agent_cwd()
+    host = _host()
+    try:
+        if host is None:
+            return Path.cwd()
+        cwd = import_module("agent.runtime_cwd")
+        if profile_is_routed():
+            return cwd.resolve_context_cwd()
+        return cwd.resolve_agent_cwd()
+    except (OSError, RuntimeError):
+        raise RuntimeBindingError("OMH logical working directory could not be resolved") from None

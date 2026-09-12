@@ -42,7 +42,7 @@ class DelegationRouteHomeTest(unittest.TestCase):
         # Force the standalone boundary regardless of the developer's host.
         self.enterContext(mock.patch.dict("sys.modules", {"hermes_constants": None}))
 
-    def _assert_tool_cycle(self, target, **args):
+    def _assert_tool_cycle(self, target, *, native=False, **args):
         untouched = (
             "# keep this comment\nmodel:\n  provider: test-parent\n"
             "delegation:\n  max_concurrent_children: 4\n"
@@ -59,7 +59,7 @@ class DelegationRouteHomeTest(unittest.TestCase):
 
         def call(action, **values):
             return json.loads(omh_delegate_route_handler({
-                "action": action, "omh_home": str(self.omh_home), **args, **values,
+                "action": action, **({} if native else {"omh_home": str(self.omh_home)}), **args, **values,
             }))
 
         self.assertEqual(call("status")["route"], {})
@@ -99,8 +99,10 @@ class DelegationRouteHomeTest(unittest.TestCase):
         native = self.root / "native"
         module = types.ModuleType("hermes_constants")
         module.get_hermes_home = lambda: native
+        module.get_hermes_home_override = lambda: str(native)
         with mock.patch.dict("sys.modules", {
             "hermes_constants": module,
+            "agent.runtime_cwd": types.SimpleNamespace(resolve_context_cwd=lambda: None, resolve_agent_cwd=Path.cwd),
             "agent.secret_scope": types.SimpleNamespace(is_multiplex_active=lambda: False,
                 current_secret_scope=lambda: {"OMH_HOME": str(self.omh_home)},
                 get_secret=lambda name: str(self.omh_home),
@@ -109,7 +111,7 @@ class DelegationRouteHomeTest(unittest.TestCase):
             "hermes_cli.config": types.SimpleNamespace(require_readable_config_before_write=lambda path: {},
                 load_config_readonly=lambda: {}),
         }):
-            self._assert_tool_cycle(native)
+            self._assert_tool_cycle(native, native=True)
 
     def test_explicit_home_does_not_consult_native_resolver(self):
         module = types.ModuleType("hermes_constants")

@@ -77,7 +77,7 @@ OMH_RUN_SUMMARY_SCHEMA = {
             },
             "hermes_home": {
                 "type": "string",
-                "description": "Optional HERMES_HOME override. Defaults to ~/.hermes.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "observation": OBSERVATION_SCHEMA,
         },
@@ -162,6 +162,8 @@ def _optional_number(value: Any) -> float | None:
 
 
 def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_run_summary", args, kwargs)
     language = str(args.get("language", "") or "en").strip().lower()
     if language not in _SUMMARY_LABELS:

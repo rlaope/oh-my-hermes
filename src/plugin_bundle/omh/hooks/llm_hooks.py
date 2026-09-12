@@ -19,6 +19,7 @@ from ..degradation import (
     COMPONENT_RUNTIME_STATUS_READ,
     degradation_payload,
     safe_error_type,
+    runtime_binding_degradation,
 )
 from ..active_workflow_context import active_workflow_context, render_active_workflow_context
 from ..approval_bypass import record_approval_bypass
@@ -161,14 +162,8 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     try:
         omh_home = str(runtime_paths.plugin_home(kwargs.get("omh_home")))
         hermes_home = str(runtime_paths.plugin_home(kwargs.get("hermes_home"), hermes=True))
-    except (OSError, RuntimeError) as exc:
-        error_type = "RuntimeError" if getattr(exc, "errno", None) == errno.ELOOP else type(exc).__name__
-        degradation = degradation_payload([(COMPONENT_RUNTIME_STATUS_READ, safe_error_type(error_type))])
-        return {
-            "omh_degradation": degradation,
-            "context": "[OMH Degraded] components=" + COMPONENT_RUNTIME_STATUS_READ
-            + ". Runtime home binding failed; no runtime state was read or written.",
-        }
+    except (runtime_paths.RuntimeBindingError, OSError, RuntimeError) as exc:
+        return runtime_binding_degradation(exc)
     record_active_main_agent_model(kwargs.get("model"))
     observe_plugin_hook_call("pre_llm_call", kwargs)
     # Turn start is the freshest in-process view of the Shift+Tab yolo flag:

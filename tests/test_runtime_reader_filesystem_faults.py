@@ -233,7 +233,7 @@ class ClassifyingHandlerReachTests(unittest.TestCase):
 
             payload = self.call_pre_llm(loop, Path(tmp) / ".hermes")
 
-            self.assert_status_read_degradation(payload, "RuntimeError")
+            self.assert_status_read_degradation(payload, "RuntimeBindingError")
 
     @requires_symlinks
     def test_either_home_fault_stops_all_scoped_io_before_awareness(self) -> None:
@@ -258,7 +258,7 @@ class ClassifyingHandlerReachTests(unittest.TestCase):
                                 **homes, user_message="fix the GitHub PR", is_first_turn=True,
                                 include_omh_awareness=awareness,
                             )
-                        self.assert_status_read_degradation(payload, "RuntimeError")
+                        self.assert_status_read_degradation(payload, "RuntimeBindingError")
                         self.assertNotIn(str(loop), str(payload))
                         for downstream in (approval, board, delivery, observation):
                             downstream.assert_not_called()

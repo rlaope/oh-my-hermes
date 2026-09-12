@@ -51,6 +51,117 @@ def test_managed_null_section_preserves_native_winner(fixture, monkeypatch, leve
     assert provider._omh_home == public_store
 
 
+@pytest.mark.parametrize('order', ['general-first', 'memory-first'])
+def test_review_single_owner_native_lifecycle_without_task_scope(fixture, monkeypatch, order):
+    root, public, private_store, public_store = fixture
+    from agent.secret_scope import set_multiplex_active, current_secret_scope
+    from hermes_constants import get_hermes_home_override
+    from hermes_cli.plugins import get_plugin_manager
+    from plugins.memory import load_memory_provider
+    from tools.registry import registry
+    set_multiplex_active(False)
+    # Ordinary single-owner Hermes has no task override/secret scope. Its
+    # explicit plugin setting must still win, including on the memory-first path.
+    assert current_secret_scope() is None
+    assert get_hermes_home_override() is None
+    settings(root, {'omh_home': str(public_store)})
+    manager = get_plugin_manager()
+    if order == 'general-first':
+        manager.discover_and_load()
+    provider = load_memory_provider('omh', register_skills=False)
+    assert provider is not None
+    if order == 'memory-first':
+        manager.discover_and_load()
+    assert provider._omh_home == public_store
+    before = baseline.snapshot(private_store)
+    result = json.loads(registry.get_entry('omh_todo').handler(
+        {'action': 'set', 'title': 'Single owner plan', 'items': [{'text': 'Check', 'state': 'pending'}]},
+        session_id='review-single'))
+    assert result['status'] == 'written'
+    assert baseline.snapshot(private_store) == before
+    hooks = manager.invoke_hook('pre_llm_call', user_message='unrelated',
+                                include_omh_awareness=False, session_id='review-single')
+    assert all(not row.get('omh_degradation') for row in hooks if isinstance(row, dict))
+    rejected = json.loads(registry.get_entry('omh_todo').handler(
+        {'action': 'show', 'omh_home': str(private_store)}))
+    assert 'error' in rejected
+    assert baseline.snapshot(private_store) == before
+
+
+def test_review_colocated_cli_uses_process_environment(fixture):
+    root, public, private_store, public_store = fixture
+    core()
+    from agent.secret_scope import set_multiplex_active, current_secret_scope
+    from hermes_constants import get_hermes_home_override
+    from omh.plugin_bundle.omh.runtime_paths import resolve_homes, _host
+    set_multiplex_active(False)
+    settings(root, {'omh_home': str(public_store)})
+    assert current_secret_scope() is None and get_hermes_home_override() is None
+    assert _host() is None
+    assert resolve_homes() == (private_store, root)
+
+
+@pytest.mark.parametrize('mode', ['standalone', 'single', 'routed', 'explicit', 'absent-cwd'])
+def test_review_native_project_artifact_contract(fixture, monkeypatch, mode):
+    from contextlib import ExitStack
+    from gateway.run import _profile_runtime_scope
+    from agent.secret_scope import set_multiplex_active
+    from agent.runtime_cwd import set_session_cwd, _SESSION_CWD
+    from tools.terminal_scope import set_terminal_scope, reset_terminal_scope
+    root, public, private_store, public_store = fixture
+    core()
+    from omh.paths import resolve_paths, project_artifact_dir
+    from omh.plugin_bundle.omh.runtime_paths import runtime_cwd
+    project = root.parent / 'project'
+    (project / '.git').mkdir(parents=True)
+    monkeypatch.chdir(project)
+    single = mode in {'standalone', 'single'}
+    set_multiplex_active(not single)
+    with ExitStack() as stack:
+        if mode != 'standalone':
+            stack.enter_context(_profile_runtime_scope(root if single else public))
+        terminal_token = set_terminal_scope({})
+        cwd_token = set_session_cwd(None if mode == 'absent-cwd' else str(project))
+        try:
+            paths = resolve_paths(private_store, root) if mode == 'explicit' else resolve_paths()
+            assert paths.omh_home_named is (not single)
+            assert runtime_cwd() == (None if mode == 'absent-cwd' else project)
+            expected = project / '.omh' if single else private_store if mode == 'explicit' else public_store
+            assert project_artifact_dir(paths, 'goals') == expected / 'goals'
+        finally:
+            _SESSION_CWD.reset(cwd_token)
+            reset_terminal_scope(terminal_token)
+
+
+def test_review_native_delegate_tool_cycle_and_override_refusal(fixture):
+    root, public, private_store, public_store = fixture
+    config = public / 'config.yaml'
+    config.write_text(config.read_text() + '# Keep unmanaged delegation settings.\ndelegation:\n  max_concurrent_children: 4\n')
+    provider, manager = baseline.load(public, 'general-first')
+    from gateway.run import _profile_runtime_scope
+    from tools.registry import registry
+    config = public / 'config.yaml'
+    original = config.read_bytes()
+    before = baseline.snapshot(private_store), (root / 'config.yaml').read_bytes()
+    with _profile_runtime_scope(public):
+        handler = registry.get_entry('omh_delegate_route').handler
+        assert json.loads(handler({'action': 'status'}))['route'] == {}
+        assert json.loads(handler({'action': 'set', 'model': 'test-child', 'reasoning_effort': 'high'}))['status'] == 'routed'
+        assert json.loads(handler({'action': 'status'}))['route']['model'] == 'test-child'
+        assert json.loads(handler({'action': 'clear'}))['status'] == 'cleared'
+        assert json.loads(handler({'action': 'status'}))['route'] == {}
+        after_cycle = baseline.snapshot(public_store)
+        rejected = handler({'action': 'set', 'model': 'test-child', 'hermes_home': str(root),
+            'observation': {'host': 'review-host', 'session_id': 'review-session'}})
+        assert 'error' in json.loads(rejected)
+        assert str(root) not in rejected
+        assert baseline.snapshot(public_store) == after_cycle
+    assert config.read_bytes() == original
+    # root contains public, so compare only its own config and launch store.
+    assert baseline.snapshot(private_store) == before[0]
+    assert (root / 'config.yaml').read_bytes() == before[1]
+
+
 def observed(**row):
     print('REVIEW_OBSERVED=' + json.dumps(row, sort_keys=True))
 

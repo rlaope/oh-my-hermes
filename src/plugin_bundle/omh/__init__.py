@@ -80,6 +80,8 @@ def register(ctx: _PluginContext) -> None:
     Naming ``register_memory_provider`` here is also what makes this directory
     visible to Hermes' provider discovery, which text-scans ``__init__.py``.
     """
+    from . import runtime_paths
+    runtime_paths.note_host_registration(ctx)
     from .memory_provider import OmhMemoryProvider
 
     _register_optional_surface(ctx, "register_memory_provider", OmhMemoryProvider())

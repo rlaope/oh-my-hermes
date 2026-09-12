@@ -130,8 +130,11 @@ def omh_evidence_handler(args: dict, **kwargs) -> str:
         parsed.append((command_text, tokens))
 
     results = [_rejected_result(item["command"], item["reason"]) for item in rejected]
-    for command_text, tokens in parsed:
-        results.append(_run_command(command_text, tokens, workdir=workdir, timeout=timeout, truncate=truncate))
+    try:
+        for command_text, tokens in parsed:
+            results.append(_run_command(command_text, tokens, workdir=workdir, timeout=timeout, truncate=truncate))
+    except runtime_paths.RuntimeBindingError:
+        return _json(_with_observation({"error": "OMH evidence runtime home binding is unavailable"}, observation))
 
     passed_count = sum(1 for result in results if result.get("passed"))
     payload = {

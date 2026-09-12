@@ -40,15 +40,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-try:  # Present only inside the Hermes process.
-    from agent.memory_provider import MemoryProvider as _MemoryProviderBase
-    from agent.memory_provider import RecallStatus as RecallStatus
-except ModuleNotFoundError as exc:  # Standalone has no Hermes dependency.
-    if exc.name not in {"agent", "agent.memory_provider"}:
-        raise
+# A missing optional module or exported symbol is a capability gap; an
+# internal import failure in an existing host module must still propagate.
+_memory_api = runtime_paths._optional_module("agent.memory_provider")
+_MemoryProviderBase = getattr(_memory_api, "MemoryProvider", object)
+RecallStatus = getattr(_memory_api, "RecallStatus", None)
+if RecallStatus is None:
     from dataclasses import dataclass
-
-    _MemoryProviderBase = object
 
     @dataclass(frozen=True)
     class RecallStatus:  # type: ignore[no-redef]

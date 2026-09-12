@@ -825,8 +825,8 @@ def resolve_paths(
     if normalized_scope not in {"user", "project"}:
         normalized_scope = "user"
     if normalized_scope == "project":
-        resolved_omh = expand_path(omh_home) if omh_home is not None else project_omh_home()
-        resolved_hermes = expand_path(hermes_home) if hermes_home is not None else project_hermes_home()
+        resolved_omh = runtime_paths.expand_path(omh_home) if omh_home is not None else project_omh_home()
+        resolved_hermes = runtime_paths.expand_path(hermes_home) if hermes_home is not None else project_hermes_home()
     else:
         resolved_omh, resolved_hermes = runtime_paths.resolve_homes(omh_home, hermes_home)
     return OmhPaths(
@@ -835,6 +835,6 @@ def resolve_paths(
         # Recorded here, while the caller's intent is still known: comparing the
         # resolved home against the default later cannot tell a named home from
         # an unnamed one that happens to match it.
-        omh_home_named=omh_home is not None or (normalized_scope == "user" and runtime_paths._host() is not None),
+        omh_home_named=omh_home is not None or (normalized_scope == "user" and runtime_paths.profile_is_routed()),
         managed_skills_dir=managed_workflow_pack_dir() if normalized_scope == "user" else None,
     )

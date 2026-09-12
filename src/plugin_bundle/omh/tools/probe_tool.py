@@ -24,11 +24,11 @@ OMH_PROBE_SCHEMA = {
         "properties": {
             "omh_home": {
                 "type": "string",
-                "description": "Optional OMH_HOME override. Defaults to $OMH_HOME or ~/.omh.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "hermes_home": {
                 "type": "string",
-                "description": "Optional HERMES_HOME override. Defaults to $HERMES_HOME or ~/.hermes.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "include_parity": {
                 "type": "boolean",
@@ -49,6 +49,8 @@ def omh_probe_handler(args: dict, **kwargs) -> str:
     include_roadmap = bool(args.get("include_roadmap", False))
     omh_home = runtime_paths.plugin_home(args.get("omh_home"))
     hermes_home = runtime_paths.plugin_home(args.get("hermes_home"), hermes=True)
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_probe", args, kwargs)
     try:
         payload = _package_probe(

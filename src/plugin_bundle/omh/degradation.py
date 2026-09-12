@@ -59,6 +59,16 @@ DEGRADATION_CHAT_NOTE = (
 )
 
 
+def runtime_binding_degradation(error: BaseException) -> dict[str, object]:
+    """Binding failed before hook I/O; never reflect exception text or retry."""
+    return {
+        "omh_degradation": degradation_payload([
+            (COMPONENT_RUNTIME_STATUS_READ, safe_error_type(type(error).__name__))]),
+        "context": "[OMH Degraded] components=" + COMPONENT_RUNTIME_STATUS_READ
+        + ". Runtime home binding failed; no runtime state was read or written.",
+    }
+
+
 def safe_error_type(error_type: str) -> str:
     """Return a bounded, character-safe exception class name."""
     text = re.sub(r"[^A-Za-z0-9_.-]", "", str(error_type or ""))
