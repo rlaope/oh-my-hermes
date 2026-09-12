@@ -66,7 +66,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
                     if name is None:
                         modules[module] = None
                     else:
-                        setattr(modules[module], name, None)
+                        vars(modules[module])[name] = None
                     # A wholly absent Hermes is the supported standalone lane.
                     if module == 'hermes_constants' and name is None:
                         continue
