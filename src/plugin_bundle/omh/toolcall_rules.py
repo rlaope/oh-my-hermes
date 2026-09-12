@@ -28,8 +28,9 @@ execution, verification, review, CI, or merge evidence.
 
 from __future__ import annotations
 
+from . import runtime_paths
+
 import json
-import os
 import re
 import threading
 from dataclasses import dataclass
@@ -81,7 +82,7 @@ _rules_cache: dict[str, tuple[int, int, tuple[ToolcallRule, ...]]] = {}
 # In-process state is the point — one intervention per rule per session within
 # this host process, and a host restart naturally re-arms the rules.
 _fired_lock = threading.Lock()
-_fired: set[tuple[str, str]] = set()
+_fired: set[tuple[Path, Path, str, str]] = set()
 _MAX_FIRED_ENTRIES: Final = 1024
 _MAX_CACHED_RULE_FILES: Final = 8
 
@@ -89,7 +90,7 @@ _MAX_CACHED_RULE_FILES: Final = 8
 def toolcall_rules_path(omh_home: str = "") -> Path:
     # Same home resolution as session_hooks.py: an explicit kwarg wins, then
     # $OMH_HOME, then ~/.omh — so the documented rules path is the read path.
-    resolved = omh_home or os.environ.get("OMH_HOME", "") or "~/.omh"
+    resolved = omh_home or runtime_paths.default_omh_home()
     return Path(resolved).expanduser() / "rules" / TOOLCALL_RULES_FILE
 
 
@@ -178,7 +179,7 @@ def toolcall_rule_directive(
             continue
         if rule.pattern.search(match_text) is None:
             continue
-        if rule.repeat == "once" and not _claim_fire(session_id, rule.name):
+        if rule.repeat == "once" and not _claim_fire(path, session_id, rule.name):
             continue
         return {
             "action": "block",
@@ -271,8 +272,8 @@ def _match_text(tool_name: str, tool_input: object) -> str:
     return f"{tool_name}\n{args_text}"[:MAX_MATCH_TEXT_CHARS]
 
 
-def _claim_fire(session_id: str, rule_name: str) -> bool:
-    key = (str(session_id or ""), rule_name)
+def _claim_fire(path: Path, session_id: str, rule_name: str) -> bool:
+    key = (runtime_paths.default_hermes_home(), path.resolve(), str(session_id or ""), rule_name)
     with _fired_lock:
         if key in _fired:
             return False

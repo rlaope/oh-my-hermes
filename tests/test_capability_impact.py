@@ -203,7 +203,7 @@ class PreVerifyHookTests(unittest.TestCase):
         self.assertIn("omh_capabilities", context.tools)
 
     def test_pre_verify_persists_bounded_host_observation_without_paths_or_response(self) -> None:
-        with TemporaryDirectory() as tmp:
+        with TemporaryDirectory() as tmp, patch.dict("os.environ", {"OMH_HOME": tmp}):
             result = verify_hooks.pre_verify(
                 host="hermes-agent",
                 session_id="session-1",

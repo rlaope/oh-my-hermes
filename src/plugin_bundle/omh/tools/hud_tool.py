@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 from typing import Any
 
@@ -77,8 +79,8 @@ def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
         if args.get(key) is not None
     }
     payload = read_omh_hud(
-        omh_home=str(args.get("omh_home", "") or "") or None,
-        hermes_home=str(args.get("hermes_home", "") or "") or None,
+        omh_home=runtime_paths.plugin_home(args.get("omh_home")),
+        hermes_home=runtime_paths.plugin_home(args.get("hermes_home"), hermes=True),
         preset=str(args.get("preset", "focused") or "focused"),
         limit=args.get("limit") or 3,
         token_metadata=token_metadata,

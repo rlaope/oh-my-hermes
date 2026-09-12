@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import hashlib
 import json
 import re
@@ -203,8 +205,8 @@ def _package_interaction(
     from omh.wrapper.sessions import create_or_resume_wrapper_session
 
     paths = resolve_paths(
-        omh_home=_optional_path_arg(args.get("omh_home")),
-        hermes_home=_optional_path_arg(args.get("hermes_home")),
+        omh_home=runtime_paths.plugin_home(args.get("omh_home")),
+        hermes_home=runtime_paths.plugin_home(args.get("hermes_home"), hermes=True),
     )
     source = _source(args)
     mode = _mode(args)

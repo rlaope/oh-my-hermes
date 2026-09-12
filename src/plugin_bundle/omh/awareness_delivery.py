@@ -24,6 +24,8 @@ cannot grow.
 
 from __future__ import annotations
 
+from . import runtime_paths
+
 import errno
 import hashlib
 import json
@@ -72,7 +74,7 @@ def _is_session_fingerprint(value: str) -> bool:
 
 
 def _runtime_dir(omh_home: str = "") -> Path:
-    root = Path(os.path.expandvars(omh_home or os.environ.get("OMH_HOME", "~/.omh"))).expanduser()
+    root = runtime_paths.expand_path(omh_home) if omh_home else runtime_paths.default_omh_home()
     return root / "runtime"
 
 

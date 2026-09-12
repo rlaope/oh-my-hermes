@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 from typing import Protocol, TypeGuard
 
@@ -16,7 +18,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     # The approval-bypass ledger observes session state, not this call's
     # outcome, so it ticks before the rule gate — a blocked call still sees
     # the same Shift+Tab flag.
-    record_approval_bypass(omh_home=str(kwargs.get("omh_home", "") or ""))
+    record_approval_bypass(omh_home=str(runtime_paths.plugin_home(kwargs.get("omh_home"))))
     # User-authored toolcall rules intervene first: a block directive is the
     # strongest host-supported response (hermes_cli/plugins.py,
     # `_get_pre_tool_call_directive_details`: "``block`` vetoes the tool call
@@ -27,7 +29,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         tool_name=kwargs.get("tool_name"),
         tool_input=kwargs.get("tool_input") if "tool_input" in kwargs else kwargs.get("args"),
         session_id=str(kwargs.get("session_id", "") or kwargs.get("task_id", "") or ""),
-        omh_home=str(kwargs.get("omh_home", "") or ""),
+        omh_home=str(runtime_paths.plugin_home(kwargs.get("omh_home"))),
     )
     if rule_directive is not None:
         # A blocked call never dispatches, so it must not tick the
@@ -50,7 +52,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     # the only place OMH can see either fact.
     record_tool_call(
         kwargs.get("tool_name"),
-        omh_home=str(kwargs.get("omh_home", "") or ""),
+        omh_home=str(runtime_paths.plugin_home(kwargs.get("omh_home"))),
         tool_call_id=kwargs.get("tool_call_id"),
         turn_id=kwargs.get("turn_id"),
     )
@@ -88,7 +90,7 @@ def post_tool_call(**kwargs: object) -> None:
         post_agent_board(kwargs)
     record_tool_call_close(
         kwargs.get("tool_call_id"),
-        omh_home=str(kwargs.get("omh_home", "") or ""),
+        omh_home=str(runtime_paths.plugin_home(kwargs.get("omh_home"))),
     )
     return None
 

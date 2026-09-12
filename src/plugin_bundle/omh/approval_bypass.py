@@ -22,6 +22,8 @@ timestamp are recorded — never a session key, command, or prompt.
 """
 from __future__ import annotations
 
+from . import runtime_paths
+
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,7 +58,7 @@ APPROVAL_BYPASS_HOST_STATE_CLAIM_BOUNDARY = (
 
 
 def _runtime_dir(omh_home: str = "") -> Path:
-    root = Path(omh_home).expanduser() if omh_home else Path.home() / ".omh"
+    root = Path(omh_home).expanduser() if omh_home else runtime_paths.default_omh_home()
     return root / "runtime"
 
 
@@ -132,7 +134,7 @@ def _approvals_mode_off(hermes_home: str = "") -> bool:
     and anything unreadable or oddly shaped reads as False (not bypassed) so
     this can only ever add a truthful ON, never mask one.
     """
-    home = Path(hermes_home).expanduser() if hermes_home else Path.home() / ".hermes"
+    home = Path(hermes_home).expanduser() if hermes_home else runtime_paths.default_hermes_home()
     try:
         text = (home / "config.yaml").read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):

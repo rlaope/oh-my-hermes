@@ -152,7 +152,7 @@ class LoadAndValidateTest(unittest.TestCase):
         try:
             self.assertEqual(
                 toolcall_rules_path(),
-                self.home / "rules" / "toolcall-rules.json",
+                self.home.resolve() / "rules" / "toolcall-rules.json",
             )
         finally:
             if previous is None:

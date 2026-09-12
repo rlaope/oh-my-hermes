@@ -20,6 +20,8 @@ without this surface rather than acting on the silence.
 """
 from __future__ import annotations
 
+from . import runtime_paths
+
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +47,7 @@ def live_tui_session_rows(hermes_home: str = "") -> list[dict[str, Any]]:
     import sqlite3
     from urllib.parse import quote
 
-    home = Path(hermes_home).expanduser() if hermes_home else Path.home() / ".hermes"
+    home = Path(hermes_home).expanduser() if hermes_home else runtime_paths.default_hermes_home()
     path = home / "state.db"
     if not path.exists():
         return []

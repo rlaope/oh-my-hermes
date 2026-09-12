@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 import time
 from typing import Any
@@ -157,8 +159,8 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
 def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
     observation = observe_plugin_tool_call("omh_delegate_route", args, kwargs)
     action = str(args.get("action", "") or "set").strip().lower()
-    hermes_home = str(args.get("hermes_home", "") or "") or None
-    omh_home = str(args.get("omh_home", "") or "") or None
+    hermes_home = runtime_paths.plugin_home(args.get("hermes_home"), hermes=True)
+    omh_home = runtime_paths.plugin_home(args.get("omh_home"))
     # Every chain read below honors the user's routing/model-chains.json
     # overrides and the provider-entitlement reorder (routing/providers.json);
     # the category vocabulary itself stays the shipped closed set. One

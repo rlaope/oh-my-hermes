@@ -7,9 +7,10 @@ registered wrapper.
 
 from __future__ import annotations
 
+from . import runtime_paths
+
 import hashlib
 import json
-import os
 import secrets
 import threading
 from dataclasses import dataclass
@@ -227,8 +228,7 @@ class RegistrationContext(Protocol):
 def register(ctx: RegistrationContext, raw: object) -> None:
     """Install only after ``ctx.get_config(...).enabled`` selected this feature."""
     targets, invalid, global_error = _parse_config(raw)
-    home_value = raw.get("omh_home", os.environ.get("OMH_HOME", "~/.omh")) if isinstance(raw, dict) else "~/.omh"
-    home = Path(str(home_value)).expanduser()
+    home, _ = runtime_paths.resolve_homes(raw.get("omh_home") if isinstance(raw, dict) else None)
     from tools.registry import registry
     scope = getattr(getattr(ctx, "_manager", None), "scope_key", None)
     guard = Guard(home, targets, invalid, global_error, lambda name: registry.get_entry(name, scope=scope))

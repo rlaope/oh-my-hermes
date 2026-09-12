@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from . import runtime_paths
+
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import errno
@@ -132,7 +134,7 @@ def _observation_metadata(args: dict[str, Any], kwargs: dict[str, Any]) -> dict[
     for source in (args.get("observation"), kwargs.get("observation"), kwargs.get("omh_observation")):
         if isinstance(source, dict):
             metadata.update(source)
-    for key in ("host", "session_id", "source", "message", "omh_home", "hermes_home"):
+    for key in ("host", "session_id", "source", "message"):
         if args.get(key) is not None:
             metadata.setdefault(key, args.get(key))
         if kwargs.get(key) is not None:
@@ -186,8 +188,8 @@ def _record_observation(metadata: dict[str, Any], *, event: str, tool: str, hook
             from omh.plugin_observations import record_plugin_host_observation
 
             paths = resolve_paths(
-                omh_home=str(metadata.get("omh_home", "") or "") or None,
-                hermes_home=str(metadata.get("hermes_home", "") or "") or None,
+                omh_home=runtime_paths.default_omh_home(),
+                hermes_home=runtime_paths.default_hermes_home(),
             )
             return record_plugin_host_observation(
                 paths,
@@ -270,7 +272,7 @@ def _record_standalone_observation(
     evidence_refs: list[str],
     message: str,
 ) -> dict[str, Any]:
-    omh_home = _expand_path(str(metadata.get("omh_home", "") or "") or os.environ.get("OMH_HOME", "~/.omh"))
+    omh_home = runtime_paths.default_omh_home()
     runtime_dir = omh_home / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     try:

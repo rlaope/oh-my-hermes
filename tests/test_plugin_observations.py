@@ -25,7 +25,7 @@ def _record_standalone_hooks(
     process_index, count, omh_home, start_barrier = work
     # The installed standalone bundle cannot import these core modules. Mask
     # them here so this regression cannot accidentally exercise the core path.
-    with mock.patch.dict(sys.modules, {"omh.paths": None, "omh.plugin_observations": None}):
+    with mock.patch.dict(sys.modules, {"omh.paths": None, "omh.plugin_observations": None}), mock.patch.dict(os.environ, {"OMH_HOME": omh_home}):
         start_barrier.wait(timeout=20)
         return [
             observe_plugin_hook_call(

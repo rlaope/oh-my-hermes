@@ -31,6 +31,8 @@ liveness signal exactly the same as this session's own calls.
 """
 from __future__ import annotations
 
+from . import runtime_paths
+
 import json
 import time
 from datetime import datetime, timezone
@@ -98,7 +100,7 @@ _MAX_ID_CHARS = 128
 
 
 def _runtime_dir(omh_home: str = "") -> Path:
-    root = Path(omh_home).expanduser() if omh_home else Path.home() / ".omh"
+    root = Path(omh_home).expanduser() if omh_home else runtime_paths.default_omh_home()
     return root / "runtime"
 
 

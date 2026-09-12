@@ -41,7 +41,12 @@ class NativeObserverTests(unittest.TestCase):
         paths = OmhPaths(root / "omh", root / "hermes")
         with patch.dict("os.environ", {"OMH_HOME": str(paths.omh_home), "HERMES_HOME": str(paths.hermes_home)}), patch.dict(
             "sys.modules", {"hermes_cli.plugins": SimpleNamespace(VALID_HOOKS={"on_room_member_activity"}),
-                            "hermes_constants": SimpleNamespace(get_hermes_home=lambda: paths.hermes_home)}):
+                            "hermes_constants": SimpleNamespace(get_hermes_home=lambda: paths.hermes_home),
+                            "agent.secret_scope": SimpleNamespace(is_multiplex_active=lambda: False,
+                                current_secret_scope=lambda: None, get_secret=lambda name: str(paths.omh_home)),
+                            "hermes_cli.config": SimpleNamespace(
+                                require_readable_config_before_write=lambda path: {},
+                                load_config_readonly=lambda: {})}):
             try:
                 plugin.register(context)
                 callback = context.hooks.get("on_room_member_activity")

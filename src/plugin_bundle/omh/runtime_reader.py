@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from . import runtime_paths
+
 import errno
 import heapq
 import json
@@ -265,11 +267,11 @@ def _widget_hud_bytes(payload: dict[str, Any]) -> int:
 
 
 def _default_omh_home() -> Path:
-    return _expand_path(os.environ.get("OMH_HOME", "~/.omh"))
+    return runtime_paths.default_omh_home()
 
 
 def _default_hermes_home() -> Path:
-    return _expand_path(os.environ.get("HERMES_HOME", "~/.hermes"))
+    return runtime_paths.default_hermes_home()
 
 
 def _read_json(path: Path) -> dict[str, Any]:

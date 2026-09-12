@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 from datetime import datetime, timezone
 import json
 import os
@@ -12,7 +14,7 @@ from ..host_observation import observe_plugin_hook_call
 def on_session_end(**kwargs) -> dict[str, str] | None:
     """Record a metadata-only plugin checkpoint when OMH runtime state exists."""
     observe_plugin_hook_call("on_session_end", kwargs)
-    home = _expand_path(str(kwargs.get("omh_home", "") or "") or os.environ.get("OMH_HOME", "~/.omh"))
+    home = runtime_paths.plugin_home(kwargs.get("omh_home"))
     runtime_dir = home / "runtime"
     if not runtime_dir.exists():
         return None

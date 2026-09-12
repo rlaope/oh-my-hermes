@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 from typing import Any
 
@@ -143,5 +145,5 @@ def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
     else:
         payload["status"] = "invalid_action"
         payload["error"] = "action must be set, clear, or show"
-    payload["todo"] = read_omh_todo(home_arg or None, session_ref=session_ref)
+    payload["todo"] = read_omh_todo(runtime_paths.plugin_home(home_arg), session_ref=session_ref)
     return json.dumps(attach_public_observation(payload, observation), sort_keys=True)

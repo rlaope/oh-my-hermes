@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from omh.plugin_bundle.omh import runtime_paths
+
 import os
 import re
 import tempfile
@@ -480,11 +482,11 @@ def expand_path(value: str | Path) -> Path:
 
 
 def default_omh_home() -> Path:
-    return expand_path(os.environ.get("OMH_HOME", "~/.omh"))
+    return runtime_paths.default_omh_home()
 
 
 def default_hermes_home() -> Path:
-    return expand_path(os.environ.get("HERMES_HOME", "~/.hermes"))
+    return runtime_paths.default_hermes_home()
 
 
 def _is_windows() -> bool:
@@ -746,7 +748,12 @@ def _project_anchor(cwd: str | Path | None = None) -> Path:
     # store into `src/whatever/.omh` while repository-scoped artifacts resolved
     # to the root -- one `--scope project` run, two homes.
     root = find_project_root(cwd)
-    return root if root is not None else expand_path(cwd or Path.cwd())
+    if root is not None:
+        return root
+    anchor = cwd if cwd is not None else runtime_paths.runtime_cwd()
+    if anchor is None:
+        raise runtime_paths.RuntimeBindingError("OMH project scope requires a logical working directory")
+    return expand_path(anchor)
 
 
 def find_project_root(cwd: str | Path | None = None) -> Path | None:
@@ -754,7 +761,10 @@ def find_project_root(cwd: str | Path | None = None) -> Path | None:
     # Filesystem-only: `git rev-parse` would be a subprocess in a core that makes
     # no external calls. `.git` is a directory in a checkout and a file in a
     # linked worktree, so both shapes count.
-    start = expand_path(cwd or Path.cwd())
+    anchor = cwd if cwd is not None else runtime_paths.runtime_cwd()
+    if anchor is None:
+        return None
+    start = expand_path(anchor)
     for candidate in (start, *start.parents):
         git_entry = candidate / ".git"
         # Empty `.git` directories are intentionally supported as lightweight
@@ -814,14 +824,17 @@ def resolve_paths(
     normalized_scope = str(scope or "user").strip().lower()
     if normalized_scope not in {"user", "project"}:
         normalized_scope = "user"
-    default_omh = project_omh_home() if normalized_scope == "project" else default_omh_home()
-    default_hermes = project_hermes_home() if normalized_scope == "project" else default_hermes_home()
+    if normalized_scope == "project":
+        resolved_omh = expand_path(omh_home) if omh_home is not None else project_omh_home()
+        resolved_hermes = expand_path(hermes_home) if hermes_home is not None else project_hermes_home()
+    else:
+        resolved_omh, resolved_hermes = runtime_paths.resolve_homes(omh_home, hermes_home)
     return OmhPaths(
-        omh_home=expand_path(omh_home) if omh_home else default_omh,
-        hermes_home=expand_path(hermes_home) if hermes_home else default_hermes,
+        omh_home=resolved_omh,
+        hermes_home=resolved_hermes,
         # Recorded here, while the caller's intent is still known: comparing the
         # resolved home against the default later cannot tell a named home from
         # an unnamed one that happens to match it.
-        omh_home_named=omh_home is not None,
+        omh_home_named=omh_home is not None or (normalized_scope == "user" and runtime_paths._host() is not None),
         managed_skills_dir=managed_workflow_pack_dir() if normalized_scope == "user" else None,
     )

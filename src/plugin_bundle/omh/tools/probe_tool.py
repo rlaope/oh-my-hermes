@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 from json import JSONDecodeError
 import os
@@ -45,8 +47,8 @@ OMH_PROBE_SCHEMA = {
 def omh_probe_handler(args: dict, **kwargs) -> str:
     include_parity = bool(args.get("include_parity", False))
     include_roadmap = bool(args.get("include_roadmap", False))
-    omh_home = _optional_path_arg(args.get("omh_home"))
-    hermes_home = _optional_path_arg(args.get("hermes_home"))
+    omh_home = runtime_paths.plugin_home(args.get("omh_home"))
+    hermes_home = runtime_paths.plugin_home(args.get("hermes_home"), hermes=True)
     observation = observe_plugin_tool_call("omh_probe", args, kwargs)
     try:
         payload = _package_probe(
@@ -95,8 +97,7 @@ def _standalone_probe(
 ) -> dict[str, Any]:
     # Keep this fallback deliberately smaller than omh.probe: copied plugin bundles
     # must answer setup/status questions without importing the installed package.
-    home = _expand_path(omh_home or os.environ.get("OMH_HOME", "~/.omh"))
-    hermes = _expand_path(hermes_home or os.environ.get("HERMES_HOME", "~/.hermes"))
+    home, hermes = runtime_paths.resolve_homes(omh_home, hermes_home)
     status = read_omh_status(omh_home=home, limit=3)
     hud = read_omh_hud(omh_home=home, hermes_home=hermes, preset="focused", limit=1)
     plugin_observation = _latest_plugin_observation(home)

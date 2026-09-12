@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 from collections.abc import Callable
 
@@ -34,7 +36,7 @@ def omh_status_handler(args: dict, *, group_activity_enabled: bool = False,
                        group_activity_observer: Callable[[], dict[str, str | int]] | None = None, **kwargs) -> str:
     observation = observe_plugin_tool_call("omh_status", args, kwargs)
     payload = read_omh_status(
-        omh_home=str(args.get("omh_home", "") or "") or None,
+        omh_home=runtime_paths.plugin_home(args.get("omh_home")),
         limit=int(args.get("limit") or 5),
     )
     payload["group_chat_activity"] = (group_activity_observer() if group_activity_observer is not None

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 from datetime import datetime, timezone
 import json
 import os
@@ -152,13 +154,15 @@ def _with_observation(payload: dict[str, Any], observation: dict[str, Any] | Non
 
 
 def _project_root(args: dict, kwargs: dict) -> Path:
-    value = str(args.get("project_root") or kwargs.get("project_root") or os.getcwd())
-    return Path(os.path.expandvars(value)).expanduser().resolve()
+    value = args.get("project_root") or kwargs.get("project_root") or runtime_paths.runtime_cwd()
+    if value is None:
+        raise runtime_paths.RuntimeBindingError("OMH evidence requires a logical project root")
+    return runtime_paths.expand_path(value)
 
 
 def _workdir(args: dict, project_root: Path) -> Path | dict[str, str]:
     value = str(args.get("workdir") or project_root)
-    workdir = Path(os.path.expandvars(value)).expanduser().resolve()
+    workdir = runtime_paths.expand_path(value)
     try:
         workdir.relative_to(project_root)
     except ValueError:
@@ -256,6 +260,8 @@ def _minimal_child_environment(pycache_dir: str) -> dict[str, str]:
 
     return {
         "HOME": str(Path.home()),
+        "OMH_HOME": str(runtime_paths.default_omh_home()),
+        "HERMES_HOME": str(runtime_paths.default_hermes_home()),
         "LANG": os.environ.get("LANG", "C.UTF-8"),
         "LC_ALL": os.environ.get("LC_ALL", os.environ.get("LANG", "C.UTF-8")),
         "PATH": os.environ.get("PATH", os.defpath),

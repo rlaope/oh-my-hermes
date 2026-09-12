@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
-import os
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
@@ -76,7 +76,7 @@ def omh_decision_gate_handler(
 
     paths = resolve_paths(
         omh_home=default_omh_home(),
-        hermes_home=Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser(),
+        hermes_home=runtime_paths.default_hermes_home(),
     )
     result = apply_connector_decision_answer(paths, **parsed_payload)
     return json.dumps(attach_public_observation(result, observation), sort_keys=True)

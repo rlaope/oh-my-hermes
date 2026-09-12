@@ -30,6 +30,8 @@ provider reads OMH's own store, renders it, and records what it saw.
 
 from __future__ import annotations
 
+from . import runtime_paths
+
 import hashlib
 import json
 import os
@@ -41,7 +43,9 @@ from typing import Any
 try:  # Present only inside the Hermes process.
     from agent.memory_provider import MemoryProvider as _MemoryProviderBase
     from agent.memory_provider import RecallStatus as RecallStatus
-except ImportError:  # pragma: no cover - exercised by the repo's own test run
+except ModuleNotFoundError as exc:  # Standalone has no Hermes dependency.
+    if exc.name not in {"agent", "agent.memory_provider"}:
+        raise
     from dataclasses import dataclass
 
     _MemoryProviderBase = object
@@ -128,8 +132,11 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # without entering the session lifecycle. `initialize` is a session
         # start: it renders the pack and settles the previous session's
         # unconsolidated turns. A question is not a session start.
-        self._omh_home = Path(omh_home).expanduser() if omh_home else _default_omh_home()
-        self._hermes_home = Path(str(hermes_home)).expanduser() if hermes_home else None
+        self._omh_home, self._hermes_home = runtime_paths.resolve_homes(omh_home, hermes_home)
+        if hermes_home is None and runtime_paths._host() is None:
+            # Standalone callers may supply the native comparison root at first
+            # initialize; no Hermes store is read before that explicit binding.
+            self._hermes_home = None
         self._session_id = ""
         self._writes_enabled = True
         self._principal_context: dict[str, object] | None = None
@@ -182,13 +189,17 @@ class OmhMemoryProvider(_MemoryProviderBase):
             return False
 
     def initialize(self, session_id: str, **kwargs: Any) -> None:
+        hermes_home = kwargs.get("hermes_home")
+        if hermes_home is not None:
+            supplied_home = runtime_paths.expand_path(hermes_home)
+            if self._hermes_home is not None and supplied_home != self._hermes_home:
+                raise runtime_paths.RuntimeBindingError("OMH provider cannot be initialized for another profile")
+            self._hermes_home = supplied_home
         self._query = ""
         self._pack, self._pack_count, self._pack_has_memory = "", 0, False
         self._served_pack, self._served_count, self._served_has_memory = "", 0, False
         self._prepared_receipt, self._served_receipt = None, None
         self._session_id = str(session_id or "")
-        hermes_home = kwargs.get("hermes_home")
-        self._hermes_home = Path(str(hermes_home)).expanduser() if hermes_home else None
         self._writes_enabled = str(kwargs.get("agent_context", "") or "") in _WRITING_CONTEXTS
         platform = str(kwargs.get("platform", "") or "")
         self._shared_surface = bool(kwargs.get("shared_surface", bool(platform and platform != "cli")))
@@ -953,7 +964,7 @@ def _attr(value: object) -> str:
 
 
 def _default_omh_home() -> Path:
-    return Path(os.path.expandvars(os.environ.get("OMH_HOME", "") or "~/.omh")).expanduser()
+    return runtime_paths.default_omh_home()
 
 
 def _project_omh_home(cwd: object = None) -> Path | None:
@@ -961,10 +972,13 @@ def _project_omh_home(cwd: object = None) -> Path | None:
 
     The same rule `omh --scope project` uses: a `.git` directory in a checkout
     or a `.git` file in a linked worktree marks the root. Hermes passes no
-    working directory to `initialize`, so the process cwd stands in.
+    working directory to `initialize`, so use its logical context cwd.
     """
     try:
-        root = project_identity_root(str(cwd) if cwd else None)
+        start = runtime_paths.expand_path(cwd) if cwd else runtime_paths.runtime_cwd()
+        if start is None:
+            return None
+        root = project_identity_root(start)
         if root is not None:
             return root / ".omh"
     except OSError:

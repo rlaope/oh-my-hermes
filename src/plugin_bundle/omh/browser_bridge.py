@@ -1,6 +1,8 @@
 """Explicit browser host binding. No browser imports or IO on unrelated calls."""
 from __future__ import annotations
 
+from . import runtime_paths
+
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -48,6 +50,7 @@ def register(ctx, config):
     effects_enabled = (config.get("effects_enabled") is True
                        and callable(getattr(ctx, "browser_effect_approval", None))
                        and all(callable(getattr(adapter, name, None)) for name in ("preview", "resume", "abort")))
+    home, _ = runtime_paths.resolve_homes(config.get("omh_home"))
     manager = None
     admission: ContextVar[_Admission | None] = ContextVar("omh_browser_admission", default=None)
 
@@ -86,10 +89,6 @@ def register(ctx, config):
         nonlocal manager
         if manager is None:
             from omh.workflows.browser_lease_store import BrowserLeaseStore, BrowserSessionManager
-            from pathlib import Path
-            import os
-
-            home = config.get("omh_home") or os.environ.get("OMH_HOME") or str(Path.home() / ".omh")
             manager = BrowserSessionManager(BrowserLeaseStore(home), adapter)
         return manager
 
