@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 import time
 from typing import Any
@@ -139,14 +141,11 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
             },
             "hermes_home": {
                 "type": "string",
-                "description": "Optional Hermes home override. Defaults to the active Hermes home, or $HERMES_HOME / ~/.hermes without Hermes.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "omh_home": {
                 "type": "string",
-                "description": (
-                    "Optional OMH home override for model-chains.json and "
-                    "model-providers.json. Defaults to ~/.omh."
-                ),
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "observation": OBSERVATION_SCHEMA,
         },
@@ -155,10 +154,12 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
 
 
 def omh_delegate_route_handler(args: dict[str, Any], **kwargs) -> str:
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_delegate_route", args, kwargs)
     action = str(args.get("action", "") or "set").strip().lower()
-    hermes_home = str(args.get("hermes_home", "") or "") or None
-    omh_home = str(args.get("omh_home", "") or "") or None
+    hermes_home = runtime_paths.plugin_home(args.get("hermes_home"), hermes=True)
+    omh_home = runtime_paths.plugin_home(args.get("omh_home"))
     # Every chain read below honors the user's routing/model-chains.json
     # overrides and the provider-entitlement reorder (routing/providers.json);
     # the category vocabulary itself stays the shipped closed set. One

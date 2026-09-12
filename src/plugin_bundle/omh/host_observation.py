@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from . import runtime_paths
+
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import errno
@@ -132,7 +134,7 @@ def _observation_metadata(args: dict[str, Any], kwargs: dict[str, Any]) -> dict[
     for source in (args.get("observation"), kwargs.get("observation"), kwargs.get("omh_observation")):
         if isinstance(source, dict):
             metadata.update(source)
-    for key in ("host", "session_id", "source", "message", "omh_home", "hermes_home"):
+    for key in ("host", "session_id", "source", "message"):
         if args.get(key) is not None:
             metadata.setdefault(key, args.get(key))
         if kwargs.get(key) is not None:
@@ -145,6 +147,14 @@ def _observation_metadata(args: dict[str, Any], kwargs: dict[str, Any]) -> dict[
         metadata.setdefault("evidence_refs", args.get("evidence_refs"))
     if kwargs.get("evidence_refs") is not None:
         metadata.setdefault("evidence_refs", kwargs.get("evidence_refs"))
+    # Only standalone operator arguments may name homes. Nested observation
+    # metadata never grants store authority, even on a standalone invocation.
+    for key in ("omh_home", "hermes_home"):
+        metadata.pop(key, None)
+        if kwargs.get(key) is not None:
+            metadata[key] = kwargs[key]
+        elif args.get(key) is not None:
+            metadata[key] = args[key]
     return metadata
 
 
@@ -186,8 +196,8 @@ def _record_observation(metadata: dict[str, Any], *, event: str, tool: str, hook
             from omh.plugin_observations import record_plugin_host_observation
 
             paths = resolve_paths(
-                omh_home=str(metadata.get("omh_home", "") or "") or None,
-                hermes_home=str(metadata.get("hermes_home", "") or "") or None,
+                omh_home=runtime_paths.plugin_home(metadata.get("omh_home")),
+                hermes_home=runtime_paths.plugin_home(metadata.get("hermes_home"), hermes=True),
             )
             return record_plugin_host_observation(
                 paths,
@@ -270,7 +280,8 @@ def _record_standalone_observation(
     evidence_refs: list[str],
     message: str,
 ) -> dict[str, Any]:
-    omh_home = _expand_path(str(metadata.get("omh_home", "") or "") or os.environ.get("OMH_HOME", "~/.omh"))
+    omh_home = runtime_paths.plugin_home(metadata.get("omh_home"))
+    runtime_paths.plugin_home(metadata.get("hermes_home"), hermes=True)
     runtime_dir = omh_home / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     try:

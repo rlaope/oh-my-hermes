@@ -11,6 +11,129 @@ AI agents and operators who need a pasteable protocol should use the root
 [Agent Install Protocol](../INSTALL_FOR_AGENTS.md). That protocol defines what
 to run, what to report, and what is still unobserved after install.
 
+## Runtime state in Hermes profiles (operator reference)
+
+A native Hermes profile must select its own OMH store, or deliberately select
+an explicitly shared store. Configure the existing plugin setting in that
+profile's `config.yaml`:
+
+```yaml
+plugins:
+  entries:
+    omh:
+      settings:
+        omh_home: ~/omh-stores/profile-a
+```
+
+Two trusted profiles may explicitly name the same directory. That shares OMH
+records and home-wide ledgers; it does not make them separate stores. Existing
+memory principal/admission checks still apply within shared stores. Different
+directories are not an OS sandbox.
+
+The copied plugin and package use the same uncached root resolver, in this order:
+
+1. A trusted programmatic/CLI home pair (also supports offline operations).
+2. The active profile's `plugins.entries.omh.settings.omh_home`, with the
+   existing legacy `config.omh_home` fallback.
+3. Legacy `OMH_HOME` from Hermes' active credential scope, verified against
+   the host's profile-home-keyed snapshot (its `.env` plus already hydrated
+   external sources), never another routed profile's process environment.
+   Anonymous scope mappings have no owner identity: mismatching/unverifiable
+   values are refused before I/O. Use an absolute profile setting for bindings
+   supplied only through an ad hoc in-memory secret mapping.
+4. For standalone/launch-owner operation only, the legacy `OMH_HOME`/`~/.omh`
+   default. The independent OMH CLI has no Hermes dependency and retains its
+   explicit `--omh-home`, `--hermes-home`, and `--scope project` behavior.
+
+Importing `hermes_constants` alone does not select native operation. A plain
+OMH CLI colocated with a compatible Hermes installation still uses process
+environment variables. Native home/secret scopes or multiplex mode select the
+native lane. Actual registration through Hermes' `PluginContext` or memory
+provider collector also marks that **bundle instance** as native: ordinary
+single-owner memory loading and later callbacks can run without task scopes.
+That marker records only the execution lane, never a profile, home or secret.
+Missing scope-probe APIs are ambiguous and fail closed; missing required
+callable APIs in an active native host are reported as a bounded
+`RuntimeBindingError` before configuration or store reads, not downgraded to
+standalone. Internal host import faults still propagate.
+
+A routed profile without a binding, an unscoped multiplex call, and blank or
+malformed settings are unavailable with a binding error. They do not create
+an empty substitute store. Relative profile settings are anchored at that
+profile's Hermes home. `~` still names the OS user's home. Prefer absolute paths;
+`$HERMES_HOME` is expanded against the active profile, but an already-expanded
+native `${HERMES_HOME}` value that disagrees with that profile is rejected with
+an absolute-path diagnostic. Validation follows the winning raw configuration
+leaf, including administrator-managed precedence; a shadowed user template
+cannot veto a managed absolute setting. Literal paths and setting presence
+must also agree with the effective native configuration. Unresolved variables
+are rejected. Evidence `project_root` and `workdir` accept literal absolute or
+relative paths and the current user's `~`/`~/...`, but not `~other-user/...`
+or variable references: model paths never query other OS users, credentials
+or environment values.
+
+Explicit empty-string/whitespace home arguments are rejected in both user and
+project scope rather than silently selecting a default. This intentionally
+tightens the former empty-string fallback: omit the argument (`None` in Python)
+to request defaults. Blank configured native bindings never inherit ambient
+state. Filesystem failures while resolving runtime homes are also bounded
+`RuntimeBindingError`s. Hooks classify failed binding before observation I/O;
+pre-tool binding failure blocks the call because its rules cannot be checked.
+Direct runtime readers still raise on unreadable state instead of claiming idle.
+Evidence child binding failure returns an error without spawning a command.
+
+Native tools/hooks do not treat home-looking model arguments or observation
+metadata as permission to choose another store. Legacy model-facing home fields
+are explicitly rejected by native tools before observation or store I/O, even
+when blank or equal to the active home; omit them. Their schemas retain and
+label standalone operator overrides, and trusted offline APIs remain separate.
+Standalone observations honor explicit top-level operator homes in both package
+and copied-bundle paths; nested observation metadata is never store authority.
+Provider and optional
+observer/egress/browser instances bind before their first I/O; providers refuse
+reinitialization with another Hermes home. Project recall uses the host's
+logical cwd rather than a multiplex launch repository; absent/deleted logical
+context selects no project. Evidence subprocesses receive only the existing
+minimal non-secret environment plus the resolved OMH/Hermes homes. A separately
+launched TUI widget must likewise receive its owning process's home pair;
+Python context scopes do not cross process boundaries.
+
+Runtime homes are canonicalized (including symlinks) for store identity and
+per-home guards. Core project-store paths were already canonicalized; native
+logical cwd is passed through without replacing it with the process cwd. Stable
+project identity and bound absent-cwd behavior are unchanged.
+
+Repository-scoped artifact defaults are explicit:
+
+| Invocation | `omh_home_named` | `project_artifact_dir` |
+| --- | --- | --- |
+| Standalone or colocated OMH CLI, no explicit home | false | Logical repository `.omh/`, or user store outside a repository |
+| Ordinary single-owner native profile | false | Logical repository `.omh/`, or profile-selected store outside a repository |
+| Routed native profile (multiplex or a non-launch home) | true | Profile-selected OMH store; never a launch repository |
+| Trusted explicit OMH home/pair | true | Explicit OMH store, including inside a repository |
+
+When logical cwd is absent there is no inferred repository; artifacts use the
+selected store. Explicit `--scope project` still selects the logical project's
+`.omh`/`.hermes`; without a logical cwd it fails rather than borrowing process
+cwd. Naming a runtime store does not change the project's stable identity.
+
+This binding uses native `hermes_constants` profile APIs,
+`agent.secret_scope` (including `build_profile_secret_scope`),
+`agent.runtime_cwd`, `hermes_cli.managed_scope.load_managed_config`, and the
+read-only config loader plus its strict readability validator. A present but incompatible/broken host is
+not treated as standalone. Setup/profile synchronization does not stamp one
+profile's store into every child or migrate data; configure each routed
+profile explicitly before activation. Existing child settings are preserved.
+
+Maintainers can run the opt-in synthetic real-loader suite with a Hermes
+checkout's `scripts/run_tests.sh`, passing this repository's
+`tests/native/test_profile_runtime.py`, `tests/native/test_review_native.py`,
+and `--native-source=/absolute/path/to/hermes`. Use an explicit pytest root/cache
+inside the test workspace. The ordinary OMH unittest suite needs no Hermes
+installation. These tests distinguish actual turn-start behavior from positive
+recall after the native background queue; this change does not alter upstream
+turn-start pack invalidation or claim live model delivery.
+
 ## Command Audience
 
 | Audience | Normal interaction |

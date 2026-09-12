@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import errno
 from datetime import datetime, timezone
 import hashlib
@@ -17,6 +19,7 @@ from ..degradation import (
     COMPONENT_RUNTIME_STATUS_READ,
     degradation_payload,
     safe_error_type,
+    runtime_binding_degradation,
 )
 from ..active_workflow_context import active_workflow_context, render_active_workflow_context
 from ..approval_bypass import record_approval_bypass
@@ -154,12 +157,19 @@ def _tracker_event_is_present(kwargs: dict) -> bool:
 
 def pre_llm_call(**kwargs) -> dict[str, object] | None:
     """Inject bounded OMH role/status context without storing prompts."""
+    # Bind before any observer or awareness I/O. A failed root must not reach
+    # downstream defaults as None, or fail before the status classifier runs.
+    try:
+        omh_home = str(runtime_paths.plugin_home(kwargs.get("omh_home")))
+        hermes_home = str(runtime_paths.plugin_home(kwargs.get("hermes_home"), hermes=True))
+    except (runtime_paths.RuntimeBindingError, OSError, RuntimeError) as exc:
+        return runtime_binding_degradation(exc)
     record_active_main_agent_model(kwargs.get("model"))
     observe_plugin_hook_call("pre_llm_call", kwargs)
     # Turn start is the freshest in-process view of the Shift+Tab yolo flag:
     # a toggle shows on the HUD at the user's next message, not only at the
     # next tool call.
-    record_approval_bypass(omh_home=str(kwargs.get("omh_home", "") or ""))
+    record_approval_bypass(omh_home=omh_home)
     context_parts: list[str] = []
     payload: dict[str, object] = {}
     user_message = "" if _tracker_event_is_present(kwargs) else str(kwargs.get("user_message", "") or "")
@@ -198,7 +208,7 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
             if not claim_route_guidance_delivery(
                 session_id=session_id,
                 route_fingerprint=route_fingerprint,
-                omh_home=str(kwargs.get("omh_home", "") or ""),
+                omh_home=omh_home,
             ):
                 route_hint_context = ""
                 message_matches_awareness = False
@@ -249,26 +259,26 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     # with the HUD checklist unnoticed. Honors the caller's awareness opt-out.
     if include_awareness:
         outcomes = unacknowledged_outcomes(
-            str(kwargs.get("omh_home", "") or ""),
-            str(kwargs.get("hermes_home", "") or ""),
+            omh_home,
+            hermes_home,
             session_id,
         )
         todo_reminder = open_todo_reminder(
-            omh_home=str(kwargs.get("omh_home", "") or ""),
-            hermes_home=str(kwargs.get("hermes_home", "") or ""),
+            omh_home=omh_home,
+            hermes_home=hermes_home,
             session_ref=session_id,
             outcomes=outcomes,
         )
         if todo_reminder:
             context_parts.append(todo_reminder)
         workflow_context = active_workflow_context(
-            str(kwargs.get("omh_home", "") or ""), session_id
+            omh_home, session_id
         )
         if workflow_context:
             payload["omh_active_workflow"] = workflow_context
             context_parts.append(render_active_workflow_context(workflow_context))
         budget_context = context_budget_continuation(
-            str(kwargs.get("omh_home", "") or ""), session_id, str(kwargs.get("model", "") or "")
+            omh_home, session_id, str(kwargs.get("model", "") or "")
         )
         if budget_context:
             payload["omh_context_budget"] = budget_context
@@ -286,8 +296,8 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
                 ""
                 if outcomes
                 else _todo_stall_status(
-                    str(kwargs.get("omh_home", "") or ""),
-                    str(kwargs.get("hermes_home", "") or ""),
+                    omh_home,
+                    hermes_home,
                     session_id,
                 )
             ),
@@ -296,10 +306,7 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         if claim_finding:
             context_parts.append(f"[OMH continuation claim] {claim_finding}")
 
-    omh_home: str | None = None
     try:
-        omh_home = str(kwargs.get("omh_home", "") or "") or None
-        hermes_home = str(kwargs.get("hermes_home", "") or "") or None
         try:
             activity = read_omh_activity(omh_home=omh_home, limit=3)
         except Exception as exc:

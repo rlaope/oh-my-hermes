@@ -1009,6 +1009,8 @@ print(json.dumps(observed, ensure_ascii=False))
             with mock.patch.dict(
                 os.environ,
                 {
+                    "OMH_HOME": str(omh_home),
+                    "HERMES_HOME": str(hermes_home),
                     "OPENAI_API_KEY": "model-secret-do-not-print",
                     "AWS_SECRET_ACCESS_KEY": "cloud-secret-do-not-print",
                     "BUZZ_PRIVATE_KEY": "buzz-secret-do-not-print",
@@ -1035,6 +1037,8 @@ print(json.dumps(observed, ensure_ascii=False))
                 set(child_env),
                 {
                     "HOME",
+                    "OMH_HOME",
+                    "HERMES_HOME",
                     "LANG",
                     "LC_ALL",
                     "PATH",
@@ -1043,6 +1047,8 @@ print(json.dumps(observed, ensure_ascii=False))
                     "TMPDIR",
                 },
             )
+            self.assertEqual(child_env["OMH_HOME"], str(omh_home.resolve()))
+            self.assertEqual(child_env["HERMES_HOME"], str(hermes_home.resolve()))
             self.assertNotIn("OPENAI_API_KEY", child_env)
             self.assertNotIn("AWS_SECRET_ACCESS_KEY", child_env)
             self.assertNotIn("BUZZ_PRIVATE_KEY", child_env)

@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import uuid
 
+from ..degradation import runtime_binding_degradation
 from ..host_observation import observe_plugin_hook_call
 
 
-def on_session_end(**kwargs) -> dict[str, str] | None:
+def on_session_end(**kwargs) -> dict[str, object] | None:
     """Record a metadata-only plugin checkpoint when OMH runtime state exists."""
+    try:
+        home = runtime_paths.plugin_home(kwargs.get("omh_home"))
+        runtime_paths.plugin_home(kwargs.get("hermes_home"), hermes=True)
+    except (runtime_paths.RuntimeBindingError, OSError, RuntimeError) as exc:
+        return runtime_binding_degradation(exc)
     observe_plugin_hook_call("on_session_end", kwargs)
-    home = _expand_path(str(kwargs.get("omh_home", "") or "") or os.environ.get("OMH_HOME", "~/.omh"))
     runtime_dir = home / "runtime"
     if not runtime_dir.exists():
         return None

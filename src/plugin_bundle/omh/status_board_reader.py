@@ -47,6 +47,8 @@ Boundaries, in order of importance:
 
 from __future__ import annotations
 
+from . import runtime_paths
+
 import errno
 import hashlib
 import json
@@ -549,7 +551,7 @@ def _sort_key(unit: dict[str, Any]) -> tuple[int, str, str]:
 
 
 def _home_dir(omh_home: str | Path | None) -> Path:
-    return _expand_path(omh_home) if omh_home else _expand_path(os.environ.get("OMH_HOME", "~/.omh"))
+    return _expand_path(omh_home) if omh_home else runtime_paths.default_omh_home()
 
 
 def _expand_path(value: str | Path) -> Path:

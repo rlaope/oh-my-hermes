@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 from datetime import datetime, timezone
 import json
 import os
@@ -89,7 +91,11 @@ def omh_evidence_handler(args: dict, **kwargs) -> str:
     if len(commands) > _MAX_COMMANDS:
         return _json(_with_observation({"error": f"too many commands: {len(commands)} > {_MAX_COMMANDS}"}, observation))
 
-    project_root = _project_root(args, kwargs)
+    try:
+        project_root = _project_root(args, kwargs)
+        workdir = _workdir(args, project_root)
+    except runtime_paths.RuntimeBindingError as exc:
+        return _json(_with_observation({"error": str(exc)}, observation))
     if not project_root.is_dir():
         return _json(
             _with_observation(
@@ -97,7 +103,6 @@ def omh_evidence_handler(args: dict, **kwargs) -> str:
                 observation,
             )
         )
-    workdir = _workdir(args, project_root)
     if isinstance(workdir, dict):
         return _json(_with_observation(workdir, observation))
 
@@ -125,8 +130,11 @@ def omh_evidence_handler(args: dict, **kwargs) -> str:
         parsed.append((command_text, tokens))
 
     results = [_rejected_result(item["command"], item["reason"]) for item in rejected]
-    for command_text, tokens in parsed:
-        results.append(_run_command(command_text, tokens, workdir=workdir, timeout=timeout, truncate=truncate))
+    try:
+        for command_text, tokens in parsed:
+            results.append(_run_command(command_text, tokens, workdir=workdir, timeout=timeout, truncate=truncate))
+    except runtime_paths.RuntimeBindingError:
+        return _json(_with_observation({"error": "OMH evidence runtime home binding is unavailable"}, observation))
 
     passed_count = sum(1 for result in results if result.get("passed"))
     payload = {
@@ -152,13 +160,15 @@ def _with_observation(payload: dict[str, Any], observation: dict[str, Any] | Non
 
 
 def _project_root(args: dict, kwargs: dict) -> Path:
-    value = str(args.get("project_root") or kwargs.get("project_root") or os.getcwd())
-    return Path(os.path.expandvars(value)).expanduser().resolve()
+    value = args.get("project_root") or kwargs.get("project_root") or runtime_paths.runtime_cwd()
+    if value is None:
+        raise runtime_paths.RuntimeBindingError("OMH evidence requires a logical project root")
+    return runtime_paths.expand_input_path(value)
 
 
 def _workdir(args: dict, project_root: Path) -> Path | dict[str, str]:
     value = str(args.get("workdir") or project_root)
-    workdir = Path(os.path.expandvars(value)).expanduser().resolve()
+    workdir = runtime_paths.expand_input_path(value)
     try:
         workdir.relative_to(project_root)
     except ValueError:
@@ -256,6 +266,8 @@ def _minimal_child_environment(pycache_dir: str) -> dict[str, str]:
 
     return {
         "HOME": str(Path.home()),
+        "OMH_HOME": str(runtime_paths.default_omh_home()),
+        "HERMES_HOME": str(runtime_paths.default_hermes_home()),
         "LANG": os.environ.get("LANG", "C.UTF-8"),
         "LC_ALL": os.environ.get("LC_ALL", os.environ.get("LANG", "C.UTF-8")),
         "PATH": os.environ.get("PATH", os.defpath),

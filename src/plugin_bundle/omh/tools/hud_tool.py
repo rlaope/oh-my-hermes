@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 from typing import Any
 
@@ -22,11 +24,11 @@ OMH_HUD_SCHEMA = {
         "properties": {
             "omh_home": {
                 "type": "string",
-                "description": "Optional OMH_HOME override. Defaults to $OMH_HOME or ~/.omh.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "hermes_home": {
                 "type": "string",
-                "description": "Optional HERMES_HOME override. Defaults to $HERMES_HOME or ~/.hermes.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "preset": {
                 "type": "string",
@@ -64,6 +66,8 @@ OMH_HUD_SCHEMA = {
 
 
 def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_hud", args, kwargs)
     token_metadata = {
         key: args.get(key)
@@ -77,8 +81,8 @@ def omh_hud_handler(args: dict[str, Any], **kwargs) -> str:
         if args.get(key) is not None
     }
     payload = read_omh_hud(
-        omh_home=str(args.get("omh_home", "") or "") or None,
-        hermes_home=str(args.get("hermes_home", "") or "") or None,
+        omh_home=runtime_paths.plugin_home(args.get("omh_home")),
+        hermes_home=runtime_paths.plugin_home(args.get("hermes_home"), hermes=True),
         preset=str(args.get("preset", "focused") or "focused"),
         limit=args.get("limit") or 3,
         token_metadata=token_metadata,

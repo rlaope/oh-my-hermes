@@ -26,6 +26,8 @@ reads it.
 
 from __future__ import annotations
 
+from . import runtime_paths
+
 import os
 import re
 import tempfile
@@ -247,14 +249,7 @@ def write_delegation_route(
 def _config_path(hermes_home: str | Path | None) -> Path:
     if hermes_home:
         return Path(hermes_home).expanduser() / "config.yaml"
-    try:
-        from hermes_constants import get_hermes_home
-    except ImportError:
-        # The bundled plugin is also importable without a Hermes runtime.
-        home = Path(os.environ.get("HERMES_HOME") or "~/.hermes").expanduser()
-    else:
-        home = get_hermes_home()
-    return home / "config.yaml"
+    return runtime_paths.default_hermes_home() / "config.yaml"
 
 
 def _delegation_child_indents(lines: list[str]) -> dict[int, int]:

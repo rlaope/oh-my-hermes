@@ -24,6 +24,8 @@ mixture routing is visible as such instead of masquerading as a routed one.
 
 from __future__ import annotations
 
+from . import runtime_paths
+
 import json
 import os
 import re
@@ -160,7 +162,7 @@ _CHAIN_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 
 
 def mixture_chain_overrides_path(omh_home: str | Path | None = None) -> Path:
-    root = Path(omh_home).expanduser() if omh_home else Path.home() / ".omh"
+    root = Path(omh_home).expanduser() if omh_home else runtime_paths.default_omh_home()
     return root / "routing" / "model-chains.json"
 
 
@@ -430,7 +432,7 @@ def is_provider_id_token(value: object) -> bool:
 
 
 def provider_entitlements_path(omh_home: str | Path | None = None) -> Path:
-    root = Path(omh_home).expanduser() if omh_home else Path.home() / ".omh"
+    root = Path(omh_home).expanduser() if omh_home else runtime_paths.default_omh_home()
     return root / "routing" / "providers.json"
 
 
@@ -623,7 +625,7 @@ MODEL_PROVIDER_ROUTES_SCHEMA_VERSION = "model_provider_routes/v1"
 
 
 def model_provider_routes_path(omh_home: str | Path | None = None) -> Path:
-    root = Path(omh_home).expanduser() if omh_home else Path.home() / ".omh"
+    root = Path(omh_home).expanduser() if omh_home else runtime_paths.default_omh_home()
     return root / "routing" / "model-providers.json"
 
 
@@ -764,7 +766,7 @@ _PROVENANCE_ORIGINS = (
 
 
 def delegation_route_provenance_path(omh_home: str | Path | None = None) -> Path:
-    root = Path(omh_home).expanduser() if omh_home else Path.home() / ".omh"
+    root = Path(omh_home).expanduser() if omh_home else runtime_paths.default_omh_home()
     return root / "routing" / "route-provenance.json"
 
 
@@ -1049,7 +1051,7 @@ MODEL_PRICE_OVERRIDES_SCHEMA_VERSION = "model_price_overrides/v1"
 
 
 def model_price_overrides_path(omh_home: str | Path | None = None) -> Path:
-    root = Path(omh_home).expanduser() if omh_home else Path.home() / ".omh"
+    root = Path(omh_home).expanduser() if omh_home else runtime_paths.default_omh_home()
     return root / "routing" / "model-prices.json"
 
 
@@ -1661,7 +1663,7 @@ def read_hermes_native_subagents(
 ) -> dict[str, Any]:
     """Project owned native children, or explicitly global fallback activity."""
     current = float(now) if now is not None else time.time()
-    home = Path(hermes_home).expanduser() if hermes_home else Path.home() / ".hermes"
+    home = Path(hermes_home).expanduser() if hermes_home else runtime_paths.default_hermes_home()
     # Category labels honor the user's ~/.omh/routing/model-chains.json
     # overrides so a customized chain labels its children like a shipped one.
     active_chains = effective_mixture_category_chains(omh_home)

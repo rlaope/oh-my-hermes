@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 from typing import Any
 
@@ -83,10 +85,7 @@ OMH_TODO_SCHEMA = {
             },
             "omh_home": {
                 "type": "string",
-                "description": (
-                    "Optional OMH_HOME override for action=show only. "
-                    "set and clear always use the configured OMH home."
-                ),
+                "description": "Standalone operator override for action=show only; set/clear reject overrides. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "observation": OBSERVATION_SCHEMA,
         },
@@ -96,6 +95,8 @@ OMH_TODO_SCHEMA = {
 
 
 def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_todo", args, kwargs)
     # Hermes passes its stable session/thread id as a keyword on every tool
     # call, so a plan declared in chat is stored for, and read back for, the
@@ -143,5 +144,5 @@ def omh_todo_handler(args: dict[str, Any], **kwargs) -> str:
     else:
         payload["status"] = "invalid_action"
         payload["error"] = "action must be set, clear, or show"
-    payload["todo"] = read_omh_todo(home_arg or None, session_ref=session_ref)
+    payload["todo"] = read_omh_todo(runtime_paths.plugin_home(home_arg), session_ref=session_ref)
     return json.dumps(attach_public_observation(payload, observation), sort_keys=True)

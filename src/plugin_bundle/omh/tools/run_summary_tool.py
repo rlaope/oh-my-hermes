@@ -14,8 +14,9 @@ read-only, and renders the lines in the requested language.
 """
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
-import os
 import sqlite3
 import time
 from pathlib import Path
@@ -76,7 +77,7 @@ OMH_RUN_SUMMARY_SCHEMA = {
             },
             "hermes_home": {
                 "type": "string",
-                "description": "Optional HERMES_HOME override. Defaults to ~/.hermes.",
+                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
             },
             "observation": OBSERVATION_SCHEMA,
         },
@@ -85,7 +86,7 @@ OMH_RUN_SUMMARY_SCHEMA = {
 
 
 def _default_hermes_home() -> Path:
-    return Path(os.environ.get("HERMES_HOME", "") or (Path.home() / ".hermes"))
+    return runtime_paths.default_hermes_home()
 
 
 def _rows(
@@ -161,12 +162,14 @@ def _optional_number(value: Any) -> float | None:
 
 
 def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
+    if error := runtime_paths.tool_home_error(args):
+        return json.dumps(error, sort_keys=True)
     observation = observe_plugin_tool_call("omh_run_summary", args, kwargs)
     language = str(args.get("language", "") or "en").strip().lower()
     if language not in _SUMMARY_LABELS:
         language = "en"
     session_id = str(args.get("session_id", "") or "") or str(kwargs.get("session_id", "") or "")
-    home = Path(str(args.get("hermes_home", "") or "")).expanduser() if args.get("hermes_home") else _default_hermes_home()
+    home = runtime_paths.plugin_home(args.get("hermes_home"), hermes=True)
 
     payload: dict[str, Any] = {
         "schema_version": "omh_run_summary/v1",

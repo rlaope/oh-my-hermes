@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
 from typing import Protocol, TypeGuard
 
+from ..degradation import runtime_binding_degradation
 from ..approval_bypass import record_approval_bypass
 from ..host_observation import observe_plugin_hook_call
 from ..omh_roles import extract_role_marker, resolve_role_name, role_aliases, role_names
@@ -12,11 +15,19 @@ from ..toolcall_rules import toolcall_rule_directive
 
 def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     """Return only host-supported pre-tool directives or role warnings."""
+    try:
+        omh_home = str(runtime_paths.plugin_home(kwargs.get("omh_home")))
+        runtime_paths.plugin_home(kwargs.get("hermes_home"), hermes=True)
+    except (runtime_paths.RuntimeBindingError, OSError, RuntimeError) as exc:
+        # A missing rules owner cannot safely authorize the tool. This is the
+        # native host's supported veto, not a swallowed rule failure.
+        return {**runtime_binding_degradation(exc), "action": "block",
+                "message": "OMH runtime binding unavailable; tool rules could not be checked. Tool call blocked."}
     _ = observe_plugin_hook_call("pre_tool_call", kwargs)
     # The approval-bypass ledger observes session state, not this call's
     # outcome, so it ticks before the rule gate — a blocked call still sees
     # the same Shift+Tab flag.
-    record_approval_bypass(omh_home=str(kwargs.get("omh_home", "") or ""))
+    record_approval_bypass(omh_home=omh_home)
     # User-authored toolcall rules intervene first: a block directive is the
     # strongest host-supported response (hermes_cli/plugins.py,
     # `_get_pre_tool_call_directive_details`: "``block`` vetoes the tool call
@@ -27,7 +38,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         tool_name=kwargs.get("tool_name"),
         tool_input=kwargs.get("tool_input") if "tool_input" in kwargs else kwargs.get("args"),
         session_id=str(kwargs.get("session_id", "") or kwargs.get("task_id", "") or ""),
-        omh_home=str(kwargs.get("omh_home", "") or ""),
+        omh_home=omh_home,
     )
     if rule_directive is not None:
         # A blocked call never dispatches, so it must not tick the
@@ -50,7 +61,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     # the only place OMH can see either fact.
     record_tool_call(
         kwargs.get("tool_name"),
-        omh_home=str(kwargs.get("omh_home", "") or ""),
+        omh_home=omh_home,
         tool_call_id=kwargs.get("tool_call_id"),
         turn_id=kwargs.get("turn_id"),
     )
@@ -66,7 +77,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     return payload
 
 
-def post_tool_call(**kwargs: object) -> None:
+def post_tool_call(**kwargs: object) -> dict[str, object] | None:
     """Close the in-flight ledger entry pre_tool_call opened for this call.
 
     A supported Hermes observer hook (`install/hook_integrity.py`
@@ -78,6 +89,11 @@ def post_tool_call(**kwargs: object) -> None:
     ceiling. A host that omits tool_call_id is a silent no-op here; the
     entry pre_tool_call never opened simply never closes early.
     """
+    try:
+        omh_home = str(runtime_paths.plugin_home(kwargs.get("omh_home")))
+        runtime_paths.plugin_home(kwargs.get("hermes_home"), hermes=True)
+    except (runtime_paths.RuntimeBindingError, OSError, RuntimeError) as exc:
+        return runtime_binding_degradation(exc)
     _ = observe_plugin_hook_call("post_tool_call", kwargs)
     try:
         from ..agent_board_bridge import post_agent_board
@@ -88,7 +104,7 @@ def post_tool_call(**kwargs: object) -> None:
         post_agent_board(kwargs)
     record_tool_call_close(
         kwargs.get("tool_call_id"),
-        omh_home=str(kwargs.get("omh_home", "") or ""),
+        omh_home=omh_home,
     )
     return None
 

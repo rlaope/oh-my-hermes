@@ -1,12 +1,11 @@
 """Adapter for Hermes on_room_member_activity, not a room-terminal contract."""
 from __future__ import annotations
 
+from . import runtime_paths
+
 from collections.abc import Callable
 from datetime import datetime, timezone
-from importlib import import_module
 import json
-import os
-from pathlib import Path
 import secrets
 from typing import Protocol, runtime_checkable
 
@@ -105,10 +104,11 @@ class NativeObserver:
 
 def register(ctx: ObserverHost) -> NativeObserver:
     """Create a private profile key at registration, never on dispatch."""
-    home = import_module("hermes_constants").get_hermes_home()
-    configured = ctx.get_config("omh_home", None)
-    omh_home = configured if isinstance(configured, str) and configured else os.environ.get("OMH_HOME", "~/.omh")
-    paths = OmhPaths(Path(omh_home).expanduser().resolve(), Path(home).expanduser().resolve())
+    # In a native host omh_home is the common profile setting, not a separate
+    # programmatic override. Standalone adapter contexts retain their API.
+    override = ctx.get_config("omh_home", None) if runtime_paths._host() is None else None
+    omh_home, home = runtime_paths.resolve_homes(override)
+    paths = OmhPaths(omh_home, home)
     key_path = paths.runtime_dir / "group-activity-keys" / f"{profile_slot(paths.hermes_home)}.key"
     with file_lock(key_path, private=True, timeout_seconds=1) as lock:
         if not lock["enforced"]:

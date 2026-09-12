@@ -6,6 +6,8 @@ Only a correlated normal-loop pre/post pair can create an OMH receipt.
 """
 from __future__ import annotations
 
+from . import runtime_paths
+
 from collections.abc import Generator, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -249,15 +251,15 @@ class _PrepareCall:
 # handler on the caller's thread, so a ContextVar cannot carry the pre to the
 # handler. This process-local registry is keyed by the host's own session/task
 # identity; each entry is consumed exactly once by the matching handler call.
-_PREPARE_CALLS: dict[tuple[str, str], _PrepareCall] = {}
+_PREPARE_CALLS: dict[tuple[Path, str, str], _PrepareCall] = {}
 _PREPARE_CALLS_LOCK = RLock()
 _MAX_PREPARE_CALLS = 64
-_BRIDGES: dict[tuple[Path, str | None], AgentBoardBridge] = {}
+_BRIDGES: dict[tuple[Path, Path, str | None], AgentBoardBridge] = {}
 _BRIDGES_LOCK = RLock()
 
 
 def _arm_prepare_call(host: HostIdentity, digest: str) -> None:
-    key = (host.session_id, host.task_id)
+    key = (runtime_paths.default_hermes_home(), host.session_id, host.task_id)
     with _PREPARE_CALLS_LOCK:
         _ = _PREPARE_CALLS.pop(key, None)
         if len(_PREPARE_CALLS) >= _MAX_PREPARE_CALLS:
@@ -270,7 +272,7 @@ def _disarm_prepare_call(host: HostIdentity | None) -> None:
     if host is None:
         return
     with _PREPARE_CALLS_LOCK:
-        _ = _PREPARE_CALLS.pop((host.session_id, host.task_id), None)
+        _ = _PREPARE_CALLS.pop((runtime_paths.default_hermes_home(), host.session_id, host.task_id), None)
 
 
 def _input_digest(arguments: Mapping[str, object]) -> str:
@@ -293,7 +295,7 @@ def handler_identity(args: Mapping[str, object], kwargs: Mapping[str, object]) -
     if not isinstance(session_id, str) or not isinstance(task_id, str):
         return None
     with _PREPARE_CALLS_LOCK:
-        pending = _PREPARE_CALLS.pop((session_id, task_id), None)
+        pending = _PREPARE_CALLS.pop((runtime_paths.default_hermes_home(), session_id, task_id), None)
     if pending is None or pending.digest != _input_digest(args):
         return None
     return pending.host
@@ -302,7 +304,7 @@ def handler_identity(args: Mapping[str, object], kwargs: Mapping[str, object]) -
 def installed_bridge(board: str) -> AgentBoardBridge:
     root = effective_root(board)
     home = default_omh_home().expanduser().resolve()
-    key = (home, root)
+    key = (runtime_paths.default_hermes_home(), home, root)
     with _BRIDGES_LOCK:
         bridge = _BRIDGES.get(key)
         if bridge is None:

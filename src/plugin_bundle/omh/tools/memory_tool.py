@@ -26,8 +26,9 @@ model is what edits it.
 
 from __future__ import annotations
 
+from .. import runtime_paths
+
 import json
-import os
 
 from ..degradation import safe_error_type as _safe_error_type
 from ..hermes_memory import build_hermes_memory_bridge
@@ -213,7 +214,7 @@ def _unknown_action(action: str) -> dict[str, object]:
 
 
 def _home(variable: str, default: str) -> str:
-    return os.path.expandvars(os.environ.get(variable, "") or default)
+    return str(runtime_paths.default_omh_home() if variable == "OMH_HOME" else runtime_paths.default_hermes_home())
 
 
 def _unavailable(reason: str) -> dict[str, object]:
