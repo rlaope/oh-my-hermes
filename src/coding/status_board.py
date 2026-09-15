@@ -125,6 +125,7 @@ _COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("STATUS", "status"),
     ("ELAPSED", "elapsed_text"),
     ("TOKENS", "tokens_text"),
+    ("TOOLS", "tool_count_text"),
     ("SESSION", "session_ref"),
 )
 
@@ -268,6 +269,19 @@ def tokens_text_for(tokens_total: Any) -> str:
     """Thousands-separated observed total, or the literal `unknown`."""
     if isinstance(tokens_total, int) and not isinstance(tokens_total, bool) and tokens_total >= 0:
         return f"{tokens_total:,}"
+    return UNKNOWN
+
+
+def tool_count_text_for(tool_count: Any) -> str:
+    """Observed tool-call count, or the literal `unknown`.
+
+    Zero is a real, renderable answer -- an executor that made no tool calls
+    made no tool calls -- which is exactly why an UNOBSERVED count must not
+    render as `0`. The two mean opposite things to a reader deciding whether a
+    quiet lane is working or stuck.
+    """
+    if isinstance(tool_count, int) and not isinstance(tool_count, bool) and tool_count >= 0:
+        return str(tool_count)
     return UNKNOWN
 
 
@@ -521,6 +535,10 @@ def _progress_units(paths: OmhPaths, observed_at: str) -> list[dict[str, Any]]:
                 status="running",
                 elapsed_seconds=_elapsed_since(str(row.get("latest_observed_at", "") or ""), observed_at),
                 tokens_total=UNKNOWN,
+                # `_compact_event_projection` folds the binding's observed
+                # routing metrics into the event, so the count is already here;
+                # it simply had no field to travel in.
+                tool_count=event.get("tool_count"),
                 session_ref="",
                 summary=str(event.get("summary", "") or ""),
                 routing_observation=observation,
@@ -550,6 +568,7 @@ def _unit_row(
     stalled_for_seconds: str = "",
     routing_observation: Mapping[str, object] | None = None,
     failure_diagnostic: FailureDiagnostic | None = None,
+    tool_count: Any = None,
 ) -> dict[str, Any]:
     row: dict[str, object] = {
         "fanout_id": fanout_id,
@@ -566,6 +585,15 @@ def _unit_row(
         "elapsed_text": elapsed_text_for(elapsed_seconds),
         "tokens_total": tokens_total if isinstance(tokens_total, int) else UNKNOWN,
         "tokens_text": tokens_text_for(tokens_total),
+        # How much the executor actually did, as opposed to how long it has been
+        # running. A lane at twelve minutes and two tool calls and a lane at
+        # twelve minutes and sixty are different situations, and elapsed time
+        # alone reports them identically. Observed or the literal `unknown`,
+        # like every other count here -- `parse_unit_telemetry` records a
+        # missing count as an absent key, never as a zero, and a rendered zero
+        # would claim an executor did nothing.
+        "tool_count": tool_count if isinstance(tool_count, int) else UNKNOWN,
+        "tool_count_text": tool_count_text_for(tool_count),
         "session_ref": session_ref or UNKNOWN,
         "summary": sanitize_user_facing_progress_text(summary, max_chars=_SUMMARY_LIMIT),
     }
@@ -708,6 +736,8 @@ def _bullet_line(unit: dict[str, Any]) -> str:
     elapsed_phrase = "elapsed unknown" if elapsed_text == UNKNOWN else elapsed_text
     tokens_text = str(unit.get("tokens_text", UNKNOWN) or UNKNOWN)
     tokens_phrase = "tokens unknown" if tokens_text == UNKNOWN else f"{tokens_text} tokens"
+    tools_text = str(unit.get("tool_count_text", UNKNOWN) or UNKNOWN)
+    tools_phrase = "tools unknown" if tools_text == UNKNOWN else f"{tools_text} tool calls"
     parts = [
         str(unit.get("label", "")),
         # Runtime and model are ONE field visually: "codex (gpt-5.6-sol xhigh)".
@@ -719,6 +749,7 @@ def _bullet_line(unit: dict[str, Any]) -> str:
         f"{unit.get('runtime', UNKNOWN)} ({unit.get('model_label', _MODEL_DEFAULT_LABEL)})",
         status_text_for(unit),
         elapsed_phrase,
+        tools_phrase,
         tokens_phrase,
         f"session {unit.get('session_ref', UNKNOWN)}",
     ]
