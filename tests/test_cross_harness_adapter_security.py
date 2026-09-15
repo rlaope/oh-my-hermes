@@ -277,6 +277,56 @@ class AdapterSandboxSecurityTests(_RunnerMixin, unittest.TestCase):
         self.assertEqual(command[state_index:state_index + 6], ("--bind-try", state, state, "--bind-try", state_file, state_file))
         self.assertNotIn("--ro-bind", command[state_index:])
 
+    @requires_posix
+    def test_linux_broad_read_command_fences_writes_and_inherits_the_environment(self) -> None:
+        child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
+        environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin"}
+        state = str(Path("/home/operator/.claude").resolve())
+        state_file = str(Path("/home/operator/.claude.json").resolve())
+        with (
+            patch("src.quality.cross_harness_adapter_sandbox._trusted_bwrap", return_value="/usr/bin/bwrap"),
+            patch("src.quality.cross_harness_adapter_sandbox._user_runtime_directory", return_value=Path("/run/user/1000")),
+        ):
+            command = sandbox_command(
+                ("/opt/runtime/bin/tool", "run"), "bwrap", (Path("/opt/fixtures"),), child, True, environment,
+                write_roots=(Path("/home/operator/.claude"),),
+                write_literals=(Path("/home/operator/.claude.json"),),
+                allow_broad_file_read=True,
+                inherit_environment=True,
+            )
+        expected = (
+            "/usr/bin/bwrap", "--unshare-user", "--unshare-ipc", "--unshare-pid", "--unshare-uts", "--disable-userns", "--new-session", "--die-with-parent",
+            "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
+            "--tmpfs", "/run/user/1000", "--remount-ro", "/run/user/1000",
+            "--bind", "/tmp/scratch", "/tmp/scratch",
+            "--bind-try", state, state, "--bind-try", state_file, state_file,
+            "--chdir", "/tmp/scratch/work", "--", "/opt/runtime/bin/tool", "run",
+        )
+        self.assertEqual(command, expected)
+
+    @requires_posix
+    def test_linux_broad_read_command_skips_an_absent_runtime_directory_and_honors_strict_flags(self) -> None:
+        child = ChildContext(Path("/tmp/scratch"), Path("/tmp/scratch/home"), Path("/tmp/scratch/work"), Path("/tmp/scratch/tmp"), Path("/tmp/scratch/output"), Path("/tmp/scratch/request.json"), Path("/tmp/scratch/output/result.json"), "f" * 64)
+        environment = {"HOME": "/tmp/scratch/home", "PATH": "/usr/bin:/bin"}
+        with (
+            patch("src.quality.cross_harness_adapter_sandbox._trusted_bwrap", return_value="/usr/bin/bwrap"),
+            patch("src.quality.cross_harness_adapter_sandbox._user_runtime_directory", return_value=None),
+        ):
+            command = sandbox_command(
+                ("/opt/runtime/bin/tool", "run"), "bwrap", (Path("/opt/fixtures"),), child, False, environment,
+                allow_broad_file_read=True,
+            )
+        expected = (
+            "/usr/bin/bwrap", "--unshare-user", "--unshare-ipc", "--unshare-pid", "--unshare-net", "--unshare-uts", "--disable-userns", "--new-session", "--die-with-parent", "--clearenv",
+            "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
+            "--bind", "/tmp/scratch", "/tmp/scratch",
+            "--chdir", "/tmp/scratch/work",
+            "--setenv", "HOME", "/tmp/scratch/home", "--setenv", "PATH", "/usr/bin:/bin",
+            "--", "/opt/runtime/bin/tool", "run",
+        )
+        self.assertEqual(command, expected)
+        self.assertNotIn("--tmpfs", command)
+
     def test_ambient_path_bwrap_is_never_executed(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

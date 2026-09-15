@@ -226,6 +226,9 @@ def preflight(
     child: ChildContext,
     allow_network: bool,
     environment: Mapping[str, str],
+    *,
+    allow_broad_file_read: bool = False,
+    inherit_environment: bool = False,
 ) -> tuple[bool, str]:
     tool = "/usr/bin/sandbox-exec" if selected == "sandbox-exec" else _trusted_bwrap()
     if tool is None:
@@ -236,7 +239,10 @@ def preflight(
         return False, "unavailable"
     try:
         completed = subprocess.run(
-            sandbox_command(("/usr/bin/true",), selected, roots, child, allow_network, environment, tool_digest),
+            sandbox_command(
+                ("/usr/bin/true",), selected, roots, child, allow_network, environment, tool_digest,
+                allow_broad_file_read=allow_broad_file_read, inherit_environment=inherit_environment,
+            ),
             cwd=child.work, env=environment, stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True,
             timeout=5, check=False,
@@ -264,6 +270,10 @@ def sandbox_command(
     # A write root is not screened as a read root: this is an explicit execution
     # allowance, while `read_roots_are_safe` protects data exposed to a child.
     write_roots: Sequence[Path] = (),
+    # bwrap only: keep the spawning process's environment instead of --clearenv
+    # plus --setenv, matching sandbox-exec, which never clears it. Fanout filters
+    # that environment itself and adds per-command overrides at spawn time.
+    inherit_environment: bool = False,
 ) -> tuple[str, ...]:
     if selected == "sandbox-exec":
         executables = (argv[0], "/usr/bin/true")
@@ -327,7 +337,41 @@ def sandbox_command(
     # In particular, it cannot create an absent exact file literal (#1356).
     write_binds = [part for root in writable_roots for part in ("--bind-try", str(root), str(root))]
     env_flags = [part for key, value in sorted(environment.items()) for part in ("--setenv", key, value)]
+    if allow_broad_file_read:
+        # The Linux counterpart of `(allow file-read*)`: the host tree is visible
+        # read-only, so a write outside the write roots fails with EROFS instead of
+        # landing in a private tmpfs, and dynamically linked tools find their
+        # loader, libraries, config and certificates. Only the binds that follow
+        # are writable (#1356).
+        if inherit_environment:
+            flags.remove("--clearenv")
+        return (
+            tool, *flags, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
+            *_hidden_user_runtime_directory(),
+            "--bind", str(child.root), str(child.root), *write_binds, "--chdir", str(child.work),
+            *(() if inherit_environment else env_flags), "--", *argv,
+        )
     return (tool, *flags, "--tmpfs", "/", *binds, "--bind", str(child.root), str(child.root), *write_binds, "--chdir", str(child.work), *env_flags, "--", *argv)
+
+
+def _user_runtime_directory() -> Path | None:
+    directory = Path("/run/user") / str(os.getuid())
+    return directory if directory.is_dir() else None
+
+
+def _hidden_user_runtime_directory() -> tuple[str, ...]:
+    """Replace the user's runtime directory with an empty read-only tmpfs.
+
+    It holds the session bus socket, and a read-only mount does not stop a
+    socket connect: from a broad-read sandbox, `systemd-run --user touch <path>`
+    asks the user's service manager to write outside every write root. An
+    absent directory is skipped, because bwrap cannot create a mount point on
+    the read-only root.
+    """
+    directory = _user_runtime_directory()
+    if directory is None:
+        return ()
+    return ("--tmpfs", str(directory), "--remount-ro", str(directory))
 
 
 def _trusted_bwrap(expected_digest: str | None = None) -> str | None:

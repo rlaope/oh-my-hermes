@@ -12,6 +12,7 @@ import subprocess
 from typing import cast
 from uuid import uuid4
 
+from ..quality.cross_harness_adapter_backend import trusted_bwrap
 from ..quality.cross_harness_adapter_sandbox import (
     ChildContext,
     backend,
@@ -39,7 +40,7 @@ _FANOUT_MACOS_TOOLCHAIN_WRITE_DATA_LITERALS = (Path("/dev/null"),)
 # external SecurityAgent prompt rather than hard-failing here, and still governs
 # credential access.
 _FANOUT_MACOS_CREDENTIAL_MACH_SERVICES = ("com.apple.securityd.xpc", "com.apple.SecurityServer")
-_FANOUT_MACOS_TOOLCHAIN_TEMP_DIRECTORY = Path(".omh") / "confinement-tmp"
+_FANOUT_TOOLCHAIN_TEMP_DIRECTORY = Path(".omh") / "confinement-tmp"
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,20 +175,21 @@ class FanoutFilesystemConfinement:
             macos_mach_lookup_names=_FANOUT_MACOS_CREDENTIAL_MACH_SERVICES,
             allow_broad_file_read=True,
             write_roots=self.write_roots,
+            inherit_environment=True,
         )
 
     def command_environment(self, environment: Mapping[str, str] | None = None) -> dict[str, str]:
-        """Keep macOS toolchain scratch writes within the confined worktree."""
+        """Keep toolchain scratch writes within the confined worktree."""
         selected_environment = self.environment if environment is None else environment
         if (
             self.receipt.get("enforced") is not True
             or self.child is None
-            or self.selected != "sandbox-exec"
+            or self.selected not in {"sandbox-exec", "bwrap"}
         ):
             return dict(selected_environment)
         return {
             **selected_environment,
-            "TMPDIR": str(self.child.work / _FANOUT_MACOS_TOOLCHAIN_TEMP_DIRECTORY),
+            "TMPDIR": str(self.child.work / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY),
         }
 
 
@@ -237,7 +239,10 @@ def prepare_fanout_filesystem_confinement(
             worktree, selected, environment, "no_os_confinement_backend_on_this_platform",
             write_roots=write_roots, write_literals=write_literals,
         )
-    if not backend_available(selected):
+    # `backend_available` answers for the platform only. A Linux host with no
+    # trusted bwrap on disk has no backend at all, which is not a preflight
+    # failure (#1356).
+    if not backend_available(selected) or (selected == "bwrap" and trusted_bwrap() is None):
         return _unconfined(
             worktree, selected, environment, "sandbox_backend_unavailable",
             write_roots=write_roots, write_literals=write_literals,
@@ -261,8 +266,8 @@ def prepare_fanout_filesystem_confinement(
             worktree, selected, environment, "unsafe_sandbox_read_root", roots=roots,
             write_roots=write_roots, write_literals=write_literals, executables=executables,
         )
-    if selected == "sandbox-exec":
-        scratch_directory = worktree / _FANOUT_MACOS_TOOLCHAIN_TEMP_DIRECTORY
+    if selected in {"sandbox-exec", "bwrap"}:
+        scratch_directory = worktree / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY
         scratch_directory.mkdir(parents=True, exist_ok=True)
         gitignore = scratch_directory / ".gitignore"
         if not gitignore.is_file() or gitignore.read_text(encoding="utf-8") != "*\n":
@@ -277,7 +282,14 @@ def prepare_fanout_filesystem_confinement(
         worktree / ".omh-confinement-artifact",
         "fanout-filesystem-confinement",
     )
-    ready, backend_digest = preflight(selected, roots, child, True, environment)
+    # bwrap's strict layout cannot start a dynamically linked program, so on
+    # Linux the preflight and the probe run under the same broad-read layout as
+    # the real spawn. sandbox-exec keeps its stricter probe policy unchanged.
+    linux_layout = selected == "bwrap"
+    ready, backend_digest = preflight(
+        selected, roots, child, True, environment,
+        allow_broad_file_read=linux_layout, inherit_environment=linux_layout,
+    )
     if not ready:
         return _unconfined(
             worktree,
@@ -402,6 +414,7 @@ def _probe(
             sandbox_command(
                 argv, selected, roots, child, True, environment, backend_digest,
                 write_roots=write_roots, write_literals=write_literals,
+                allow_broad_file_read=selected == "bwrap", inherit_environment=selected == "bwrap",
             ),
             cwd=child.work,
             env=environment,
