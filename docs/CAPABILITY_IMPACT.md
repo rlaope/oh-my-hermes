@@ -93,9 +93,19 @@ gates `pre_verify` on the turn having made at least one landed `write_file` or
 `patch` call, so a turn that only read, searched, ran tests, or reported never
 reaches it, and neither does a turn whose file edits went through the shell.
 
-The hook is one-shot, fail-open, and metadata-only. It does not store raw
-changed paths or final responses, and its message is guidance rather than proof
-that verification, review, CI, or merge readiness occurred. The plan directive
+How much of the host's turn-end budget the plan directive may spend is decided
+on progress, not on the attempt number. Hermes allows `agent.max_verify_nudges`
+nudges per turn (3 by default) and enforces that bound itself. The first
+attempt nudges; a later attempt in the same turn nudges only when the plan
+record was written again since the previous nudge, so a run that keeps
+advancing is carried to the host's bound and a run that produced no movement
+spends one nudge and lets the turn finish. The served-surface check stays
+one-shot: it asks for the check this turn's edits earned, and those edits do
+not change between attempts.
+
+The hook is fail-open and metadata-only. It does not store raw changed paths or
+final responses, and its message is guidance rather than proof that
+verification, review, CI, or merge readiness occurred. The plan directive
 reports what the plan record says and is never evidence that an item ran.
 
 ## Growth Gate

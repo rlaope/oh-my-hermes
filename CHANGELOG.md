@@ -229,6 +229,38 @@ All notable changes will be documented here.
   name and its job (the session model); the two edit different things. A host
   whose widget SDK lacks the overlay primitives keeps the docks and the CLI
   picker.
+- **The HUD says when another model answered.** A delegation child's row now
+  carries a `model_attestation` verdict comparing the model the run was routed
+  to against the model Hermes recorded as having answered it
+  (`session_model_usage.model`, written per call). Nothing compared the two
+  before: the row reader preferred the recorded route and never read the
+  answering model, which hid a substitution in exactly the case one happened.
+  Both sides resolve through the alias table the mixture-category label
+  already uses, so a vendor pointer answered by its exact contract id, a base
+  answered by a dated snapshot of itself, or two speed tiers of one model read
+  as agreement rather than a false alarm — and a newly declared pointer alias
+  moves the verdict with no second table to update. `unknown` is a first-class
+  verdict: a child that switched models mid-run, one with no usage row, and
+  one nothing recorded a request for each say so with the reason, never a
+  silent agreement. The payload states the limit it covers — delegation
+  children only, since a main session is named by `sessions.model` alone with
+  no per-call answering model to attest against.
+- **Rehearse an unattended batch against your rules before it starts.**
+  `omh ops permission-rehearse --plan <file>` runs the `(tool, args)` pairs a
+  cron entry or unattended run intends to issue through the same matcher the
+  enforcing `pre_tool_call` hook uses, and returns a per-call table: `refused`
+  names the rule that would block the call, and everything else is `unknown`
+  with the reason. The third tier is deliberately not claimed — "needs
+  approval" lives in Hermes' per-tool approval declarations, which OMH has no
+  reader for — so the summary counts `planned`, `refused`, and `unknown` and
+  has no allowed bucket an unknown could be folded into. The payload carries
+  the observed approval-bypass state alongside, because a rehearsal run under
+  an active bypass describes a policy nobody is currently applying, and it
+  reports when the rules file is present but defective, because "nothing
+  refused" from a policy the hook never loaded is not a green light. The
+  rehearsal executes nothing and writes nothing; exit `1` means a planned call
+  is refused, `3` that the rules file is defective, and `0` only that no rule
+  refuses these calls — never that they are allowed.
 
 ## 2.0.3 - 2026-09-12
 

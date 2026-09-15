@@ -25,11 +25,14 @@ unit did anything.
 
 The per-turn line has one structural limit: it is read at the start of a
 turn, so nothing observes a turn that ENDS with open items, and continuation
-then waits for the person. `plan_continuation_directive` is the same policy
+then waits for the person. `plan_continuation_reading` is the same policy
 delivered at the one moment a host offers -- `pre_verify`, where a returned
 directive starts the next turn instead of describing the current one. Same
 gate (`open_plan_position`), same rules, same boundary: it reports what the
-plan record says and asserts nothing about what the next turn does.
+plan record says and asserts nothing about what the next turn does. It also
+hands back the plan's write stamp, which is how the hook decides whether the
+run is still moving and therefore whether more of the host's turn-end budget
+may be spent on it (`hooks/nudge_budget.py`).
 """
 from __future__ import annotations
 
@@ -258,18 +261,27 @@ def recorded_blocked_reason(item: dict[str, Any] | None) -> str:
 _READ_FAILURES = (OSError, RuntimeError, ValueError, TypeError)
 
 
-def plan_continuation_directive(
+def plan_continuation_reading(
     *, omh_home: str = "", hermes_home: str = "", session_ref: str = ""
-) -> str:
-    """The turn-end message for a session whose plan still has open work.
+) -> tuple[str, str]:
+    """The turn-end message for a session whose plan still has open work, and its stamp.
 
     ``TODO_CONTINUATION_RULE`` is already the right sentence delivered at the
     wrong moment: ``_open_plan_line`` renders it into the context of a turn
     that is already happening, so a turn that ends with open items ends
     anyway. This is that rule at the one moment a host lets a plugin start the
-    next turn instead. Empty whenever the plan itself says stop -- no plan, a
-    finished plan, or a next item carrying a `blocked_reason` -- so the
-    directive never argues with the plan's own stop criterion.
+    next turn instead. The message is empty whenever the plan itself says stop
+    -- no plan, a finished plan, or a next item carrying a `blocked_reason` --
+    so the directive never argues with the plan's own stop criterion.
+
+    The second value is the plan record's own `updated_at` as the reader
+    projected it, `""` when the read failed or the record carries no stamp. It
+    rides back with the message rather than being fetched by a second read,
+    because the caller spends its remaining turn-end budget on whether the plan
+    MOVED between two attempts, and a stamp read separately could describe a
+    different plan than the message does. It is returned even when the message
+    is empty: a turn continued by something else still needs a baseline for the
+    next attempt to measure against.
     """
     # Dropping the dispatch lines with the plan is not a second F3:
     # `unacknowledged_outcomes` opens with this same `read_omh_todo` call and
@@ -280,9 +292,16 @@ def plan_continuation_directive(
     try:
         todo = read_omh_todo(omh_home or None, hermes_home or None, session_ref=session_ref)
     except _READ_FAILURES:
-        return ""
+        return "", ""
     if not isinstance(todo, dict):
-        return ""
+        return "", ""
+    # Every write through `todo_store` restamps this, so it moves on any plan
+    # edit rather than only on a completed item -- which is the notion of
+    # progress the caller wants. Marking the next item active, re-scoping the
+    # list, or recording a reason are all a run advancing, and none of them
+    # changes `done/total`.
+    stamp = todo.get("updated_at", "")
+    stamp = stamp if isinstance(stamp, str) else ""
     position = open_plan_position(todo)
     item = next_open_item(todo) if position is not None else {}
     lines: list[str] = []
@@ -308,9 +327,9 @@ def plan_continuation_directive(
         outcomes = []
     lines.extend(_dispatch_outcome_lines(outcomes))
     if not lines:
-        return ""
+        return "", stamp
     lines.append(PLAN_CONTINUATION_BOUNDARY)
-    return "\n".join(lines)
+    return "\n".join(lines), stamp
 
 
 def _open_plan_line(*, omh_home: str, hermes_home: str, session_ref: str) -> str:

@@ -71,6 +71,11 @@ SESSION = "hermes-session-1"
 # else; anything further would let a real divergence pass as noise.
 _VOLATILE_KEYS = frozenset(
     {
+        # Not unique per loop but unique per render: both cards derive it from
+        # the same fixed `observed_at` minus `datetime.now()`, so the two values
+        # differ by however long the CLI subprocess took. `assert_card_parity`
+        # keeps what equality was checking here -- see the age assertion there.
+        "age_seconds",
         "applied_mutations",
         "attempt_id",
         "authority_envelope_sha256",
@@ -106,6 +111,29 @@ def scrub(value: object) -> object:
     if isinstance(value, list):
         return [scrub(item) for item in value]
     return value
+
+
+def _ages(value: object, path: str = "status_card") -> list[tuple[str, object, object]]:
+    """Every `age_seconds` in the card with the stamp it was derived from.
+
+    Each entry is (path, age, stamp), the stamp being the `observed_at`
+    sitting beside it. The producer computes the age from that stamp or
+    returns `None` when there is none, so carrying both is what lets a
+    caller check the rule instead of only the two ages against each other.
+    Paths rather than bare values, so a mismatch names where the two cards
+    stopped agreeing instead of reporting two lists of numbers.
+    """
+    found: list[tuple[str, object, object]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "age_seconds":
+                found.append((f"{path}.{key}", item, value.get("observed_at")))
+            else:
+                found.extend(_ages(item, f"{path}.{key}"))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            found.extend(_ages(item, f"{path}[{index}]"))
+    return found
 
 
 def tool(**args: object) -> dict:
@@ -292,9 +320,33 @@ class ToolCliParityTests(_LoopHome):
 
     def assert_card_parity(self, cli_payload: dict, tool_payload: dict) -> None:
         self.assertEqual(tool_payload.get("status"), "ok", tool_payload)
+        self.assert_age_parity(cli_payload["status_card"], tool_payload["status_card"])
         self.assertEqual(
             scrub(cli_payload["status_card"]), scrub(tool_payload["status_card"])
         )
+
+    def assert_age_parity(self, cli_card: object, tool_card: object) -> None:
+        """What `age_seconds` was checking, minus the race on when it was read.
+
+        Scrubbing the key would drop the check that both adapters compute an
+        age at all, which is the part a divergence would show up in; only the
+        exact second is unstable. So compare the fields position by position
+        for shape instead of value: an adapter that stopped emitting one, or
+        emitted `None` where the other emitted a number, still fails.
+        """
+        cli_ages, tool_ages = _ages(cli_card), _ages(tool_card)
+        self.assertEqual(
+            [path for path, _, _ in cli_ages],
+            [path for path, _, _ in tool_ages],
+            "the two cards carry age_seconds at different places",
+        )
+        for (path, cli_age, cli_stamp), (_, tool_age, tool_stamp) in zip(cli_ages, tool_ages):
+            for label, age, stamp in (("cli", cli_age, cli_stamp), ("tool", tool_age, tool_stamp)):
+                if stamp is None:
+                    self.assertIsNone(age, f"{path}: {label} aged a record with no stamp")
+                    continue
+                self.assertIsInstance(age, int, f"{path}: {label} did not age a stamped record")
+                self.assertGreaterEqual(age, 0, f"{path}: {label} age is negative")
 
     def test_assess_is_identical(self) -> None:
         self.assertEqual(

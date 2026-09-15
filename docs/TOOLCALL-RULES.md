@@ -62,6 +62,59 @@ Exit 0 with `"valid": true` means every rule parses and loads; exit 1 lists
 each defect with its rule index, including patterns the enforcing hook would
 refuse and a file-size overflow that would disable the whole file.
 
+## Rehearsing a planned batch
+
+Validation answers whether your rules load. It does not answer whether the
+batch you are about to schedule will get through them. Before a cron entry or
+an unattended run starts, rehearse its planned calls — nothing is executed and
+nothing is written:
+
+```sh
+omh ops permission-rehearse --plan planned-batch.json
+```
+
+The plan lists the `(tool, args)` pairs the run intends to issue:
+
+```json
+{
+  "schema_version": "omh_permission_rehearsal_plan/v1",
+  "calls": [
+    {"tool": "write_file", "args": {"path": "src/lib.rs", "content": "Box::leak(x)"}},
+    {"tool": "read_file", "args": {"path": "README.md"}}
+  ]
+}
+```
+
+Each planned call comes back with one verdict:
+
+| Verdict | Meaning |
+| --- | --- |
+| `refused` | A rule matches the call. The row names the rule; the enforcing hook would return the block directive and the call would not run. |
+| `unknown` | No rule refuses the call, and whether Hermes stops it for approval **is not derivable here** — that lives in Hermes' per-tool approval declarations, which OMH has no reader for. |
+
+`unknown` is not permission, and the summary has no allowed bucket to fold
+one into: it counts `planned`, `refused`, and `unknown` only. The payload also
+carries `approval_bypass`, because a rehearsal run while a bypass is active
+describes a policy nobody is currently applying — `summary.approval_bypass_active`
+is the one-field answer, projected from `approvals.mode` in `config.yaml` plus
+the live session's persisted `/yolo` flag.
+
+Unlike the rules file it reads, the plan fails **closed**: a plan document OMH
+cannot read whole is an error, never a quiet "nothing refused".
+
+Exit codes, for the cron wrapper that reads only the status:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | No rule refuses any planned call. Not a claim that they are allowed. |
+| `1` | At least one planned call is refused. |
+| `2` | The command could not run — usually a plan file that does not parse. |
+| `3` | The rules file is present but defective, so the refusal verdicts answered from a policy you did not write. Run `omh ops toolcall-rules-validate`. |
+
+A batch is rehearsed as one fresh session in plan order, so a `repeat: "once"`
+rule refuses the first matching call and the rest proceed past it — what the
+hook would do to that batch.
+
 ## Boundaries
 
 - Everything fails open: a missing, malformed, or oversized rules file and any

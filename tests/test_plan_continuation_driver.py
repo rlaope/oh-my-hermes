@@ -9,8 +9,12 @@ open items, so continuation waits for the person.
 `pre_verify` is the one moment a Hermes host lets a plugin start the next turn
 instead of describing the current one. These tests pin what the directive says
 and, at least as importantly, every state in which it must stay silent: no
-plan, a finished plan, a next item carrying a `blocked_reason`, a second
-attempt inside one turn, a non-coding turn, and another session's plan.
+plan, a finished plan, a next item carrying a `blocked_reason`, a later attempt
+with no first nudge behind it, a non-coding turn, and another session's plan.
+
+Which LATER attempts inside one turn may nudge is its own contract, decided on
+whether the plan moved since the previous nudge; it lives in
+`test_plan_nudge_progress_budget.py`.
 
 The last test is the anti-drift one: the context line and the directive must
 decide "does this plan have open work" through the same helper, so a plan that
@@ -31,7 +35,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.plugin_bundle.omh import runtime_paths, todo_reconciliation
-from omh.plugin_bundle.omh.hooks import verify_hooks
+from omh.plugin_bundle.omh.hooks import nudge_budget, verify_hooks
 from omh.plugin_bundle.omh.runtime_reader import read_omh_todo
 from omh.plugin_bundle.omh.todo_reconciliation import (
     DISPATCH_COMPLETION_RULE,
@@ -39,7 +43,7 @@ from omh.plugin_bundle.omh.todo_reconciliation import (
     TODO_CONTINUATION_RULE,
     open_plan_position,
     open_todo_reminder,
-    plan_continuation_directive,
+    plan_continuation_reading,
 )
 from omh.plugin_bundle.omh.todo_store import (
     TODO_SCHEMA_VERSION,
@@ -59,6 +63,13 @@ class PlanContinuationDirectiveTest(unittest.TestCase):
         self.home = Path(self._tmp.name) / "omh"
         self.hermes = Path(self._tmp.name) / "hermes"
         self.hermes.mkdir(parents=True, exist_ok=True)
+        # The turn-end budget remembers the plan stamp its last nudge was
+        # issued on in a process-global map, so a test that fires the hook
+        # leaves a baseline behind for whichever test runs next -- and the CI
+        # shard planner reorders tests run to run. Cleared here and again on
+        # the way out, through the module's named seam.
+        nudge_budget.reset_nudge_budget()
+        self.addCleanup(nudge_budget.reset_nudge_budget)
 
     def _write_plan(self, items, session_ref=SESSION):
         """`items` is a list of `(text, state)` pairs, or `(text, state, blocked_reason)`."""
@@ -238,7 +249,11 @@ class PlanContinuationDirectiveTest(unittest.TestCase):
         self.assertIn(f"next: {long_text[:80]}", message)
         self.assertNotIn(long_text, message)
 
-    def test_a_second_attempt_inside_one_turn_does_not_nudge_again(self):
+    def test_a_later_attempt_with_no_first_nudge_behind_it_does_not_nudge(self):
+        # A later attempt nudges only on movement MEASURED against the previous
+        # nudge in the same turn. With no first attempt recorded there is
+        # nothing to measure, and an unmeasured attempt must not invent
+        # movement -- so this stays silent however open the plan is.
         self._write_plan([("land the fix", "done"), ("open the PR", "active")])
 
         self.assertIsNone(self._fire(attempt=1))
@@ -357,10 +372,10 @@ class PlanContinuationDirectiveTest(unittest.TestCase):
             self.skipTest(f"symlinks unavailable here: {exc}")
 
         self.assertEqual(
-            todo_reconciliation.plan_continuation_directive(
+            todo_reconciliation.plan_continuation_reading(
                 omh_home=str(linked), hermes_home=str(self.hermes), session_ref=SESSION
             ),
-            "",
+            ("", ""),
         )
 
     def test_a_failed_outcome_read_does_not_take_the_plan_line_with_it(self):
@@ -409,8 +424,15 @@ class PlanContinuationDirectiveTest(unittest.TestCase):
         self._write_plan([("land the fix", "done"), ("open the PR", "active")])
         homes = {"omh_home": str(self.home), "hermes_home": str(self.hermes), "session_ref": SESSION}
 
-        for surface in (open_todo_reminder, plan_continuation_directive):
-            with self.subTest(surface=surface.__name__):
+        surfaces = (
+            open_todo_reminder,
+            # The directive hands its plan stamp back beside the message, so
+            # the rendered half is the one this compares.
+            lambda **kwargs: plan_continuation_reading(**kwargs)[0],
+        )
+
+        for name, surface in zip(("open_todo_reminder", "plan_continuation_reading"), surfaces):
+            with self.subTest(surface=name):
                 with patch.object(
                     todo_reconciliation, "open_plan_position", return_value=None
                 ) as gate:
@@ -428,7 +450,7 @@ class PlanContinuationDirectiveTest(unittest.TestCase):
         homes = {"omh_home": str(self.home), "hermes_home": str(self.hermes), "session_ref": SESSION}
 
         reminder = open_todo_reminder(**homes)
-        directive = plan_continuation_directive(**homes)
+        directive, _stamp = plan_continuation_reading(**homes)
 
         self.assertIn("[OMH plan todo] 1/2 done.", reminder)
         self.assertNotIn("open the PR", reminder)

@@ -18,6 +18,7 @@ from pathlib import Path
 from omh.coding.model_contracts import MODEL_CONTRACTS
 from omh.plugin_bundle.omh import hermes_delegation as hermes_delegation_module
 from omh.plugin_bundle.omh.hermes_delegation import (
+    ATTESTATION_COVERAGE_CLAIM,
     COMPLETED_LINGER_SECONDS,
     DELEGATION_ROUTE_PROVENANCE_SCHEMA_VERSION,
     DECLARED_MODEL_ALIAS_PROJECTIONS,
@@ -33,6 +34,7 @@ from omh.plugin_bundle.omh.hermes_delegation import (
     parse_model_provider_routes,
     provider_serves_alias,
     read_hermes_native_subagents,
+    served_model_attestation,
 )
 
 NOW = 1_800_000_000.0
@@ -1435,6 +1437,266 @@ class HermesNativeSubagentReaderTest(unittest.TestCase):
         self.assertEqual(payload["active"], 1)
 
 
+class ServedModelAttestationTest(unittest.TestCase):
+    """The model a child was routed to, compared against the one that answered.
+
+    Hermes records the two separately and never compares them: `sessions.model`
+    is what was asked for, `session_model_usage.model` is written per call from
+    the model that answered. The row reader preferred the recorded value, which
+    hid the difference in exactly the case it exists.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+
+    def _attestation(self, child: dict) -> dict:
+        _build_state_db(self.home, [child])
+        payload = read_hermes_native_subagents(self.home, now=NOW, omh_home=self.home / ".omh")
+        return payload["rows"][0]["model_attestation"]
+
+    def test_the_answering_model_matching_the_recorded_route_attests_agreement(self):
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_agree1",
+                "model": "claude-fable-5-1",
+                "started_at": NOW - 60,
+                "usage": {"model": "claude-fable-5-1", "output_tokens": 10, "last_seen": NOW - 5},
+            }
+        )
+        self.assertEqual(attestation["verdict"], "agreement")
+        self.assertEqual(attestation["basis"], "resolved_match")
+        self.assertEqual(attestation["requested"], "claude-fable-5-1")
+        self.assertEqual(attestation["answering"], "claude-fable-5-1")
+        self.assertEqual(attestation["requested_source"], "session_model")
+
+    def test_an_answering_model_the_route_never_asked_for_attests_disagreement(self):
+        # The case the row reader used to hide: the recorded model wins the
+        # `model` column, so without this comparison the substitution is
+        # invisible. Both sides are named RESOLVED -- the vendor prefix the
+        # usage row carried is not what the reader reports.
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_swap1",
+                "model": "gpt-6-astra",
+                "started_at": NOW - 60,
+                "usage": {
+                    "model": "anthropic/claude-fable-5-1",
+                    "output_tokens": 10,
+                    "last_seen": NOW - 5,
+                },
+            }
+        )
+        self.assertEqual(attestation["verdict"], "disagreement")
+        self.assertEqual(attestation["basis"], "resolved_mismatch")
+        self.assertEqual(attestation["requested"], "gpt-6-astra")
+        self.assertEqual(attestation["answering"], "claude-fable-5-1")
+
+    def test_a_child_that_changed_models_mid_run_attests_unknown_not_agreement(self):
+        # `_sole_distinct_value` hands two distinct usage models over as an
+        # empty string, which is the right answer for the `model` column and
+        # a trap for a verdict: an empty answering side must never read as a
+        # match against the recorded route.
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_switch",
+                "model": "claude-fable-5-1",
+                "started_at": NOW - 60,
+                "usages": [
+                    {"model": "claude-fable-5-1", "output_tokens": 10, "last_seen": NOW - 20},
+                    {"model": "gpt-6-astra", "output_tokens": 10, "last_seen": NOW - 5},
+                ],
+            }
+        )
+        self.assertEqual(attestation["verdict"], "unknown")
+        self.assertEqual(attestation["basis"], "multiple_usage_models")
+        self.assertNotIn("answering", attestation)
+        self.assertEqual(attestation["requested"], "claude-fable-5-1")
+
+    def test_a_child_with_no_usage_row_attests_unknown(self):
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_nousage",
+                "model": "claude-fable-5-1",
+                "started_at": NOW - 60,
+            }
+        )
+        self.assertEqual(attestation["verdict"], "unknown")
+        self.assertEqual(attestation["basis"], "no_usage_observation")
+        self.assertNotIn("answering", attestation)
+
+    def test_a_vendor_pointer_answered_by_its_exact_contract_id_agrees(self):
+        # `deepseek-flash` is DeepSeek's served pointer for the exact contract
+        # id a gateway reports. Two spellings, one model: a disagreement here
+        # would be a false alarm on every gateway route.
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_pointer",
+                "model": "deepseek-flash",
+                "started_at": NOW - 60,
+                "usage": {
+                    "model": "deepseek/deepseek-v4.1-flash",
+                    "output_tokens": 10,
+                    "last_seen": NOW - 5,
+                },
+            }
+        )
+        self.assertEqual(attestation["verdict"], "agreement")
+        self.assertEqual(attestation["requested"], "deepseek-v4.1-flash")
+        self.assertEqual(attestation["answering"], "deepseek-v4.1-flash")
+
+    def test_a_dated_snapshot_of_the_requested_model_agrees(self):
+        # `<base>-YYYY-MM-DD` is the base pinned to a release date, so a
+        # snapshot answering the base is the same model, not a substitution.
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_snapsho",
+                "model": "gpt-6-astra",
+                "started_at": NOW - 60,
+                "usage": {
+                    "model": "gpt-6-astra-2026-07-09",
+                    "output_tokens": 10,
+                    "last_seen": NOW - 5,
+                },
+            }
+        )
+        self.assertEqual(attestation["verdict"], "agreement")
+        self.assertEqual(attestation["requested"], "gpt-6-astra")
+        self.assertEqual(attestation["answering"], "gpt-6-astra")
+
+    def test_a_new_pointer_alias_moves_the_verdict_through_the_shared_table(self):
+        # The no-second-copy proof: the comparison resolves through
+        # `_model_alias_candidates`, the same list the category label matches
+        # chains against. Declaring one more pointer row is the whole change
+        # a future model generation needs.
+        from unittest import mock
+
+        child = {
+            "id": "20260818_100100_newptr1",
+            "model": "claude-fable-5-1",
+            "started_at": NOW - 60,
+            "usage": {
+                "model": "anthropic/claude-fable-5-1-preview",
+                "output_tokens": 10,
+                "last_seen": NOW - 5,
+            },
+        }
+        self.assertEqual(self._attestation(child)["verdict"], "disagreement")
+        with mock.patch.object(
+            hermes_delegation_module,
+            "EXACT_CONTRACT_POINTER_ALIASES",
+            {"claude-fable-5-1-preview": ("claude-fable-5-1",)},
+        ):
+            attestation = read_hermes_native_subagents(
+                self.home, now=NOW, omh_home=self.home / ".omh"
+            )["rows"][0]["model_attestation"]
+        self.assertEqual(attestation["verdict"], "agreement")
+        self.assertEqual(attestation["requested"], "claude-fable-5-1")
+        self.assertEqual(attestation["answering"], "claude-fable-5-1-preview")
+        # The requested side already spells the shared identity, so no third
+        # name is added; `resolved` appears only when neither side names it.
+        self.assertNotIn("resolved", attestation)
+
+    def test_a_shared_identity_neither_side_spells_is_named_on_its_own(self):
+        # Two speed tiers of one model: the sides agree on `glm-5.3`, and
+        # neither the requested nor the answering spelling says so.
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_tiers11",
+                "model": "glm-5.3-ultrafast",
+                "started_at": NOW - 60,
+                "usage": {"model": "glm-5.3-fast", "output_tokens": 10, "last_seen": NOW - 5},
+            }
+        )
+        self.assertEqual(attestation["verdict"], "agreement")
+        self.assertEqual(attestation["requested"], "glm-5.3-ultrafast")
+        self.assertEqual(attestation["answering"], "glm-5.3-fast")
+        self.assertEqual(attestation["resolved"], "glm-5.3")
+
+    def test_a_child_with_no_recorded_model_is_attested_against_the_configured_route(self):
+        # `sessions.model` is empty on a child whose row was created before
+        # the model was known. `delegation.model` is what the next dispatch
+        # resolves, so it is the only record of what was asked for -- and the
+        # verdict says which side it read.
+        (self.home / "config.yaml").write_text(
+            "delegation:\n  model: 'gpt-6-astra'\n", encoding="utf-8"
+        )
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_routed1",
+                "model": "",
+                "started_at": NOW - 60,
+                "usage": {"model": "claude-fable-5-1", "output_tokens": 10, "last_seen": NOW - 5},
+            }
+        )
+        self.assertEqual(attestation["verdict"], "disagreement")
+        self.assertEqual(attestation["requested"], "gpt-6-astra")
+        self.assertEqual(attestation["requested_source"], "delegation_route")
+
+    def test_a_child_nothing_recorded_a_request_for_attests_unknown(self):
+        # No session model and no configured route: the answering model is
+        # observed, and there is nothing to attest it against.
+        attestation = self._attestation(
+            {
+                "id": "20260818_100100_noreq11",
+                "model": "",
+                "started_at": NOW - 60,
+                "usage": {"model": "claude-fable-5-1", "output_tokens": 10, "last_seen": NOW - 5},
+            }
+        )
+        self.assertEqual(attestation["verdict"], "unknown")
+        self.assertEqual(attestation["basis"], "no_requested_model")
+        self.assertEqual(attestation["answering"], "claude-fable-5-1")
+        self.assertNotIn("requested_source", attestation)
+
+    def test_the_payload_states_what_the_verdict_covers(self):
+        # The coverage limit is in the output, not left to the reader: every
+        # row carries the scope token, and the payload carries the sentence.
+        _build_state_db(
+            self.home,
+            [
+                {
+                    "id": "20260818_100100_cover11",
+                    "model": "claude-fable-5-1",
+                    "started_at": NOW - 60,
+                    "usage": {
+                        "model": "claude-fable-5-1",
+                        "output_tokens": 10,
+                        "last_seen": NOW - 5,
+                    },
+                }
+            ],
+        )
+        payload = read_hermes_native_subagents(self.home, now=NOW, omh_home=self.home / ".omh")
+        self.assertEqual(
+            payload["rows"][0]["model_attestation"]["coverage"], "delegation_child"
+        )
+        self.assertEqual(payload["attestation_coverage"], ATTESTATION_COVERAGE_CLAIM)
+        self.assertIn("delegation children only", payload["attestation_coverage"])
+        self.assertIn("main session", payload["attestation_coverage"])
+
+    def test_the_comparison_separates_the_two_reasons_it_cannot_resolve(self):
+        # The function's own contract, independent of the reader: the
+        # distinct-model count is what separates "nothing observed" from "more
+        # than one model answered", and neither is agreement.
+        self.assertEqual(
+            served_model_attestation("gpt-6-astra", "", answering_observations=0)["basis"],
+            "no_usage_observation",
+        )
+        self.assertEqual(
+            served_model_attestation("gpt-6-astra", "", answering_observations=2)["basis"],
+            "multiple_usage_models",
+        )
+        for observations in (0, 2):
+            self.assertEqual(
+                served_model_attestation(
+                    "gpt-6-astra", "", answering_observations=observations
+                )["verdict"],
+                "unknown",
+            )
+
+
 class HudMergeTest(unittest.TestCase):
     def test_read_omh_hud_uses_requested_provider_route_home(self):
         from omh.plugin_bundle.omh.runtime_reader import read_omh_hud
@@ -1521,6 +1783,13 @@ class HudMergeTest(unittest.TestCase):
             self.assertEqual(rows[0]["category"], "deep")
             # Nothing was dropped, so the disclosed hidden-row count is zero.
             self.assertEqual(payload["subagents"]["hidden_rows"], 0)
+            # The served-model verdict rides along with its coverage limit:
+            # the native rows are the only ones that carry a verdict, so the
+            # sentence describing what it covers travels with them.
+            self.assertEqual(rows[0]["model_attestation"]["verdict"], "agreement")
+            self.assertEqual(
+                payload["subagents"]["attestation_coverage"], ATTESTATION_COVERAGE_CLAIM
+            )
 
     def test_read_omh_hud_caps_many_native_rows_and_discloses_the_drop(self):
         from omh.plugin_bundle.omh.runtime_reader import ACTIVITY_ROW_LIMIT, read_omh_hud

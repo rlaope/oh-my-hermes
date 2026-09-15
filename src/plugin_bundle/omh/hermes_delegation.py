@@ -25,6 +25,7 @@ mixture routing is visible as such instead of masquerading as a routed one.
 from __future__ import annotations
 
 from . import runtime_paths
+from .delegation_routing import read_delegation_route
 from .provider_detection import detect_linked_providers, env_row_is_covered
 
 import json
@@ -1452,46 +1453,27 @@ def _finite(value: Any) -> float | None:
     return None
 
 
-def mixture_category_for(
-    model: str,
-    effort: str,
-    *,
-    parent_model: str = "",
-    chains: dict[str, tuple[tuple[str, str], ...]] | None = None,
-) -> str:
-    """Project an observed child model+effort onto a mixture category label.
+def _model_alias_candidates(observed_model: str) -> list[str]:
+    """Every alias spelling that names the same served model as ``observed_model``.
 
-    ``inherit`` wins over any chain match: a child on the parent session's own
-    model looks unrouted, whatever chain its model also appears in — the
-    projection cannot tell "routed to the model the parent also runs" from
-    "not routed"; a fresh matching provenance record can, and the reader
-    upgrades the row from it (`same_as_parent`). Otherwise
-    the first category (canonical chain order) whose head matches wins, then
-    the category where the model sits earliest in its chain (a shallow
-    fall-through entry is a likelier route than a deep one; canonical order
-    breaks position ties); a chain entry that declares a reasoning effort
-    only matches that effort.
+    Specific first: the observed spelling, then the aliases the declared
+    tables say are the same model. Two readers share this list — the mixture
+    category label and the served-model attestation — so a new pointer alias
+    or dated snapshot moves both without a second copy to update.
+
+    Some explicitly declared catalog aliases represent a model contract plus
+    a reasoning mode/service tier. Project only those rows onto the contract
+    alias before retaining the older generic speed-tier behavior. Unknown
+    suffixes therefore do not gain an Astra contract merely because their
+    spelling looks similar. A dated snapshot (`gpt-5.6-terra-2026-07-09`) is
+    the exception with its own bound: the base becomes a candidate, and it
+    names a model only when a caller's own table names that base — an unknown
+    base with a date matches nothing.
+
+    ``observed_model`` is already unqualified and casefolded by
+    `_unqualified_model_alias`; a raw wire spelling passed straight in would
+    match nothing.
     """
-    observed_model = _unqualified_model_alias(_text(model))
-    observed_effort = _text(effort, limit=40).casefold()
-    if not observed_model:
-        return ""
-    parent_key = _unqualified_model_alias(_text(parent_model))
-    # A child on a dated snapshot of the parent's model is on the parent's
-    # model; the parent's own id is the base this reader knows. One direction
-    # only, like the resolver's explicit match: a child on the unpinned base
-    # of a date-pinned parent, or on a different date, is not the same run.
-    if parent_key and parent_key in (observed_model, _dated_snapshot_base(observed_model)):
-        return "inherit"
-
-    # Some explicitly declared catalog aliases represent a model contract plus
-    # a reasoning mode/service tier. Project only those rows onto the contract
-    # alias before retaining the older generic speed-tier category behavior.
-    # Unknown suffixes therefore do not gain an Astra contract/category merely
-    # because their spelling looks similar. A dated snapshot
-    # (`gpt-5.6-terra-2026-07-09`) is the exception with its own bound: the
-    # base becomes a candidate, and it labels a category only when a chain
-    # entry names that base — an unknown base with a date matches nothing.
     candidates = [observed_model]
     projected_model, _service_tier = _projected_model_alias(observed_model)
     snapshot_base = _dated_snapshot_base(observed_model)
@@ -1524,6 +1506,45 @@ def mixture_category_for(
                 if speed_base not in candidates:
                     candidates.append(speed_base)
                 break
+    return candidates
+
+
+def mixture_category_for(
+    model: str,
+    effort: str,
+    *,
+    parent_model: str = "",
+    chains: dict[str, tuple[tuple[str, str], ...]] | None = None,
+) -> str:
+    """Project an observed child model+effort onto a mixture category label.
+
+    ``inherit`` wins over any chain match: a child on the parent session's own
+    model looks unrouted, whatever chain its model also appears in — the
+    projection cannot tell "routed to the model the parent also runs" from
+    "not routed"; a fresh matching provenance record can, and the reader
+    upgrades the row from it (`same_as_parent`). Otherwise
+    the first category (canonical chain order) whose head matches wins, then
+    the category where the model sits earliest in its chain (a shallow
+    fall-through entry is a likelier route than a deep one; canonical order
+    breaks position ties); a chain entry that declares a reasoning effort
+    only matches that effort.
+    """
+    observed_model = _unqualified_model_alias(_text(model))
+    observed_effort = _text(effort, limit=40).casefold()
+    if not observed_model:
+        return ""
+    parent_key = _unqualified_model_alias(_text(parent_model))
+    # A child on a dated snapshot of the parent's model is on the parent's
+    # model; the parent's own id is the base this reader knows. One direction
+    # only, like the resolver's explicit match: a child on the unpinned base
+    # of a date-pinned parent, or on a different date, is not the same run.
+    if parent_key and parent_key in (observed_model, _dated_snapshot_base(observed_model)):
+        return "inherit"
+
+    # The alias spellings this model may also be named by; a chain entry
+    # labels a category only when it names one of them. The list is shared
+    # with the served-model attestation, so both move on one declaration.
+    candidates = _model_alias_candidates(observed_model)
     active_chains = HERMES_MIXTURE_CATEGORY_CHAINS if chains is None else chains
 
     def _entry_matches(entry: tuple[str, str], model: str) -> bool:
@@ -1710,6 +1731,21 @@ def _sole_distinct_value(value: Any, *, limit: int = 80) -> str:
     return text[:limit]
 
 
+def _distinct_value_count(value: Any) -> int:
+    """How many distinct values a `GROUP_CONCAT(DISTINCT ...)` returned.
+
+    `_sole_distinct_value` spells "no rows at all" and "more than one value"
+    with the same empty string, which is the right answer for a row field but
+    loses the difference a verdict has to state: nothing observed versus an
+    observation this reader cannot resolve. Counting the joined list keeps
+    both, and is only ever read when that empty string arrives.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    return len([part for part in text.split(",") if part.strip()])
+
+
 def _observed_wire_model(child: Mapping[str, Any]) -> str:
     """The model a child ran: recorded on the session, else observed in usage.
 
@@ -1724,6 +1760,113 @@ def _observed_wire_model(child: Mapping[str, Any]) -> str:
     if recorded:
         return recorded
     return _text((child.get("usage") or {}).get("model"))
+
+
+# What the verdict covers, stated where the verdict is read rather than left
+# for the reader to assume. `_query_state_db` only ever selects delegation
+# children (`model_config LIKE '%_delegate_from%'`), and only a child's usage
+# rows are grouped per session here, so a main session is named by
+# `sessions.model` alone and has nothing to attest against.
+ATTESTATION_COVERAGE = "delegation_child"
+ATTESTATION_COVERAGE_CLAIM = (
+    "Served-model attestation covers delegation children only: the verdict "
+    "compares the model a child was routed to against the model its "
+    "session_model_usage rows say answered. A main session is named by "
+    "sessions.model alone, with no per-call answering model to attest "
+    "against, so it carries no verdict rather than an agreeing one."
+)
+
+
+def _shared_model_aliases(requested_key: str, answering_key: str) -> list[str]:
+    """Every alias both sides resolve to, most specific first; empty is two models.
+
+    Resolution is `_model_alias_candidates`, the same list the mixture
+    category label matches chains against, so a newly declared pointer alias
+    or a dated snapshot changes this verdict through that one table.
+    """
+    answering_candidates = set(_model_alias_candidates(answering_key))
+    return [
+        alias
+        for alias in _model_alias_candidates(requested_key)
+        if alias in answering_candidates
+    ]
+
+
+def served_model_attestation(
+    requested: str,
+    answering: str,
+    *,
+    requested_source: str = "",
+    answering_observations: int = 0,
+) -> dict[str, Any]:
+    """Compare the model a run was routed to against the model that answered.
+
+    Hermes records the two independently: `sessions.model` is the model that
+    was asked for (written at session creation and on an explicit `/model`
+    switch, never from a provider's answer), while `session_model_usage.model`
+    is written per call from the model that actually answered. Nothing
+    compared them, and `_observed_wire_model` prefers the recorded value —
+    which hides the difference in exactly the case it exists.
+
+    Both sides resolve through `_model_alias_candidates`, so a vendor pointer
+    (`deepseek-flash`) answered by its exact contract id, or a base answered
+    by a dated snapshot of itself, is agreement rather than a false alarm.
+
+    `unknown` is a first-class verdict, never a failure and never a silent
+    agreement. It is what a caller gets when no usage row named an answering
+    model (`no_usage_observation`), when the usage rows named more than one so
+    no single model answered the run (`multiple_usage_models` — the mid-run
+    switch, which `_sole_distinct_value` hands over as an empty string that
+    must not read as a match), or when nothing recorded what was requested
+    (`no_requested_model`).
+
+    ``answering_observations`` is the distinct-model count behind ``answering``
+    and is consulted only when ``answering`` is empty, to tell those first two
+    apart. ``requested_source`` names where the requested side came from, and
+    is reported only when there is a requested side to attribute.
+    """
+    requested_key = _unqualified_model_alias(requested)
+    answering_key = _unqualified_model_alias(answering)
+    resolved_requested = _projected_model_alias(requested_key)[0] if requested_key else ""
+    resolved_answering = _projected_model_alias(answering_key)[0] if answering_key else ""
+    shared_aliases: list[str] = []
+    # The answering side is judged first: it is the observation the verdict
+    # exists to report, and its absence is the structural case. A caller that
+    # knows neither side hears about the missing observation, not about a
+    # request it can already read out of its own config.
+    if not answering_key:
+        verdict = "unknown"
+        basis = (
+            "multiple_usage_models"
+            if answering_observations > 1
+            else "no_usage_observation"
+        )
+    elif not requested_key:
+        verdict = "unknown"
+        basis = "no_requested_model"
+    else:
+        shared_aliases = _shared_model_aliases(requested_key, answering_key)
+        verdict = "agreement" if shared_aliases else "disagreement"
+        basis = "resolved_match" if shared_aliases else "resolved_mismatch"
+    attestation: dict[str, Any] = {"verdict": verdict, "basis": basis}
+    if resolved_requested:
+        attestation["requested"] = resolved_requested
+        if requested_source:
+            attestation["requested_source"] = requested_source
+    if resolved_answering:
+        attestation["answering"] = resolved_answering
+    # Named only when it says something the two sides do not: an `-ultrafast`
+    # route answered by a `-fast` one agrees on a model neither side spells.
+    # When either side already reports a shared alias, that spelling IS the
+    # shared identity and a third name would only muddy it.
+    if (
+        shared_aliases
+        and resolved_requested not in shared_aliases
+        and resolved_answering not in shared_aliases
+    ):
+        attestation["resolved"] = shared_aliases[0]
+    attestation["coverage"] = ATTESTATION_COVERAGE
+    return attestation
 
 
 def _query_state_db(state_db: Path, *, now: float, session_ref: str | None = None) -> dict[str, Any]:
@@ -1845,6 +1988,11 @@ def _query_state_db(state_db: Path, *, now: float, session_ref: str | None = Non
                     "informative_cost_rows": int(_finite(row[11]) or 0.0),
                     "billing_provider": _sole_distinct_value(row[12]),
                     "model": _sole_distinct_value(row[13]),
+                    # Kept beside the resolved value, not derived from it: a
+                    # child that switched models mid-run and a child with no
+                    # usage row at all both leave `model` empty, and the
+                    # attestation verdict has to tell them apart.
+                    "model_count": _distinct_value_count(row[13]),
                 }
             for child in children:
                 child["usage"] = usage.get(child["session_id"], {})
@@ -1915,6 +2063,17 @@ def read_hermes_native_subagents(
     if payload["scope"] == "session":
         # Prepared route records likewise carry no conversation ownership.
         route_provenance = []
+    payload["attestation_coverage"] = ATTESTATION_COVERAGE_CLAIM
+    # The requested side of the attestation, for children whose session row
+    # names no model: `delegation.model` is what the next `delegate_task`
+    # dispatch resolves, so it is the route the host asked for. It is read
+    # once and only when some child needs it -- the config is rewritten per
+    # dispatch, so it describes the most recent one, and a child that started
+    # under an earlier route is attested against the value its own session row
+    # recorded instead.
+    configured_route_model = ""
+    if any(not _text(child.get("model")) for child in children):
+        configured_route_model = _text(read_delegation_route(home).get("model", ""))
 
     # Children of one manifest, oldest-first, pair with the manifest's tasks
     # by dispatch order; the pairing is best-effort context (goal text and
@@ -1995,6 +2154,18 @@ def read_hermes_native_subagents(
         # An empty `sessions.model` is filled from the one model the child's
         # usage rows observed, never from a guess; see `_observed_wire_model`.
         wire_model = _observed_wire_model(child)
+        # The same two surfaces the fill above chooses between, compared
+        # instead of collapsed: the recorded route is what was asked for, the
+        # usage model is what answered. A child whose session row names no
+        # model is attested against the configured delegation route, which is
+        # the only record of what was asked for in that case.
+        recorded_model = _text(child.get("model"))
+        attestation = served_model_attestation(
+            recorded_model or configured_route_model,
+            _text(usage.get("model")),
+            requested_source="session_model" if recorded_model else "delegation_route",
+            answering_observations=int(usage.get("model_count") or 0),
+        )
 
         input_tokens = usage.get("input_tokens") or 0.0
         output_tokens = usage.get("output_tokens") or 0.0
@@ -2105,6 +2276,7 @@ def read_hermes_native_subagents(
                 chains=active_chains,
             ),
             "delegation_id": delegation_id,
+            "model_attestation": attestation,
         }
         if route_provider:
             row["provider_source"] = "model_provider_routes"

@@ -112,9 +112,17 @@ PYTHONPATH=tests uv run python -m unittest discover -s tests
 
 ## 6. Authoring doctrine: the body carries instruction, the trigger carries phrasing
 
-`FULL_PROFILE_SKILL_BODY_CHAR_LIMIT` bounds what the whole pack costs. It cannot
-tell a body that grew a rule from a body that grew adjectives, so
-`tests/test_skill_density.py` measures instruction density per skill from the
+`FULL_PROFILE_SKILL_BODY_CHAR_LIMIT` bounds the always-loaded skill body, not the
+whole pack. `_full_profile_skill_body_chars()` in `src/maintenance/drift.py` reads
+`profile["skill_body"]["bytes"]`; `docs skill-context-cost` prints on-demand
+references as a separate figure, and the ratchet never reads it. A byte in the
+body is therefore paid in every context window of a `full` install, and a byte in
+a `references/*.md` only when a reader opens it. Move optional detail out to a
+reference instead of compressing it in place -- compression buys back a fraction
+of one skill's body, relocation buys back all of it.
+
+That limit cannot tell a body that grew a rule from a body that grew adjectives,
+so `tests/test_skill_density.py` measures instruction density per skill from the
 catalog producer. It fails naming the skill, the measured value, the threshold,
 and the offending excerpt. Thresholds and the reviewed lists live in
 `src/quality/skill_density.py`; `omh release drift` reports the filler count

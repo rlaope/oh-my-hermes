@@ -891,6 +891,11 @@ def read_omh_hud(
         merged["running"] = int(merged.get("running", 0)) + int(native["running"])
         merged["blocked"] = int(merged.get("blocked", 0)) + int(native["blocked"])
         merged["completed"] = int(merged.get("completed", 0)) + int(native["completed"])
+        # Only the native rows carry a served-model verdict, so what that
+        # verdict covers travels with them rather than being stated over a
+        # payload that may hold none.
+        if native.get("attestation_coverage"):
+            merged["attestation_coverage"] = native["attestation_coverage"]
         if merged.get("status") == "idle":
             merged["status"] = "observed"
     payload["graph"] = _hud_subagent_graph(
