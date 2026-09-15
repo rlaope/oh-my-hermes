@@ -477,6 +477,7 @@ class WrapperSessionTests(unittest.TestCase):
                     "evidence_summary",
                     "pending_gaps",
                     "blockers",
+                    "signal",
                     "next_action",
                     "user_facing_lines",
                     "claim_boundary",
@@ -518,7 +519,7 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(status["chat_response"]["coding_briefing"]["schema_version"], "coding_briefing/v1")
             self.assertEqual(
                 set(status["chat_response"]["coding_briefing"]),
-                {"schema_version", "headline", "lines", "next_action", "pending_gaps", "blockers", "claim_boundary"},
+                {"schema_version", "headline", "lines", "next_action", "pending_gaps", "blockers", "signal", "claim_boundary"},
             )
             self.assertNotIn("progress", status["chat_response"]["coding_briefing"])
             self.assertNotIn("coding_briefing", status["status_card"])
@@ -1054,9 +1055,13 @@ class WrapperSessionTests(unittest.TestCase):
             self.assertEqual(harness_stages["review"], "pending")
             self.assertIn("runtime_observation:verification", harness["verification_matrix"]["missing_evidence"])
             lines = "\n".join(status["coding_briefing"]["user_facing_lines"])
-            self.assertIn("runtime_start", lines)
-            self.assertIn("worker_dispatch", lines)
-            self.assertIn("still missing", lines)
+            # The rendered words, not the event ids: the ids stay in
+            # `runtime_milestones[]` below, which is what a parser reads.
+            self.assertIn("runtime start", lines)
+            self.assertIn("worker dispatch", lines)
+            self.assertIn("Hermes team path", lines)
+            self.assertIn("remaining:", lines)
+            self.assertNotIn("runtime_start", lines)
             self.assertEqual(milestones["runtime_start"], "complete")
             self.assertEqual(milestones["worker_dispatch"], "complete")
             for pending_event in (
@@ -1071,7 +1076,7 @@ class WrapperSessionTests(unittest.TestCase):
                 self.assertEqual(milestones[pending_event], "pending")
                 self.assertIn(pending_event, status["coding_briefing"]["runtime_milestone_gaps"])
             self.assertIn("executor_result", status["coding_briefing"]["pending_gaps"])
-            self.assertIn("Hermes coding team path observations", lines)
+            self.assertIn("Hermes team path — observed:", lines)
 
     def test_runtime_handoff_preparation_is_idempotent_and_preserves_envelope(self) -> None:
         with TemporaryDirectory() as tmp:

@@ -10,7 +10,13 @@ from ..coding.executor_capabilities import (
 from ..coding.executor_capability_snapshots import validate_executor_capability_snapshot
 from ..coding.executor_local_workflow import validate_executor_local_workflow
 from ..coding.handoff_input_manifest import input_manifest_summary
-from ..catalogs.briefing_vocabulary import blocker_kind_label, step_label
+from ..catalogs.briefing_vocabulary import (
+    action_text,
+    blocker_kind_label,
+    line_label,
+    runtime_event_label,
+    step_label,
+)
 from ..runtime.records import OBSERVED_RESULTS
 
 CODING_BRIEFING_SCHEMA_VERSION = "coding_briefing/v1"
@@ -44,10 +50,13 @@ def build_coding_briefing(
     blocking_reason = str(runtime_status.get("blocking_reason") or _blocking_reason_from_status(next_action))
     progress = _progress_steps(session, runtime_status, executor_status, runtime_observation)
     runtime_milestones = _runtime_milestones(_active_handoff(session, runtime_status), runtime_observation)
-    headline = _headline(selected_executor, lifecycle_status, next_action, executor_status, runtime_status, runtime_observation)
+    blockers = _blockers(executor_status, runtime_observation)
+    signal = _signal(progress, blockers)
+    headline = _headline(
+        selected_executor, lifecycle_status, next_action, executor_status, runtime_status, runtime_observation, blockers
+    )
     evidence = _evidence_summary(progress, runtime_status, executor_status)
     pending_gaps = _pending_gaps(progress, runtime_status, executor_status, runtime_observation)
-    blockers = _blockers(executor_status, runtime_observation)
     work_summary = _work_summary(session, runtime_status)
     user_facing_lines = _user_facing_lines(
         headline=headline,
@@ -58,6 +67,7 @@ def build_coding_briefing(
         blockers=blockers,
         next_action=next_action,
         locale=locale,
+        signal=signal,
     )
 
     loop_driver = _object(_object(runtime_status.get("loop_status_card")).get("driver"))
@@ -93,6 +103,10 @@ def build_coding_briefing(
         # questions ("what has not happened yet" and "what stopped"), and a
         # consumer that has only ever read the first keeps reading it unchanged.
         "blockers": blockers,
+        # One of three values, so an adapter that renders its own chrome can ask
+        # "does this need the user" without parsing a sentence or re-deriving
+        # the answer from `progress[]`.
+        "signal": signal,
         "next_action": next_action,
         "user_facing_lines": user_facing_lines,
         "claim_boundary": (
@@ -110,6 +124,7 @@ def chat_response_briefing(briefing: dict[str, Any]) -> dict[str, Any]:
         "next_action": briefing.get("next_action", ""),
         "pending_gaps": list(briefing.get("pending_gaps", [])) if isinstance(briefing.get("pending_gaps"), list) else [],
         "blockers": deepcopy(briefing.get("blockers")) if isinstance(briefing.get("blockers"), list) else [],
+        "signal": str(briefing.get("signal", "")),
         "claim_boundary": briefing.get("claim_boundary", ""),
     }
 
@@ -174,7 +189,15 @@ def _headline(
     executor_status: dict[str, Any],
     runtime_status: dict[str, Any],
     runtime_observation: dict[str, Any],
+    blockers: list[dict[str, str]],
 ) -> str:
+    # A standing stop outranks every other headline. The ladder branches below
+    # describe a run that is moving through it; saying "reported completion"
+    # above a `Stopped:` line, or under a red signal, states the opposite of
+    # what the next line says. `blockers` is built from each event's LATEST
+    # record, so a failure that a later observation superseded is not here.
+    if blockers:
+        return f"{_label(selected_executor)} work is stopped."
     result = str(executor_status.get("result") or _object(runtime_status.get("execution")).get("status") or "not_observed")
     verification = str(executor_status.get("verification") or ("observed" if _object(runtime_status.get("verification")).get("observed") else "not_observed"))
     runtime_result_observed = _runtime_event_observed(runtime_observation, "worker_result")
@@ -482,6 +505,39 @@ _BLOCKER_KINDS: Final[tuple[tuple[str, str], ...]] = (
 BLOCKER_EXECUTOR_SESSION: Final[str] = "executor_session_error"
 
 
+# The three signals, and the one fact that decides each. Deliberately read from
+# observed state rather than from `next_action`: the action token is free text
+# from an open set of producers, and a reader's "do I have to move" must not
+# depend on a string someone else chose the wording of.
+SIGNAL_STOPPED: Final[str] = "stopped"
+SIGNAL_WAITING: Final[str] = "waiting_on_you"
+SIGNAL_RUNNING: Final[str] = "running"
+
+_SIGNAL_GLYPHS: Final[dict[str, str]] = {
+    SIGNAL_STOPPED: "🔴",
+    SIGNAL_WAITING: "🟡",
+    SIGNAL_RUNNING: "🟢",
+}
+
+
+def _signal(progress: list[dict[str, Any]], blockers: list[dict[str, str]]) -> str:
+    """Whether the reader has to move, in one of three values.
+
+    A stopped step wins: it is the only state where doing nothing leaves the
+    work where it is. Otherwise, a run that was never dispatched is waiting on
+    a person -- nothing downstream happens until someone starts it -- and
+    everything else is moving or done, which a reader can skip.
+    """
+    if blockers:
+        return SIGNAL_STOPPED
+    dispatched = any(str(step.get("id")) == "dispatch" and step.get("state") == "complete" for step in progress)
+    return SIGNAL_RUNNING if dispatched else SIGNAL_WAITING
+
+
+def signal_glyph(signal: str) -> str:
+    return _SIGNAL_GLYPHS.get(signal, _SIGNAL_GLYPHS[SIGNAL_RUNNING])
+
+
 def _blockers(
     executor_status: dict[str, Any],
     runtime_observation: dict[str, Any],
@@ -538,8 +594,12 @@ def _user_facing_lines(
     blockers: list[dict[str, str]],
     next_action: str,
     locale: str,
+    signal: str,
 ) -> list[str]:
-    lines = [headline]
+    # The glyph leads because this line is what a phone notification shows: a
+    # reader who sees only the first 60 characters still learns whether the run
+    # needs them. The headline text is unchanged behind it.
+    lines = [f"{signal_glyph(signal)} {headline}".strip()]
     display = executor_status.get("display_status_lines")
     if isinstance(display, list):
         lines.extend(str(line) for line in display[:4] if str(line))
@@ -558,12 +618,25 @@ def _user_facing_lines(
         elif strategy == "worktree_recommended":
             lines.append("Workspace isolation is recommended before starting the coding session.")
     if team_path:
-        observed = [str(step["id"]) for step in runtime_milestones if step.get("state") == "complete"]
-        remaining = [str(step["id"]) for step in runtime_milestones if step.get("state") in {"pending", "blocked", "in_progress"}]
+        # Milestone ids are runtime event types, a different closed set from the
+        # progress step ids above, and they were reaching the screen raw for the
+        # same reason those were.
+        observed = [
+            runtime_event_label(str(step["id"]), locale=locale)
+            for step in runtime_milestones
+            if step.get("state") == "complete"
+        ]
+        remaining = [
+            runtime_event_label(str(step["id"]), locale=locale)
+            for step in runtime_milestones
+            if step.get("state") in {"pending", "blocked", "in_progress"}
+        ]
         if observed:
+            still = ", ".join(remaining[:5]) or line_label("action_none", locale=locale)
             lines.append(
-                "Hermes coding team path observations: "
-                f"{', '.join(observed[:4])}; still missing: {', '.join(remaining[:5]) or 'none'}."
+                f"{line_label('team_path', locale=locale)} — "
+                f"{line_label('observations', locale=locale)}: {', '.join(observed[:4])}; "
+                f"{line_label('remaining', locale=locale).lower()}: {still}."
             )
         else:
             lines.append(
@@ -575,12 +648,16 @@ def _user_facing_lines(
     # and it used to appear only as one more name in a list of steps that had
     # merely not happened yet.
     if blockers:
-        lines.append(f"Stopped: {'; '.join(_blocker_line_item(blocker, locale) for blocker in blockers[:5])}.")
+        stopped = "; ".join(_blocker_line_item(blocker, locale) for blocker in blockers[:5])
+        lines.append(f"{line_label('stopped', locale=locale)}: {stopped}.")
     stopped_ids = {blocker["id"] for blocker in blockers}
     remaining = [gap for gap in pending_gaps if gap not in stopped_ids]
     if remaining:
-        lines.append(f"Not reached yet: {', '.join(step_label(gap, locale=locale) for gap in remaining[:5])}.")
-    lines.append(f"Next action: {next_action}.")
+        names = ", ".join(step_label(gap, locale=locale) for gap in remaining[:5])
+        lines.append(f"{line_label('remaining', locale=locale)}: {names}.")
+    # The action the reader takes, not the token the wrapper routes on. The
+    # token is still in `next_action` for anything that parses this payload.
+    lines.append(f"{line_label('action', locale=locale)}: {action_text(next_action, locale=locale)}.")
     return _dedupe(lines)
 
 

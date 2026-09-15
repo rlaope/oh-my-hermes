@@ -83,14 +83,14 @@ class BlockerLineTests(unittest.TestCase):
         briefing = _briefing(runtime_observation={"failed_events": ["ci"]})
         lines = briefing["user_facing_lines"]
         stopped = [index for index, line in enumerate(lines) if line.startswith("Stopped:")]
-        not_reached = [index for index, line in enumerate(lines) if line.startswith("Not reached yet:")]
+        not_reached = [index for index, line in enumerate(lines) if line.startswith("Remaining:")]
         self.assertTrue(stopped, f"no stopped line in {lines}")
-        self.assertTrue(not_reached, f"no not-reached line in {lines}")
+        self.assertTrue(not_reached, f"no remaining line in {lines}")
         self.assertLess(stopped[0], not_reached[0])
 
     def test_a_stopped_step_is_not_repeated_as_not_reached(self) -> None:
         briefing = _briefing(runtime_observation={"failed_events": ["ci"]})
-        not_reached = [line for line in briefing["user_facing_lines"] if line.startswith("Not reached yet:")]
+        not_reached = [line for line in briefing["user_facing_lines"] if line.startswith("Remaining:")]
         self.assertEqual(len(not_reached), 1)
         # The rendered word, not the step id: after the vocabulary change the id
         # never appears, so asserting on `ci` would pass without proving the

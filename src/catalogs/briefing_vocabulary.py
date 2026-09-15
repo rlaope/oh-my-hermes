@@ -142,8 +142,196 @@ STATUS_BOARD_COPY: Final[Mapping[str, Mapping[str, str]]] = {
 }
 
 
+# The runtime observation ladder, a different set from `STEP_LABELS`: those are
+# briefing progress steps, these are the event types a Hermes coding path
+# records. They overlap without matching, so they get their own table rather
+# than one merged table with entries that only some callers may use.
+RUNTIME_EVENT_LABELS: Final[Mapping[str, Mapping[str, str]]] = {
+    "runtime_start": {
+        "en": "runtime start", "ko": "런타임 시작", "ja": "ランタイム開始", "zh": "运行时启动",
+        "es": "inicio del entorno", "fr": "démarrage du runtime", "de": "Runtime-Start",
+    },
+    "worktree_creation": {
+        "en": "worktree creation", "ko": "작업 폴더 생성", "ja": "作業フォルダの作成", "zh": "工作目录创建",
+        "es": "creación del worktree", "fr": "création du worktree", "de": "Worktree-Erstellung",
+    },
+    "worker_dispatch": {
+        "en": "worker dispatch", "ko": "작업자 배정", "ja": "ワーカーの割り当て", "zh": "工作单元下发",
+        "es": "envío del worker", "fr": "envoi du worker", "de": "Worker-Beauftragung",
+    },
+    "worker_result": {
+        "en": "worker result", "ko": "작업자 결과", "ja": "ワーカーの結果", "zh": "工作单元结果",
+        "es": "resultado del worker", "fr": "résultat du worker", "de": "Worker-Ergebnis",
+    },
+    "verification": {
+        "en": "verification", "ko": "검증", "ja": "検証", "zh": "验证",
+        "es": "verificación", "fr": "vérification", "de": "Verifikation",
+    },
+    "review": {
+        "en": "review", "ko": "리뷰", "ja": "レビュー", "zh": "评审",
+        "es": "revisión", "fr": "revue", "de": "Review",
+    },
+    "ci": {
+        "en": "CI", "ko": "CI", "ja": "CI", "zh": "CI",
+        "es": "CI", "fr": "CI", "de": "CI",
+    },
+    "merge_readiness": {
+        "en": "merge readiness", "ko": "머지 준비", "ja": "マージ準備", "zh": "合并就绪",
+        "es": "preparación para la fusión", "fr": "prêt à fusionner", "de": "Merge-Bereitschaft",
+    },
+    "merge": {
+        "en": "merge", "ko": "머지", "ja": "マージ", "zh": "合并",
+        "es": "fusión", "fr": "fusion", "de": "Merge",
+    },
+}
+
+# The labels that structure a rendered briefing line. Separate from the names
+# they introduce: a reader who understands "workspace isolation" still has to
+# be told whether it stopped or has simply not happened.
+LINE_LABELS: Final[Mapping[str, Mapping[str, str]]] = {
+    "stopped": {
+        "en": "Stopped", "ko": "중단", "ja": "停止", "zh": "已停止",
+        "es": "Detenido", "fr": "Arrêté", "de": "Gestoppt",
+    },
+    "remaining": {
+        "en": "Remaining", "ko": "잔여", "ja": "残り", "zh": "剩余",
+        "es": "Restante", "fr": "Restant", "de": "Ausstehend",
+    },
+    "action": {
+        "en": "Action", "ko": "조치", "ja": "対応", "zh": "处理",
+        "es": "Acción", "fr": "Action", "de": "Aktion",
+    },
+    "action_none": {
+        "en": "none", "ko": "불필요", "ja": "不要", "zh": "无需处理",
+        "es": "ninguna", "fr": "aucune", "de": "keine",
+    },
+    # The team-path line reports the RUNTIME LADDER, which is a different set
+    # from the progress steps the `Remaining:` line reports. Without a word
+    # naming which one it is, the two lines read as one contradicting itself.
+    "team_path": {
+        "en": "Hermes team path", "ko": "Hermes 팀 경로", "ja": "Hermes チーム経路", "zh": "Hermes 团队路径",
+        "es": "ruta de equipo de Hermes", "fr": "parcours d'équipe Hermes", "de": "Hermes-Teampfad",
+    },
+    "observations": {
+        "en": "observed", "ko": "관측됨", "ja": "観測済み", "zh": "已观测",
+        "es": "observado", "fr": "observé", "de": "beobachtet",
+    },
+}
+
+# What the reader is being asked to do. Keyed by `next_action`, which is an OPEN
+# set -- an executor supplies its own, and the runtime composes
+# `surface_runtime_failure:ci` from a prefix and an event -- so `action_text`
+# splits on the colon and falls back to `unknown`. That fallback is the point:
+# an unrecognized token must not reach a chat bubble just because nobody
+# enumerated it here, which is what happened to `show_runtime_handoff`.
+ACTION_LABELS: Final[Mapping[str, Mapping[str, str]]] = {
+    "unknown": {
+        "en": "check the current status", "ko": "현재 상태 확인", "ja": "現在の状況を確認",
+        "zh": "确认当前状态", "es": "revisar el estado actual", "fr": "vérifier l'état actuel",
+        "de": "aktuellen Status prüfen",
+    },
+    "accept_or_revise_plan": {
+        "en": "approve the plan, or ask for changes", "ko": "계획 승인, 또는 수정 요청",
+        "ja": "計画を承認、または修正を依頼", "zh": "批准计划，或提出修改",
+        "es": "aprobar el plan o pedir cambios", "fr": "approuver le plan ou demander des modifications",
+        "de": "Plan freigeben oder Änderungen anfordern",
+    },
+    "choose_executor": {
+        "en": "choose which coding agent runs this", "ko": "어떤 코딩 에이전트가 실행할지 선택",
+        "ja": "どのコーディングエージェントが実行するかを選択", "zh": "选择由哪个编码代理执行",
+        "es": "elegir qué agente de código lo ejecuta", "fr": "choisir quel agent de code exécute la tâche",
+        "de": "wählen, welcher Coding-Agent das ausführt",
+    },
+    "prepare_handoff": {
+        "en": "none — the handoff is being prepared", "ko": "불필요 — 작업 인계 준비 중",
+        "ja": "不要 — 引き継ぎを準備中", "zh": "无需处理 — 正在准备任务交接",
+        "es": "ninguna — se está preparando el traspaso", "fr": "aucune — la transmission est en préparation",
+        "de": "keine — die Übergabe wird vorbereitet",
+    },
+    "show_prompt_handoff": {
+        "en": "approve to start, or adjust the scope", "ko": "시작 승인, 또는 범위 조정",
+        "ja": "開始を承認、または範囲を調整", "zh": "批准开始，或调整范围",
+        "es": "aprobar el inicio o ajustar el alcance", "fr": "approuver le démarrage ou ajuster le périmètre",
+        "de": "Start freigeben oder den Umfang anpassen",
+    },
+    "show_status": {
+        "en": "none", "ko": "불필요", "ja": "不要", "zh": "无需处理",
+        "es": "ninguna", "fr": "aucune", "de": "keine",
+    },
+    "report_completion_with_evidence": {
+        "en": "none — the result is being reported", "ko": "불필요 — 결과 보고 중",
+        "ja": "不要 — 結果を報告中", "zh": "无需处理 — 正在报告结果",
+        "es": "ninguna — se está informando el resultado", "fr": "aucune — le résultat est en cours de rapport",
+        "de": "keine — das Ergebnis wird berichtet",
+    },
+    # Runtime-composed prefixes. The event after the colon is named separately
+    # through `RUNTIME_EVENT_LABELS`, so these read as a sentence with a blank.
+    "surface_runtime_failure": {
+        "en": "look at the failure on {event}", "ko": "{event}에서 난 실패 확인",
+        "ja": "{event} の失敗を確認", "zh": "查看 {event} 的失败",
+        "es": "revisar el fallo en {event}", "fr": "examiner l'échec sur {event}",
+        "de": "den Fehler bei {event} ansehen",
+    },
+    "surface_runtime_blocker": {
+        "en": "clear the blocker on {event}", "ko": "{event} 차단 해제",
+        "ja": "{event} のブロックを解除", "zh": "解除 {event} 的阻塞",
+        "es": "desbloquear {event}", "fr": "débloquer {event}",
+        "de": "die Blockade bei {event} auflösen",
+    },
+    "surface_runtime_cancellation": {
+        "en": "restart {event}, or drop it", "ko": "{event} 재시작, 또는 중단 확정",
+        "ja": "{event} を再実行、または取りやめ", "zh": "重启 {event}，或放弃",
+        "es": "reiniciar {event} o descartarlo", "fr": "relancer {event} ou l'abandonner",
+        "de": "{event} neu starten oder verwerfen",
+    },
+    "record_runtime_observation": {
+        "en": "none — waiting on {event}", "ko": "불필요 — {event} 대기 중",
+        "ja": "不要 — {event} を待機中", "zh": "无需处理 — 等待 {event}",
+        "es": "ninguna — a la espera de {event}", "fr": "aucune — en attente de {event}",
+        "de": "keine — wartet auf {event}",
+    },
+    "report_runtime_observed": {
+        "en": "none", "ko": "불필요", "ja": "不要", "zh": "无需处理",
+        "es": "ninguna", "fr": "aucune", "de": "keine",
+    },
+}
+
+# `show_runtime_handoff` means the same thing to a reader as its prompt-only
+# twin; both say "a handoff is ready and nobody has started it". One entry with
+# an alias rather than two rows that must be kept in step.
+_ACTION_ALIASES: Final[Mapping[str, str]] = {"show_runtime_handoff": "show_prompt_handoff"}
+
+
 def status_board_copy(key: str, *, locale: str = DEFAULT_LOCALE) -> str:
     return _lookup(STATUS_BOARD_COPY, key, locale)
+
+
+def line_label(key: str, *, locale: str = DEFAULT_LOCALE) -> str:
+    return _lookup(LINE_LABELS, key, locale)
+
+
+def runtime_event_label(event_type: str, *, locale: str = DEFAULT_LOCALE) -> str:
+    return _lookup(RUNTIME_EVENT_LABELS, event_type, locale)
+
+
+def action_text(next_action: str, *, locale: str = DEFAULT_LOCALE) -> str:
+    """What the reader should do, in words, for an open set of action tokens.
+
+    `next_action` is composed by three different producers and one of them
+    joins a prefix to an event with a colon, so this resolves the whole token
+    first, then the prefix, then gives up and says to check the status. It never
+    returns the token: printing `show_runtime_handoff` at a reader is the defect
+    this exists to close, and doing it only for unrecognized values would make
+    the defect rarer and harder to notice rather than fixing it.
+    """
+    token = str(next_action or "").strip()
+    resolved = _ACTION_ALIASES.get(token, token)
+    if resolved in ACTION_LABELS:
+        return _lookup(ACTION_LABELS, resolved, locale)
+    prefix, _, event = resolved.partition(":")
+    if prefix in ACTION_LABELS:
+        return _lookup(ACTION_LABELS, prefix, locale).format(event=runtime_event_label(event, locale=locale))
+    return _lookup(ACTION_LABELS, "unknown", locale)
 
 
 def step_label(step_id: str, *, locale: str = DEFAULT_LOCALE) -> str:

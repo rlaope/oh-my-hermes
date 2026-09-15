@@ -4,6 +4,28 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A coding briefing now opens by saying whether it needs you.** The first
+  line carries 🔴 / 🟡 / 🟢 — stopped, waiting on you, running — which is what
+  a phone notification shows when it shows sixty characters and nothing else.
+  The signal is computed from observed state (a standing blocker, then whether
+  dispatch was ever observed), never from `next_action`: that token is free
+  text from an open set of producers, and whether a reader has to get up must
+  not depend on wording someone else chose. It also ships as `signal` in
+  `coding_briefing/v1` so an adapter with its own chrome can ask the question
+  without parsing a sentence. `headline` now consults the blockers too, so a
+  cancelled run can no longer be headed "reported completion" beneath a red
+  glyph — the contradiction the previous entry left open. The remaining
+  internal tokens left the screen with it: the `Stopped:` / `Remaining:` /
+  `Action:` labels are translated, runtime milestone ids are named in words,
+  and `next_action` is rendered as what the reader should do
+  (`surface_runtime_failure:ci` → "look at the failure on CI"). That last one
+  is an open set, so unrecognized values render "check the current status"
+  rather than the token — the failure mode being fixed is a token reaching a
+  chat bubble, and doing it only for rare values would have made it harder to
+  notice rather than rarer. Every identifier stays in the payload for anything
+  that parses it. `tests/test_briefing_line_shape.py` sweeps eight run states
+  across four locales for twenty-one known internal tokens.
+
 - **The coding briefing stopped printing its own step ids at the reader.**
   `Still missing evidence: workspace_isolation, verification, review, ci` named
   five internal keys; a key is a stable identifier, not a word anyone outside
