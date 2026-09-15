@@ -261,6 +261,24 @@ All notable changes will be documented here.
   rehearsal executes nothing and writes nothing; exit `1` means a planned call
   is refused, `3` that the rules file is defective, and `0` only that no rule
   refuses these calls — never that they are allowed.
+- **A configured profile can move to another machine.** `omh setup-profile
+  export` serializes this install's `setup_profile/v1` -- coding owner,
+  operating model, memory mode, selected categories -- plus the capability
+  policy, the recorded MCP host recipe and the Hermes model aliases into one
+  local JSON pack with a content-addressed manifest, and `omh setup-profile
+  apply --from <pack.json> --apply` writes it back through `omh setup`'s own
+  writers. Redaction reuses the `RAW_OR_HIDDEN_KEYS` and `metadata_safety`
+  primitives every record store already screens against: a credential-shaped
+  value or a machine-local path never enters the artifact, and every field
+  withheld is named with its reason rather than dropped in silence. Apply is
+  a dry run until `--apply`, reports each field as applied or not applied
+  with the reason, refuses a pack from a newer OMH whole rather than writing
+  a partial profile, and hands back the exact `omh setup` commands for the
+  two surfaces it will not write unasked -- Hermes model aliases, which need
+  their own digest-bound confirmation, and the MCP host config, which is
+  written only under `--with-mcp`. Transport stays out: export writes a local
+  file, apply reads a local file, and moving one between machines is your own
+  git or file copy.
 
 ## 2.0.3 - 2026-09-12
 

@@ -5135,6 +5135,11 @@ def _add_top_level_commands(sub) -> None:
     skill_profile_reconcile.add_argument("--json", action="store_true", help="Print the full machine-readable reconcile payload.")
     skill_profile_reconcile.set_defaults(func=cmd_skill_profile_reconcile)
 
+    # Same deferred-import reason as `capability_policy` below.
+    from .setup_profile_pack import add_setup_profile_commands
+
+    add_setup_profile_commands(sub)
+
     # Imported here rather than at module scope: `capability_policy` is a
     # command module like the ones `main` imports from here, so a top-level
     # import would close a cycle through this module's own parser wiring.

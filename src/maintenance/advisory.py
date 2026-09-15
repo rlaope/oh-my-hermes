@@ -274,7 +274,7 @@ def _hermes_model_status(config_path: Path, active_models: list[dict[str, object
             "recommendation": None,
             "auth": auth,
         }
-    aliases, error = _parse_hermes_model_aliases(text)
+    aliases, error = parse_hermes_model_aliases(text)
     if error:
         return {
             "status": "corrupt",
@@ -294,7 +294,14 @@ def _hermes_model_status(config_path: Path, active_models: list[dict[str, object
     }
 
 
-def _parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
+def parse_hermes_model_aliases(text: str) -> tuple[dict[str, str], str]:
+    """The `model.aliases` mapping a Hermes config declares, or why none was read.
+
+    Public because the setup profile pack reads the same aliases and must read
+    them the same way: both halves of every entry go through
+    `require_opaque_metadata_ref`, so a credential cannot arrive as an alias
+    target. A second parser would be a second place for that screen to lapse.
+    """
     if "\t" in text or "\x00" in text:
         return {}, "config contains unsupported tab indentation or NUL bytes"
     lines = text.splitlines()

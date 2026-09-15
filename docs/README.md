@@ -40,6 +40,7 @@ references rather than normal user steps.
 | Understand modules, artifacts, and ownership | [Architecture](ARCHITECTURE.md) |
 | Inspect the runtime-readable capability map | [Capabilities](CAPABILITIES.md) |
 | Turn a capability family on or off without uninstalling | [Capability Toggles](CAPABILITY-TOGGLES.md) |
+| Move a configured profile to another machine or teammate | [Setup Profile Pack](SETUP-PROFILE-PACK.md) |
 | Block a Hermes tool call with a rule you wrote | [Toolcall Rules](TOOLCALL-RULES.md) |
 | See which of an unattended batch's calls the rules refuse, before it starts | [Toolcall Rules: Rehearsing a planned batch](TOOLCALL-RULES.md#rehearsing-a-planned-batch) |
 | See which coding work is running, in which session | [Coding Observability](CODING-OBSERVABILITY.md) |
