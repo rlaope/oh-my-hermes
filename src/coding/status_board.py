@@ -56,6 +56,7 @@ from .routing_observation import (
 )
 from ..catalogs.briefing_vocabulary import status_board_copy
 from ..system.display_width import display_width, pad_to_width
+from ..catalogs.model_vendor_glyphs import vendor_glyph
 
 CODING_STATUS_BOARD_SCHEMA_VERSION: Final[str] = "omh_coding_status_board/v1"
 
@@ -679,6 +680,13 @@ def _cell(unit: dict[str, Any], field: str) -> str:
     # and the fenced messenger profile in agreement by construction.
     if field == "status":
         return status_text_for(unit)
+    # MODEL leads with its vendor's glyph, for the same reason and in the same
+    # place: a board of three lanes differs in this column and nowhere else a
+    # reader scans, and doing it here means the widths, the aligned table and
+    # the bullets cannot disagree about how wide the cell is.
+    if field == "model_label":
+        label = str(unit.get(field, "") or UNKNOWN)
+        return f"{vendor_glyph(label)} {label}"
     return str(unit.get(field, "") or UNKNOWN)
 
 
@@ -705,6 +713,9 @@ def _bullet_line(unit: dict[str, Any]) -> str:
         # Runtime and model are ONE field visually: "codex (gpt-5.6-sol xhigh)".
         # Separating them with a dash as well produced "codex — (gpt-5.6-sol
         # xhigh)", a doubled separator around a parenthetical.
+        # Same glyph as the aligned board's MODEL column, in front of the same
+        # runtime/model pair, so the two profiles read as one surface.
+        f"{vendor_glyph(str(unit.get('model_label', '') or ''))} "
         f"{unit.get('runtime', UNKNOWN)} ({unit.get('model_label', _MODEL_DEFAULT_LABEL)})",
         status_text_for(unit),
         elapsed_phrase,

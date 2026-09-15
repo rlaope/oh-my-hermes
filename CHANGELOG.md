@@ -4,6 +4,29 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Each lane on the coding status board now wears its model vendor's glyph.**
+  Three running lanes are three rows of near-identical text, and the model is
+  the field that differs and the field a reader scans for; a glyph is read
+  before the word beside it is. The mapping is per vendor, not per model —
+  `claude-opus-5` and `claude-fable-5-1` share 🟠, because eleven glyphs are
+  already at the edge of what anyone holds and one per model generation is not.
+  The traffic lights are reserved: 🟢 🟡 🔴 mean whether a run needs the reader,
+  so a vendor wearing red would read as a stopped lane, and
+  `tests/test_model_vendor_glyphs.py` fails if the two sets ever intersect.
+  Every glyph is two display cells, also pinned, because a one- or three-cell
+  glyph looks fine in bullets and shifts every column after it in the aligned
+  block. A model the table has not seen renders ⬜ rather than nothing, since an
+  unlabelled row among labelled ones reads as a rendering fault.
+
+  Vendor resolution handles the shapes the board actually carries rather than
+  the aliases OMH chooses: a bare product name (`fable-5 high` — Anthropic's
+  names arrive without the family prefix), a provider-prefixed id
+  (`openrouter/qwen-3.5-coder`, where the vendor is the model's and not the
+  gateway's), and a generation-numbered token (`qwen3-coder`, which is why the
+  token table is written out instead of matched by prefix). The first two were
+  found by existing board tests, not by the new guard, which had been derived
+  from the shipped chain table alone.
+
 - **A narrow table keeps its columns on Slack, and provenance stopped taking
   the notification preview.** Messenger profiles turned every markdown table
   into bullets, which is right for a wide one and wrong for the shape people
