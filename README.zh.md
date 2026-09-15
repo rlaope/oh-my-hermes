@@ -410,6 +410,7 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
   <img src="assets/omh-character-badge.png" alt="Oh My Hermes character mark" width="170">
 </p>
 
+<!-- omh:ulw-inventory:begin (generated: uv run python -m omh.cli docs ulw-inventory; source: src/skills/catalog.py) -->
 九个 `ulw-` workflow。说出触发词，其余交给 Hermes —— 完整目录见
 [Workflow Reference](docs/WORKFLOWS.md)。
 
