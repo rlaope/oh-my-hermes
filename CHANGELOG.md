@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The coding status board reports how much a lane did, not only how long it
+  ran.** A lane at twelve minutes and two tool calls and a lane at twelve
+  minutes and sixty are different situations, and an elapsed time alone reports
+  them identically — which is the reading a person has to make when deciding
+  whether a quiet lane is working or stuck. `tool_count` was already observed
+  and recorded in `ROUTING_METRIC_SIGNAL_KEYS`, and
+  `_compact_event_projection` already folded it into the progress event; it had
+  no field on the board row to travel in. There is now a `TOOLS` column on the
+  aligned board and a `N tool calls` part in the bullet profile.
+
+  Zero and unobserved render differently, deliberately. Zero is a real answer —
+  an executor that made no tool calls made none — so an unobserved count shows
+  `unknown` rather than `0`, which a reader would take as the executor having
+  done nothing. `True` is refused as a count for the same reason it is refused
+  elsewhere in this module: it is an `int` in Python and `1 tool call` would be
+  a fiction.
+
 - **Each lane on the coding status board now wears its model vendor's glyph.**
   Three running lanes are three rows of near-identical text, and the model is
   the field that differs and the field a reader scans for; a glyph is read
