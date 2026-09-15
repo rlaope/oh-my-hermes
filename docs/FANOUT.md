@@ -829,10 +829,18 @@ Rules, all applied at freeze time:
   they hold identically on every host and a dispatched unit can never be handed
   a target, a data class, or a destination that was refused upstream.
   `runtime_filesystem_confinement` and `runtime_network_confinement` are
-  `host_confinement`, and dispatch does **not** provide them — the
-  cross-harness adapter lane builds an OS confinement sandbox (`sandbox-exec`
-  on macOS, a trusted `bwrap` on Linux) and no dispatched unit runs under it,
-  which is the blocker those two rows now name in words.
+  `host_confinement`. Dispatch runs the owner CLI and its verification
+  commands under an OS write fence (`sandbox-exec` on macOS, a trusted `bwrap`
+  on Linux) and reports it only when that run's own probe wrote inside the
+  unit worktree and the owner's state and was refused outside them. A host
+  with no backend, or whose probe fails, dispatches unconfined with the reason
+  recorded. Reads and network stay open, so the network row keeps naming its
+  blocker. On Linux the fence is the host tree mounted read-only with the
+  worktree and owner state bound writable, toolchain `TMPDIR` redirected into
+  the worktree's ignored `.omh/confinement-tmp`, and the per-user runtime
+  directory (`/run/user/<uid>`, which holds the session bus) replaced by an
+  empty read-only mount: a socket on a read-only mount still lets a confined
+  process ask a host service, such as `systemd-run --user`, to write for it.
   `executor_honours_declared_targets` is advisory everywhere: a unit's
   file boundary is frozen in the contract and checked for overlaps at prepare
   time, but nothing constrains the spawned CLI to it at runtime.

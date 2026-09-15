@@ -880,7 +880,8 @@ _DATA_BOUNDARY_STATEMENTS = {
     "runtime_filesystem_confinement": (
         "Fanout places its owner and dispatcher verification processes under the existing OS sandbox. "
         "It confines writes, not reads, to the unit worktree and the selected owner's state directories, with any "
-        "owner state file granted as an exact literal and only the two named credential mach-lookup allowances. "
+        "owner state file granted as an exact literal. On macOS the only IPC allowances are the two named credential "
+        "mach-lookup services; on Linux the per-user runtime directory is replaced by an empty read-only mount. "
         "A particular run reports confinement only after its same-run probe wrote every directory root and was refused outside them."
     ),
     "runtime_network_confinement": (

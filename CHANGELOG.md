@@ -4,6 +4,32 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Fanout's write fence now works on Linux.** `omh coding fanout dispatch`
+  confines the owner CLI and its verification commands with `sandbox-exec` on
+  macOS, but the Linux `bwrap` path had never run, and on a real host (Fedora
+  44, bubblewrap 0.11.0) it never could: its `--tmpfs /` root mounted only each
+  executable's directory, so the dynamic loader was missing and even the
+  preflight's `/usr/bin/true` failed with `execvp /usr/bin/true: No such file
+  or directory`. Every Linux dispatch therefore ran unconfined, recorded as
+  `sandbox_preflight_failed`, even with a trusted bwrap installed. The fanout
+  layout is now the Linux counterpart of the macOS policy. The host tree is
+  mounted read-only, so a write outside the worktree and the owner's state
+  fails with `EROFS` instead of landing in a private tmpfs; `/dev` and `/proc`
+  are fresh; toolchain `TMPDIR` points into the worktree's ignored
+  `.omh/confinement-tmp`; the spawning environment is inherited rather than
+  cleared, so per-command verification overrides reach the child; and
+  `/run/user/<uid>` is replaced by an empty read-only mount, because from a
+  read-only host tree `systemd-run --user touch <path>` otherwise asks the
+  user's service manager to write outside the fence. The preflight and the
+  probe run under that same layout. macOS keeps its probe policy unchanged and
+  the cross-harness adapter lane keeps its strict layout. A Linux host with no
+  trusted bwrap now reports `sandbox_backend_unavailable` instead of a failed
+  preflight. The real-sandbox tests that ran only on macOS now also run on
+  Linux hosts with a working trusted bwrap (and skip elsewhere, including CI),
+  four backend-independent tests left the macOS-only class, and the
+  `docs/FANOUT.md` note that dispatch provides no filesystem confinement is
+  corrected. (#1356)
+
 - **The plugin risk audit says what a declared hook would actually do.**
   `omh ops plugin-risk-audit` reported one aggregate `hermes_hook_capability`
   category decided by a regex holding three hook names, so a policy gate that
