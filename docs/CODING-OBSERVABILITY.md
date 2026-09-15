@@ -21,6 +21,14 @@ or run the command directly:
 omh coding status-board [--limit N] [--json]
 ```
 
+Both renderers take a `locale`: `render_status_board_text(payload, locale=...)`
+for the aligned board and `status_board_messenger_body(payload, locale=...)`
+for a chat surface. The copy comes from `src/catalogs/briefing_vocabulary.py`
+and answers every locale either locale set uses — the four `--language` accepts
+and the three more the chat-copy set resolves from a message. The CLI does not
+yet pass one, so the command still prints English; an adapter that already
+knows its reader's language can pass it today.
+
 ## What was actually broken
 
 **The model was dropped.** The runtime (`codex` / `claude_code`) was tracked

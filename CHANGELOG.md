@@ -4,6 +4,27 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The coding briefing stopped printing its own step ids at the reader.**
+  `Still missing evidence: workspace_isolation, verification, review, ci` named
+  five internal keys; a key is a stable identifier, not a word anyone outside
+  this repository knows. Step and blocker names now come from
+  `src/catalogs/briefing_vocabulary.py`, which answers in all seven locales
+  either locale set can ask for, and `build_coding_briefing` takes a `locale`
+  for the rendered lines only — ids, `next_action`, and every machine-readable
+  value keep their one spelling so a parser never has to know the reader's
+  language. The same module supplies the status board's copy, which had been an
+  `if korean:` pair inside the renderer: five of the seven locales could not be
+  rendered no matter what a caller passed, and `status_board_messenger_body`
+  took no locale at all, hardcoding `korean=False` at each of its three call
+  sites — so a messenger board was English regardless of configuration. Both
+  now take a locale. The Korean truncation line also gains the unit total it
+  alone omitted, which had left a reader to add two numbers to learn how much
+  work there was. `tests/test_briefing_vocabulary.py` derives the required keys
+  from `_progress_steps` and `_BLOCKER_KINDS` rather than from a list kept
+  beside them, and fails on a row that answers fewer locales than a caller can
+  ask for. The `Stopped:` and `Not reached yet:` labels themselves are still
+  English; they belong with the line structure, not with the names.
+
 - **A stopped coding run no longer reads as an early one.** The coding briefing
   listed everything that had not happened under a single `Still missing
   evidence:` heading, so a step the runtime had failed, blocked, or cancelled

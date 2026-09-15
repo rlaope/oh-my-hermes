@@ -92,11 +92,14 @@ class BlockerLineTests(unittest.TestCase):
         briefing = _briefing(runtime_observation={"failed_events": ["ci"]})
         not_reached = [line for line in briefing["user_facing_lines"] if line.startswith("Not reached yet:")]
         self.assertEqual(len(not_reached), 1)
-        self.assertNotIn("ci", not_reached[0].split(": ", 1)[1].split(", "))
+        # The rendered word, not the step id: after the vocabulary change the id
+        # never appears, so asserting on `ci` would pass without proving the
+        # stopped step was excluded.
+        self.assertNotIn("CI", not_reached[0].split(": ", 1)[1].split(", "))
 
     def test_the_narrative_leads_with_the_stop(self) -> None:
         briefing = _briefing(runtime_observation={"failed_events": ["ci"]})
-        self.assertIn("stopped at ci (failed)", briefing["narrative"])
+        self.assertIn("stopped at CI (failed)", briefing["narrative"])
 
     def test_a_clean_run_keeps_the_waiting_narrative(self) -> None:
         self.assertIn("still waiting on", _briefing()["narrative"])

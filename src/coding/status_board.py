@@ -54,7 +54,7 @@ from .routing_observation import (
     build_routing_observation,
     render_routing_status_rows,
 )
-from .work_reporting import _korean_locale
+from ..catalogs.briefing_vocabulary import status_board_copy
 
 CODING_STATUS_BOARD_SCHEMA_VERSION: Final[str] = "omh_coding_status_board/v1"
 
@@ -167,12 +167,18 @@ def build_status_board(paths: OmhPaths, *, limit: int = DEFAULT_LIMIT, now: str 
 
 
 def render_status_board_text(payload: dict[str, Any], *, locale: str = "") -> str:
-    """Aligned ASCII board. English unless `locale` explicitly names Korean."""
-    korean = _korean_locale(locale)
+    """Aligned ASCII board. English unless `locale` names another language.
+
+    `locale` used to reach a boolean: the renderer asked `_korean_locale` and
+    every language that was not Korean rendered as English, including the three
+    the chat-copy set already supports. The copy now comes from
+    `briefing_vocabulary`, so the answer is per locale rather than per side of
+    a boolean.
+    """
     units = _payload_units(payload)
-    lines = [_header_line(payload, korean=korean)]
+    lines = [_header_line(payload, locale=locale)]
     if not units:
-        lines.append(_empty_line(korean=korean))
+        lines.append(_empty_line(locale=locale))
         lines.append(str(payload.get("claim_boundary", "")))
         return "\n".join(line for line in lines if line)
 
@@ -184,45 +190,53 @@ def render_status_board_text(payload: dict[str, Any], *, locale: str = "") -> st
         observation = unit.get("routing_observation")
         if isinstance(observation, Mapping):
             lines.extend(render_routing_status_rows(observation))
-    truncation = _truncation_line(payload, korean=korean)
+    truncation = _truncation_line(payload, locale=locale)
     if truncation:
         lines.append(truncation)
     lines.append(str(payload.get("claim_boundary", "")))
     return "\n".join(line for line in lines if line)
 
 
-def status_board_messenger_body(payload: dict[str, Any], *, render_profile: str = _LIMITED_MARKDOWN) -> str:
+def status_board_messenger_body(
+    payload: dict[str, Any], *, render_profile: str = _LIMITED_MARKDOWN, locale: str = ""
+) -> str:
     """Messenger-safe body. `rich_markdown` keeps alignment; `limited_markdown` is flat bullets.
 
     The boundary is the SHORT form and sits OUTSIDE the fence. Inside it, a
     paragraph of prose is monospace-wrapped at the table's width, which reads as
     broken rendering rather than as a caveat; and at full length it was more of
     the message than the data was.
+
+    `locale` reaches the same copy the CLI board uses. Before, this function
+    took no locale at all and passed `korean=False` at each of its three call
+    sites, so a messenger board rendered in English whatever the caller had
+    configured -- not as a decision about messengers, which is why nothing said
+    so, but because the argument had never been threaded through.
     """
     if render_profile == _RICH_MARKDOWN:
         return (
             "```\n"
-            + _aligned_rows_only(payload)
+            + _aligned_rows_only(payload, locale=locale)
             + "\n```\n"
             + CODING_STATUS_BOARD_SHORT_BOUNDARY
         )
     units = _payload_units(payload)
-    lines = [_header_line(payload, korean=False)]
+    lines = [_header_line(payload, locale=locale)]
     if not units:
-        lines.append(_empty_line(korean=False))
+        lines.append(_empty_line(locale=locale))
     for unit in units:
         lines.append(_bullet_line(unit))
-    truncation = _truncation_line(payload, korean=False)
+    truncation = _truncation_line(payload, locale=locale)
     if truncation:
         lines.append(truncation)
     lines.append(CODING_STATUS_BOARD_SHORT_BOUNDARY)
     return "\n".join(line for line in lines if line)
 
 
-def _aligned_rows_only(payload: dict[str, Any]) -> str:
+def _aligned_rows_only(payload: dict[str, Any], *, locale: str = "") -> str:
     """The aligned table without the trailing boundary paragraph."""
     boundary = str(payload.get("claim_boundary", "") or "")
-    text = render_status_board_text(payload)
+    text = render_status_board_text(payload, locale=locale)
     if boundary and text.endswith(boundary):
         text = text[: -len(boundary)]
     return text.rstrip("\n")
@@ -701,7 +715,7 @@ def _bullet_line(unit: dict[str, Any]) -> str:
     return f"{line} — {summary}" if summary else line
 
 
-def _header_line(payload: dict[str, Any], *, korean: bool) -> str:
+def _header_line(payload: dict[str, Any], *, locale: str) -> str:
     running = int(payload.get("running_count", 0) or 0)
     total = int(payload.get("unit_count", 0) or 0)
     # Stuck units are SUBTRACTED from the headline count and named separately.
@@ -711,25 +725,20 @@ def _header_line(payload: dict[str, Any], *, korean: bool) -> str:
     stuck = min(int(payload.get("stuck_count", 0) or 0), running)
     moving = running - stuck
     observed_at = str(payload.get("observed_at", "") or UNKNOWN)
-    if korean:
-        stuck_text = f", 멈춤 {stuck}" if stuck else ""
-        return f"코딩 작업 현황 (실행 중 {moving}{stuck_text} / 전체 {total}) — 관측 시각 {observed_at}"
-    stuck_text = f", {stuck} stuck" if stuck else ""
-    return f"Coding status board ({moving} running{stuck_text} of {total} observed) — observed at {observed_at}"
+    stuck_text = status_board_copy("header_stuck_suffix", locale=locale).format(stuck=stuck) if stuck else ""
+    return status_board_copy("header", locale=locale).format(
+        moving=moving, stuck=stuck_text, total=total, observed_at=observed_at
+    )
 
 
-def _empty_line(*, korean: bool) -> str:
-    if korean:
-        return "관측된 코딩 작업이 없습니다."
-    return "No coding work observed."
+def _empty_line(*, locale: str) -> str:
+    return status_board_copy("empty", locale=locale)
 
 
-def _truncation_line(payload: dict[str, Any], *, korean: bool) -> str:
+def _truncation_line(payload: dict[str, Any], *, locale: str) -> str:
     total = int(payload.get("unit_count", 0) or 0)
     shown = len(_payload_units(payload))
     dropped = total - shown
     if dropped <= 0:
         return ""
-    if korean:
-        return f"{shown}개만 표시했습니다. {dropped}개는 표시 한도로 생략되었습니다."
-    return f"Showing {shown} of {total} units; {dropped} not shown because of the display limit."
+    return status_board_copy("truncation", locale=locale).format(shown=shown, total=total, dropped=dropped)

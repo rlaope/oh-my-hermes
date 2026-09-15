@@ -10,6 +10,7 @@ from ..coding.executor_capabilities import (
 from ..coding.executor_capability_snapshots import validate_executor_capability_snapshot
 from ..coding.executor_local_workflow import validate_executor_local_workflow
 from ..coding.handoff_input_manifest import input_manifest_summary
+from ..catalogs.briefing_vocabulary import blocker_kind_label, step_label
 from ..runtime.records import OBSERVED_RESULTS
 
 CODING_BRIEFING_SCHEMA_VERSION = "coding_briefing/v1"
@@ -21,8 +22,15 @@ def build_coding_briefing(
     runtime_status: dict[str, Any] | None = None,
     executor_status: dict[str, Any] | None = None,
     runtime_observation: dict[str, Any] | None = None,
+    locale: str = "",
 ) -> dict[str, Any]:
-    """Build a deterministic, user-facing summary from persisted wrapper evidence."""
+    """Build a deterministic, user-facing summary from persisted wrapper evidence.
+
+    ``locale`` selects the words for step and blocker names in the rendered
+    lines only. The payload keys, the step ids, ``next_action`` and every
+    machine-readable value stay in their one spelling: a consumer parsing this
+    must not have to know which language the reader had configured.
+    """
 
     runtime_status = runtime_status if isinstance(runtime_status, dict) else {}
     executor_status = executor_status if isinstance(executor_status, dict) else {}
@@ -49,6 +57,7 @@ def build_coding_briefing(
         pending_gaps=pending_gaps,
         blockers=blockers,
         next_action=next_action,
+        locale=locale,
     )
 
     loop_driver = _object(_object(runtime_status.get("loop_status_card")).get("driver"))
@@ -64,7 +73,7 @@ def build_coding_briefing(
         "run_id": run_id,
         "thread_key": str(session.get("thread_key", "")),
         "headline": headline,
-        "narrative": _narrative(headline, pending_gaps, blockers, next_action),
+        "narrative": _narrative(headline, pending_gaps, blockers, next_action, locale),
         "current_state": {
             "session_status": str(session.get("status", "")),
             "selected_executor_profile": selected_executor,
@@ -528,6 +537,7 @@ def _user_facing_lines(
     pending_gaps: list[str],
     blockers: list[dict[str, str]],
     next_action: str,
+    locale: str,
 ) -> list[str]:
     lines = [headline]
     display = executor_status.get("display_status_lines")
@@ -565,17 +575,19 @@ def _user_facing_lines(
     # and it used to appear only as one more name in a list of steps that had
     # merely not happened yet.
     if blockers:
-        lines.append(f"Stopped: {'; '.join(_blocker_line_item(blocker) for blocker in blockers[:5])}.")
+        lines.append(f"Stopped: {'; '.join(_blocker_line_item(blocker, locale) for blocker in blockers[:5])}.")
     stopped_ids = {blocker["id"] for blocker in blockers}
     remaining = [gap for gap in pending_gaps if gap not in stopped_ids]
     if remaining:
-        lines.append(f"Not reached yet: {', '.join(remaining[:5])}.")
+        lines.append(f"Not reached yet: {', '.join(step_label(gap, locale=locale) for gap in remaining[:5])}.")
     lines.append(f"Next action: {next_action}.")
     return _dedupe(lines)
 
 
-def _blocker_line_item(blocker: dict[str, str]) -> str:
-    return f"{blocker['id']} ({blocker['kind']})"
+def _blocker_line_item(blocker: dict[str, str], locale: str = "") -> str:
+    # The id is a stable key, not a word. Printing it was how `workspace_isolation`
+    # reached a chat bubble.
+    return f"{step_label(blocker['id'], locale=locale)} ({blocker_kind_label(blocker['kind'], locale=locale)})"
 
 
 def _executor_local_workflow_line(work_summary: dict[str, Any]) -> str:
@@ -595,15 +607,18 @@ def _executor_local_workflow_line(work_summary: dict[str, Any]) -> str:
     )
 
 
-def _narrative(headline: str, pending_gaps: list[str], blockers: list[dict[str, str]], next_action: str) -> str:
+def _narrative(
+    headline: str, pending_gaps: list[str], blockers: list[dict[str, str]], next_action: str, locale: str = ""
+) -> str:
     # A stopped step leads: "waiting on review, ci" is true of a run that is
     # progressing and of one that failed an hour ago, and only one of those is
     # worth reading first.
     if blockers:
-        stopped = "; ".join(_blocker_line_item(blocker) for blocker in blockers[:4])
+        stopped = "; ".join(_blocker_line_item(blocker, locale) for blocker in blockers[:4])
         return f"{headline} The run is stopped at {stopped}; next action is {next_action}."
     if pending_gaps:
-        return f"{headline} The wrapper is still waiting on {', '.join(pending_gaps[:4])}; next action is {next_action}."
+        waiting = ", ".join(step_label(gap, locale=locale) for gap in pending_gaps[:4])
+        return f"{headline} The wrapper is still waiting on {waiting}; next action is {next_action}."
     return f"{headline} The wrapper has no additional pending gap in this briefing; next action is {next_action}."
 
 
