@@ -111,24 +111,8 @@
     "visible_prefix": "[omh] adapter golden",
     "first_line": "Prepared cross-channel handoff",
     "body_format": "messenger_safe_markdown",
-    "body_text": "- skill — ulw-work\n- model — hermes (adapter-selected)\n- status — prepared_not_observed\n- prompt — sha256:6f1d8b5a2c4e\n\nReview the prepared cross-channel handoff.\n\n- Confirm scope\n- Keep delivery adapter-owned.",
+    "body_text": "Review the prepared cross-channel handoff.\n\n- Confirm scope\n- Keep delivery adapter-owned.\n\nskill: ulw-work — model: hermes (adapter-selected) — status: prepared_not_observed — prompt: sha256:6f1d8b5a2c4e",
     "body_blocks": [
-      {
-        "type": "bullet",
-        "text": "skill — ulw-work"
-      },
-      {
-        "type": "bullet",
-        "text": "model — hermes (adapter-selected)"
-      },
-      {
-        "type": "bullet",
-        "text": "status — prepared_not_observed"
-      },
-      {
-        "type": "bullet",
-        "text": "prompt — sha256:6f1d8b5a2c4e"
-      },
       {
         "type": "paragraph",
         "text": "Review the prepared cross-channel handoff."
@@ -140,27 +124,15 @@
       {
         "type": "bullet",
         "text": "Keep delivery adapter-owned."
+      },
+      {
+        "type": "paragraph",
+        "text": "skill: ulw-work — model: hermes (adapter-selected) — status: prepared_not_observed — prompt: sha256:6f1d8b5a2c4e"
       }
     ],
     "fallback_body_format": "messenger_safe_markdown",
-    "fallback_body_text": "- skill — ulw-work\n- model — hermes (adapter-selected)\n- status — prepared_not_observed\n- prompt — sha256:6f1d8b5a2c4e\n\nReview the prepared cross-channel handoff.\n\n- Confirm scope\n- Keep delivery adapter-owned.",
+    "fallback_body_text": "Review the prepared cross-channel handoff.\n\n- Confirm scope\n- Keep delivery adapter-owned.\n\nskill: ulw-work — model: hermes (adapter-selected) — status: prepared_not_observed — prompt: sha256:6f1d8b5a2c4e",
     "fallback_body_blocks": [
-      {
-        "type": "bullet",
-        "text": "skill — ulw-work"
-      },
-      {
-        "type": "bullet",
-        "text": "model — hermes (adapter-selected)"
-      },
-      {
-        "type": "bullet",
-        "text": "status — prepared_not_observed"
-      },
-      {
-        "type": "bullet",
-        "text": "prompt — sha256:6f1d8b5a2c4e"
-      },
       {
         "type": "paragraph",
         "text": "Review the prepared cross-channel handoff."
@@ -172,6 +144,10 @@
       {
         "type": "bullet",
         "text": "Keep delivery adapter-owned."
+      },
+      {
+        "type": "paragraph",
+        "text": "skill: ulw-work — model: hermes (adapter-selected) — status: prepared_not_observed — prompt: sha256:6f1d8b5a2c4e"
       }
     ],
     "preferred_blocks": [
@@ -197,7 +173,7 @@
       ]
     },
     "chunked_body_texts": [
-      "- skill — ulw-work\n- model — hermes (adapter-selected)\n- status — prepared_not_observed\n- prompt — sha256:6f1d8b5a2c4e\n\nReview the prepared cross-channel handoff.\n\n- Confirm scope\n- Keep delivery adapter-owned."
+      "Review the prepared cross-channel handoff.\n\n- Confirm scope\n- Keep delivery adapter-owned.\n\nskill: ulw-work — model: hermes (adapter-selected) — status: prepared_not_observed — prompt: sha256:6f1d8b5a2c4e"
     ],
     "follow_up_texts": [
       "HERMES PROMPTING — hermes (adapter-selected)\n```\nPrepare the bounded adapter response; do not deliver it.\n```"
@@ -225,8 +201,8 @@
       "hermes": "Render body_text as rich Markdown when the Hermes surface supports it; use fallback_body_text when relaying to a narrow chat adapter.",
       "generic": "Use body_text for the declared render_profile; use fallback_body_text if the actual surface cannot render Markdown tables."
     },
-    "table_policy": "convert_tables_to_bullets_for_messenger",
-    "body_preview": "- skill — ulw-work - model — hermes (adapter-selected) - status — prepared_not_observed - prompt — sha256:6f1d8b5a2c4e Review the prepared cross-channel handoff. - Confirm scope...",
+    "table_policy": "narrow_tables_to_aligned_block_else_bullets",
+    "body_preview": "Review the prepared cross-channel handoff. - Confirm scope - Keep delivery adapter-owned. skill: ulw-work — model: hermes (adapter-selected) — status: prepared_not_observed — pr...",
     "claim_boundary": "This golden records deterministic preparation only; it is not network, posting, delivery, or vendor-capability evidence.",
     "omh_message_gate": {
       "schema_version": "omh_message_gate/v1",
@@ -243,7 +219,7 @@
         "status",
         "prompt"
       ],
-      "render_guidance": "Render the provided gate lines verbatim, in order, above the response body, and post prompt_block as its own follow-on message. Never restate either as a markdown table: messenger surfaces drop tables.",
+      "render_guidance": "Render the provided gate lines verbatim, in order, and post prompt_block as its own follow-on message. Placement follows the profile: above the response body on a rich surface, below it on a limited one, where the first line is the notification preview. Never restate either as a markdown table: messenger surfaces drop tables.",
       "prompt_block": "HERMES PROMPTING — hermes (adapter-selected)\n```\nPrepare the bounded adapter response; do not deliver it.\n```",
       "warnings": []
     },

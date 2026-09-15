@@ -1,4 +1,23 @@
-"""P2 exact channel-envelope fixture contracts."""
+"""P2 exact channel-envelope fixture contracts.
+
+The fixtures under `examples/wrapper-golden/platform-envelopes/` are generated,
+not written. When a deliberate rendering change moves them, regenerate from the
+same producer this test compares against rather than hand-editing the JSON::
+
+    PYTHONPATH=tests uv run python -c "
+    import json; from pathlib import Path
+    from _platform_golden import GOLDEN_PLATFORMS, build_platform_fixture
+    d = Path('examples/wrapper-golden/platform-envelopes')
+    for pid in sorted(GOLDEN_PLATFORMS):
+        (d / f'{pid}.json').write_text(
+            json.dumps(build_platform_fixture(pid), ensure_ascii=False, indent=2) + chr(10),
+            encoding='utf-8')
+    "
+
+Diff the result before committing: these fixtures are what an adapter author
+reads to learn the envelope shape, so a key that moved without being meant to
+is the thing this test exists to surface.
+"""
 
 from __future__ import annotations
 

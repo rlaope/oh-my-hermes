@@ -20,6 +20,7 @@ from ..coding.routing_observation import (
     validate_routing_observation,
 )
 from ..coding.status_board import model_label_for
+from ..system.display_width import display_width, pad_to_width
 from ..evidence import status_label
 from .message_gate import build_message_gate, fence_marker_for, message_gate_body
 from .continuity import build_continuity_briefing
@@ -9789,7 +9790,7 @@ def messenger_rendering_contract(
             "status_lines",
         ]
         avoid_blocks = ["markdown_table", "wide_table", "large_unbroken_block"]
-        table_policy = "convert_tables_to_bullets_for_messenger"
+        table_policy = "narrow_tables_to_aligned_block_else_bullets"
         transforms = safe_transforms
     # Blocks come from the pre-dialect text so `code_block.language` survives;
     # the emitted body_text then loses fence language tags on every limited
@@ -10305,14 +10306,21 @@ def _messenger_safe_body_cached(body: str) -> tuple[str, tuple[str, ...]]:
         while index < len(lines) and _is_markdown_table_line(lines[index]):
             block.append(lines[index])
             index += 1
-        converted = _markdown_table_to_bullets(block)
+        # Narrow list-shaped tables keep their columns inside a fence; anything
+        # wider or shorter becomes bullets. A table that is neither -- malformed
+        # rows, one column -- passes through untouched, as before.
+        converted = _markdown_table_to_aligned_block(block)
+        transform = "markdown_table_to_aligned_block"
+        if not converted:
+            converted = _markdown_table_to_bullets(block)
+            transform = "markdown_table_to_bullets"
         if not converted:
             output.extend(block)
             continue
         if output and output[-1].strip():
             output.append("")
         output.extend(converted)
-        transforms.append("markdown_table_to_bullets")
+        transforms.append(transform)
     return "\n".join(output), tuple(sorted(set(transforms)))
 
 
@@ -10486,6 +10494,71 @@ def _is_markdown_separator_line(line: str) -> bool:
         if cell.count("-") < 3:
             return False
     return True
+
+
+# A table that survives a messenger as a monospace block rather than as
+# bullets. All three limits exist because the failure modes differ:
+#
+# - Columns: at four or more, the aligned width stops fitting a phone and the
+#   row wraps, which is worse than bullets because a wrapped monospace row no
+#   longer lines up with the one above it.
+# - Rows: a single data row has nothing to align WITH, and a fence around one
+#   row costs more vertical space than it saves.
+# - Width: the real constraint. It is measured on the rendered block rather
+#   than guessed from the column count, because three short columns fit where
+#   two long ones do not.
+#
+# Above any of them, bullets stay the answer -- they wrap without lying about
+# alignment. This is the only shape that keeps column alignment on Slack and
+# Telegram, which drop markdown tables outright.
+_ALIGNED_TABLE_MAX_COLUMNS: Final[int] = 3
+_ALIGNED_TABLE_MIN_ROWS: Final[int] = 2
+_ALIGNED_TABLE_MAX_WIDTH: Final[int] = 56
+
+
+def _markdown_table_to_aligned_block(lines: list[str]) -> list[str]:
+    """A narrow list-shaped table as a fenced, aligned block, or ``[]``.
+
+    Returning ``[]`` hands the table to ``_markdown_table_to_bullets``. Both are
+    lossless about the cells; they differ in whether the reader gets columns.
+    """
+    rows = _markdown_table_rows(lines)
+    if not rows:
+        return []
+    headers, body_rows = rows[0], rows[1:]
+    if not (2 <= len(headers) <= _ALIGNED_TABLE_MAX_COLUMNS) or len(body_rows) < _ALIGNED_TABLE_MIN_ROWS:
+        return []
+    if any(len(row) != len(headers) for row in body_rows):
+        return []
+    # Display cells, not characters: `len("이슈")` is 2 and the string occupies
+    # four columns, so padding by length is how a Korean or Japanese table comes
+    # out ragged inside the very fence that exists to keep it straight.
+    widths = [max(display_width(cell) for cell in column) for column in zip(headers, *body_rows)]
+    if sum(widths) + 2 * (len(widths) - 1) > _ALIGNED_TABLE_MAX_WIDTH:
+        return []
+    rendered = [
+        "  ".join(pad_to_width(cell, width) for cell, width in zip(row, widths)).rstrip()
+        for row in (headers, *body_rows)
+    ]
+    return ["```", *rendered, "```"]
+
+
+def _markdown_table_rows(lines: list[str]) -> list[list[str]]:
+    """Header and body cells of a markdown table, or ``[]`` when it is not one."""
+    if len(lines) < 3 or not _is_markdown_separator_line(lines[1]):
+        return []
+    headers = _split_markdown_table_row(lines[0])
+    if not headers or not any(header.strip() for header in headers):
+        return []
+    rows = [[header.strip() for header in headers]]
+    for row in lines[2:]:
+        if _is_markdown_separator_line(row):
+            continue
+        cells = _split_markdown_table_row(row)
+        if not any(cells):
+            continue
+        rows.append([cell.strip() for cell in cells])
+    return rows if len(rows) > 1 else []
 
 
 def _markdown_table_to_bullets(lines: list[str]) -> list[str]:

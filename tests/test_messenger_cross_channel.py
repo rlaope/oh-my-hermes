@@ -12,9 +12,9 @@ from omh.wrapper.message_gate import build_message_gate
 
 
 _BASELINE_SHA256 = {
-    "discord": "0d4e80fa21a5019db5ef7ac91da43587035bccc95453e447b6785592cb3d7512",
-    "slack": "052337a0fe32b6adfb1352497ae93af91cfa80c58f2a4d7e6bc717559f5e8607",
-    "telegram": "695a154f10a68697a64ac3f7e00cbf52d284547e857cc6b192c74ded9a96570d",
+    "discord": "39f91e4a81818259d8efa8c0602570ba5250295f2480182178102f6c69bf865d",
+    "slack": "674d7e2eccb6e676e2650a3fc4a41bcd1485f0ca2eb2f848c339dbddaafb52b9",
+    "telegram": "67f286273e602d496434262807599cce6f5ec63502b0a5f5d77226a943936030",
     "hermes": "a6a686bf7dee7ab5a23281e39d6ed9a1aae19a871f7abb4e7b5ea39e42351176",
     "generic": "a6a686bf7dee7ab5a23281e39d6ed9a1aae19a871f7abb4e7b5ea39e42351176",
 }
@@ -144,7 +144,7 @@ class StructuredGateTests(unittest.TestCase):
         self.assertEqual(rendering["chunking"]["max_recommended_chars"], 3800)
         self.assertEqual(rendering["chunking"]["hard_limit_chars"], 4000)
         self.assertEqual(rendering["chunking"]["limit_provenance"], "adapter_declared")
-        self.assertIn("- model — ", rendering["body_text"])
+        self.assertIn("model: ", rendering["body_text"])
         self.assertEqual(len(rendering["follow_up_texts"]), 1)
 
 

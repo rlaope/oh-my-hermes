@@ -2253,7 +2253,7 @@ class WrapperContractTests(unittest.TestCase):
         self.assertTrue(actions["prepare_report_package"]["enabled"])
         self.assertEqual(rendering["schema_version"], "omh_messenger_rendering/v1")
         self.assertIn("markdown_table", rendering["avoid_blocks"])
-        self.assertEqual(rendering["table_policy"], "convert_tables_to_bullets_for_messenger")
+        self.assertEqual(rendering["table_policy"], "narrow_tables_to_aligned_block_else_bullets")
         self.assertEqual(rendering["prefix_policy"]["default"], "once_per_response_first_line")
         self.assertEqual(rendering["prefix_policy"]["repeat_when"], "adapter_splits_response_across_separate_messages_or_chunks")
         self.assertIn("not execution evidence", trace["claim_boundary"])
@@ -2279,12 +2279,15 @@ class WrapperContractTests(unittest.TestCase):
             claim_boundary="Research summary is not execution evidence.",
         )
 
-        self.assertIn("markdown_table_to_bullets", rendering["transforms_applied"])
-        self.assertIn("- Hermes Agent: 강점: Skills, memory, gateway; OMH 포지션: Workflow layer", rendering["body_text"])
-        self.assertIn("- OpenCode: 강점: TUI coding loop; OMH 포지션: Handoff target", rendering["body_text"])
+        # Three narrow columns, so this table keeps its columns inside a fence
+        # rather than becoming bullets. Either way the markdown table itself is
+        # gone, which is what a messenger requires; see
+        # `tests/test_messenger_table_policy.py` for the full three-way split.
+        self.assertIn("markdown_table_to_aligned_block", rendering["transforms_applied"])
+        self.assertIn("Hermes Agent  Skills, memory, gateway  Workflow layer", rendering["body_text"])
+        self.assertIn("OpenCode      TUI coding loop          Handoff target", rendering["body_text"])
         self.assertNotIn("| --- |", rendering["body_text"])
         self.assertIn("Hermes Agent", rendering["body_preview"])
-        self.assertTrue(any(block["type"] == "bullet" and "Hermes Agent" in block["text"] for block in rendering["body_blocks"]))
 
     def test_messenger_rendering_preserves_tables_for_rich_markdown_profile(self) -> None:
         body = "\n".join(
@@ -2383,9 +2386,13 @@ class WrapperContractTests(unittest.TestCase):
             claim_boundary="Research summary is not execution evidence.",
         )
 
-        self.assertIn("- Escaped: Example: `a|b`; Notes: keeps escaped | text", rendering["body_text"])
-        self.assertIn("- Code span: Example: `x|y`; Notes: keeps inline code pipe", rendering["body_text"])
-        self.assertIn("markdown_table_to_bullets", rendering["transforms_applied"])
+        # The claim is about the cells, not the shape that carries them: an
+        # escaped pipe and one inside a code span both survive the transform.
+        self.assertIn("keeps escaped | text", rendering["body_text"])
+        self.assertIn("keeps inline code pipe", rendering["body_text"])
+        self.assertIn("`a|b`", rendering["body_text"])
+        self.assertIn("`x|y`", rendering["body_text"])
+        self.assertIn("markdown_table_to_aligned_block", rendering["transforms_applied"])
 
     def test_messenger_rendering_keeps_tables_inside_code_fences(self) -> None:
         body = "\n".join(

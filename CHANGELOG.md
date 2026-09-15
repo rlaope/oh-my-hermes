@@ -4,6 +4,33 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A narrow table keeps its columns on Slack, and provenance stopped taking
+  the notification preview.** Messenger profiles turned every markdown table
+  into bullets, which is right for a wide one and wrong for the shape people
+  actually send — a list of issues or PRs, two or three short columns, which
+  reads as a table and loses its alignment as bullets. Limited profiles now
+  render such a table as an aligned block inside a code fence, the one shape
+  Slack and Telegram keep, and fall back to bullets above three columns, above
+  a 56-cell rendered width, or below two data rows. Each limit answers a
+  different failure: a wrapped monospace row no longer lines up with the row
+  above it, and a fence around a single row costs more than the columns save.
+  Rich profiles are unchanged and keep the markdown table.
+
+  Column width is now measured in display cells rather than characters.
+  `len("이슈")` is 2 while the string occupies four columns, so padding by
+  length is how a Korean or Japanese board comes out ragged inside the fence
+  that exists to keep it straight — which the coding status board had been
+  doing all along, and `src/commands/setup.py` had been getting right in its
+  own copy. `src/system/display_width.py` is now the one home for both.
+
+  Separately, the message gate's five provenance bullets became one line, and
+  on limited profiles it follows the body instead of leading it. Five lines of
+  "which skill, which model, which prompt" above the answer spend the whole of
+  a phone's notification preview on who did the work rather than on what they
+  found. The field labels stay: dropping them would leave
+  `ulw-goal — active — sha256:…`, where only the digest identifies itself. Rich
+  profiles keep the aligned card above the body, where there is room for it.
+
 - **A coding briefing now opens by saying whether it needs you.** The first
   line carries 🔴 / 🟡 / 🟢 — stopped, waiting on you, running — which is what
   a phone notification shows when it shows sixty characters and nothing else.

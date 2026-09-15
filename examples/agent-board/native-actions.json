@@ -359,7 +359,7 @@
             "hermes": "Render body_text as rich Markdown when the Hermes surface supports it; use fallback_body_text when relaying to a narrow chat adapter.",
             "generic": "Use body_text for the declared render_profile; use fallback_body_text if the actual surface cannot render Markdown tables."
           },
-          "table_policy": "convert_tables_to_bullets_for_messenger",
+          "table_policy": "narrow_tables_to_aligned_block_else_bullets",
           "body_preview": "I will prepare the agent board: targets, roles, tasks, handoff lanes, heartbeat expectations, blocker states, and completion rules. For parallel coding splits, `omh coding fanou...",
           "claim_boundary": "An agent board card is not proof that another Hermes target accepted, worked, heartbeat-ed, or completed. It is not target acceptance, agent heartbeat, task execution, blocker resolution, handoff receipt, or completion evidence."
         },
@@ -678,7 +678,7 @@
           "hermes": "Render body_text as rich Markdown when the Hermes surface supports it; use fallback_body_text when relaying to a narrow chat adapter.",
           "generic": "Use body_text for the declared render_profile; use fallback_body_text if the actual surface cannot render Markdown tables."
         },
-        "table_policy": "convert_tables_to_bullets_for_messenger",
+        "table_policy": "narrow_tables_to_aligned_block_else_bullets",
         "body_preview": "create: prepared.",
         "claim_boundary": "Prepared actions are not invocations; receipts prove only the correlated operation, not review approval, CI or merge."
       },

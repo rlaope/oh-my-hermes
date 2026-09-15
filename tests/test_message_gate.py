@@ -72,9 +72,16 @@ def _routed_gate(**overrides: object) -> dict:
 
 class RenderShapeTests(unittest.TestCase):
     def test_a_newline_in_a_value_cannot_break_the_rows_below_it(self) -> None:
+        """The limited profile is one line, and a value cannot make it two.
+
+        The claim did not change when the shape did: a newline that survived
+        `_bounded` used to split one bullet into three, and would now split the
+        single provenance line into three lines the reader cannot attribute.
+        """
         gate = _routed_gate(skill="ulw\nwork\nbroken")
         lines = render_message_gate_lines(gate, render_profile=RENDER_PROFILE_LIMITED_MARKDOWN)
-        self.assertEqual(len(lines), len([line for line in lines if line.startswith("- ")]))
+        self.assertEqual(len(lines), 1)
+        self.assertNotIn("\n", lines[0])
 
 
 class DisclosureHonestyTests(unittest.TestCase):
@@ -246,8 +253,8 @@ class WiringTests(unittest.TestCase):
         rendering = self._payload(CODING_MESSAGE, executor_target="codex", mode="delegate")[
             "chat_response"
         ]["messenger_rendering"]
-        self.assertIn("- model — ", rendering["body_text"])
-        self.assertIn("- status — ", rendering["body_text"])
+        self.assertIn("model: ", rendering["body_text"])
+        self.assertIn("status: ", rendering["body_text"])
 
     def test_a_capability_question_carries_no_gate(self) -> None:
         # The `oh-my-hermes` router skill's own harness is `coding-handling`, so
@@ -255,7 +262,7 @@ class WiringTests(unittest.TestCase):
         # and a missing-model warning about a question with no executor at all.
         response = self._payload("what can OMH do?")["chat_response"]
         self.assertNotIn("message_gate", response)
-        self.assertNotIn("- model — ", response["messenger_rendering"]["body_text"])
+        self.assertNotIn("model: ", response["messenger_rendering"]["body_text"])
 
     def test_a_research_route_carries_no_gate(self) -> None:
         response = self._payload("웹서치해서 최신 자료 정리해줘")["chat_response"]
@@ -359,7 +366,7 @@ class WiringTests(unittest.TestCase):
                 response = self._payload(message)["chat_response"]
                 self.assertEqual(response["kind"], "handoff")
                 self.assertNotIn("message_gate", response)
-                self.assertNotIn("- model — ", response["messenger_rendering"]["body_text"])
+                self.assertNotIn("model: ", response["messenger_rendering"]["body_text"])
 
     def test_the_canonical_body_carries_no_render_profile(self) -> None:
         # `chat_response.body` and the blocks derived from it are the
@@ -375,17 +382,18 @@ class WiringTests(unittest.TestCase):
         }
         self.assertEqual(len(set(bodies.values())), 1, bodies)
         for body in bodies.values():
-            self.assertNotIn("- model — ", body)
+            self.assertNotIn("model: ", body)
             self.assertNotIn("MODEL   ", body)
 
     def test_the_header_still_reaches_the_body_the_messenger_posts(self) -> None:
         limited = self._payload(CODING_MESSAGE, source="discord", executor_target="codex", mode="delegate")
         rich = self._payload(CODING_MESSAGE, source="hermes", executor_target="codex", mode="delegate")
-        self.assertIn("- model — ", limited["chat_response"]["messenger_rendering"]["body_text"])
+        self.assertIn("model: ", limited["chat_response"]["messenger_rendering"]["body_text"])
         self.assertIn("MODEL   ", rich["chat_response"]["messenger_rendering"]["body_text"])
-        # The fallback is what a rich envelope degrades to, so it takes bullets
-        # even when the primary body took the aligned card.
-        self.assertIn("- model — ", rich["chat_response"]["messenger_rendering"]["fallback_body_text"])
+        # The fallback is what a rich envelope degrades to, so it takes the
+        # limited profile's single line even when the primary body took the
+        # aligned card.
+        self.assertIn("model: ", rich["chat_response"]["messenger_rendering"]["fallback_body_text"])
 
     def test_the_main_delegate_path_names_an_unresolved_model_route(self) -> None:
         # The guarantee this replaces was written against a shape production
@@ -547,14 +555,14 @@ class GoalSurfaceTests(unittest.TestCase):
     def test_a_goal_declares_no_model_rather_than_an_unknown_one(self) -> None:
         rendered = self._render()
         self.assertNotIn("model", rendered)
-        self.assertIn("- skill — ulw-goal", rendered)
-        self.assertIn("- status — active", rendered)
+        self.assertIn("skill: ulw-goal", rendered)
+        self.assertIn("status: active", rendered)
 
     def test_a_goal_digest_is_labelled_objective_not_prompt(self) -> None:
         # A goal ledger holds an objective. Calling the row PROMPT asserts a
         # provenance category the card does not have.
         rendered = self._render()
-        self.assertIn("- objective — sha256:", rendered)
+        self.assertIn("objective: sha256:", rendered)
         self.assertNotIn("prompt", rendered)
 
     def test_a_declared_non_disclosure_raises_no_missing_model_warning(self) -> None:

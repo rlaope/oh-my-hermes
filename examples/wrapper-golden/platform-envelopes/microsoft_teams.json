@@ -133,24 +133,8 @@
       }
     ],
     "fallback_body_format": "messenger_safe_markdown",
-    "fallback_body_text": "- skill — ulw-work\n- model — hermes (adapter-selected)\n- status — prepared_not_observed\n- prompt — sha256:6f1d8b5a2c4e\n\nReview the prepared cross-channel handoff.\n\n- Confirm scope\n- Keep delivery adapter-owned.",
+    "fallback_body_text": "Review the prepared cross-channel handoff.\n\n- Confirm scope\n- Keep delivery adapter-owned.\n\nskill: ulw-work — model: hermes (adapter-selected) — status: prepared_not_observed — prompt: sha256:6f1d8b5a2c4e",
     "fallback_body_blocks": [
-      {
-        "type": "bullet",
-        "text": "skill — ulw-work"
-      },
-      {
-        "type": "bullet",
-        "text": "model — hermes (adapter-selected)"
-      },
-      {
-        "type": "bullet",
-        "text": "status — prepared_not_observed"
-      },
-      {
-        "type": "bullet",
-        "text": "prompt — sha256:6f1d8b5a2c4e"
-      },
       {
         "type": "paragraph",
         "text": "Review the prepared cross-channel handoff."
@@ -162,6 +146,10 @@
       {
         "type": "bullet",
         "text": "Keep delivery adapter-owned."
+      },
+      {
+        "type": "paragraph",
+        "text": "skill: ulw-work — model: hermes (adapter-selected) — status: prepared_not_observed — prompt: sha256:6f1d8b5a2c4e"
       }
     ],
     "preferred_blocks": [
@@ -232,7 +220,7 @@
         "status",
         "prompt"
       ],
-      "render_guidance": "Render the provided gate lines verbatim, in order, above the response body, and post prompt_block as its own follow-on message. Never restate either as a markdown table: messenger surfaces drop tables.",
+      "render_guidance": "Render the provided gate lines verbatim, in order, and post prompt_block as its own follow-on message. Placement follows the profile: above the response body on a rich surface, below it on a limited one, where the first line is the notification preview. Never restate either as a markdown table: messenger surfaces drop tables.",
       "prompt_block": "HERMES PROMPTING — hermes (adapter-selected)\n```\nPrepare the bounded adapter response; do not deliver it.\n```",
       "warnings": []
     },

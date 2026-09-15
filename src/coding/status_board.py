@@ -55,6 +55,7 @@ from .routing_observation import (
     render_routing_status_rows,
 )
 from ..catalogs.briefing_vocabulary import status_board_copy
+from ..system.display_width import display_width, pad_to_width
 
 CODING_STATUS_BOARD_SCHEMA_VERSION: Final[str] = "omh_coding_status_board/v1"
 
@@ -683,13 +684,13 @@ def _cell(unit: dict[str, Any], field: str) -> str:
 
 def _column_widths(units: list[dict[str, Any]]) -> list[int]:
     return [
-        max([len(header)] + [len(_cell(unit, field)) for unit in units])
+        max([display_width(header)] + [display_width(_cell(unit, field)) for unit in units])
         for header, field in _COLUMNS
     ]
 
 
 def _table_row(cells: list[str], widths: list[int], *, summary: str) -> str:
-    padded = [cell.ljust(width) for cell, width in zip(cells, widths)]
+    padded = [pad_to_width(cell, width) for cell, width in zip(cells, widths)]
     row = "  ".join(padded).rstrip()
     return f"{row}  {summary}".rstrip() if summary else row
 

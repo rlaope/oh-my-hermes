@@ -92,9 +92,10 @@ WARNING_UNRESOLVED_MODEL_ROUTE: Final[str] = "message_gate_unresolved_model_rout
 # the gate hands back exact lines, so an agent relaying them has no formatting
 # decision left to get wrong.
 RENDER_GUIDANCE: Final[str] = (
-    "Render the provided gate lines verbatim, in order, above the response body, and post "
-    "prompt_block as its own follow-on message. Never restate either as a markdown table: "
-    "messenger surfaces drop tables."
+    "Render the provided gate lines verbatim, in order, and post prompt_block as its own "
+    "follow-on message. Placement follows the profile: above the response body on a rich "
+    "surface, below it on a limited one, where the first line is the notification preview. "
+    "Never restate either as a markdown table: messenger surfaces drop tables."
 )
 
 
@@ -207,11 +208,29 @@ def render_message_gate_lines(
         # An empty fence pair is a rendering fault on every messenger, so a
         # payload this version can read no rows out of renders nothing at all.
         return ["```", *rows, "```"] if rows else []
+    # One line, not five bullets, and it goes BELOW the body (see
+    # `message_gate_body`). Five lines of provenance above the answer spend the
+    # whole of a phone notification's preview on who ran the work rather than on
+    # what it found.
+    #
+    # The separator is an em dash. ` · ` is out because a status value already
+    # contains one (`Code · running`) and a reader would see one field split in
+    # two; ` | ` is out because it is a markdown table's cell separator, and
+    # `test_no_table_is_ever_rendered` is right to refuse it -- a line that
+    # looks like a table row on a surface that drops tables is the shape this
+    # module exists to avoid.
+    #
+    # The labels stay. Dropping them would save about a quarter of the line and
+    # leave `ulw-goal — active — sha256:…`, where only the digest identifies
+    # itself; a reader would have to know the field order to read the row. A
+    # value identified by its position is not compressed, it is unlabelled.
     labels = {key: label for label, key in _FIELDS}
     return [
-        f"- {labels.get(key, key.upper()).lower()} — {fields[key]}"
-        for key in _field_order(payload)
-        if key in fields
+        " — ".join(
+            f"{labels.get(key, key.upper()).lower()}: {fields[key]}"
+            for key in _field_order(payload)
+            if key in fields
+        )
     ]
 
 
@@ -221,12 +240,26 @@ def message_gate_body(
     render_profile: str = RENDER_PROFILE_LIMITED_MARKDOWN,
     body: str = "",
 ) -> str:
-    """The gate lines joined above ``body``, or ``body`` unchanged when empty."""
+    """The gate lines placed around ``body``, or ``body`` unchanged when empty.
+
+    Placement is per profile, and it is the whole reason this function exists
+    rather than callers joining strings. A rich surface has room for the aligned
+    card to lead, and a reader there scans a block before prose. A limited
+    surface is read on a phone, where the first line is often the only line
+    shown, so the single provenance line follows the answer instead of
+    displacing it.
+    """
     lines = render_message_gate_lines(payload, render_profile=render_profile)
     if not lines:
         return body
-    header = "\n".join(lines)
-    return f"{header}\n\n{body}" if body else header
+    block = "\n".join(lines)
+    if not body:
+        return block
+    if render_profile == RENDER_PROFILE_RICH_MARKDOWN:
+        return f"{block}\n\n{body}"
+    # `rstrip` on the body only: a body that ends with a newline would otherwise
+    # put a blank line and a half between the answer and its provenance.
+    return f"{body.rstrip()}\n\n{block}"
 
 
 
