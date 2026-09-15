@@ -24,6 +24,7 @@
 
 <p align="center">
   <strong>只需安装一次。保留 Hermes，再加上一层更强的工作系统。</strong>
+  <br>
   <em>以清晰的证据边界提供规划、研究、内容制作、编码 handoff、运维和项目记忆。</em>
 </p>
 
@@ -31,10 +32,14 @@
   <img src="assets/oh-my-hermes-agent-poster.png" alt="Oh My Hermes Agent poster" width="720">
 </p>
 
-**oh-my-hermes**（OMH）把
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) 中的普通请求，
-转化为合适的能力、明确的下一步，以及对“已经发生”和“尚未发生”的诚实状态。
-它不会取代 Hermes，也不会隐藏编码 executor，而是增强现有 Hermes 工作流。
+<p align="center">
+  <strong>oh-my-hermes</strong>（OMH）把
+  <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>
+  中的普通请求，转化为合适的能力、明确的下一步，以及对“已经发生”和“尚未发生”的诚实状态。
+  它不会取代 Hermes，也不会隐藏编码 executor，而是增强现有 Hermes 工作流。
+  <br><br>
+  OMH 是 Hermes 原生技能之上的操作层：它框定问题、挑选工作流与证据门禁，并在这条受治理的路径内以能力（capability）的形式运行原生技能。
+</p>
 
 [Website](https://rlaope.github.io/oh-my-hermes/) ·
 [Documentation](docs/README.md) ·
@@ -183,6 +188,8 @@ hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
 
 </details>
 
+<br>
+
 ## 你能得到什么
 
 OMH 以一个插件为 Hermes Agent 提供三样东西：编码智能（01–04、07）、长期记忆系统（08）、优化的工作流包（05–06）。每样各一个场景，取自真实界面。
@@ -197,7 +204,7 @@ OMH 的编码面有三步：按模型调整提示（03），把工作拆成并�
 
 ### 02 · 类别按执行器归你所有
 
-`ultrabrain`、`deep`、`architect`、`quick`、`writing`、`visual-engineering`：每一个都是按编码执行器划分的模型+effort 链，在一个文件里即可查看和覆盖。提供方拒绝某个模型时链会前进；一次会继承无法提供该模型的提供方的派发会被拒绝，而不是悄悄降级。setup 会询问你的提供方，并按当前这台机器重排链。
+`ultrabrain`、`deep`、`architect`、`unspecified-high`、`unspecified-low`、`quick`、`writing`、`visual-engineering`、`artistry`、`capable`、`simple-work`、`deep-work`：每一个都是可编辑的模型 + effort 链，与下方“推荐模型”里列出的十二个一致，在一个文件里即可查看和覆盖。提供方拒绝某个模型时链会前进；一次会继承无法提供该模型的提供方的派发会被拒绝，而不是悄悄降级。setup 会询问你的提供方，并按当前这台机器重排链。
 
 <p align="center">
   <img src="assets/showcase-02-categories.svg" alt="omh coding category-maestro show：按执行器的类别链、一处操作者覆盖、一次被拒绝的派发" width="1080">
@@ -221,7 +228,7 @@ OMH 的编码面有三步：按模型调整提示（03），把工作拆成并�
 
 ### 05 · Oh-My-Hermes 界面与 Hermes Agent 工作流
 
-每条委派通道一行：模型、effort、轮次、token、成本，实时更新。经 Maestro 交给 Codex 或 Claude Code 的通道有自己的一行，标为 `(codex/maestro …)` 或 `(claude/maestro …)`。成本为零只在主机确认时才显示；无法定价的调用显示 `unknown`，而不是 `$0`。进程存在之前是 `Plan · not run`，执行器自称完成时是 `Code · reported done`，只有门禁通过后才是 `Test · verified`。提示框上方的阶段待办是这次运行自己的清单，不是事后写的摘要。
+界面是 Hermes 终端：提示符下方带 OMH dock、上方带阶段待办；工作流是 `ulw-*` 引擎与每一个 `omh-*` 技能，从聊天中路由。每条委派通道一行：模型、effort、轮次、token、成本，实时更新。经 Maestro 交给 Codex 或 Claude Code 的通道有自己的一行，标为 `(codex/maestro …)` 或 `(claude/maestro …)`。成本为零只在主机确认时才显示；无法定价的调用显示 `unknown`，而不是 `$0`。进程存在之前是 `Plan · not run`，执行器自称完成时是 `Code · reported done`，只有门禁通过后才是 `Test · verified`。提示框上方的阶段待办是这次运行自己的清单，不是事后写的摘要。
 
 <p align="center">
   <img src="assets/showcase-05-hud.svg" alt="OMH HUD：每条通道的模型、effort、轮次、token、成本来源、证据状态，以及阶段待办" width="1080">
@@ -368,9 +375,19 @@ $ cat ~/.omh/routing/model-chains.json
 当前生效的 chain 可用 `omh model-chains show` 查看。不想手动编辑文件的话，在终端运行 `omh model-chains`（或 `omh model`）会打开方向键选择器——上下选类别，左右换 head 模型，`-`/`+` 调 effort——在 Modern TUI 里 `/omh-model` 打开同一个选择器。脚本化的写法是 `omh model-chains set quick "kimi-k3-ultrafast:low, glm-5.3-ultrafast:low"`，同一个文件会被直接修改。
 如果 alias 需要 provider 专用的 wire ID，请在 `~/.omh/routing/model-providers.json` 中按 `model_provider_routes/v1` 映射一次。此后 `set`、`status`、fallback 和 HUD 都会显示完整的 alias/provider/wire model route。OMH 只保存 provider ID，不保存 credential。
 
+每个账号都不一样，所以 OMH 会自行读取 Hermes 已绑定了哪些 provider——一次 `hermes auth` 登录、Hermes 配置里的一个 `providers:` 条目或 `model.provider`、`$HERMES_HOME/.env` 里的一个 API-key 变量名——并自己统计：每条链会重排，让已绑定 provider 能服务的条目排在前面，选择器会标记其余条目，不删除任何东西，也不会去调用任何东西来核实。只读取 id 和变量名，从不读取密钥或 token。交互式 `omh setup` 仍会询问，已绑定的行会预先勾选，这样你可以纠正某一种类、取消勾选一个你其实用不了的已绑定 provider、添加一个 OMH 无法定位的，或说明你是否订阅了 Claude Code；它的回答会写入 `~/.omh/routing/providers.json`（`provider_entitlements/v1`），并优先于自动检测。Claude Code 订阅只会为 Maestro 通道预置 Claude Code 的 `--model` 偏好，因为 Hermes 本身无法消费它。
+
 请让 Hermes **设置我的模型**，以查看或更改这些推荐。它们是可编辑的偏好，不是 benchmark 结果。详细的设置、fallback、provider 与所有权规则见 [Guided Model Setup](docs/INSTALLATION.md#guided-model-setup)。
 
-编码委派的 dispatch（`omh coding run` / `omh coding fanout dispatch`）读取的是与本文件分开、由 operator 自行设置的 preference：要在 Claude Code 上使用最强档位，在 `~/.omh/routing/dispatch-models.json` 中设置 `"claude-code": "opus"`，或在单次 `omh coding run` 调用中传入 `--model opus`；`codex` 在确认账号可用的 model id 后同样设置即可。完整的 schema 与优先级顺序见 `docs/FANOUT.md`（Dispatch-model preference）。
+编码委派 dispatch（`omh coding run` / `omh coding fanout dispatch`）——直接派生 Claude Code 或 Codex 的 Maestro 通道——拥有与它自己的同级文件相同的类别拨盘。按工作类别路由：
+
+```sh
+$ omh coding category-maestro set codex ultrabrain gpt-5.6-sol:xhigh
+$ omh coding category-maestro interview   # 引导式问答，回车保留每条链
+$ omh coding run --owner codex --category ultrabrain --goal ...
+```
+
+这会编辑 `~/.omh/routing/category-maestro.json`（`omh_category_maestro/v1`）；`omh coding category-maestro show` 会打印生效表并标出 operator 覆盖项，交互式 `omh setup` 也提供同样的问答流程。单次运行里的显式 `--model` 始终优先，而 `~/.omh/routing/dispatch-models.json` 仍是按 owner 的默认值，仅在没有任何路由能解析时才会用到（要给 Claude Code 最强档位，就在那里设 `"claude-code": "opus"`）。schema 与完整优先级顺序见 `docs/FANOUT.md`（Category-maestro 与 Dispatch-model preference）。
 
 <details>
 <summary><strong>也可以把以下内容粘贴给 Hermes 或其他 coding agent</strong></summary>
@@ -384,6 +401,8 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 ```
 
 </details>
+
+<br>
 
 ## Ultra 技能
 
@@ -405,6 +424,8 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 | ⚡ `ulw-loop` | 计划 → 实现 → 评审，循环到目标真正通过。 |
 | ⚡ `ulw-qa` | 故意用狠场景攻击，坏哪修哪。 |
 | ⚡ `ulw-perf` | 先测出真正慢和贵的地方，再逐条修热路径。 |
+
+<br>
 
 ## OMH 提供什么
 
@@ -445,6 +466,8 @@ Hermes Agent 已经在跑循环。OMH 决定往循环里放什么：每条 lane 
 | ♾️ **Ultra 工作流引擎** | 并行交付 lane、带 ledger 与真实完成 gate 的度量循环、引擎运行前的 decision-frontier 访谈。列表见上方 Ultra 技能。 |
 | 📦 **确定性目录** | 由同一来源生成的一百多个可安装技能、含负例的 routing precision 语料，以及一个字节偏差就让 CI 失败的 drift gate。 |
 
+<br>
+
 ## 证据先于声明
 
 OMH 只报告自己观测到的事情。你看到的每个状态都由两部分组成：处于哪个阶段，
@@ -458,7 +481,16 @@ OMH 只报告自己观测到的事情。你看到的每个状态都由两部分�
 | `Test · verified` | test、review 或 CI gate 确实通过了。 |
 
 关键是倒数第二行：executor 说自己完成了，与结果被检查过是两回事，
-而大多数工具把两者都写成「完成」。
+而大多数工具把两者都写成「完成」。能力影响是跨独立维度报告的，而不是折叠成一个营销分数。见 [Capability Impact](docs/CAPABILITY_IMPACT.md)。
+
+### 实测：单独 Hermes 对比经 OMH 的 Hermes
+
+`benchmarks/product-ab/v1` 在一个固定的语料库上对比这两个产品——语料库是本仓库自己已合并的 PR，评分依据是那些 PR 自己的测试，每个分组报告四个数字：通过率、每个通过任务的成本、每个目标的墙钟时间、以及虚假完成率。
+
+**目前还没有发布任何实测运行结果。** 通道、语料库和离线试点都已就位；一旦有了仓库可以指向的运行记录，本节就会放上这张表。复现命令与完整声明边界：[`benchmarks/product-ab/v1/README.md`](benchmarks/product-ab/v1/README.md)。
+
+<br>
+
 ## 文档
 
 - [文档地图](docs/README.md)
@@ -469,8 +501,21 @@ OMH 只报告自己观测到的事情。你看到的每个状态都由两部分�
 - [Workflow reference](docs/WORKFLOWS.md)
 - [角色](docs/ROLES.md)
 - [应用案例](docs/APPLICATION_CASES.md)
+- [模型路由、扇出契约与请求打分](docs/FANOUT.md)
+- [扇出 executor 证据：会话、故障诊断、容量（agent/operator 参考）](docs/FANOUT-EXECUTOR-EVIDENCE.md)
+- [Agent 看板与原生 Kanban 协作（agent/operator 参考）](docs/AGENT-BOARD.md)
+- [按模型的校准映射](MODEL_OPTI.md)
+- [证据规则与能力影响](docs/CAPABILITY_IMPACT.md)
+- [长期记忆模型](docs/MEMORY.md)
+- [用 Hermes 处理超大 PDF](docs/LONG-DOCUMENT-READING.md)
+- [实时模型基准与实测结果](benchmarks/live-model-tools/v1/README.md)
 - [发布与开发](docs/RELEASE.md)
+
+<br>
+
 ## 开发
+
+源码检出（source checkout）时：
 
 ```sh
 PYTHONPATH=tests uv run python -m unittest discover -s tests -v
