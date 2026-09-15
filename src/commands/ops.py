@@ -902,6 +902,7 @@ def _add_recurring_intent_json_arg(parser: argparse.ArgumentParser) -> None:
 def _add_ops_commands(sub) -> None:
     from .design_direction_iterations import add_ops_design_direction_iterations_command
     from .memory_provider_posture import add_ops_memory_provider_posture_command
+    from .permission_rehearsal import add_ops_permission_rehearsal_command
     from .plugin_risk_audit import add_ops_plugin_risk_audit_command
     from .provider_profile_posture import add_ops_provider_profile_posture_command
     from .prompt_compatibility import add_ops_prompt_compatibility_command
@@ -919,6 +920,7 @@ def _add_ops_commands(sub) -> None:
     add_ops_rules_import_command(ops_sub)
     add_ops_plugin_risk_audit_command(ops_sub)
     add_ops_toolcall_rules_command(ops_sub)
+    add_ops_permission_rehearsal_command(ops_sub)
     add_ops_design_direction_iterations_command(ops_sub)
 
     data_harness = ops_sub.add_parser(

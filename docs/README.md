@@ -41,6 +41,7 @@ references rather than normal user steps.
 | Inspect the runtime-readable capability map | [Capabilities](CAPABILITIES.md) |
 | Turn a capability family on or off without uninstalling | [Capability Toggles](CAPABILITY-TOGGLES.md) |
 | Block a Hermes tool call with a rule you wrote | [Toolcall Rules](TOOLCALL-RULES.md) |
+| See which of an unattended batch's calls the rules refuse, before it starts | [Toolcall Rules: Rehearsing a planned batch](TOOLCALL-RULES.md#rehearsing-a-planned-batch) |
 | See which coding work is running, in which session | [Coding Observability](CODING-OBSERVABILITY.md) |
 | Understand measured and unproven impact claims | [Capability Impact](CAPABILITY_IMPACT.md) |
 | Browse all generated skills and harness metadata | [Workflow Reference](WORKFLOWS.md) |

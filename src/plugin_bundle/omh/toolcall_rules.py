@@ -153,14 +153,28 @@ def validate_toolcall_rules_document(raw: object) -> tuple[list[str], int]:
     return (errors, accepted)
 
 
-def toolcall_rule_directive(
+def matched_toolcall_rule(
     *,
     tool_name: object,
     tool_input: object,
     session_id: str = "",
     omh_home: str = "",
-) -> dict[str, str] | None:
-    """The block directive for this call, or ``None`` to let it proceed."""
+) -> ToolcallRule | None:
+    """The rule that intervenes on this call, or ``None`` to let it proceed.
+
+    Split out of ``toolcall_rule_directive`` so a caller that needs the rule
+    itself -- the batch rehearsal, which reports which rule refused a planned
+    call -- reads the matched object instead of parsing the name back out of
+    the block message. The enforcing hook keeps calling the directive
+    wrapper, so there is still exactly one matcher and a rehearsal cannot
+    drift from enforcement.
+
+    Not side-effect free in one respect: a ``repeat="once"`` rule is CLAIMED
+    here, against ``session_id``. That is the semantics -- one intervention
+    per rule per session -- and a caller modelling a session (rather than
+    living in one) passes a session id of its own so it cannot consume a real
+    session's claims.
+    """
     name = str(tool_name or "").strip()
     if not name:
         return None
@@ -181,11 +195,30 @@ def toolcall_rule_directive(
             continue
         if rule.repeat == "once" and not _claim_fire(path, session_id, rule.name):
             continue
-        return {
-            "action": "block",
-            "message": f"[OMH Rule] {rule.name}: {rule.message}\n{_BLOCK_SUFFIX}",
-        }
+        return rule
     return None
+
+
+def toolcall_rule_directive(
+    *,
+    tool_name: object,
+    tool_input: object,
+    session_id: str = "",
+    omh_home: str = "",
+) -> dict[str, str] | None:
+    """The block directive for this call, or ``None`` to let it proceed."""
+    rule = matched_toolcall_rule(
+        tool_name=tool_name,
+        tool_input=tool_input,
+        session_id=session_id,
+        omh_home=omh_home,
+    )
+    if rule is None:
+        return None
+    return {
+        "action": "block",
+        "message": f"[OMH Rule] {rule.name}: {rule.message}\n{_BLOCK_SUFFIX}",
+    }
 
 
 def _parse_rules(raw: object) -> tuple[ToolcallRule, ...]:
