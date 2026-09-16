@@ -72,6 +72,23 @@ class SelfEvaluationLoopsReferenceTests(unittest.TestCase):
         self.assertIn("a refined output is not a\nverified output", content)
         self.assertIn("an improved score is a statement about the rubric, not\nabout the world", content)
 
+    def test_the_bands_state_that_they_are_unverified_here(self) -> None:
+        # The bands are the conventional reading of a chance-corrected
+        # statistic and were measured on no judge this repository uses. A
+        # reader applying the table correctly still reads their own figure
+        # against numbers nobody checked, so the table says so itself. The
+        # first row is a rule, not a calibration, and survives whatever a
+        # later measurement shows (#1612).
+        content = self._content()
+        self.assertIn("not a figure measured here", content)
+        self.assertIn("no grader model and no hand-labeled sample of its own", content)
+        self.assertIn("The first row is a rule rather than a calibration", content)
+        self.assertIn(
+            "| not measured | unqualified; reported as unqualified, never quoted as a result |",
+            content,
+        )
+        self.assertIn("too small to separate 0.4 from\n0.6, that is the result", content)
+
     def test_the_skill_body_points_at_the_reference(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
         evaluation = definitions["agent-evaluation"]

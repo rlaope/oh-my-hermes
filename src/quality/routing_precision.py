@@ -32,6 +32,12 @@ class RoutingInterventionCase:
     expected_next_action: str
     expected_response_kind: str
     expected_candidate: str = ""
+    # The confidence tier the route reached. Left unset on most cases, because
+    # `expected_route_action` already implies a band: `dispatch` needs `high`.
+    # Set it where the tier itself is the claim -- a case pinned at `clarify`
+    # passes at any confidence below the dispatch threshold, so a phrase that
+    # slid from `medium` to `low` would otherwise still pass.
+    expected_confidence: str = ""
     active_design_direction_iteration: dict[str, str] | None = None
 
 
@@ -3385,6 +3391,8 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "automation-blueprint",
         "prepare_scheduled_ops_blueprint",
         "automation_blueprint",
+        "automation-blueprint",
+        "high",
     ),
     RoutingInterventionCase(
         "watch-continuously-opens-automation-blueprint",
@@ -3394,6 +3402,61 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "automation-blueprint",
         "prepare_scheduled_ops_blueprint",
         "automation_blueprint",
+    ),
+    # A ja or zh sentence is one routing token, so a pack phrase sitting inside
+    # a longer sentence earns the phrase credit but not the token credit an
+    # exact-message match adds, and lands one tier below the English
+    # equivalent above. Measured over every shipped pack: 84 of 91 ja phrases
+    # and 81 of 88 zh phrases dispatch at high bare and clarify at medium once
+    # a sentence surrounds them, while ko (space-segmented, NFKD-folded) barely
+    # moves -- 895 of 962 phrases dispatch bare and 899 wrapped. The four cases
+    # below record that difference as intended rather than leaving it
+    # unpinned: the skill is still found and named, the tier is lower, and a
+    # scoring change that lifts CJK credit must move these cases on purpose.
+    # See #1607 for the scoring half, which is not taken here.
+    RoutingInterventionCase(
+        "japanese-pack-phrase-in-sentence-clarifies",
+        "A Japanese pack phrase inside a sentence clarifies with the skill named",
+        "ずっと監視して",
+        "clarify",
+        "oh-my-hermes",
+        "answer_clarification",
+        "clarification",
+        "automation-blueprint",
+        "medium",
+    ),
+    RoutingInterventionCase(
+        "chinese-pack-phrase-in-sentence-clarifies",
+        "A Chinese pack phrase inside a sentence clarifies with the skill named",
+        "持续监控这个服务",
+        "clarify",
+        "oh-my-hermes",
+        "answer_clarification",
+        "clarification",
+        "automation-blueprint",
+        "medium",
+    ),
+    RoutingInterventionCase(
+        "chinese-bare-pack-phrase-dispatches",
+        "A bare Chinese pack phrase still dispatches at high confidence",
+        "构建失败",
+        "dispatch",
+        "build-failure-triage",
+        "prepare_build_failure_triage",
+        "build_failure_triage",
+        "build-failure-triage",
+        "high",
+    ),
+    RoutingInterventionCase(
+        "chinese-pack-phrase-in-question-clarifies",
+        "The same Chinese phrase inside a question drops a tier, not a skill",
+        "构建失败了怎么办",
+        "clarify",
+        "oh-my-hermes",
+        "answer_clarification",
+        "clarification",
+        "build-failure-triage",
+        "medium",
     ),
     RoutingInterventionCase(
         "korean-morning-market-research",
@@ -5864,6 +5927,11 @@ def _evaluate_intervention_case(case: RoutingInterventionCase, *, source: str) -
     observed_candidate = str(route.get("candidate_skill") or "")
     if case.expected_candidate and observed_candidate != case.expected_candidate:
         issues.append(f"expected candidate {case.expected_candidate}, observed {observed_candidate}")
+    observed_confidence = str(observed["route_confidence"] or "")
+    if case.expected_confidence and observed_confidence != case.expected_confidence:
+        issues.append(
+            f"expected confidence {case.expected_confidence}, observed {observed_confidence}"
+        )
     if observed["response_kind"] == "ack":
         issues.append("generic acknowledgement replaced expected workflow surface")
     if observed["raw_message_echoed"]:
@@ -5881,6 +5949,8 @@ def _evaluate_intervention_case(case: RoutingInterventionCase, *, source: str) -
             "workflow": case.expected_workflow,
             "next_action": case.expected_next_action,
             "response_kind": case.expected_response_kind,
+            "candidate": case.expected_candidate,
+            "confidence": case.expected_confidence,
         },
         "observed": observed,
         "issues": issues,

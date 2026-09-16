@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import unittest
 
@@ -26,12 +27,12 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["intervention_case_count"], 388)
-        self.assertEqual(payload["summary"]["intervention_passing_count"], 388)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 392)
+        self.assertEqual(payload["summary"]["intervention_passing_count"], 392)
         self.assertEqual(payload["summary"]["missed_intervention_count"], 0)
         self.assertEqual(payload["summary"]["intervention_generic_ack_count"], 0)
-        self.assertEqual(payload["summary"]["total_case_count"], 623)
-        self.assertEqual(payload["summary"]["total_passing_count"], 623)
+        self.assertEqual(payload["summary"]["total_case_count"], 627)
+        self.assertEqual(payload["summary"]["total_passing_count"], 627)
         self.assertEqual(routing_precision_errors(payload), [])
         self.assertIn("over-intervention and missed-intervention guards", payload["claim_boundary"])
 
@@ -440,7 +441,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertIn("OMH routing precision", stdout)
         self.assertIn("235/235 negative-control cases passing", stdout)
-        self.assertIn("Interventions: 388/388 expected workflow cases passing", stdout)
+        self.assertIn("Interventions: 392/392 expected workflow cases passing", stdout)
         self.assertIn("overroutes: 0", stdout)
         self.assertIn("catalog pickers: 0", stdout)
         self.assertIn("generic ack: 0", stdout)
@@ -544,6 +545,60 @@ class TrivialMessageGuardTests(unittest.TestCase):
         ):
             with self.subTest(message=message):
                 self.assertEqual(route_chat_message(message, source="discord")["selected_skill"], "github-issue-intake")
+
+    def test_cjk_pack_phrases_reach_their_skill_one_tier_below_english(self) -> None:
+        # Given: the corpus can now assert a tier, not only an action
+        payload = build_routing_precision_demo(source="discord")
+        interventions = {case["id"]: case for case in payload["intervention_cases"]}
+
+        # When/Then: a pack phrase inside a ja or zh sentence keeps its skill as
+        # a named candidate but reaches it at medium, where English dispatches
+        # at high. This is the recorded #1607 decision, not an aspiration: the
+        # cases pass today and a scoring change has to move them on purpose.
+        for case_id in (
+            "japanese-pack-phrase-in-sentence-clarifies",
+            "chinese-pack-phrase-in-sentence-clarifies",
+        ):
+            with self.subTest(case_id=case_id):
+                case = interventions[case_id]
+                self.assertTrue(case["passed"])
+                self.assertEqual(case["observed"]["route_action"], "clarify")
+                self.assertEqual(case["observed"]["route_confidence"], "medium")
+                self.assertEqual(case["observed"]["route_workflow"], "oh-my-hermes")
+                self.assertEqual(case["expected"]["confidence"], "medium")
+        english = interventions["keep-monitoring-opens-automation-blueprint"]["observed"]
+        self.assertEqual(english["route_action"], "dispatch")
+        self.assertEqual(english["route_confidence"], "high")
+        self.assertEqual(english["route_workflow"], "automation-blueprint")
+
+        # And: the same zh phrase crosses the tier on segmentation alone --
+        # bare it dispatches, inside a question it clarifies.
+        bare = interventions["chinese-bare-pack-phrase-dispatches"]["observed"]
+        embedded = interventions["chinese-pack-phrase-in-question-clarifies"]["observed"]
+        self.assertEqual((bare["route_action"], bare["route_confidence"]), ("dispatch", "high"))
+        self.assertEqual(
+            (embedded["route_action"], embedded["route_confidence"]), ("clarify", "medium")
+        )
+        self.assertEqual(embedded["route_workflow"], "oh-my-hermes")
+
+        # And: the tier assertion can fail the thing it names. Without this the
+        # pinned tier would be a payload field nothing checks, which is the
+        # shape of guard this repository keeps finding.
+        from omh.quality.routing_precision import (
+            ROUTING_INTERVENTION_CASES,
+            _evaluate_intervention_case,
+        )
+
+        pinned = next(
+            case
+            for case in ROUTING_INTERVENTION_CASES
+            if case.id == "japanese-pack-phrase-in-sentence-clarifies"
+        )
+        mispinned = _evaluate_intervention_case(
+            replace(pinned, expected_confidence="high"), source="discord"
+        )
+        self.assertFalse(mispinned["passed"])
+        self.assertIn("expected confidence high, observed medium", mispinned["issues"])
 
 
 if __name__ == "__main__":

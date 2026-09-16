@@ -401,7 +401,18 @@ class RoutingInertnessTests(unittest.TestCase):
         `research`'s triggers became its own skill, so the four pinned cases
         whose messages are lookups move with them. A re-pin is only ever this
         -- a routing change the PR body names, with the moved rows enumerated
-        in the fixture -- never a way to absorb an unexplained digest change."""
+        in the fixture -- never a way to absorb an unexplained digest change.
+
+        Re-pinned a fourth time for a reason the first three did not have: the
+        row schema widened. `RoutingInterventionCase.expected_confidence`
+        (#1607) put two more keys in every intervention row's `expected` block,
+        so all of them serialize differently while nothing about their
+        behaviour moved. That is why
+        `test_observed_digest_is_inert_to_row_schema_changes` exists beside
+        this one: this digest answers "did any pinned row change", the narrow
+        one answers "did the router change", and only the second question can
+        be answered without re-deriving it by hand every time a field is
+        added."""
         fixture = json.loads(
             (FIXTURES / "routing_precision_subset_at_c.json").read_text(encoding="utf-8")
         )
@@ -422,6 +433,46 @@ class RoutingInertnessTests(unittest.TestCase):
             json.dumps(subset, sort_keys=True, ensure_ascii=False).encode("utf-8")
         ).hexdigest()
         self.assertEqual(digest, fixture["digest"])
+
+    def test_observed_digest_is_inert_to_row_schema_changes(self):
+        """The routing-inertness claim this class is named for.
+
+        `digest` above covers the whole row, `expected` block included, which
+        is what catches a pre-existing case whose assertion was quietly
+        loosened. It also moves whenever a case dataclass gains a field, and
+        those two causes are indistinguishable from the failure message -- the
+        #1607 branch had to reproduce the old digest by stripping the new keys
+        to show which one it was.
+
+        This pin carries only what the router returned for each pinned
+        message, so it moves when and only when a pinned message's verdict
+        changes. Measured against all three ways `digest` can move:
+
+        - a case dataclass gains a field: `digest` moves, this one does not;
+        - a pinned case's message is reworded and still routes the same:
+          `digest` moves (the row carries `message_sha256`), this one does not;
+        - a pinned case's message reaches a different route: both move.
+
+        So `digest` alone moving says no verdict changed and the row shape or
+        an input did; both moving says routing did. Never re-pin this one to
+        make a build green -- it moving is a behaviour change, and it belongs
+        in the PR body with the rows named."""
+        fixture = json.loads(
+            (FIXTURES / "routing_precision_subset_at_c.json").read_text(encoding="utf-8")
+        )
+        pinned_ids = set(fixture["case_ids"])
+        demo = build_routing_precision_demo()
+        rows = sorted(
+            [row for row in demo["cases"] if row["id"] in pinned_ids]
+            + [row for row in demo["intervention_cases"] if row["id"] in pinned_ids],
+            key=lambda row: row["id"],
+        )
+        self.assertEqual(len(rows), 237)
+        observed = [{"id": row["id"], "observed": row["observed"]} for row in rows]
+        digest = hashlib.sha256(
+            json.dumps(observed, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        self.assertEqual(digest, fixture["observed_digest"])
 
     def test_the_pinned_case_ids_stay_in_sorted_order(self):
         """Sorted ids are what keeps a re-pin a readable diff.

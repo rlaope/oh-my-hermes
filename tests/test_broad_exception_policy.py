@@ -144,7 +144,9 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "Two injected-boundary handlers in one function, classified together. An unexpected "
         "runner failure becomes the cell's explicit CRASHED state and still reaches its cleaner; "
         "an unexpected cleaner failure becomes CLEANUP_FAILED with cleanup_succeeded=False. "
-        "Neither can become a successful receipt or silently abort sibling-cell cleanup.",
+        "Neither can become a successful receipt or silently abort sibling-cell cleanup. Both "
+        "record the exception's type and a sanitized message on the cell, so the contained "
+        "failure is readable at the fan-in boundary instead of only classified there.",
     ),
     ClassifiedSite(
         "src/workflows/domain_intelligence_store_security.py",

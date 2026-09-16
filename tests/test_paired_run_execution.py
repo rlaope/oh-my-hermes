@@ -6,15 +6,20 @@ from tempfile import TemporaryDirectory
 from threading import Barrier, Lock
 import unittest
 
+from omh.coding.hermes_child_receipts import ReceiptVerificationError
 from omh.coding.paired_run_dispatch import ApprovalState
 from omh.coding.paired_run_execution import (
+    CrashDetailState,
     ExecutionState,
     PairedRunCleanupFailure,
     PairedRunExecutionLimits,
     PairedRunExecutionOutcome,
     PairedRunRunnerFailure,
+    PairedRunWorkspaceFailure,
+    crash_reason_for,
     execute_paired_run_plan,
 )
+from omh.coding.paired_run_execution_model import MAX_CRASH_DETAIL_CHARS
 from paired_run_execution_support import plan as _plan
 from paired_run_execution_support import receipt as _receipt
 from paired_run_execution_support import workspace as _workspace
@@ -183,6 +188,109 @@ class PairedRunExecutionTests(unittest.TestCase):
                 for item in report.receipts
             )
         )
+
+    def test_crashed_cell_carries_what_raised_it_across_the_boundary(self) -> None:
+        # #1592 lost a diagnosis cycle here: a ReceiptVerificationError naming a
+        # short integrity key reached the caller as an opaque CRASHED cell, and
+        # the coherent first hypothesis drawn from the surviving evidence was
+        # wrong. Each fault kind must be readable from the cell it produced.
+        faults = (
+            ReceiptVerificationError("Hermes child observation integrity key is invalid"),
+            PairedRunRunnerFailure("hermes child exited before sealing a receipt"),
+            AssertionError("runner bug"),
+        )
+        for error in faults:
+            with self.subTest(fault=type(error).__name__):
+                report = execute_paired_run_plan(
+                    _plan(),
+                    workspace_factory=_workspace,
+                    runner=lambda cell, workspace, raised=error: (_ for _ in ()).throw(raised),
+                    cleaner=lambda cell, workspace: True,
+                )
+                expected = {
+                    "error_type": type(error).__name__,
+                    "detail": str(error),
+                    "detail_state": "retained",
+                }
+                self.assertEqual(
+                    {item.state for item in report.receipts}, {ExecutionState.CRASHED}
+                )
+                self.assertEqual(
+                    {
+                        (
+                            item.crash_reason.error_type,
+                            item.crash_reason.detail,
+                            item.crash_reason.detail_state,
+                        )
+                        for item in report.receipts
+                    },
+                    {(expected["error_type"], expected["detail"], CrashDetailState.RETAINED)},
+                )
+                self.assertEqual(
+                    [cell["crash_reason"] for cell in report.metadata()["cells"]],
+                    [expected] * len(report.receipts),
+                )
+
+        workspace_failure = execute_paired_run_plan(
+            _plan(),
+            workspace_factory=lambda cell: (_ for _ in ()).throw(
+                PairedRunWorkspaceFailure("worktree parent was removed")
+            ),
+            runner=lambda cell, workspace: self.fail("runner ran without a workspace"),
+            cleaner=lambda cell, workspace: self.fail("cleaner ran without a workspace"),
+        )
+        self.assertEqual(
+            {item.crash_reason.label for item in workspace_failure.receipts},
+            {"PairedRunWorkspaceFailure: worktree parent was removed"},
+        )
+
+    def test_cleanup_failure_records_its_cause_without_overwriting_the_runners(self) -> None:
+        crashed_then_uncleaned = execute_paired_run_plan(
+            _plan(),
+            workspace_factory=_workspace,
+            runner=lambda cell, workspace: (_ for _ in ()).throw(AssertionError("runner bug")),
+            cleaner=lambda cell, workspace: (_ for _ in ()).throw(OSError("worktree is busy")),
+        )
+        self.assertEqual(
+            {item.crash_reason.label for item in crashed_then_uncleaned.receipts},
+            {"AssertionError: runner bug"},
+        )
+        uncleaned = execute_paired_run_plan(
+            _plan(),
+            workspace_factory=_workspace,
+            runner=lambda cell, workspace: PairedRunExecutionOutcome(ExecutionState.PARTIAL, None),
+            cleaner=lambda cell, workspace: (_ for _ in ()).throw(OSError("worktree is busy")),
+        )
+        self.assertEqual(
+            {item.state for item in uncleaned.receipts}, {ExecutionState.CLEANUP_FAILED}
+        )
+        self.assertEqual(
+            {item.crash_reason.label for item in uncleaned.receipts},
+            {"OSError: worktree is busy"},
+        )
+
+    def test_crash_detail_is_bounded_redacted_and_withheld_when_sensitive(self) -> None:
+        overlong = crash_reason_for(RuntimeError("x" * (MAX_CRASH_DETAIL_CHARS + 50)))
+        self.assertEqual(len(overlong.detail), MAX_CRASH_DETAIL_CHARS)
+        self.assertTrue(overlong.detail.endswith("..."))
+
+        rooted = crash_reason_for(
+            OSError("/Users/someone/work/repo/src/omh/cli.py is unreadable")
+        )
+        self.assertEqual(rooted.detail, ".../src/omh/cli.py is unreadable")
+
+        control = crash_reason_for(ValueError("line one\x1b[2Jline\x00two"))
+        self.assertEqual(control.detail, "line one [2Jline two")
+
+        secret = crash_reason_for(RuntimeError("child env carried api_key=sk-abc123"))
+        self.assertEqual(secret.detail, "")
+        self.assertEqual(secret.detail_state, CrashDetailState.WITHHELD)
+        self.assertEqual(secret.label, "RuntimeError (withheld detail)")
+
+        silent = crash_reason_for(RuntimeError())
+        self.assertEqual(silent.detail, "")
+        self.assertEqual(silent.detail_state, CrashDetailState.EMPTY)
+        self.assertEqual(silent.label, "RuntimeError (empty detail)")
 
     def test_authenticated_matching_terminal_receipts_resume_once_and_mismatches_rerun(self) -> None:
         plan = _plan()

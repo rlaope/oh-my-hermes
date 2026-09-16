@@ -621,6 +621,60 @@ All notable changes will be documented here.
   every surface was inspected and none leaked. The ordinary `omh doctor` run is
   unchanged: the sub-check fires only for the operators who pass the flag.
   (#1562)
+- **A crashed paired-run cell now records what raised it.** `_execute_cell`
+  contains an exception so one cell's failure cannot take the matrix down, and
+  the containment is correct -- but it discarded the reason. A
+  `ReceiptVerificationError` naming a short integrity key reached the caller as
+  an opaque CRASHED cell, and the fan-in blocker then described the shape of
+  the result (`crashed execution state`) rather than the cause. On #1592 that
+  cost a full diagnosis cycle: the first hypothesis drawn from the surviving
+  evidence was coherent and wrong. The `except` clauses are unchanged; what
+  they record is wider. Every contained failure -- workspace, runner, unexpected
+  runner error, and cleanup -- now carries a `PairedRunCrashReason` on the
+  outcome, and the fan-in blocker reads `crashed execution state:
+  ReceiptVerificationError: Hermes child observation integrity key is invalid`.
+  A runner that already crashed owns the cause, so a later cleanup failure does
+  not overwrite it. The record reaches a metadata artifact, so it carries a
+  bounded exception type and a message that is path-redacted, control-stripped,
+  capped at 200 characters, and withheld whole when it matches a secret marker;
+  `withheld` and `empty` stay distinct states so a reader can tell a screened
+  message from an exception that carried none. (#1619)
+
+- **The ja/zh confidence tier is now a recorded decision, not an unpinned
+  artifact.** A Japanese or Chinese trigger phrase reaches its skill one tier
+  below the English equivalent: a CJK sentence is one routing token, so a pack
+  phrase inside a longer sentence earns the phrase credit but not the token
+  credit an exact-message match adds, and lands at clarify-with-candidate where
+  English dispatches. Measured over every shipped pack rather than the two
+  phrases the report named: 84 of 91 ja phrases and 81 of 88 zh phrases
+  dispatch at high when sent bare and clarify at medium once a sentence
+  surrounds them, while ko -- space-segmented and NFKD-folded -- barely moves,
+  895 of 962 bare against 899 wrapped. `RoutingInterventionCase` gains
+  `expected_confidence`, so a case pinned at `clarify` can state which tier it
+  reached instead of passing at any tier below dispatch, and four cases record
+  the gap: a ja and a zh phrase inside a sentence at clarify/medium with the
+  skill still named, and one zh phrase pinned bare at dispatch/high beside the
+  same phrase inside a question at clarify/medium. The scoring half is
+  deliberately not taken here: lifting CJK credit would move roughly 165 pack
+  phrases in one change, and it now has cases to move deliberately. (#1607)
+
+- **The judge agreement bands now say they are unverified here.**
+  `agent-evaluation`'s `references/self-evaluation-loops.md` tells a reader
+  where an LLM judge's usable thresholds sit -- unmeasured is unqualified,
+  below 0.4 unusable, 0.4 to 0.6 relative comparison only, above 0.6 absolute
+  scoring. Those bands are the conventional reading of a chance-corrected
+  agreement statistic and were measured on no judge this repository uses, so a
+  reader who applied the section's own rule correctly still read their figure
+  against a table nobody checked. Measuring them here needs a judge already
+  used in an OMH evaluation lane and a hand-labeled sample from its own
+  distribution, and neither exists: OMH's evaluation lanes score with
+  deterministic predicates against frozen corpora, there is no grader model,
+  and there is no human-labeled sample. So the table now states its own
+  provenance rather than carrying an invented measurement or losing the
+  guidance: the bands are the starting default, the first row is a rule rather
+  than a calibration and holds whatever a measurement shows, and a sample too
+  small to separate 0.4 from 0.6 is itself the reportable result. The
+  measurement remains open. (#1612)
 
 ## 2.0.3 - 2026-09-12
 

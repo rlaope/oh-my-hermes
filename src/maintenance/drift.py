@@ -308,7 +308,13 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # incident with `reliability-review`, one customer's outage reply
             # with `support-operations`, and a healthy release watch with
             # `deploy-and-monitor`.
-            expected=388,
+            # The CJK tier lane adds four: a ja and a zh pack phrase inside a
+            # sentence, each pinned at clarify/medium with its skill still
+            # named, and a zh phrase pinned bare at dispatch/high beside the
+            # same phrase inside a question at clarify/medium. They record the
+            # tokenisation tier gap as intended so a scoring change has to
+            # move them deliberately (#1607).
+            expected=392,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",

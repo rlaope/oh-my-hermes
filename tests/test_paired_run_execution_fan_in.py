@@ -5,11 +5,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
+from omh.coding.hermes_child_receipts import ReceiptVerificationError
 from omh.coding.paired_run_execution import (
     ExecutionState,
     PairedRunExecutionFanInError,
     PairedRunExecutionOutcome,
     build_paired_run_execution_decision,
+    crash_reason_for,
     execute_paired_run_plan,
 )
 from omh.coding.paired_run_execution_validation import terminal_state
@@ -171,6 +173,36 @@ class PairedRunExecutionFanInTests(unittest.TestCase):
                     with self.assertRaises(PairedRunExecutionFanInError) as raised:
                         build_paired_run_execution_decision(request, candidate, home)
                     self.assertEqual(raised.exception.blockers, (f"{workspace_id}: {reason}",))
+
+    def test_crashed_cell_names_its_cause_rather_than_the_shape_of_the_result(self) -> None:
+        # The blocker a reader saw on #1592 named the invalid combination the
+        # crash produced. The cause the cell recorded belongs in it.
+        with TemporaryDirectory(prefix="omh-fan-in-cause-") as raw:
+            home = (Path(raw) / ".omh").resolve()
+            report = _execute(home)
+            request = _request(report)
+            workspace_id = report.plan.cells[0].workspace_id
+            candidate = _report_with_first(
+                report,
+                replace(
+                    report.receipts[0],
+                    state=ExecutionState.CRASHED,
+                    crash_reason=crash_reason_for(
+                        ReceiptVerificationError(
+                            "Hermes child observation integrity key is invalid"
+                        )
+                    ),
+                ),
+            )
+            with self.assertRaises(PairedRunExecutionFanInError) as raised:
+                build_paired_run_execution_decision(request, candidate, home)
+        self.assertEqual(
+            raised.exception.blockers,
+            (
+                f"{workspace_id}: crashed execution state: ReceiptVerificationError: "
+                "Hermes child observation integrity key is invalid",
+            ),
+        )
 
 
 if __name__ == "__main__":

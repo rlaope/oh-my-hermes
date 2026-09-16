@@ -199,7 +199,7 @@ def _outcome_error(
     if outcome.cell is None or normalized_cell(outcome.cell) != normalized_cell(cell):
         return "stale execution identity"
     if outcome.state is not ExecutionState.SUCCEEDED:
-        return f"{outcome.state.value} execution state"
+        return _execution_state_error(outcome)
     if cell.terminal_state is not terminal_state(outcome.state):
         return "stale terminal state"
     if outcome.cleanup_succeeded is not True:
@@ -219,6 +219,19 @@ def _outcome_error(
     if persisted != outcome.receipt:
         return "persisted receipt does not match execution receipt"
     return _binding_error(cell, row, task, request)
+
+
+def _execution_state_error(outcome: PairedRunExecutionOutcome) -> str:
+    """Name the cause a contained cell recorded, not only the state it produced.
+
+    A blocker that reports the shape of the result sends the reader back to
+    reconstruct the fault from surviving evidence. When the cell carried its
+    exception across the containment boundary, say so here.
+    """
+    state = f"{outcome.state.value} execution state"
+    if outcome.crash_reason is None:
+        return state
+    return f"{state}: {outcome.crash_reason.label}"
 
 
 def _binding_error(

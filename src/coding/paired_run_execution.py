@@ -12,14 +12,17 @@ from threading import BoundedSemaphore, Lock
 from .paired_run_dispatch_model import PairedRunDispatchCell, PairedRunDispatchPlan
 from .paired_run_dispatch_planner import record_terminal_state
 from .paired_run_execution_model import (
+    CrashDetailState,
     ExecutionState,
     PairedRunCleanupFailure,
+    PairedRunCrashReason,
     PairedRunExecutionLimits,
     PairedRunExecutionOutcome,
     PairedRunExecutionReport,
     PairedRunRunnerFailure,
     PairedRunWorkspace,
     PairedRunWorkspaceFailure,
+    crash_reason_for,
 )
 from .paired_run_execution_validation import (
     inferred_limits,
@@ -39,8 +42,10 @@ Cleaner = Callable[[PairedRunDispatchCell, PairedRunWorkspace], bool]
 
 __all__ = [
     "Cleaner",
+    "CrashDetailState",
     "ExecutionState",
     "PairedRunCleanupFailure",
+    "PairedRunCrashReason",
     "PairedRunExecutionFanInError",
     "PairedRunExecutionLimits",
     "PairedRunExecutionOutcome",
@@ -51,6 +56,7 @@ __all__ = [
     "Runner",
     "WorkspaceFactory",
     "build_paired_run_execution_decision",
+    "crash_reason_for",
     "execute_paired_run_plan",
 ]
 
@@ -123,31 +129,46 @@ def _execute_cell(
             None,
             cell=cell,
             cleanup_succeeded=exc.cleanup_succeeded,
+            crash_reason=crash_reason_for(exc),
         )
-    except PairedRunRunnerFailure:
-        outcome = PairedRunExecutionOutcome(ExecutionState.CRASHED, None, cell=cell)
-    except Exception:
+    except PairedRunRunnerFailure as exc:
+        outcome = PairedRunExecutionOutcome(
+            ExecutionState.CRASHED, None, cell=cell, crash_reason=crash_reason_for(exc)
+        )
+    except Exception as exc:
         # The injected runner is an external boundary. Classify its failure so
-        # this cell still reaches cleanup and sibling cells still terminate.
+        # this cell still reaches cleanup and sibling cells still terminate, and
+        # record what raised so the crash is readable without reconstructing it.
         outcome = PairedRunExecutionOutcome(
             ExecutionState.CRASHED,
             None,
             cell=cell,
+            crash_reason=crash_reason_for(exc),
         )
     if not created:
         return cell, outcome
     if workspace is None:
         raise RuntimeError("created paired-run workspace is missing")
+    cleanup_reason: PairedRunCrashReason | None = None
     try:
         cleaned = cleaner(cell, workspace)
-    except PairedRunCleanupFailure:
+    except PairedRunCleanupFailure as exc:
         cleaned = False
-    except Exception:
+        cleanup_reason = crash_reason_for(exc)
+    except Exception as exc:
         # Cleanup failures are terminal evidence, not permission to abort the
         # matrix while other isolated cells are still running.
         cleaned = False
+        cleanup_reason = crash_reason_for(exc)
     if cleaned is not True:
-        outcome = replace(outcome, state=ExecutionState.CLEANUP_FAILED, cleanup_succeeded=False)
+        outcome = replace(
+            outcome,
+            state=ExecutionState.CLEANUP_FAILED,
+            cleanup_succeeded=False,
+            # A runner that already crashed owns the cause; the cleaner's
+            # failure is downstream of it and must not overwrite it.
+            crash_reason=outcome.crash_reason or cleanup_reason,
+        )
     else:
         outcome = replace(outcome, cleanup_succeeded=True)
     return cell, outcome

@@ -91,6 +91,18 @@ What the agreement figure licenses:
 | 0.4 to 0.6 | usable only to compare two runs against the same rubric, never as an absolute score |
 | above 0.6 | usable as an absolute score, reported with the agreement figure beside it |
 
+Where those bands come from: they are the conventional reading of a
+chance-corrected agreement statistic, not a figure measured here. No judge
+this repository uses has been checked against them, and none can be yet - OMH's
+own evaluation lanes score with deterministic predicates against frozen
+corpora, so there is no grader model and no hand-labeled sample of its own to
+measure against. Use them as the starting default and say that is what they
+are when you quote one. The first row is a rule rather than a calibration and
+holds whatever any measurement shows; the three numeric rows are the part that
+moves. When you qualify your own judge, report the agreement figure with the
+sample size beside it, and if that sample is too small to separate 0.4 from
+0.6, that is the result rather than a reason to keep these numbers silently.
+
 Every reported judge score carries four fields: the grader model ID, the
 rubric version, the size of the sample agreement was measured on, and the
 agreement value. A score missing any of them is prepared analysis, and the
