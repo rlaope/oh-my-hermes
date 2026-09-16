@@ -4,6 +4,28 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **An `ultrawork` run now meets its "declare the plan first" instruction
+  before it starts, not after it has finished.** The one sentence telling the
+  engine to initialize its phase todo was the sixth bullet of a ninety-line
+  list under a heading named `Catalog Metadata`, near the bottom of a
+  26,705-byte body — a section a model reads as machine-readable bookkeeping,
+  reached only once the run is already underway. Strip that block from
+  `skills/ulw-work/SKILL.md` and the word `todo` did not appear anywhere else
+  in the document, `Completion Checklist` included; a real run performed the
+  whole task with the HUD checklist empty. The directive is unchanged text
+  that moved: workflow bodies gained a `## First Steps` section, rendered
+  directly under `## Why This Exists` from a new `opening_steps` catalog field,
+  and `ultrawork` and `ralplan` carry their todo-initialization there. Each
+  also gained one `Completion Checklist` line, because the section a model
+  follows to decide it is done covered lane disjointness, ACK, review, CI and
+  integration and said nothing about whether a plan was ever declared — so a
+  run that declared none still read as complete. The Agent Skills projection
+  buried its own host-neutral copy of the same directive in the same place and
+  moved with it. The seven remaining `ulw-*` skills are unchanged: six mention
+  a todo only through the shared interjection rule, which re-reads one *when
+  one is active*, and `ulw-interview` mentions none — a conditional reference
+  is not a misplaced instruction, and giving them an obligation they never had
+  is a different change.
 - **A narrow table keeps its columns on Slack, and provenance stopped taking
   the notification preview.** Messenger profiles turned every markdown table
   into bullets, which is right for a wide one and wrong for the shape people

@@ -487,6 +487,18 @@ def _example_block(label: str, definition: SkillDefinition, *, good: bool) -> st
 - Why: {example.why}"""
 
 
+def _opening_steps_block(definition: SkillDefinition) -> str:
+    """Render the run's opening actions where the body is read as steps.
+
+    Placed directly under `## Why This Exists` so a directive that must be
+    followed before the engine starts is reached before the run does, not in
+    the `## Catalog Metadata` quality-bar list at the bottom of the body.
+    """
+    if not definition.opening_steps:
+        return ""
+    return f"\n## First Steps\n\n{_tuple_list(definition.opening_steps)}\n"
+
+
 def _quality_rubric_sections(
     definition: SkillDefinition, target: Literal["hermes", "agent-skills"] = "hermes",
 ) -> str:
@@ -494,7 +506,7 @@ def _quality_rubric_sections(
     return f"""## Why This Exists
 
 {definition.why_this_exists}
-
+{_opening_steps_block(definition)}
 ## Do Not Use When
 
 {_tuple_list(definition.do_not_use_when)}
@@ -4946,6 +4958,11 @@ def _workflow_reference_markdown_cached() -> str:
                 f"- Preferred usage: {exposure.preferred_usage}",
                 f"- Handoff policy: {definition.handoff_policy}",
                 f"- Why this exists: {definition.why_this_exists}",
+                *(
+                    ["- First steps:", *[f"  - {item}" for item in definition.opening_steps]]
+                    if definition.opening_steps
+                    else []
+                ),
                 f"- Use when: {definition.use_when}",
                 "- Do not use when:",
                 *[f"  - {item}" for item in definition.do_not_use_when],

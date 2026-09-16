@@ -955,7 +955,19 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # closed in one direction only, plus the new lane name on the
 # automation_and_status skills' Workflow Lane lines. Re-derived from the
 # full-profile skill_context_cost_payload() producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 976281
+# 976281 -> 976662: the todo-initialization directive moves out of the
+# `ultrawork` and `ralplan` quality bars into the new `## First Steps` section
+# rendered under `## Why This Exists`. The directive itself is unchanged text
+# that only changed place, so the growth is the two section headings and the
+# two `Completion Checklist` lines that stop a run from reading as complete
+# while the plan was never declared or never advanced. It belongs in the
+# always-loaded body for the same reason the execution-wait discipline does: a
+# rule about what to do BEFORE the engine starts, reached only at the bottom of
+# the body under a heading named `Catalog Metadata`, arrives after the run has
+# already begun -- which is how a real run left the HUD checklist empty from
+# start to finish. Re-derived from the full-profile skill_context_cost_payload()
+# producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 976662
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

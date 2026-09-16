@@ -34,7 +34,15 @@ STRUCTURE_LINT_RULE_IDS = (
 # acting, and the sibling FULL_PROFILE_SKILL_BODY_CHAR_LIMIT pin in
 # src/maintenance/release.py was re-derived from the same producer on the
 # same branch. Warranted always-loaded growth, not drift.
-STRUCTURE_LINT_SKILL_BODY_BYTE_CEILING = 25_500
+# 25_500 held until 2026-09-16, when the ultrawork body measured 25_661 bytes
+# after its todo-initialization directive moved out of the quality bar (which
+# renders under `## Catalog Metadata`, past the point a run has already begun)
+# into the new `## First Steps` section under `## Why This Exists`, and a
+# `Completion Checklist` line was added so a run cannot read as complete while
+# the plan was never declared. The directive is the same text in a different
+# place; the 186 bytes are the heading and the checklist line. Warranted
+# always-loaded growth, not drift.
+STRUCTURE_LINT_SKILL_BODY_BYTE_CEILING = 25_700
 _PICKER_SAFE_TRIGGER = re.compile(r"^[0-9A-Za-z\uac00-\ud7a3][0-9A-Za-z\uac00-\ud7a3 _.-]*$")
 _FRONTMATTER = re.compile(r'^---\nname: (.+)\ndescription: (.+)\nmetadata:\n(.*?)\n---\n', re.DOTALL)
 _JSON_STRING = re.compile(r'"(?:[^"\\\x00-\x1f]|\\["\\/bfnrt]|\\u[0-9A-Fa-f]{4})*"')

@@ -818,6 +818,14 @@ class SkillDefinition:
         "Separate Hermes guidance from executor or wrapper behavior unless evidence proves the step happened.",
     )
     why_this_exists: str = ""
+    # The run's opening actions, rendered as `## First Steps` directly under
+    # `## Why This Exists`. A directive the model must follow BEFORE the engine
+    # starts is unfollowable from `quality_bar`: that tuple renders under
+    # `## Catalog Metadata`, which reads as machine-readable bookkeeping rather
+    # than as steps to perform, and a run that reaches the bottom of the body
+    # has already begun. Reserve this for the few steps that are wrong to
+    # discover late; everything else stays in the quality bar.
+    opening_steps: tuple[str, ...] = ()
     do_not_use_when: tuple[str, ...] = ()
     good_example: SkillExample | None = None
     bad_example: SkillExample | None = None

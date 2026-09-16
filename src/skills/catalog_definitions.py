@@ -919,7 +919,6 @@ _DEFINITIONS = [
             "When a lane's coding owner is an external CLI rather than the Hermes harness, that lane's handoff runs under `ulw-maestro`'s contract — load it and follow its explicit-owner precondition, skill-set-informed prompt composition, readiness and permission probes, and session-id capture; a lane with an external owner is never a Hermes-native `delegate_task` lane. Lane framing, disjointness, integration verification, and the closing brief stay here.",
             "Route each Hermes-native lane before dispatch: an inherit-labeled delegation wave is an unrouted wave, not mixture routing — re-route it or state why parent inheritance is intended.",
             EXECUTION_WAIT_DISCIPLINE_RULE,
-            "Initialize the phase todo before engine work: declare numbered phases in delivery order with `omh_todo` (todo init) — bootstrap, one implement/verify/deliver task per lane or work unit, independent review lanes, and an evidence-and-cleanup close, with one task per observable outcome — keep exactly one item active while working, and update states as lanes complete; the run walks a bounded, HUD-visible checklist instead of an open-ended reasoning loop. Phase names and task titles are written in English — short, operator-legible labels — even when the conversation runs in another language, since the HUD todo checklist is an operator surface under the repo's English-by-default output contract.",
             ENGINE_INTERJECTION_RESUME_RULE,
             ENGINE_FOLLOW_UP_AUTHORITY_RULE,
             ENGINE_CLOSING_BRIEF_RULE,
@@ -940,6 +939,9 @@ _DEFINITIONS = [
             "`coordinated_scope` (coordinated worker lanes), `delivery_boundary` (one bounded plan-to-PR cycle), "
             "`single_owner_persistence` (one owner finishes and verifies), and `durable_checkpoint` (durable goal "
             "ledger with checkpoints and a final gate)."
+        ),
+        opening_steps=(
+            "Initialize the phase todo before engine work: declare numbered phases in delivery order with `omh_todo` (todo init) — bootstrap, one implement/verify/deliver task per lane or work unit, independent review lanes, and an evidence-and-cleanup close, with one task per observable outcome — keep exactly one item active while working, and update states as lanes complete; the run walks a bounded, HUD-visible checklist instead of an open-ended reasoning loop. Phase names and task titles are written in English — short, operator-legible labels — even when the conversation runs in another language, since the HUD todo checklist is an operator surface under the repo's English-by-default output contract.",
         ),
         do_not_use_when=(
             "The work touches the same files or invariants in ways that need one owner.",
@@ -965,6 +967,7 @@ _DEFINITIONS = [
             why="Shared core logic makes parallel edits likely to conflict or hide regressions.",
         ),
         final_checklist=(
+            "The phase todo was declared before engine work started and every task reached a terminal state; a run that declared none, or that left tasks pending, is not complete.",
             "Every concurrently runnable lane is disjoint by write scope, invariant, or responsibility, and every ordered unit carries an explicit acyclic dependency edge, before parallel handoffs are prepared.",
             "Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.",
             "When Hermes owns the coding path, use `hermes_coding_harness/v1` to separate builder, verifier, reviewer, docs, and PR lanes.",
@@ -5813,7 +5816,6 @@ _DEFINITIONS = [
         quality_tier="reviewed-plan-gated",
         quality_bar=(
             "Start from observed repo facts and source/web evidence when freshness or external behavior matters.",
-            "Initialize the plan todo before the first planning step: declare the planning stages as `omh_todo` items (todo init) — repo facts and evidence check, options and tradeoffs, risk review, acceptance criteria and verification commands, plan record and acceptance — keep exactly one item active, and when the evidence check reveals a gap rewrite the list (`omh_todo` action=set) to insert the research stage; update the list as stages complete so the HUD todo panel shows plan progress as a bounded checklist, and treat items as declarations, never execution evidence. Phase names and task titles are written in English — short, operator-legible labels — even when the conversation runs in another language, since the HUD todo checklist is an operator surface under the repo's English-by-default output contract.",
             "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
             "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
             "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
@@ -5824,6 +5826,9 @@ _DEFINITIONS = [
             "Do not implement directly from consensus planning.",
         ),
         why_this_exists="`ralplan` exists to make planning reviewable before execution: Hermes should gather codebase/source facts, compare options, expose risks, define acceptance criteria, and prepare a handoff without pretending implementation already happened.",
+        opening_steps=(
+            "Initialize the plan todo before the first planning step: declare the planning stages as `omh_todo` items (todo init) — repo facts and evidence check, options and tradeoffs, risk review, acceptance criteria and verification commands, plan record and acceptance — keep exactly one item active, and when the evidence check reveals a gap rewrite the list (`omh_todo` action=set) to insert the research stage; update the list as stages complete so the HUD todo panel shows plan progress as a bounded checklist, and treat items as declarations, never execution evidence. Phase names and task titles are written in English — short, operator-legible labels — even when the conversation runs in another language, since the HUD todo checklist is an operator surface under the repo's English-by-default output contract.",
+        ),
         do_not_use_when=(
             "The request is still too ambiguous to name requirements, non-goals, or acceptance criteria; use `deep-interview` first.",
             "The user asks for one full research-plan-implementation-review-PR cycle; use `ultrawork` (its `delivery_boundary` capability) and keep ralplan as the planning stage.",
@@ -5844,6 +5849,7 @@ _DEFINITIONS = [
             why="Ralplan is a planning gate, not implementation, review, CI, or PR evidence.",
         ),
         final_checklist=(
+            "The plan todo was declared before the first planning step and every stage reached a terminal state; a plan produced without one, or with stages still pending, is not finished.",
             "Observed repo facts and source/web evidence gaps are named.",
             "At least two options or one chosen option plus rejected alternatives are recorded.",
             "Risks, acceptance criteria, and verification commands are testable or explicitly blocked.",
