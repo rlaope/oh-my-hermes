@@ -1850,6 +1850,22 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "direct_answer",
         "automation-blueprint",
     ),
+    RoutingPrecisionCase(
+        "git-rollback-question-stays-direct",
+        "A rollback concept question is not a memory-provider trial",
+        "what is a rollback in git",
+        "answer_directly",
+        "direct_answer",
+        "external-connector-readiness",
+    ),
+    RoutingPrecisionCase(
+        "database-migration-stays-a-clarification",
+        "Migrating a database is not migrating a memory provider",
+        "we need to migrate the old database this weekend",
+        "answer_clarification",
+        "",
+        "external-connector-readiness",
+    ),
 )
 
 
@@ -5546,6 +5562,16 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_scheduled_ops_blueprint",
         "automation_blueprint",
         "automation-blueprint",
+    ),
+    RoutingInterventionCase(
+        "memory-provider-migration-reaches-the-trial-lane",
+        "Migrating a memory provider with a rollback reaches the connector-trial lane",
+        "migrate our memory provider and roll back if it is worse",
+        "dispatch",
+        "external-connector-readiness",
+        "prepare_external_connector_readiness",
+        "external_connector_readiness",
+        "external-connector-readiness",
     ),
 )
 

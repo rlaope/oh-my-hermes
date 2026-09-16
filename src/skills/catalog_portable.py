@@ -886,4 +886,5 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'native-debugging/references/native-debug-loop.md',
     'application-threat-model/references/threat-model-method.md',
     'live-incident-response/references/incident-command-method.md',
+    'external-connector-readiness/references/memory-provider-trial.md',
 })

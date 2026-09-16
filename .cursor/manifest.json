@@ -56,7 +56,8 @@
     "omh-design-quality-gate/SKILL.md": "07224925ff6f2aca2fbffc4c98d2b24254d5cb5eec7ce7e0448d86dc39f26371",
     "omh-design-quality-gate/references/design-critique-rubric.md": "7b7bde56a390431bd46b1b1d3965723521c722f461d12bdc993407a54595e9ae",
     "omh-docs/SKILL.md": "47d36b28f42c7d83d32c4f7bbb2ae7db3a534c19949c11221473803638b95d6d",
-    "omh-external-connector-readiness/SKILL.md": "10cfc4db4bf82eba8ac04d3303ff91c3f262dd55505e25e831616b3c9cf6c56a",
+    "omh-external-connector-readiness/SKILL.md": "0fc2370d9dbd3dc61170ecaab74b857d9ce8bc3aa6735f84f3a6562542e03213",
+    "omh-external-connector-readiness/references/memory-provider-trial.md": "b6eda7efc3307d8bd6540bec47b2564f3e565da5ad8133bd998b2ebcabdf29a3",
     "omh-failure-signal-audit/SKILL.md": "5d51ca9a0b78a902fbb4d5d2230be273e71d52a449f51584a9d23a0e80a52475",
     "omh-feedback-triage/SKILL.md": "30b5a57eced19a7132a1ff1d1b2a98c674f0439510292092cff88070323f6b17",
     "omh-files/SKILL.md": "33465192387107a1a6ff8634b003110bf87fa87f77db96a5d7ac02575bb3619d",
@@ -272,7 +273,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "850563271cc3b0b54ea6b2ee124a2403cb5298cd6304e59b5def97bf552b83a5",
+  "source_digest": "49d3b9ee2ef253d5e99cd4bda42fd7bd4d866332bb6e50b8b069fbeb56b55c8e",
   "targets": {
     "repo": ".agents/skills",
     "user": ".agents/skills"

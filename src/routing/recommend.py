@@ -2277,17 +2277,33 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # covers. `provider`, `readiness`, `adoption`, and `connector` stay
     # creditable because they were this skill's trigger vocabulary before
     # these phrases landed.
+    #
+    # The trial phrasings added later ("memory provider trial", "... migration",
+    # "... rollback", "... benchmark") split the same way, into words the rest
+    # of the catalog owns: `deploy-and-monitor` answers "what is a rollback",
+    # `backend` owns "migrate the old database", `performance-goal` owns
+    # "benchmark this function". Credited as bare tokens they pulled all three
+    # toward this lane -- "we need to migrate the old database this weekend"
+    # put it level with `backend`. The intent is in the compound noun `memory
+    # provider`, which scores +6 on its own. `trial` is deliberately absent
+    # from this list: it was already creditable here ("external tool trial",
+    # "voice connector trial"), and holding it back now would move cases the
+    # trial phrasings never touched.
     "external-connector-readiness": frozenset(
         {
+            "benchmark",
             "delete",
             "disable",
             "export",
             "failure",
             "lifecycle",
             "memory",
+            "migrate",
+            "migration",
             "portability",
             "posture",
             "retention",
+            "rollback",
             "switch",
             "switching",
             "sync",

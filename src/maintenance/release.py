@@ -256,7 +256,11 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # (#1570). The four-way table, the retry axes, and the delivery/silence rules
 # are `references/recurring-surface-choice.md`, outside this budget; warranted
 # growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 425832
+# 425832 -> 426032: `external-connector-readiness` declares
+# `memory_provider_trial_comparison/v1` and the one-corpus rule (#1573). The
+# trial procedure, the three dimensions, and the exercised-rollback steps are
+# `references/memory-provider-trial.md`, outside this budget; warranted growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 426032
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -983,7 +987,20 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `skills/omh-automation-blueprint/references/recurring-surface-choice.md`,
 # measured outside this budget. Re-derived from the full-profile
 # skill_context_cost_payload() producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 977424
+# 977424 -> 978537: `external-connector-readiness` gains the output, two safety
+# rules, and one quality bar that let a person compare memory providers on
+# their own material (#1573). It folds into this skill rather than a new one
+# because a provider is a connector with a declared posture and the
+# `connector_trial_manifest/v1` pattern already exists; a second trial shape
+# would drift from it. The body carries only what must hold whether or not a
+# reference is open: one corpus and one query set across candidates, a
+# dimension nobody measured reported as `not_observed` rather than zero, and a
+# rollback proven by running it. The trial procedure, the three dimensions and
+# their reporters, and the four migration steps are
+# `skills/omh-external-connector-readiness/references/memory-provider-trial.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 978537
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

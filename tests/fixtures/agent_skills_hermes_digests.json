@@ -41,7 +41,7 @@
   "design-quality-gate": "6022429609cd7eec786eb6e239faef29910f2d0ec7c7a4594778208f7b6e523d",
   "doctor": "c42d46ed33c02f67dca69269070b826f3718081f9e8f9976601f90db900a1d2e",
   "executor-runtime-readiness": "50d530802abdda003a9f133e2dd265c6c74dce6924b7fb25db0c8bfaafc37015",
-  "external-connector-readiness": "3024fdf91ad981b97ac7cd5cc1219aae279734e76658f1cbd3fd201d94002679",
+  "external-connector-readiness": "3e22bab892866ae2935eb194f26ca85e286ed9555f964d947e7c0263c1e74b74",
   "failure-signal-audit": "f9c253b1300f5258072de8f0c7502e12b34f79d4e88883f06557f35ec6374454",
   "feedback-triage": "36de6db8f6cb412d8e6d507f8353f5917d5afa448919c87e240fc120a0962dd7",
   "finance-analysis": "57cdfd83ca5e54b2783e2ea37224dac68e838c665da0370fd99fe698cff73445",
