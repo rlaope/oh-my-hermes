@@ -1996,6 +1996,16 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # "watch out for the race condition in this handler". Those three score only
     # inside a complete phrase.
     "automation-blueprint": frozenset({"keep", "monitor", "watch"}),
+    # `security-safety-review` gained the rotation phrasings ("key rotation",
+    # "rotate the api key", "revoke the old key"). Their loose tokens belong to
+    # everything else: `rotate` turns an image and rotates a log file, `key` is
+    # a map legend and a dictionary key, `api` is half the catalog, and `old` is
+    # ordinary English. Credited alone, `rotate` put this workflow into "rotate
+    # the image ninety degrees". The intent needs a rotation verb and a
+    # credential noun together, which `credential_rotation_before_toolbelt_readiness`
+    # in `policy.py` requires. `credential`, `certificate`, `revoke`, and
+    # `rotation` stay creditable: nothing else in this catalog owns them.
+    "security-safety-review": frozenset({"api", "key", "old", "rotate", "the", "this"}),
     # `backend` gained the contract-evolution phrasings ("openapi spec",
     # "deprecation window", "sunset date", "api versioning", "breaking api
     # change"). `openapi`, `deprecate`, `deprecation`, and `sunset` are

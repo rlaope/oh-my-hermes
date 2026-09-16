@@ -134,7 +134,8 @@
     "omh-sales-development/references/procedure.md": "0ed747dc7a21bee8931023e4f7d78f65a7a9845ccf40cd6b754eeecc2a6aea70",
     "omh-sales-pipeline-review/SKILL.md": "de2e6755a1eb3acd20732e2ea61586bbd1511850daa8a2fe12a25f4ced353096",
     "omh-sales-pipeline-review/references/procedure.md": "ae092ea4d9363da82d23620f33a2f83e8a3dd42f4a8d69fd08b92cb2989fa138",
-    "omh-security-safety-review/SKILL.md": "25b62718c285226d010488481543297671857c7646cc09a99210cce3e3eb688c",
+    "omh-security-safety-review/SKILL.md": "c53feb8af2439b38c437b8d41a523dcb5552a286309dd401af4986148b30698e",
+    "omh-security-safety-review/references/credential-rotation.md": "2a4e1cacc2c10141a1aaff437353150696c397f5fec0b41536eb5d946ebff065",
     "omh-skill-health/SKILL.md": "227476bbc5de7375fec53846883a55cbe5465ce49a47db562eda18984475c1de",
     "omh-skill-scout/SKILL.md": "9ea99eb5bed0256800e44041b216c605f073f6c4d7b221ae896d8bc9f6efe154",
     "omh-source-finder/SKILL.md": "dee9bc54b388d99d2bab6f1da1c9528541d702f22ad31e9aad21b16b22825f19",
@@ -276,7 +277,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "b964d47f53016bee6598601f2c674d1fad0ede3bac2aa8f4fbd31f570972b193",
+  "source_digest": "9f070cbabdb0635696e9f97463b0cbaf9b01b4dd3442da72668cb9716d30f9ff",
   "targets": {
     "repo": ".agents/skills",
     "user": ".agents/skills"

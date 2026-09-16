@@ -270,7 +270,12 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # reconnaissance outputs and gains six upgrade triggers (#1576). The advisory,
 # licence, migration-guide, and lockfile procedures are
 # `references/dependency-upgrade.md`, outside this budget; warranted growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 426477
+# 426477 -> 426787: `security-safety-review` declares
+# `credential_rotation_sequence/v1` and its eight rotation triggers (#1578).
+# The five-step order, the overlap window, and the per-credential-type steps
+# are `references/credential-rotation.md`, outside this budget; warranted
+# growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 426787
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1046,7 +1051,19 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `skills/omh-backend/references/consumer-impact.md`, measured outside this
 # budget. Re-derived from the full-profile skill_context_cost_payload()
 # producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 981506
+# 981506 -> 982500: `security-safety-review` gains the output, its artifact
+# expectation, one safety rule, and one quality bar for replacing a live
+# credential (#1578). It folds here because the finding already lives in this
+# skill and the procedural scope is too narrow for a body ratchet of its own.
+# The body carries the two rules a reader must not have to open a reference to
+# reach: the five-step order, and that revocation is proven by a call that
+# fails with the old credential rather than by the revoke command's exit
+# status, which reports only that the request was accepted. The overlap
+# window, the what-breaks table, and the per-credential-type steps are
+# `skills/omh-security-safety-review/references/credential-rotation.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 982500
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

@@ -1898,6 +1898,14 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "backend",
     ),
+    RoutingPrecisionCase(
+        "image-rotation-stays-a-clarification",
+        "Rotating an image is not rotating a credential",
+        "rotate the image ninety degrees",
+        "answer_clarification",
+        "",
+        "security-safety-review",
+    ),
 )
 
 
@@ -5664,6 +5672,36 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_backend_handoff",
         "backend_contract",
         "backend",
+    ),
+    RoutingInterventionCase(
+        "credential-rotation-reaches-the-security-review",
+        "Replacing a live credential reaches the lane that carries the cutover order",
+        "rotate this api key without an outage",
+        "dispatch",
+        "security-safety-review",
+        "prepare_security_safety_review",
+        "security_safety_review",
+        "security-safety-review",
+    ),
+    RoutingInterventionCase(
+        "rotation-proof-is-not-a-missing-tool",
+        "An existing credential being replaced is not a readiness gap",
+        "credential rotation sequence and proof the old key is dead",
+        "dispatch",
+        "security-safety-review",
+        "prepare_security_safety_review",
+        "security_safety_review",
+        "security-safety-review",
+    ),
+    RoutingInterventionCase(
+        "missing-api-key-stays-a-readiness-gap",
+        "Not having a credential still reaches the missing-capability inventory",
+        "i do not have an api key for this connector",
+        "dispatch",
+        "toolbelt-readiness",
+        "prepare_toolbelt_readiness",
+        "toolbelt_readiness",
+        "toolbelt-readiness",
     ),
 )
 

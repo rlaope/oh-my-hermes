@@ -4420,6 +4420,40 @@ _DELIVERABLE_PHRASES = (
 # `refactor-plan` never offered itself. Complete phrases only: a bare `upgrade`
 # is a laptop, a plan, a seat, and a subscription tier, and `version` and
 # `major` are ordinary words everywhere else in this catalog.
+# Rotating a credential is a sequencing problem with a proof step, not a missing
+# tool. `toolbelt-readiness` owns "I do not have an API key"; this owns "I have
+# one and it has to be replaced while the service stays up". Both halves are
+# required: `rotate` alone turns an image, and `key` alone is a map legend.
+_CREDENTIAL_ROTATION_VERBS = (
+    "rotate",
+    "rotating",
+    "rotation",
+    "revoke",
+    "revoking",
+    "revocation",
+    "교체",
+    "폐기",
+)
+_CREDENTIAL_ROTATION_SUBJECTS = (
+    "api key",
+    "api keys",
+    "access key",
+    "secret",
+    "secrets",
+    "credential",
+    "credentials",
+    "certificate",
+    "certificates",
+    "private key",
+    "signing key",
+    "token",
+    "tokens",
+    "password",
+    "passwords",
+    "api 키",
+    "인증서",
+    "자격 증명",
+)
 _DEPENDENCY_UPGRADE_PHRASES = (
     "dependency upgrade",
     "dependency upgrades",
@@ -5263,6 +5297,15 @@ VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; visual image-card requests should prepare a visual prompt card before delivery or material packaging.",
     activation_status="active",
 )
+CREDENTIAL_ROTATION_GUARD = RoutingGuardRule(
+    id="credential_rotation_before_toolbelt_readiness",
+    rule="Rotating or revoking an existing credential should route to the security review lane that carries the cutover order and the revocation proof, not to the missing-capability inventory.",
+    matched_label="guard:credential_rotation",
+    preferred_skills=("security-safety-review",),
+    score_boost=36,
+    why="Matched guard/trigger metadata; replacing a live credential needs an overlap window, a cutover order, and a check that the old credential stopped working.",
+    activation_status="active",
+)
 DEPENDENCY_UPGRADE_GUARD = RoutingGuardRule(
     id="dependency_upgrade_before_generic_plan",
     rule="A major dependency or framework upgrade should route to the phased refactor planner rather than the generic plan lane.",
@@ -5824,6 +5867,8 @@ def _active_routing_guard_rules_cached(
         rules.append(GITHUB_ISSUE_INTAKE_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
+    if credential_rotation_guard_applies(normalized_query):
+        rules.append(CREDENTIAL_ROTATION_GUARD)
     if dependency_upgrade_guard_applies(normalized_query):
         rules.append(DEPENDENCY_UPGRADE_GUARD)
     if _generated_artifact_provenance_guard_applies(normalized_query):
@@ -8632,6 +8677,13 @@ def _provider_profile_posture_guard_applies(normalized_query: str) -> bool:
 def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _hermes_setup_guide_requested(normalized_query):
         return False
+    # An existing credential being replaced is not a missing one. This lane owns
+    # "I do not have an API key"; rotating the key you already have is a
+    # sequencing and revocation-proof problem, and reading it as a readiness gap
+    # answered "credential rotation sequence and proof the old key is dead" with
+    # a tool inventory.
+    if credential_rotation_guard_applies(normalized_query):
+        return False
     if _provider_profile_posture_guard_applies(normalized_query):
         return False
     if _public_plugin_connector_readiness_requested(normalized_query):
@@ -8990,6 +9042,13 @@ def _is_short_visual_summary_request(normalized_query: str) -> bool:
 
 def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
     return has_normalized_missed_omh_workflow_context(normalized_query)
+
+
+def credential_rotation_guard_applies(normalized_query: str) -> bool:
+    """A rotation verb and a credential noun together; neither alone."""
+    return _contains_phrase(normalized_query, _CREDENTIAL_ROTATION_VERBS) and _contains_phrase(
+        normalized_query, _CREDENTIAL_ROTATION_SUBJECTS
+    )
 
 
 def dependency_upgrade_guard_applies(normalized_query: str) -> bool:

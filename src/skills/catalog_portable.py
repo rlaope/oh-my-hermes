@@ -890,4 +890,5 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'live-incident-response/references/incident-command-method.md',
     'external-connector-readiness/references/memory-provider-trial.md',
     'verification-gate/references/generated-artifact-provenance.md',
+    'security-safety-review/references/credential-rotation.md',
 })
