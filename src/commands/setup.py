@@ -2789,7 +2789,6 @@ def _ask_provider_entitlements(args: argparse.Namespace, paths: OmhPaths, langua
         SUBSCRIPTION_CLI_PROFILES,
         is_provider_id_token,
         load_provider_entitlements,
-        provider_entitlements_path,
     )
 
     existing, existing_status = load_provider_entitlements(paths.omh_home)
@@ -2894,9 +2893,12 @@ def _ask_provider_entitlements(args: argparse.Namespace, paths: OmhPaths, langua
     excluded = sorted(provider_id for provider_id, _kind, _source in candidates if provider_id not in providers)
     if excluded:
         document["excluded_providers"] = excluded
-    path = provider_entitlements_path(paths.omh_home)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(path, json.dumps(document, indent=2, sort_keys=True) + "\n")
+    # The same writer `omh model-chains provider set` uses: one producer for
+    # this document, validated through the reader's own rules, so the
+    # interview and the scriptable path cannot drift.
+    from .provider_entitlements import write_provider_entitlements
+
+    path = write_provider_entitlements(paths.omh_home, document)
     args._provider_entitlements = document
     print(tr(language, "provider_entitlements_recorded", path=str(path)))
     if "claude-code" in subscription_clis:

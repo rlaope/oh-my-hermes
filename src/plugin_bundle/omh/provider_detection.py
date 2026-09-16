@@ -10,11 +10,14 @@ pickers can count a provider the moment Hermes can use it:
 
 - `config.yaml`: every `providers.<id>` key and `model.provider`. An id the
   registry knows carries its vendor family. Anything else is the operator's
-  own endpoint (`og`, `work-gateway`) and counts as a `gateway` -- a relay
-  the operator declared on purpose, which is the one case where "serves
-  every family" is the honest default rather than a guess; a custom block
-  whose `base_url` is a loopback address (LM Studio, a local Ollama) serves
-  nothing the catalog names and is left out.
+  own endpoint (`og`, `work-gateway`), and the block says where it points:
+  a `base_url` naming a vendor's documented API host carries that vendor's
+  family (`ENDPOINT_HOST_FAMILIES`, exact hosts only), and anything else
+  counts as a `gateway` -- a relay the operator declared on purpose, which
+  is the one case where "serves every family" is the honest default rather
+  than a guess; a custom block whose `base_url` is a loopback address
+  (LM Studio, a local Ollama) serves nothing the catalog names and is left
+  out.
 - `auth.json`: the ids under `providers`, the `credential_pool` entries
   Hermes itself would count (its explicit flows -- device code, PKCE, a
   manual add -- and an `env:`-seeded row whose variable is still in `.env`;
@@ -157,6 +160,36 @@ EXPLICIT_POOL_SOURCES: frozenset[str] = frozenset({"device_code", "loopback_pkce
 # under a local name, never a catalog alias.
 LOCAL_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", "host.docker.internal"})
 
+# Endpoint host -> vendor family, for a `providers.<id>` block whose id says
+# nothing (`custom`, `work-relay`). The block already carries the one fact
+# that answers "what does this serve": its `base_url`. Reading the host is
+# not a guess -- it is the vendor's own documented API endpoint, and it is
+# the same evidence class as a config key, never a claim about an account,
+# a tier, or a quota.
+#
+# EXACT hosts only, and only hosts that name a family in the entitlement
+# vocabulary. A substring rule would resolve `openrouter.my-company.net` to
+# `openrouter` and promote models in front of a chain that cannot serve
+# them; a private gateway is unknowable from its URL and stays unresolved,
+# which is what `omh model-chains provider set` exists for. Relay endpoints
+# (NVIDIA NIM, Nous Portal) are deliberately absent: the honest kind for a
+# multi-vendor relay is `gateway`, which is exactly what the fallback below
+# already records, so an entry for one would change nothing.
+ENDPOINT_HOST_FAMILIES: dict[str, str] = {
+    "openrouter.ai": "openrouter",
+    "api.anthropic.com": "anthropic",
+    "api.openai.com": "openai",
+    "api.deepseek.com": "deepseek",
+    "api.x.ai": "xai",
+    "generativelanguage.googleapis.com": "gemini",
+    "api.z.ai": "zai",
+    "open.bigmodel.cn": "zai",
+    "api.moonshot.ai": "kimi-coding",
+    "api.moonshot.cn": "kimi-coding",
+    "dashscope.aliyuncs.com": "qwen-oauth",
+    "dashscope-intl.aliyuncs.com": "qwen-oauth",
+}
+
 
 def _read_text(path: Path) -> str:
     # `utf-8-sig`, like Hermes' own auth-store reader: a BOM is skipped, not
@@ -177,15 +210,18 @@ def _base_url_host(value: str) -> str:
     return host.rsplit(":", 1)[0].lower() if host.count(":") == 1 else host.lower()
 
 
-def local_config_provider_ids(config_text: str) -> list[str]:
-    """`providers.<id>` keys whose `base_url` names a loopback host.
+def config_provider_base_url_hosts(config_text: str) -> dict[str, str]:
+    """`providers.<id>` -> the host of its `base_url`, in config order.
 
     Line-shaped like `configured_provider_ids`: a four-space `base_url:` line
-    under a two-space provider key. Such a block is a local model server
-    (LM Studio, Ollama) serving a local model under a local name; counting
-    it as a gateway would mark every catalog model served on this machine.
+    under a two-space provider key. The first `base_url` in a block wins, a
+    block without one is absent, and the host is lowercased by
+    `_base_url_host`. Both questions the host answers -- "is this a local
+    model server" and "which vendor's endpoint is this" -- read this one
+    mapping, so there is one parser and the two can never disagree about
+    what a block points at.
     """
-    local: list[str] = []
+    hosts: dict[str, str] = {}
     in_providers = False
     current = ""
     for line in config_text.splitlines():
@@ -202,10 +238,32 @@ def local_config_provider_ids(config_text: str) -> list[str]:
             continue
         if current and line.startswith("    ") and not line.startswith("      "):
             key, separator, rest = stripped.partition(":")
-            if separator and key.strip() == "base_url":
-                if _base_url_host(rest.split("#", 1)[0]) in LOCAL_HOSTS and current not in local:
-                    local.append(current)
-    return local
+            if separator and key.strip() == "base_url" and current not in hosts:
+                hosts[current] = _base_url_host(rest.split("#", 1)[0])
+    return hosts
+
+
+def local_config_provider_ids(config_text: str) -> list[str]:
+    """`providers.<id>` keys whose `base_url` names a loopback host.
+
+    Such a block is a local model server (LM Studio, Ollama) serving a local
+    model under a local name; counting it as a gateway would mark every
+    catalog model served on this machine.
+    """
+    return [
+        provider_id
+        for provider_id, host in config_provider_base_url_hosts(config_text).items()
+        if host in LOCAL_HOSTS
+    ]
+
+
+def endpoint_family_for_host(host: str) -> str:
+    """The vendor family an endpoint host names, or "" when none does.
+
+    Exact match only (see `ENDPOINT_HOST_FAMILIES`): a host the table does
+    not name is unresolved, never approximated.
+    """
+    return ENDPOINT_HOST_FAMILIES.get(str(host or "").strip().lower(), "")
 
 
 def configured_provider_ids(config_text: str) -> list[str]:
@@ -339,17 +397,35 @@ def detect_linked_providers(
     keeps the strongest. `env_names` lets a caller supply the variable names
     it already read (the setup interview does, and includes the shell's);
     otherwise only `.env` is read. An unbound profile home yields no rows
-    rather than another home's rows.
+    rather than another home's rows. A `providers.<id>` block whose id names
+    no vendor family is read from its `base_url` host (`config_kind`), so a
+    custom-named block pointed at a vendor's documented endpoint carries
+    that vendor's family instead of the `gateway` fallback.
     """
     home = _hermes_home(hermes_home)
     if home is None:
         return []
     config_text = _read_text(home / "config.yaml")
-    local_ids = set(local_config_provider_ids(config_text))
+    base_url_hosts = config_provider_base_url_hosts(config_text)
+    local_ids = {provider_id for provider_id, host in base_url_hosts.items() if host in LOCAL_HOSTS}
     config_ids = [provider_id for provider_id in configured_provider_ids(config_text) if provider_id not in local_ids]
     custom_ids = {provider_id for provider_id in config_ids if provider_id not in HERMES_PROVIDER_KINDS}
     names = env_key_names(home) if env_names is None else sorted(str(name) for name in env_names)
     rows: dict[str, dict[str, str]] = {}
+
+    def config_kind(provider_id: str) -> str:
+        """What a `providers.<id>` block serves: its id, else its endpoint, else `gateway`.
+
+        An id the registry maps to a vendor family answers on its own and
+        the endpoint is not consulted -- the id is the operator naming the
+        provider, which outranks the URL under it. `gateway` is not such an
+        answer: it is what an id that says nothing falls back to, so for
+        those the endpoint host gets to answer before the fallback stands.
+        """
+        kind = HERMES_PROVIDER_KINDS.get(provider_id, GATEWAY_KIND)
+        if kind != GATEWAY_KIND:
+            return kind
+        return endpoint_family_for_host(base_url_hosts.get(provider_id, "")) or kind
 
     def add(provider_id: str, kind: str, source: str, evidence: str) -> None:
         if provider_id in NON_PROVIDER_IDS or not PROVIDER_ID_RE.fullmatch(provider_id):
@@ -361,10 +437,9 @@ def detect_linked_providers(
         if provider_id in HERMES_PROVIDER_KINDS:
             add(provider_id, HERMES_PROVIDER_KINDS[provider_id], LINKED_SOURCE_LOGIN, "auth.json")
         elif provider_id in custom_ids:
-            add(provider_id, GATEWAY_KIND, LINKED_SOURCE_LOGIN, "auth.json")
+            add(provider_id, config_kind(provider_id), LINKED_SOURCE_LOGIN, "auth.json")
     for provider_id in config_ids:
-        kind = HERMES_PROVIDER_KINDS.get(provider_id, GATEWAY_KIND)
-        add(provider_id, kind, LINKED_SOURCE_CONFIG, "config.yaml")
+        add(provider_id, config_kind(provider_id), LINKED_SOURCE_CONFIG, "config.yaml")
     for name in names:
         provider_id = HERMES_ENV_KEY_PROVIDERS.get(name)
         if provider_id is None:

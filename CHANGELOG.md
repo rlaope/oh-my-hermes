@@ -31,6 +31,37 @@ All notable changes will be documented here.
   `ulw-goal — active — sha256:…`, where only the digest identifies itself. Rich
   profiles keep the aligned card above the body, where there is room for it.
 
+- **A `providers.<id>` block now says what it serves, and a machine that
+  cannot say is told so.** Such a block is the operator's own endpoint behind
+  their own `base_url`, and detection recorded every one of them as `gateway`.
+  That kind is multi-vendor, so `alias_is_served` counted every alias as served
+  and `entitlement_shaped_chain` was a no-op: the chain reordering did nothing
+  at all, and `omh model-chains show` said only `Linked Hermes providers:
+  custom (config)`, which reads as confirmation that the providers are being
+  counted. Free-tier users reach OpenRouter and similar through exactly such a
+  block, so the feature was dark for the population whose chains most need
+  shaping. Detection now reads the block's `base_url` host, which it already
+  parsed to decide whether the endpoint was a local model server: a host that
+  is a vendor's documented API endpoint (`ENDPOINT_HOST_FAMILIES` — exact
+  hosts, never a substring) carries that vendor's family, so a `custom` block
+  pointed at `api.deepseek.com` reorders the chains like a `deepseek` provider.
+  An id that already names a family is never overruled by its URL, and a
+  private relay of the operator's own stays unresolved rather than being
+  renamed after a vendor whose name happens to appear in its URL. For that
+  remaining case — a gateway no host can identify — `omh model-chains show`
+  adds one indented line naming both ways to record what it serves, and
+  `omh model-chains provider set <id> <kind>` / `clear <id>` is the way that
+  does not need a terminal, since a `--yes`, `--json`, or non-TTY `omh setup`
+  asks no provider question at all. It writes the same `providers.json`
+  through the same validation the interview now also routes through — one
+  producer, `write_provider_entitlements` — refuses a kind outside the
+  vocabulary by naming the accepted values, refuses to overwrite a record it
+  cannot read, and is idempotent. The line is said only when every provider
+  resolves to no family and no category actually came out reordered, so a
+  machine holding `openrouter` (which does serve every family) and one whose
+  routes shape a chain are both left alone; the `--json` payload carries the
+  same fact as `unplaced_providers`.
+
 - **A coding briefing now opens by saying whether it needs you.** The first
   line carries 🔴 / 🟡 / 🟢 — stopped, waiting on you, running — which is what
   a phone notification shows when it shows sixty characters and nothing else.

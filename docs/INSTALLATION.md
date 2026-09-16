@@ -533,8 +533,13 @@ shell is not counted (Hermes did not record it; the interview below still
 offers it). Only ids, names, and a pool row's `source` label are read —
 never a token or a key — and nothing is invoked. A registry id carries its
 vendor family (`openai-codex`, `zai`, `kimi-coding`); an id OMH cannot place
-is your own endpoint and counts as a `gateway` unless its `base_url` is a
-loopback address (LM Studio, a local Ollama), which is left out; a Hermes
+is your own endpoint, and the block says where it points — a `base_url`
+naming a vendor's documented API host (`openrouter.ai`, `api.deepseek.com`,
+`api.z.ai`, …) carries that vendor's family, exact hosts only, so a private
+relay of your own is never renamed after a vendor whose name happens to
+appear in its URL — and anything else counts as a `gateway` unless the
+`base_url` is a loopback address (LM Studio, a local Ollama), which is left
+out entirely; a Hermes
 provider whose models the catalog never describes (MiniMax, StepFun) is
 ignored rather than guessed, and so is `CLAUDE_CODE_OAUTH_TOKEN`, which
 Hermes' registry marks implicit. The recorded document sits on top: its kind
@@ -544,6 +549,22 @@ and stops counting — the one way short of unlinking it from Hermes. Beyond
 that neither side removes the other's providers. `omh model-chains show`,
 the CLI picker, and `/omh-model` list the providers counted, each with where
 it was found (`login`, `config`, `env`, or `recorded`).
+
+A private gateway is the case no host can answer, and a `--yes`, `--json`,
+or non-TTY `omh setup` asks no provider question at all — so there is a
+scriptable way to record one, for install scripts and agents:
+
+```sh
+omh model-chains provider set work-gateway openrouter   # record what it serves
+omh model-chains provider clear work-gateway            # go back to detection
+```
+
+It writes the same `providers.json` through the same validation the
+interview uses, refuses a kind outside the vocabulary by naming the accepted
+values, refuses to overwrite a record it cannot read, and is idempotent — so
+an install script can run it on every run. `omh model-chains show` says when
+a machine's providers all resolve to nothing, and names both of these ways
+out.
 
 With linked providers found or that document present, every chain is
 reordered so the entries such a provider can serve lead and the rest follow;

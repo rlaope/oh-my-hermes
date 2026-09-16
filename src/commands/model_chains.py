@@ -15,6 +15,10 @@ supported editing surface over that file:
   one category's replacement chain; `--clear` returns it to the default.
 * `omh model-chains interview` — walk every category with numbered choices
   (keep / shipped default / Ultrafast tier / custom entry) on a terminal.
+* `omh model-chains provider set <id> <kind>` / `clear <id>` — record what
+  one of this machine's providers serves, which is what reorders the chains
+  above. The scriptable counterpart of the `omh setup` provider question,
+  which a `--yes`, `--json`, or non-TTY install never reaches.
 
 Editing the JSON file directly stays equally supported; every path converges
 on the same validated document.
@@ -36,6 +40,8 @@ from ..local_store import atomic_write_text
 from ..plugin_bundle.omh.hermes_delegation import (
     APPROX_PRICE_PER_MTOK,
     HERMES_MIXTURE_CATEGORY_CHAINS,
+    PROVIDER_FAMILY_VOCABULARY,
+    PROVIDER_KIND_VOCABULARY,
     alias_is_served,
     chains_with_overrides,
     entitlement_shaped_chain,
@@ -44,8 +50,10 @@ from ..plugin_bundle.omh.hermes_delegation import (
     effective_provider_entitlements,
     mixture_chain_overrides_path,
     model_provider_routes_path,
+    is_provider_id_token,
     parse_mixture_chain_overrides,
     provider_entitlements_path,
+    provider_family_for,
     routes_to_unknown_providers,
     split_unknown_routes,
     unknown_route_labels,
@@ -149,6 +157,18 @@ def _state(omh_home, hermes_home=None) -> dict[str, object]:
         "entitlements_path": str(provider_entitlements_path(omh_home)),
         "entitlements_status": entitlement_status,
         "providers": [dict(row) for row in providers],
+        # Providers whose kind names no model family: `gateway`, `unknown`,
+        # or an id nothing on this machine records. The serving rule counts
+        # every alias as served for such a provider, so on its own it can
+        # only ever leave a chain in the order it already had. Resolved
+        # through `provider_family_for` -- the one id -> family lookup this
+        # surface has -- so the printed line cannot drift from a second copy
+        # of the rule.
+        "unplaced_providers": [
+            row["id"]
+            for row in providers
+            if provider_family_for(str(row["id"]), entitlements) not in PROVIDER_FAMILY_VOCABULARY
+        ],
         "routes_path": str(model_provider_routes_path(omh_home)),
         "routes_status": routes_status,
         # Routes to a provider neither recorded nor linked, each with its
@@ -177,6 +197,24 @@ def _print_state(state: dict[str, object]) -> None:
     linked = [row for row in state.get("providers", []) if row["source"] != "recorded"]
     if linked:
         print("Linked Hermes providers: " + ", ".join(f"{row['id']} ({row['source']})" for row in linked))
+        unplaced = set(state.get("unplaced_providers", []))
+        reordered = any(row.get("entitlement_shaped") for row in state["categories"])
+        # Said only when it is the whole story: every provider this machine
+        # holds is one whose kind names no family, and no category came out
+        # reordered. A named multi-vendor family (`openrouter`, `opencode`)
+        # leaves the chains unshaped too, but correctly -- it does serve
+        # every family, and no answer would change that -- so a machine
+        # holding one is not told to go and fix something. A route in
+        # model-providers.json can shape a chain past a gateway kind, and
+        # then the reordering is not doing nothing, so the line stays off.
+        #
+        # Both ways out are named. A `--yes`, `--json`, or non-TTY setup
+        # asks no provider question, so an agent-driven or scripted install
+        # -- which overlaps heavily with the machines that land here -- can
+        # never take advice that says only `omh setup`.
+        if unplaced >= {str(row["id"]) for row in state.get("providers", [])} and not reordered:
+            print("  none of these names a model family, so no chain is reordered. Record what one serves with")
+            print("  `omh model-chains provider set <id> <kind>`, or answer `omh setup` on a terminal.")
     else:
         print("Linked Hermes providers: none found (a `hermes auth` login, a config provider, or a key name counts)")
     routes_status = str(state.get("routes_status", ""))
@@ -472,6 +510,70 @@ def cmd_model_chains_interview(args: argparse.Namespace) -> int:
     return model_chains_interview(_paths(args))
 
 
+def _provider_kind_error(kind: str) -> str:
+    return (
+        f"omh: unknown provider kind {kind!r}; choose one of "
+        + ", ".join(PROVIDER_KIND_VOCABULARY)
+    )
+
+
+def cmd_model_chains_provider_set(args: argparse.Namespace) -> int:
+    """Record what one provider serves, without a terminal.
+
+    The scriptable counterpart of the `omh setup` provider question, which a
+    `--yes`, `--json`, or non-TTY install never reaches. A kind outside the
+    vocabulary is refused by name rather than recorded: an unresolvable kind
+    is the exact state the `model-chains show` hint exists to make visible,
+    so writing one from a typo would manufacture it.
+    """
+    paths = _paths(args)
+    provider_id = str(args.provider)
+    kind = str(args.kind)
+    if not is_provider_id_token(provider_id):
+        print(f"omh: {provider_id!r} is not a plain provider identifier", file=sys.stderr)
+        return 2
+    if kind not in PROVIDER_KIND_VOCABULARY:
+        print(_provider_kind_error(kind), file=sys.stderr)
+        return 2
+    return _report_provider_record(args, paths.omh_home, provider_id, kind)
+
+
+def cmd_model_chains_provider_clear(args: argparse.Namespace) -> int:
+    """Remove one provider from the record; detection counts it again afterwards."""
+    paths = _paths(args)
+    provider_id = str(args.provider)
+    if not is_provider_id_token(provider_id):
+        print(f"omh: {provider_id!r} is not a plain provider identifier", file=sys.stderr)
+        return 2
+    return _report_provider_record(args, paths.omh_home, provider_id, None)
+
+
+def _report_provider_record(args: argparse.Namespace, omh_home, provider_id: str, kind: str | None) -> int:
+    from .provider_entitlements import record_provider_kind
+
+    payload = record_provider_kind(omh_home, provider_id, kind)
+    if getattr(args, "json", False):
+        print(json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
+    status = str(payload["status"])
+    if status == "refused_invalid_document":
+        # Never silently discard an operator document a script has not read.
+        if not getattr(args, "json", False):
+            print(
+                f"omh: {payload['path']} is not readable as a provider record "
+                f"[{payload['document_status']}]; fix or delete it first",
+                file=sys.stderr,
+            )
+        return 2
+    if not getattr(args, "json", False):
+        if status == "unchanged":
+            print(f"{provider_id} already recorded as expected in {payload['path']}; nothing written")
+        elif status == "cleared":
+            print(f"Cleared {provider_id} from {payload['path']}; this machine's own providers count it again")
+        else:
+            print(f"Recorded {provider_id} as {kind} in {payload['path']}; `omh model-chains show` prints the effect")
+    return 0
+
+
 def _add_model_chains_commands(sub) -> None:
     chains = sub.add_parser(
         "model-chains",
@@ -507,3 +609,24 @@ def _add_model_chains_commands(sub) -> None:
         help="Walk every category with numbered choices (keep / default / Ultrafast / custom).",
     )
     interview.set_defaults(func=cmd_model_chains_interview)
+
+    # The provider record lives beside the chains because it is what reorders
+    # them, and `show` already prints it. These two are the scriptable half
+    # of the `omh setup` provider question, which no `--yes`, `--json`, or
+    # non-TTY install ever reaches.
+    provider = chains_sub.add_parser(
+        "provider",
+        help="Record what one of this machine's providers serves (scriptable; `omh setup` asks a person).",
+    )
+    provider_sub = provider.add_subparsers(dest="model_chains_provider_command", required=True)
+
+    provider_set = provider_sub.add_parser("set", help="Record one provider id as serving one model family.")
+    provider_set.add_argument("provider", help="Provider id as Hermes names it (a `providers.<id>` key).")
+    provider_set.add_argument("kind", help="One of: " + ", ".join(PROVIDER_KIND_VOCABULARY))
+    provider_set.add_argument("--json", action="store_true", help="Print the machine-readable result payload.")
+    provider_set.set_defaults(func=cmd_model_chains_provider_set)
+
+    provider_clear = provider_sub.add_parser("clear", help="Remove one provider id from the record.")
+    provider_clear.add_argument("provider", help="Provider id to stop recording.")
+    provider_clear.add_argument("--json", action="store_true", help="Print the machine-readable result payload.")
+    provider_clear.set_defaults(func=cmd_model_chains_provider_clear)
