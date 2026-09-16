@@ -75,6 +75,7 @@ Quality bar:
 - Separate durable requirements, volatile status, file refs, verification evidence, and open blockers.
 - Define checkpoint cadence, overflow recovery, and continuity verification.
 - Use bounded copy while preserving the full objective and evidence gaps.
+- Count the must-keep pack by item class, so a replaced pack reports which class lost entries instead of only that a digest moved; a pack that recorded no classes reports the comparison unavailable and never reports zero items.
 - Keep prompt-prefix placement cache-stable: fixed section order, volatile bytes never above the fold, mid-run changes as appended messages never system-prompt mutations — load `references/cache-placement.md` for the placement rules.
 
 Handoff policy:
@@ -96,6 +97,7 @@ Expected outputs:
 
 - context_budget_plan/v1
 - must_keep_context_pack/v1
+- must_keep_item_class_delta/v1 when a pack replaces an earlier one
 - summarization_checkpoint_plan/v1
 - budget_risk_register/v1
 - overflow_recovery_route/v1
@@ -105,6 +107,7 @@ Artifact expectations:
 
 - context_budget_plan/v1 with scope, max visible context, source priority, discard rules, and checkpoint cadence
 - must_keep_context_pack/v1 with durable facts, file refs, decisions, PR/CI state, and blocked assumptions
+- must_keep_item_class_delta/v1 naming the item class that lost entries rather than reporting a digest difference, over the closed vocabulary prohibitions, decisions, open_questions, requirements, paths, pr_state, verification_gaps
 - summarization_checkpoint_plan/v1 with when to compact, what to preserve, and how to verify continuity
 - budget_risk_register/v1 separating estimated cost/token/latency risk from provider-observed truth
 

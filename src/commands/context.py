@@ -121,8 +121,27 @@ def cmd_context_budget_plan(args: argparse.Namespace) -> int:
         for name, evidence in record["capacity"].items():
             print(f"  {name}: {evidence['value']} ({evidence['class']}; {evidence['source']}; clock={evidence['observed_at'] or 'unknown'})")
         print(f"Continuation: {payload['invalidation']['action']} ({payload['invalidation']['reason']})")
+        _print_must_keep_delta(payload.get("must_keep_delta"))
         print("Prepared obligation only. Provider usage, compaction and billing: not observed.")
     return 0
+
+
+def _print_must_keep_delta(delta: object) -> None:
+    """Name the class that lost an item; never print a bare digest verdict."""
+    if not isinstance(delta, dict):
+        return
+    if delta["comparison"] != "compared":
+        print(f"Must-keep item classes: unavailable ({delta['unavailable_reason']})")
+        return
+    missing, reduced = delta["missing_classes"], delta["reduced_classes"]
+    if not missing and not reduced:
+        print("Must-keep item classes: every recorded class still present")
+        return
+    for name in missing:
+        print(f"  MISSING class {name}: recorded before, absent now")
+    for row in reduced:
+        dropped = ", ".join(row["dropped_refs"]) or "no refs recorded"
+        print(f"  REDUCED class {row['item_class']}: {row['previous_count']} -> {row['current_count']} (dropped: {dropped})")
 
 
 def _add_context_commands(sub) -> None:
@@ -153,5 +172,12 @@ def _add_context_commands(sub) -> None:
             parser.add_argument("--model", required=True, help="Exact host wire-model spelling, not a family alias.")
             parser.add_argument("--capacity", help="Local route_capacity_input/v1 JSON; absent limits stay unknown.")
         if operation == "prepare":
-            parser.add_argument("--must-keep", required=True, help="JSON digest and estimated_tokens_total; never pack content.")
+            parser.add_argument(
+                "--must-keep",
+                required=True,
+                help=(
+                    "JSON digest, estimated_tokens_total, and optional item_classes counts/refs; never pack content. "
+                    "Omitting item_classes reports a later comparison as unavailable, not as zero items."
+                ),
+            )
         parser.set_defaults(func=cmd_context_budget_plan)

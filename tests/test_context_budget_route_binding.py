@@ -38,7 +38,8 @@ class RouteBoundBudgetTests(unittest.TestCase):
         self.assertEqual((code, stderr), (0, ""))
         return json.loads(stdout)
 
-    def publish(self, operation="prepare", route="a", capacity: bool | dict[str, FixtureEvidence] = True, tokens=12000):
+    def publish(self, operation="prepare", route="a", capacity: bool | dict[str, FixtureEvidence] = True, tokens=12000,
+                digest="a", item_classes=None):
         args = [operation, "--executor-profile", "hermes", "--provider", f"provider-{route}", "--model", f"model-{route}"]
         if capacity:
             data = self.capacity() if capacity is True else capacity
@@ -47,7 +48,13 @@ class RouteBoundBudgetTests(unittest.TestCase):
             args += ["--capacity", str(path)]
         if operation == "prepare":
             path = self.home / "must-keep.json"
-            path.write_text(json.dumps({"digest": "sha256:" + "a" * 64, "estimated_tokens_total": tokens}), encoding="utf-8")
+            # `item_classes` stays absent by default, so every other case in
+            # this file publishes the pre-item-class pack shape and the
+            # compatibility path is exercised by the whole file, not one test.
+            pack: dict[str, object] = {"digest": "sha256:" + digest * 64, "estimated_tokens_total": tokens}
+            if item_classes is not None:
+                pack["item_classes"] = item_classes
+            path.write_text(json.dumps(pack), encoding="utf-8")
             args += ["--must-keep", str(path)]
         return self.cli(*args)
 
@@ -239,3 +246,77 @@ class RouteBoundBudgetTests(unittest.TestCase):
                 self.assertEqual(projection["invalidation"]["action"], "capacity_unknown_hold")
                 self.assertIsNone(projection["active_budget_source"])
                 self.assertIsNone(projection["usable_budget_tokens"]["value"])
+
+    def test_replaced_pack_names_the_item_class_that_went_missing(self) -> None:
+        # Given a pack that recorded what it was keeping, by class.
+        recorded = {
+            "prohibitions": {"count": 2, "refs": ["no-force-push", "no-schema-rewrite"]},
+            "decisions": {"count": 1, "refs": ["adr-0007"]},
+            "open_questions": {"count": 1, "refs": ["q-rollback-owner"]},
+        }
+        first = self.publish(item_classes=recorded)
+        self.assertEqual(first["must_keep_delta"]["comparison"], "unavailable")
+        self.assertEqual(first["must_keep_delta"]["unavailable_reason"], "no_previous_pack")
+        # When a later preparation drops one class outright and thins another.
+        survives = {
+            "prohibitions": {"count": 1, "refs": ["no-force-push"]},
+            "decisions": {"count": 1, "refs": ["adr-0007"]},
+        }
+        second = self.publish(digest="b", item_classes=survives)
+        delta = second["must_keep_delta"]
+        # Then the report names the class, not only that the digest differs.
+        self.assertFalse(delta["digest_matches"])
+        self.assertEqual(delta["comparison"], "compared")
+        self.assertEqual(delta["missing_classes"], ["open_questions"])
+        self.assertEqual(
+            delta["reduced_classes"],
+            [{"item_class": "prohibitions", "previous_count": 2, "current_count": 1, "dropped_refs": ["no-schema-rewrite"]}],
+        )
+        # And an unchanged class is not reported as a loss.
+        self.assertNotIn("decisions", [row["item_class"] for row in delta["reduced_classes"]])
+
+    def test_pack_without_item_classes_reports_unavailable_not_empty(self) -> None:
+        # Given a plan published before item classes existed on the pack.
+        self.publish()
+        stored = self.cli("status")["must_keep_pack"]
+        self.assertIsNone(stored["item_classes"])
+        # When a class-recording pack replaces it, and then the reverse.
+        forward = self.publish(digest="b", item_classes={"prohibitions": {"count": 1, "refs": ["no-force-push"]}})
+        backward = self.publish(digest="c")
+        # Then neither direction claims the missing side lost nothing.
+        for payload, reason in (
+            (forward, "previous_pack_recorded_no_item_classes"),
+            (backward, "current_pack_recorded_no_item_classes"),
+        ):
+            with self.subTest(reason=reason):
+                delta = payload["must_keep_delta"]
+                self.assertEqual(delta["comparison"], "unavailable")
+                self.assertEqual(delta["unavailable_reason"], reason)
+                self.assertEqual((delta["missing_classes"], delta["reduced_classes"]), ([], []))
+
+    def test_item_classes_stay_metadata_only(self) -> None:
+        # Given packs carrying an unknown class, prose refs, and count/ref drift.
+        rejected = (
+            {"secrets": {"count": 1, "refs": ["x"]}},
+            {"prohibitions": {"count": 1}},
+            {"prohibitions": {"count": 1, "refs": ["do not rewrite the PRIVATE_SENTINEL schema"]}},
+            {"prohibitions": {"count": 1, "refs": ["a", "b"]}},
+            {"prohibitions": {"count": 1, "refs": ["a", "a"]}},
+            {"prohibitions": {"count": 2, "refs": ["a"] * 9}},
+        )
+        plans = self.home / "runtime" / "context-budget-plans"
+        self.publish()
+        before = {p.name: p.read_bytes() for p in plans.glob("*.json")}
+        for classes in rejected:
+            with self.subTest(classes=classes):
+                path = self.home / "bad-pack.json"
+                path.write_text(json.dumps({"digest": "sha256:" + "b" * 64, "estimated_tokens_total": 10, "item_classes": classes}))
+                # When the untrusted pack crosses the real CLI parser.
+                code, stdout, stderr = run_cli([
+                    "--omh-home", str(self.home), "context", "budget-plan", "prepare", "--session-ref", self.session,
+                    "--executor-profile", "hermes", "--provider", "p", "--model", "m", "--must-keep", str(path), "--json",
+                ])
+                # Then it is refused with no leaked text and no publication.
+                self.assertEqual(code, 2)
+                self.assertNotIn("PRIVATE_SENTINEL", stdout + stderr)
+                self.assertEqual({p.name: p.read_bytes() for p in plans.glob("*.json")}, before)

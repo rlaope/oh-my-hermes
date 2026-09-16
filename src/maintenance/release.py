@@ -246,7 +246,12 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # that lane reviews incident notes after the fact. One new capability section
 # for one new workflow plus the reciprocal boundary lines in the three siblings
 # it hands back to; not per-section padding, warranted growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 425447
+# 425447 -> 425489: `context-budget-review` names `must_keep_item_class_delta/v1`
+# among its outputs (#1572), so the capability section renders one more declared
+# output line. The item-class vocabulary and the unavailable-versus-empty rule
+# are artifact expectations and a quality bar, not section text; warranted
+# growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 425489
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -955,7 +960,14 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # closed in one direction only, plus the new lane name on the
 # automation_and_status skills' Workflow Lane lines. Re-derived from the
 # full-profile skill_context_cost_payload() producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 976281
+# 976281 -> 976809: `context-budget-review` gains the one output, one artifact
+# expectation, and one quality bar that make a must-keep mismatch nameable
+# (#1572). A digest comparison could previously say only that something
+# changed, so the rule that a pack recording no classes reports the comparison
+# unavailable -- never zero items -- has to hold whether or not any reference is
+# open. Re-derived from the full-profile skill_context_cost_payload() producer,
+# never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 976809
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 
