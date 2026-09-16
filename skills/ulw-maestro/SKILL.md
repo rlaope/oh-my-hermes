@@ -47,6 +47,7 @@ Bad example:
 - The final status cites observed runtime evidence or keeps the work prepared_not_observed.
 - When Hermes is the selected coding owner this engine does not apply -- Hermes-native selection uses the Hermes runtime path, never this engine.
 - Dispatch never merges: collect each unit's fanout_unit_result/v1 evidence, verify the integrated combination of units (not just each one alone -- disjoint file scopes can still conflict at integration), and report merged/unmerged per unit in the closing brief. Merging the unit branches remains an explicit operator or reviewing-agent action; a dispatch receipt is never merge evidence.
+- The closing brief ends with the observed `omh_run_summary` summary_text verbatim, or an explicit run-summary not_available line -- never a model-estimated number.
 
 ## Recovery Notes
 

@@ -965,9 +965,18 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # rule about what to do BEFORE the engine starts, reached only at the bottom of
 # the body under a heading named `Catalog Metadata`, arrives after the run has
 # already begun -- which is how a real run left the HUD checklist empty from
-# start to finish. Re-derived from the full-profile skill_context_cost_payload()
-# producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 976662
+# start to finish.
+# 976662 -> 976827: a sweep of every rendered body for `omh_*` tool directives
+# appearing ONLY inside the `## Catalog Metadata` span found the same defect in
+# `ulw-maestro`: its quality bar tells a run to close with the localized
+# `omh_run_summary` text, and its `Completion Checklist` -- the section a run
+# reads to decide it is done -- said nothing about the close, so a run that
+# omitted the summary had nothing in the document to fail against. `ultrawork`
+# already carries the equivalent line, so this was an omission rather than a
+# deliberate difference. One checklist line; no new behavior text. Re-derived
+# from the full-profile skill_context_cost_payload() producer, never by adding
+# deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 976827
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

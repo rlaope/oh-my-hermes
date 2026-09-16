@@ -308,6 +308,17 @@ _MAESTRO_RESULT_INTEGRATION_FINAL_CHECKLIST_NOTE = (
     "reviewing-agent action; a dispatch receipt is never merge evidence."
 )
 
+# maestro's quality bar already tells a run to close with the localized
+# `omh_run_summary` text, but `quality_bar` renders under `## Catalog Metadata`
+# and its `Completion Checklist` said nothing about the close, so a run that
+# omitted the summary had nothing in the document to fail against. `ultrawork`
+# carries the equivalent checklist line; the absence here was an omission, not
+# a deliberate difference between the two engines.
+_MAESTRO_RUN_SUMMARY_FINAL_CHECKLIST_NOTE = (
+    "The closing brief ends with the observed `omh_run_summary` summary_text verbatim, or an explicit "
+    "run-summary not_available line -- never a model-estimated number."
+)
+
 _HANDOFF_RECOVERY_NOTES = (
     "If the selected executor is unavailable, ask for Codex, Claude Code, Hermes, or another runtime before retrying.",
     "If dispatch or result evidence is missing, keep the handoff prepared_not_observed and expose the next observable action.",

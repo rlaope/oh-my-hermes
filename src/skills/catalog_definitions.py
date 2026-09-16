@@ -71,6 +71,7 @@ from .catalog_types import (
     _HERMES_SETUP_WRITE_BOUNDARY,
     _MAESTRO_HERMES_OWNER_FINAL_CHECKLIST_NOTE,
     _MAESTRO_RESULT_INTEGRATION_FINAL_CHECKLIST_NOTE,
+    _MAESTRO_RUN_SUMMARY_FINAL_CHECKLIST_NOTE,
     SPECIALIST_DOMAIN_HANDOFF_BOUNDARY,
 )
 
@@ -1053,7 +1054,11 @@ _DEFINITIONS = [
         ),
         quality_tier="handoff-gated",
         final_checklist=_HANDOFF_FINAL_CHECKLIST
-        + (_MAESTRO_HERMES_OWNER_FINAL_CHECKLIST_NOTE, _MAESTRO_RESULT_INTEGRATION_FINAL_CHECKLIST_NOTE),
+        + (
+            _MAESTRO_HERMES_OWNER_FINAL_CHECKLIST_NOTE,
+            _MAESTRO_RESULT_INTEGRATION_FINAL_CHECKLIST_NOTE,
+            _MAESTRO_RUN_SUMMARY_FINAL_CHECKLIST_NOTE,
+        ),
         quality_bar=(
             ENGINE_ENTRY_CONFIRMATION_RULE,
             "Require the coding owner to already be chosen for this run -- named in the request, accepted when "
