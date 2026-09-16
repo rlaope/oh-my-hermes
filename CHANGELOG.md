@@ -4,6 +4,44 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **An `ultrawork` run now meets its "declare the plan first" instruction
+  before it starts, not after it has finished.** The one sentence telling the
+  engine to initialize its phase todo was the sixth bullet of a ninety-line
+  list under a heading named `Catalog Metadata`, near the bottom of a
+  26,705-byte body — a section a model reads as machine-readable bookkeeping,
+  reached only once the run is already underway. Strip that block from
+  `skills/ulw-work/SKILL.md` and the word `todo` did not appear anywhere else
+  in the document, `Completion Checklist` included; a real run performed the
+  whole task with the HUD checklist empty. The directive is unchanged text
+  that moved: workflow bodies gained a `## First Steps` section, rendered
+  directly under `## Why This Exists` from a new `opening_steps` catalog field,
+  and `ultrawork` and `ralplan` carry their todo-initialization there. Each
+  also gained one `Completion Checklist` line, because the section a model
+  follows to decide it is done covered lane disjointness, ACK, review, CI and
+  integration and said nothing about whether a plan was ever declared — so a
+  run that declared none still read as complete. The Agent Skills projection
+  buried its own host-neutral copy of the same directive in the same place and
+  moved with it. The seven remaining `ulw-*` skills are unchanged: six mention
+  a todo only through the shared interjection rule, which re-reads one *when
+  one is active*, and `ulw-interview` mentions none — a conditional reference
+  is not a misplaced instruction, and giving them an obligation they never had
+  is a different change.
+
+  Because the cause is structural rather than an authoring slip -- `quality_bar`
+  is a `SkillDefinition` field and every field it holds renders under
+  `## Catalog Metadata` -- all 126 rendered bodies were then swept for `omh_*`
+  directives living only inside that span. It found the same shape twice more,
+  and both are now stated where a run decides it is done. `ulw-maestro` is told
+  to close with the localized `omh_run_summary` text and its checklist said
+  nothing about the close, so a run could end with no summary and nothing in
+  the document contradicted it. `ultrawork` is told to route every
+  Hermes-native lane with `omh_delegate_route` before dispatch and its
+  checklist said nothing about routing, so a run that dispatched every lane
+  inherit-labeled passed its own completion contract -- which is the second
+  half of the same user report, the run that declared no todo also routed no
+  lane. Each is one line restating an obligation the quality bar already
+  carried; no new behavior text.
+
 - **A narrow table keeps its columns on Slack, and provenance stopped taking
   the notification preview.** Messenger profiles turned every markdown table
   into bullets, which is right for a wide one and wrong for the shape people

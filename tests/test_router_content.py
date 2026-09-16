@@ -3070,6 +3070,56 @@ class RouterContentTests(unittest.TestCase):
                 self.assertNotIn("<task that matches this workflow>", definition.good_example.prompt)
                 self.assertNotIn("<unrelated or unaccepted work>", definition.bad_example.prompt)
 
+    def test_opening_steps_render_above_the_catalog_metadata_block(self) -> None:
+        """An opening step must be reachable before the run it governs starts.
+
+        `quality_bar` renders under `## Catalog Metadata`, which sits below
+        `Use When` in every workflow body and reads as machine-readable
+        bookkeeping. A directive placed there is discovered, if at all, after
+        the engine has already begun. This asserts the ordering in the rendered
+        bytes for both the Hermes skills and the Agent Skills projection, and
+        that the Hermes-declared text actually reaches the section.
+        """
+        from omh.skills.render import agent_skill_templates
+
+        for renderer in (builtin_skill_templates, agent_skill_templates):
+            rendered = {template.name: template.content for template in renderer()}
+            definitions = {
+                definition.name: definition
+                for definition in builtin_definitions()
+                if definition.opening_steps
+            }
+            self.assertIn("ultrawork", definitions)
+            for name, definition in definitions.items():
+                display = omh_skill_display_name(name)
+                content = rendered.get(name) or rendered.get(display)
+                if content is None:  # hermes-only skills have no portable body
+                    continue
+                with self.subTest(renderer=renderer.__name__, skill=name):
+                    headings = [
+                        line for line in content.splitlines() if line.startswith("## ")
+                    ]
+                    self.assertIn("## First Steps", headings)
+                    # The first section after the one that says what the skill is
+                    # for. Asserting only "somewhere above Catalog Metadata" would
+                    # pass with the steps rendered below Recovery Notes, which is
+                    # the same failure one section higher.
+                    self.assertEqual(
+                        headings[headings.index("## Why This Exists") + 1],
+                        "## First Steps",
+                    )
+                    self.assertLess(
+                        headings.index("## First Steps"),
+                        headings.index("## Catalog Metadata"),
+                    )
+                    self.assertLess(
+                        headings.index("## First Steps"),
+                        headings.index("## Use When"),
+                    )
+                    if renderer is builtin_skill_templates:
+                        for step in definition.opening_steps:
+                            self.assertIn(step, content)
+
     def test_catalog_marks_retained_and_codex_handoff_skills(self) -> None:
         definitions = {definition.name: definition for definition in builtin_definitions()}
         retained = set(retained_delegation_skill_names())
@@ -3102,10 +3152,18 @@ class RouterContentTests(unittest.TestCase):
         # ultrawork engine already does, and run research as an in-plan stage
         # when plan-shaping evidence is missing instead of only consuming a
         # dossier that happens to exist.
+        # The todo-init rule carries in `opening_steps`, not `quality_bar`. The
+        # quality bar renders under `## Catalog Metadata` at the bottom of the
+        # body, where a run reaches it only after it has already begun; a real
+        # `ultrawork` run left the HUD checklist empty start to finish with the
+        # rule present the whole time. Pin the field it renders from, so moving
+        # it back into the bar fails here instead of silently.
+        ralplan_steps = definitions["ralplan"].opening_steps
         ralplan_bar = definitions["ralplan"].quality_bar
-        self.assertTrue(any("`omh_todo`" in item and "todo init" in item for item in ralplan_bar))
+        self.assertTrue(any("`omh_todo`" in item and "todo init" in item for item in ralplan_steps))
+        self.assertFalse(any("todo init" in item for item in ralplan_bar))
         self.assertTrue(
-            any("declarations, never execution evidence" in item for item in ralplan_bar)
+            any("declarations, never execution evidence" in item for item in ralplan_steps)
         )
         self.assertTrue(
             any(
@@ -3118,16 +3176,52 @@ class RouterContentTests(unittest.TestCase):
         # another language, so both todo-init instructions carry the English-labels
         # clause -- ultrawork's phase todo and ralplan's plan todo.
         english_labels_clause = "written in English"
-        self.assertTrue(any(english_labels_clause in item for item in ralplan_bar))
+        self.assertTrue(any(english_labels_clause in item for item in ralplan_steps))
+        ultrawork_steps = definitions["ultrawork"].opening_steps
         ultrawork_bar = definitions["ultrawork"].quality_bar
         self.assertTrue(
-            any("`omh_todo`" in item and "todo init" in item for item in ultrawork_bar)
+            any("`omh_todo`" in item and "todo init" in item for item in ultrawork_steps)
         )
-        self.assertTrue(any(english_labels_clause in item for item in ultrawork_bar))
+        self.assertFalse(any("todo init" in item for item in ultrawork_bar))
+        self.assertTrue(any(english_labels_clause in item for item in ultrawork_steps))
+        # The section a model follows to decide it is done must name the todo.
+        # Before this, `Completion Checklist` covered lane disjointness, ACK,
+        # review, CI and integration and said nothing about whether a plan was
+        # ever declared, so a run with an empty checklist still read as complete.
+        self.assertTrue(
+            any(
+                "phase todo was declared" in item
+                for item in definitions["ultrawork"].final_checklist
+            )
+        )
+        self.assertTrue(
+            any(
+                "plan todo was declared" in item
+                for item in definitions["ralplan"].final_checklist
+            )
+        )
+        # Same hole, same skill. The quality bar obliges every Hermes-native lane
+        # to be routed before dispatch; the checklist covered acceptance criteria,
+        # ACK, review and integration but never routing, so a run that dispatched
+        # every lane inherit-labeled passed its own completion contract. The
+        # reported symptom was both halves at once: no todo declared and no lane
+        # routed.
+        self.assertTrue(
+            any(
+                "`omh_delegate_route`" in item
+                for item in definitions["ultrawork"].final_checklist
+            )
+        )
         # The todo rule stays off the shared `planning` harness and off the lighter
         # `plan` skill on purpose: `plan`, `curriculum-design`, and `product-brief`
-        # share that harness and should not gain a HUD checklist obligation.
-        self.assertFalse(any("omh_todo" in item for item in definitions["plan"].quality_bar))
+        # share that harness and should not gain a HUD checklist obligation. Both
+        # carriers are checked; a rule that changed section must not slip the guard.
+        self.assertFalse(
+            any(
+                "omh_todo" in item
+                for item in definitions["plan"].quality_bar + definitions["plan"].opening_steps
+            )
+        )
         planning_harness = next(item for item in builtin_harnesses() if item.name == "planning")
         self.assertFalse(any("omh_todo" in item for item in planning_harness.quality_bar))
         self.assertTrue(any("prepared_not_observed" in item for item in definitions["ralplan"].final_checklist))

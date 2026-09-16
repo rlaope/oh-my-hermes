@@ -18,6 +18,10 @@ This is a Hermes-native `ralplan` workflow skill.
 
 `ralplan` exists to make planning reviewable before execution: Hermes should gather codebase/source facts, compare options, expose risks, define acceptance criteria, and prepare a handoff without pretending implementation already happened.
 
+## First Steps
+
+- Initialize the plan todo before the first planning step: declare the planning stages as `omh_todo` items (todo init) — repo facts and evidence check, options and tradeoffs, risk review, acceptance criteria and verification commands, plan record and acceptance — keep exactly one item active, and when the evidence check reveals a gap rewrite the list (`omh_todo` action=set) to insert the research stage; update the list as stages complete so the HUD todo panel shows plan progress as a bounded checklist, and treat items as declarations, never execution evidence. Phase names and task titles are written in English — short, operator-legible labels — even when the conversation runs in another language, since the HUD todo checklist is an operator surface under the repo's English-by-default output contract.
+
 ## Do Not Use When
 
 - The request is still too ambiguous to name requirements, non-goals, or acceptance criteria; use `deep-interview` first.
@@ -44,6 +48,7 @@ Bad example:
 
 ## Completion Checklist
 
+- The plan todo was declared before the first planning step and every stage reached a terminal state; a plan produced without one, or with stages still pending, is not finished.
 - Observed repo facts and source/web evidence gaps are named.
 - At least two options or one chosen option plus rejected alternatives are recorded.
 - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
@@ -80,7 +85,6 @@ Reasoning demand: `standard`
 Quality bar:
 
 - Start from observed repo facts and source/web evidence when freshness or external behavior matters.
-- Initialize the plan todo before the first planning step: declare the planning stages as `omh_todo` items (todo init) — repo facts and evidence check, options and tradeoffs, risk review, acceptance criteria and verification commands, plan record and acceptance — keep exactly one item active, and when the evidence check reveals a gap rewrite the list (`omh_todo` action=set) to insert the research stage; update the list as stages complete so the HUD todo panel shows plan progress as a bounded checklist, and treat items as declarations, never execution evidence. Phase names and task titles are written in English — short, operator-legible labels — even when the conversation runs in another language, since the HUD todo checklist is an operator surface under the repo's English-by-default output contract.
 - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
 - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
 - Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.

@@ -34,7 +34,18 @@ STRUCTURE_LINT_RULE_IDS = (
 # acting, and the sibling FULL_PROFILE_SKILL_BODY_CHAR_LIMIT pin in
 # src/maintenance/release.py was re-derived from the same producer on the
 # same branch. Warranted always-loaded growth, not drift.
-STRUCTURE_LINT_SKILL_BODY_BYTE_CEILING = 25_500
+# 25_500 held until 2026-09-16, when the ultrawork body measured 25_836 bytes.
+# Its todo-initialization directive moved out of `quality_bar` -- which renders
+# under `## Catalog Metadata`, past the point a run has already begun -- into
+# the new `## First Steps` section under `## Why This Exists`, and its
+# `Completion Checklist` gained two lines for obligations the quality bar
+# already carried but the completion contract did not: that the phase todo was
+# declared, and that every Hermes-native lane was routed before dispatch. All
+# three are the same text in a place a run reads; the 336 bytes are one heading
+# and two checklist lines. The sibling FULL_PROFILE_SKILL_BODY_CHAR_LIMIT pin in
+# src/maintenance/release.py was re-derived from its own producer on the same
+# branch. Warranted always-loaded growth, not drift.
+STRUCTURE_LINT_SKILL_BODY_BYTE_CEILING = 25_900
 _PICKER_SAFE_TRIGGER = re.compile(r"^[0-9A-Za-z\uac00-\ud7a3][0-9A-Za-z\uac00-\ud7a3 _.-]*$")
 _FRONTMATTER = re.compile(r'^---\nname: (.+)\ndescription: (.+)\nmetadata:\n(.*?)\n---\n', re.DOTALL)
 _JSON_STRING = re.compile(r'"(?:[^"\\\x00-\x1f]|\\["\\/bfnrt]|\\u[0-9A-Fa-f]{4})*"')

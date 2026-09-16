@@ -18,6 +18,10 @@ This is an OMH `ralplan` workflow skill, projected for Agent Skills hosts (Claud
 
 `ralplan` exists to make planning reviewable before execution: the host should gather codebase/source facts, compare options, expose risks, define acceptance criteria, and prepare a handoff without pretending implementation already happened.
 
+## First Steps
+
+- Use the host task list or a durable checklist for repo facts, evidence gaps, options, risks, verification, and plan acceptance; keep one item active and insert research when evidence is missing. Checklist states are declarations, not execution evidence.
+
 ## Do Not Use When
 
 - The request is still too ambiguous to name requirements, non-goals, or acceptance criteria; use `deep-interview` first.
@@ -44,6 +48,7 @@ Bad example:
 
 ## Completion Checklist
 
+- The plan todo was declared before the first planning step and every stage reached a terminal state; a plan produced without one, or with stages still pending, is not finished.
 - Observed repo facts and source/web evidence gaps are named.
 - At least two options or one chosen option plus rejected alternatives are recorded.
 - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
@@ -75,7 +80,6 @@ Reasoning demand: `standard`
 Quality bar:
 
 - Start from observed repo facts and source/web evidence when freshness or external behavior matters.
-- Use the host task list or a durable checklist for repo facts, evidence gaps, options, risks, verification, and plan acceptance; keep one item active and insert research when evidence is missing. Checklist states are declarations, not execution evidence.
 - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
 - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
 - Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.

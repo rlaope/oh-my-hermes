@@ -158,11 +158,11 @@
     "ulw-loop/references/goal-constraint-discipline.md": "e9755a82604a6b9d363716b6bf33bc980406ea40bce813d763eda9703e1a093f",
     "ulw-loop/references/measured-loop-discipline.md": "1c3da401271e023ea21cf5aa0a1cee488cdb9bb8ca966251dc0bca767af00dfb",
     "ulw-perf/SKILL.md": "7d00c48839ccdacb6b2d58bd4087ff63d35ed4934c56e34478f7983beb35baea",
-    "ulw-plan/SKILL.md": "e823f4b3da3fb73e68d7419e97d13deec3e52ef0023906a50c2caa8d5a542950",
+    "ulw-plan/SKILL.md": "3b5a48ff022414dd94ee705905d929ccad9bc4045f0e081d8711144b129bef33",
     "ulw-qa/SKILL.md": "6a9649053365cf696209a4a37581682b61499578d69cb7ab0cc17b16ea2f47ce",
     "ulw-research/SKILL.md": "920c1e871e17dedab2e98d2413459e694e3357c17c9be4ed0edf473e6935375d",
     "ulw-research/references/briefing-format.md": "466c21fb7bedefe1e42dbdb3f8ddaf3321504882140af507a292188678243dac",
-    "ulw-work/SKILL.md": "243d8e9d4c4c240a6e8602007d617d5e66e00477fd574995ce8b2d61b83a4f6f",
+    "ulw-work/SKILL.md": "6893ae72e7d2a42733ab30852328acfb0ff39b8db3cec4894e88d38ea2f9aff1",
     "ulw-work/references/dependency-topology.md": "b35e627344579054a9ec46722ca59cdf9f6bda41a217f0b3775669c1ad764dac"
   },
   "host": "pi",
@@ -272,7 +272,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "b3bf26abc3026ef89cb29f1b261d69675e3c0dcafde189ba6410b0c9104b819a",
+  "source_digest": "ca72a74e0c4e631fabf90eb00c5c3b83846b826a30fa21a2466e9695249b6ec6",
   "targets": {
     "repo": ".agents/skills",
     "user": ".agents/skills"

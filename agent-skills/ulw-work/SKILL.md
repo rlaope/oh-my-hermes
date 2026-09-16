@@ -19,6 +19,10 @@ This is an OMH `ultrawork` workflow skill, projected for Agent Skills hosts (Cla
 
 `ultrawork` exists to choose one-owner, ordered-dependency, or independent-frontier execution for an accepted implementation plan without letting concurrency blur ownership, verification, worker protocol, worktree isolation, or observed runtime evidence. It also carries four named internal capabilities absorbed from sibling engines: `coordinated_scope` (coordinated worker lanes), `delivery_boundary` (one bounded plan-to-PR cycle), `single_owner_persistence` (one owner finishes and verifies), and `durable_checkpoint` (durable goal ledger with checkpoints and a final gate).
 
+## First Steps
+
+- Initialize an English phase checklist through the host's task mechanism or a durable file: bootstrap, each implementation/verification lane, independent review, and evidence/cleanup close. Keep one outcome active and update declarations from observed results.
+
 ## Do Not Use When
 
 - The work touches the same files or invariants in ways that need one owner.
@@ -49,8 +53,10 @@ Bad example:
 
 ## Completion Checklist
 
+- The phase checklist was declared before engine work started and every outcome reached a terminal state; a run that declared none, or that left outcomes pending, is not complete.
 - Every concurrently runnable lane is disjoint by write scope, invariant, or responsibility, and every ordered unit carries an explicit acyclic dependency edge, before parallel handoffs are prepared.
 - Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.
+- Every lane's owner and routing were named before dispatch, never inferred from inheritance; a lane dispatched on inherited routing is unrouted.
 - Builder, verifier, reviewer, documentation, and PR lanes have explicit host task owners and observed evidence.
 - Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.
 - Integration verification ran after lane results before the final status claims completion.
@@ -110,7 +116,6 @@ Quality bar:
 - When the user explicitly selects an external coding owner, use the host's authorized task mechanism, verify its actual capabilities, and capture its session/task handle. Missing delegation means sequential work or a named blocker, never fabricated dispatch.
 - Name each lane owner and its actual host capabilities before dispatch; do not infer model or tool routing from inheritance.
 - Choose the wait strategy before starting long-running work and bind it to a completion signal the host exposes, never to a status loop: a command that fits one tool call runs once in the foreground with a duration-sized timeout; a longer terminal command runs in the background with completion notification armed and no process-status polling; a delegated lane relies on its delivered result while the parent continues independent work or ends the turn; a CI, PR, deploy, file, port, log-line, or external-session condition uses the host's monitor when observed, else exactly ONE bounded watcher or adaptive backoff outside model turns. Record the handle and observation mode at dispatch; every armed wait needs a hard deadline, a cancellation path, and a fallback naming the missing capability. Each wait closes in one terminal state with bounded evidence; an unbounded idle or busy-wait is a defect and a lost notification times out. One decision-changing midpoint peek and any user-requested status check stay allowed; neither is the wait mechanism. Ladder and terminal states: shared rail.
-- Initialize an English phase checklist through the host's task mechanism or a durable file: bootstrap, each implementation/verification lane, independent review, and evidence/cleanup close. Keep one outcome active and update declarations from observed results.
 - A mid-run user message is an interjection, not a stop: answer it briefly and, in the same reply, continue the run — re-read the phase todo when one is active and dispatch or advance the next pending step, or name the armed wait it is waiting on -- handle, bound completion signal, deadline -- instead of re-reading status. Only the user's explicit stop or cancel, or the engine's own completion gate, ends the run; when the interjection changes scope, say so and update the declared plan or todo instead of silently abandoning it. A mid-run message is the latest steering for the active task, not automatically a replacement objective: it replaces the objective when the user says so and steers the current one otherwise.
 - A follow-up that needs new authority, materially expands the scope, or changes external state not already authorized is described first and started only on the user's approval; persistence never broadens the authorized scope. A refused escalation gets a safer alternative inside the boundary, or the authorization the boundary asks for — never a workaround or an indirect execution.
 - The closing brief scales to the change: one or two sentences plus the observed validation for a simple change, more only when the complexity earns it. Lead with the result or decision; omit abandoned approaches unless they explain a tradeoff the reader needs; narrate no internal bookkeeping (todo transitions, follow-up declarations, waits). Required closing lines stay outside this scaling: the observed run summary, and any prepared-not-observed or unmerged work, are stated whatever the brief's length.

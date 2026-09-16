@@ -309,12 +309,12 @@ PORTABLE_OVERRIDES: dict[str, dict[str, tuple[str, ...]]] = {'ulw-plan': {'artif
                                'evidence.',
                                'Write plans only to an explicitly chosen repository or host-owned planning '
                                "path; never write another product's state root."),
+              'opening_steps': ('Use the host task list or a durable checklist for repo facts, evidence '
+                                'gaps, options, risks, verification, and plan acceptance; keep one item '
+                                'active and insert research when evidence is missing. Checklist states are '
+                                'declarations, not execution evidence.',),
               'quality_bar': ('Start from observed repo facts and source/web evidence when freshness or '
                               'external behavior matters.',
-                              'Use the host task list or a durable checklist for repo facts, evidence gaps, '
-                              'options, risks, verification, and plan acceptance; keep one item active and '
-                              'insert research when evidence is missing. Checklist states are declarations, '
-                              'not execution evidence.',
                               'Include planner view, critic/risk review, alternative paths, rejected '
                               'options, and a testability check before handoff.',
                               'Produce testable acceptance criteria and exact verification commands or '
@@ -421,10 +421,6 @@ PORTABLE_OVERRIDES: dict[str, dict[str, tuple[str, ...]]] = {'ulw-plan': {'artif
                               'lost notification times out. One decision-changing midpoint peek and any '
                               'user-requested status check stay allowed; neither is the wait mechanism. '
                               'Ladder and terminal states: shared rail.',
-                              "Initialize an English phase checklist through the host's task mechanism or a "
-                              'durable file: bootstrap, each implementation/verification lane, independent '
-                              'review, and evidence/cleanup close. Keep one outcome active and update '
-                              'declarations from observed results.',
                               'A mid-run user message is an interjection, not a stop: answer it briefly and, '
                               'in the same reply, continue the run — re-read the phase todo when one is '
                               'active and dispatch or advance the next pending step, or name the armed wait '
@@ -492,11 +488,20 @@ PORTABLE_OVERRIDES: dict[str, dict[str, tuple[str, ...]]] = {'ulw-plan': {'artif
                                'commands, examples, or public claims changed.',
                                '[capability:delivery_boundary] Keep web research source-backed and '
                                'permission-aware; do not run hidden network or LLM calls from OMH core.'),
-              'final_checklist': ('Every concurrently runnable lane is disjoint by write scope, invariant, '
+              'opening_steps': ("Initialize an English phase checklist through the host's task mechanism or "
+                                'a durable file: bootstrap, each implementation/verification lane, '
+                                'independent review, and evidence/cleanup close. Keep one outcome active and '
+                                'update declarations from observed results.',),
+              'final_checklist': ('The phase checklist was declared before engine work started and every '
+                                  'outcome reached a terminal state; a run that declared none, or that left '
+                                  'outcomes pending, is not complete.',
+                                  'Every concurrently runnable lane is disjoint by write scope, invariant, '
                                   'or responsibility, and every ordered unit carries an explicit acyclic '
                                   'dependency edge, before parallel handoffs are prepared.',
                                   'Each lane has acceptance criteria, verification command, worker protocol '
                                   'expectation, and review owner.',
+                                  "Every lane's owner and routing were named before dispatch, never inferred "
+                                  'from inheritance; a lane dispatched on inherited routing is unrouted.',
                                   'Builder, verifier, reviewer, documentation, and PR lanes have explicit '
                                   'host task owners and observed evidence.',
                                   'Worker ACK, dispatch, result, review, CI, and merge evidence are observed '

@@ -198,6 +198,26 @@ class MaestroHermesOwnerChecklistTests(unittest.TestCase):
             checklist,
         )
 
+    def test_maestro_final_checklist_requires_the_observed_run_summary_close(self) -> None:
+        """The close is stated where a run decides it is done, not only in the bar.
+
+        `quality_bar` renders under `## Catalog Metadata`; before this, the
+        `omh_run_summary` close appeared there and nowhere else in maestro's
+        body, so a run that ended without the summary had nothing in the
+        document to fail against. `ultrawork` already carried the equivalent
+        checklist line, which is what makes the absence here an omission rather
+        than a deliberate difference between the two engines.
+        """
+        definition = _maestro_definition()
+        self.assertTrue(
+            any("`omh_run_summary`" in item for item in definition.final_checklist),
+            "maestro's completion checklist must name the observed run-summary close",
+        )
+        self.assertTrue(
+            any("not_available" in item for item in definition.final_checklist),
+            "the not_available fallback belongs with it, or omitting the summary reads as compliant",
+        )
+
     def test_other_handoff_gated_skill_keeps_the_original_hermes_coding_harness_line(self) -> None:
         definitions = {item.name: item for item in builtin_definitions()}
         checklist = " ".join(definitions["ai-slop-cleaner"].final_checklist)
