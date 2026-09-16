@@ -26,6 +26,22 @@ All notable changes will be documented here.
   one is active*, and `ulw-interview` mentions none — a conditional reference
   is not a misplaced instruction, and giving them an obligation they never had
   is a different change.
+
+  Because the cause is structural rather than an authoring slip -- `quality_bar`
+  is a `SkillDefinition` field and every field it holds renders under
+  `## Catalog Metadata` -- all 126 rendered bodies were then swept for `omh_*`
+  directives living only inside that span. It found the same shape twice more,
+  and both are now stated where a run decides it is done. `ulw-maestro` is told
+  to close with the localized `omh_run_summary` text and its checklist said
+  nothing about the close, so a run could end with no summary and nothing in
+  the document contradicted it. `ultrawork` is told to route every
+  Hermes-native lane with `omh_delegate_route` before dispatch and its
+  checklist said nothing about routing, so a run that dispatched every lane
+  inherit-labeled passed its own completion contract -- which is the second
+  half of the same user report, the run that declared no todo also routed no
+  lane. Each is one line restating an obligation the quality bar already
+  carried; no new behavior text.
+
 - **A narrow table keeps its columns on Slack, and provenance stopped taking
   the notification preview.** Messenger profiles turned every markdown table
   into bullets, which is right for a wide one and wrong for the shape people

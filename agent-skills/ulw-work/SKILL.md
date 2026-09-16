@@ -56,6 +56,7 @@ Bad example:
 - The phase checklist was declared before engine work started and every outcome reached a terminal state; a run that declared none, or that left outcomes pending, is not complete.
 - Every concurrently runnable lane is disjoint by write scope, invariant, or responsibility, and every ordered unit carries an explicit acyclic dependency edge, before parallel handoffs are prepared.
 - Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.
+- Every lane's owner and routing were named before dispatch, never inferred from inheritance; a lane dispatched on inherited routing is unrouted.
 - Builder, verifier, reviewer, documentation, and PR lanes have explicit host task owners and observed evidence.
 - Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.
 - Integration verification ran after lane results before the final status claims completion.

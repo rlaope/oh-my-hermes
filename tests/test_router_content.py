@@ -3200,6 +3200,18 @@ class RouterContentTests(unittest.TestCase):
                 for item in definitions["ralplan"].final_checklist
             )
         )
+        # Same hole, same skill. The quality bar obliges every Hermes-native lane
+        # to be routed before dispatch; the checklist covered acceptance criteria,
+        # ACK, review and integration but never routing, so a run that dispatched
+        # every lane inherit-labeled passed its own completion contract. The
+        # reported symptom was both halves at once: no todo declared and no lane
+        # routed.
+        self.assertTrue(
+            any(
+                "`omh_delegate_route`" in item
+                for item in definitions["ultrawork"].final_checklist
+            )
+        )
         # The todo rule stays off the shared `planning` harness and off the lighter
         # `plan` skill on purpose: `plan`, `curriculum-design`, and `product-brief`
         # share that harness and should not gain a HUD checklist obligation. Both

@@ -55,6 +55,7 @@ Bad example:
 - The phase todo was declared before engine work started and every task reached a terminal state; a run that declared none, or that left tasks pending, is not complete.
 - Every concurrently runnable lane is disjoint by write scope, invariant, or responsibility, and every ordered unit carries an explicit acyclic dependency edge, before parallel handoffs are prepared.
 - Each lane has acceptance criteria, verification command, worker protocol expectation, and review owner.
+- Every Hermes-native lane was routed with `omh_delegate_route` before dispatch, or its parent inheritance was explicitly stated; an inherit-labeled wave is an unrouted wave.
 - When Hermes owns the coding path, use `hermes_coding_harness/v1` to separate builder, verifier, reviewer, docs, and PR lanes.
 - Worker ACK, dispatch, result, review, CI, and merge evidence are observed or explicitly missing.
 - Integration verification ran after lane results before the final status claims completion.
