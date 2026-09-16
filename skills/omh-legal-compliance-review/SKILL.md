@@ -97,8 +97,8 @@ Expected outputs:
 - legal_scope_authority_record/v1
 - legal_issue_traceability_matrix/v1
 - legal_risk_counsel_hold_register/v1
-- legal_review_disposition/v1
 - legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment
+- legal_review_disposition/v1
 
 Artifact expectations:
 

@@ -1673,8 +1673,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - legal_scope_authority_record/v1
   - legal_issue_traceability_matrix/v1
   - legal_risk_counsel_hold_register/v1
-  - legal_review_disposition/v1
   - legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment
+  - legal_review_disposition/v1
 - Artifact expectations:
   - prepared legal and compliance issue matrix when a wrapper captures it
   - legal_negotiation_preparation/v1 with one row per contested clause: the playbook position it came from, the proposed language, the fallback, and the walk-away, plus the concession order across rows
