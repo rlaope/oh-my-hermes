@@ -204,7 +204,7 @@ class StatusBoardBuildTests(unittest.TestCase):
         text = render_status_board_text(payload)
         self.assertIn("openrouter/qwen-3.5-coder high", text)
         bullets = status_board_messenger_body(payload, render_profile="limited_markdown")
-        self.assertIn("omo work — omo (openrouter/qwen-3.5-coder high) — Code · reported done", bullets)
+        self.assertIn("omo work — 🟤 omo (openrouter/qwen-3.5-coder high) — Code · reported done", bullets)
         self.assertNotIn(" — (", bullets)
 
     def test_mixed_running_and_completed_ordering_and_dedup(self) -> None:
@@ -458,8 +458,8 @@ class MessengerProfileTests(unittest.TestCase):
         # Runtime and model read as ONE field. Separating them with a dash as
         # well produced "claude — (fable-5 high)", a doubled separator around a
         # parenthetical.
-        self.assertIn("research — claude (fable-5 high) — Code · running — 35m — tokens unknown", bullets[0])
-        self.assertIn("feature work — codex (gpt-5.6-sol xhigh) — Code · reported done — 35m — 10,000,000 tokens", bullets[1])
+        self.assertIn("research — 🟠 claude (fable-5 high) — Code · running — 35m — tokens unknown", bullets[0])
+        self.assertIn("feature work — ⚪ codex (gpt-5.6-sol xhigh) — Code · reported done — 35m — 10,000,000 tokens", bullets[1])
         for bullet in bullets:
             self.assertNotIn(" — (", bullet)
         self.assertIn("session sess-7", bullets[1])
