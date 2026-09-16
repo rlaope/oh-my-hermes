@@ -25,7 +25,8 @@
     "omh-autoresearch-goal/SKILL.md": "e9dc10276de33401c2d4217523245f4617f0d55da8e6163d50c2e8e79b0f7b71",
     "omh-award-bar-score/SKILL.md": "e8ddee4019ebc0c120fd1f8d45edf475ce2066dc58ab065572bb1a9307b9ffe5",
     "omh-award-bar-score/references/award-judging-model.md": "3eb04c94402da5efaa2d3bc18bb66acd1121b234a8b82a47a878c5d01725be50",
-    "omh-backend/SKILL.md": "90dbd0e6b6f30329f9c38977f75200338396be0a18ba4c9605e4ba74d4af4497",
+    "omh-backend/SKILL.md": "9f67dd3d6433010c97eaf396013a7eb34d969adf8a43d01657bc181f23b39856",
+    "omh-backend/references/consumer-impact.md": "843ec98391847e3de4e28057ab4aeb95d24a4d8e593b1c812e630723a4f006b9",
     "omh-backend/references/schema-migration.md": "e20aebd284f51d18962e28959b2e35702c9662e4d3d13fb1854c60f1279a6054",
     "omh-backend/references/service-contract.md": "984cd9cb634b88a505cbd76214e281b2e22edf3d75fc6a3b9a0a88fcc4a265f5",
     "omh-best-practice-research/SKILL.md": "603a7f0f45158c1021b287c856f371bff99716a885f41c08c52fc7304f1eee37",
@@ -275,7 +276,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "dc7c2ccdf03da76aa5a2997762fccf44ce534d03e1561633acad1c32c308bc85",
+  "source_digest": "b964d47f53016bee6598601f2c674d1fad0ede3bac2aa8f4fbd31f570972b193",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"

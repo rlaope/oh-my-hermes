@@ -1890,6 +1890,14 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "refactor-plan",
     ),
+    RoutingPrecisionCase(
+        "price-change-consumer-impact-stays-a-clarification",
+        "A price change's effect on customers is not an API consumer impact",
+        "the consumer impact of the price change on our customers",
+        "answer_clarification",
+        "",
+        "backend",
+    ),
 )
 
 
@@ -5636,6 +5644,26 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_refactor_plan",
         "refactor_plan",
         "refactor-plan",
+    ),
+    RoutingInterventionCase(
+        "openapi-consumer-question-reaches-the-contract-owner",
+        "Who breaks when a field leaves the spec reaches the skill that owns the spec",
+        "which consumers break if I remove this field from the OpenAPI spec",
+        "dispatch",
+        "backend",
+        "prepare_backend_handoff",
+        "backend_contract",
+        "backend",
+    ),
+    RoutingInterventionCase(
+        "endpoint-deprecation-reaches-the-contract-owner",
+        "A deprecation with a sunset date reaches the same lane",
+        "deprecate this endpoint and set a sunset date",
+        "dispatch",
+        "backend",
+        "prepare_backend_handoff",
+        "backend_contract",
+        "backend",
     ),
 )
 

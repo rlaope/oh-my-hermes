@@ -1034,7 +1034,19 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `skills/omh-refactor-plan/references/dependency-upgrade.md`, measured outside
 # this budget. Re-derived from the full-profile skill_context_cost_payload()
 # producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 980275
+# 980275 -> 981506: `backend` gains `consumer_impact_and_sunset/v1`, its
+# artifact expectation, one safety rule, one quality bar, and one final
+# checklist row (#1577). It folds here because splitting a contract from its
+# evolution across two skills is how the response shape and the deprecation
+# window drift apart. The body carries the rule a reader must not have to open
+# a reference to reach: an empty consumer list claims the search was complete,
+# so an unenumerable set is reported as `consumers_not_enumerable` with what
+# was searched. The enumeration sources, the per-change breakage grades, and
+# the window/path/date rules are
+# `skills/omh-backend/references/consumer-impact.md`, measured outside this
+# budget. Re-derived from the full-profile skill_context_cost_payload()
+# producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 981506
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

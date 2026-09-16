@@ -882,6 +882,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'ai-slop-cleaner/references/cleanup-passes.md',
     'backend/references/service-contract.md',
     'backend/references/schema-migration.md',
+    'backend/references/consumer-impact.md',
     'rust/references/rust-discipline.md',
     'rust/references/ub-escalation.md',
     'native-debugging/references/native-debug-loop.md',

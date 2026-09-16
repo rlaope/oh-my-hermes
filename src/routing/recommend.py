@@ -1996,6 +1996,15 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # "watch out for the race condition in this handler". Those three score only
     # inside a complete phrase.
     "automation-blueprint": frozenset({"keep", "monitor", "watch"}),
+    # `backend` gained the contract-evolution phrasings ("openapi spec",
+    # "deprecation window", "sunset date", "api versioning", "breaking api
+    # change"). `openapi`, `deprecate`, `deprecation`, and `sunset` are
+    # specific enough to score alone -- nothing else in the catalog owns them
+    # -- but the words around them are not: crediting `change`, `date`, `spec`,
+    # and `window` separately routed "the consumer impact of the price change
+    # on our customers" to this workflow at high confidence. Those count only
+    # inside a complete phrase.
+    "backend": frozenset({"breaking", "change", "date", "spec", "versioning", "window"}),
     # `verification-gate` gained the generated-path phrasings ("generated
     # file", "generated artifact", "source of truth", "regenerate instead of
     # editing"). Every loose token in them is an ordinary word this catalog
