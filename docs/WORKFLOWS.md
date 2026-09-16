@@ -4959,7 +4959,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The refactor's direction is still contested or the goal itself needs consensus planning; use `ralplan`.
   - The work is deletion-first cleanup with no boundary changes; use `ai-slop-cleaner`.
   - The plan is done and the claim is that work is complete; use `verification-gate` for the evidence close.
-- Strong routing signals: `refactor-plan`, `refactor plan`, `plan this refactor`, `plan the refactor`, `refactor planning`, `refactor phases`, `phased refactor`, `refactor in phases`, `refactor rollback plan`, `blast radius`, `module restructure plan`, `restructure plan`, `리팩터링 계획`, `리팩토링 계획`, `리팩터링 단계`, `단계별 리팩터링`, `리팩터링 계획 세워줘`, `리팩터링 롤백 계획`
+- Strong routing signals: `refactor-plan`, `refactor plan`, `plan this refactor`, `plan the refactor`, `refactor planning`, `refactor phases`, `phased refactor`, `refactor in phases`, `refactor rollback plan`, `blast radius`, `module restructure plan`, `restructure plan`, `dependency upgrade`, `major version upgrade`, `framework upgrade`, `upgrade to the next major`, `breaking change upgrade`, `lockfile`, `리팩터링 계획`, `리팩토링 계획`, `리팩터링 단계`, `단계별 리팩터링`, `리팩터링 계획 세워줘`, `리팩터링 롤백 계획`
 - Good example:
   - Prompt: We decided to split the billing module out of orders - plan the refactor so each step is shippable.
   - Expected behavior: Map affected files and consumers from the import graph, name hidden coupling and blast radius, order the five phases with per-phase verification and rollback, ship the files table, and stop at the approval gate.
@@ -4973,6 +4973,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Order phases contracts-first: types and interfaces, then implementations, then callers in reviewable groups, then tests, then cleanup - and name what verifies each phase and where it rolls back to.
   - Ship the files table with the plan: one row per file with action, phase, and blocks/blocked-by; a row without a phase is unplanned work.
   - Size verification to the blast radius, not to optimism: a phase touching public surfaces or persisted shapes carries the full gate, not the fast one.
+  - For a dependency or framework upgrade, read four inputs before ordering phases — advisory and end-of-life intake, the licence delta at the target version, the upstream migration guide item by item against this codebase, and lockfile handling in the same commit as the manifest; a breaking change nobody checked is a gap, not a pass. The full contract is `omh-refactor-plan/references/dependency-upgrade.md`.
   - Stop at the approval gate and hand the user the go/no-go, whole plan or first phase.
 - Completion checklist:
   - Reconnaissance names affected files, boundaries, coupling, and blast radius from observed evidence.
@@ -4988,7 +4989,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - the affected-file evidence: import graph, codegraph handoff, or an observed file inventory
   - the regression gates that exist today (test suite, typecheck, generated-artifact checks)
 - Expected outputs:
-  - reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius
+  - reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius — and for an upgrade, the advisory, licence, migration-guide, and lockfile intake
   - phase plan in the fixed order - types/interfaces, implementations, callers, tests, cleanup - each with verification and rollback
   - files table: path, action, phase, blocks/blocked-by
   - the approval gate: the plan stops and waits for the user's go

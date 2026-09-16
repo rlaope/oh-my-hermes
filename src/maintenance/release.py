@@ -266,7 +266,11 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # fields, and the shapes that look like violations are
 # `references/generated-artifact-provenance.md`, outside this budget;
 # warranted growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 426395
+# 426395 -> 426477: `refactor-plan` names the upgrade intake among its
+# reconnaissance outputs and gains six upgrade triggers (#1576). The advisory,
+# licence, migration-guide, and lockfile procedures are
+# `references/dependency-upgrade.md`, outside this budget; warranted growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 426477
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1019,7 +1023,18 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `skills/omh-verification-gate/references/generated-artifact-provenance.md`,
 # measured outside this budget. Re-derived from the full-profile
 # skill_context_cost_payload() producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 979647
+# 979647 -> 980275: `refactor-plan` gains one quality bar and one widened
+# reconnaissance line for dependency and framework upgrades (#1576). It folds
+# here because the phased plan, per-phase verification, rollback point, files
+# table, and approval gate are already this skill's, and an upgrade is a
+# boundary-changing refactor whose direction was decided upstream. The body
+# carries only the four inputs an upgrade adds and the rule that a breaking
+# change nobody checked is a gap rather than a pass; the advisory, licence,
+# migration-guide, and lockfile procedures are
+# `skills/omh-refactor-plan/references/dependency-upgrade.md`, measured outside
+# this budget. Re-derived from the full-profile skill_context_cost_payload()
+# producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 980275
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

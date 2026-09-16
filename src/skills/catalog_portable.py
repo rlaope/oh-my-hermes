@@ -876,6 +876,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'accessibility-audit/references/a11y-rules.md',
     'strategy-brief/references/decision-records.md',
     'refactor-plan/references/refactor-phases.md',
+    'refactor-plan/references/dependency-upgrade.md',
     'frontend-refactor/references/refactor-passes.md',
     'frontend-refactor/references/state-discipline.md',
     'ai-slop-cleaner/references/cleanup-passes.md',

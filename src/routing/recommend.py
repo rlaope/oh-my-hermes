@@ -39,6 +39,7 @@ from .policy import (
     _explicit_skill_candidate_is_negated,
     active_routing_guard_rules,
     context_query_is_budget_sense,
+    dependency_upgrade_guard_applies,
     explicit_skill_invocation,
     is_explicit_one_off_request,
     jit_learn_guard_applies,
@@ -2238,8 +2239,18 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # catalog -- "refactor" and "plan" -- plus "phases", "restructure", and
     # "blast". Credited as bare tokens they claimed every planning and
     # cleanup message. Complete phrases carry the intent.
+    # The upgrade phrasings added later split the same way, into words with a
+    # meaning everywhere else: `upgrade` is a laptop and a subscription tier,
+    # `version`/`major`/`next` are ordinary, `framework` and `dependency`
+    # belong to half the catalog, and `lockfile` is the only unambiguous one.
+    # The intent is carried by the complete phrases and by
+    # `dependency_upgrade_before_generic_plan` in `policy.py`.
     "refactor-plan": frozenset(
-        {"blast", "module", "phased", "phases", "plan", "planning", "radius", "refactor", "restructure", "rollback", "the", "this"}
+        {
+            "blast", "breaking", "change", "dependency", "framework", "major", "module", "next", "phased",
+            "phases", "plan", "planning", "radius", "refactor", "restructure", "rollback", "the", "this",
+            "to", "upgrade", "version",
+        }
     ),
     # `codebase-uml` names its picture with the vocabulary of every code
     # question -- "draw", "diagram", "architecture", "package", "module",
@@ -3594,6 +3605,13 @@ def _refactor_plan_offers_itself(normalized_query: str, query_tokens: set[str]) 
     restructure = {"refactor", "refactoring", "restructure", "restructuring", "리팩터링", "리팩토링"}
     planning = {"plan", "planning", "phases", "phase", "phased", "rollback", "계획", "단계"}
     if "phased" in query_tokens:
+        return True
+    # A dependency upgrade is a boundary-changing refactor whose direction was
+    # decided upstream, but the sentence asking for one says "upgrade" and never
+    # "refactor", so the both-halves rule above excluded the entire lane before
+    # any trigger could score. The complete upgrade phrases stand in for the
+    # restructuring half; a bare `upgrade` still does not.
+    if dependency_upgrade_guard_applies(normalized_query):
         return True
     return bool(restructure & query_tokens) and bool(planning & query_tokens)
 

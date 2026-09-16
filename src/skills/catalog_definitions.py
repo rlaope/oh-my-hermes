@@ -6131,6 +6131,12 @@ _DEFINITIONS = [
             "blast radius",
             "module restructure plan",
             "restructure plan",
+            "dependency upgrade",
+            "major version upgrade",
+            "framework upgrade",
+            "upgrade to the next major",
+            "breaking change upgrade",
+            "lockfile",
         ),
         (
             "Use when a refactor that crosses module boundaries is already decided and needs its execution "
@@ -6152,7 +6158,7 @@ _DEFINITIONS = [
             "the regression gates that exist today (test suite, typecheck, generated-artifact checks)",
         ),
         expected_outputs=(
-            "reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius",
+            "reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius — and for an upgrade, the advisory, licence, migration-guide, and lockfile intake",
             "phase plan in the fixed order - types/interfaces, implementations, callers, tests, cleanup - each with verification and rollback",
             "files table: path, action, phase, blocks/blocked-by",
             "the approval gate: the plan stops and waits for the user's go",
@@ -6169,6 +6175,7 @@ _DEFINITIONS = [
             "Order phases contracts-first: types and interfaces, then implementations, then callers in reviewable groups, then tests, then cleanup - and name what verifies each phase and where it rolls back to.",
             "Ship the files table with the plan: one row per file with action, phase, and blocks/blocked-by; a row without a phase is unplanned work.",
             "Size verification to the blast radius, not to optimism: a phase touching public surfaces or persisted shapes carries the full gate, not the fast one.",
+            "For a dependency or framework upgrade, read four inputs before ordering phases — advisory and end-of-life intake, the licence delta at the target version, the upstream migration guide item by item against this codebase, and lockfile handling in the same commit as the manifest; a breaking change nobody checked is a gap, not a pass. The full contract is `omh-refactor-plan/references/dependency-upgrade.md`.",
             "Stop at the approval gate and hand the user the go/no-go, whole plan or first phase.",
         ),
         why_this_exists=(

@@ -4415,6 +4415,26 @@ _DELIVERABLE_PHRASES = (
 # the sense is decided by whether the sentence also asks where the file came
 # from. Both halves are required: a provenance cue alone is an ordinary code
 # question, and the noun alone is the delivery sense the existing guard owns.
+# A dependency upgrade is a boundary-changing refactor with an upstream author,
+# but the sentence that asks for one says "upgrade", not "refactor", so
+# `refactor-plan` never offered itself. Complete phrases only: a bare `upgrade`
+# is a laptop, a plan, a seat, and a subscription tier, and `version` and
+# `major` are ordinary words everywhere else in this catalog.
+_DEPENDENCY_UPGRADE_PHRASES = (
+    "dependency upgrade",
+    "dependency upgrades",
+    "upgrade the dependency",
+    "upgrade this dependency",
+    "upgrade our dependencies",
+    "major version upgrade",
+    "major version bump",
+    "framework upgrade",
+    "upgrade the framework",
+    "upgrade to the next major",
+    "breaking change upgrade",
+    "의존성 업그레이드",
+    "메이저 버전 업그레이드",
+)
 _GENERATED_ARTIFACT_NOUNS = (
     "generated file",
     "generated files",
@@ -5243,6 +5263,15 @@ VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; visual image-card requests should prepare a visual prompt card before delivery or material packaging.",
     activation_status="active",
 )
+DEPENDENCY_UPGRADE_GUARD = RoutingGuardRule(
+    id="dependency_upgrade_before_generic_plan",
+    rule="A major dependency or framework upgrade should route to the phased refactor planner rather than the generic plan lane.",
+    matched_label="guard:dependency_upgrade",
+    preferred_skills=("refactor-plan",),
+    score_boost=32,
+    why="Matched guard/trigger metadata; an upgrade across a boundary needs phased order, per-phase verification, and a rollback point, which is the phased refactor plan.",
+    activation_status="active",
+)
 GENERATED_ARTIFACT_PROVENANCE_GUARD = RoutingGuardRule(
     id="generated_artifact_provenance_before_deliverable_package",
     rule="A request asking whether a change touches a generated file, and where its source of truth is, should route to verification-gate rather than the delivery lane.",
@@ -5795,6 +5824,8 @@ def _active_routing_guard_rules_cached(
         rules.append(GITHUB_ISSUE_INTAKE_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
+    if dependency_upgrade_guard_applies(normalized_query):
+        rules.append(DEPENDENCY_UPGRADE_GUARD)
     if _generated_artifact_provenance_guard_applies(normalized_query):
         rules.append(GENERATED_ARTIFACT_PROVENANCE_GUARD)
     deliverable_package_applies = _deliverable_package_guard_applies(
@@ -8959,6 +8990,11 @@ def _is_short_visual_summary_request(normalized_query: str) -> bool:
 
 def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
     return has_normalized_missed_omh_workflow_context(normalized_query)
+
+
+def dependency_upgrade_guard_applies(normalized_query: str) -> bool:
+    """Complete upgrade phrases only; `upgrade` alone is not this lane."""
+    return _contains_phrase(normalized_query, _DEPENDENCY_UPGRADE_PHRASES)
 
 
 def _generated_artifact_provenance_guard_applies(normalized_query: str) -> bool:

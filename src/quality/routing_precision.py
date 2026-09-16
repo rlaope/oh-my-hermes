@@ -1882,6 +1882,14 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "verification-gate",
     ),
+    RoutingPrecisionCase(
+        "laptop-upgrade-stays-a-clarification",
+        "Upgrading a laptop is not a dependency upgrade",
+        "upgrade my laptop to the new os",
+        "answer_clarification",
+        "",
+        "refactor-plan",
+    ),
 )
 
 
@@ -5608,6 +5616,26 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_deliverable_package",
         "deliverable_package",
         "deliverable-package",
+    ),
+    RoutingInterventionCase(
+        "dependency-upgrade-reaches-the-phased-refactor-plan",
+        "A major dependency upgrade reaches the phased planner, not the generic plan lane",
+        "major dependency upgrade plan with rollback",
+        "dispatch",
+        "refactor-plan",
+        "prepare_refactor_plan",
+        "refactor_plan",
+        "refactor-plan",
+    ),
+    RoutingInterventionCase(
+        "framework-major-version-upgrade-reaches-the-phased-refactor-plan",
+        "The framework phrasing reaches the same lane without the word refactor",
+        "we need a major version upgrade of the framework, sequence it with rollback points",
+        "dispatch",
+        "refactor-plan",
+        "prepare_refactor_plan",
+        "refactor_plan",
+        "refactor-plan",
     ),
 )
 
