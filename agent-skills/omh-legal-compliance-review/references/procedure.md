@@ -29,6 +29,9 @@ Declared checks:
 - `legal_counsel_hold_check`
   - Required result fields: `trigger_ids`, `impact`, `likelihood_applicability`, `urgency`, `evidence_confidence`, `reversibility`, `hold_status`, `counsel_owner`
   - Criterion: Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, and sensitive, high-risk or cross-border privacy or DPIA uncertainty.
+- `legal_negotiation_preparation_check`
+  - Required result fields: `playbook_position`, `gap`, `proposed_language`, `fallback_position`, `walk_away_trigger`, `concession_order`, `counsel_hold_state`
+  - Criterion: Every proposed clause traces to a cited playbook position and carries its fallback and walk-away; a row whose position cannot be cited becomes a counsel question, an open hold blocks its row, and the concession order states which rows are linked.
 - `legal_final_determination_guard`
   - Required result fields: `invented_authority_status`, `stale_authority_status`, `unresolved_triggers`, `disposition`
   - Criterion: Fail closed on absent, fabricated, stale, superseded or unverified authority; invent no citation, holding, requirement or compliance conclusion and issue no final determination while a hold remains open.
@@ -64,6 +67,14 @@ Rank impact, applicability, urgency, confidence and reversibility, then impose m
 - Input refs: `jurisdiction`, `supplied authority`, `review objective`
 - Output refs: `legal_risk_counsel_hold_register/v1`
 - Check IDs: `legal_counsel_hold_check`
+
+### `legal_prepare_negotiation_positions` (production)
+
+When the objective is a redline, build one row per contested clause -- playbook position, gap, proposed language, fallback, walk-away, counsel-hold state -- then rank the concession order by what is lost and name the linked rows; prepare nothing for a clause whose hold is open.
+
+- Input refs: `document or process version`, `supplied authority`, `review objective`
+- Output refs: `legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment`
+- Check IDs: `legal_negotiation_preparation_check`, `legal_counsel_hold_check`
 
 ### `legal_validate_disposition` (validation)
 

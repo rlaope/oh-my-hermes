@@ -2245,6 +2245,11 @@ _DEFINITIONS = [
                 "Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, and sensitive, high-risk or cross-border privacy or DPIA uncertainty.",
             ),
             ProcedureCheck(
+                "legal_negotiation_preparation_check",
+                ("playbook_position", "gap", "proposed_language", "fallback_position", "walk_away_trigger", "concession_order", "counsel_hold_state"),
+                "Every proposed clause traces to a cited playbook position and carries its fallback and walk-away; a row whose position cannot be cited becomes a counsel question, an open hold blocks its row, and the concession order states which rows are linked.",
+            ),
+            ProcedureCheck(
                 "legal_final_determination_guard",
                 ("invented_authority_status", "stale_authority_status", "unresolved_triggers", "disposition"),
                 "Fail closed on absent, fabricated, stale, superseded or unverified authority; invent no citation, holding, requirement or compliance conclusion and issue no final determination while a hold remains open.",
@@ -2270,6 +2275,12 @@ _DEFINITIONS = [
                 "legal_apply_counsel_holds", "production", ("jurisdiction", "supplied authority", "review objective"),
                 ("legal_risk_counsel_hold_register/v1",), ("legal_counsel_hold_check",),
                 "Rank impact, applicability, urgency, confidence and reversibility, then impose mandatory counsel holds and owners for every triggered high-risk or authority-sensitive issue.",
+            ),
+            ProcedureStep(
+                "legal_prepare_negotiation_positions", "production", ("document or process version", "supplied authority", "review objective"),
+                ("legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment",),
+                ("legal_negotiation_preparation_check", "legal_counsel_hold_check"),
+                "When the objective is a redline, build one row per contested clause -- playbook position, gap, proposed language, fallback, walk-away, counsel-hold state -- then rank the concession order by what is lost and name the linked rows; prepare nothing for a clause whose hold is open.",
             ),
             ProcedureStep(
                 "legal_validate_disposition", "validation", ("jurisdiction", "document or process version", "supplied authority", "review objective"),
