@@ -251,7 +251,12 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # output line. The item-class vocabulary and the unavailable-versus-empty rule
 # are artifact expectations and a quality bar, not section text; warranted
 # growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 425489
+# 425489 -> 425832: `automation-blueprint` declares `recurring_surface_comparison/v1`
+# and the rule that a recurring recommendation carries its stop condition
+# (#1570). The four-way table, the retry axes, and the delivery/silence rules
+# are `references/recurring-surface-choice.md`, outside this budget; warranted
+# growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 425832
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -967,7 +972,18 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # unavailable -- never zero items -- has to hold whether or not any reference is
 # open. Re-derived from the full-profile skill_context_cost_payload() producer,
 # never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 976809
+# 976809 -> 977424: `automation-blueprint` gains the output and the one quality
+# bar that make "keep watching this for me" a choice among four surfaces rather
+# than whichever lane the sentence happened to reach (#1570). The body carries
+# only what must hold whether or not a reference is open: that one of cron,
+# heartbeat, loop, and native goal is recommended, that the other three are
+# named as rejected, and that a recommendation with no stop condition is not an
+# answer -- what ends each surface is the only thing separating them. The
+# comparison table, the four retry axes, and the silence rule are
+# `skills/omh-automation-blueprint/references/recurring-surface-choice.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 977424
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

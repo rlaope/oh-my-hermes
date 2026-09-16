@@ -72,6 +72,7 @@ Reasoning demand: `light`
 
 Quality bar:
 
+- Recommend one of cron, heartbeat, loop, and native goal, say why the other three lost, and carry its stop condition; a recommendation with no stop condition is not an answer, because what ends it is the only thing that separates the four — load `references/recurring-surface-choice.md` for the comparison, retry, and delivery rules.
 - Name cadence/timezone uncertainty, delivery target, silence/no-change rule, selected skills, and context chain.
 - When the recurring work is saved, say it is paused and name what activation needs: explicit overlap, missed-run, retry, backfill, and failure-pause decisions, an approval reference, and an observer from the approved runtime surface.
 - Before activation, say what the policy does when a prior run is still active, when a window is missed, and when failures repeat; after a safety pause, report the applied policy and that resuming needs a policy revision.
@@ -92,6 +93,7 @@ Required inputs:
 Expected outputs:
 
 - hermes_ops_blueprint/v1 projection
+- recurring_surface_comparison/v1 naming the recommended surface and why the other three lost
 - hermes_recurring_intent/v1 paused lifecycle record when the user wants the recurring work saved
 - schedule/delivery/silence confirmation needs
 - status-card boundary
@@ -100,6 +102,7 @@ Expected outputs:
 Artifact expectations:
 
 - hermes_ops_blueprint/v1 under .omh/hermes-ops/blueprints when a wrapper or CLI records it
+- recurring_surface_comparison/v1 with the recommended surface among cron, heartbeat, loop, and native goal, its stop condition, and a per-surface reason the other three were not chosen
 - hermes_recurring_intent/v1 under .omh/hermes-ops/recurring-intents when the user asks to save the recurring work
 
 Safety rules:

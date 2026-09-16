@@ -1834,6 +1834,22 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "automation-blueprint",
     ),
+    RoutingPrecisionCase(
+        "daily-digest-as-translation-input-stays-direct",
+        "A cadence word inside translation input is not a cadence",
+        "translate the phrase daily digest into french",
+        "answer_directly",
+        "direct_answer",
+        "automation-blueprint",
+    ),
+    RoutingPrecisionCase(
+        "protocol-heartbeat-question-stays-direct",
+        "A protocol heartbeat is a concept question, not a liveness watch",
+        "what does a heartbeat timeout mean in this protocol spec",
+        "answer_directly",
+        "direct_answer",
+        "automation-blueprint",
+    ),
 )
 
 
@@ -5510,6 +5526,26 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_external_connector_readiness",
         "external_connector_readiness",
         "external-connector-readiness",
+    ),
+    RoutingInterventionCase(
+        "continuous-watch-reaches-the-recurring-surface-comparison",
+        "A watch with no cadence reaches the lane that compares the four recurring surfaces",
+        "keep watching the deploy status and tell me when it changes",
+        "dispatch",
+        "automation-blueprint",
+        "prepare_scheduled_ops_blueprint",
+        "automation_blueprint",
+        "automation-blueprint",
+    ),
+    RoutingInterventionCase(
+        "named-cadence-reaches-the-recurring-surface-comparison",
+        "A named cadence reaches the same lane, where the schedule beats the other three",
+        "every weekday morning check the error budget and post a digest",
+        "dispatch",
+        "automation-blueprint",
+        "prepare_scheduled_ops_blueprint",
+        "automation_blueprint",
+        "automation-blueprint",
     ),
 )
 
