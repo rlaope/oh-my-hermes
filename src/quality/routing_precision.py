@@ -1866,6 +1866,22 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "external-connector-readiness",
     ),
+    RoutingPrecisionCase(
+        "function-output-question-stays-direct",
+        "A function's output is not a generated artifact",
+        "what is the output of this function",
+        "answer_directly",
+        "direct_answer",
+        "verification-gate",
+    ),
+    RoutingPrecisionCase(
+        "release-artifact-upload-stays-a-clarification",
+        "A release artifact to upload is not a generated path in a diff",
+        "upload the artifact to the release page",
+        "answer_clarification",
+        "",
+        "verification-gate",
+    ),
 )
 
 
@@ -5572,6 +5588,26 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_external_connector_readiness",
         "external_connector_readiness",
         "external-connector-readiness",
+    ),
+    RoutingInterventionCase(
+        "generated-path-in-a-diff-reaches-the-verification-gate",
+        "Asking whether a diff touched a generated file reaches the provenance row",
+        "did this diff touch a generated file",
+        "dispatch",
+        "verification-gate",
+        "prepare_verification_gate",
+        "verification_gate",
+        "verification-gate",
+    ),
+    RoutingInterventionCase(
+        "generated-file-to-attach-stays-a-deliverable",
+        "The same words without a provenance cue stay in the delivery lane",
+        "attach the generated file to the ticket",
+        "dispatch",
+        "deliverable-package",
+        "prepare_deliverable_package",
+        "deliverable_package",
+        "deliverable-package",
     ),
 )
 

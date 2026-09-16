@@ -4409,6 +4409,43 @@ _DELIVERABLE_PHRASES = (
     "첨부 상태",
     "전달 상태",
 )
+# "generated file" is two different things. To `deliverable-package` it is the
+# PDF somebody produced and wants attached; in a repository it is a checked-in
+# artifact whose source of truth is a generator. The words are identical, so
+# the sense is decided by whether the sentence also asks where the file came
+# from. Both halves are required: a provenance cue alone is an ordinary code
+# question, and the noun alone is the delivery sense the existing guard owns.
+_GENERATED_ARTIFACT_NOUNS = (
+    "generated file",
+    "generated files",
+    "generated artifact",
+    "generated artifacts",
+    "generated output",
+    "generated code",
+    "generated doc",
+    "generated docs",
+    "생성된 파일",
+    "생성 파일",
+)
+_GENERATED_PROVENANCE_CUES = (
+    "source of truth",
+    "generator",
+    "regenerate",
+    "regenerated",
+    "regeneration",
+    "hand-edit",
+    "hand edit",
+    "hand-edited",
+    "hand edited",
+    "by hand",
+    "edit",
+    "edited",
+    "editing",
+    "diff",
+    "checked in",
+    "손으로 고치",
+    "직접 수정",
+)
 _DELIVERABLE_GATEWAY_CONTEXT_TOKENS = _normalized_token_set(
     {
         "gateway",
@@ -5206,6 +5243,15 @@ VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; visual image-card requests should prepare a visual prompt card before delivery or material packaging.",
     activation_status="active",
 )
+GENERATED_ARTIFACT_PROVENANCE_GUARD = RoutingGuardRule(
+    id="generated_artifact_provenance_before_deliverable_package",
+    rule="A request asking whether a change touches a generated file, and where its source of truth is, should route to verification-gate rather than the delivery lane.",
+    matched_label="guard:generated_artifact_provenance",
+    preferred_skills=("verification-gate",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; a generated-path question is a provenance check against the repository's declared artifact map, not a file to attach.",
+    activation_status="active",
+)
 DELIVERABLE_PACKAGE_GUARD = RoutingGuardRule(
     id="deliverable_package_for_file_attachment",
     rule="Requests that combine generated files or reports with attachment/delivery status should route to deliverable-package.",
@@ -5749,6 +5795,8 @@ def _active_routing_guard_rules_cached(
         rules.append(GITHUB_ISSUE_INTAKE_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
+    if _generated_artifact_provenance_guard_applies(normalized_query):
+        rules.append(GENERATED_ARTIFACT_PROVENANCE_GUARD)
     deliverable_package_applies = _deliverable_package_guard_applies(
         normalized_query,
         query_tokens,
@@ -8913,6 +8961,13 @@ def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
     return has_normalized_missed_omh_workflow_context(normalized_query)
 
 
+def _generated_artifact_provenance_guard_applies(normalized_query: str) -> bool:
+    """A generated-path question needs both halves: the noun and the provenance."""
+    return _contains_phrase(normalized_query, _GENERATED_ARTIFACT_NOUNS) and _contains_phrase(
+        normalized_query, _GENERATED_PROVENANCE_CUES
+    )
+
+
 def _deliverable_package_guard_applies(
     normalized_query: str,
     query_tokens: set[str],
@@ -8920,6 +8975,8 @@ def _deliverable_package_guard_applies(
     visual_summary_applies: bool | None = None,
 ) -> bool:
     if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
+        return False
+    if _generated_artifact_provenance_guard_applies(normalized_query):
         return False
     if _deliverable_gateway_context_applies(normalized_query, query_tokens):
         return False

@@ -260,7 +260,13 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # `memory_provider_trial_comparison/v1` and the one-corpus rule (#1573). The
 # trial procedure, the three dimensions, and the exercised-rollback steps are
 # `references/memory-provider-trial.md`, outside this budget; warranted growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 426032
+# 426032 -> 426395: `verification-gate` declares
+# `generated_artifact_provenance/v1`, its `map_not_declared` state, and the
+# five generated-path triggers (#1575). The declaration sources, the row
+# fields, and the shapes that look like violations are
+# `references/generated-artifact-provenance.md`, outside this budget;
+# warranted growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 426395
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1000,7 +1006,20 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `skills/omh-external-connector-readiness/references/memory-provider-trial.md`,
 # measured outside this budget. Re-derived from the full-profile
 # skill_context_cost_payload() producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 978537
+# 978537 -> 979647: `verification-gate` gains the output, the never-infer
+# safety rule, and the one quality bar that move a generated-path edit from
+# after the byte gate to before it (#1575). It folds here rather than becoming
+# a general engineering skill because a generic skill cannot know which files
+# are generated without a repo-declared map, and would pay a full always-loaded
+# body for a filename heuristic. The body carries the asymmetry that makes the
+# heuristic wrong: a false positive redirects correct work, a miss costs one
+# regeneration, so a repository declaring no map reports `map_not_declared`.
+# The declaration sources, the five row fields, and the generator-plus-output
+# shape that is correct rather than a violation are
+# `skills/omh-verification-gate/references/generated-artifact-provenance.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 979647
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

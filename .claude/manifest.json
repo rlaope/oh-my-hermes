@@ -141,7 +141,8 @@
     "omh-tech-debt-audit/references/debt-dimensions.md": "7d0d601c1fc8897f0ce433dfa2ae44c2a5c9dd69ded28d7775cb6adbdd2afb75",
     "omh-terminal/SKILL.md": "8641a0b19298f4d81ab86d70d746c2aba74485c162abe330e1f06edaa5c1bc47",
     "omh-toolbelt-readiness/SKILL.md": "13a192a9b5aa4d481dade7b19be9afdf6e053cfe51011649dff6fbd58a97f913",
-    "omh-verification-gate/SKILL.md": "5942a09b8e1efdf010706834a644205eac8d59fa469d1ffa2a4dab88181ba4a9",
+    "omh-verification-gate/SKILL.md": "8c409c40430da3f25707b9f85d34739805461078fcd58274df7c596e823f191a",
+    "omh-verification-gate/references/generated-artifact-provenance.md": "91a818c86eb8311e39f7e1e0f1dca2bed5066551acff83a656aeb78e947f2fad",
     "omh-visual-qa/SKILL.md": "071db3172d349f376edddcfaa9bbd16a7b91fe218be25006f115f965a79e66a4",
     "omh-visual-qa/references/visual-verdict-contract.md": "7c803a3997dc58be0a4b88f2d7aa081cc5cac49a227d0cc19437cd1aad420759",
     "omh-voice-input/SKILL.md": "a78951eaf35a967bfd3089b1d10bfcd24954e1187e1a8228b6a6492798243c00",
@@ -273,7 +274,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "49d3b9ee2ef253d5e99cd4bda42fd7bd4d866332bb6e50b8b069fbeb56b55c8e",
+  "source_digest": "3f9ba947adbb9980ce5f4ccfeb0af944a89c2e6b5424eabb7667ec45e55fb751",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"

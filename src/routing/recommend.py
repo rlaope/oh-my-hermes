@@ -1995,6 +1995,31 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # "watch out for the race condition in this handler". Those three score only
     # inside a complete phrase.
     "automation-blueprint": frozenset({"keep", "monitor", "watch"}),
+    # `verification-gate` gained the generated-path phrasings ("generated
+    # file", "generated artifact", "source of truth", "regenerate instead of
+    # editing"). Every loose token in them is an ordinary word this catalog
+    # uses constantly: credited on their own they put this workflow top of
+    # "what is the output of this function" and level with `content-operator`
+    # on "upload the artifact to the release page". The intent needs both the
+    # generated-artifact noun and a provenance cue together, which is what
+    # `generated_artifact_provenance_before_deliverable_package` in
+    # `policy.py` requires, so none of these words counts alone. The skill's
+    # own vocabulary (`verification`, `gate`, `merge`, `lint`, `typecheck`)
+    # is untouched.
+    "verification-gate": frozenset(
+        {
+            "artifact",
+            "editing",
+            "file",
+            "generated",
+            "instead",
+            "of",
+            "output",
+            "regenerate",
+            "source",
+            "truth",
+        }
+    ),
     # `application-threat-model` is built from words that mean something else
     # almost everywhere else in the catalog: "model" is model-setup and
     # model-optimization, "review" is code-review, "security" is
