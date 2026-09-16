@@ -18,12 +18,24 @@ from omh.skills.render import strategy_brief_reference_templates
 
 class DecisionRecordsReferenceTests(unittest.TestCase):
     def _content(self) -> str:
-        templates = strategy_brief_reference_templates()
-        self.assertEqual(
-            [(t.skill_name, t.relative_path) for t in templates],
-            [("strategy-brief", "references/decision-records.md")],
-        )
-        return templates[0].content
+        """Select the decision-records reference by name, not by position.
+
+        This asserted that `strategy-brief`'s whole template list equalled one
+        row, which located `templates[0]` by making it the only row. That is a
+        stronger claim than any case here needs: every assertion below is about
+        the decision-records document specifically -- the `docs/adr/`
+        convention, the Proposed/Accepted lifecycle, the `decision-recall`
+        corpus -- so a second reference on the skill sits outside their subject
+        rather than violating it. `test_the_packaged_set_includes_it` already
+        asks the membership question the right way, with `assertIn`. Selecting
+        by name keeps every locked string and stops a later reference from
+        failing cases that were never about it.
+        """
+        path = "references/decision-records.md"
+        by_path = {t.relative_path: t for t in strategy_brief_reference_templates()}
+        self.assertIn(path, by_path)
+        self.assertEqual(by_path[path].skill_name, "strategy-brief")
+        return by_path[path].content
 
     def test_the_packaged_set_includes_it(self) -> None:
         packaged = {(t.skill_name, t.relative_path) for t in builtin_skill_reference_templates()}
