@@ -876,6 +876,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'tech-debt-audit/references/debt-dimensions.md',
     'accessibility-audit/references/a11y-rules.md',
     'strategy-brief/references/decision-records.md',
+    'strategy-brief/references/capacity-planning.md',
     'refactor-plan/references/refactor-phases.md',
     'refactor-plan/references/dependency-upgrade.md',
     'frontend-refactor/references/refactor-passes.md',

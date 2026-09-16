@@ -280,7 +280,11 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # render into the router's workflow registry (#1579). The row shape and the
 # concession-order rules are `references/negotiation-preparation.md`, outside
 # this budget; warranted growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 427396
+# 427396 -> 427563: `strategy-brief` gains one `do_not_use_when` line against
+# `people-ops` and six resourcing triggers, which also render into the router's
+# workflow registry (#1580). The worked figures are
+# `references/capacity-planning.md`, outside this budget; warranted growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 427563
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1081,7 +1085,17 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `skills/omh-legal-compliance-review/references/negotiation-preparation.md`,
 # measured outside this budget. Re-derived from the full-profile
 # skill_context_cost_payload() producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 983557
+# 983557 -> 984191: `strategy-brief` gains one quality bar and one
+# `do_not_use_when` line for resourcing decisions (#1580). The framework was
+# already here -- options, tradeoffs, recommendation, decision note -- and the
+# failure was that the two sides were compared without either being a number,
+# so the body carries only the quantify-in-one-unit rule and the lag rule (a
+# gap that exists this quarter is not closed by a hire that ramps next
+# quarter). The worked figures, the three priced options, and the
+# unplanned-work caveat are `skills/omh-decide/references/capacity-planning.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 984191
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

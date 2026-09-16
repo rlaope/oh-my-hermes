@@ -46,7 +46,8 @@
     "omh-curriculum-design/SKILL.md": "103030f8165fa0467dc8de7a211808ec9c49cc74ab5a852d323172c7f956ca35",
     "omh-curriculum-design/references/procedure.md": "5078d35c8cd9cae8257fd14fa8ab7466bff5287500f160787633ec2930d1da1b",
     "omh-data-analysis/SKILL.md": "5f0a0f031eb84240cc6347316ab63bb9a10d8cdeffc82a9b2319c93f2e6e6942",
-    "omh-decide/SKILL.md": "f00ec4cb45cd6a2d7f8e2a137b17a6a778a0ce1652715ccb2dcd8c940d421104",
+    "omh-decide/SKILL.md": "c92aa4c2973bad0340c8f2cec78042ff4d8002d36a62c91b0f78025458136ed7",
+    "omh-decide/references/capacity-planning.md": "5f017b357b0bfb37279918098b9992c3c793ac8ad4056969bf3e2c0e6d5bb9ae",
     "omh-decide/references/decision-records.md": "4da873d3351a8d7ab96d44860c62d7d18130147abb7aa390078eee6dbe2d4d2d",
     "omh-decision-prototype/SKILL.md": "bfb8f16761fc2fc21871ef24c9408ac141fcf38a35742a6c78b07e4825c09f6a",
     "omh-decision-prototype/references/procedure.md": "53334fb4c76acb18a49272bd9dfab9317c0f9d3eb812b7ef9e87550d99762e88",
@@ -278,7 +279,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "572fc62fa0877c744dd0538d6f2d07dca65ee73f9b1384f117133ad800eb76d2",
+  "source_digest": "22e395a89732b00979d20aa24b034f35fbb67b364b7debc94846e43621e2b8d5",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"

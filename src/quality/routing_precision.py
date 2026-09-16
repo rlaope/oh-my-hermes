@@ -1922,6 +1922,22 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "direct_answer",
         "legal-compliance-review",
     ),
+    RoutingPrecisionCase(
+        "build-queue-capacity-stays-a-clarification",
+        "Queue capacity is not team capacity",
+        "we need more capacity in the build queue",
+        "answer_clarification",
+        "",
+        "strategy-brief",
+    ),
+    RoutingPrecisionCase(
+        "growing-demand-remark-stays-a-clarification",
+        "Demand for a feature is not demand against capacity",
+        "the demand for this feature is growing",
+        "answer_clarification",
+        "",
+        "strategy-brief",
+    ),
 )
 
 
@@ -5738,6 +5754,16 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_legal_compliance_review",
         "legal_compliance_review",
         "legal-compliance-review",
+    ),
+    RoutingInterventionCase(
+        "hire-outsource-or-cut-scope-reaches-the-decision-brief",
+        "A resourcing decision reaches the options-and-tradeoffs lane",
+        "do we hire, outsource, or cut scope for this quarters demand",
+        "dispatch",
+        "strategy-brief",
+        "prepare_strategy_brief",
+        "strategy_brief",
+        "strategy-brief",
     ),
 )
 

@@ -1996,6 +1996,14 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # "watch out for the race condition in this handler". Those three score only
     # inside a complete phrase.
     "automation-blueprint": frozenset({"keep", "monitor", "watch"}),
+    # `strategy-brief` gained the capacity-decision phrasings ("capacity
+    # planning", "hire or outsource", "demand versus capacity"). `capacity` is
+    # a disk, a queue, and this catalog's own route-capacity vocabulary,
+    # `planning` belongs to every planning lane, and `demand`, `versus`, and
+    # `scope` are ordinary. `hire`, `outsource`, and `headcount` stay
+    # creditable: they name the decision this example exists for, and
+    # `people-ops` owns the hiring PROCESS through `hiring` rather than `hire`.
+    "strategy-brief": frozenset({"capacity", "cut", "demand", "planning", "scope", "versus"}),
     # `legal-compliance-review` gained the negotiation-preparation phrasings.
     # `language` is every localization request, and `position`, `preparation`,
     # and `strategy` are ordinary words this catalog uses constantly. The bare
