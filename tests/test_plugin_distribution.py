@@ -922,6 +922,7 @@ print(json.dumps(observed, ensure_ascii=False))
                     "pre_llm_call",
                     "pre_tool_call",
                     "pre_verify",
+                    "subagent_start",
                     "transform_tool_result",
                 ],
             )

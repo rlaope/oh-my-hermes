@@ -69,6 +69,16 @@ TODO_UNCHANGED_SECONDS = TOOL_CALL_OPEN_TTL_SECONDS
 # The two statuses that ARE the finding; every other value is a way of being
 # silent. Named once so a caller cannot cover one and miss the other.
 TODO_UNCHANGED_STATUSES: frozenset[str] = frozenset({"unchanged", "unchanged_while_busy"})
+# The statuses that mean this session has a plan record to show: one with work
+# left, and one finished and still lingering. Named once for the same reason as
+# the pair above -- a caller that covered `established` and missed `all_done`
+# would read a plan the person can see on the HUD as no plan at all.
+#
+# This projection is a snapshot, not a history. A finished plan becomes
+# `absent` once it ages past ALL_DONE_TODO_LINGER_SECONDS, so "does a plan
+# exist right now" is the only question these statuses can answer; a caller
+# that needs "did this session ever declare one" has to remember that itself.
+DECLARED_TODO_STATUSES: frozenset[str] = frozenset({"established", "all_done"})
 TODO_STALL_CLAIM_BOUNDARY = (
     "Elapsed time since this checklist last changed, paired with whether this OMH "
     "install currently has a tool call open. Not evidence that work failed, that "
@@ -2174,7 +2184,7 @@ def _collapse_todo_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
 
 def _hud_todo_lines(todo: dict[str, Any], *, preset: str = "focused") -> list[str]:
     status = str(todo.get("status", "absent"))
-    if status not in {"established", "all_done"}:
+    if status not in DECLARED_TODO_STATUSES:
         return []
     counts = todo.get("counts", {})
     title = str(todo.get("title", ""))

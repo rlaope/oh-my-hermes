@@ -50,7 +50,12 @@ from __future__ import annotations
 from typing import Any
 
 from .dispatch_outcomes import unacknowledged_outcomes
-from .runtime_reader import TODO_UNCHANGED_STATUSES, read_omh_todo, todo_unchanged_text
+from .runtime_reader import (
+    DECLARED_TODO_STATUSES,
+    TODO_UNCHANGED_STATUSES,
+    read_omh_todo,
+    todo_unchanged_text,
+)
 
 try:  # Match a continuation claim on the router's own fold when OMH is installed.
     from omh.routing.visual_qa_cues import contains_cue_phrase as _contains_cue_phrase
@@ -187,6 +192,35 @@ def open_todo_reminder(
     return "\n".join(lines)
 
 
+def plan_is_established(todo: dict[str, Any]) -> bool:
+    """Whether this plan is declared AND still has work in it.
+
+    The single place the string ``"established"`` is compared.
+    """
+    return todo.get("status") == "established"
+
+
+def plan_is_declared(todo: dict[str, Any]) -> bool:
+    """Whether a plan record exists for this session right now, open or finished.
+
+    A different question from ``plan_is_established``, and the reason the two
+    are separate: the engagement nudge asks whether the model declared a plan,
+    and a plan that was declared and then completed still means it did. Reading
+    that through ``established`` alone would un-latch the nudge the moment a
+    plan finished and start asking for another one -- the projection writes
+    ``all_done`` for exactly that state.
+
+    It is still only a snapshot. ``read_omh_todo`` retires a finished plan to
+    ``absent`` after ALL_DONE_TODO_LINGER_SECONDS, so this cannot answer "did
+    this session ever declare one" and the nudge's own latch remembers that.
+
+    A record field, never a text match -- the rule ``recorded_blocked_reason``
+    below carries, for the reason written there: a matcher was deleted from
+    this module for getting ordinary strings wrong in both directions.
+    """
+    return str(todo.get("status", "")) in DECLARED_TODO_STATUSES
+
+
 def open_plan_position(todo: dict[str, Any]) -> tuple[int, int] | None:
     """``(done, total)`` while this plan has open work, else ``None``.
 
@@ -196,7 +230,7 @@ def open_plan_position(todo: dict[str, Any]) -> tuple[int, int] | None:
     happening, the directive starts the next one -- so a second copy of this
     condition would let the two disagree about the same plan.
     """
-    if todo.get("status") != "established":
+    if not plan_is_established(todo):
         return None
     counts = todo.get("counts") if isinstance(todo.get("counts"), dict) else {}
     done = counts.get("done")

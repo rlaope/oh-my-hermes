@@ -175,14 +175,26 @@ HOOK_REVIEWS: dict[str, dict[str, Any]] = {
             "continuation directive before a Hermes coding verification"
         ),
     },
+    "subagent_start": {
+        "source_path": "hooks/session_hooks.py",
+        "event_scope": ("subagent_start",),
+        "reviewed_timeout_ms": 1000,
+        "capability": (
+            "recording the delegated child's session id in process memory so "
+            "the engagement nudges can tell a subagent from the session that "
+            "spawned it (no file write, no runtime read, never blocks a spawn)"
+        ),
+    },
     "transform_tool_result": {
         "source_path": "hooks/result_transforms.py",
         "event_scope": ("transform_tool_result",),
         "reviewed_timeout_ms": 1000,
         "capability": (
             "once-per-session code-mode discipline annotation of execute_code "
-            "results plus full-width diff band padding of tool-result diffs "
-            "(non-matching results pass through untouched)"
+            "results, bounded self-latching plan and delegation nudges on "
+            "file-mutating and search/read results, plus full-width diff band "
+            "padding of tool-result diffs (non-matching results pass through "
+            "untouched)"
         ),
     },
 }

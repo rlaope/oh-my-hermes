@@ -119,8 +119,90 @@ def _stamp_text(stamp: object) -> str:
     return stamp if isinstance(stamp, str) else ""
 
 
+# ---------------------------------------------------------------------------
+# Engagement counters: the second thing this module remembers per session.
+#
+# Kept here rather than in a module of its own because the eviction policy, the
+# key derivation, the bound, and above all the reset obligation are one
+# question answered once. A second bounded per-session map elsewhere would be a
+# second thing a new test has to remember to clear, and the docstring on
+# `reset_nudge_budget` is an argument about exactly that.
+#
+# Only the payload differs from the stamps above. The stamps answer "did the
+# plan move since the last nudge in this turn" and live for a turn; these
+# answer "how much work has this session done, and has it done the thing yet"
+# and live for the session. Same map shape, same 64-row ceiling, same
+# fail-toward-fewer-nudges direction on eviction -- an evicted session restarts
+# its counts at zero, which delays a nudge and never adds one.
+_ENGAGEMENT_COUNTS: "OrderedDict[str, dict[str, int]]" = OrderedDict()
+
+# Session ids the host reported as delegated children (`subagent_start`'s
+# `child_session_id`). A child runs under its OWN session id, so per-session
+# keying alone does not separate it from the orchestrator, and the tool-result
+# seam the nudges ride carries no agent identity at all. This is the only
+# record-based way this bundle can tell the two apart.
+_DELEGATED_SESSIONS: "OrderedDict[str, bool]" = OrderedDict()
+
+
+def bump_engagement_count(session_id: object, field: str) -> int:
+    """Increment one counter for this session and return its new value.
+
+    Returns 0 for a session with no usable id rather than sharing an untracked
+    row, for the reason the stamps above give: measuring one session's work
+    against another session's plan is worse than not measuring at all.
+    """
+    key = _session_key(session_id)
+    if not key:
+        return 0
+    row = _ENGAGEMENT_COUNTS.pop(key, None) or {}
+    row[field] = int(row.get(field, 0)) + 1
+    _ENGAGEMENT_COUNTS[key] = row
+    while len(_ENGAGEMENT_COUNTS) > MAX_TRACKED_SESSIONS:
+        _ = _ENGAGEMENT_COUNTS.popitem(last=False)
+    return row[field]
+
+
+def engagement_count(session_id: object, field: str) -> int:
+    """Read one counter without creating a row for a session that has none."""
+    key = _session_key(session_id)
+    if not key:
+        return 0
+    return int((_ENGAGEMENT_COUNTS.get(key) or {}).get(field, 0))
+
+
+def latch_engagement(session_id: object, field: str) -> None:
+    """Record that this session did the thing, for the rest of its life.
+
+    A latch, not a decay: once a plan is declared or a lane is routed, the
+    nudge that asked for it has no remaining question to ask.
+    """
+    _ = bump_engagement_count(session_id, field)
+
+
+def note_delegated_session(child_session_id: object) -> None:
+    """Remember a session id the host reported as a delegated child.
+
+    Fed by `subagent_start`, whose `child_session_id` the host emits from the
+    same code path that creates the child -- so a host that never calls it is
+    a host with no children to mistake for orchestrators.
+    """
+    key = _session_key(child_session_id)
+    if not key:
+        return
+    _ = _DELEGATED_SESSIONS.pop(key, None)
+    _DELEGATED_SESSIONS[key] = True
+    while len(_DELEGATED_SESSIONS) > MAX_TRACKED_SESSIONS:
+        _ = _DELEGATED_SESSIONS.popitem(last=False)
+
+
+def session_is_delegated(session_id: object) -> bool:
+    """Whether this session is a delegated child the host told us about."""
+    key = _session_key(session_id)
+    return bool(key) and key in _DELEGATED_SESSIONS
+
+
 def reset_nudge_budget() -> None:
-    """Forget every recorded baseline. A test seam, deliberately named.
+    """Forget every recorded baseline and every engagement count. A test seam.
 
     This memory is process-global, and the repository has already paid for that
     shape once: `fanout_dispatch._INTERRUPT_FLAG` was set by one test and
@@ -134,6 +216,8 @@ def reset_nudge_budget() -> None:
     `reset_nudge_budget` search away from being found.
     """
     _LAST_NUDGE_STAMPS.clear()
+    _ENGAGEMENT_COUNTS.clear()
+    _DELEGATED_SESSIONS.clear()
 
 
 def _remember(key: str, stamp: str) -> None:

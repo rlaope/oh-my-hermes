@@ -215,10 +215,18 @@ class PreVerifyHookTests(unittest.TestCase):
         register(context)
 
         # Only the rejected optional hook is absent; the other optional hooks
-        # (post_tool_call, transform_tool_result) still register on this host.
+        # (post_tool_call, subagent_start, transform_tool_result) still register
+        # on this host.
         self.assertEqual(
             set(context.hooks),
-            {"on_session_end", "pre_llm_call", "pre_tool_call", "post_tool_call", "transform_tool_result"},
+            {
+                "on_session_end",
+                "pre_llm_call",
+                "pre_tool_call",
+                "post_tool_call",
+                "subagent_start",
+                "transform_tool_result",
+            },
         )
         self.assertIn("omh_capabilities", context.tools)
 

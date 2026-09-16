@@ -128,7 +128,7 @@ def register(ctx: _PluginContext) -> None:
 
     from .hooks.llm_hooks import pre_llm_call
     from .hooks.result_transforms import transform_tool_result
-    from .hooks.session_hooks import on_session_end
+    from .hooks.session_hooks import on_session_end, subagent_start
     from .hooks.tool_hooks import post_tool_call, pre_tool_call
     from .hooks.verify_hooks import pre_verify
     from .tools.agent_board_tool import OMH_AGENT_BOARD_SCHEMA, omh_agent_board_handler
@@ -281,6 +281,7 @@ def register(ctx: _PluginContext) -> None:
     _ = ctx.register_hook("pre_tool_call", pre_tool_call)
     _register_optional_hook(ctx, "post_tool_call", post_tool_call)
     _register_optional_hook(ctx, "pre_verify", pre_verify)
+    _register_optional_hook(ctx, "subagent_start", subagent_start)
     _register_optional_hook(ctx, "transform_tool_result", transform_tool_result)
     get_config = getattr(ctx, "get_config", None)
     browser_config = get_config("browser_adapter", {}) if callable(get_config) else {}
