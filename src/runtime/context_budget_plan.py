@@ -8,11 +8,11 @@ from ..coding.model_routing import model_family, resolve_model_route
 from ..plugin_bundle.omh.active_workflow_context_state import session_fingerprint
 from ..plugin_bundle.omh.context_budget_plan import evaluate_capacity
 from ..plugin_bundle.omh.context_budget_plan_capacity import (
-    build_capacity_record, digest_json, metadata_ref, observations,
+    build_capacity_record, digest_json, metadata_ref, must_keep_delta, observations,
 )
 from ..plugin_bundle.omh.context_budget_plan_store import context_budget_plan_path, read_plan
 from ..plugin_bundle.omh.context_budget_plan_types import (
-    BudgetPlanError, Evidence, Invalidation, MustKeep, Plan, RouteIdentity,
+    BudgetPlanError, Evidence, Invalidation, MustKeep, Plan, PreparedPlan, RouteIdentity,
 )
 from ..system.local_store import atomic_write_json
 from ..system.paths import OmhPaths
@@ -36,12 +36,19 @@ def build_route_identity(executor_profile: str, provider: str, model: str) -> Ro
 
 
 def prepare_context_budget_plan(paths: OmhPaths, *, session_ref: str, identity: RouteIdentity,
-                                capacity: dict[str, Evidence], must_keep: MustKeep) -> Plan:
+                                capacity: dict[str, Evidence], must_keep: MustKeep) -> PreparedPlan:
     """Explicit preparation is the only operation that starts a new recovery lineage.
 
     This publishes operator-reviewed metadata, not a receipt that the operator
     actually checkpointed, compacted, or delivered this pack to a model.
+
+    Re-preparing over an existing session is where a pack is discovered to have
+    lost something, so the returned payload carries the item-class delta against
+    the pack being replaced. The delta describes this call and is not persisted:
+    the stored plan records the pack, and every later read compares against
+    whatever the next writer supplies.
     """
+    previous, unreadable = _previous_pack(paths, session_ref)
     record = build_capacity_record(identity, capacity)
     invalidation = evaluate_capacity(None, record, must_keep["estimated_tokens_total"])
     plan: Plan = {
@@ -52,7 +59,23 @@ def prepare_context_budget_plan(paths: OmhPaths, *, session_ref: str, identity: 
         "rebind_count": 0, "route_history": [], "active_budget_source": record, **observations(must_keep),
     }
     atomic_write_json(context_budget_plan_path(str(paths.omh_home), session_ref), dict(plan), private=True)
-    return plan
+    delta = must_keep_delta(previous, must_keep, previous_unreadable=unreadable)
+    return {**plan, "must_keep_delta": delta}
+
+
+def _previous_pack(paths: OmhPaths, session_ref: str) -> tuple[MustKeep | None, bool]:
+    """An unreadable prior plan is no comparison basis, never a clean slate.
+
+    `read_plan` raises on corrupt or foreign data, and preparation must still
+    publish. Returning a bare `None` for both cases would make the delta read
+    `no_previous_pack`, which asserts there was nothing there to lose; the flag
+    keeps "no plan yet" and "a plan that would not parse" distinguishable.
+    """
+    try:
+        plan = read_plan(str(paths.omh_home), session_ref)
+    except (OSError, ValueError, UnicodeError, RecursionError):
+        return None, True
+    return (plan["must_keep_pack"] if plan else None), False
 
 
 def rebind_context_budget_plan(paths: OmhPaths, *, session_ref: str, identity: RouteIdentity,

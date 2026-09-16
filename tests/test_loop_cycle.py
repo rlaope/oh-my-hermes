@@ -227,6 +227,67 @@ class GoalLoopTests(unittest.TestCase):
         self.assertEqual(project["required_inputs"], [])
         self.assertIn("first value", project["next_verification"])
 
+    def test_recurring_requests_reach_the_three_non_loop_surfaces(self) -> None:
+        from omh.workflows.loopability import RECURRING_SURFACES, validate_loopability_assessment
+
+        # Given one request per recurring surface other than the loop itself.
+        cases = (
+            ("every weekday morning check the error budget and post a digest", "scheduled_ops_blueprint"),
+            ("keep watching the deploy status and tell me when it changes", "heartbeat_watch"),
+            ("work on this and keep going until the tests pass", "native_goal"),
+        )
+        for message, expected in cases:
+            with self.subTest(message=message):
+                assessment = assess_loopability(message, expose_goal=True)
+                # Then the surface is the recurring one, not a loop reframe.
+                self.assertEqual(assessment["recommended_surface"], expected)
+                self.assertEqual(assessment["goal_kind"], "recurring")
+                # And it carries a stop condition plus the three it beat.
+                self.assertTrue(assessment["stop_condition"].strip())
+                comparison = assessment["recurring_surface_comparison"]
+                self.assertTrue(comparison["applies"])
+                self.assertEqual(
+                    [row["surface"] for row in comparison["rejected"]],
+                    [surface for surface in RECURRING_SURFACES if surface != expected],
+                )
+                for row in comparison["rejected"]:
+                    self.assertTrue(row["not_chosen_because"].strip())
+                self.assertEqual(validate_loopability_assessment(assessment), [])
+
+    def test_a_recurring_surface_without_a_stop_condition_fails_its_own_check(self) -> None:
+        from omh.workflows.loopability import validate_loopability_assessment
+
+        # Given a recurring recommendation whose stop condition was blanked.
+        assessment = assess_loopability("keep watching the deploy status and tell me when it changes")
+        # When the record is validated.
+        errors = validate_loopability_assessment({**assessment, "stop_condition": "   "})
+        # Then the missing stop condition is the failure, named as itself.
+        self.assertIn("loopability_assessment.stop_condition is required for a recurring surface", errors)
+        # And a surface outside the widened vocabulary is refused, not passed through.
+        self.assertIn(
+            "loopability_assessment.recommended_surface is unsupported",
+            validate_loopability_assessment({**assessment, "recommended_surface": "cron_maybe"}),
+        )
+
+    def test_an_end_without_a_named_condition_is_not_a_stated_stop_criterion(self) -> None:
+        # Given two requests that both say the work ends.
+        named = assess_loopability("work on this and keep going until the tests pass")
+        unnamed = assess_loopability("이 작업 끝날 때까지 계속 돌려줘")
+        # Then only the one naming a checkable condition is a goal; the other
+        # still needs the reframe the loop chain asks for.
+        self.assertEqual(named["recommended_surface"], "native_goal")
+        self.assertEqual(unnamed["recommended_surface"], "loop_start_after_reframe")
+        self.assertEqual(unnamed["recommended_next_action"], "ask_goal_boundary")
+
+    def test_a_non_recurring_request_does_not_report_an_empty_comparison(self) -> None:
+        # Given an ordinary direct task.
+        assessment = assess_loopability("./loop change the button color", expose_goal=True)
+        comparison = assessment["recurring_surface_comparison"]
+        # Then the comparison says it does not apply rather than rejecting nothing.
+        self.assertFalse(comparison["applies"])
+        self.assertEqual(comparison["rejected"], [])
+        self.assertIn("not a recurring one", comparison["reason"])
+
     def test_loop_cycle_records_permission_profile_without_completion_claim(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

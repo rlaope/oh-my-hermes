@@ -3640,6 +3640,7 @@ def _domain_engineering_reference_templates_cached() -> tuple[SkillReferenceTemp
     return (
         SkillReferenceTemplate("backend", "references/service-contract.md", _backend_service_contract_reference()),
         SkillReferenceTemplate("backend", "references/schema-migration.md", _backend_schema_migration_reference()),
+        SkillReferenceTemplate("backend", "references/consumer-impact.md", _backend_consumer_impact_reference()),
         SkillReferenceTemplate("rust", "references/rust-discipline.md", _rust_discipline_reference()),
         SkillReferenceTemplate("rust", "references/ub-escalation.md", _rust_ub_escalation_reference()),
         SkillReferenceTemplate(
@@ -5753,6 +5754,549 @@ merge evidence.
 """
 
 
+def _backend_consumer_impact_reference() -> str:
+    return """# Consumer Impact and Sunset
+
+The contract's shape and the contract's evolution belong to the same owner.
+Split across two skills, the response envelope and the deprecation window drift
+apart, and the surface ends up with a rule for how it looks and no rule for how
+it changes.
+
+## Enumerate consumers before designing the change
+
+Work the sources in order, and record which ones were searched - the list is
+only as good as its coverage, and the coverage is the part a reader cannot
+reconstruct later:
+
+| Source | Finds |
+| --- | --- |
+| This repository | internal callers, generated clients, fixtures and contract tests naming the field |
+| Generated client packages | published SDKs whose consumers you cannot see |
+| Access logs by API key, user agent, or client id | who actually calls the endpoint, and how often |
+| The spec's own history | who asked for the field, in the commit or PR that added it |
+| Partner or integration registries | named external consumers under an agreement |
+
+Then say what the search could not reach. Consumers outside the repository are
+unknowable from it: a public API, a published SDK, a webhook anybody may
+subscribe to, and an internal caller in another team's repo are all invisible
+to a code search.
+
+**An empty consumer list is a claim.** Reporting zero consumers says the search
+was complete and found nothing, which is a much stronger statement than "the
+search covered this repository and no more". When the set cannot be closed,
+report `consumers_not_enumerable` and name what was searched, so the reader
+knows the shape of the gap rather than reading confidence into silence.
+
+## Grade what breaks, per consumer
+
+Not every change breaks every caller. Say which, and say why:
+
+- **Removing a field** breaks readers that require it; a reader tolerating
+  unknown fields is unaffected by an addition but not by a removal.
+- **Narrowing a type or an enum** breaks writers sending the old range, and
+  silently breaks readers that switch exhaustively.
+- **Adding a required request field** breaks every existing caller.
+- **Changing an error code, status, or error body shape** breaks retry and
+  error-handling logic, which is the breakage nobody's contract test covers.
+- **Changing pagination, ordering, or default limits** breaks clients that
+  depend on the old behaviour without declaring it - the hardest class to find
+  and the one access logs answer better than code search.
+
+## The window, the path, and the date
+
+A deprecation with no date is a warning nobody acts on:
+
+- **Compatibility window** - how long both behaviours are served, stated as a
+  date and not a release count. Size it against the slowest consumer you
+  identified, not the median, and against `consumers_not_enumerable` if the set
+  is open.
+- **Migration path** - what a consumer does, concretely, including the new
+  field or endpoint and any semantic difference. "Use v2" is not a path.
+- **Announcement** - where consumers are told, and the observation that proves
+  they were told. A changelog entry nobody reads is prepared, not delivered.
+- **Sunset date** - when the old behaviour stops. Name what is observed before
+  it arrives: the old surface's traffic falling to zero, or to a known set of
+  consumers who have accepted the break.
+- **What happens after** - the removed surface returns a specific status and
+  error body rather than a generic 404, so a late caller gets a diagnosis.
+
+An open consumer set does not block the deprecation; it changes the window and
+the announcement, and it must say so rather than shortening the window on an
+assumption.
+
+## Boundary
+
+A consumer list, a window, and a sunset date are prepared. Traffic figures,
+access-log analysis, and the observation that consumers migrated are observed
+evidence and come from the operator; a prepared sunset plan is not a removed
+endpoint and not proof that anybody was told.
+"""
+
+
+def legal_compliance_reference_templates() -> list[SkillReferenceTemplate]:
+    return list(_legal_compliance_reference_templates_cached())
+
+
+@lru_cache(maxsize=1)
+def _legal_compliance_reference_templates_cached() -> tuple[SkillReferenceTemplate, ...]:
+    return (
+        SkillReferenceTemplate(
+            "legal-compliance-review",
+            "references/negotiation-preparation.md",
+            _negotiation_preparation_reference(),
+        ),
+    )
+
+
+def _negotiation_preparation_reference() -> str:
+    return """# Negotiation Preparation
+
+This is the output mode where the objective is a redline rather than an
+assessment: proposed language, fallbacks, and a concession order, prepared for
+the person who will negotiate.
+
+The boundary from the rest of this workflow carries through unchanged. This is
+preparation material, never legal advice. A proposed clause says "here is
+language that matches the playbook position, and here is what it gives up"; it
+never says whether to accept a term, whether a clause is enforceable, or what
+the law requires. The authority-citation and counsel-hold rules apply to every
+row.
+
+## Requires a playbook
+
+Preparation is against the organization's OWN positions. Without a playbook -
+standard terms, approved deviations, and what needs escalation - a proposal is
+an invented position, and inventing a position is the failure this whole
+workflow exists to prevent. If none is supplied, ask for it, or say that rows
+are being prepared against the counterparty's draft alone and carry no approved
+position behind them.
+
+## The row
+
+One row per contested clause:
+
+| Field | Content |
+| --- | --- |
+| `clause` | the counterparty's language, by its own reference |
+| `playbook_position` | the standard position, cited to the playbook clause |
+| `gap` | what the draft does that the position does not allow |
+| `proposed` | the replacement language |
+| `fallback` | the next acceptable position if the proposal is refused |
+| `walk_away` | the point past which escalation is required, and to whom |
+| `counsel_hold` | open or closed, from the hold register |
+
+`fallback` and `walk_away` are not optional. A redline with a proposal and
+nothing behind it puts the negotiator in front of a counterparty with one
+position and no room, and the first refusal becomes an escalation that could
+have been planned.
+
+**An open counsel hold blocks the row.** A clause with an unresolved
+enforceability, privilege, uncapped-liability, or regulatory-deadline trigger
+gets a counsel question, not a proposal. Proposing language over an open hold is
+how preparation turns into advice.
+
+## Concession order across rows
+
+Rank the rows by what the organization actually loses, not by how contested
+they are. Then state which are linked - a concession on liability that assumes a
+cap elsewhere is one position, and trading it away separately loses both halves.
+Record what each concession buys: an ordering with no exchange is a list of
+things to give away.
+
+Three rows that usually rank higher than they read: an indemnity whose cap is
+set elsewhere in the document, a termination-for-convenience clause with an
+asymmetric notice period, and an audit right with no scope or frequency limit.
+
+## What the negotiator gets
+
+The rows, the concession order with its linkages, the counsel questions that
+are still open, and an explicit statement of what was not reviewed - clauses
+outside the supplied instruments, exhibits that were not provided, and any
+version uncertainty. A preparation pack that does not say what it did not see
+reads as complete.
+
+## Boundary
+
+Prepared negotiation material is not legal advice, counsel sign-off, an
+accepted position, an executed amendment, or a communication to the
+counterparty. Every authority-dependent statement in a row traces to supplied
+authority with an exact locator and status, exactly as in the issue matrix, and
+an unresolved hold blocks a final determination here as it does everywhere else
+in this workflow.
+"""
+
+
+def security_safety_review_reference_templates() -> list[SkillReferenceTemplate]:
+    return list(_security_safety_review_reference_templates_cached())
+
+
+@lru_cache(maxsize=1)
+def _security_safety_review_reference_templates_cached() -> tuple[SkillReferenceTemplate, ...]:
+    return (
+        SkillReferenceTemplate(
+            "security-safety-review",
+            "references/credential-rotation.md",
+            _credential_rotation_reference(),
+        ),
+    )
+
+
+def _credential_rotation_reference() -> str:
+    return """# Credential Rotation
+
+Finding the secret that needs rotating is the easy half. This is the order that
+keeps the service up while the credential changes, and the check that proves
+the old one is dead.
+
+## The order
+
+Five steps, and the order is the whole point:
+
+1. **Issue new** - create the replacement alongside the current credential.
+   Most providers allow two live credentials per identity; where they do not,
+   the rotation needs a second identity and that changes the plan, so find out
+   before step 2 rather than during it.
+2. **Deploy new** - put the new credential everywhere the old one is used.
+   Enumerate those places first: application config, CI secrets, developer
+   machines, scheduled jobs, infrastructure-as-code state, and any partner who
+   was given it. A place nobody listed is the outage.
+3. **Verify new** - a real call succeeds with the new credential, from each
+   deployed environment, not only from a laptop.
+4. **Revoke old** - disable the previous credential.
+5. **Verify revoked** - a call with the old credential FAILS.
+
+## What breaks if the order changes
+
+| Change | Result |
+| --- | --- |
+| Revoke before deploy | a full outage for the window between them - this is the mistake the sequence exists to prevent |
+| Deploy before issue | the new credential is not live yet, so every call fails with an authentication error nobody expects |
+| Skip verify-new | a deployment that silently fell back to the old credential looks healthy until step 4 turns it off |
+| Skip verify-revoked | the old credential is assumed dead; if revocation did not take, the exposure that triggered the rotation is still open |
+| Revoke immediately after deploy | in-flight requests and cached tokens issued under the old credential fail; the overlap window exists for them |
+
+## The overlap window
+
+Both credentials are live between steps 1 and 4. Size it by the longest thing
+that can still be holding the old one: token lifetime, cache TTL, a scheduled
+job that runs hourly, a mobile client that updates weekly. A window shorter than
+the slowest of those turns step 4 into the outage step 1 was meant to avoid.
+
+A compromised credential inverts this: the exposure outranks the availability,
+so revoke first and accept the outage. Say which case applies before naming a
+window.
+
+## Revocation is proven by a failure, not by an exit code
+
+**A revoke command's success means the request was accepted.** It does not mean
+the credential stopped working. Providers cache authorization decisions,
+propagate revocation asynchronously across regions, and sometimes keep issued
+tokens valid to their expiry after the credential behind them is disabled.
+
+The proof is a call made with the OLD credential that fails with an
+authentication or authorization error. Record what was called, when, and the
+exact status returned. Three results that are not proof: a connection error
+(the endpoint was unreachable, not the credential rejected), a 404 (wrong
+path), and a success (revocation has not propagated - wait and re-check rather
+than calling it done).
+
+Where the provider issues bearer tokens from the credential, a token minted
+before revocation may outlive it. Say so explicitly, name the longest such
+lifetime, and treat the rotation as incomplete until it has passed.
+
+## Per credential type
+
+- **API key or token** - the five steps as written.
+- **Certificate** - deploy the new chain to trust stores before switching the
+  leaf; a client that does not trust the new issuer fails at step 3, which is
+  where it should fail.
+- **Database password** - some engines allow only one password per role;
+  rotation then needs a second role plus a connection-string switch, or a
+  maintenance window.
+- **Signing key** - verifiers must accept both keys before the signer switches,
+  so the overlap window is set by the slowest verifier, and the old key is
+  retired only after nothing signed with it is still in flight.
+- **OAuth client secret** - refresh tokens issued under the old secret may
+  survive it; check whether the provider invalidates them, because "we rotated
+  the secret" and "old sessions are dead" are different claims.
+
+## Boundary
+
+OMH core makes no network calls, so the rotation itself is always the
+operator's execution. This is the sequence and its proof step. A delivered
+sequence is not a rotation that happened, a planned verify step is not observed
+evidence, and a credential is reported rotated only from an observed failure
+with the old one.
+"""
+
+
+def verification_gate_reference_templates() -> list[SkillReferenceTemplate]:
+    return list(_verification_gate_reference_templates_cached())
+
+
+@lru_cache(maxsize=1)
+def _verification_gate_reference_templates_cached() -> tuple[SkillReferenceTemplate, ...]:
+    return (
+        SkillReferenceTemplate(
+            "verification-gate",
+            "references/generated-artifact-provenance.md",
+            _generated_artifact_provenance_reference(),
+        ),
+    )
+
+
+def _generated_artifact_provenance_reference() -> str:
+    return """# Generated-Artifact Provenance
+
+Editing a generated file is caught after the fact, if at all: the change looks
+correct, review passes, and the byte gate rejects it - or worse, nothing
+rejects it and the edit disappears at the next regeneration. This row asks the
+question while the diff is still being written.
+
+## The map is declared, never inferred
+
+A generated path is one the repository says is generated. Look, in order, for:
+
+- A generated-artifact table in the contributor docs (`CLAUDE.md`, `AGENTS.md`,
+  `CONTRIBUTING.md`) pairing source, output, regeneration command, and gate.
+- A codegen config that names its outputs (`buf.gen.yaml`, `openapi-generator`
+  config, `protoc` invocations, `sqlc.yaml`, schema-to-type generators).
+- Build or CI steps that regenerate and then fail on a dirty tree - a
+  `--check`, `--verify`, or `git diff --exit-code` step names its outputs.
+- A lockfile or vendor directory the tooling owns.
+
+If none of these exists, the answer is `map_not_declared`. Say that and stop.
+
+**Never guess from filename patterns.** `*.generated.ts`, a `dist/` or `gen/`
+directory, and a "DO NOT EDIT" header are conventions, not declarations: plenty
+of hand-maintained code lives in `gen/`, and plenty of generated code carries no
+marker. The asymmetry decides this. A false positive tells someone their
+correct edit belongs in a generator that does not produce that file, and they
+either obey and lose the change or stop trusting the check. A miss costs one
+regeneration. Report the uncertainty instead of resolving it.
+
+## The row
+
+One row per touched generated path:
+
+| Field | Content |
+| --- | --- |
+| `path` | the generated file the diff touches |
+| `source_of_truth` | the file or schema the generator reads |
+| `regenerate` | the exact command, copyable |
+| `gate` | the check that fails when the two disagree, or `no_gate` |
+| `declared_by` | where the map was read from |
+
+`no_gate` is worth recording on its own: a generated artifact nothing verifies
+drifts silently, which is a finding about the repository rather than about this
+diff.
+
+## A generator and its output together is the correct shape
+
+The whole point of the redirect is to move the edit into the source, and the
+source change regenerates the output, so both appear in the same diff. That is
+success, not a violation. Report a finding only when the output moved and its
+source did not.
+
+Two shapes that look like violations and are not: a regeneration that changes
+formatting across many files after a generator version bump, and an output
+committed alone because its source lives in another repository. Both are
+answered by the `declared_by` field, not by the path.
+
+## Where this sits among the gate's other rows
+
+Provenance runs before the checks, not among them. The other rows ask whether
+the change is proven; this one asks whether the change is in the right file at
+all, and it is cheapest to answer before the work is done. It is also not a
+substitute for the gate: a diff that edits the source correctly still has to
+regenerate and still has to pass the byte check.
+
+## Boundary
+
+A provenance row is read from a declaration and a diff. It is not a
+regeneration, not a passing gate, and not proof that the named command produces
+the committed bytes; running the command and observing a clean tree is separate
+observed evidence.
+"""
+
+
+def external_connector_reference_templates() -> list[SkillReferenceTemplate]:
+    return list(_external_connector_reference_templates_cached())
+
+
+@lru_cache(maxsize=1)
+def _external_connector_reference_templates_cached() -> tuple[SkillReferenceTemplate, ...]:
+    return (
+        SkillReferenceTemplate(
+            "external-connector-readiness",
+            "references/memory-provider-trial.md",
+            _memory_provider_trial_reference(),
+        ),
+    )
+
+
+def _memory_provider_trial_reference() -> str:
+    return """# Trialling Memory Providers on Your Own Corpus
+
+A provider's declared posture says what it promises; a trial says what it did
+with your material. This is the `connector_trial_manifest/v1` pattern applied
+to a memory provider - a provider is a connector with a declared posture, and
+the trial records what was observed against it.
+
+## The trial is one corpus and one query set
+
+Every candidate gets the same documents and the same queries. A provider
+evaluated on its own sample is evaluated on the sample it was chosen for, which
+is the one comparison that cannot be wrong. Freeze both before the first
+candidate runs, and record their identity - a digest, a document count, a query
+count - never their content. Extending the corpus mid-trial invalidates every
+result already collected; start over rather than compare across two corpora.
+
+## Three dimensions, each separately reportable
+
+| Dimension | What the host reports | What it is not |
+| --- | --- | --- |
+| Retrieval quality | per query: which expected items came back, at what rank | a model's opinion of the answer |
+| Latency | per query: the provider's own round trip, and whether it was measured warm or cold | end-to-end chat latency |
+| Cost | per trial: the provider's billed or quoted units for the run | an extrapolated monthly figure |
+
+A dimension nobody measured is `not_observed`. It is never `0`, never a
+default, and never inferred from another dimension: a provider with no cost
+figure is not free, and one with no quality figure has not scored zero. A
+comparison table where one cell is `not_observed` and another is a number is
+still useful; one where the gap was filled with a plausible value is not.
+
+OMH makes no network calls, so every figure here arrives from the host,
+connector, or operator that ran the queries. Record the reporter alongside the
+figure.
+
+## Migration is not finished until the rollback has run
+
+Choosing a provider is reversible only if the reverse has been done. In the
+trial, before any production data moves:
+
+1. Export from the current provider and record what the export contained -
+   counts and identifiers, not content.
+2. Import into the candidate and record what arrived; a count that does not
+   match the export is the finding, not a rounding difference.
+3. **Run the rollback.** Point back at the original provider, re-run the query
+   set, and record whether the original results returned.
+4. Record what the rollback did *not* restore. Writes made against the
+   candidate during the trial, derived indexes, and anything the candidate
+   generated are the usual answers.
+
+A rollback that was described but not executed is `prepared_not_observed`. Say
+so in those words rather than calling the migration reversible.
+
+## What the record holds
+
+Provider identity, corpus and query-set identity, per-provider figures with
+their reporters, the unmeasured dimensions marked `not_observed`, the migration
+counts, and the rollback observation. Corpus content, query text, and retrieved
+documents stay out: the record is metadata about the trial, and a memory corpus
+is exactly the material that should not be copied into a readiness card.
+
+## Boundary
+
+A trial comparison is prepared adoption evidence. It is not provider
+installation, credential validation, a completed migration, a production
+cutover, or proof that the chosen provider behaves the same way on material the
+trial did not include.
+"""
+
+
+def automation_blueprint_reference_templates() -> list[SkillReferenceTemplate]:
+    return list(_automation_blueprint_reference_templates_cached())
+
+
+@lru_cache(maxsize=1)
+def _automation_blueprint_reference_templates_cached() -> tuple[SkillReferenceTemplate, ...]:
+    return (
+        SkillReferenceTemplate(
+            "automation-blueprint",
+            "references/recurring-surface-choice.md",
+            _recurring_surface_choice_reference(),
+        ),
+    )
+
+
+def _recurring_surface_choice_reference() -> str:
+    return """# Choosing Among Heartbeat, Loop, Goal, and Cron
+
+"Keep doing this for me" has four answers in OMH, and they differ in exactly
+one thing: what ends them. Decide that first; the stop condition, retry policy,
+and delivery target all follow from it.
+
+## The four
+
+| Surface | Ends when | Runs between occurrences | Recommend when |
+| --- | --- | --- | --- |
+| Cron (`scheduled_ops_blueprint`) | the operator removes the schedule | nothing | the request names a cadence - "every morning", "nightly", "each Monday" |
+| Heartbeat (`heartbeat_watch`) | never; the user withdraws it | a liveness check only | the request watches a condition with no cadence and no end state |
+| Loop (`loop_start`) | a named verification signal passes | work driven by the last iteration | the request improves something inside a bounded arena |
+| Goal (`native_goal`) | a stated stop criterion is met | work driven toward that criterion | the request already states the condition that finishes it |
+
+Two distinctions carry most of the decisions. A cadence answers *when*, so a
+request that names one is never a loop, even when the work inside each
+occurrence is iterative. And a heartbeat reports without changing anything: the
+moment the request asks for something to be fixed between observations, it is a
+loop or a goal.
+
+## Each recommendation names the three it beat
+
+A recommendation that does not say why the other three lost is a default, not a
+choice, and a user cannot correct a default they cannot see. State each
+rejection in the request's own terms - "not a schedule, because no cadence was
+named" is checkable, "a heartbeat fits better" is not.
+
+`assess_loopability` emits this as `recurring_surface_comparison`, one reason
+per pair, and refuses a recurring recommendation that carries no stop
+condition.
+
+## Stop condition
+
+Every recommendation carries one, and it is a condition, never a duration.
+"Until the tests pass" is a stop condition; "for two weeks" is an end date,
+which belongs in the schedule rather than in the stop rule. A heartbeat's stop
+condition is the delivery of a change, not a completion - say that rather than
+leaving the field blank, because a blank field reads as "runs forever by
+design" when it usually means nobody decided.
+
+## Retry policy
+
+Retry belongs to the surface, not to the task. Name four things before
+activation, because the runtime cannot decide any of them:
+
+- **Overlap** - a prior occurrence is still running when the next is due: skip,
+  queue, or run concurrently.
+- **Missed run** - the host was down through a window: backfill it, or drop it
+  and continue at the next occurrence.
+- **Repeat failure** - how many consecutive failures pause the surface, and
+  whether resuming needs a human.
+- **Backoff** - whether a retry waits, and whether that wait is bounded.
+
+A loop and a goal answer these differently from a cron: an iteration that fails
+its verification is information the next iteration uses, so a loop's "failure"
+is usually not a retry at all. Say which reading applies.
+
+## Delivery target
+
+Name the destination, the silence rule, and what a no-change occurrence does.
+The silence rule is the one people skip: a daily digest that sends when nothing
+changed trains its reader to ignore it, and one that never sends is
+indistinguishable from a broken schedule. Choose one and write it down - report
+only on change, or report every occurrence with an explicit no-change line.
+
+## Boundary
+
+A recommended surface, its stop condition, its retry policy, and its delivery
+target are a prepared blueprint. OMH starts, skips, queues, retries, and
+backfills nothing; a policy decision is not proof the runtime honoured it, and
+a saved recurring intent stays paused until an approved runtime surface records
+an occurrence against that exact intent revision.
+"""
+
+
 def refactor_plan_reference_templates() -> list[SkillReferenceTemplate]:
     return list(_refactor_plan_reference_templates_cached())
 
@@ -5765,7 +6309,99 @@ def _refactor_plan_reference_templates_cached() -> tuple[SkillReferenceTemplate,
             "references/refactor-phases.md",
             _refactor_phases_reference(),
         ),
+        SkillReferenceTemplate(
+            "refactor-plan",
+            "references/dependency-upgrade.md",
+            _dependency_upgrade_reference(),
+        ),
     )
+
+
+def _dependency_upgrade_reference() -> str:
+    return """# Dependency and Framework Upgrades
+
+A major upgrade is a boundary-changing refactor whose direction was decided by
+somebody else. The phase contract in `references/refactor-phases.md` carries
+the execution shape unchanged - reconnaissance, contracts-first order,
+per-phase verification and rollback, the files table, the approval gate. Four
+things are specific to an upgrade, and all four are read before the first
+phase is ordered.
+
+## 1. Advisory intake
+
+Establish why the upgrade is happening, because it sets the deadline and the
+acceptable risk:
+
+- Which advisories or CVEs the current version carries, with their identifiers
+  and severity, and whether a patch release fixes them without the major jump.
+- Whether the current version is still supported upstream, and the end-of-life
+  date if one is published.
+- Whether any advisory is reachable from this codebase. An advisory in a code
+  path nothing calls is a different deadline from one in the request handler,
+  and saying which is a finding, not a detail.
+
+A security-driven upgrade and a housekeeping upgrade produce different phase
+plans: the first may ship the version bump alone and defer the API migration,
+which is a legitimate split; the second has no reason to.
+
+## 2. License delta
+
+The new version may not carry the old licence. Read the licence file at the
+target version rather than the package metadata, which lags. Record the
+before and after, and flag a change from permissive to copyleft, a change to a
+source-available or dual licence, and any new attribution requirement, as a
+blocker for the user's decision rather than a note in the plan. The same
+applies to transitive dependencies the upgrade adds - a new direct dependency
+is visible in the diff, a new transitive one is visible only in the lockfile.
+
+## 3. The upstream migration guide is an input, not a summary
+
+Read the upstream migration guide and the changelog between the two versions,
+and record for each breaking change: the upstream item, whether this codebase
+is affected, and which phase handles it. A breaking change nobody checked is
+not "probably fine", and a guide that does not mention something this codebase
+does is a gap to record, not silence to interpret.
+
+Two things the guide will not tell you and the reconnaissance must: deprecated
+APIs this codebase uses that still work in the target version - they are the
+next upgrade's breaking changes - and behaviour changes that are not API
+changes, such as a different default, a changed error type, or a changed
+ordering guarantee. Those pass the typechecker and fail in production.
+
+## 4. Lockfile discipline
+
+The lockfile is the artifact the upgrade actually produces.
+
+- The lockfile changes in the same commit as the manifest. A manifest bump
+  without its lockfile is a change nobody can reproduce.
+- Regenerate it with the project's own tooling and version; a lockfile written
+  by a different package-manager version reorders or reshapes entries and
+  buries the real delta.
+- Review the transitive delta, not only the direct one: read what was added,
+  removed, and moved, and pair each unexpected addition with the direct
+  dependency that pulled it in.
+- Never hand-edit a lockfile to force a version. Constrain it in the manifest
+  and regenerate, or the next regeneration silently undoes it.
+- A monorepo with several lockfiles upgrades them together or states which are
+  deliberately pinned behind and why.
+
+## Phase order for an upgrade
+
+The contracts-first order still holds, read for this shape: the version bump
+and lockfile are the first phase and must end green on their own; adapters for
+renamed or moved APIs come next; call sites follow in reviewable groups; test
+and fixture updates follow those; removal of the compatibility shims is the
+cleanup phase. Rolling back the first phase is reverting two files, which is
+why it is first.
+
+## Boundary
+
+Advisory identifiers, licence text, and changelog entries are read from what
+the user or the repository supplies; OMH fetches nothing. An upgrade plan is
+not an applied upgrade, a passing suite, or evidence that the advisory is
+resolved - the regenerated lockfile and a green run are separate observed
+evidence.
+"""
 
 
 def _refactor_phases_reference() -> str:
@@ -6101,7 +6737,84 @@ def _strategy_brief_reference_templates_cached() -> tuple[SkillReferenceTemplate
             "references/decision-records.md",
             _decision_records_reference(),
         ),
+        SkillReferenceTemplate(
+            "strategy-brief",
+            "references/capacity-planning.md",
+            _capacity_planning_reference(),
+        ),
     )
+
+
+def _capacity_planning_reference() -> str:
+    return """# Worked Example: Capacity Planning
+
+Hire, outsource, or cut scope is an options-tradeoffs-decision question, and
+this skill's frame already fits it. What it needs is the quantification,
+because the failure mode here is not a missing framework - it is a discussion
+where "the team is stretched" and "we could hire" are compared to each other
+without either being a number.
+
+## Quantify both sides in the same unit
+
+Pick one unit and hold it for the whole analysis. Person-weeks is usually the
+least arguable; story points are fine if the team already estimates in them and
+has a measured throughput.
+
+**Demand.** Every committed item with its estimate, plus the work that is not
+on the roadmap and always happens: support escalations, on-call, code review,
+interviewing, and the maintenance nobody plans. Take those from the last two
+quarters rather than from intention - the gap between planned and actual is
+frequently the whole finding, and a demand figure that omits them understates
+by a third or more in most teams.
+
+**Capacity.** Headcount times weeks, minus holiday, leave, onboarding time for
+anyone who joined in the window, and the fraction of senior time the other
+items above already consumed. Then subtract the capacity that is not fungible:
+a backend person cannot absorb a design backlog, so capacity that cannot reach
+the demand does not count against it.
+
+## The worked shape
+
+For one quarter, one team:
+
+| | Person-weeks |
+| --- | --- |
+| Committed roadmap | 52 |
+| Unplanned (from last two quarters' actuals) | 21 |
+| **Demand total** | **73** |
+| Headcount x weeks (5 x 13) | 65 |
+| Holiday, leave, onboarding | -9 |
+| **Capacity total** | **56** |
+| **Gap** | **17 person-weeks, 23% of demand** |
+
+A gap stated as a percentage of demand is what makes the three options
+comparable, because each one closes a different fraction of it at a different
+price and a different lag.
+
+## The three options, priced and lagged
+
+| Option | Closes | Lands in | Costs | Risk |
+| --- | --- | --- | --- | --- |
+| Hire | the gap permanently, once ramped | one to two quarters, counting ramp | salary plus the senior time recruiting and onboarding consume - which comes out of this quarter's capacity | the gap is worse before it is better |
+| Outsource | a bounded, specifiable slice | weeks | contract rate plus the internal time to specify and review | only works where the work can be handed over without the context that is not written down |
+| Cut scope | exactly what is cut | immediately | whatever the cut item was for | the only option that closes the gap this quarter, and the only one whose cost is a commitment to somebody |
+
+The comparison is the deliverable. Hiring to close a 17-week gap that exists
+this quarter does not close it this quarter; saying so is the analysis.
+
+## What the brief carries
+
+The demand and capacity figures with their sources, the gap as an absolute and
+a percentage, the three options priced and lagged, the recommendation, and the
+assumptions that would change it - most often the unplanned-work figure, which
+is the one drawn from actuals and the one most likely to be disputed.
+
+## Boundary
+
+Estimates, throughput figures, and the unplanned-work fraction come from what
+the user supplies or from records they point at. A capacity brief is a
+recommendation, not an approved hire, a signed contract, or a descoped roadmap.
+"""
 
 
 def _decision_records_reference() -> str:

@@ -167,8 +167,13 @@ NON_SKILL_BACKTICKS = frozenset(
 # retrospective half staying with `reliability-review` -- because that one line
 # is what sent an open outage to a postmortem. Three more cases, three more
 # pairs, two more owners.
-EXPECTED_DEFERENCE_CASES = 249
-EXPECTED_DEFERENCE_PAIRS = 262
+# `strategy-brief` gains one statement handing the hiring PROCESS -- scorecards,
+# interview loops, candidate comparison -- to `people-ops`, because the
+# capacity-planning example it now carries answers whether to hire and stops
+# there (#1580). One case, one pair, no new owner: `strategy-brief` already
+# defers to `product-discovery-validation`.
+EXPECTED_DEFERENCE_CASES = 250
+EXPECTED_DEFERENCE_PAIRS = 263
 EXPECTED_DEFERRING_OWNERS = 72
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,

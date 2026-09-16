@@ -42,6 +42,9 @@ COLLISION_RATIONALES: dict[str, str] = {
     "R-ACCESSIBILITY-SURFACE": (
         "Accessibility is a real concern of both the visual frontend surface and the voice operator surface."
     ),
+    "R-GENERATED-FILE-SENSE": (
+        "A generated file is two things: the PDF somebody produced and wants attached, which is the delivery lane's, and a checked-in artifact whose source of truth is a generator, which is the verification gate's. The words are identical and the sense is decided by whether the sentence also asks where the file came from, so both own the phrase and `generated_artifact_provenance_before_deliverable_package` separates them."
+    ),
     "R-LAYOUT-DEFECT-INTAKE": (
         "A reported broken layout is legitimately either a frontend fix or a visual-QA verification request."
     ),
@@ -103,6 +106,7 @@ INTENTIONAL_COLLISIONS: tuple[CollisionDeclaration, ...] = (
     CollisionDeclaration(identity="end-to-end process", owners=("ultraprocess", "ultrawork",), rationale_id="R-DELIVERY-CYCLE"),
     CollisionDeclaration(identity="feedback trends", owners=("feedback-triage", "research-brief",), rationale_id="R-FEEDBACK-SIGNAL"),
     CollisionDeclaration(identity="finish until done", owners=("ralph", "ultrawork",), rationale_id="R-PERSISTENT-EXECUTION"),
+    CollisionDeclaration(identity="generated file", owners=("deliverable-package", "verification-gate",), rationale_id="R-GENERATED-FILE-SENSE"),
     CollisionDeclaration(identity="issue triage", owners=("github-event-ops", "plan",), rationale_id="R-ISSUE-INTAKE"),
     CollisionDeclaration(identity="layout broken", owners=("frontend", "visual-qa",), rationale_id="R-LAYOUT-DEFECT-INTAKE"),
     CollisionDeclaration(identity="make a pr", owners=("ultraprocess", "ultrawork",), rationale_id="R-DELIVERY-CYCLE"),

@@ -1269,7 +1269,8 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Use when: Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.
 - Do not use when:
   - The strategic question is whether an early idea's customer problem and segment are real, and no validated discovery receipt exists yet; use `product-discovery-validation`.
-- Strong routing signals: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`, `decision note`, `leadership strategy`, `next strategy`, `다음 전략`, `전략 정리`, `전략 메모`, `전략 옵션`, `의사결정`, `리더십 회의`
+  - The question is how to run a hiring process — scorecards, interview loops, candidate comparison — rather than whether to hire at all; use `people-ops`.
+- Strong routing signals: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`, `decision note`, `leadership strategy`, `next strategy`, `capacity planning`, `hire or outsource`, `outsource or hire`, `cut scope`, `headcount plan`, `demand versus capacity`, `다음 전략`, `전략 정리`, `전략 메모`, `전략 옵션`, `의사결정`, `리더십 회의`
 - Good example:
   - Prompt: strategy-brief: decide whether our onboarding should prioritize solo founders or enterprise buyers.
   - Expected behavior: Frame options, tradeoffs, assumptions, rejected paths, and the decision evidence needed.
@@ -1282,6 +1283,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name the decision, constraints, options, tradeoffs, and rejected alternatives.
   - Tie recommendations to observed evidence or mark them as assumptions.
   - Keep coding handoff disabled until strategy is accepted and code work is explicit.
+  - When the decision is a resourcing one — hire, outsource, or cut scope — quantify demand and capacity against each other in one unit before comparing options, and price each option with the lag before it lands; a gap that exists this quarter is not closed by a hire that ramps next quarter. The worked example is `omh-decide/references/capacity-planning.md`.
   - Ask whether the decision deserves a durable record - hard to reverse, surprising without its context, and carrying a real trade-off; all three or no record, a decision note in chat is enough.
   - When a record is warranted, draft it per `omh-decide/references/decision-records.md` - the `docs/adr/` convention with Context, Drivers, Considered Options, Decision, Consequences with mitigations, and Related - and stop for the user's approval before any file is written.
   - Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record is kept - it is what `decision-recall` reads later.
@@ -1629,7 +1631,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The review is about code, secrets, permissions, prompt injection, dependencies, or unsafe tool behavior; use `security-safety-review`.
   - The request is a plain-language rewrite without a legal-risk review objective; use `content-operator`.
   - The user asks to sign, accept, submit, file, publish, or change a policy or contract in an external system; use `connector-operator` only after explicit authority.
-- Strong routing signals: `contract review`, `contract liability clause`, `regulatory analysis`, `compliance review`, `계약서 검토`, `규제 분석`, `컴플라이언스 검토`
+- Strong routing signals: `contract review`, `contract liability clause`, `regulatory analysis`, `compliance review`, `contract redline`, `redline the contract`, `negotiation preparation`, `negotiation strategy`, `clause language`, `counterparty position`, `계약서 검토`, `규제 분석`, `컴플라이언스 검토`
 - Good example:
   - Prompt: Review this vendor DPA for data-processing obligations, risky clauses, and questions for counsel.
   - Expected behavior: Prepare an authority-bound issue matrix, ranked risks, and counsel questions.
@@ -1641,6 +1643,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Quality bar:
   - Name jurisdiction, authority, document version, and unresolved questions.
   - Rank issues and preserve the counsel-escalation boundary.
+  - For a redline objective, tie every proposed clause to the playbook position it came from and carry its fallback and walk-away, so the negotiator sees what is being traded; an open counsel hold on a clause blocks its row rather than producing a proposal — load `references/negotiation-preparation.md` for the row shape and the concession-order rules.
 - Completion checklist:
   - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
   - Open questions, residual risk, and missing verification are named.
@@ -1670,12 +1673,15 @@ These surfaces are generated command references, not installed Hermes workflow s
   - legal_scope_authority_record/v1
   - legal_issue_traceability_matrix/v1
   - legal_risk_counsel_hold_register/v1
+  - legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment
   - legal_review_disposition/v1
 - Artifact expectations:
   - prepared legal and compliance issue matrix when a wrapper captures it
+  - legal_negotiation_preparation/v1 with one row per contested clause: the playbook position it came from, the proposed language, the fallback, and the walk-away, plus the concession order across rows
 - Safety rules:
   - Distinguish supplied authority from legal interpretation and final advice.
   - Do not claim sign-off, certification, filing, execution, or regulator communication.
+  - Proposed clause language is preparation material for the person who will negotiate, never advice about whether to accept it; a row whose playbook position cannot be cited is a counsel question, not a proposal.
 - Procedure checks:
   - `legal_scope_facts_instruments_check`
     - Required result fields: `actors_roles`, `operative_facts`, `instrument_set`, `order_of_precedence`, `governing_law_forum`, `regulatory_jurisdictions`, `execution_effective_as_of_dates`, `assumptions_blockers`
@@ -1689,6 +1695,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - `legal_counsel_hold_check`
     - Required result fields: `trigger_ids`, `impact`, `likelihood_applicability`, `urgency`, `evidence_confidence`, `reversibility`, `hold_status`, `counsel_owner`
     - Criterion: Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, and sensitive, high-risk or cross-border privacy or DPIA uncertainty.
+  - `legal_negotiation_preparation_check`
+    - Required result fields: `playbook_position`, `gap`, `proposed_language`, `fallback_position`, `walk_away_trigger`, `concession_order`, `counsel_hold_state`
+    - Criterion: Every proposed clause traces to a cited playbook position and carries its fallback and walk-away; a row whose position cannot be cited becomes a counsel question, an open hold blocks its row, and the concession order states which rows are linked.
   - `legal_final_determination_guard`
     - Required result fields: `invented_authority_status`, `stale_authority_status`, `unresolved_triggers`, `disposition`
     - Criterion: Fail closed on absent, fabricated, stale, superseded or unverified authority; invent no citation, holding, requirement or compliance conclusion and issue no final determination while a hold remains open.
@@ -1713,6 +1722,11 @@ These surfaces are generated command references, not installed Hermes workflow s
     - Output refs: `legal_risk_counsel_hold_register/v1`
     - Check IDs: `legal_counsel_hold_check`
     - Instruction: Rank impact, applicability, urgency, confidence and reversibility, then impose mandatory counsel holds and owners for every triggered high-risk or authority-sensitive issue.
+  - `legal_prepare_negotiation_positions` (`production`)
+    - Input refs: `document or process version`, `supplied authority`, `review objective`
+    - Output refs: `legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment`
+    - Check IDs: `legal_negotiation_preparation_check`, `legal_counsel_hold_check`
+    - Instruction: When the objective is a redline, build one row per contested clause -- playbook position, gap, proposed language, fallback, walk-away, counsel-hold state -- then rank the concession order by what is lost and name the linked rows; prepare nothing for a clause whose hold is open.
   - `legal_validate_disposition` (`validation`)
     - Input refs: `jurisdiction`, `document or process version`, `supplied authority`, `review objective`
     - Output refs: `legal_review_disposition/v1`
@@ -2949,7 +2963,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is a security posture or threat review rather than a service design; use `security-safety-review`.
   - The request is to run or judge the verification of an already-built service; use `verification-gate`.
   - The request is a Rust-language change whose risk is compiler, ownership, or `unsafe` discipline; use `rust`.
-- Strong routing signals: `backend`, `back-end`, `back end`, `backend skill`, `server side`, `server-side`, `api design`, `api contract`, `rest api`, `graphql api`, `grpc service`, `endpoint design`, `auth boundary`, `authentication flow`, `authorization rules`, `idempotency key`, `pagination contract`, `database schema`, `postgres schema`, `schema migration`, `db migration`, `orm mapping`, `connection pool`, `message queue`, `webhook handler`, `バックエンド`, `エンドポイント設計`, `認証フロー`, `スキーマ移行`, `백엔드`, `서버 개발`, `서버 api`, `api 설계`, `인증 흐름`, `권한 체크`, `디비 스키마`, `db 스키마`, `스키마 마이그레이션`, `엔드포인트 설계`, `后端`, `後端`, `接口设计`, `认证流程`, `数据库迁移`
+- Strong routing signals: `backend`, `back-end`, `back end`, `backend skill`, `server side`, `server-side`, `api design`, `api contract`, `rest api`, `graphql api`, `grpc service`, `endpoint design`, `auth boundary`, `authentication flow`, `authorization rules`, `idempotency key`, `pagination contract`, `database schema`, `postgres schema`, `schema migration`, `db migration`, `orm mapping`, `connection pool`, `message queue`, `webhook handler`, `openapi`, `openapi spec`, `deprecate endpoint`, `deprecate this endpoint`, `deprecation window`, `sunset date`, `sunset schedule`, `api versioning`, `breaking api change`, `バックエンド`, `エンドポイント設計`, `認証フロー`, `スキーマ移行`, `백엔드`, `서버 개발`, `서버 api`, `api 설계`, `인증 흐름`, `권한 체크`, `디비 스키마`, `db 스키마`, `스키마 마이그레이션`, `엔드포인트 설계`, `后端`, `後端`, `接口设计`, `认证流程`, `数据库迁移`
 - Good example:
   - Prompt: Design a REST API with a Postgres schema and migrations for the billing service.
   - Expected behavior: Prepare backend_service_contract/v1, auth_boundary_map/v1, error_path_table/v1, response_shape_contract/v1, and schema_migration_plan/v1, then hand off with the per-stack reference named.
@@ -2963,6 +2977,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Load `references/service-contract.md` and fill the auth boundary, error-path table, and response-shape rules from it rather than improvising a per-endpoint shape.
   - When the change touches storage, load `references/schema-migration.md` and order the migration as expand, backfill, switch, contract, with the rollback point named per step.
   - Hold the `api` product-family expectations — authentication boundary, contract error paths, response consistency — as the standing bar for every prepared endpoint.
+  - When an existing contract changes, name who consumes it before designing the change: each identified consumer with what breaks for it, then the compatibility window, migration path, and sunset date — the skill that owns a surface owns its evolution. Load `references/consumer-impact.md` for the enumeration sources and the window rules.
   - Name the per-stack reference the executor must read first; the stack is a routing input, not a detail discovered mid-implementation.
   - Keep implementation, migration application, integration runs, load testing, and deployment as observed-only evidence.
 - Completion checklist:
@@ -2971,6 +2986,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The error_path_table/v1 covers each failure mode with status, body shape, retryability, and redaction rule.
   - The response_shape_contract/v1 is consistent across endpoints rather than per-endpoint improvisation.
   - Storage changes carry an expand/backfill/switch/contract order with a rollback point per step.
+  - A change to an existing contract carries its consumer list or an explicit `consumers_not_enumerable`, plus the compatibility window, migration path, and sunset date.
   - The handoff names the executor, the stack, and the per-stack reference to load first.
   - Implementation, migrations, integration runs, and deployment stay observed-only.
 - Recovery notes:
@@ -2990,6 +3006,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - error_path_table/v1
   - response_shape_contract/v1
   - schema_migration_plan/v1 when the change touches storage
+  - consumer_impact_and_sunset/v1 when an existing contract changes
   - backend_implementation_handoff/v1
   - observed_integration_evidence/v1 when observed
 - Artifact expectations:
@@ -2998,12 +3015,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - error_path_table/v1 pairs every failure mode with its status/code, body shape, retryability, and log/redaction rule
   - response_shape_contract/v1 keeps success and error envelopes consistent across the surface instead of per-endpoint improvisation
   - schema_migration_plan/v1 orders expand, backfill, switch, and contract steps with the rollback point for each
+  - consumer_impact_and_sunset/v1 lists each identified consumer with what breaks for it, then the compatibility window, the migration path, and the sunset date; a consumer set that could not be enumerated is reported as `consumers_not_enumerable` with the reason, never as zero breakage
   - integration runs, applied migrations, load numbers, and deployment only when observed
 - Safety rules:
   - Do not claim implementation, a running service, an applied migration, a passing integration suite, or a deployment from a prepared backend contract.
   - Require the auth boundary before endpoint work: an endpoint whose caller trust level is unnamed is not ready for handoff.
   - Require the error-path table before the happy path is called complete; an unlisted failure mode is a gap, not a default.
   - Treat a destructive or non-reversible migration step as a blocker until an explicit rollback point and backfill order exist.
+  - Report an unenumerable consumer set as `consumers_not_enumerable` with what was searched; consumers outside the repository are unknowable from it, and an empty list is a claim that nothing breaks.
   - Never place secrets, tokens, or connection strings in the contract, examples, or handoff text.
   - Do not call databases, HTTP services, LLM, or network endpoints from OMH core.
 
@@ -3597,7 +3616,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user asks for visual render QA; use `visual-qa`.
   - The user asks for production release readiness beyond verification commands; use `production-audit`.
   - The user wants a bug-first code review of a diff; use `code-review`.
-- Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`
+- Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`
 - Good example:
   - Prompt: verification-gate 이 PR 머지 전에 build/lint/test/docs/CI 증거를 정리해서 PASS 가능한지 봐줘.
   - Expected behavior: Prepare verification_matrix/v1, record observed_check_results/v1, and issue PASS/HOLD/BLOCK with missing evidence.
@@ -3608,6 +3627,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: A verification gate is useful only if planned checks and observed results stay separate.
 - Quality bar:
   - Tie every completion claim to the smallest check that proves it, then broaden for shared surfaces.
+  - When a diff touches a declared generated path, name its source of truth and regeneration command before the edit rather than after a byte gate rejects it; a diff touching a generator and its output together is the correct shape, not a violation — load `references/generated-artifact-provenance.md` for the declaration and reporting rules.
   - Record command/source, freshness, exit status, and scope for each observed result.
   - Return PASS only when required checks pass and stale or missing evidence is resolved.
   - Keep fixes, reruns, review, CI, and merge as separate observed states.
@@ -3626,6 +3646,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Expected outputs:
   - verification_gate_plan/v1
   - verification_matrix/v1
+  - generated_artifact_provenance/v1 when the change touches a path the repository declares generated
   - observed_check_results/v1 when observed
   - claim_verdict/v1
   - rerun_or_blocker/v1
@@ -3634,8 +3655,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable
   - observed_check_results/v1 with command, timestamp/source, exit status, summary, and stale-output flag
   - claim_verdict/v1 with PASS, HOLD, or BLOCK and exact missing or failed checks
+  - generated_artifact_provenance/v1 with one row per touched generated path: the source of truth that produces it, the regeneration command, and the drift gate that catches it, or the single state `map_not_declared` when the repository declares no generated-artifact map
 - Safety rules:
   - Do not treat a planned command, stale output, green local check, or prepared handoff as fresh verification evidence.
+  - Read generated paths from a map the repository declares; where none exists report `map_not_declared` and never infer one from filename patterns, directory names, or a generated-file header, because a false positive redirects correct work while the miss it prevents only costs a rerun.
   - Do not collapse build, lint, tests, security, generated docs, review, CI, DCO, merge-readiness, or merge into one claim.
   - Failed or unavailable checks must produce HOLD/BLOCK with a rerun or remediation path.
   - A change touching an authentication, secrets/config, schema/migration, or payment/crypto path escalates to the thorough verification lane regardless of diff size.
@@ -4014,6 +4037,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate durable requirements, volatile status, file refs, verification evidence, and open blockers.
   - Define checkpoint cadence, overflow recovery, and continuity verification.
   - Use bounded copy while preserving the full objective and evidence gaps.
+  - Count the must-keep pack by item class, so a replaced pack reports which class lost entries instead of only that a digest moved; a pack that recorded no classes reports the comparison unavailable and never reports zero items.
   - Keep prompt-prefix placement cache-stable: fixed section order, volatile bytes never above the fold, mid-run changes as appended messages never system-prompt mutations — load `references/cache-placement.md` for the placement rules.
 - Completion checklist:
   - The run or workflow scope, metric window, failure modes, and cost/latency boundary are named.
@@ -4030,6 +4054,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Expected outputs:
   - context_budget_plan/v1
   - must_keep_context_pack/v1
+  - must_keep_item_class_delta/v1 when a pack replaces an earlier one
   - summarization_checkpoint_plan/v1
   - budget_risk_register/v1
   - overflow_recovery_route/v1
@@ -4037,6 +4062,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Artifact expectations:
   - context_budget_plan/v1 with scope, max visible context, source priority, discard rules, and checkpoint cadence
   - must_keep_context_pack/v1 with durable facts, file refs, decisions, PR/CI state, and blocked assumptions
+  - must_keep_item_class_delta/v1 naming the item class that lost entries rather than reporting a digest difference, over the closed vocabulary prohibitions, decisions, open_questions, requirements, paths, pr_state, verification_gaps
   - summarization_checkpoint_plan/v1 with when to compact, what to preserve, and how to verify continuity
   - budget_risk_register/v1 separating estimated cost/token/latency risk from provider-observed truth
 - Safety rules:
@@ -4068,7 +4094,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user asks for merge verification commands; use `verification-gate`.
   - The user asks for a normal code review focused on bugs; use `code-review`.
   - The subject is an application or service rather than the agent's own runtime -- its assets, trust boundaries, attack scenarios, and the controls that defend them; use `application-threat-model`.
-- Strong routing signals: `security-safety-review`, `security safety review`, `ai coding safety`, `agent safety review`, `prompt injection review`, `tool permission review`, `secret exposure review`, `destructive action review`, `supply chain safety`, `sandbox safety`, `plugin risk audit`, `Hermes plugin audit`, `local plugin guard`, `보안 안전 검토`, `에이전트 안전`, `프롬프트 인젝션`, `시크릿 노출`, `파괴적 명령`
+- Strong routing signals: `security-safety-review`, `security safety review`, `ai coding safety`, `agent safety review`, `prompt injection review`, `tool permission review`, `secret exposure review`, `destructive action review`, `supply chain safety`, `sandbox safety`, `plugin risk audit`, `Hermes plugin audit`, `local plugin guard`, `key rotation`, `secret rotation`, `credential rotation`, `certificate rotation`, `rotate the api key`, `rotate this api key`, `rotate the credentials`, `revoke the old key`, `보안 안전 검토`, `에이전트 안전`, `프롬프트 인젝션`, `시크릿 노출`, `파괴적 명령`
 - Good example:
   - Prompt: security-safety-review 이 자동화가 프롬프트 인젝션, 시크릿, 파괴적 명령 위험이 있는지 봐줘.
   - Expected behavior: Prepare threat_surface_map/v1, permission/secret risk matrix, prompt injection review, safe action policy, and remediation handoff if needed.
@@ -4081,6 +4107,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name the target, trust boundary, allowed actions, and risk tolerance before reviewing.
   - Separate prompt, tool, secret, dependency, network, and destructive-action risks.
   - Use redacted evidence and concrete remediation handoffs rather than broad fear language.
+  - Order a credential replacement issue-new, deploy-new, verify-new, revoke-old, verify-revoked, and name what breaks if the order changes; revocation is proven by a call that fails with the old credential, never by the revoke command's exit status, which reports that the request was accepted. Load `references/credential-rotation.md` for the overlap window and the per-credential-type steps.
   - Return PASS, HOLD, or BLOCK with missing evidence and confirmation requirements.
 - Completion checklist:
   - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
@@ -4102,6 +4129,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - safe_action_policy/v1
   - plugin_risk_audit/v1 for one explicitly named local plugin directory
   - remediation_handoff/v1 when needed
+  - credential_rotation_sequence/v1 when a live credential must be replaced
   - not-evidence boundary
 - Artifact expectations:
   - threat_surface_map/v1 with prompts, tools, files, dependencies, credentials, network, destructive actions, and external services
@@ -4109,6 +4137,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - prompt_injection_risk_review/v1 with untrusted input boundaries and tool-use constraints
   - safe_action_policy/v1 with allowed, confirmation-gated, blocked, and observed-only actions
   - plugin_risk_audit/v1 with bounded aggregate local risk categories and no source disclosure
+  - credential_rotation_sequence/v1 attached to remediation_handoff/v1, ordering issue-new, deploy-new, verify-new, revoke-old, verify-revoked, with the overlap window and the operator who runs each step
 - Artifact contract enforcement:
   - This label denotes the machine-enforcement level, not a skill quality score and not an observed evidence state.
   - contract_id: `security_safety_review_plan/v1`; enforcement_level: `guidance_only`; consumer_id: `none`
@@ -4118,6 +4147,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Do not claim vulnerability absence, sandbox safety, credential validity, or dependency safety without observed tool or source evidence.
   - Treat untrusted prompts, downloaded files, generated commands, and external config as untrusted until reviewed.
   - An explicit local plugin risk audit reads bounded source metadata only; it must not import, register, execute, install, or activate a plugin.
+  - A rotation sequence is the operator's to run: OMH issues, deploys, and revokes nothing, and a delivered sequence is never a rotation that happened.
 
 ### automation-blueprint
 
@@ -4152,6 +4182,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Expected behavior: Ask for observed Hermes/gateway delivery evidence or report the delivery as not_observed instead of claiming it happened.
   - Why: A blueprint can prepare the scheduled operation, but it cannot prove runtime execution or delivery.
 - Quality bar:
+  - Recommend one of cron, heartbeat, loop, and native goal, say why the other three lost, and carry its stop condition; a recommendation with no stop condition is not an answer, because what ends it is the only thing that separates the four — load `references/recurring-surface-choice.md` for the comparison, retry, and delivery rules.
   - Name cadence/timezone uncertainty, delivery target, silence/no-change rule, selected skills, and context chain.
   - When the recurring work is saved, say it is paused and name what activation needs: explicit overlap, missed-run, retry, backfill, and failure-pause decisions, an approval reference, and an observer from the approved runtime surface.
   - Before activation, say what the policy does when a prior run is still active, when a window is missed, and when failures repeat; after a safety pause, report the applied policy and that resuming needs a policy revision.
@@ -4171,12 +4202,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - silence/no-change preference
 - Expected outputs:
   - hermes_ops_blueprint/v1 projection
+  - recurring_surface_comparison/v1 naming the recommended surface and why the other three lost
   - hermes_recurring_intent/v1 paused lifecycle record when the user wants the recurring work saved
   - schedule/delivery/silence confirmation needs
   - status-card boundary
   - not-evidence list
 - Artifact expectations:
   - hermes_ops_blueprint/v1 under .omh/hermes-ops/blueprints when a wrapper or CLI records it
+  - recurring_surface_comparison/v1 with the recommended surface among cron, heartbeat, loop, and native goal, its stop condition, and a per-surface reason the other three were not chosen
   - hermes_recurring_intent/v1 under .omh/hermes-ops/recurring-intents when the user asks to save the recurring work
 - Safety rules:
   - Do not claim host cron, Hermes automation, gateway delivery, source retrieval, no-agent execution, plugin load, or connector work from a prepared blueprint.
@@ -4949,7 +4982,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The refactor's direction is still contested or the goal itself needs consensus planning; use `ralplan`.
   - The work is deletion-first cleanup with no boundary changes; use `ai-slop-cleaner`.
   - The plan is done and the claim is that work is complete; use `verification-gate` for the evidence close.
-- Strong routing signals: `refactor-plan`, `refactor plan`, `plan this refactor`, `plan the refactor`, `refactor planning`, `refactor phases`, `phased refactor`, `refactor in phases`, `refactor rollback plan`, `blast radius`, `module restructure plan`, `restructure plan`, `리팩터링 계획`, `리팩토링 계획`, `리팩터링 단계`, `단계별 리팩터링`, `리팩터링 계획 세워줘`, `리팩터링 롤백 계획`
+- Strong routing signals: `refactor-plan`, `refactor plan`, `plan this refactor`, `plan the refactor`, `refactor planning`, `refactor phases`, `phased refactor`, `refactor in phases`, `refactor rollback plan`, `blast radius`, `module restructure plan`, `restructure plan`, `dependency upgrade`, `major version upgrade`, `framework upgrade`, `upgrade to the next major`, `breaking change upgrade`, `lockfile`, `리팩터링 계획`, `리팩토링 계획`, `리팩터링 단계`, `단계별 리팩터링`, `리팩터링 계획 세워줘`, `리팩터링 롤백 계획`
 - Good example:
   - Prompt: We decided to split the billing module out of orders - plan the refactor so each step is shippable.
   - Expected behavior: Map affected files and consumers from the import graph, name hidden coupling and blast radius, order the five phases with per-phase verification and rollback, ship the files table, and stop at the approval gate.
@@ -4963,6 +4996,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Order phases contracts-first: types and interfaces, then implementations, then callers in reviewable groups, then tests, then cleanup - and name what verifies each phase and where it rolls back to.
   - Ship the files table with the plan: one row per file with action, phase, and blocks/blocked-by; a row without a phase is unplanned work.
   - Size verification to the blast radius, not to optimism: a phase touching public surfaces or persisted shapes carries the full gate, not the fast one.
+  - For a dependency or framework upgrade, read four inputs before ordering phases — advisory and end-of-life intake, the licence delta at the target version, the upstream migration guide item by item against this codebase, and lockfile handling in the same commit as the manifest; a breaking change nobody checked is a gap, not a pass. The full contract is `omh-refactor-plan/references/dependency-upgrade.md`.
   - Stop at the approval gate and hand the user the go/no-go, whole plan or first phase.
 - Completion checklist:
   - Reconnaissance names affected files, boundaries, coupling, and blast radius from observed evidence.
@@ -4978,7 +5012,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - the affected-file evidence: import graph, codegraph handoff, or an observed file inventory
   - the regression gates that exist today (test suite, typecheck, generated-artifact checks)
 - Expected outputs:
-  - reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius
+  - reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius — and for an upgrade, the advisory, licence, migration-guide, and lockfile intake
   - phase plan in the fixed order - types/interfaces, implementations, callers, tests, cleanup - each with verification and rollback
   - files table: path, action, phase, blocks/blocked-by
   - the approval gate: the plan stops and waits for the user's go
@@ -7919,7 +7953,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The request is already handled by a narrower explicit skill with stronger evidence.
   - The user asks OMH to secretly run external platforms, connectors, schedulers, file exports, or runtime agents.
   - The only safe answer is to ask for missing authority, credentials, target, or observed evidence first.
-- Strong routing signals: `external-connector-readiness`, `external connector readiness`, `connector readiness matrix`, `plugin readiness matrix`, `provider readiness`, `api readiness`, `connector adoption`, `external plugin adoption`, `weather plugin readiness`, `weather connector readiness`, `wxtrain readiness`, `onequery read-only sql`, `read-only sql connector`, `sql connector readiness`, `nextcloud connector`, `microsoft workspace connector`, `microsoft graph connector`, `chainlink connector`, `solana connector`, `monero gateway`, `xmr gateway`, `private crypto transaction`, `private cryptocurrency connector`, `crypto transaction plugin`, `blockchain gateway`, `composio connector`, `composio universal cli`, `universal cli connector`, `universal cli skill adoption`, `skill connector adoption`, `connector auth risk`, `connector cost auth risk`, `agentchat connector`, `peer-to-peer agent messaging connector`, `websocket identity connector`, `websocket connector trial`, `clawsocial connector`, `social discovery connector`, `windy pairing`, `windymail mailbox connector`, `matrix chat identity`, `antigravity cli connector`, `agy cli bridge`, `agy bridge connector`, `macos keychain oauth connector`, `oracle oci connector`, `oracle genai connector`, `miniverse bridge`, `crustocean platform connector`, `cost-aware connector`, `multimodal connector`, `multimodal routing`, `screenshot connector`, `audio connector`, `video connector`, `video generation`, `generate a video`, `product demo video`, `text to video`, `home assistant connector`, `home assistant integration`, `home assistant device control`, `home assistant smart home`, `smart home connector`, `device control connector`, `plugin auto-routing`, `connector auto-routing`, `external tool trial`, `memory provider readiness`, `memory provider posture`, `memory provider lifecycle`, `memory provider adoption`, `memory provider retention`, `memory provider portability`, `memory provider sync failure`, `compare memory providers`, `memory provider comparison`, `switch memory provider`, `switching memory providers`, `disable memory provider`, `delete provider memory`, `export memory provider data`, `realtime voice connector`, `real-time voice connector`, `realtime voice readiness`, `realtime voice trial`, `realtime voice stack`, `voice connector readiness`, `voice connector trial`, `voice gateway readiness`, `voice gateway trial`, `voice agent connector readiness`, `voice trial receipt`, `voice turn integrity`, `voice turn receipt`, `barge-in behavior`, `barge-in handling`, `voice tool safety`, `spoken tool safety`, `커넥터 준비도`, `외부 커넥터 준비`, `외부 플러그인 채택`, `플러그인 준비도`, `커넥터 도입`, `플러그인 도입`, `비용 인증 리스크`, `인증 리스크`, `도입 비용`, `비용 기준 커넥터`, `자동 라우팅`, `멀티모달 커넥터`, `멀티모달 라우팅`, `영상 생성`, `제품 데모 영상`, `홈 어시스턴트 커넥터`, `홈 어시스턴트 연동`, `홈 어시스턴트 기기 제어`, `홈 어시스턴트 스마트홈`, `홈어시스턴트 커넥터`, `홈어시스턴트 연동`, `홈어시스턴트 기기 제어`, `홈어시스턴트 스마트홈`, `스마트홈 커넥터`
+- Strong routing signals: `external-connector-readiness`, `external connector readiness`, `connector readiness matrix`, `plugin readiness matrix`, `provider readiness`, `api readiness`, `connector adoption`, `external plugin adoption`, `weather plugin readiness`, `weather connector readiness`, `wxtrain readiness`, `onequery read-only sql`, `read-only sql connector`, `sql connector readiness`, `nextcloud connector`, `microsoft workspace connector`, `microsoft graph connector`, `chainlink connector`, `solana connector`, `monero gateway`, `xmr gateway`, `private crypto transaction`, `private cryptocurrency connector`, `crypto transaction plugin`, `blockchain gateway`, `composio connector`, `composio universal cli`, `universal cli connector`, `universal cli skill adoption`, `skill connector adoption`, `connector auth risk`, `connector cost auth risk`, `agentchat connector`, `peer-to-peer agent messaging connector`, `websocket identity connector`, `websocket connector trial`, `clawsocial connector`, `social discovery connector`, `windy pairing`, `windymail mailbox connector`, `matrix chat identity`, `antigravity cli connector`, `agy cli bridge`, `agy bridge connector`, `macos keychain oauth connector`, `oracle oci connector`, `oracle genai connector`, `miniverse bridge`, `crustocean platform connector`, `cost-aware connector`, `multimodal connector`, `multimodal routing`, `screenshot connector`, `audio connector`, `video connector`, `video generation`, `generate a video`, `product demo video`, `text to video`, `home assistant connector`, `home assistant integration`, `home assistant device control`, `home assistant smart home`, `smart home connector`, `device control connector`, `plugin auto-routing`, `connector auto-routing`, `external tool trial`, `memory provider readiness`, `memory provider posture`, `memory provider lifecycle`, `memory provider adoption`, `memory provider retention`, `memory provider portability`, `memory provider sync failure`, `compare memory providers`, `memory provider comparison`, `memory provider`, `memory provider trial`, `memory provider benchmark`, `memory provider migration`, `memory provider rollback`, `switch memory provider`, `switching memory providers`, `disable memory provider`, `delete provider memory`, `export memory provider data`, `realtime voice connector`, `real-time voice connector`, `realtime voice readiness`, `realtime voice trial`, `realtime voice stack`, `voice connector readiness`, `voice connector trial`, `voice gateway readiness`, `voice gateway trial`, `voice agent connector readiness`, `voice trial receipt`, `voice turn integrity`, `voice turn receipt`, `barge-in behavior`, `barge-in handling`, `voice tool safety`, `spoken tool safety`, `커넥터 준비도`, `외부 커넥터 준비`, `외부 플러그인 채택`, `플러그인 준비도`, `커넥터 도입`, `플러그인 도입`, `비용 인증 리스크`, `인증 리스크`, `도입 비용`, `비용 기준 커넥터`, `자동 라우팅`, `멀티모달 커넥터`, `멀티모달 라우팅`, `영상 생성`, `제품 데모 영상`, `홈 어시스턴트 커넥터`, `홈 어시스턴트 연동`, `홈 어시스턴트 기기 제어`, `홈 어시스턴트 스마트홈`, `홈어시스턴트 커넥터`, `홈어시스턴트 연동`, `홈어시스턴트 기기 제어`, `홈어시스턴트 스마트홈`, `스마트홈 커넥터`
 - Good example:
   - Prompt: external-connector-readiness compare weather plugin and wxtrain candidates with cost, freshness, multimodal evidence, and fallback routes before adoption.
   - Expected behavior: Produce `prepare_external_connector_readiness` with required context, wrapper actions, and not-evidence boundaries.
@@ -7932,6 +7966,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Name the user-facing workflow objective, required context, next action, and stop condition.
   - Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.
   - Expose missing tools, credentials, targets, or observations as user-visible gaps.
+  - Trial two or more memory providers on one corpus and one query set, never on each provider's own sample — load `references/memory-provider-trial.md` for the corpus, query, and reversibility rules.
 - Completion checklist:
   - Candidate connector, target domain, read/write scope, modality needs, provider owner, fallback workflow, and stop condition are explicit.
   - Cost, quota, credential, permission, live-data freshness, multimodal capture, safety, and compliance boundaries are marked ready, missing, risky, or not_observed.
@@ -7960,6 +7995,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - fallback_route_policy/v1
   - connector_trial_manifest/v1 when observed
   - memory_provider_posture/v1 when the candidate is an optional memory provider
+  - memory_provider_trial_comparison/v1 when two or more memory providers are trialled on one corpus
   - realtime_voice_trial_receipt/v1 when a supplied realtime voice trial is observed
   - realtime_voice_readiness/v1 verdict per voice dimension when a receipt is supplied
   - next action
@@ -7972,6 +8008,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - multimodal_routing_policy/v1 for screenshot, audio, video, file, OCR, or visual QA evidence routes when needed
   - connector_trial_manifest/v1 only when a provider response, capture id, query transcript, message id, or tool-call observation is recorded
   - memory_provider_posture/v1 for an optional memory provider, covering identity scope, automatic hooks, storage boundary, synchronization, failure, retention, deletion, export/import, backup/restore, and portability, each marked ready, missing, risky, not_observed, or unknown
+  - memory_provider_trial_comparison/v1 built on the connector_trial_manifest/v1 pattern: one corpus and one query set per candidate, retrieval quality, latency, and cost each reported per provider or marked not_observed, plus the migration route and the rollback that was exercised rather than asserted
   - realtime_voice_trial_receipt/v1 only when an authorized host, connector, or operator supplies the observed trial: connector build identity, requested versus observed stack, per-turn milestones on one declared timing reference, turn-integrity states, fallback path, interruption behavior, and spoken tool decisions
   - realtime_voice_readiness/v1 with a pass, hold, or block state and reasons for turn integrity, latency, fallback, interruption, and tool safety, plus the separated connector-configured, synthetic-trial, actual-environment-trial, voice-turn, tool-action, and session-completed states
 - Safety rules:
@@ -7983,6 +8020,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - A realtime voice verdict comes only from a supplied realtime_voice_trial_receipt/v1. OMH opens no microphone, call, room, socket, or provider session, installs no connector, downloads no voice model, and authorizes no tool from a receipt.
   - A synthetic voice fixture never proves the intended room, microphone, network, or telephony path, and a fallback path succeeding is never success for the requested voice stack, provider, or model.
   - Generic connector, voice-input, and media-input records are not realtime voice readiness; a turn that lost its onset, split, merged, dispatched twice, truncated, or replayed after audible output blocks the verdict rather than reporting latency.
+  - A memory-provider trial reports retrieval quality, latency, and cost per candidate only from host-supplied observation; a dimension nobody measured is not_observed, never a default or a zero, and a corpus is never copied into the record.
+  - A rollback is proven by exercising it during the trial and recording what came back; a documented rollback path is prepared, not reversible.
 
 ### prompt-import-readiness
 

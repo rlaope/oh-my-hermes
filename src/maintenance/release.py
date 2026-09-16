@@ -246,7 +246,45 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # that lane reviews incident notes after the fact. One new capability section
 # for one new workflow plus the reciprocal boundary lines in the three siblings
 # it hands back to; not per-section padding, warranted growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 425447
+# 425447 -> 425489: `context-budget-review` names `must_keep_item_class_delta/v1`
+# among its outputs (#1572), so the capability section renders one more declared
+# output line. The item-class vocabulary and the unavailable-versus-empty rule
+# are artifact expectations and a quality bar, not section text; warranted
+# growth.
+# 425489 -> 425832: `automation-blueprint` declares `recurring_surface_comparison/v1`
+# and the rule that a recurring recommendation carries its stop condition
+# (#1570). The four-way table, the retry axes, and the delivery/silence rules
+# are `references/recurring-surface-choice.md`, outside this budget; warranted
+# growth.
+# 425832 -> 426032: `external-connector-readiness` declares
+# `memory_provider_trial_comparison/v1` and the one-corpus rule (#1573). The
+# trial procedure, the three dimensions, and the exercised-rollback steps are
+# `references/memory-provider-trial.md`, outside this budget; warranted growth.
+# 426032 -> 426395: `verification-gate` declares
+# `generated_artifact_provenance/v1`, its `map_not_declared` state, and the
+# five generated-path triggers (#1575). The declaration sources, the row
+# fields, and the shapes that look like violations are
+# `references/generated-artifact-provenance.md`, outside this budget;
+# warranted growth.
+# 426395 -> 426477: `refactor-plan` names the upgrade intake among its
+# reconnaissance outputs and gains six upgrade triggers (#1576). The advisory,
+# licence, migration-guide, and lockfile procedures are
+# `references/dependency-upgrade.md`, outside this budget; warranted growth.
+# 426477 -> 426787: `security-safety-review` declares
+# `credential_rotation_sequence/v1` and its eight rotation triggers (#1578).
+# The five-step order, the overlap window, and the per-credential-type steps
+# are `references/credential-rotation.md`, outside this budget; warranted
+# growth.
+# 426787 -> 427396: `legal-compliance-review` declares
+# `legal_negotiation_preparation/v1` and six negotiation triggers, which also
+# render into the router's workflow registry (#1579). The row shape and the
+# concession-order rules are `references/negotiation-preparation.md`, outside
+# this budget; warranted growth.
+# 427396 -> 427563: `strategy-brief` gains one `do_not_use_when` line against
+# `people-ops` and six resourcing triggers, which also render into the router's
+# workflow registry (#1580). The worked figures are
+# `references/capacity-planning.md`, outside this budget; warranted growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 427563
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -955,7 +993,109 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # closed in one direction only, plus the new lane name on the
 # automation_and_status skills' Workflow Lane lines. Re-derived from the
 # full-profile skill_context_cost_payload() producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 976281
+# 976281 -> 976809: `context-budget-review` gains the one output, one artifact
+# expectation, and one quality bar that make a must-keep mismatch nameable
+# (#1572). A digest comparison could previously say only that something
+# changed, so the rule that a pack recording no classes reports the comparison
+# unavailable -- never zero items -- has to hold whether or not any reference is
+# open. Re-derived from the full-profile skill_context_cost_payload() producer,
+# never by adding deltas.
+# 976809 -> 977424: `automation-blueprint` gains the output and the one quality
+# bar that make "keep watching this for me" a choice among four surfaces rather
+# than whichever lane the sentence happened to reach (#1570). The body carries
+# only what must hold whether or not a reference is open: that one of cron,
+# heartbeat, loop, and native goal is recommended, that the other three are
+# named as rejected, and that a recommendation with no stop condition is not an
+# answer -- what ends each surface is the only thing separating them. The
+# comparison table, the four retry axes, and the silence rule are
+# `skills/omh-automation-blueprint/references/recurring-surface-choice.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+# 977424 -> 978537: `external-connector-readiness` gains the output, two safety
+# rules, and one quality bar that let a person compare memory providers on
+# their own material (#1573). It folds into this skill rather than a new one
+# because a provider is a connector with a declared posture and the
+# `connector_trial_manifest/v1` pattern already exists; a second trial shape
+# would drift from it. The body carries only what must hold whether or not a
+# reference is open: one corpus and one query set across candidates, a
+# dimension nobody measured reported as `not_observed` rather than zero, and a
+# rollback proven by running it. The trial procedure, the three dimensions and
+# their reporters, and the four migration steps are
+# `skills/omh-external-connector-readiness/references/memory-provider-trial.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+# 978537 -> 979647: `verification-gate` gains the output, the never-infer
+# safety rule, and the one quality bar that move a generated-path edit from
+# after the byte gate to before it (#1575). It folds here rather than becoming
+# a general engineering skill because a generic skill cannot know which files
+# are generated without a repo-declared map, and would pay a full always-loaded
+# body for a filename heuristic. The body carries the asymmetry that makes the
+# heuristic wrong: a false positive redirects correct work, a miss costs one
+# regeneration, so a repository declaring no map reports `map_not_declared`.
+# The declaration sources, the five row fields, and the generator-plus-output
+# shape that is correct rather than a violation are
+# `skills/omh-verification-gate/references/generated-artifact-provenance.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+# 979647 -> 980275: `refactor-plan` gains one quality bar and one widened
+# reconnaissance line for dependency and framework upgrades (#1576). It folds
+# here because the phased plan, per-phase verification, rollback point, files
+# table, and approval gate are already this skill's, and an upgrade is a
+# boundary-changing refactor whose direction was decided upstream. The body
+# carries only the four inputs an upgrade adds and the rule that a breaking
+# change nobody checked is a gap rather than a pass; the advisory, licence,
+# migration-guide, and lockfile procedures are
+# `skills/omh-refactor-plan/references/dependency-upgrade.md`, measured outside
+# this budget. Re-derived from the full-profile skill_context_cost_payload()
+# producer, never by adding deltas.
+# 980275 -> 981506: `backend` gains `consumer_impact_and_sunset/v1`, its
+# artifact expectation, one safety rule, one quality bar, and one final
+# checklist row (#1577). It folds here because splitting a contract from its
+# evolution across two skills is how the response shape and the deprecation
+# window drift apart. The body carries the rule a reader must not have to open
+# a reference to reach: an empty consumer list claims the search was complete,
+# so an unenumerable set is reported as `consumers_not_enumerable` with what
+# was searched. The enumeration sources, the per-change breakage grades, and
+# the window/path/date rules are
+# `skills/omh-backend/references/consumer-impact.md`, measured outside this
+# budget. Re-derived from the full-profile skill_context_cost_payload()
+# producer, never by adding deltas.
+# 981506 -> 982500: `security-safety-review` gains the output, its artifact
+# expectation, one safety rule, and one quality bar for replacing a live
+# credential (#1578). It folds here because the finding already lives in this
+# skill and the procedural scope is too narrow for a body ratchet of its own.
+# The body carries the two rules a reader must not have to open a reference to
+# reach: the five-step order, and that revocation is proven by a call that
+# fails with the old credential rather than by the revoke command's exit
+# status, which reports only that the request was accepted. The overlap
+# window, the what-breaks table, and the per-credential-type steps are
+# `skills/omh-security-safety-review/references/credential-rotation.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+# 982500 -> 983557: `legal-compliance-review` gains the redline output mode --
+# one artifact expectation, one safety rule, one quality bar -- plus the
+# triggers, which also reach the router's workflow registry (#1579). It folds
+# here because the authority-citation and counsel-hold machinery is what makes
+# a redline preparable at all, and duplicating it is how the two would drift.
+# The body carries the boundary that makes it foldable: proposed language is
+# preparation material for the person who will negotiate, never advice about
+# whether to accept a term, and an open counsel hold blocks a row rather than
+# producing a proposal. The row fields, the requires-a-playbook rule, and the
+# concession-order linkages are
+# `skills/omh-legal-compliance-review/references/negotiation-preparation.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+# 983557 -> 984191: `strategy-brief` gains one quality bar and one
+# `do_not_use_when` line for resourcing decisions (#1580). The framework was
+# already here -- options, tradeoffs, recommendation, decision note -- and the
+# failure was that the two sides were compared without either being a number,
+# so the body carries only the quantify-in-one-unit rule and the lag rule (a
+# gap that exists this quarter is not closed by a hire that ramps next
+# quarter). The worked figures, the three priced options, and the
+# unplanned-work caveat are `skills/omh-decide/references/capacity-planning.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 984191
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

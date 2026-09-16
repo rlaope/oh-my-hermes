@@ -4409,6 +4409,132 @@ _DELIVERABLE_PHRASES = (
     "첨부 상태",
     "전달 상태",
 )
+# "generated file" is two different things. To `deliverable-package` it is the
+# PDF somebody produced and wants attached; in a repository it is a checked-in
+# artifact whose source of truth is a generator. The words are identical, so
+# the sense is decided by whether the sentence also asks where the file came
+# from. Both halves are required: a provenance cue alone is an ordinary code
+# question, and the noun alone is the delivery sense the existing guard owns.
+# A dependency upgrade is a boundary-changing refactor with an upstream author,
+# but the sentence that asks for one says "upgrade", not "refactor", so
+# `refactor-plan` never offered itself. Complete phrases only: a bare `upgrade`
+# is a laptop, a plan, a seat, and a subscription tier, and `version` and
+# `major` are ordinary words everywhere else in this catalog.
+# Rotating a credential is a sequencing problem with a proof step, not a missing
+# tool. `toolbelt-readiness` owns "I do not have an API key"; this owns "I have
+# one and it has to be replaced while the service stays up". Both halves are
+# required: `rotate` alone turns an image, and `key` alone is a map legend.
+# A redline is always a redline OF something. `redline` is unambiguous inside a
+# work catalog and not in English -- crediting it alone sent "the engine is
+# running at the redline" to the legal lane -- so the markup word and the
+# document it marks up are both required.
+_CONTRACT_MARKUP_CUES = (
+    "redline",
+    "redlines",
+    "redlining",
+    "negotiat",
+    "concession",
+    "counterproposal",
+    "counter-proposal",
+    "fallback position",
+    "walk-away",
+    "walk away",
+    "레드라인",
+    "협상",
+)
+_CONTRACT_DOCUMENT_NOUNS = (
+    "contract",
+    "agreement",
+    "clause",
+    "clauses",
+    "terms",
+    "msa",
+    "nda",
+    "sow",
+    "dpa",
+    "playbook",
+    "amendment",
+    "addendum",
+    "계약",
+    "조항",
+    "약관",
+)
+_CREDENTIAL_ROTATION_VERBS = (
+    "rotate",
+    "rotating",
+    "rotation",
+    "revoke",
+    "revoking",
+    "revocation",
+    "교체",
+    "폐기",
+)
+_CREDENTIAL_ROTATION_SUBJECTS = (
+    "api key",
+    "api keys",
+    "access key",
+    "secret",
+    "secrets",
+    "credential",
+    "credentials",
+    "certificate",
+    "certificates",
+    "private key",
+    "signing key",
+    "token",
+    "tokens",
+    "password",
+    "passwords",
+    "api 키",
+    "인증서",
+    "자격 증명",
+)
+_DEPENDENCY_UPGRADE_PHRASES = (
+    "dependency upgrade",
+    "dependency upgrades",
+    "upgrade the dependency",
+    "upgrade this dependency",
+    "upgrade our dependencies",
+    "major version upgrade",
+    "major version bump",
+    "framework upgrade",
+    "upgrade the framework",
+    "upgrade to the next major",
+    "breaking change upgrade",
+    "의존성 업그레이드",
+    "메이저 버전 업그레이드",
+)
+_GENERATED_ARTIFACT_NOUNS = (
+    "generated file",
+    "generated files",
+    "generated artifact",
+    "generated artifacts",
+    "generated output",
+    "generated code",
+    "generated doc",
+    "generated docs",
+    "생성된 파일",
+    "생성 파일",
+)
+_GENERATED_PROVENANCE_CUES = (
+    "source of truth",
+    "generator",
+    "regenerate",
+    "regenerated",
+    "regeneration",
+    "hand-edit",
+    "hand edit",
+    "hand-edited",
+    "hand edited",
+    "by hand",
+    "edit",
+    "edited",
+    "editing",
+    "diff",
+    "checked in",
+    "손으로 고치",
+    "직접 수정",
+)
 _DELIVERABLE_GATEWAY_CONTEXT_TOKENS = _normalized_token_set(
     {
         "gateway",
@@ -5206,6 +5332,42 @@ VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; visual image-card requests should prepare a visual prompt card before delivery or material packaging.",
     activation_status="active",
 )
+CONTRACT_REDLINE_GUARD = RoutingGuardRule(
+    id="contract_redline_before_generic_review",
+    rule="Redline, concession, and negotiation-preparation requests about a contract document should route to the legal review lane that owns the authority citation and counsel hold.",
+    matched_label="guard:contract_redline",
+    preferred_skills=("legal-compliance-review",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; proposed clause language is preparation material bound to a playbook position and a counsel hold, not a general review.",
+    activation_status="active",
+)
+CREDENTIAL_ROTATION_GUARD = RoutingGuardRule(
+    id="credential_rotation_before_toolbelt_readiness",
+    rule="Rotating or revoking an existing credential should route to the security review lane that carries the cutover order and the revocation proof, not to the missing-capability inventory.",
+    matched_label="guard:credential_rotation",
+    preferred_skills=("security-safety-review",),
+    score_boost=36,
+    why="Matched guard/trigger metadata; replacing a live credential needs an overlap window, a cutover order, and a check that the old credential stopped working.",
+    activation_status="active",
+)
+DEPENDENCY_UPGRADE_GUARD = RoutingGuardRule(
+    id="dependency_upgrade_before_generic_plan",
+    rule="A major dependency or framework upgrade should route to the phased refactor planner rather than the generic plan lane.",
+    matched_label="guard:dependency_upgrade",
+    preferred_skills=("refactor-plan",),
+    score_boost=32,
+    why="Matched guard/trigger metadata; an upgrade across a boundary needs phased order, per-phase verification, and a rollback point, which is the phased refactor plan.",
+    activation_status="active",
+)
+GENERATED_ARTIFACT_PROVENANCE_GUARD = RoutingGuardRule(
+    id="generated_artifact_provenance_before_deliverable_package",
+    rule="A request asking whether a change touches a generated file, and where its source of truth is, should route to verification-gate rather than the delivery lane.",
+    matched_label="guard:generated_artifact_provenance",
+    preferred_skills=("verification-gate",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; a generated-path question is a provenance check against the repository's declared artifact map, not a file to attach.",
+    activation_status="active",
+)
 DELIVERABLE_PACKAGE_GUARD = RoutingGuardRule(
     id="deliverable_package_for_file_attachment",
     rule="Requests that combine generated files or reports with attachment/delivery status should route to deliverable-package.",
@@ -5749,6 +5911,14 @@ def _active_routing_guard_rules_cached(
         rules.append(GITHUB_ISSUE_INTAKE_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
+    if contract_redline_guard_applies(normalized_query):
+        rules.append(CONTRACT_REDLINE_GUARD)
+    if credential_rotation_guard_applies(normalized_query):
+        rules.append(CREDENTIAL_ROTATION_GUARD)
+    if dependency_upgrade_guard_applies(normalized_query):
+        rules.append(DEPENDENCY_UPGRADE_GUARD)
+    if _generated_artifact_provenance_guard_applies(normalized_query):
+        rules.append(GENERATED_ARTIFACT_PROVENANCE_GUARD)
     deliverable_package_applies = _deliverable_package_guard_applies(
         normalized_query,
         query_tokens,
@@ -8553,6 +8723,13 @@ def _provider_profile_posture_guard_applies(normalized_query: str) -> bool:
 def _toolbelt_readiness_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
     if _hermes_setup_guide_requested(normalized_query):
         return False
+    # An existing credential being replaced is not a missing one. This lane owns
+    # "I do not have an API key"; rotating the key you already have is a
+    # sequencing and revocation-proof problem, and reading it as a readiness gap
+    # answered "credential rotation sequence and proof the old key is dead" with
+    # a tool inventory.
+    if credential_rotation_guard_applies(normalized_query):
+        return False
     if _provider_profile_posture_guard_applies(normalized_query):
         return False
     if _public_plugin_connector_readiness_requested(normalized_query):
@@ -8913,6 +9090,32 @@ def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
     return has_normalized_missed_omh_workflow_context(normalized_query)
 
 
+def contract_redline_guard_applies(normalized_query: str) -> bool:
+    """A markup or negotiation cue and a contract document together."""
+    return _contains_phrase(normalized_query, _CONTRACT_MARKUP_CUES) and _contains_phrase(
+        normalized_query, _CONTRACT_DOCUMENT_NOUNS
+    )
+
+
+def credential_rotation_guard_applies(normalized_query: str) -> bool:
+    """A rotation verb and a credential noun together; neither alone."""
+    return _contains_phrase(normalized_query, _CREDENTIAL_ROTATION_VERBS) and _contains_phrase(
+        normalized_query, _CREDENTIAL_ROTATION_SUBJECTS
+    )
+
+
+def dependency_upgrade_guard_applies(normalized_query: str) -> bool:
+    """Complete upgrade phrases only; `upgrade` alone is not this lane."""
+    return _contains_phrase(normalized_query, _DEPENDENCY_UPGRADE_PHRASES)
+
+
+def _generated_artifact_provenance_guard_applies(normalized_query: str) -> bool:
+    """A generated-path question needs both halves: the noun and the provenance."""
+    return _contains_phrase(normalized_query, _GENERATED_ARTIFACT_NOUNS) and _contains_phrase(
+        normalized_query, _GENERATED_PROVENANCE_CUES
+    )
+
+
 def _deliverable_package_guard_applies(
     normalized_query: str,
     query_tokens: set[str],
@@ -8920,6 +9123,8 @@ def _deliverable_package_guard_applies(
     visual_summary_applies: bool | None = None,
 ) -> bool:
     if _cached_visual_summary_applies(normalized_query, query_tokens, visual_summary_applies):
+        return False
+    if _generated_artifact_provenance_guard_applies(normalized_query):
         return False
     if _deliverable_gateway_context_applies(normalized_query, query_tokens):
         return False

@@ -21,6 +21,7 @@ This is an OMH `strategy-brief` workflow skill, projected for Agent Skills hosts
 ## Do Not Use When
 
 - The strategic question is whether an early idea's customer problem and segment are real, and no validated discovery receipt exists yet; use `product-discovery-validation`.
+- The question is how to run a hiring process — scorecards, interview loops, candidate comparison — rather than whether to hire at all; use `people-ops`.
 
 ## Examples
 
@@ -53,7 +54,7 @@ Bad example:
 
 Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.
 
-    Strong routing signals: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`, `decision note`, `leadership strategy`, `next strategy`, `다음 전략`, `전략 정리`, `전략 메모`, `전략 옵션`, `의사결정`, `리더십 회의`
+    Strong routing signals: `strategy-brief`, `strategy brief`, `strategy memo`, `product strategy`, `strategic options`, `decision note`, `leadership strategy`, `next strategy`, `capacity planning`, `hire or outsource`, `outsource or hire`, `cut scope`, `headcount plan`, `demand versus capacity`, `다음 전략`, `전략 정리`, `전략 메모`, `전략 옵션`, `의사결정`, `리더십 회의`
 
 ## Catalog Metadata
 
@@ -67,6 +68,7 @@ Quality bar:
 - Name the decision, constraints, options, tradeoffs, and rejected alternatives.
 - Tie recommendations to observed evidence or mark them as assumptions.
 - Keep coding handoff disabled until strategy is accepted and code work is explicit.
+- When the decision is a resourcing one — hire, outsource, or cut scope — quantify demand and capacity against each other in one unit before comparing options, and price each option with the lag before it lands; a gap that exists this quarter is not closed by a hire that ramps next quarter. The worked example is `omh-decide/references/capacity-planning.md`.
 - Ask whether the decision deserves a durable record - hard to reverse, surprising without its context, and carrying a real trade-off; all three or no record, a decision note in chat is enough.
 - When a record is warranted, draft it per `omh-decide/references/decision-records.md` - the `docs/adr/` convention with Context, Drivers, Considered Options, Decision, Consequences with mitigations, and Related - and stop for the user's approval before any file is written.
 - Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record is kept - it is what `decision-recall` reads later.

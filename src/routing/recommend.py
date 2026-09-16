@@ -39,6 +39,7 @@ from .policy import (
     _explicit_skill_candidate_is_negated,
     active_routing_guard_rules,
     context_query_is_budget_sense,
+    dependency_upgrade_guard_applies,
     explicit_skill_invocation,
     is_explicit_one_off_request,
     jit_learn_guard_applies,
@@ -1995,6 +1996,70 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # "watch out for the race condition in this handler". Those three score only
     # inside a complete phrase.
     "automation-blueprint": frozenset({"keep", "monitor", "watch"}),
+    # `strategy-brief` gained the capacity-decision phrasings ("capacity
+    # planning", "hire or outsource", "demand versus capacity"). `capacity` is
+    # a disk, a queue, and this catalog's own route-capacity vocabulary,
+    # `planning` belongs to every planning lane, and `demand`, `versus`, and
+    # `scope` are ordinary. `hire`, `outsource`, and `headcount` stay
+    # creditable: they name the decision this example exists for, and
+    # `people-ops` owns the hiring PROCESS through `hiring` rather than `hire`.
+    "strategy-brief": frozenset({"capacity", "cut", "demand", "planning", "scope", "versus"}),
+    # `legal-compliance-review` gained the negotiation-preparation phrasings.
+    # `language` is every localization request, and `position`, `preparation`,
+    # and `strategy` are ordinary words this catalog uses constantly. The bare
+    # markup words are not triggers at all: `redline` is an engine at its rev
+    # limit and a budget at its ceiling, so the intent needs a markup cue and a
+    # contract document together, which
+    # `contract_redline_before_generic_review` in `policy.py` requires.
+    # `negotiation`, `counterparty`, and `clause` stay creditable: nothing else
+    # in this catalog owns them.
+    "legal-compliance-review": frozenset(
+        {"language", "negotiation", "position", "preparation", "redline", "strategy", "the"}
+    ),
+    # `security-safety-review` gained the rotation phrasings ("key rotation",
+    # "rotate the api key", "revoke the old key"). Their loose tokens belong to
+    # everything else: `rotate` turns an image and rotates a log file, `key` is
+    # a map legend and a dictionary key, `api` is half the catalog, and `old` is
+    # ordinary English. Credited alone, `rotate` put this workflow into "rotate
+    # the image ninety degrees". The intent needs a rotation verb and a
+    # credential noun together, which `credential_rotation_before_toolbelt_readiness`
+    # in `policy.py` requires. `credential`, `certificate`, `revoke`, and
+    # `rotation` stay creditable: nothing else in this catalog owns them.
+    "security-safety-review": frozenset({"api", "key", "old", "rotate", "the", "this"}),
+    # `backend` gained the contract-evolution phrasings ("openapi spec",
+    # "deprecation window", "sunset date", "api versioning", "breaking api
+    # change"). `openapi`, `deprecate`, `deprecation`, and `sunset` are
+    # specific enough to score alone -- nothing else in the catalog owns them
+    # -- but the words around them are not: crediting `change`, `date`, `spec`,
+    # and `window` separately routed "the consumer impact of the price change
+    # on our customers" to this workflow at high confidence. Those count only
+    # inside a complete phrase.
+    "backend": frozenset({"breaking", "change", "date", "spec", "versioning", "window"}),
+    # `verification-gate` gained the generated-path phrasings ("generated
+    # file", "generated artifact", "source of truth", "regenerate instead of
+    # editing"). Every loose token in them is an ordinary word this catalog
+    # uses constantly: credited on their own they put this workflow top of
+    # "what is the output of this function" and level with `content-operator`
+    # on "upload the artifact to the release page". The intent needs both the
+    # generated-artifact noun and a provenance cue together, which is what
+    # `generated_artifact_provenance_before_deliverable_package` in
+    # `policy.py` requires, so none of these words counts alone. The skill's
+    # own vocabulary (`verification`, `gate`, `merge`, `lint`, `typecheck`)
+    # is untouched.
+    "verification-gate": frozenset(
+        {
+            "artifact",
+            "editing",
+            "file",
+            "generated",
+            "instead",
+            "of",
+            "output",
+            "regenerate",
+            "source",
+            "truth",
+        }
+    ),
     # `application-threat-model` is built from words that mean something else
     # almost everywhere else in the catalog: "model" is model-setup and
     # model-optimization, "review" is code-review, "security" is
@@ -2213,8 +2278,18 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # catalog -- "refactor" and "plan" -- plus "phases", "restructure", and
     # "blast". Credited as bare tokens they claimed every planning and
     # cleanup message. Complete phrases carry the intent.
+    # The upgrade phrasings added later split the same way, into words with a
+    # meaning everywhere else: `upgrade` is a laptop and a subscription tier,
+    # `version`/`major`/`next` are ordinary, `framework` and `dependency`
+    # belong to half the catalog, and `lockfile` is the only unambiguous one.
+    # The intent is carried by the complete phrases and by
+    # `dependency_upgrade_before_generic_plan` in `policy.py`.
     "refactor-plan": frozenset(
-        {"blast", "module", "phased", "phases", "plan", "planning", "radius", "refactor", "restructure", "rollback", "the", "this"}
+        {
+            "blast", "breaking", "change", "dependency", "framework", "major", "module", "next", "phased",
+            "phases", "plan", "planning", "radius", "refactor", "restructure", "rollback", "the", "this",
+            "to", "upgrade", "version",
+        }
     ),
     # `codebase-uml` names its picture with the vocabulary of every code
     # question -- "draw", "diagram", "architecture", "package", "module",
@@ -2277,17 +2352,33 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # covers. `provider`, `readiness`, `adoption`, and `connector` stay
     # creditable because they were this skill's trigger vocabulary before
     # these phrases landed.
+    #
+    # The trial phrasings added later ("memory provider trial", "... migration",
+    # "... rollback", "... benchmark") split the same way, into words the rest
+    # of the catalog owns: `deploy-and-monitor` answers "what is a rollback",
+    # `backend` owns "migrate the old database", `performance-goal` owns
+    # "benchmark this function". Credited as bare tokens they pulled all three
+    # toward this lane -- "we need to migrate the old database this weekend"
+    # put it level with `backend`. The intent is in the compound noun `memory
+    # provider`, which scores +6 on its own. `trial` is deliberately absent
+    # from this list: it was already creditable here ("external tool trial",
+    # "voice connector trial"), and holding it back now would move cases the
+    # trial phrasings never touched.
     "external-connector-readiness": frozenset(
         {
+            "benchmark",
             "delete",
             "disable",
             "export",
             "failure",
             "lifecycle",
             "memory",
+            "migrate",
+            "migration",
             "portability",
             "posture",
             "retention",
+            "rollback",
             "switch",
             "switching",
             "sync",
@@ -3553,6 +3644,13 @@ def _refactor_plan_offers_itself(normalized_query: str, query_tokens: set[str]) 
     restructure = {"refactor", "refactoring", "restructure", "restructuring", "리팩터링", "리팩토링"}
     planning = {"plan", "planning", "phases", "phase", "phased", "rollback", "계획", "단계"}
     if "phased" in query_tokens:
+        return True
+    # A dependency upgrade is a boundary-changing refactor whose direction was
+    # decided upstream, but the sentence asking for one says "upgrade" and never
+    # "refactor", so the both-halves rule above excluded the entire lane before
+    # any trigger could score. The complete upgrade phrases stand in for the
+    # restructuring half; a bare `upgrade` still does not.
+    if dependency_upgrade_guard_applies(normalized_query):
         return True
     return bool(restructure & query_tokens) and bool(planning & query_tokens)
 

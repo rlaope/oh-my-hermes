@@ -9,7 +9,8 @@ from typing import assert_never
 
 from ._governance_safety import contains_credential_like_material
 from .context_budget_plan_types import (
-    CAPACITY_FIELDS, Budget, BudgetPlanError, Evidence, EvidenceClass, MustKeep,
+    CAPACITY_FIELDS, MUST_KEEP_ITEM_CLASSES, MUST_KEEP_REFS_PER_CLASS, Budget, BudgetPlanError,
+    Evidence, EvidenceClass, MustKeep, MustKeepClass, MustKeepClassDelta, MustKeepDelta,
     Observations, RouteCapacity, RouteIdentity,
 )
 
@@ -73,14 +74,96 @@ def parse_route_capacity_input(raw: str) -> dict[str, Evidence]:
 
 
 def parse_must_keep(raw: str) -> MustKeep:
-    """The pack is a content digest and local estimate, never retained text."""
+    """The pack is a content digest, local estimate, and item-class counts.
+
+    Item classes are metadata about the pack, not the pack: counts and opaque
+    refs only, so a digest comparison can say which class lost an item without
+    the record ever retaining the text. A pack that omits the field parses --
+    plans written before it existed still load -- and reads back as `None`,
+    which a comparison reports as unavailable rather than as zero items.
+    """
     data = json.loads(raw)
-    if not isinstance(data, dict) or set(data) != {"digest", "estimated_tokens_total"}:
+    if not isinstance(data, dict) or set(data) - {"item_classes"} != {"digest", "estimated_tokens_total"}:
         raise BudgetPlanError("invalid_must_keep_schema")
     digest, tokens = data["digest"], data["estimated_tokens_total"]
     if not isinstance(digest, str) or not valid_digest(digest) or type(tokens) is not int or not 0 <= tokens <= 1_000_000_000:
         raise BudgetPlanError("invalid_must_keep_metadata")
-    return {"digest": digest, "estimated_tokens_total": tokens}
+    return {"digest": digest, "estimated_tokens_total": tokens, "item_classes": parse_item_classes(data.get("item_classes"))}
+
+
+def parse_item_classes(value: object) -> dict[str, MustKeepClass] | None:
+    """Absent stays absent; present must be the closed vocabulary and bounded."""
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) - set(MUST_KEEP_ITEM_CLASSES):
+        raise BudgetPlanError("invalid_must_keep_item_class")
+    classes: dict[str, MustKeepClass] = {}
+    for name in MUST_KEEP_ITEM_CLASSES:
+        if name not in value:
+            continue
+        item = value[name]
+        if not isinstance(item, dict) or set(item) != {"count", "refs"}:
+            raise BudgetPlanError("invalid_must_keep_item_class")
+        count, refs = item["count"], item["refs"]
+        if type(count) is not int or not 0 <= count <= 10_000:
+            raise BudgetPlanError("invalid_must_keep_item_count")
+        if not isinstance(refs, list) or len(refs) > MUST_KEEP_REFS_PER_CLASS or len(refs) > count:
+            raise BudgetPlanError("invalid_must_keep_item_refs")
+        if any(not isinstance(ref, str) for ref in refs) or len(set(refs)) != len(refs):
+            raise BudgetPlanError("invalid_must_keep_item_refs")
+        classes[name] = {"count": count, "refs": [metadata_ref(ref) for ref in refs]}
+    return classes
+
+
+def must_keep_delta(previous: MustKeep | None, current: MustKeep, *, previous_unreadable: bool = False) -> MustKeepDelta:
+    """Say which class of item left the pack, not only that the digest moved.
+
+    A digest difference is the question, never the answer: it fires for a
+    reworded requirement and for a deleted prohibition alike. Every branch that
+    cannot answer says so through `unavailable_reason` instead of returning
+    empty lists, because an empty `missing_classes` otherwise reads as proof
+    that nothing was lost.
+    """
+    matches = previous is not None and previous["digest"] == current["digest"]
+    before = previous["item_classes"] if previous is not None else None
+    after = current["item_classes"]
+    reason = ""
+    if previous_unreadable:
+        reason = "previous_pack_unreadable"
+    elif previous is None:
+        reason = "no_previous_pack"
+    elif before is None:
+        reason = "previous_pack_recorded_no_item_classes"
+    elif after is None:
+        reason = "current_pack_recorded_no_item_classes"
+    if reason or before is None or after is None:
+        return _must_keep_delta(matches, "unavailable", reason, [], [])
+    missing = [name for name in MUST_KEEP_ITEM_CLASSES if name in before and name not in after]
+    reduced: list[MustKeepClassDelta] = []
+    for name in MUST_KEEP_ITEM_CLASSES:
+        prior, now = before.get(name), after.get(name)
+        if prior is None or now is None:
+            continue
+        dropped = [ref for ref in prior["refs"] if ref not in now["refs"]]
+        if now["count"] < prior["count"] or dropped:
+            reduced.append({
+                "item_class": name, "previous_count": prior["count"],
+                "current_count": now["count"], "dropped_refs": dropped,
+            })
+    return _must_keep_delta(matches, "compared", "", missing, reduced)
+
+
+def _must_keep_delta(matches: bool, comparison: str, reason: str, missing: list[str],
+                     reduced: list[MustKeepClassDelta]) -> MustKeepDelta:
+    return {
+        "schema_version": "must_keep_item_class_delta/v1", "digest_matches": matches,
+        "comparison": "compared" if comparison == "compared" else "unavailable",
+        "unavailable_reason": reason, "missing_classes": missing, "reduced_classes": reduced,
+        "claim_boundary": (
+            "Item-class counts are locally declared pack metadata. They are not retained pack text, "
+            "observed compaction, provider usage, or proof that the named items reached a model."
+        ),
+    }
 
 
 def derive_budget(capacity: dict[str, Evidence]) -> Budget:

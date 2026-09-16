@@ -621,6 +621,110 @@ All notable changes will be documented here.
   every surface was inspected and none leaked. The ordinary `omh doctor` run is
   unchanged: the sub-check fires only for the operators who pass the flag.
   (#1562)
+- **"Keep watching this for me" is now a choice among four surfaces, not one.**
+  Heartbeat, loop, goal, and cron are four different answers, and
+  `assess_loopability`'s vocabulary was loop-family only, so every one of its
+  return sites recommended a loop surface, a reframe toward one, or a
+  clarification. A named cadence now reads as a scheduled operation, a watch
+  with no cadence and no end state as a heartbeat, and a request that states a
+  checkable finishing condition as a native goal. Each recommendation carries
+  its stop condition — what ends it is the only thing separating the four — and
+  names the three it beat with a reason per pair;
+  `validate_loopability_assessment` closes the surface vocabulary and refuses a
+  recurring recommendation whose stop condition is blank. The four-way
+  comparison, the four retry axes, and the silence rule are
+  `skills/omh-automation-blueprint/references/recurring-surface-choice.md`.
+  (#1570)
+
+- **A must-keep digest mismatch now names the class of item that went missing.**
+  The pack carried `{digest, estimated_tokens_total}`, so a mismatch reported
+  the same thing whether a requirement had been reworded or a user prohibition
+  deleted. It now also carries counts and opaque refs across seven item classes
+  — prohibitions, decisions, open questions, requirements, paths, PR state,
+  verification gaps — and `omh context budget-plan prepare` returns the delta
+  against the pack it replaces. The metadata-only posture is unchanged: refs go
+  through `metadata_ref` and no retained text enters the record. A pack that
+  recorded no classes reads as unavailable with a reason rather than as zero
+  items, so a plan written before this field reports what it cannot tell.
+  (#1572)
+
+- **Memory providers can be trialled on your own corpus before you pick one.**
+  `memory_provider_posture/v1` records what a provider declares; nothing
+  recorded what it did with your material. `external-connector-readiness` now
+  emits `memory_provider_trial_comparison/v1` on the existing
+  `connector_trial_manifest/v1` pattern: one corpus and one query set across
+  every candidate, retrieval quality, latency, and cost each reported per
+  provider or marked `not_observed` rather than defaulted to zero, and a
+  rollback proven by running it during the trial. The procedure is
+  `skills/omh-external-connector-readiness/references/memory-provider-trial.md`.
+  (#1573)
+
+- **An edit to a generated file is caught before it is made.**
+  `verification-gate` named generated output as a gate dimension but checked
+  the output, not the intent. `generated_artifact_provenance/v1` reports each
+  touched generated path with its source of truth, regeneration command, and
+  drift gate — read from a map the repository declares, and reported as
+  `map_not_declared` where none exists. It is never inferred from filename
+  patterns: a false positive redirects correct work, while the miss it prevents
+  costs one regeneration. "Attach the generated file to the ticket" still
+  reaches the delivery lane; the provenance guard fires only when a
+  generated-artifact noun and a provenance cue appear together. (#1575)
+
+- **A major dependency or framework upgrade reaches the phased planner.** It
+  used to land on generic `plan`, and no trigger could have fixed that:
+  `refactor-plan` requires restructuring vocabulary, and an upgrade request
+  never says "refactor". The complete upgrade phrases now stand in for that
+  half, and `references/dependency-upgrade.md` carries what the phase contract
+  does not — advisory and end-of-life intake including whether the advisory is
+  reachable from this codebase, the licence delta read at the target version,
+  the migration guide item by item (including the behaviour changes that are
+  not API changes and pass the typechecker), and lockfile discipline. (#1576)
+
+- **`backend` now owns who consumes an API, not only its shape.**
+  `consumer_impact_and_sunset/v1` lists each identified consumer with what
+  breaks for it, then the compatibility window, migration path, and sunset
+  date. An unenumerable consumer set is reported as `consumers_not_enumerable`
+  with what was searched — an empty list claims the search was complete, and
+  consumers outside the repository are unknowable from it. The enumeration
+  sources, the per-change breakage grades, and the window rules are
+  `skills/omh-backend/references/consumer-impact.md`. (#1577)
+
+- **Rotating a credential now has a sequence and a proof step.**
+  `security-safety-review` found the secret and stopped there.
+  `credential_rotation_sequence/v1` orders issue-new, deploy-new, verify-new,
+  revoke-old, verify-revoked, and states that revocation is proven by a call
+  that FAILS with the old credential — never by the revoke command's exit
+  status, which reports only that the request was accepted. Rotation phrasings
+  no longer reach `toolbelt-readiness`: a credential being replaced is not a
+  credential that is missing, and "i do not have an api key for this connector"
+  still reaches the readiness lane. The overlap window, the what-breaks table,
+  and the per-credential-type steps are
+  `skills/omh-security-safety-review/references/credential-rotation.md`. (#1578)
+
+- **Contract redlining and negotiation preparation have an owner.** `redline`
+  and `negotiat` returned no hits across the catalog.
+  `legal-compliance-review` now carries `legal_negotiation_preparation/v1` — one
+  row per contested clause with its playbook position, proposed language,
+  fallback, and walk-away, plus the concession order across rows. The
+  counsel-hold boundary carries through unchanged: this is preparation material
+  for the person who will negotiate, never legal advice, a row whose playbook
+  position cannot be cited is a counsel question rather than a proposal, and an
+  open hold blocks its row. The row shape and the concession-order linkages are
+  `skills/omh-legal-compliance-review/references/negotiation-preparation.md`.
+  (#1579)
+
+- **Hire, outsource, or cut scope reaches the decision lane, quantified.** That
+  phrasing previously reached nothing at all. `strategy-brief` already produced
+  options, tradeoffs, and a decision note; what was missing was the
+  quantification, because the failure mode is a discussion where "the team is
+  stretched" and "we could hire" are compared without either being a number.
+  The body now requires demand and capacity in one unit and each option priced
+  with its lag — a gap that exists this quarter is not closed by a hire that
+  ramps next quarter — and the worked figures are
+  `skills/omh-decide/references/capacity-planning.md`. The bare phrase
+  "capacity planning" still reaches `plan`, which is a serviceable answer;
+  moving it would need a guard rule this change deliberately does not add.
+  (#1580)
 
 ## 2.0.3 - 2026-09-12
 

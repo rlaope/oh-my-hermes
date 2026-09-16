@@ -4654,7 +4654,11 @@ class RouterContentTests(unittest.TestCase):
         expected_trigger_counts = {
             "finance-analysis": 7,
             "people-ops": 7,
-            "legal-compliance-review": 7,
+            # Six negotiation-preparation phrases joined the domain table for
+            # the redline output mode (#1579); they are the skill's triggers
+            # and its +54 route cues at once, so each one is a deliberate
+            # widening of both.
+            "legal-compliance-review": 13,
             "support-operations": 6,
             "curriculum-design": 6,
             "localization-review": 6,

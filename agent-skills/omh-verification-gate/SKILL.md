@@ -55,7 +55,7 @@ Bad example:
 
 Use when Hermes must turn a change, PR, release, or claim into a concrete evidence checklist and PASS/HOLD/BLOCK verdict.
 
-    Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`
+    Strong routing signals: `verification-gate`, `verification gate`, `quality gate`, `release gate`, `test gate`, `build lint test`, `lint typecheck tests`, `verify before merge`, `merge readiness gate`, `generated file`, `generated artifact`, `generated output`, `source of truth`, `regenerate instead of editing`, `検証ゲート`, `品質ゲート`, `マージ前の検証`, `リリース前チェック`, `검증 게이트`, `품질 게이트`, `테스트 게이트`, `머지 전 검증`, `빌드 린트 테스트`, `验证门禁`, `质量门禁`, `合并前验证`, `发布前检查`
 
 ## Catalog Metadata
 
@@ -67,6 +67,7 @@ Reasoning demand: `standard`
 Quality bar:
 
 - Tie every completion claim to the smallest check that proves it, then broaden for shared surfaces.
+- When a diff touches a declared generated path, name its source of truth and regeneration command before the edit rather than after a byte gate rejects it; a diff touching a generator and its output together is the correct shape, not a violation — load `references/generated-artifact-provenance.md` for the declaration and reporting rules.
 - Record command/source, freshness, exit status, and scope for each observed result.
 - Return PASS only when required checks pass and stale or missing evidence is resolved.
 - Keep fixes, reruns, review, CI, and merge as separate observed states.
@@ -82,6 +83,7 @@ Expected outputs:
 
 - verification_gate_plan/v1
 - verification_matrix/v1
+- generated_artifact_provenance/v1 when the change touches a path the repository declares generated
 - observed_check_results/v1 when observed
 - claim_verdict/v1
 - rerun_or_blocker/v1
@@ -92,10 +94,12 @@ Artifact expectations:
 - verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable
 - observed_check_results/v1 with command, timestamp/source, exit status, summary, and stale-output flag
 - claim_verdict/v1 with PASS, HOLD, or BLOCK and exact missing or failed checks
+- generated_artifact_provenance/v1 with one row per touched generated path: the source of truth that produces it, the regeneration command, and the drift gate that catches it, or the single state `map_not_declared` when the repository declares no generated-artifact map
 
 Safety rules:
 
 - Do not treat a planned command, stale output, green local check, or prepared handoff as fresh verification evidence.
+- Read generated paths from a map the repository declares; where none exists report `map_not_declared` and never infer one from filename patterns, directory names, or a generated-file header, because a false positive redirects correct work while the miss it prevents only costs a rerun.
 - Do not collapse build, lint, tests, security, generated docs, review, CI, DCO, merge-readiness, or merge into one claim.
 - Failed or unavailable checks must produce HOLD/BLOCK with a rerun or remediation path.
 - A change touching an authentication, secrets/config, schema/migration, or payment/crypto path escalates to the thorough verification lane regardless of diff size.

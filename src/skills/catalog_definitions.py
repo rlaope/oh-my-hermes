@@ -1842,6 +1842,12 @@ _DEFINITIONS = [
             "decision note",
             "leadership strategy",
             "next strategy",
+            "capacity planning",
+            "hire or outsource",
+            "outsource or hire",
+            "cut scope",
+            "headcount plan",
+            "demand versus capacity",
         ),
         "Use when Hermes should turn goals and evidence into options, tradeoffs, recommendations, and a decision-ready brief.",
         category="strategy",
@@ -1864,12 +1870,14 @@ _DEFINITIONS = [
             "Name the decision, constraints, options, tradeoffs, and rejected alternatives.",
             "Tie recommendations to observed evidence or mark them as assumptions.",
             "Keep coding handoff disabled until strategy is accepted and code work is explicit.",
+            "When the decision is a resourcing one — hire, outsource, or cut scope — quantify demand and capacity against each other in one unit before comparing options, and price each option with the lag before it lands; a gap that exists this quarter is not closed by a hire that ramps next quarter. The worked example is `omh-decide/references/capacity-planning.md`.",
             "Ask whether the decision deserves a durable record - hard to reverse, surprising without its context, and carrying a real trade-off; all three or no record, a decision note in chat is enough.",
             "When a record is warranted, draft it per `omh-decide/references/decision-records.md` - the `docs/adr/` convention with Context, Drivers, Considered Options, Decision, Consequences with mitigations, and Related - and stop for the user's approval before any file is written.",
             "Never edit an accepted record: status moves Proposed to Accepted to Deprecated or Superseded, supersession is a new record pointing back at the old one, and a Rejected record is kept - it is what `decision-recall` reads later.",
         ),
         do_not_use_when=(
             "The strategic question is whether an early idea's customer problem and segment are real, and no validated discovery receipt exists yet; use `product-discovery-validation`.",
+            "The question is how to run a hiring process — scorecards, interview loops, candidate comparison — rather than whether to hire at all; use `people-ops`.",
         ),
     ),
     SkillDefinition(
@@ -2168,6 +2176,13 @@ _DEFINITIONS = [
     SkillDefinition(
         "legal-compliance-review",
         "Surface contract and compliance risks, questions, and escalation points before a legal decision or action.",
+        # The domain table doubles as this skill's +54 route cue, so only
+        # phrases unambiguous on their own belong in it. The bare markup words
+        # are not: `redline` as a cue claimed "the engine is running at the
+        # redline" at 63, and as a plain trigger it still won an uncontested
+        # field at 6. They reach this skill through
+        # `contract_redline_before_generic_review`, which requires the markup
+        # word and the document it marks up together.
         SPECIALIST_DOMAIN_TRIGGERS["legal-compliance-review"],
         "Use when supplied contract, policy, product, process, or regulatory context needs a scoped issue matrix, assumptions, and counsel/escalation brief.",
         category="review",
@@ -2205,6 +2220,11 @@ _DEFINITIONS = [
             "legal_scope_authority_record/v1",
             "legal_issue_traceability_matrix/v1",
             "legal_risk_counsel_hold_register/v1",
+            # Ordered where its step produces it, not appended. The outputs
+            # mirror `procedure_steps` order, and the disposition stays last
+            # because it is the terminal verdict -- a redline prepared after
+            # the disposition would read as advice issued past the hold.
+            "legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment",
             "legal_review_disposition/v1",
         ),
         procedure_checks=(
@@ -2227,6 +2247,11 @@ _DEFINITIONS = [
                 "legal_counsel_hold_check",
                 ("trigger_ids", "impact", "likelihood_applicability", "urgency", "evidence_confidence", "reversibility", "hold_status", "counsel_owner"),
                 "Mandatory HOLD triggers include uncertain or conflicting authority, missing jurisdiction or dates, enforceability or privilege, material or uncapped liability or indemnity, regulatory deadlines, and sensitive, high-risk or cross-border privacy or DPIA uncertainty.",
+            ),
+            ProcedureCheck(
+                "legal_negotiation_preparation_check",
+                ("playbook_position", "gap", "proposed_language", "fallback_position", "walk_away_trigger", "concession_order", "counsel_hold_state"),
+                "Every proposed clause traces to a cited playbook position and carries its fallback and walk-away; a row whose position cannot be cited becomes a counsel question, an open hold blocks its row, and the concession order states which rows are linked.",
             ),
             ProcedureCheck(
                 "legal_final_determination_guard",
@@ -2256,21 +2281,32 @@ _DEFINITIONS = [
                 "Rank impact, applicability, urgency, confidence and reversibility, then impose mandatory counsel holds and owners for every triggered high-risk or authority-sensitive issue.",
             ),
             ProcedureStep(
+                "legal_prepare_negotiation_positions", "production", ("document or process version", "supplied authority", "review objective"),
+                ("legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment",),
+                ("legal_negotiation_preparation_check", "legal_counsel_hold_check"),
+                "When the objective is a redline, build one row per contested clause -- playbook position, gap, proposed language, fallback, walk-away, counsel-hold state -- then rank the concession order by what is lost and name the linked rows; prepare nothing for a clause whose hold is open.",
+            ),
+            ProcedureStep(
                 "legal_validate_disposition", "validation", ("jurisdiction", "document or process version", "supplied authority", "review objective"),
                 ("legal_review_disposition/v1",),
                 ("legal_scope_facts_instruments_check", "legal_authority_citation_check", "legal_issue_matrix_check", "legal_counsel_hold_check", "legal_final_determination_guard"),
                 "Return PASS, REVISE, or HOLD with exact open triggers and counsel route; prohibit final legal or compliance determinations until all mandatory holds are resolved by qualified counsel.",
             ),
         ),
-        artifact_expectations=("prepared legal and compliance issue matrix when a wrapper captures it",),
+        artifact_expectations=(
+            "prepared legal and compliance issue matrix when a wrapper captures it",
+            "legal_negotiation_preparation/v1 with one row per contested clause: the playbook position it came from, the proposed language, the fallback, and the walk-away, plus the concession order across rows",
+        ),
         safety_rules=(
             "Distinguish supplied authority from legal interpretation and final advice.",
             "Do not claim sign-off, certification, filing, execution, or regulator communication.",
+            "Proposed clause language is preparation material for the person who will negotiate, never advice about whether to accept it; a row whose playbook position cannot be cited is a counsel question, not a proposal.",
         ),
         quality_tier="review-gated",
         quality_bar=(
             "Name jurisdiction, authority, document version, and unresolved questions.",
             "Rank issues and preserve the counsel-escalation boundary.",
+            "For a redline objective, tie every proposed clause to the playbook position it came from and carry its fallback and walk-away, so the negotiator sees what is being traded; an open counsel hold on a clause blocks its row rather than producing a proposal — load `references/negotiation-preparation.md` for the row shape and the concession-order rules.",
         ),
         why_this_exists="`legal-compliance-review` prepares scoped issues for human legal review without claiming counsel or filing authority.",
         do_not_use_when=(
@@ -3749,6 +3785,15 @@ _DEFINITIONS = [
             "connection pool",
             "message queue",
             "webhook handler",
+            "openapi",
+            "openapi spec",
+            "deprecate endpoint",
+            "deprecate this endpoint",
+            "deprecation window",
+            "sunset date",
+            "sunset schedule",
+            "api versioning",
+            "breaking api change",
         ),
         "Use when Hermes should shape a server, API, or data-layer change before implementation: authentication boundary, contract error paths, response consistency, schema and migration discipline, and the per-stack reference the executor loads first.",
         category="planning",
@@ -3774,6 +3819,7 @@ _DEFINITIONS = [
             "error_path_table/v1",
             "response_shape_contract/v1",
             "schema_migration_plan/v1 when the change touches storage",
+            "consumer_impact_and_sunset/v1 when an existing contract changes",
             "backend_implementation_handoff/v1",
             "observed_integration_evidence/v1 when observed",
         ),
@@ -3783,6 +3829,7 @@ _DEFINITIONS = [
             "error_path_table/v1 pairs every failure mode with its status/code, body shape, retryability, and log/redaction rule",
             "response_shape_contract/v1 keeps success and error envelopes consistent across the surface instead of per-endpoint improvisation",
             "schema_migration_plan/v1 orders expand, backfill, switch, and contract steps with the rollback point for each",
+            "consumer_impact_and_sunset/v1 lists each identified consumer with what breaks for it, then the compatibility window, the migration path, and the sunset date; a consumer set that could not be enumerated is reported as `consumers_not_enumerable` with the reason, never as zero breakage",
             "integration runs, applied migrations, load numbers, and deployment only when observed",
         ),
         safety_rules=(
@@ -3790,6 +3837,7 @@ _DEFINITIONS = [
             "Require the auth boundary before endpoint work: an endpoint whose caller trust level is unnamed is not ready for handoff.",
             "Require the error-path table before the happy path is called complete; an unlisted failure mode is a gap, not a default.",
             "Treat a destructive or non-reversible migration step as a blocker until an explicit rollback point and backfill order exist.",
+            "Report an unenumerable consumer set as `consumers_not_enumerable` with what was searched; consumers outside the repository are unknowable from it, and an empty list is a claim that nothing breaks.",
             "Never place secrets, tokens, or connection strings in the contract, examples, or handoff text.",
             "Do not call databases, HTTP services, LLM, or network endpoints from OMH core.",
         ),
@@ -3799,6 +3847,7 @@ _DEFINITIONS = [
             "Load `references/service-contract.md` and fill the auth boundary, error-path table, and response-shape rules from it rather than improvising a per-endpoint shape.",
             "When the change touches storage, load `references/schema-migration.md` and order the migration as expand, backfill, switch, contract, with the rollback point named per step.",
             "Hold the `api` product-family expectations — authentication boundary, contract error paths, response consistency — as the standing bar for every prepared endpoint.",
+            "When an existing contract changes, name who consumes it before designing the change: each identified consumer with what breaks for it, then the compatibility window, migration path, and sunset date — the skill that owns a surface owns its evolution. Load `references/consumer-impact.md` for the enumeration sources and the window rules.",
             "Name the per-stack reference the executor must read first; the stack is a routing input, not a detail discovered mid-implementation.",
             "Keep implementation, migration application, integration runs, load testing, and deployment as observed-only evidence.",
         ),
@@ -3828,6 +3877,7 @@ _DEFINITIONS = [
             "The error_path_table/v1 covers each failure mode with status, body shape, retryability, and redaction rule.",
             "The response_shape_contract/v1 is consistent across endpoints rather than per-endpoint improvisation.",
             "Storage changes carry an expand/backfill/switch/contract order with a rollback point per step.",
+            "A change to an existing contract carries its consumer list or an explicit `consumers_not_enumerable`, plus the compatibility window, migration path, and sunset date.",
             "The handoff names the executor, the stack, and the per-stack reference to load first.",
             "Implementation, migrations, integration runs, and deployment stay observed-only.",
         ),
@@ -4622,6 +4672,11 @@ _DEFINITIONS = [
             "lint typecheck tests",
             "verify before merge",
             "merge readiness gate",
+            "generated file",
+            "generated artifact",
+            "generated output",
+            "source of truth",
+            "regenerate instead of editing",
         ),
         "Use when Hermes must turn a change, PR, release, or claim into a concrete evidence checklist and PASS/HOLD/BLOCK verdict.",
         category="verification",
@@ -4641,6 +4696,7 @@ _DEFINITIONS = [
         expected_outputs=(
             "verification_gate_plan/v1",
             "verification_matrix/v1",
+            "generated_artifact_provenance/v1 when the change touches a path the repository declares generated",
             "observed_check_results/v1 when observed",
             "claim_verdict/v1",
             "rerun_or_blocker/v1",
@@ -4650,9 +4706,11 @@ _DEFINITIONS = [
             "verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable",
             "observed_check_results/v1 with command, timestamp/source, exit status, summary, and stale-output flag",
             "claim_verdict/v1 with PASS, HOLD, or BLOCK and exact missing or failed checks",
+            "generated_artifact_provenance/v1 with one row per touched generated path: the source of truth that produces it, the regeneration command, and the drift gate that catches it, or the single state `map_not_declared` when the repository declares no generated-artifact map",
         ),
         safety_rules=(
             "Do not treat a planned command, stale output, green local check, or prepared handoff as fresh verification evidence.",
+            "Read generated paths from a map the repository declares; where none exists report `map_not_declared` and never infer one from filename patterns, directory names, or a generated-file header, because a false positive redirects correct work while the miss it prevents only costs a rerun.",
             "Do not collapse build, lint, tests, security, generated docs, review, CI, DCO, merge-readiness, or merge into one claim.",
             "Failed or unavailable checks must produce HOLD/BLOCK with a rerun or remediation path.",
             "A change touching an authentication, secrets/config, schema/migration, or payment/crypto path escalates to the thorough verification lane regardless of diff size.",
@@ -4662,6 +4720,7 @@ _DEFINITIONS = [
         quality_tier="verification-gated",
         quality_bar=(
             "Tie every completion claim to the smallest check that proves it, then broaden for shared surfaces.",
+            "When a diff touches a declared generated path, name its source of truth and regeneration command before the edit rather than after a byte gate rejects it; a diff touching a generator and its output together is the correct shape, not a violation — load `references/generated-artifact-provenance.md` for the declaration and reporting rules.",
             "Record command/source, freshness, exit status, and scope for each observed result.",
             "Return PASS only when required checks pass and stale or missing evidence is resolved.",
             "Keep fixes, reruns, review, CI, and merge as separate observed states.",
@@ -5166,6 +5225,7 @@ _DEFINITIONS = [
         expected_outputs=(
             "context_budget_plan/v1",
             "must_keep_context_pack/v1",
+            "must_keep_item_class_delta/v1 when a pack replaces an earlier one",
             "summarization_checkpoint_plan/v1",
             "budget_risk_register/v1",
             "overflow_recovery_route/v1",
@@ -5174,6 +5234,7 @@ _DEFINITIONS = [
         artifact_expectations=(
             "context_budget_plan/v1 with scope, max visible context, source priority, discard rules, and checkpoint cadence",
             "must_keep_context_pack/v1 with durable facts, file refs, decisions, PR/CI state, and blocked assumptions",
+            "must_keep_item_class_delta/v1 naming the item class that lost entries rather than reporting a digest difference, over the closed vocabulary prohibitions, decisions, open_questions, requirements, paths, pr_state, verification_gaps",
             "summarization_checkpoint_plan/v1 with when to compact, what to preserve, and how to verify continuity",
             "budget_risk_register/v1 separating estimated cost/token/latency risk from provider-observed truth",
         ),
@@ -5189,6 +5250,7 @@ _DEFINITIONS = [
             "Separate durable requirements, volatile status, file refs, verification evidence, and open blockers.",
             "Define checkpoint cadence, overflow recovery, and continuity verification.",
             "Use bounded copy while preserving the full objective and evidence gaps.",
+            "Count the must-keep pack by item class, so a replaced pack reports which class lost entries instead of only that a digest moved; a pack that recorded no classes reports the comparison unavailable and never reports zero items.",
             "Keep prompt-prefix placement cache-stable: fixed section order, volatile bytes never above the fold, mid-run changes as appended messages never system-prompt mutations — load `references/cache-placement.md` for the placement rules.",
         ),
         why_this_exists=(
@@ -5228,6 +5290,14 @@ _DEFINITIONS = [
             "plugin risk audit",
             "Hermes plugin audit",
             "local plugin guard",
+            "key rotation",
+            "secret rotation",
+            "credential rotation",
+            "certificate rotation",
+            "rotate the api key",
+            "rotate this api key",
+            "rotate the credentials",
+            "revoke the old key",
         ),
         "Use when Hermes should identify security, prompt-injection, tool-permission, secret, dependency, destructive-action, or explicit local plugin risks before execution or release.",
         category="review",
@@ -5252,6 +5322,7 @@ _DEFINITIONS = [
             "safe_action_policy/v1",
             "plugin_risk_audit/v1 for one explicitly named local plugin directory",
             "remediation_handoff/v1 when needed",
+            "credential_rotation_sequence/v1 when a live credential must be replaced",
             "not-evidence boundary",
         ),
         artifact_expectations=(
@@ -5260,6 +5331,7 @@ _DEFINITIONS = [
             "prompt_injection_risk_review/v1 with untrusted input boundaries and tool-use constraints",
             "safe_action_policy/v1 with allowed, confirmation-gated, blocked, and observed-only actions",
             "plugin_risk_audit/v1 with bounded aggregate local risk categories and no source disclosure",
+            "credential_rotation_sequence/v1 attached to remediation_handoff/v1, ordering issue-new, deploy-new, verify-new, revoke-old, verify-revoked, with the overlap window and the operator who runs each step",
         ),
         safety_rules=(
             "Never print secret values, tokens, private keys, cookies, or credentials.",
@@ -5267,12 +5339,14 @@ _DEFINITIONS = [
             "Do not claim vulnerability absence, sandbox safety, credential validity, or dependency safety without observed tool or source evidence.",
             "Treat untrusted prompts, downloaded files, generated commands, and external config as untrusted until reviewed.",
             "An explicit local plugin risk audit reads bounded source metadata only; it must not import, register, execute, install, or activate a plugin.",
+            "A rotation sequence is the operator's to run: OMH issues, deploys, and revokes nothing, and a delivered sequence is never a rotation that happened.",
         ),
         quality_tier="security-safety-gated",
         quality_bar=(
             "Name the target, trust boundary, allowed actions, and risk tolerance before reviewing.",
             "Separate prompt, tool, secret, dependency, network, and destructive-action risks.",
             "Use redacted evidence and concrete remediation handoffs rather than broad fear language.",
+            "Order a credential replacement issue-new, deploy-new, verify-new, revoke-old, verify-revoked, and name what breaks if the order changes; revocation is proven by a call that fails with the old credential, never by the revoke command's exit status, which reports that the request was accepted. Load `references/credential-rotation.md` for the overlap window and the per-credential-type steps.",
             "Return PASS, HOLD, or BLOCK with missing evidence and confirmation requirements.",
         ),
         why_this_exists=(
@@ -5338,6 +5412,7 @@ _DEFINITIONS = [
         required_inputs=("recurring request", "schedule or cadence hint", "delivery target or current-thread default", "silence/no-change preference"),
         expected_outputs=(
             "hermes_ops_blueprint/v1 projection",
+            "recurring_surface_comparison/v1 naming the recommended surface and why the other three lost",
             "hermes_recurring_intent/v1 paused lifecycle record when the user wants the recurring work saved",
             "schedule/delivery/silence confirmation needs",
             "status-card boundary",
@@ -5345,6 +5420,7 @@ _DEFINITIONS = [
         ),
         artifact_expectations=(
             "hermes_ops_blueprint/v1 under .omh/hermes-ops/blueprints when a wrapper or CLI records it",
+            "recurring_surface_comparison/v1 with the recommended surface among cron, heartbeat, loop, and native goal, its stop condition, and a per-surface reason the other three were not chosen",
             "hermes_recurring_intent/v1 under .omh/hermes-ops/recurring-intents when the user asks to save the recurring work",
         ),
         safety_rules=(
@@ -5356,6 +5432,7 @@ _DEFINITIONS = [
         ),
         quality_tier="ops-blueprint-gated",
         quality_bar=(
+            "Recommend one of cron, heartbeat, loop, and native goal, say why the other three lost, and carry its stop condition; a recommendation with no stop condition is not an answer, because what ends it is the only thing that separates the four — load `references/recurring-surface-choice.md` for the comparison, retry, and delivery rules.",
             "Name cadence/timezone uncertainty, delivery target, silence/no-change rule, selected skills, and context chain.",
             "When the recurring work is saved, say it is paused and name what activation needs: explicit overlap, missed-run, retry, backfill, and failure-pause decisions, an approval reference, and an observer from the approved runtime surface.",
             "Before activation, say what the policy does when a prior run is still active, when a window is missed, and when failures repeat; after a safety pause, report the applied policy and that resuming needs a policy revision.",
@@ -6116,6 +6193,12 @@ _DEFINITIONS = [
             "blast radius",
             "module restructure plan",
             "restructure plan",
+            "dependency upgrade",
+            "major version upgrade",
+            "framework upgrade",
+            "upgrade to the next major",
+            "breaking change upgrade",
+            "lockfile",
         ),
         (
             "Use when a refactor that crosses module boundaries is already decided and needs its execution "
@@ -6137,7 +6220,7 @@ _DEFINITIONS = [
             "the regression gates that exist today (test suite, typecheck, generated-artifact checks)",
         ),
         expected_outputs=(
-            "reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius",
+            "reconnaissance: affected files, ownership boundaries, hidden coupling, blast radius — and for an upgrade, the advisory, licence, migration-guide, and lockfile intake",
             "phase plan in the fixed order - types/interfaces, implementations, callers, tests, cleanup - each with verification and rollback",
             "files table: path, action, phase, blocks/blocked-by",
             "the approval gate: the plan stops and waits for the user's go",
@@ -6154,6 +6237,7 @@ _DEFINITIONS = [
             "Order phases contracts-first: types and interfaces, then implementations, then callers in reviewable groups, then tests, then cleanup - and name what verifies each phase and where it rolls back to.",
             "Ship the files table with the plan: one row per file with action, phase, and blocks/blocked-by; a row without a phase is unplanned work.",
             "Size verification to the blast radius, not to optimism: a phase touching public surfaces or persisted shapes carries the full gate, not the fast one.",
+            "For a dependency or framework upgrade, read four inputs before ordering phases — advisory and end-of-life intake, the licence delta at the target version, the upstream migration guide item by item against this codebase, and lockfile handling in the same commit as the manifest; a breaking change nobody checked is a gap, not a pass. The full contract is `omh-refactor-plan/references/dependency-upgrade.md`.",
             "Stop at the approval gate and hand the user the go/no-go, whole plan or first phase.",
         ),
         why_this_exists=(

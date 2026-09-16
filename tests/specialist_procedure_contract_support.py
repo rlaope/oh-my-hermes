@@ -35,10 +35,15 @@ DOMAIN_REVIEW_CONTRACTS = {
         },
     },
     "legal-compliance-review": {
+        # The redline output mode (#1579). Its output sits where its step
+        # produces it, not appended: this contract asserts outputs and steps as
+        # ordered tuples, and the disposition stays last because it is the
+        # terminal verdict.
         "outputs": (
             "legal_scope_authority_record/v1",
             "legal_issue_traceability_matrix/v1",
             "legal_risk_counsel_hold_register/v1",
+            "legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment",
             "legal_review_disposition/v1",
         ),
         "steps": (
@@ -46,6 +51,7 @@ DOMAIN_REVIEW_CONTRACTS = {
             "legal_trace_authority",
             "legal_map_issues_exceptions",
             "legal_apply_counsel_holds",
+            "legal_prepare_negotiation_positions",
             "legal_validate_disposition",
         ),
         "checks": {
@@ -53,6 +59,7 @@ DOMAIN_REVIEW_CONTRACTS = {
             "legal_authority_citation_check": {"source_type", "source_identifier", "source_version", "effective_status", "pinpoint", "operative_text_summary", "verification_status"},
             "legal_issue_matrix_check": {"applicability_facts", "obligation_position", "definitions_dependencies", "exceptions_carveouts_conflicts", "evidence_status", "risk_uncertainty", "action_owner", "recommended_disposition", "counsel_question", "issue_family_applicability"},
             "legal_counsel_hold_check": {"trigger_ids", "impact", "likelihood_applicability", "urgency", "evidence_confidence", "reversibility", "hold_status", "counsel_owner"},
+            "legal_negotiation_preparation_check": {"playbook_position", "gap", "proposed_language", "fallback_position", "walk_away_trigger", "concession_order", "counsel_hold_state"},
             "legal_final_determination_guard": {"invented_authority_status", "stale_authority_status", "unresolved_triggers", "disposition"},
         },
     },
