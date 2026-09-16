@@ -212,9 +212,27 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
             ):
                 route_hint_context = ""
                 message_matches_awareness = False
+    # The primer is the block that says OMH exists at all. Gating it on the
+    # message already containing OMH vocabulary made it unreachable for exactly
+    # the sessions that needed it: eight ordinary work requests measured on
+    # `main` -- including "migrate the database schema, update all models, fix
+    # the tests, and write the migration guide" -- carried no OMH word and so
+    # got nothing. There was no way out from inside either, because the
+    # per-turn plan line reads an `established` plan and can only continue a
+    # checklist that already exists.
+    #
+    # So the session's first turn carries it unconditionally. Deliberately not
+    # a task-size test: judging "big enough" is the same guess that is already
+    # failing here, and the largest request in that set is one of the misses.
+    # The cost is bounded and one-off -- one primer, once per session.
+    #
+    # The route hint keeps its own gate: it is message-specific, so a message
+    # that matched nothing still contributes no hint text, and the
+    # per-fingerprint claim above still decides whether guidance already went
+    # out. This widens what the primer reaches, not what counts as a route.
     should_include_awareness = (
         include_awareness
-        and (bool(route_hint_context) or message_matches_awareness)
+        and (bool(route_hint_context) or message_matches_awareness or is_first_turn)
     )
     if should_include_awareness:
         primer = awareness_primer_context()
@@ -337,22 +355,11 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         error_type = "RuntimeError" if getattr(exc, "errno", None) == errno.ELOOP else type(exc).__name__
         degraded.append((COMPONENT_RUNTIME_STATUS_READ, safe_error_type(error_type)))
 
-    if include_awareness and is_first_turn and status.get("active_executors") and not should_include_awareness:
-        primer = awareness_primer_context()
-        if not _primer_already_in_api_history(kwargs.get("conversation_history"), primer):
-            context_parts.insert(0, primer)
-            payload["omh_context_brief"] = build_context_brief(
-                user_message,
-                source=str(kwargs.get("source") or kwargs.get("host") or "pre_llm_call"),
-                max_hints=2,
-                include_prompt_context=False,
-                route_hint_payload=route_hint_payload,
-            )
-            brief = payload.get("omh_context_brief")
-            if isinstance(brief, dict):
-                for row in brief.get("degradation", {}).get("components", []):
-                    if isinstance(row, dict):
-                        degraded.append((str(row.get("component", "")), str(row.get("error_type", ""))))
+    # A first-turn primer fallback stood here, reached only when an executor
+    # was already running. `should_include_awareness` now covers every first
+    # turn, so its `not should_include_awareness` condition can no longer be
+    # true and the block would have been unreachable code claiming to handle a
+    # case the gate above already handles.
 
     board = read_running_work_board(omh_home, limit=6)
     running_count = int(board.get("running_count", 0) or 0)

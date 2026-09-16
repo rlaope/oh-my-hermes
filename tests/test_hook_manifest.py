@@ -165,10 +165,17 @@ class HookManifestTests(unittest.TestCase):
                     omh_home=omh_home,
                 )
 
-            self.assertIsNone(result)
+            # What this test is about: a first turn does not pay for the
+            # setup-only status and HUD reads. The primer it now carries is
+            # message-independent, so it costs neither read.
             status_read.assert_not_called()
             hud_read.assert_not_called()
-            self.assertFalse(os.path.exists(os.path.join(omh_home, "runtime", "awareness_delivery.json")))
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertIn("[OMH Awareness]", result["context"])
+            self.assertNotIn("Native bridge status context", result["context"])
+            # A greeting still matches no workflow, so nothing claims a route.
+            self.assertNotIn("[OMH Route Hint]", result["context"])
 
     def test_relevant_first_turn_keeps_route_hint_without_setup_status(self) -> None:
         with TemporaryDirectory() as omh_home:
@@ -411,8 +418,14 @@ class HookManifestTests(unittest.TestCase):
                     omh_home=omh_home,
                 )
 
-            self.assertIsNone(result)
+            # A completed run is history, so no status block and no HUD read.
+            # The first-turn primer is unrelated to run state and rides along.
             hud_read.assert_not_called()
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertNotIn("Native bridge status context", result["context"])
+            self.assertNotIn("old-run", result["context"])
+            self.assertIn("[OMH Awareness]", result["context"])
 
     def test_active_executor_triggers_status_context(self) -> None:
         active_executor = {

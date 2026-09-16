@@ -6049,6 +6049,50 @@ def awareness_route_hint_context(message: str, *, max_hints: int = 2) -> str:
     return awareness_route_hint_context_from_payload(payload)
 
 
+# The workflows whose run is a bounded checklist that outlives the turn that
+# opens it. `omh_todo` exists to carry a goal ACROSS turns
+# (`todo_reconciliation`), so these are the runs where a checklist is the point
+# and not overhead -- and the route hint used to name the workflow, the lane,
+# the next action and the first-response shape while saying nothing at all
+# about declaring one. The per-turn reminder could not cover the gap: it reads
+# an `established` plan, so it can only continue a checklist that exists and
+# never start one.
+#
+# Explicit rows, not a comprehension over the engine set: `ulw-context`
+# prepares project terms and `ulw-interview` asks one clarifying question, and
+# both are engines. A one-card or one-answer route has nothing to put on a
+# checklist, and a line telling it to declare one is the kind of standing
+# instruction a reader learns to skip.
+_PLAN_TODO_WORKFLOWS = frozenset(
+    {
+        "loop",
+        "plan",
+        "ralplan",
+        "ultraperf",
+        "ultraqa",
+        "ultrawork",
+    }
+)
+
+PLAN_TODO_DECLARATION_RULE = (
+    "Declare this run's checklist with omh_todo before the first step and keep "
+    "exactly one item active as steps land, so the Hermes TUI shows the person "
+    "what is planned and what is left. Todo items are declarations, never "
+    "execution evidence."
+)
+
+
+def workflow_declares_plan_todo(workflow: str) -> bool:
+    """Whether this workflow's run is a checklist the person should see declared.
+
+    Takes the emitted (public) name as well as the catalog key: the hint is
+    rendered after `_route_hint_with_public_workflow_names`, so what reaches
+    here is `ulw-work`, not `ultrawork`.
+    """
+    name = workflow.strip()
+    return _canonical_workflow_by_display_name().get(name, name) in _PLAN_TODO_WORKFLOWS
+
+
 def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str:
     """Return compact hook text from an already-built route hint payload."""
     if payload.get("status") != "hinted":
@@ -6085,6 +6129,8 @@ def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str
             first_response_shape = str(context_card.get("first_response_shape") or "").strip()
             if first_response_shape:
                 lines.append(f"  first_response_shape={first_response_shape}")
+        if workflow_declares_plan_todo(str(hint.get("workflow", ""))):
+            lines.append(f"  plan_todo={PLAN_TODO_DECLARATION_RULE}")
         fallback_action = str(hint.get("fallback_action") or "").strip()
         if fallback_action:
             fallback_action_label = str(hint.get("fallback_action_label") or _next_action_label(fallback_action)).strip()
@@ -6849,15 +6895,22 @@ def _canonical_workflow_by_display_name() -> dict[str, str]:
     ):
         if workflow in workflows:
             mapping[display] = workflow
-            # Earlier releases rendered `omh-<workflow>` (pre-ulw era) and the
-            # mechanical `ulw-<workflow>`; stale agents still echo both, so
-            # they stay resolvable as historical aliases of the same workflow
-            # instead of being dropped. Mirrors
-            # `skills/catalog_types.historical_skill_display_names`.
-            mapping.setdefault(f"omh-{workflow}", workflow)
         else:
             mapping.pop(f"omh-{workflow}", None)
             mapping.pop(f"ulw-{workflow}", None)
+    # Earlier releases rendered `omh-<workflow>` (pre-ulw era) and, for the
+    # engines, the mechanical `ulw-<workflow>` before the labels were
+    # shortened. Stale agents, memories, and docs still echo both, so they stay
+    # resolvable as historical aliases of the same workflow. Mirrors
+    # `skills/catalog_types.historical_skill_display_names`, which derives them
+    # for EVERY name -- this loop used to sit inside the override branch above,
+    # so an engine without an override (`loop`, `research`) got its current
+    # `ulw-` label and never its `omh-` one, and `omh-loop` reached the router
+    # as a route but this module as nothing.
+    for workflow in workflows:
+        mapping.setdefault(f"omh-{workflow}", workflow)
+        if workflow in _ULW_ENGINE_WORKFLOWS:
+            mapping.setdefault(f"ulw-{workflow}", workflow)
     return mapping
 
 
@@ -6941,17 +6994,59 @@ def _route_hint_with_public_workflow_names(hint: dict[str, object]) -> dict[str,
     return public_hint
 
 
+# Bare-token invocation aliases: spellings that name a workflow without being a
+# display label. The router resolves them in its policy layer
+# (`routing/policy._EXPLICIT_SKILL_ALIASES`) BEFORE any display-label rewrite,
+# and the rewrite cannot carry them -- it only matches hyphenated `omh-`/`ulw-`
+# labels, which is exactly why `ulw-work` produced a hint here and a bare `ulw`
+# produced nothing while the router dispatched it. Duplicated on purpose (a
+# copied plugin bundle has no router import) and locked against the router's
+# table by `tests/test_display_names.py`.
+#
+# Only the bare table is mirrored. `routing/policy._PREFIXED_SKILL_ALIASES`
+# adds `omh` and `skills`, which the router accepts only behind a sigil
+# (`/omh`, `$skills`); bare, the router sends `omh` to a clarify. Copying them
+# here would make this module hint where the router asks.
+_WORKFLOW_INVOCATION_ALIASES = {
+    "ohmy": "oh-my-hermes",
+    "paper-explainer": "paper-learning",
+    "source-acquisition": "source-finder",
+    "source-intake": "source-finder",
+    "ulw": "ultrawork",
+}
+
+
 def _direct_workflow_prefix(routing_normalized: str) -> str:
     normalized = routing_normalized.strip()
     for workflow in sorted(_DIRECT_WORKFLOW_NEXT_ACTIONS, key=len, reverse=True):
         aliases = (workflow, workflow.replace("-", " "))
         if any(_starts_with_direct_workflow_alias(normalized, alias) for alias in aliases):
             return workflow
+    for alias in sorted(_WORKFLOW_INVOCATION_ALIASES, key=len, reverse=True):
+        workflow = _WORKFLOW_INVOCATION_ALIASES[alias]
+        if workflow in _DIRECT_WORKFLOW_NEXT_ACTIONS and _starts_with_invocation_alias(normalized, alias):
+            return workflow
     return ""
 
 
 def _starts_with_direct_workflow_alias(normalized: str, alias: str) -> bool:
     return re.match(rf"^(?:use\s+(?:omh\s+)?|run\s+)?{re.escape(alias)}(?:\b|$)", normalized) is not None
+
+
+def _starts_with_invocation_alias(normalized: str, alias: str) -> bool:
+    """Match a bare alias as a whole opening token.
+
+    Same `\\b` boundary as the display-label form above, so an alias behaves
+    exactly like the name it stands for: `ulw로` is no more an invocation than
+    `ultrawork로` is, and both reach the router's vagueness gate rather than a
+    hint. `ulwork` and `ulw_work` fail the boundary outright.
+
+    The added `(?!-)` is what `\\b` alone cannot do: a hyphen IS a word
+    boundary, so without it `ulw-nonexistent` would resolve to `ultrawork`
+    here while the router, whose alias lookup is keyed on the whole token,
+    does not read it as an explicit invocation at all.
+    """
+    return re.match(rf"^(?:use\s+(?:omh\s+)?|run\s+)?{re.escape(alias)}\b(?!-)", normalized) is not None
 
 
 def _bounded_matches(matches: list[str]) -> list[str]:

@@ -340,3 +340,65 @@ class UlwBundleParityTests(unittest.TestCase):
 
         self.assertEqual(set(awareness_module._ULW_ENGINE_WORKFLOWS), set(ULW_ENGINE_SKILL_NAMES))
         self.assertEqual(awareness_module._ULW_ENGINE_LIFECYCLE_STAGES, catalog_stages)
+
+
+class BundleInvocationVocabularyParityTests(unittest.TestCase):
+    """Every spelling that names a workflow to the router names it here too.
+
+    The bundle is what runs in a live session and the router is what the
+    repo's routing corpora measure, so a spelling the router resolves and the
+    bundle does not is a dead live surface behind green tests. Three had
+    drifted: a bare `ulw` (a router alias the display-label rewriter cannot
+    carry, since it only matches hyphenated `omh-`/`ulw-` labels) and
+    `omh-loop`/`omh-research` (historical labels of the two engines that have
+    no display-name override).
+
+    A parity test rather than a generated sidecar, matching the four locks
+    `awareness.py` already carries: both sides are small Python tables, and
+    neither is an artifact a user reads.
+    """
+
+    def test_bundle_bare_invocation_aliases_match_the_router_table(self) -> None:
+        from omh.routing.policy import _EXPLICIT_SKILL_ALIASES
+
+        self.assertEqual(
+            awareness_module._WORKFLOW_INVOCATION_ALIASES,
+            dict(_EXPLICIT_SKILL_ALIASES),
+        )
+
+    def test_prefix_only_router_aliases_stay_out_of_the_bundle_table(self) -> None:
+        """The deliberate half of the copy: aliases the router accepts only behind a sigil.
+
+        Bare, the router sends these to a clarify, so copying them here would
+        make the bundle hint where the router asks. Pinned as an equality so
+        the router adding one forces the decision rather than silently
+        widening or silently omitting it.
+        """
+        from omh.routing.policy import _EXPLICIT_SKILL_ALIASES, _PREFIXED_SKILL_ALIASES
+
+        prefix_only = set(_PREFIXED_SKILL_ALIASES) - set(_EXPLICIT_SKILL_ALIASES)
+        self.assertEqual(prefix_only, {"omh", "skills"})
+        for alias in sorted(prefix_only):
+            with self.subTest(alias=alias):
+                self.assertNotIn(alias, awareness_module._WORKFLOW_INVOCATION_ALIASES)
+                self.assertEqual(awareness_route_hint(f"{alias} the auth refactor")["hints"], [])
+
+    def test_every_label_of_a_workflow_this_module_hints_is_in_the_bundle_map(self) -> None:
+        """The reverse of `test_awareness_display_map_matches_the_catalog_display_rule`.
+
+        That test checks every entry in the map against the catalog, which
+        cannot notice a label the catalog renders and the map omits -- and
+        omission is the direction that drifted. The historical `omh-` alias
+        was added only inside the display-name override branch, so `loop` and
+        `research`, the two engines with no override, kept their current
+        `ulw-` label and nothing else.
+        """
+        mapping = awareness_module._canonical_workflow_by_display_name()
+        workflows = set(awareness_module._WORKFLOW_CONTEXT_CARD_BY_WORKFLOW) | set(
+            awareness_module._DIRECT_WORKFLOW_NEXT_ACTIONS
+        )
+
+        for workflow in sorted(workflows):
+            for label in (omh_skill_display_name(workflow), *historical_skill_display_names(workflow)):
+                with self.subTest(workflow=workflow, label=label):
+                    self.assertEqual(mapping.get(label), workflow)
