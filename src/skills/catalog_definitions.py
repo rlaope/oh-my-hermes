@@ -2168,6 +2168,13 @@ _DEFINITIONS = [
     SkillDefinition(
         "legal-compliance-review",
         "Surface contract and compliance risks, questions, and escalation points before a legal decision or action.",
+        # The domain table doubles as this skill's +54 route cue, so only
+        # phrases unambiguous on their own belong in it. The bare markup words
+        # are not: `redline` as a cue claimed "the engine is running at the
+        # redline" at 63, and as a plain trigger it still won an uncontested
+        # field at 6. They reach this skill through
+        # `contract_redline_before_generic_review`, which requires the markup
+        # word and the document it marks up together.
         SPECIALIST_DOMAIN_TRIGGERS["legal-compliance-review"],
         "Use when supplied contract, policy, product, process, or regulatory context needs a scoped issue matrix, assumptions, and counsel/escalation brief.",
         category="review",
@@ -2206,6 +2213,7 @@ _DEFINITIONS = [
             "legal_issue_traceability_matrix/v1",
             "legal_risk_counsel_hold_register/v1",
             "legal_review_disposition/v1",
+            "legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment",
         ),
         procedure_checks=(
             ProcedureCheck(
@@ -2262,15 +2270,20 @@ _DEFINITIONS = [
                 "Return PASS, REVISE, or HOLD with exact open triggers and counsel route; prohibit final legal or compliance determinations until all mandatory holds are resolved by qualified counsel.",
             ),
         ),
-        artifact_expectations=("prepared legal and compliance issue matrix when a wrapper captures it",),
+        artifact_expectations=(
+            "prepared legal and compliance issue matrix when a wrapper captures it",
+            "legal_negotiation_preparation/v1 with one row per contested clause: the playbook position it came from, the proposed language, the fallback, and the walk-away, plus the concession order across rows",
+        ),
         safety_rules=(
             "Distinguish supplied authority from legal interpretation and final advice.",
             "Do not claim sign-off, certification, filing, execution, or regulator communication.",
+            "Proposed clause language is preparation material for the person who will negotiate, never advice about whether to accept it; a row whose playbook position cannot be cited is a counsel question, not a proposal.",
         ),
         quality_tier="review-gated",
         quality_bar=(
             "Name jurisdiction, authority, document version, and unresolved questions.",
             "Rank issues and preserve the counsel-escalation boundary.",
+            "For a redline objective, tie every proposed clause to the playbook position it came from and carry its fallback and walk-away, so the negotiator sees what is being traded; an open counsel hold on a clause blocks its row rather than producing a proposal — load `references/negotiation-preparation.md` for the row shape and the concession-order rules.",
         ),
         why_this_exists="`legal-compliance-review` prepares scoped issues for human legal review without claiming counsel or filing authority.",
         do_not_use_when=(

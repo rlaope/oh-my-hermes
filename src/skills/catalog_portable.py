@@ -847,6 +847,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'llm-app-dev/references/stateful-contracts.md',
     'finance-analysis/references/procedure.md',
     'legal-compliance-review/references/procedure.md',
+    'legal-compliance-review/references/negotiation-preparation.md',
     'curriculum-design/references/procedure.md',
     'sales-development/references/procedure.md',
     'decision-prototype/references/procedure.md',

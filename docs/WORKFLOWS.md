@@ -1629,7 +1629,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The review is about code, secrets, permissions, prompt injection, dependencies, or unsafe tool behavior; use `security-safety-review`.
   - The request is a plain-language rewrite without a legal-risk review objective; use `content-operator`.
   - The user asks to sign, accept, submit, file, publish, or change a policy or contract in an external system; use `connector-operator` only after explicit authority.
-- Strong routing signals: `contract review`, `contract liability clause`, `regulatory analysis`, `compliance review`, `계약서 검토`, `규제 분석`, `컴플라이언스 검토`
+- Strong routing signals: `contract review`, `contract liability clause`, `regulatory analysis`, `compliance review`, `contract redline`, `redline the contract`, `negotiation preparation`, `negotiation strategy`, `clause language`, `counterparty position`, `계약서 검토`, `규제 분석`, `컴플라이언스 검토`
 - Good example:
   - Prompt: Review this vendor DPA for data-processing obligations, risky clauses, and questions for counsel.
   - Expected behavior: Prepare an authority-bound issue matrix, ranked risks, and counsel questions.
@@ -1641,6 +1641,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Quality bar:
   - Name jurisdiction, authority, document version, and unresolved questions.
   - Rank issues and preserve the counsel-escalation boundary.
+  - For a redline objective, tie every proposed clause to the playbook position it came from and carry its fallback and walk-away, so the negotiator sees what is being traded; an open counsel hold on a clause blocks its row rather than producing a proposal — load `references/negotiation-preparation.md` for the row shape and the concession-order rules.
 - Completion checklist:
   - Findings or no-issue results are grounded in concrete file, artifact, command, or source evidence.
   - Open questions, residual risk, and missing verification are named.
@@ -1671,11 +1672,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - legal_issue_traceability_matrix/v1
   - legal_risk_counsel_hold_register/v1
   - legal_review_disposition/v1
+  - legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment
 - Artifact expectations:
   - prepared legal and compliance issue matrix when a wrapper captures it
+  - legal_negotiation_preparation/v1 with one row per contested clause: the playbook position it came from, the proposed language, the fallback, and the walk-away, plus the concession order across rows
 - Safety rules:
   - Distinguish supplied authority from legal interpretation and final advice.
   - Do not claim sign-off, certification, filing, execution, or regulator communication.
+  - Proposed clause language is preparation material for the person who will negotiate, never advice about whether to accept it; a row whose playbook position cannot be cited is a counsel question, not a proposal.
 - Procedure checks:
   - `legal_scope_facts_instruments_check`
     - Required result fields: `actors_roles`, `operative_facts`, `instrument_set`, `order_of_precedence`, `governing_law_forum`, `regulatory_jurisdictions`, `execution_effective_as_of_dates`, `assumptions_blockers`

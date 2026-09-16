@@ -1996,6 +1996,18 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # "watch out for the race condition in this handler". Those three score only
     # inside a complete phrase.
     "automation-blueprint": frozenset({"keep", "monitor", "watch"}),
+    # `legal-compliance-review` gained the negotiation-preparation phrasings.
+    # `language` is every localization request, and `position`, `preparation`,
+    # and `strategy` are ordinary words this catalog uses constantly. The bare
+    # markup words are not triggers at all: `redline` is an engine at its rev
+    # limit and a budget at its ceiling, so the intent needs a markup cue and a
+    # contract document together, which
+    # `contract_redline_before_generic_review` in `policy.py` requires.
+    # `negotiation`, `counterparty`, and `clause` stay creditable: nothing else
+    # in this catalog owns them.
+    "legal-compliance-review": frozenset(
+        {"language", "negotiation", "position", "preparation", "redline", "strategy", "the"}
+    ),
     # `security-safety-review` gained the rotation phrasings ("key rotation",
     # "rotate the api key", "revoke the old key"). Their loose tokens belong to
     # everything else: `rotate` turns an image and rotates a log file, `key` is

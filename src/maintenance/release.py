@@ -275,7 +275,12 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # The five-step order, the overlap window, and the per-credential-type steps
 # are `references/credential-rotation.md`, outside this budget; warranted
 # growth.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 426787
+# 426787 -> 427396: `legal-compliance-review` declares
+# `legal_negotiation_preparation/v1` and six negotiation triggers, which also
+# render into the router's workflow registry (#1579). The row shape and the
+# concession-order rules are `references/negotiation-preparation.md`, outside
+# this budget; warranted growth.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 427396
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1063,7 +1068,20 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # `skills/omh-security-safety-review/references/credential-rotation.md`,
 # measured outside this budget. Re-derived from the full-profile
 # skill_context_cost_payload() producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 982500
+# 982500 -> 983557: `legal-compliance-review` gains the redline output mode --
+# one artifact expectation, one safety rule, one quality bar -- plus the
+# triggers, which also reach the router's workflow registry (#1579). It folds
+# here because the authority-citation and counsel-hold machinery is what makes
+# a redline preparable at all, and duplicating it is how the two would drift.
+# The body carries the boundary that makes it foldable: proposed language is
+# preparation material for the person who will negotiate, never advice about
+# whether to accept a term, and an open counsel hold blocks a row rather than
+# producing a proposal. The row fields, the requires-a-playbook rule, and the
+# concession-order linkages are
+# `skills/omh-legal-compliance-review/references/negotiation-preparation.md`,
+# measured outside this budget. Re-derived from the full-profile
+# skill_context_cost_payload() producer, never by adding deltas.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 983557
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

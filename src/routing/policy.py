@@ -4424,6 +4424,41 @@ _DELIVERABLE_PHRASES = (
 # tool. `toolbelt-readiness` owns "I do not have an API key"; this owns "I have
 # one and it has to be replaced while the service stays up". Both halves are
 # required: `rotate` alone turns an image, and `key` alone is a map legend.
+# A redline is always a redline OF something. `redline` is unambiguous inside a
+# work catalog and not in English -- crediting it alone sent "the engine is
+# running at the redline" to the legal lane -- so the markup word and the
+# document it marks up are both required.
+_CONTRACT_MARKUP_CUES = (
+    "redline",
+    "redlines",
+    "redlining",
+    "negotiat",
+    "concession",
+    "counterproposal",
+    "counter-proposal",
+    "fallback position",
+    "walk-away",
+    "walk away",
+    "레드라인",
+    "협상",
+)
+_CONTRACT_DOCUMENT_NOUNS = (
+    "contract",
+    "agreement",
+    "clause",
+    "clauses",
+    "terms",
+    "msa",
+    "nda",
+    "sow",
+    "dpa",
+    "playbook",
+    "amendment",
+    "addendum",
+    "계약",
+    "조항",
+    "약관",
+)
 _CREDENTIAL_ROTATION_VERBS = (
     "rotate",
     "rotating",
@@ -5297,6 +5332,15 @@ VISUAL_SUMMARY_GUARD = RoutingGuardRule(
     why="Matched guard/trigger metadata; visual image-card requests should prepare a visual prompt card before delivery or material packaging.",
     activation_status="active",
 )
+CONTRACT_REDLINE_GUARD = RoutingGuardRule(
+    id="contract_redline_before_generic_review",
+    rule="Redline, concession, and negotiation-preparation requests about a contract document should route to the legal review lane that owns the authority citation and counsel hold.",
+    matched_label="guard:contract_redline",
+    preferred_skills=("legal-compliance-review",),
+    score_boost=30,
+    why="Matched guard/trigger metadata; proposed clause language is preparation material bound to a playbook position and a counsel hold, not a general review.",
+    activation_status="active",
+)
 CREDENTIAL_ROTATION_GUARD = RoutingGuardRule(
     id="credential_rotation_before_toolbelt_readiness",
     rule="Rotating or revoking an existing credential should route to the security review lane that carries the cutover order and the revocation proof, not to the missing-capability inventory.",
@@ -5867,6 +5911,8 @@ def _active_routing_guard_rules_cached(
         rules.append(GITHUB_ISSUE_INTAKE_GUARD)
     if _github_event_ops_guard_applies(normalized_query, query_tokens):
         rules.append(GITHUB_EVENT_OPS_GUARD)
+    if contract_redline_guard_applies(normalized_query):
+        rules.append(CONTRACT_REDLINE_GUARD)
     if credential_rotation_guard_applies(normalized_query):
         rules.append(CREDENTIAL_ROTATION_GUARD)
     if dependency_upgrade_guard_applies(normalized_query):
@@ -9042,6 +9088,13 @@ def _is_short_visual_summary_request(normalized_query: str) -> bool:
 
 def _missed_omh_workflow_context_applies(normalized_query: str) -> bool:
     return has_normalized_missed_omh_workflow_context(normalized_query)
+
+
+def contract_redline_guard_applies(normalized_query: str) -> bool:
+    """A markup or negotiation cue and a contract document together."""
+    return _contains_phrase(normalized_query, _CONTRACT_MARKUP_CUES) and _contains_phrase(
+        normalized_query, _CONTRACT_DOCUMENT_NOUNS
+    )
 
 
 def credential_rotation_guard_applies(normalized_query: str) -> bool:

@@ -1906,6 +1906,22 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "security-safety-review",
     ),
+    RoutingPrecisionCase(
+        "engine-redline-stays-a-clarification",
+        "An engine at its redline is not a contract redline",
+        "the engine is running at the redline",
+        "answer_clarification",
+        "",
+        "legal-compliance-review",
+    ),
+    RoutingPrecisionCase(
+        "salary-negotiation-remark-stays-direct",
+        "A remark about a salary negotiation is not negotiation preparation",
+        "the salary negotiation went well",
+        "answer_directly",
+        "direct_answer",
+        "legal-compliance-review",
+    ),
 )
 
 
@@ -5702,6 +5718,26 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_toolbelt_readiness",
         "toolbelt_readiness",
         "toolbelt-readiness",
+    ),
+    RoutingInterventionCase(
+        "contract-redline-reaches-the-legal-review",
+        "Redlining a contract against a playbook reaches the counsel-hold lane",
+        "redline this contract against our playbook",
+        "dispatch",
+        "legal-compliance-review",
+        "prepare_legal_compliance_review",
+        "legal_compliance_review",
+        "legal-compliance-review",
+    ),
+    RoutingInterventionCase(
+        "negotiation-preparation-reaches-the-legal-review",
+        "Fallback positions and clause language reach the same lane",
+        "prepare negotiation positions and fallback clause language",
+        "dispatch",
+        "legal-compliance-review",
+        "prepare_legal_compliance_review",
+        "legal_compliance_review",
+        "legal-compliance-review",
     ),
 )
 

@@ -1,6 +1,6 @@
 ---
 name: "omh-legal-compliance-review"
-description: "[omh] Surface contract and compliance risks, questions, and escalation points before a legal decision or action. Use when the user says: contract review, contract liability clause, regulatory analysis, compliance review, 계약서 검토, 규제 분석, 컴플라이언스 검토."
+description: "[omh] Surface contract and compliance risks, questions, and escalation points before a legal decision or action. Use when the user says: contract review, contract liability clause, regulatory analysis, compliance review, contract redline, redline the contract, negotiation preparation, negotiation strategy."
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, review]
@@ -56,7 +56,7 @@ Bad example:
 
 Use when supplied contract, policy, product, process, or regulatory context needs a scoped issue matrix, assumptions, and counsel/escalation brief.
 
-    Strong routing signals: `contract review`, `contract liability clause`, `regulatory analysis`, `compliance review`, `계약서 검토`, `규제 분석`, `컴플라이언스 검토`
+    Strong routing signals: `contract review`, `contract liability clause`, `regulatory analysis`, `compliance review`, `contract redline`, `redline the contract`, `negotiation preparation`, `negotiation strategy`, `clause language`, `counterparty position`, `계약서 검토`, `규제 분석`, `컴플라이언스 검토`
 
 ## Catalog Metadata
 
@@ -69,6 +69,7 @@ Quality bar:
 
 - Name jurisdiction, authority, document version, and unresolved questions.
 - Rank issues and preserve the counsel-escalation boundary.
+- For a redline objective, tie every proposed clause to the playbook position it came from and carry its fallback and walk-away, so the negotiator sees what is being traded; an open counsel hold on a clause blocks its row rather than producing a proposal — load `references/negotiation-preparation.md` for the row shape and the concession-order rules.
 
 Required inputs:
 
@@ -88,15 +89,18 @@ Expected outputs:
 - legal_issue_traceability_matrix/v1
 - legal_risk_counsel_hold_register/v1
 - legal_review_disposition/v1
+- legal_negotiation_preparation/v1 when the objective is a redline rather than an assessment
 
 Artifact expectations:
 
 - prepared legal and compliance issue matrix when a wrapper captures it
+- legal_negotiation_preparation/v1 with one row per contested clause: the playbook position it came from, the proposed language, the fallback, and the walk-away, plus the concession order across rows
 
 Safety rules:
 
 - Distinguish supplied authority from legal interpretation and final advice.
 - Do not claim sign-off, certification, filing, execution, or regulator communication.
+- Proposed clause language is preparation material for the person who will negotiate, never advice about whether to accept it; a row whose playbook position cannot be cited is a counsel question, not a proposal.
 
 Procedure: load `references/procedure.md`.
 
