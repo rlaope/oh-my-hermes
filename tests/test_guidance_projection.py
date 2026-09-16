@@ -7,6 +7,7 @@ reading five doctor checks and inferring which one mattered.
 
 from __future__ import annotations
 
+import argparse
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -27,6 +28,7 @@ from omh.install.guidance_projection import (
     validate_guidance_projection_status,
 )
 from omh.commands import setup as setup_commands
+from omh.install.installer import DEFAULT_SKILL_PROFILE, SKILL_PROFILES, install_skill_pack
 from omh.local_store import atomic_write_text
 from omh.maintenance.doctor import run_doctor
 from omh.manifest import SkillRecord, new_manifest, skill_records
@@ -153,6 +155,47 @@ class ProjectionStatusTests(unittest.TestCase):
             # Not "stale": no `omh update` resolves a difference from a catalog
             # the projection was never rendered from.
             self.assertEqual(status["projection"], "not_comparable")
+
+
+class GuidanceProjectionProfileTests(unittest.TestCase):
+    """#1635: the reason completeness follows the manifest, computed not asserted.
+
+    `_projection_state` measures completeness against the manifest rather than
+    the catalog, and the comment beside it used to justify that by asserting
+    `omh setup` installs a core subset by default. That stopped being true once
+    the default became `full`, and a load-bearing reason a reader can falsify in
+    one command is worse than no reason at all. These two cases compute both
+    halves: what the default actually is, and that a core install -- the state
+    the rule exists for, default or not -- reads `fresh` while holding a
+    fraction of the catalog.
+    """
+
+    def test_the_default_profile_is_read_from_the_installer_not_from_prose(self) -> None:
+        args = argparse.Namespace(full=False, core=False)
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            resolved = setup_commands._resolved_skill_profile(args, paths)
+
+        # Whatever the default is, it is the installer's value; nothing here
+        # restates it, so a change to it cannot leave a second copy behind.
+        self.assertEqual(resolved, DEFAULT_SKILL_PROFILE)
+        self.assertIn(resolved, SKILL_PROFILES)
+
+    def test_a_core_profile_install_reads_fresh_while_holding_a_subset(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            manifest = install_skill_pack(paths, profile="core")
+
+            # The premise of the rule: a correct install that is not the whole
+            # catalog. Computed, so a catalog or profile change cannot leave
+            # this passing for the wrong reason.
+            self.assertEqual(manifest["skill_profile"], "core")
+            self.assertLess(len(manifest["skills"]), len(builtin_skill_templates()))
+
+            status = build_guidance_projection_status(
+                paths.skills_dir, manifest, registered=True, host_observed=False
+            )
+            self.assertEqual(status["projection"], "fresh")
 
 
 class LocalModificationTests(unittest.TestCase):

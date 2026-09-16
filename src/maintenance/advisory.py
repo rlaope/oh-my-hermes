@@ -78,6 +78,16 @@ SOUL_STARTER_MARKERS = (
 # Rough context-weight estimate per installed skill (SKILL.md front-loading).
 APPROX_TOKENS_PER_SKILL = 350
 
+# One sentence, two facts: the command that installs the absent engines, and
+# why the command the operator already ran did not. `{command}` is filled from
+# the recorded profile, because only a `full` install adds every packaged skill.
+_WORKFLOW_ENGINE_REACH_REMEDIATION = (
+    "Run `{command}` to install them. `omh update` adds only what the recorded profile "
+    "names and otherwise refreshes what is already on disk, so a core install never "
+    "acquires a full-only skill by updating; `omh skill-profile` reports the recorded "
+    "and the effective profile."
+)
+
 
 @dataclass(frozen=True)
 class AdviceEntry:
@@ -918,6 +928,98 @@ def check_installed_skill_context_weight(
         )
 
 
+def check_workflow_engine_reach(
+    hermes_home: str | Path | None = None,
+    *,
+    omh_home: str | Path | None = None,
+) -> AdviceEntry:
+    """Say when the recorded profile cannot reach the ULW workflow engines.
+
+    `install_skill_pack` refreshes whatever is on disk and ADDS only what the
+    recorded profile names, so a `core` install can never acquire a full-only
+    skill: no number of `omh update` runs will add one, and only `--full` or an
+    explicit reconcile changes that. The split is deliberate and stays -- an
+    update that silently shed installed skills, or one that left them on an
+    older render, would each be worse.
+
+    What was missing is the consequence. None of the canonical ULW workflow
+    engines is in `CORE_PROFILE_SKILLS`, so a core install holds none of them;
+    a user who invokes one finds nothing, and until this entry existed no
+    surface said why or named the command that fixes it. `--core`'s own help
+    text states the trade at the moment of choosing and nothing restates it
+    afterwards, which is exactly when it is needed.
+
+    This sits in the advisory lane rather than among the doctor checks because
+    core is a legitimate, deliberately recommended profile: a fact with a
+    consequence, not a health failure, and it must not move the doctor status
+    or exit code. It is the honest counterpart of
+    `installed_skill_context_weight`, which states the cost of the other choice.
+
+    The finding is derived from which engines are absent, never from the
+    profile label, so an install that has them stays silent whatever it
+    recorded.
+    """
+    from ..install.installer import installed_skill_names
+    from ..manifest import read_manifest
+    from ..skills.catalog import ulw_inventory_payload
+
+    home = _resolve_hermes_home(hermes_home)
+    paths = OmhPaths(
+        omh_home=Path(omh_home).expanduser() if omh_home is not None else home.parent / ".omh",
+        hermes_home=home,
+    )
+    evidence_boundary = (
+        "Local install manifest and on-disk skill directories only; whether Hermes would "
+        "have selected an absent engine is not observed."
+    )
+    try:
+        manifest = read_manifest(paths.manifest_path)
+        installed = set(installed_skill_names(paths.skills_dir))
+    except OSError as error:
+        return AdviceEntry(
+            "workflow_engine_reach",
+            "unobserved",
+            _WORKFLOW_ENGINE_REACH_REMEDIATION.format(command="omh update --full"),
+            evidence_boundary,
+            f"install manifest or skill directory unreadable: {error}",
+        )
+    profile = str((manifest or {}).get("skill_profile") or "")
+    # Only a `full` install adds every packaged skill; every other recorded
+    # value needs the flag that changes the profile.
+    command = "omh update" if profile == "full" else "omh update --full"
+    remediation = _WORKFLOW_ENGINE_REACH_REMEDIATION.format(command=command)
+    if manifest is None or not installed:
+        return AdviceEntry(
+            "workflow_engine_reach",
+            "unobserved",
+            remediation,
+            evidence_boundary,
+            "no OMH skill install found to measure reach against",
+        )
+    engines = ulw_inventory_payload()["canonical_engines"]
+    absent = sorted(
+        str(engine["display_name"]) for engine in engines if str(engine["canonical"]) not in installed
+    )
+    if not absent:
+        return AdviceEntry(
+            "workflow_engine_reach",
+            "ok",
+            remediation,
+            evidence_boundary,
+            f"all {len(engines)} ULW workflow engine(s) installed; profile={profile or 'unrecorded'}",
+        )
+    return AdviceEntry(
+        "workflow_engine_reach",
+        "advice",
+        remediation,
+        evidence_boundary,
+        (
+            f"recorded skill profile {profile or 'unrecorded'}; {len(absent)} of {len(engines)} "
+            f"ULW workflow engine(s) not installed: {', '.join(absent)}"
+        ),
+    )
+
+
 def run_config_advisories(
     hermes_home: str | Path | None = None,
     *,
@@ -939,5 +1041,6 @@ def run_config_advisories(
             check_legacy_plan_artifacts(hermes_home),
             check_orphaned_project_scope_store(hermes_home),
             check_installed_skill_context_weight(hermes_home),
+            check_workflow_engine_reach(hermes_home, omh_home=omh_home),
         ],
     )

@@ -19,7 +19,7 @@ from ..config_adapter import (
 )
 from ..hashutil import sha256_file, sha256_text
 from ..local_store import can_write_dir
-from ..install.guidance_projection import build_guidance_projection_status
+from ..install.guidance_projection import build_guidance_projection_status, catalog_revision
 from ..install.hook_integrity import HOOK_HOST_TARGET, VALID_HOOK_EVENTS, build_hook_integrity_status
 from ..install.identity_conflicts import build_identity_conflict_report
 from ..install.installer import installed_skill_directories
@@ -46,7 +46,6 @@ from ..plugin_pack import PLUGIN_NAME, inspect_plugin_bundle
 from ..runtime.artifacts import read_state, read_state_error
 from ..skill_pack import CORE_SKILLS, builtin_skill_templates
 from ..system.security_posture import SECURITY_POSTURE_ENV_VAR, STRICT_POSTURE, resolve_security_posture
-from ..version import __version__
 from ..targets import read_target_registry_result, summarize_target_registry
 from ..workflow_state import list_workflow_states
 
@@ -1324,6 +1323,20 @@ def _skill_freshness_check(paths: OmhPaths, manifest: dict) -> Check:
     untouched installed files against what the running package would render
     today and points a mismatch at `omh update`. Locally edited files are
     excluded here because `local_modifications` already owns that report.
+
+    The message reports catalog revisions, not a package version pair, because
+    the revision is what the finding was derived from. Catalog content moves
+    without a version bump on every preview build, and the version pair then
+    read `installed by omh 2.0.3, but this omh is 2.0.3` -- a sentence that
+    contradicts itself while asserting a real problem, so a user could not act
+    on it. `catalog_revision` is the identifier `guidance_projection` already
+    names, so the two checks describe one condition in one vocabulary.
+
+    A revision pair has the same failure mode, so it is printed only when there
+    are two revisions to print. A manifest that records the current revision
+    over files that do not match it is a real state -- it is what a rewritten
+    or partially repaired manifest leaves behind -- and it is reported as that
+    disagreement rather than as one digest quoted against itself.
     """
     source = str(manifest.get("source", "builtin"))
     if source != "builtin":
@@ -1351,21 +1364,33 @@ def _skill_freshness_check(paths: OmhPaths, manifest: dict) -> Check:
         if installed_sha != manifest_sha_by_rel[rel]:
             continue
         stale.append(template.name)
+    current_revision = catalog_revision()
+    installed_revision = str(manifest.get("catalog_revision", "")) or "unrecorded"
     if not stale:
         return Check(
             "skill_freshness",
             True,
-            f"installed managed skills match the omh {__version__} catalog",
+            f"installed managed skills match catalog_revision={current_revision[:12]}",
         )
-    installed_version = str(manifest.get("version", "unknown"))
     listed = ", ".join(sorted(stale)[:5]) + (", ..." if len(stale) > 5 else "")
+    if installed_revision == current_revision:
+        # The manifest claims the generation this package renders and the files
+        # recorded under it do not match it, so there is no second revision to
+        # name. Printing the pair anyway would repeat one digest twice, which
+        # is the self-contradicting shape the version pair had.
+        detail = (
+            f"the install manifest records catalog_revision={current_revision[:12]} "
+            "but these files do not match it"
+        )
+    else:
+        detail = (
+            f"installed_revision={installed_revision[:12]} "
+            f"catalog_revision={current_revision[:12]}"
+        )
     return Check(
         "skill_freshness",
         False,
-        (
-            f"{len(stale)} managed skill(s) still carry content installed by omh {installed_version}, "
-            f"but this omh is {__version__}: {listed}"
-        ),
+        f"{len(stale)} managed skill(s) do not match the catalog this omh renders ({detail}): {listed}",
         remediation="Run `omh update` to regenerate the managed skills from the current package catalog.",
         next_action="Run `omh update`, then `omh doctor` again.",
     )

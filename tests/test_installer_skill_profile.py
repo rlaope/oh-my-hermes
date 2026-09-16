@@ -13,6 +13,7 @@ load_local_package()
 from _cli_harness import run_cli
 from omh.core.errors import OmhError
 from omh.hashutil import sha256_file
+from omh.install.guidance_projection import catalog_revision
 from omh.installer import (
     install_skill_pack,
     installed_skill_names,
@@ -30,6 +31,7 @@ from omh.skill_pack import (
     builtin_skill_templates,
     installable_skill_names,
 )
+from omh.version import __version__
 
 
 def _installed_names(paths) -> set[str]:
@@ -393,19 +395,22 @@ class SkillFreshnessCheckTests(unittest.TestCase):
     def _check(self, paths, name: str):
         return next((check for check in run_doctor(paths) if check.name == name), None)
 
-    def _age_one_skill(self, paths) -> str:
+    def _age_one_skill(self, paths, *, version: str | None = None) -> str:
         """Rewrite one installed skill as an older release would have left it.
 
         The file content and the manifest sha agree (so it is not a local
         modification), but both differ from what the current package renders.
-        Returns the canonical skill name.
+        `version` rewrites the manifest's recorded package version; leaving it
+        `None` keeps whatever the install recorded, which is the case where the
+        content moved and the version did not. Returns the canonical skill name.
         """
         manifest = read_manifest(paths.manifest_path)
         record = manifest["skills"][0]
         path = paths.skills_dir / record["path"]
         path.write_text("# Old release content\n", encoding="utf-8")
         record["sha256"] = sha256_file(path)
-        manifest["version"] = "0.0.1"
+        if version is not None:
+            manifest["version"] = version
         write_manifest(paths.manifest_path, manifest)
         return record["name"]
 
@@ -421,19 +426,103 @@ class SkillFreshnessCheckTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
             install_skill_pack(paths)
-            aged = self._age_one_skill(paths)
+            aged = self._age_one_skill(paths, version="0.0.1")
 
             freshness = self._check(paths, "skill_freshness")
             self.assertIsNotNone(freshness)
             self.assertFalse(freshness.ok)
             self.assertIn(aged, freshness.message)
-            self.assertIn("0.0.1", freshness.message)
             self.assertIn("omh update", freshness.next_action)
+
+            # Negative control for the equal-version case below: a genuinely
+            # differing package version changes nothing about how the finding
+            # reads, because the finding was never derived from the version.
+            self._assert_carries_no_version_pair(freshness.message)
 
             # Ownership boundary: the aged file matches its manifest record,
             # so it is stale, not a local modification.
             local = self._check(paths, "local_modifications")
             self.assertTrue(local.ok, local)
+
+    def _assert_carries_no_version_pair(self, message: str) -> None:
+        """No package version anywhere in a finding derived from content hashes."""
+        self.assertNotIn("but this omh is", message)
+        self.assertNotIn(__version__, message)
+
+    def test_content_that_moved_without_a_version_bump_still_reads(self) -> None:
+        """#1635: the equal-version case, which is the normal preview-channel one.
+
+        The check is a content comparison, and reporting it as a package
+        version pair produced `installed by omh 2.0.3, but this omh is 2.0.3`
+        -- a sentence that contradicts itself while asserting a real problem,
+        leaving the reader nothing to act on. Same version on both sides,
+        content differing, and the message must still say what differs.
+
+        The manifest here also still records the current catalog revision, so
+        this doubles as the guard against reprinting the version pair's shape
+        in revision clothing: one digest quoted against itself reads exactly as
+        badly. The digest is counted, not matched.
+        """
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths)
+            aged = self._age_one_skill(paths)
+            manifest = read_manifest(paths.manifest_path)
+
+            # The premise, computed: neither the version nor the recorded
+            # revision moved, so either printed as a pair would be two
+            # identical strings.
+            self.assertEqual(manifest["version"], __version__)
+            self.assertEqual(manifest["catalog_revision"], catalog_revision())
+
+            freshness = self._check(paths, "skill_freshness")
+            self.assertFalse(freshness.ok)
+            self.assertIn(aged, freshness.message)
+            self._assert_carries_no_version_pair(freshness.message)
+            self.assertIn("omh update", freshness.next_action)
+
+            current = catalog_revision()[:12]
+            self.assertEqual(
+                freshness.message.count(current),
+                1,
+                f"one revision quoted against itself: {freshness.message}",
+            )
+            self.assertIn("do not match it", freshness.message)
+
+    def test_an_install_from_an_older_catalog_names_both_revisions(self) -> None:
+        """The other half: two real revisions, and both are named.
+
+        Without this case the message could name no revision at all and the
+        equal-revision guard above would still pass.
+        """
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths)
+            aged = self._age_one_skill(paths)
+            manifest = read_manifest(paths.manifest_path)
+            # What an older release's manifest looks like from here: it names a
+            # catalog generation this package does not carry.
+            manifest["catalog_revision"] = "0" * 64
+            write_manifest(paths.manifest_path, manifest)
+
+            freshness = self._check(paths, "skill_freshness")
+            self.assertFalse(freshness.ok)
+            self.assertIn(aged, freshness.message)
+            self.assertIn("installed_revision=" + "0" * 12, freshness.message)
+            self.assertIn(f"catalog_revision={catalog_revision()[:12]}", freshness.message)
+            self._assert_carries_no_version_pair(freshness.message)
+
+    def test_a_current_install_reports_the_revision_it_matches(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths)
+
+            check = self._check(paths, "skill_freshness")
+            self.assertTrue(check.ok, check)
+            # The passing message states the same identifier as the failing one
+            # and as `guidance_projection`, so one condition is not described
+            # in two vocabularies.
+            self.assertIn(f"catalog_revision={catalog_revision()[:12]}", check.message)
 
     def test_locally_edited_skill_is_not_reported_stale(self) -> None:
         with TemporaryDirectory() as tmp:

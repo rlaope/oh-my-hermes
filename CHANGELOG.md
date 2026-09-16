@@ -4,6 +4,44 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh doctor` now says when the installed profile cannot reach the workflow
+  engines, and names the command that fixes it.** `install_skill_pack` adds
+  only what the recorded profile names and otherwise refreshes what is already
+  on disk, and none of the nine canonical ULW engines is in
+  `CORE_PROFILE_SKILLS` — so on a core install `ulw-work` is in neither set and
+  no number of `omh update` runs will ever add it. That ADD/REFRESH rule is
+  deliberate and unchanged; what was missing was the consequence, which nothing
+  restated after `--core`'s help text stated it at the moment of choosing. A
+  user who invoked an engine found nothing and had no way to learn why. The new
+  `workflow_engine_reach` entry names the absent engines and the profile on
+  record, and points at `omh update --full`. It lives in the read-only advisory
+  lane rather than among the doctor checks because core is a legitimate,
+  recommended profile — a fact with a consequence, not a health failure — so it
+  cannot move the doctor status or exit code. It is derived from which engines
+  are absent and never from the profile label, so an install that holds them
+  stays silent whatever it recorded.
+
+- **`doctor`'s staleness finding reports what it actually measured.** The
+  `skill_freshness` check is a content comparison, and its message printed two
+  package versions: on the preview channel, where catalog content moves without
+  a version bump, that read `installed by omh 2.0.3, but this omh is 2.0.3` — a
+  sentence contradicting itself while asserting a real problem, with nothing in
+  it a reader could act on. It now reports catalog revisions, the identifier
+  `guidance_projection` already names, so the two checks describe one condition
+  in one vocabulary. A revision pair has the same failure mode, so it is
+  printed only when there are two revisions to print: a manifest that records
+  the current revision over files that do not match it is reported as that
+  disagreement rather than as one digest quoted against itself.
+
+- **A load-bearing comment in `guidance_projection` no longer states a false
+  reason.** `_projection_state` measures completeness against the install
+  manifest rather than the catalog, and justified that by asserting `omh setup`
+  installs a core subset by default. The default is `full` and has been for
+  some time. The measurement is still right — a user can be on core, and
+  catalog-based completeness would then call that correct install missing — so
+  the behaviour stands and the reason is now stated without naming a default at
+  all. `GuidanceProjectionProfileTests` computes both halves instead.
+
 - **A coding briefing now opens by saying whether it needs you.** The first
   line carries 🔴 / 🟡 / 🟢 — stopped, waiting on you, running — which is what
   a phone notification shows when it shows sixty characters and nothing else.

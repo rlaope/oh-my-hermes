@@ -197,9 +197,15 @@ def _projection_state(
     installed_paths = _manifest_paths(manifest)
     if not installed_paths:
         return "missing"
-    # Completeness is measured against the manifest, not against the catalog.
-    # `omh setup` installs a profile subset by default (`CORE_PROFILE_SKILLS`),
-    # so "every template has a file" would report a correct install as missing.
+    # Completeness is measured against the manifest, not against the catalog,
+    # because the profile recorded at install time decides which templates
+    # should exist: a `core` install holds `CORE_PROFILE_SKILLS` and nothing
+    # else, so "every template has a file" would report that correct install as
+    # missing. The rule holds whatever the default profile is, which is why no
+    # default is named here -- an earlier revision of this comment asserted the
+    # default WAS that subset, and stayed in place after the default became
+    # `full`. `GuidanceProjectionProfileTests` computes both halves instead:
+    # that a core install reads `fresh`, and what the default actually is.
     if any(not (skills_dir / rel).is_file() for rel in installed_paths):
         return "missing"
     if not installed_revision:

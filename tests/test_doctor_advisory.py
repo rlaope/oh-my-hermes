@@ -24,11 +24,16 @@ from omh.maintenance.advisory import (
     check_legacy_plan_artifacts,
     check_orphaned_project_scope_store,
     check_soul_missing_or_starter,
+    check_workflow_engine_reach,
     run_config_advisories,
 )
 from omh.maintenance.doctor import Check, doctor_ok, recommended_next_action, run_doctor, run_doctor_advisories
 from omh.commands import setup as setup_commands
+from omh.installer import install_skill_pack
+from omh.manifest import read_manifest, write_manifest
 from omh.paths import resolve_paths
+from omh.skill_pack import CORE_PROFILE_SKILLS
+from omh.skills.catalog import omh_skill_install_path, ulw_inventory_payload
 
 ADVISORY_CHECK_IDS = {
     "model_routing_readiness",
@@ -38,6 +43,7 @@ ADVISORY_CHECK_IDS = {
     "legacy_plan_artifacts",
     "orphaned_project_scope_store",
     "installed_skill_context_weight",
+    "workflow_engine_reach",
 }
 
 ALL_AUTO_AUXILIARY = """version: 1
@@ -413,6 +419,10 @@ class MembershipGuardrailTests(unittest.TestCase):
                 # No subdirectory store below a repository root in the fixture home.
                 "orphaned_project_scope_store": "ok",
                 "installed_skill_context_weight": "advice",
+                # The fixture home has no install manifest, so reach cannot be
+                # measured; the firing case is covered in
+                # WorkflowEngineReachTests.
+                "workflow_engine_reach": "unobserved",
             },
         )
 
@@ -427,6 +437,107 @@ class MembershipGuardrailTests(unittest.TestCase):
         ok_with = doctor_ok(checks)
         self.assertEqual(ok_with, doctor_ok([c for c in checks]))
         self.assertIsInstance(recommended_next_action(checks), str)
+
+
+class WorkflowEngineReachTests(unittest.TestCase):
+    """#1635: a core install cannot reach the ULW workflow engines, and now says so.
+
+    `install_skill_pack` ADDS only what the recorded profile names and
+    otherwise refreshes what is on disk, so on a core install a full-only skill
+    is in neither set and no number of `omh update` runs will ever add one.
+    That rule is deliberate and stays. What was missing is the consequence: a
+    user invokes a workflow engine, finds nothing, and no surface names the
+    command that would install it.
+
+    The advisory lane is the home for it because core is a legitimate,
+    deliberately recommended profile -- a fact with a consequence, not a health
+    failure -- so it must not move the doctor status or exit code, which
+    `ExitCodeParityTests` already pins for the lane as a whole.
+    """
+
+    def _engines(self) -> list[dict]:
+        return list(ulw_inventory_payload()["canonical_engines"])
+
+    def _entry(self, paths):
+        return check_workflow_engine_reach(paths.hermes_home, omh_home=paths.omh_home)
+
+    def test_no_workflow_engine_is_in_the_core_profile(self) -> None:
+        """The premise, computed: this is why the entry has to exist at all."""
+        core = set(CORE_PROFILE_SKILLS)
+        reachable = sorted(
+            str(engine["canonical"]) for engine in self._engines() if str(engine["canonical"]) in core
+        )
+        self.assertEqual(reachable, [])
+
+    def test_a_core_install_is_told_what_it_cannot_reach_and_which_command_adds_it(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths, profile="core")
+
+            entry = self._entry(paths)
+            self.assertEqual(entry.status, "advice")
+            for engine in self._engines():
+                self.assertIn(str(engine["display_name"]), entry.observed)
+            self.assertIn("core", entry.observed)
+            self.assertIn("omh update --full", entry.remediation)
+
+            # The reason this needs saying rather than merely recording: the
+            # update the operator would reach for adds none of them.
+            install_skill_pack(paths, profile="core")
+            self.assertEqual(self._entry(paths).observed, entry.observed)
+
+    def test_a_full_install_is_not_told_to_run_full(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths, profile="full")
+
+            entry = self._entry(paths)
+            self.assertEqual(entry.status, "ok")
+            self.assertNotIn("--full", entry.remediation)
+
+    def test_an_install_holding_every_engine_is_silent_whatever_it_recorded(self) -> None:
+        """Derived from what is absent, never from the profile label.
+
+        A `full` install whose manifest was later rewritten to `core` is the
+        real `retained_exception` state -- installs never delete -- and it has
+        every engine, so there is nothing to say.
+        """
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths, profile="full")
+            manifest = read_manifest(paths.manifest_path)
+            manifest["skill_profile"] = "core"
+            write_manifest(paths.manifest_path, manifest)
+
+            entry = self._entry(paths)
+            self.assertEqual(entry.status, "ok")
+            self.assertIn("core", entry.observed)
+
+    def test_an_engine_present_on_a_core_install_is_not_named(self) -> None:
+        """The per-engine half: `ultrawork` is the engine the reports named."""
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            install_skill_pack(paths, profile="core")
+            present = next(
+                engine for engine in self._engines() if str(engine["canonical"]) == "ultrawork"
+            )
+            _write(
+                paths.skills_dir / omh_skill_install_path(str(present["canonical"])) / "SKILL.md",
+                "# placed by hand\n",
+            )
+
+            entry = self._entry(paths)
+            self.assertEqual(entry.status, "advice")
+            self.assertNotIn(str(present["display_name"]), entry.observed)
+            for engine in self._engines():
+                if str(engine["canonical"]) == str(present["canonical"]):
+                    continue
+                self.assertIn(str(engine["display_name"]), entry.observed)
+
+    def test_a_home_with_no_install_is_unobserved_rather_than_advice(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
+            self.assertEqual(self._entry(paths).status, "unobserved")
 
 
 class NoWriteTests(unittest.TestCase):
