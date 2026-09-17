@@ -24,6 +24,7 @@
 
 <p align="center">
   <strong>一度インストールするだけ。Hermes はそのまま、より強い運用レイヤーを追加します。</strong>
+  <br>
   <em>計画、調査、制作、コーディング handoff、運用、プロジェクト記憶を明確な証拠境界とともに提供します。</em>
 </p>
 
@@ -31,11 +32,15 @@
   <img src="assets/oh-my-hermes-agent-poster.png" alt="Oh My Hermes Agent poster" width="720">
 </p>
 
-**oh-my-hermes**（OMH）は、
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) への通常の依頼を、
-適切な機能、有用な次の行動、そして実際に起きたこと・まだ起きていないことの
-正直な状態へ変換します。Hermes を置き換えたり、コーディング executor を
-隠したりせず、既存の Hermes ワークフローを強化します。
+<p align="center">
+  <strong>oh-my-hermes</strong>（OMH）は、
+  <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>
+  への通常の依頼を、適切な機能、有用な次の行動、そして実際に起きたこと・まだ起きていないことの
+  正直な状態へ変換します。Hermes を置き換えたり、コーディング executor を
+  隠したりせず、既存の Hermes ワークフローを強化します。
+  <br><br>
+  OMH は Hermes ネイティブスキルの上に載る運用レイヤーです。問題を枠付けし、ワークフローと証拠ゲートを選び、その統治された経路の中でネイティブスキルを能力（capability）として実行します。
+</p>
 
 [Website](https://rlaope.github.io/oh-my-hermes/) ·
 [Documentation](docs/README.md) ·
@@ -189,6 +194,8 @@ hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes
 
 </details>
 
+<br>
+
 ## 得られるもの
 
 OMH は Hermes Agent のための 3 つを 1 つのプラグインとして届ける。コーディングインテリジェンス（01–04, 07）、長期記憶システム（08）、最適化されたワークフローパッケージ（05–06）。実際の画面に基づくシーンをそれぞれ 1 つ。
@@ -203,7 +210,7 @@ OMH のコーディング面は 3 つの動きだ。モデルごとにプロン�
 
 ### 02 · カテゴリはエグゼキュータごとにあなたが所有する
 
-`ultrabrain`、`deep`、`architect`、`quick`、`writing`、`visual-engineering`。それぞれがコーディングエグゼキュータごとのモデル+effort チェーンで、1 つのファイルで読み、上書きできる。プロバイダがモデルを拒否すればチェーンは次へ進み、提供できないプロバイダを引き継ぐディスパッチは黙ってダウングレードされずに拒否される。setup がプロバイダをインタビューし、このマシン向けにチェーンを並べ替える。
+`ultrabrain`、`deep`、`architect`、`unspecified-high`、`unspecified-low`、`quick`、`writing`、`visual-engineering`、`artistry`、`capable`、`simple-work`、`deep-work`：それぞれが編集可能なモデル + effort チェーンで、下の「推奨モデル」に挙げる十二個と同じものを、1 つのファイルで読み、上書きできる。プロバイダがモデルを拒否すればチェーンは次へ進み、提供できないプロバイダを引き継ぐディスパッチは黙ってダウングレードされずに拒否される。setup がプロバイダをインタビューし、このマシン向けにチェーンを並べ替える。
 
 <p align="center">
   <img src="assets/showcase-02-categories.svg" alt="omh coding category-maestro show: エグゼキュータ別カテゴリチェーン、オペレータのオーバーライド、拒否されたディスパッチ" width="1080">
@@ -227,7 +234,7 @@ OMH のコーディング面は 3 つの動きだ。モデルごとにプロン�
 
 ### 05 · Oh-My-Hermes インターフェースと Hermes Agent ワークフロー
 
-委譲レーンごとに 1 行: モデル、effort、ターン、トークン、コスト、ライブ更新。Maestro 経由で Codex や Claude Code に渡したレーンは `(codex/maestro …)`、`(claude/maestro …)` のタグ付きで自分の行を持つ。コスト 0 はホストが確認したときだけ表示され、価格不明の呼び出しは `$0` ではなく `unknown` と言う。プロセスが存在するまでは `Plan · not run`、エグゼキュータが完了を告げれば `Code · reported done`、ゲートを通過して初めて `Test · verified`。プロンプト上の phase todo は後から書いた要約ではなく、その実行自身のチェックリストだ。
+インターフェースは Hermes ターミナルです。プロンプト下に OMH dock、上に phase todo。ワークフローは `ulw-*` エンジンとすべての `omh-*` スキルで、チャットからルーティングされます。委譲レーンごとに 1 行: モデル、effort、ターン、トークン、コスト、ライブ更新。Maestro 経由で Codex や Claude Code に渡したレーンは `(codex/maestro …)`、`(claude/maestro …)` のタグ付きで自分の行を持つ。コスト 0 はホストが確認したときだけ表示され、価格不明の呼び出しは `$0` ではなく `unknown` と言う。プロセスが存在するまでは `Plan · not run`、エグゼキュータが完了を告げれば `Code · reported done`、ゲートを通過して初めて `Test · verified`。プロンプト上の phase todo は後から書いた要約ではなく、その実行自身のチェックリストだ。
 
 <p align="center">
   <img src="assets/showcase-05-hud.svg" alt="OMH HUD: レーンごとのモデル・effort・ターン・トークン・コスト出所・証拠状態と phase todo" width="1080">
@@ -379,9 +386,19 @@ $ cat ~/.omh/routing/model-chains.json
 現在有効な chain は `omh model-chains show` で確認できます。ファイルを直接編集したくない場合は、ターミナルで `omh model-chains`（または `omh model`）を実行すると矢印キーのピッカーが開き — 上下でカテゴリ、左右で head モデル、`-`/`+` で effort — Modern TUI では `/omh-model` が同じピッカーを開きます。スクリプト向けには `omh model-chains set quick "kimi-k3-ultrafast:low, glm-5.3-ultrafast:low"` のようにコマンドから同じファイルを書き換えられます。
 alias に provider 固有の wire ID が必要な場合は、`model_provider_routes/v1` 形式の `~/.omh/routing/model-providers.json` に一度マッピングします。その後は `set`、`status`、fallback、HUD が alias/provider/wire model の完全な route を表示します。OMH が保存するのは provider ID だけで、credential は保存しません。
 
+アカウントごとに状況が違うので、OMH は Hermes がすでに紐づけている provider を自分で読み取ります — `hermes auth` のログイン、Hermes 設定の `providers:` エントリや `model.provider`、`$HERMES_HOME/.env` の API-key 変数名 — そして自分で数えます。各チェーンは、紐づいた provider が扱える項目が先頭に来るよう並べ替えられ、ピッカーは残りをマークするだけで、何も削除せず、確認のために何も呼び出しません。読むのは id と変数名だけで、鍵や token は読みません。対話式の `omh setup` は引き続き尋ね、紐づいた行はあらかじめチェック済みなので、種類の訂正、実際には使えない紐づけ済み provider の外し、OMH が置けなかったものの追加、Claude Code サブスクリプションの有無を伝えられます。その回答は `~/.omh/routing/providers.json`（`provider_entitlements/v1`）に入り、自動検出より優先されます。Claude Code サブスクリプションは Maestro レーン向けの Claude Code `--model` 優先設定だけを種まきします。Hermes 自身はそれを消費できないからです。
+
 Hermes に **モデルをセットアップして** と頼むと、確認や変更ができます。これは編集可能な優先設定であり、benchmark 結果ではありません。詳しい設定、fallback、provider、所有権のルールは [Guided Model Setup](docs/INSTALLATION.md#guided-model-setup) を参照してください。
 
-コーディング委任の dispatch（`omh coding run` / `omh coding fanout dispatch`）は、このファイルとは別の、operator が自分で設定する preference を読みます。Claude Code で最強クラスのティアを使うには `~/.omh/routing/dispatch-models.json` に `"claude-code": "opus"` を設定するか、`omh coding run` の一回の実行に `--model opus` を渡してください。`codex` も、アカウントで使える model id を確認した上で同様に設定できます。スキーマと完全な優先順位は `docs/FANOUT.md`（Dispatch-model preference）を参照してください。
+コーディング委任の dispatch（`omh coding run` / `omh coding fanout dispatch`）— Claude Code や Codex を直接起動する Maestro レーン — は、それ自身の兄弟ファイルと同じカテゴリダイヤルを持ちます。作業カテゴリごとにルーティングします:
+
+```sh
+$ omh coding category-maestro set codex ultrabrain gpt-5.6-sol:xhigh
+$ omh coding category-maestro interview   # ガイド付きウォーク、Enter で各チェーンを保持
+$ omh coding run --owner codex --category ultrabrain --goal ...
+```
+
+これは `~/.omh/routing/category-maestro.json`（`omh_category_maestro/v1`）を編集します。`omh coding category-maestro show` は有効な表をオペレータ上書き付きで表示し、対話式 `omh setup` も同じウォークを提供します。実行時の明示的な `--model` は常に優先され、`~/.omh/routing/dispatch-models.json` はどのルートも解決しないときだけ使われる owner ごとの既定値のままです（Claude Code で最強ティアを使うなら、そこに `"claude-code": "opus"` を設定）。スキーマと完全な優先順位は `docs/FANOUT.md`（Category-maestro と Dispatch-model preference）を参照してください。
 
 <details>
 <summary><strong>または、以下を Hermes や別の coding agent に貼り付けてください</strong></summary>
@@ -395,6 +412,8 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 ```
 
 </details>
+
+<br>
 
 ## ウルトラスキル
 
@@ -416,6 +435,8 @@ Do not replace the resolved SHA with main. Execute the pinned protocol's OS-appr
 | ⚡ `ulw-loop` | 計画 → 実装 → レビューを、ゴールが本当に通るまで回します。 |
 | ⚡ `ulw-qa` | わざと過酷なシナリオで攻撃し、壊れた所を直します。 |
 | ⚡ `ulw-perf` | 本当に遅く高コストな場所を測り、ホットパスを一つずつ修正します。 |
+
+<br>
 
 ## OMH が追加するもの
 
@@ -448,7 +469,7 @@ Hermes Agent はすでにループを回しています。OMH はそのループ
 | --- | --- |
 | 🧭 **Mixture-of-models ルーティング** | 委譲される lane ごとに、dispatch 時点でカテゴリ（モデル + 推論強度）が付きます。provider がモデルを拒否すれば chain を下り、仕事をしなかった子は緑の行ではなく `failed` と表示されます。 |
 | 🎛️ **モデル系列ごとのキャリブレーション** | GPT-6 Astra、GPT-5.6、Claude 5.1、GLM 5.3、Kimi、Gemini、Qwen、DeepSeek など、系列と世代ごとにプロンプティングを調整し、ベンチマークのペアが効果を示す間だけ維持します。 |
-| 🗂️ **自分で所有するカテゴリ** | executor ごとに 9 つの標準カテゴリ、`omh model-chains set` による並べ替え、マシンごとに chain を並べ替える entitlement インタビュー、実行前にリクエストがどこへルーティングされるかを示すライブビュー。 |
+| 🗂️ **自分で所有するカテゴリ** | executor ごとに十二の標準カテゴリ、`omh model-chains set` による並べ替え、マシンごとに chain を並べ替える entitlement インタビュー、実行前にリクエストがどこへルーティングされるかを示すライブビュー。 |
 | 🖥️ **ネイティブ TUI サーフェス** | OMH HUD（カテゴリ・ターン・コスト・キャッシュ付きのライブ行）、プロンプト上の phase todo、`parallel shot ×N`、full-row diff バンド、管理されたスキン。Hermes の隣にインストールされ、Hermes にパッチは当てません。 |
 | ⚡ **観測できる並列作業** | 独立した作業を、ファイル所有権が重ならない fanout unit に分割し、provider 負荷に応じた admission control、型付きの結果 sidecar、返ってきた結果を読む verification gate を付けます。 |
 | 🎼 **Maestro handoff** | Codex、Claude Code、その他の CLI のための明示的な第二 lane。readiness probe、capability snapshot、owner-fit レポート、実行ごとのモデルと強度の指定。opt-in であり、既定の経路ではありません。 |
@@ -458,6 +479,8 @@ Hermes Agent はすでにループを回しています。OMH はそのループ
 | 🛡️ **自分で書くガードレール** | ルールを外れた tool call を自分のルール文で遮断する toolcall rules、stub やスキップされたテストを証拠と認めない completion-integrity gate、危険な操作のための approval tier。 |
 | ♾️ **ウルトラワークフローエンジン** | 並列デリバリー lane、ledger と実際の完了 gate で回る計測ループ、エンジン実行前の decision-frontier インタビュー。一覧は上のウルトラスキルにあります。 |
 | 📦 **決定的なカタログ** | 一つのソースから生成される 100 以上のインストール可能なスキル、ネガティブケースを含む routing precision コーパス、1 バイトのずれで CI が失敗する drift gate。 |
+
+<br>
 
 ## 主張より証拠
 
@@ -470,7 +493,16 @@ OMH は自分が見たことだけを起きたと報告します。表示され�
 | `Code · reported done` | executor が終わったと言いました。結果は誰も確認していません。 |
 | `Test · verified` | test、review、CI gate が実際に通過しました。 |
 
-重要なのは下から二番目の行です。executor が終わったと言うことと結果が確認されたことは別ですが、多くのツールは両方を「完了」と書きます。
+重要なのは下から二番目の行です。executor が終わったと言うことと結果が確認されたことは別ですが、多くのツールは両方を「完了」と書きます。能力影響は独立した次元ごとに報告され、一つのマーケティング用スコアに畳まれません。詳しくは [Capability Impact](docs/CAPABILITY_IMPACT.md)。
+
+### 測定: 単独 Hermes と OMH 経由の Hermes
+
+`benchmarks/product-ab/v1` は、このリポジトリ自身のマージ済み pull request を固定コーパスとして二つの製品を比較し、それらの PR 自身のテストで採点し、アームごとに四つの数字 — 通過率、通過タスクあたりのコスト、ゴールあたりの壁時計時間、偽完了率 — を報告します。
+
+**測定済みの実行結果はまだ公開されていません。** レーン、コーパス、オフラインパイロットは揃っています。リポジトリが指せる実行記録ができた時点で、この節に表が載ります。再現コマンドと完全な主張境界: [`benchmarks/product-ab/v1/README.md`](benchmarks/product-ab/v1/README.md)。
+
+<br>
+
 ## ドキュメント
 
 - [ドキュメントマップ](docs/README.md)
@@ -481,8 +513,21 @@ OMH は自分が見たことだけを起きたと報告します。表示され�
 - [Workflow reference](docs/WORKFLOWS.md)
 - [ロール](docs/ROLES.md)
 - [活用事例](docs/APPLICATION_CASES.md)
+- [モデルルーティング、ファンアウト契約、リクエスト採点](docs/FANOUT.md)
+- [ファンアウト executor 証拠: セッション、障害診断、容量（agent/operator 向け）](docs/FANOUT-EXECUTOR-EVIDENCE.md)
+- [Agent ボードとネイティブ Kanban 連携（agent/operator 向け）](docs/AGENT-BOARD.md)
+- [モデルごとのキャリブレーションマップ](MODEL_OPTI.md)
+- [証拠ルールと能力影響](docs/CAPABILITY_IMPACT.md)
+- [長期記憶モデル](docs/MEMORY.md)
+- [Hermes で超大容量 PDF を処理する](docs/LONG-DOCUMENT-READING.md)
+- [ライブモデルベンチマークと測定結果](benchmarks/live-model-tools/v1/README.md)
 - [リリースと開発](docs/RELEASE.md)
+
+<br>
+
 ## 開発
+
+ソースチェックアウト時:
 
 ```sh
 PYTHONPATH=tests uv run python -m unittest discover -s tests -v

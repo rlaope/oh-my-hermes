@@ -3876,16 +3876,14 @@ class RouterContentTests(unittest.TestCase):
             # and from 500 when the /omh-model capture (a centred figure under
             # the recommended-models heading, 4 lines, owner-directed) landed
             # in every language; it still sits below README.md's length.
-            # 505 -> 540 when README.zh.md alone caught up to the English
-            # README (#1595): the twelve-category correction, the interface
-            # sentence, the category-maestro dial, provider auto-detection, the
-            # product A/B section, and the full docs list. Every earlier raise
-            # here says "in every language" because every earlier addition
-            # landed in all three at once. This one did not, so zh is 535 while
-            # ja is 503 and ko 498, and the bound is no longer evidence that
-            # the three are in step -- #1600 tracks bringing ja and ko across.
-            # The ceiling still does its remaining job: below README.md's 660.
-            self.assertLess(len(localized_readme.splitlines()), 540)
+            # 540 -> 560 after #1600 brought README.ja.md and README.ko.md
+            # across the same six catch-ups README.zh.md took in #1595/#1596
+            # (twelve categories, interface lead-in, category-maestro dial,
+            # provider auto-detection, product A/B section, full docs list).
+            # The three localized files are in step again; the ceiling is only
+            # a sanity bound against README.md's length (~660), not a parity
+            # proxy — structural sync is asserted separately below.
+            self.assertLess(len(localized_readme.splitlines()), 560)
             # The trust surface is the evidence table, not the wire token that
             # used to stand in for it. Pinning the token meant a README could
             # satisfy this by naming a value no reader could decode; pinning
