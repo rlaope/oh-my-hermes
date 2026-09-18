@@ -18,7 +18,6 @@ from ..quality.cross_harness_adapter_sandbox import (
     backend,
     backend_available,
     preflight,
-    read_roots_are_safe,
     runtime_roots,
     sandbox_command,
     unique_roots,
@@ -261,11 +260,15 @@ def prepare_fanout_filesystem_confinement(
     roots = unique_roots(
         (worktree, *(Path(executable).parent for executable in executables.values()), *runtime_roots(selected))
     )
-    if not read_roots_are_safe(roots):
-        return _unconfined(
-            worktree, selected, environment, "unsafe_sandbox_read_root", roots=roots,
-            write_roots=write_roots, write_literals=write_literals, executables=executables,
-        )
+    # These roots are deliberately not screened with `read_roots_are_safe`. The
+    # spawn passes `allow_broad_file_read=True` (see `command`), so the child
+    # reads the whole host tree and the screen has nothing to narrow; the roots
+    # only shape the sandbox-exec preflight and probe, which run omh's own
+    # `/usr/bin/true` and `/bin/sh` script. A screen failure used to return
+    # `_unconfined`, so an owner CLI under `~/.claude/local` (a `.claude` part)
+    # dropped the WRITE fence for that dispatch: the more sensitive the
+    # executable's location, the less confined the run (#1602). The strict
+    # cross-harness-adapter lane keeps the screen because there it does narrow reads.
     if selected in {"sandbox-exec", "bwrap"}:
         scratch_directory = worktree / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY
         scratch_directory.mkdir(parents=True, exist_ok=True)

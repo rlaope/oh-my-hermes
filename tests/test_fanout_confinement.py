@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import shlex
@@ -23,6 +24,7 @@ from omh.coding.fanout_confinement import (  # noqa: E402
 )
 from omh.quality.cross_harness_adapter_sandbox import (  # noqa: E402
     ChildContext,
+    read_roots_are_safe,
     runtime_roots,
     sandbox_command,
 )
@@ -524,6 +526,64 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
             self.assertEqual(len(probe_calls), 1)
             self.assertFalse(probe_calls[0]["allow_broad_file_read"])
             self.assertFalse(probe_calls[0]["inherit_environment"])
+
+    def test_owner_cli_under_a_sensitive_read_root_keeps_the_write_fence(self) -> None:
+        # ~/.claude/local/<cli> is a standard Claude Code install shape. Its
+        # parent carries a `.claude` part, so `read_roots_are_safe` rejects it;
+        # the fanout lane must still confine writes (#1602).
+        with TemporaryDirectory() as temporary:
+            worktree = Path(temporary) / "worktree"
+            worktree.mkdir()
+            home = Path(temporary) / "home"
+            owner_cli = home / ".claude" / "local" / "claude"
+            owner_cli.parent.mkdir(parents=True)
+            owner_cli.touch()
+            probe_calls: list[dict[str, object]] = []
+
+            def record_probe(argv, *_args, **kwargs):
+                probe_calls.append(kwargs)
+                return argv
+
+            def passing_probe(argv, **_kwargs):
+                Path(argv[4]).write_text("inside", encoding="utf-8")
+                return subprocess.CompletedProcess(
+                    argv, 0, "inside_exit=0 owner_state_exit=0 outside_exit=1\n", "refused"
+                )
+
+            with (
+                mock.patch("omh.coding.fanout_confinement.backend", return_value="sandbox-exec"),
+                mock.patch("omh.coding.fanout_confinement.backend_available", return_value=True),
+                mock.patch(
+                    "omh.coding.fanout_confinement._resolve_executables",
+                    return_value={"claude": str(owner_cli)},
+                ),
+                mock.patch("omh.coding.fanout_confinement.preflight", return_value=(True, "digest")) as preflight_call,
+                mock.patch("omh.coding.fanout_confinement.sandbox_command", side_effect=record_probe),
+                mock.patch("omh.coding.fanout_confinement.subprocess.run", side_effect=passing_probe),
+            ):
+                confinement = prepare_fanout_filesystem_confinement(
+                    worktree, {}, (("claude", "-p", "task"),)
+                )
+
+            # Negative control: the helper the fanout lane stopped consulting
+            # still rejects these roots, so the strict lane is unchanged.
+            self.assertFalse(read_roots_are_safe(confinement.roots))
+            self.assertIn(owner_cli.parent.resolve(), confinement.roots)
+            self.assertEqual(confinement.receipt["status"], "observed")
+            self.assertTrue(confinement.receipt["enforced"])
+            self.assertEqual(confinement.receipt["reason_code"], "")
+            self.assertEqual(preflight_call.call_args.args[1], confinement.roots)
+            self.assertEqual(len(probe_calls), 1)
+            self.assertFalse(probe_calls[0]["allow_broad_file_read"])
+
+            command = confinement.command(("claude", "-p", "task"))
+
+            self.assertIsNotNone(command)
+            assert command is not None
+            policy = command[2]
+            self.assertIn("(allow file-read*)(", policy)
+            self.assertIn(f'(allow file-write* (subpath {json.dumps(str(worktree.resolve()))}))', policy)
+            self.assertNotIn(str(home), policy)
 
     def test_bwrap_command_environment_keeps_toolchain_scratch_in_the_worktree(self) -> None:
         worktree = Path("/tmp/fanout-bwrap-worktree")
