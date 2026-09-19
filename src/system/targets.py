@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ..config_adapter import ensure_external_dir, read_config, write_config
+from ..config_adapter import ensure_external_dir, update_config
 from ..local_store import atomic_write_json, file_lock, read_json_object_result, utc_now
 from ..paths import OmhPaths, expand_path
 
@@ -65,11 +65,22 @@ def record_target_observation(
         registry = None
     if ensure_config:
         config_path = Path(str(target["hermes_config_path"]))
-        current = read_config(config_path)
-        change = ensure_external_dir(current, paths.skills_dir)
-        if change.changed:
-            write_config(config_path, change.text)
-            config_changed = True
+        # The lock lives in an OMH home, and this record may name another
+        # Hermes home than the one `paths` resolved -- a target observation
+        # can describe a profile this invocation is not bound to. Pass the
+        # home only when it is the one whose config is being written; for
+        # any other, the signature compare is the whole contract (#1742).
+        own_config = config_path == paths.hermes_config_path
+        # A `ConfigConcurrentUpdate` propagates. It is an `OmhError`, so the
+        # CLI reports it as a refusal and exits non-zero; recording an
+        # observation that says the registration happened when it did not is
+        # the one outcome this must never produce.
+        change = update_config(
+            config_path,
+            lambda text: ensure_external_dir(text, paths.skills_dir),
+            omh_home=paths.omh_home if own_config else None,
+        )
+        config_changed = change.written
     with file_lock(paths.target_registry_path, private=True):
         registry, error = read_target_registry_result(paths)
         if error:

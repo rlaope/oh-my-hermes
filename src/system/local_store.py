@@ -157,6 +157,54 @@ def atomic_write_text(path: Path, text: str, *, private: bool = False) -> None:
         raise
 
 
+def atomic_replace_text(path: Path, text: str, *, guard: Callable[[], bool]) -> bool:
+    """Replace `path` atomically, aborting when `guard()` says it moved under us.
+
+    `atomic_write_text` above is for files OMH owns outright, where the last
+    writer is always right. This one is for a file somebody else also writes
+    -- the person's Hermes `config.yaml` -- where the last writer being right
+    means losing the other's update.
+
+    The guard runs with the replacement already on disk as a temp file in the
+    same directory AND already carrying the destination's mode, so the only
+    thing left after it returns is the rename. That is what makes the
+    compare sufficient: the last instant another writer's change can be
+    observed is the guard, and the window after it is one `os.replace`,
+    which is atomic. Returns False, having replaced nothing, when the guard
+    refuses.
+
+    The destination's mode is read first, before the temp file exists,
+    because a rename installs the temp file's mode and the temp file was
+    created under this process's umask; without this a config a person had
+    chmodded to 0600 would silently widen on the next OMH write. Reading it
+    up front is also what keeps the guard-to-rename window empty -- an
+    earlier version did the `stat` and the `chmod` between the two and then
+    described the window as one rename, which was not true.
+    """
+    ensure_dir(path.parent)
+    try:
+        mode = path.stat().st_mode & 0o7777
+    except FileNotFoundError:
+        mode = 0
+    tmp = path.with_name(f".{path.name}.{os.getpid()}-{secrets.token_hex(8)}.tmp")
+    created_tmp = False
+    try:
+        with tmp.open("x", encoding="utf-8", newline="") as handle:
+            created_tmp = True
+            handle.write(text)
+        if mode:
+            _with_windows_retry(lambda: tmp.chmod(mode))
+        if not guard():
+            tmp.unlink()
+            return False
+        _with_windows_retry(lambda: tmp.replace(path))
+        return True
+    except OSError:
+        if created_tmp and tmp.exists() and not tmp.is_symlink():
+            tmp.unlink()
+        raise
+
+
 def atomic_write_json(path: Path, data: dict[str, Any], *, private: bool = False) -> None:
     atomic_write_text(path, json.dumps(data, indent=2, sort_keys=True) + "\n", private=private)
 

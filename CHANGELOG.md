@@ -4,6 +4,57 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **One discipline for every OMH write of Hermes' `config.yaml`.** OMH wrote
+  that file from two families that did not know about each other. The
+  delegation route writer read, compared a file signature and replaced
+  atomically, and since #1737 held a lock; `write_config` rewrote the whole
+  file with no lock and no compare, reached by `omh setup`, `omh theme`,
+  `omh memory`, self-update's external-dirs registration and
+  `system/targets`. One of those could read the file, have a route land, and
+  write back its stale copy. The route was erased, and the restore record
+  then saw a value it had not written and dropped the person's baseline as a
+  foreign edit. Before #1737 that needed somebody running a CLI command
+  during a routed dispatch; with restores running at turn and session
+  boundaries the window is met far more often.
+
+  Every one of the seven call sites now goes through `update_config`, which
+  reads, runs the caller's mutation against the text it just read, checks the
+  signature again immediately before the replace, retries when the file
+  moved, and refuses rather than writing after three rounds. The retry is
+  what keeps both updates: the second attempt derives its change from the
+  other writer's file. Where the OMH home is known and exists the CLI takes
+  the SAME lock the route writer holds, so the two families serialize instead
+  of merely detecting each other. `system/targets` is the one place that may
+  write a config belonging to a Hermes home this invocation is not bound to,
+  and there the signature compare stands alone; it is marked as such.
+
+  The replacement also carries the destination's file mode, which the old
+  path did not: a rename installs the temp file's mode, so a config somebody
+  had chmodded to 0600 widened on every OMH write. The mode is read before
+  the temp file exists, which is also what leaves nothing but the rename
+  between the signature check and the replace.
+
+  `--dry-run` takes no lock. A preview writes nothing, so it has nothing to
+  serialize against, and taking the lock regardless made a read-only command
+  create a `routing/` directory and a lock file inside it, force that
+  directory to 0700, and acquire a five-second wait plus a way to exit 2.
+
+  Four source-derived gates keep the discipline from drifting back. They fail
+  on a bare `write_config` call anywhere in `src/`, on a renamed import of it,
+  on a write that hands the Hermes config path to `atomic_write_text`,
+  `write_text` or `open` a level lower, and on a mutation that never names the
+  text it was handed. That last one is not hypothetical: converting
+  `cmd_uninstall` reintroduced exactly that shape and it passed every other
+  test. It is also the limit of what a syntactic gate can do -- a mutation
+  that mentions its argument and still returns precomputed bytes is the same
+  lost update and is indistinguishable from a correct one, so the tests say
+  so rather than implying otherwise.
+
+  A refusal now names its own cause. An unreadable or symlinked config raises
+  `ConfigUnwritable` and a real race raises `ConfigConcurrentUpdate`, both
+  under one `ConfigWriteRefused`; before, a permission error surfaced as an
+  exception whose name claimed a race that had not happened.
+
 - **`omh uninstall` now reverses every `config.yaml` key setup wrote, not one
   of seven.** Setup's apply step writes `skills.external_dirs`,
   `auxiliary.compression.fallback_chain`, `plugins.enabled`,

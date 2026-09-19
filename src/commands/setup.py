@@ -55,7 +55,7 @@ from ..config_adapter import (
     memory_provider_selection,
     read_config,
     remove_external_dir,
-    write_config,
+    update_config,
 )
 from ..install.compression_defaults import ensure_compression_defaults
 from ..install.config_reversal import (
@@ -618,14 +618,26 @@ def _uninstall_hermes_profiles(
         profile_paths = _paths(clone)
         entry: dict[str, object] = {"profile": name}
         try:
-            change, rows = _unregister_and_reverse(
-                profile_paths,
-                read_config(profile_paths.hermes_config_path),
-                remove_all=remove_all,
-                record=record,
+            rows: list[dict[str, str]] = []
+
+            def _unregister(config_text: str, profile_paths: OmhPaths = profile_paths) -> ConfigChange:
+                # Unregistration AND reversal both derive from the text
+                # `update_config` just read, so a retry re-derives them from
+                # the other writer's file. Deciding either from an earlier
+                # read and replaying the result is the stale whole-file copy
+                # #1742 exists to prevent.
+                change, fresh = _unregister_and_reverse(
+                    profile_paths, config_text, remove_all=remove_all, record=record
+                )
+                rows[:] = fresh
+                return change
+
+            change = update_config(
+                profile_paths.hermes_config_path,
+                _unregister,
+                omh_home=profile_paths.omh_home,
+                dry_run=bool(args.dry_run),
             )
-            if not args.dry_run and change.changed:
-                write_config(profile_paths.hermes_config_path, change.text)
             touched = change.changed
             if rows:
                 entry["config_keys"] = rows
@@ -1811,8 +1823,17 @@ def cmd_apply(args: argparse.Namespace) -> int:
 def _apply_result(args: argparse.Namespace) -> dict[str, object]:
     paths = _paths(args)
     memory_mode = str(getattr(args, "memory_mode", "") or "") or "review-first"
-    current = read_config(paths.hermes_config_path)
-    try:
+    # One mutation, run against the text `update_config` just read and run
+    # again on a retry, so a route write landing mid-pass makes this pass
+    # re-derive its seven changes from the other writer's file instead of
+    # writing a stale whole-file copy over it (#1742).
+    applied: dict[str, ConfigChange] = {}
+    current = ""
+    display_sections_before: dict[str, str] = {}
+
+    def _apply(config_text: str) -> ConfigChange:
+        nonlocal current, display_sections_before
+        current = config_text
         change = ensure_external_dir(current, _registered_workflow_dir(paths))
         compression = ensure_compression_defaults(change.text)
         # Installing the bridge and switching it on are separate steps in
@@ -1885,18 +1906,36 @@ def _apply_result(args: argparse.Namespace) -> dict[str, object]:
         # have it. Claims the slot only when it is free; `set_memory_provider`
         # refuses when another product holds it, because Hermes runs exactly one.
         memory_provider = maybe_set_memory_provider(display_sections.text, MEMORY_PROVIDER_NAME, memory_mode)
+        applied.update(
+            {
+                "external_dir": change,
+                "compression": compression,
+                "plugin_enable": plugin_enable,
+                "tui_interface": tui_interface,
+                "skin_active": skin_active,
+                "display_sections": display_sections,
+                "memory_provider": memory_provider,
+            }
+        )
+        return ConfigChange(
+            any(step.changed for step in applied.values()),
+            change.message,
+            memory_provider.text,
+        )
+
+    try:
+        update_config(
+            paths.hermes_config_path, _apply, omh_home=paths.omh_home, dry_run=bool(args.dry_run)
+        )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
-    if not args.dry_run and (
-        change.changed
-        or compression.changed
-        or plugin_enable.changed
-        or tui_interface.changed
-        or skin_active.changed
-        or display_sections.changed
-        or memory_provider.changed
-    ):
-        write_config(paths.hermes_config_path, memory_provider.text)
+    change = applied["external_dir"]
+    compression = applied["compression"]
+    plugin_enable = applied["plugin_enable"]
+    tui_interface = applied["tui_interface"]
+    skin_active = applied["skin_active"]
+    display_sections = applied["display_sections"]
+    memory_provider = applied["memory_provider"]
     # The record of what this pass added, carried forward from any earlier
     # one. `omh uninstall` reads it to reverse exactly the keys OMH wrote and
     # leave every value the person has since changed; without it, three of
@@ -1975,35 +2014,45 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     if args.registration_only and (args.remove_files or args.all or args.purge):
         raise OmhError("--registration-only cannot be combined with --remove-files, --all, or --purge")
     paths = _paths(args)
-    current = read_config(paths.hermes_config_path)
     remove_all = bool(args.all or args.purge or (not args.registration_only and not args.remove_files))
     record = _managed_config_record(paths)
-    # The rest of what setup wrote, and only in the scope that removes the
-    # bundle those keys name. `--registration-only` keeps its narrow meaning:
-    # the registration comes out and every other key stays, because that
-    # scope exists to leave a working install unregistered.
+    registration_message = ""
+    reversal_rows: list[dict[str, str]] = []
+
+    def _unregister(config_text: str) -> ConfigChange:
+        # Unregistration AND reversal both derive from the text
+        # `update_config` just read, so a retry re-derives them from the
+        # other writer's file. Deciding either from an earlier read and
+        # replaying the result is the stale whole-file copy #1742 exists to
+        # prevent.
+        nonlocal registration_message, reversal_rows
+        change, rows = _unregister_and_reverse(
+            paths, config_text, remove_all=remove_all, record=record
+        )
+        registration_message = change.message
+        reversal_rows = rows
+        return change
+
     try:
-        change, reversal_rows = _unregister_and_reverse(
-            paths, current, remove_all=remove_all, record=record
+        # `config_message` stays the registration message it has always
+        # been: the summary line reads "Hermes registration: {message}" and
+        # is mapped to a translation key by its exact text. Everything the
+        # reversal did is reported per key through `config_keys`.
+        #
+        # This write lands BEFORE the menubar, skill-pack, widget, skin,
+        # profile and command-package removals below, as it always has. A
+        # failure in any of those leaves a reversed config beside a bundle
+        # still on disk. That is the safer of the two directions -- Hermes
+        # ignores a plugin it is not told to load, while a config still
+        # naming `omh` after the bundle is gone is the exact cost #1725
+        # exists to remove -- but the blast radius went from one key to
+        # seven, so it is written down.
+        update = update_config(
+            paths.hermes_config_path, _unregister, omh_home=paths.omh_home, dry_run=bool(args.dry_run)
         )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
-    config_text = change.text
-    config_changed = change.changed
-    # `config_message` stays the registration message it has always been --
-    # the summary line reads "Hermes registration: {message}" and is mapped
-    # to a translation key by its exact text. Everything the reversal did is
-    # reported per key through `config_keys`.
-    #
-    # This write lands BEFORE the menubar, skill-pack, widget, skin, profile
-    # and command-package removals below, as it always has. A failure in any
-    # of those therefore leaves a reversed config beside a bundle still on
-    # disk. That is the safer of the two directions -- Hermes ignores a
-    # plugin it is not told to load, while a config still naming `omh` after
-    # the bundle is gone is the exact cost #1725 exists to remove -- but the
-    # blast radius went from one key to seven, so it is written down.
-    if not args.dry_run and config_changed:
-        write_config(paths.hermes_config_path, config_text)
+    config_changed = update.changed
     menubar_result = (
         uninstall_menubar_app(paths, dry_run=bool(args.dry_run))
         if remove_all and _uninstall_should_remove_menubar(args)
@@ -2039,7 +2088,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         {
             "operation": "uninstall",
             "config_changed": config_changed,
-            "config_message": change.message,
+            "config_message": registration_message,
             "config_keys": reversal_rows,
             "scope": scope,
             "registration_only": bool(args.registration_only),
