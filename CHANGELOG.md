@@ -4,6 +4,42 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The HUD can tell forty different tool calls from the same call forty
+  times.** The activity segment counts calls in flight, which is progress,
+  and a loop is the opposite situation wearing the same number. Session
+  `20260919_140745_db409e` issued 203 `search_files` calls, 185 of them
+  refused by the host's own guard, for a pattern matching nothing in the
+  repository; the person noticed only because the transcript's tool-call
+  panel happened to be expanded. Collapsed, that panel is one chevron line
+  reading `Tool calls (203)`, and the HUD was the only place left to see it.
+
+  The status line and the TUI dock header now carry `repeat xN` whenever the
+  repeat guard has a cycle for the reading session: muted while the guard is
+  only watching, `repeat xN blocked` in the warn tone once it has actually
+  refused a call, and `repeat xN approval` in the error tone once it has
+  stopped answering the model and is asking a person. A cycle longer than one
+  call says so (`repeat x8 cycle-of-2`), because the same call eight times
+  and a pair of calls four times over are different things to look at.
+
+  Three properties make the row trustworthy rather than decorative. It is
+  scoped to the reading session, resolved the same way the plan block
+  resolves it, so two sessions sharing one OMH home never add up. It rides
+  the poll's existing ledger read -- one read already backed the parallel
+  shot and the liveness block, and now backs this too -- so the two-second
+  reader takes no new lock and no new file open; measured at the 64-session
+  ceiling, the projection costs 0.006 to 0.018 ms more and the whole HUD read
+  is unchanged inside noise. And the stage is the one the GATE recorded:
+  `escalation_can_reach_a_person` reads process-global maps that the widget's
+  freshly spawned interpreter does not have, where it would answer "attended"
+  for every session, so `pre_tool_call` writes its own answer onto the row
+  and the reader takes that. A row with no recorded answer withholds the
+  escalation stage rather than assuming it.
+
+  Metadata only, and narrower than the ledger: the projection is given no
+  tool name and no argument digest, so the row says that a call repeated and
+  never what it was. Asserted against the serialized payload with a sentinel
+  in the arguments and in the results.
+
 - **Fourteen skills stop telling the model to record a coding handoff for work
   that is not coding.** A skill body rendered "Preferred harness for this
   skill: `coding-handling`" and an `omh runtime record --harness

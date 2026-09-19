@@ -775,6 +775,24 @@ export default function register(sdk) {
     const maestro = payload.maestro || {}
     const board = payload.kanban || {}
     const boardTotal = Number(board.rows_total) || 0
+    // Repeat guard: "the same call N times" as opposed to "N calls", which
+    // the liveness segment below cannot distinguish (#1687). Rendered only
+    // for a repeat the reader actually observed -- the projection answers
+    // `idle` for a session that made N DIFFERENT calls, so there is nothing
+    // to gate on here beyond its own verdict and the count it carries.
+    const repeat = payload.repeat || {}
+    const repeatCount = Number(repeat.consecutive) || 0
+    const repeatPeriod = Number(repeat.period) || 1
+    // The stage is reached one call before the guard uses it -- the gate
+    // reads the history before appending the call it is deciding -- so the
+    // suffix waits for a call this guard actually refused. Until then the
+    // chip is a count, because `blocked` about a call that ran is a claim
+    // the payload does not support. Mirrors `repeat_stage_label`.
+    const repeatStage = (Number(repeat.intercepted) || 0) >= 1 ? safeText(repeat.stage) : ''
+    const repeatChip =
+      repeat.status === 'observed' && repeatCount >= 2
+        ? `repeat x${repeatCount}${repeatPeriod > 1 ? ` cycle-of-${repeatPeriod}` : ''}${repeatStage === 'blocking' ? ' blocked' : repeatStage === 'approval' ? ' approval' : ''}`
+        : ''
     const graph = payload.graph || {}
     const graphActive = graph.status === 'active'
     const graphNodes = graphActive && Array.isArray(graph.nodes) ? graph.nodes : []
@@ -824,6 +842,37 @@ export default function register(sdk) {
         version ? h(Text, { color: t.color.muted }, ` v${version}`) : null,
         h(Text, { color: t.color.border }, SEPARATOR),
         h(Text, { color: active ? t.color.warn : t.color.ok }, `${agents.scope === 'global' ? '[global] ' : agents.scope === 'mixed' || maestro.rows?.some(row => row.scope === 'global') ? '[this chat + global] ' : agents.scope === 'session' ? '[this chat] ' : ''}${hudStateLabel(active, agents)}`),
+        // The session repeating itself, immediately after the state label
+        // and before everything optional. Position is the width policy: this
+        // line has no drop loop, only `truncate-end`, so a segment's place
+        // in the order IS its priority, and a loop must not be the fact that
+        // falls off a narrow terminal while a cost estimate survives. The
+        // chip is ~10 cells and what it pushes right is what already
+        // truncates there -- the tokens segment, which is gated on 100
+        // columns for exactly this reason.
+        //
+        // Metadata only. The reader hands over a count, a cycle length and
+        // the guard's stage; it is given no tool name and no arguments, so
+        // this says that a call repeated and never what it was (#1687).
+        repeatChip
+          ? h(
+              Text,
+              {},
+              h(Text, { color: t.color.muted }, ' · '),
+              h(
+                Text,
+                // Three tones for three different facts. Muted while the
+                // guard is only watching: a repeat it has not acted on is
+                // information, not a fault. Warn once it is refusing the
+                // call, error once it has given up on the model and is
+                // asking a person. The stage comes from the reader, which
+                // takes it from the answer the GATE recorded -- a surface
+                // never renders an escalation the gate is withholding.
+                { bold: repeatStage !== 'watching', color: repeatStage === 'approval' ? t.color.error : repeatStage === 'blocking' ? t.color.warn : t.color.muted },
+                repeatChip,
+              ),
+            )
+          : null,
         // Board lanes are counted beside the agent count only while the
         // board has any: queued/running/blocked as the reader tallied them.
         // `dispatcher not observed` is the reader's verdict that ready tasks

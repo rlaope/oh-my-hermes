@@ -65,6 +65,7 @@ from omh.plugin_bundle.omh.tool_bursts import (
     repeat_cycle_rule_key,
     tool_args_digest,
     tool_bursts_path,
+    tool_call_projection,
     tool_result_digest,
 )
 
@@ -1561,6 +1562,206 @@ class LedgerPrivacyTest(unittest.TestCase):
         self.assertEqual(tool_args_digest(body + "a"), tool_args_digest(body + "b"))
         # An object json cannot serialize still digests, via default=str.
         self.assertTrue(tool_args_digest({"path": Path("src")}))
+
+
+class RepeatRowProjectionTest(CycleAndResultHarness):
+    """What a surface is given about a repeat, and what it is not.
+
+    #1687: the HUD could say "40 calls in flight" and not "the same call
+    40 times", and those are opposite situations -- one is progress, the
+    other is a loop. This is the projection the row renders from. It rides
+    the poll's existing ledger read, so the cases here drive
+    `tool_call_projection`, the same single-read call `read_omh_hud`
+    makes, rather than a reader of its own.
+    """
+
+    def projection(self, session="session-a"):
+        return tool_call_projection(str(self.home), session_id=session)["repeat"]
+
+    def loop(self, times, *, session="session-a", args=None):
+        for _ in range(times):
+            self.call(args=BURN_ARGS if args is None else args, result="", session=session)
+
+    def test_the_same_call_n_times_is_reported_as_n(self):
+        self.loop(6)
+
+        row = self.projection()
+
+        self.assertEqual(row["status"], "observed")
+        self.assertEqual(row["consecutive"], 6)
+        self.assertEqual(row["ran"], 6)
+        self.assertEqual(row["period"], 1)
+        self.assertFalse(row["cycle"])
+
+    def test_n_different_calls_report_nothing(self):
+        """The whole point of the row, stated as its own case.
+
+        Six calls that differ only in their arguments are six calls, and
+        the activity block already counts those. A surface must have
+        nothing to render here, not a count of one.
+        """
+        for index in range(6):
+            self.call(args={**BURN_ARGS, "path": f"src/{index}"}, result="")
+
+        self.assertEqual(self.projection(), {"status": "idle"})
+
+    def test_a_single_call_is_not_a_repeat(self):
+        # The gate's own reader reports `ran: 1` for one call, to keep its
+        # numbers continuous with the message it writes. A surface must
+        # not turn that into `repeat x1` on every tool call.
+        self.call(args=BURN_ARGS, result="")
+
+        self.assertEqual(self.projection(), {"status": "idle"})
+        self.assertEqual(
+            repeat_call_streak(
+                str(self.home), session_id="session-a", escalation_allowed=True
+            )["ran"],
+            1,
+        )
+
+    def test_a_cycle_reports_its_length_rather_than_a_longer_streak(self):
+        for _ in range(4):
+            self.call(args=BURN_ARGS, result="")
+            self.call(args={**BURN_ARGS, "path": "tests"}, result="")
+
+        row = self.projection()
+
+        self.assertEqual(row["period"], 2)
+        self.assertEqual(row["laps"], 4)
+        self.assertTrue(row["cycle"])
+        self.assertEqual(row["consecutive"], 8)
+
+    def test_two_sessions_in_one_omh_home_do_not_add_up(self):
+        """The acceptance criterion that keeps the row honest on a gateway.
+
+        One OMH home serves every session on the machine. Two of them
+        running the same call is two loops, or two sessions doing ordinary
+        work; it is never one session repeating itself sixteen times.
+        """
+        self.loop(6, session="session-a")
+        self.loop(6, session="session-b")
+
+        self.assertEqual(self.projection("session-a")["consecutive"], 6)
+        self.assertEqual(self.projection("session-b")["consecutive"], 6)
+
+    def test_a_reader_with_no_session_identity_reports_nothing(self):
+        # Not a sum over the file: a reader that cannot say who it is
+        # reading for has no repeat to report, the way it has no plan.
+        self.loop(6)
+
+        self.assertEqual(self.projection(session="")["status"], "idle")
+
+    def test_a_truncated_ledger_degrades_to_no_row_rather_than_a_wrong_number(self):
+        """A torn read must cost the row, never invent one.
+
+        The writer replaces this file atomically, so a half-written one
+        should not be observable -- but the reader runs every two seconds
+        in a separate process against a file the hot path rewrites on
+        every tool call, and "should not" is not a guard. Truncation is
+        the shape a partial read takes, and json.loads is where it lands.
+        """
+        self.loop(6)
+        self.assertEqual(self.projection()["consecutive"], 6)
+
+        path = tool_bursts_path(str(self.home))
+        raw = path.read_text(encoding="utf-8")
+        path.write_text(raw[: len(raw) // 2], encoding="utf-8")
+
+        self.assertEqual(self.projection(), {"status": "idle"})
+
+    def test_the_stage_is_the_one_the_gate_recorded_for_this_lane(self):
+        """Two lanes, the same counts, two stages -- the gate's own answer.
+
+        `escalation_can_reach_a_person` reads process-global maps that the
+        HUD reader's interpreter does not have: the widget spawns a fresh
+        python every two seconds, where the platform map is empty and the
+        predicate answers "attended" for everything. So the gate records
+        its answer and the projection reads that, which is what makes
+        `_repeat_stage`'s claim hold across a process boundary rather than
+        only inside one.
+        """
+        note_session_platform("session-api", "api_server")
+        self.assertFalse(escalation_can_reach_a_person("session-api"))
+        for session in ("session-cli", "session-api"):
+            for _ in range(REPEAT_CALL_BLOCK_THRESHOLD):
+                self.assertIsNone(self.call(args=BURN_ARGS, result="", session=session))
+            for _ in range(REPEAT_CALL_ESCALATION_ATTEMPTS):
+                self.assertEqual(
+                    self.call(args=BURN_ARGS, result="", session=session)["action"], "block"
+                )
+
+        attended = self.projection("session-cli")
+        withheld = self.projection("session-api")
+
+        self.assertEqual(attended["consecutive"], withheld["consecutive"])
+        self.assertEqual(attended["stage"], "approval")
+        self.assertEqual(withheld["stage"], "blocking")
+        self.assertTrue(attended["escalation_recorded"])
+        self.assertTrue(withheld["escalation_recorded"])
+
+    def test_a_row_written_without_the_gates_answer_withholds_the_escalation(self):
+        """The mutation guard for the threading, stated as behaviour.
+
+        Remove `escalation_allowed=` from `pre_tool_call`'s
+        `record_tool_call` and every row lands in this state. The stage
+        must then stop at `blocking` -- rendering `approval` where the
+        gate would block is the one disagreement this projection exists
+        to prevent -- and `escalation_recorded` must say the answer is
+        missing rather than leave a reader guessing which it got.
+        """
+        for _ in range(REPEAT_CALL_BLOCK_THRESHOLD + REPEAT_CALL_ESCALATION_ATTEMPTS):
+            record_tool_call(
+                "search_files",
+                omh_home=str(self.home),
+                args_digest=tool_args_digest(BURN_ARGS),
+                session_id="session-mute",
+            )
+        for _ in range(REPEAT_CALL_ESCALATION_ATTEMPTS):
+            record_repeat_refusal(
+                tool_name="search_files",
+                args_digest=tool_args_digest(BURN_ARGS),
+                session_id="session-mute",
+                omh_home=str(self.home),
+            )
+
+        row = self.projection("session-mute")
+
+        self.assertGreaterEqual(row["intercepted"], REPEAT_CALL_ESCALATION_ATTEMPTS)
+        self.assertEqual(row["stage"], "blocking")
+        self.assertFalse(row["escalation_recorded"])
+        # And the same counts WITH an answer do reach the escalation, so
+        # the case above is the missing answer and not a missing count.
+        self.assertEqual(
+            _repeat_stage_of(self.home, "session-mute", escalation_allowed=True), "approval"
+        )
+
+    def test_the_row_carries_no_tool_name_and_no_argument_digest(self):
+        """#1687's boundary: the row says a call repeated, never what it was.
+
+        Asserted against the projection's keys rather than its values,
+        because a field that is not there cannot be rendered by a surface
+        that was written later. The gate's own reader keeps both, and
+        does so for the message it writes.
+        """
+        self.loop(6)
+
+        row = self.projection()
+
+        self.assertNotIn("tool", row)
+        self.assertNotIn("args_digest", row)
+        self.assertNotIn("search_files", json.dumps(row))
+        self.assertIn("tool", self._gate_streak())
+
+    def _gate_streak(self):
+        return repeat_call_streak(
+            str(self.home), session_id="session-a", escalation_allowed=True
+        )
+
+
+def _repeat_stage_of(home, session, *, escalation_allowed):
+    return repeat_call_streak(
+        str(home), session_id=session, escalation_allowed=escalation_allowed
+    )["stage"]
 
 
 if __name__ == "__main__":

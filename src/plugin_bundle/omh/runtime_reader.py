@@ -849,10 +849,21 @@ def read_omh_hud(
     target_registry = _read_hud_json(home / "targets.json", root=home)
     runs = status_payload.get("runs", [])
     latest_run = runs[0] if runs else {}
-    # One ledger read backs both blocks below -- see `tool_call_projection`
+    # Who this poll is reading FOR, resolved once. The plan block has always
+    # needed it; the repeat row needs the same answer, because a repeat
+    # streak belongs to one session and two sessions sharing an OMH home must
+    # not add up. Resolving it here rather than inside each block keeps the
+    # one `live_tui_session_rows` query per poll that `_todo_summary` already
+    # paid for, and guarantees the two blocks describe the same session.
+    reading = _reading_session(
+        hermes,
+        session_ref or tui_session_ref,
+        mru_allowed=not (tui_identity_expected and not session_ref and not tui_session_ref),
+    )
+    # One ledger read backs all three blocks below -- see `tool_call_projection`
     # for why calling `latest_parallel_shot` and `tool_call_activity`
     # separately could hand them different snapshots of the same poll.
-    tool_calls = tool_call_projection(str(home))
+    tool_calls = tool_call_projection(str(home), session_id=reading[0])
     payload: dict[str, Any] = {
         "schema_version": HUD_SCHEMA_VERSION,
         "preset": safe_preset,
@@ -873,6 +884,7 @@ def read_omh_hud(
             tui_session_ref,
             activity=tool_calls["activity"],
             tui_identity_expected=tui_identity_expected,
+            reading=reading,
         ),
         # Concurrent tool-call batches observed by the pre_tool_call hook;
         # the [OMH] status line brands a fresh batch as a parallel shot.
@@ -886,6 +898,15 @@ def read_omh_hud(
         # that as liveness being unanswerable rather than trusting entries
         # that can only expire, never legitimately close.
         "activity": tool_calls["activity"],
+        # Whether this session is repeating itself, and how far the repeat
+        # guard has gone about it. Forty calls in flight and the same call
+        # forty times are opposite situations -- one is progress, the other
+        # is a loop -- and the activity block above cannot tell them apart
+        # (#1687). Scoped to the reading session, metadata only: a count, a
+        # cycle length and the guard's stage, never the tool and never the
+        # arguments. The stage is the one the gate RECORDED for this session,
+        # so a surface cannot show an escalation the gate is withholding.
+        "repeat": tool_calls["repeat"],
         # Effective approval-bypass (yolo) state, read from the host's own
         # persisted surfaces (session row's /yolo flag, approvals.mode) so a
         # toggle between turns shows on the next widget poll; the hook
@@ -1995,6 +2016,7 @@ def _todo_summary(
     tui_session_ref: str = "",
     activity: dict[str, Any] | None = None,
     tui_identity_expected: bool = False,
+    reading: tuple[str, dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
     """Project the reading session's plan todo.
 
@@ -2003,6 +2025,12 @@ def _todo_summary(
     block and passes it in so one poll sees one ledger state; a caller that
     has none (``read_omh_todo``) makes the reader take its own read, and only
     for a plan that is actually established.
+
+    ``reading`` is the same courtesy for the reader's identity: resolving it
+    queries the host's live TUI rows, and `read_omh_hud` now needs the answer
+    for its repeat row as well, so it resolves it once and hands it here. A
+    caller that passes none resolves it the same way from the same arguments
+    -- this is one query saved, never a second way to decide who is reading.
     """
     empty = {
         "status": "absent",
@@ -2017,7 +2045,7 @@ def _todo_summary(
         "more_count": 0,
         "stall": _todo_stall(None, None),
     }
-    session_id, session = _reading_session(
+    session_id, session = reading if reading is not None else _reading_session(
         hermes,
         session_ref or tui_session_ref,
         mru_allowed=not (tui_identity_expected and not session_ref and not tui_session_ref),
@@ -2431,6 +2459,13 @@ def _hud_segments(payload: dict[str, Any], *, preset: str) -> list[str]:
     executor = payload.get("executor", {})
     runtime = payload.get("runtime", {})
     base = [f"[omh] v{version}"]
+    # Before anything else the line carries, and in every preset. A session
+    # repeating itself is the one fact on this line that is worth reading
+    # more than the version is, and `minimal` is the preset a person watches
+    # during a long run -- the run where a loop is what they need to see.
+    repeat_segment = _repeat_segment(payload.get("repeat", {}))
+    if repeat_segment:
+        base.append(repeat_segment)
     if preset == "minimal":
         return [*base, _activity_label(runtime)]
     focused = [*base, f"plugin:{_plugin_display_status(plugin)}"]
@@ -2445,6 +2480,57 @@ def _hud_segments(payload: dict[str, Any], *, preset: str) -> list[str]:
     if preset == "full" and isinstance(achievements, dict) and achievements.get("observed"):
         focused.append(f"ach:{achievements.get('unlocked_count', 0)}/{achievements.get('total_count', 0)}")
     return focused
+
+
+REPEAT_STAGE_LABELS = {
+    # The guard's own stage names rendered as what has happened, not as the
+    # internal word. `watching` is the guard having noticed and not yet
+    # acted, so it adds nothing to the count and is absent here.
+    "blocking": " blocked",
+    "approval": " approval",
+}
+
+
+def repeat_stage_label(repeat: dict[str, Any]) -> str:
+    """The stage suffix a surface may append, or "" when none is earned.
+
+    The stage is reached one call before the guard uses it: the gate reads
+    the history BEFORE appending the call it is deciding, so a session
+    eight calls into a repeat is already at `blocking` while nothing has
+    been refused yet. That is right for the gate, which is deciding the
+    ninth call, and wrong for a person reading a line that says `blocked`
+    about a call that ran. So the suffix waits for the interception count
+    -- the number of calls this guard actually refused -- and until then
+    the row is a count and nothing more.
+
+    `approval` needs no such condition: reaching it requires four ignored
+    blocks, so the count is never zero there.
+    """
+    if _safe_int(repeat.get("intercepted"), 0) < 1:
+        return ""
+    return REPEAT_STAGE_LABELS.get(str(repeat.get("stage", "")), "")
+
+
+def _repeat_segment(repeat: dict[str, Any]) -> str:
+    """`repeat xN` for the status line, or "" when nothing is repeating.
+
+    Reads only the projection's own numbers. It never reaches for a tool
+    name or an argument -- the reader was not given either (#1687), which
+    is what makes "no argument text in the HUD payload" a property of the
+    payload rather than a promise about this function.
+
+    A cycle names its length, because "the same call twelve times" and
+    "this pair of calls six times over" are different things to look at
+    and the count alone cannot tell them apart.
+    """
+    if not isinstance(repeat, dict) or repeat.get("status") != "observed":
+        return ""
+    count = _safe_int(repeat.get("consecutive"), 0)
+    if count < 2:
+        return ""
+    period = _safe_int(repeat.get("period"), 1)
+    cycle = f" cycle-of-{period}" if period > 1 else ""
+    return f"repeat x{count}{cycle}{repeat_stage_label(repeat)}"
 
 
 def _plugin_display_status(plugin: dict[str, Any]) -> str:

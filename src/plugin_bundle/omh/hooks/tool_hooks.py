@@ -170,18 +170,26 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
     # "message", "rule_key"?}`` (escalate ANY tool to the human-approval
     # gate; ``rule_key`` picks the ``[a]lways`` allowlist grain)").
     args_digest = tool_args_digest(tool_input)
+    # Stage two asks a person. Where there is none, the host resolves the
+    # gate without one -- blocking with its own wording under the `deny`
+    # default, and AUTO-APPROVING under `approvals.unattended_mode: approve`,
+    # which would run the very call stage one was refusing. So the escalation
+    # is withheld and stage one's block stands (`session_attendance`).
+    #
+    # Computed once and used twice: the gate decides this call with it, and
+    # the ledger records it. `escalation_can_reach_a_person` reads two
+    # process-global maps, and the HUD reader is a DIFFERENT interpreter --
+    # the TUI widget spawns one every two seconds -- where both maps are
+    # empty and the predicate would answer "attended" for every session. So
+    # the reader takes the recorded answer instead of asking again, and this
+    # is the one place that answer is produced (#1687).
+    escalation_allowed = escalation_can_reach_a_person(session_id)
     repeat_directive = repeat_call_directive(
         tool_name=kwargs.get("tool_name"),
         args_digest=args_digest,
         session_id=session_id,
         omh_home=omh_home,
-        # Stage two asks a person. Where there is none, the host resolves
-        # the gate without one -- blocking with its own wording under the
-        # `deny` default, and AUTO-APPROVING under
-        # `approvals.unattended_mode: approve`, which would run the very
-        # call stage one was refusing. So the escalation is withheld and
-        # stage one's block stands (`session_attendance`).
-        escalation_allowed=escalation_can_reach_a_person(session_id),
+        escalation_allowed=escalation_allowed,
     )
     if repeat_directive is not None:
         # Counted as intercepted, not as a call: it is what moves the
@@ -214,6 +222,7 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         turn_id=kwargs.get("turn_id"),
         args_digest=args_digest,
         session_id=session_id,
+        escalation_allowed=escalation_allowed,
     )
     context_parts: list[str] = []
     payload: dict[str, object] = {}

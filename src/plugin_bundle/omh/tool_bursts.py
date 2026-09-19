@@ -324,6 +324,21 @@ _HISTORY_TOOL_KEY = "t"
 _HISTORY_ARGS_KEY = "a"
 _HISTORY_RESULT_KEY = "r"
 _HISTORY_TICK_KEY = "s"
+# The attendance answer the GATE computed for this session, recorded on the
+# row so a reader in another process can render the stage the gate acts on
+# rather than one it would not.
+#
+# The predicate itself (`session_attendance.escalation_can_reach_a_person`)
+# reads two process-global maps: the platform `pre_llm_call` recorded and the
+# delegated-child set `subagent_start` recorded. The HUD reader is a separate
+# interpreter -- the TUI widget spawns one every two seconds -- so both maps
+# are empty there and the predicate would answer "attended" for every
+# session, which is precisely the disagreement `_repeat_stage`'s signature
+# exists to prevent. Recording the gate's own answer is what carries that
+# guarantee across the process boundary: there is no second predicate, and no
+# default standing in for one. A row with no recorded answer withholds the
+# escalation stage instead of assuming it (`_recorded_escalation`).
+_ROW_ESCALATION_KEY = "esc"
 
 
 def _runtime_dir(omh_home: str = "") -> Path:
@@ -823,17 +838,10 @@ def repeat_call_streak(
         row = _read_one_repeat_streak(tool_bursts_path(omh_home), session)
     except (OSError, ValueError, TypeError, RuntimeError):
         return idle
-    if row is None or current - row["ts"] > REPEAT_STREAK_WINDOW_SECONDS:
+    live = _live_cycle(row, now=current)
+    if live is None or row is None:
         return idle
-    history = _decided_history(_fresh_history(row["history"], now=current))
-    if not history:
-        return idle
-    # No cycle is the one-lap reading: the last call, once. That keeps the
-    # reader's numbers continuous with the gate's -- a session one call
-    # into a repeat reports `ran: 1`, the way the counter this replaced
-    # did -- rather than reporting a cycle that has not formed.
-    period, laps = _detect_cycle(history) or (1, 1)
-    intercepted = int(row["intercepted"])
+    history, period, laps, intercepted = live
     ran = period * laps
     return {
         "status": "observed",
@@ -858,6 +866,105 @@ def repeat_call_streak(
     }
 
 
+def _live_cycle(
+    row: dict[str, Any] | None, *, now: float
+) -> tuple[list[dict[str, Any]], int, int, int] | None:
+    """One sanitized row read as a cycle, or None when it describes none.
+
+    `(decided history, period, laps, intercepted)`. Shared by every reader
+    of a row so the gate's view and a surface's view cannot be assembled
+    two different ways from the same bytes -- the same reason
+    `_sanitized_repeat_streak_row` is shared by the two file readers.
+
+    No cycle is the one-lap reading: the last call, once. That keeps a
+    reader's numbers continuous with the gate's -- a session one call into
+    a repeat reports `ran: 1`, the way the counter this replaced did --
+    rather than reporting a cycle that has not formed. A surface that must
+    not render a single call as a repeat asks for `laps`, which is 1
+    there and 2 or more once something actually repeated.
+    """
+    if row is None or now - row["ts"] > REPEAT_STREAK_WINDOW_SECONDS:
+        return None
+    history = _decided_history(_fresh_history(row["history"], now=now))
+    if not history:
+        return None
+    period, laps = _detect_cycle(history) or (1, 1)
+    return history, period, laps, int(row["intercepted"])
+
+
+def _repeat_row_projection(
+    streaks: dict[str, dict[str, Any]], session: object, *, now: float
+) -> dict[str, Any]:
+    """The repeat block of the HUD payload: idle, or a repeat and its stage.
+
+    Built from rows a caller has ALREADY read, never from a read of its
+    own. `read_omh_hud` takes one snapshot of this ledger per poll and
+    three projections come out of it; a second read here would be a
+    second chance to straddle a concurrent writer, and the HUD reader is
+    spawned every two seconds per TUI.
+
+    Three things this deliberately does not carry, and one it does:
+
+    * **Not the tool name and not the argument digest.** #1687 asks the
+      row to say that a call repeated and never what it was, and a
+      surface cannot render a field it was not given. The digest is
+      one-way and the tool name is already in the clear inside the
+      ledger, so neither is a disclosure on its own -- they are simply
+      not this row's business, and leaving them out is what makes the
+      privacy claim checkable against the serialized payload rather than
+      argued.
+    * **Not a single call.** `laps` is 1 for a session that made one
+      call, and rendering `repeat x1` on every tool call is noise, not a
+      loop. The block answers `idle` until something has actually
+      repeated, which is also #1687's acceptance criterion: N different
+      calls show nothing.
+    * **The stage the gate would act on, or none.** The attendance answer
+      comes off the row (`_ROW_ESCALATION_KEY`), where the gate recorded
+      its own. A row written before this field existed, or by a caller
+      that had no answer to give, withholds the escalation stage rather
+      than assuming it -- rendering `approval` where the gate blocks is
+      the one disagreement this projection must not produce, and
+      `escalation_recorded` says which of the two happened.
+    """
+    key = _normalized_id(session)
+    idle: dict[str, Any] = {"status": "idle"}
+    if not key:
+        return idle
+    raw = streaks.get(key)
+    row = _sanitized_repeat_streak_row(raw) if isinstance(raw, dict) else None
+    live = _live_cycle(row, now=now)
+    if live is None or row is None:
+        return idle
+    history, period, laps, intercepted = live
+    if laps < 2:
+        return idle
+    recorded = row["escalation_allowed"]
+    ran = period * laps
+    # Field order is load bearing at one extreme: `_fit_widget_hud_budget`
+    # truncates an oversized payload's dicts to their first N keys, so the
+    # three a surface renders come first and a block cut to four keys still
+    # says a repeat happened, how long, and what the guard did about it.
+    return {
+        "status": "observed",
+        "consecutive": ran + intercepted,
+        "stage": _repeat_stage(
+            laps, period, intercepted, escalation_allowed=bool(recorded)
+        ),
+        "period": period,
+        # True once the cycle is longer than one call: "the same call over
+        # and over" and "this short sequence over and over" are different
+        # things to look at, and the surface says which.
+        "cycle": period > 1,
+        "laps": laps,
+        "results_compared": _results_were_compared(history, period, laps),
+        "ran": ran,
+        "intercepted": intercepted,
+        "escalation_recorded": recorded is not None,
+        "observed_at": _iso(row["ts"]),
+        "claim_boundary": REPEAT_CALL_CLAIM_BOUNDARY,
+    }
+
+
 def record_tool_call(
     tool_name: object,
     *,
@@ -867,9 +974,21 @@ def record_tool_call(
     turn_id: object = None,
     args_digest: object = "",
     session_id: object = "",
+    escalation_allowed: bool | None = None,
 ) -> None:
     """Append one pre_tool_call tick and, when the host supplies a
     tool_call_id, open an in-flight entry post_tool_call will close.
+
+    ``escalation_allowed`` is the answer the GATE just computed for this
+    session, threaded through rather than recomputed so the value stored
+    is literally the one the directive was decided with. ``None`` means
+    this caller had no answer to give, which a reader treats as "no
+    escalation stage" rather than as "attended"; see
+    `_ROW_ESCALATION_KEY`. It is not required, because a writer that
+    cannot answer must still be able to record the call -- a missing
+    answer costs a surface one rung of detail and costs the gate
+    nothing, while a required parameter would push every caller into
+    inventing one.
 
     Best-effort: losing a tick is acceptable, breaking the hook that feeds
     the model is not. What a lost tick now costs is worth naming, because
@@ -922,6 +1041,7 @@ def record_tool_call(
                 tool=name,
                 args_digest=str(args_digest or "")[:_MAX_DIGEST_CHARS],
                 now=tick,
+                escalation_allowed=escalation_allowed,
             )
             _write_delivery_record(
                 path,
@@ -1280,6 +1400,10 @@ def _sanitized_repeat_streak_row(item: dict[str, Any]) -> dict[str, Any] | None:
             if isinstance(intercepted, int) and not isinstance(intercepted, bool) and intercepted >= 0
             else 0
         ),
+        # Tri-state on purpose: True, False, or "the gate never said".
+        # Collapsing the third into either of the first two is what makes
+        # a reader render a stage the gate would not act on.
+        "escalation_allowed": _row_escalation(item),
         "ts": float(tick),
     }
 
@@ -1402,6 +1526,7 @@ def _advance_repeat_streak(
     tool: str,
     args_digest: str,
     now: float,
+    escalation_allowed: bool | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Record this call in the session's history and re-read the loop.
 
@@ -1444,8 +1569,30 @@ def _advance_repeat_streak(
     if _detect_cycle(_sanitized_history(stored)) is None:
         intercepted = 0
         stored = stored[-IDLE_REPEAT_HISTORY:]
-    streaks[session] = {"history": stored, "intercepted": intercepted, "ts": now}
+    row_out: dict[str, Any] = {"history": stored, "intercepted": intercepted, "ts": now}
+    # This call's answer wins; a caller that had none leaves the last one
+    # the gate recorded in place. The two maps the predicate reads are
+    # per session and do not move between one call and the next, so the
+    # previous answer is still the gate's answer for this session -- and
+    # dropping it would silently downgrade a surface from the gate's
+    # stage to no stage at all on the first write that came from a caller
+    # without one.
+    recorded = escalation_allowed if escalation_allowed is not None else _row_escalation(row)
+    if recorded is not None:
+        row_out[_ROW_ESCALATION_KEY] = bool(recorded)
+    streaks[session] = row_out
     return _cap_repeat_streaks(streaks)
+
+
+def _row_escalation(item: dict[str, Any]) -> bool | None:
+    """The attendance answer stored on a row, or None when it holds none.
+
+    Only a real boolean answers. A hand-edited or foreign value is the
+    same as an absent one, which withholds the escalation stage -- the
+    direction a reader must fail in.
+    """
+    value = item.get(_ROW_ESCALATION_KEY)
+    return value if isinstance(value, bool) else None
 
 
 def _fresh_stored_history(source: object, *, now: float) -> list[dict[str, Any]]:
@@ -1553,6 +1700,11 @@ def _read_snapshot(omh_home: str, *, now: float) -> dict[str, Any]:
     return {
         "entries": record["entries"],
         "open_calls": _prune_expired_opens(record["open_calls"], now=now),
+        # Rows as the file held them. `_read_record` carries them through
+        # rather than rebuilding them, and only the ONE row a projection
+        # asks about is sanitized -- so adding the repeat block costs this
+        # read nothing beyond the dictionary lookup for that row.
+        "repeat_streaks": _prune_stale_streaks(record["repeat_streaks"], now=now),
         "post_tool_call_observed_at": record["post_tool_call_observed_at"],
     }
 
@@ -1607,16 +1759,28 @@ def tool_call_activity(omh_home: str = "", *, now: float | None = None) -> dict[
     return _activity_from_snapshot(snapshot, shot, now=current)
 
 
-def tool_call_projection(omh_home: str = "", *, now: float | None = None) -> dict[str, Any]:
-    """`{"parallel_shot": ..., "activity": ...}` from one ledger read.
+def tool_call_projection(
+    omh_home: str = "", *, session_id: object = "", now: float | None = None
+) -> dict[str, Any]:
+    """`{"parallel_shot": ..., "activity": ..., "repeat": ...}` from one read.
 
-    The HUD reader needs both projections every poll; calling
+    The HUD reader needs all three projections every poll; calling
     ``latest_parallel_shot`` and ``tool_call_activity`` separately each reads
     the ledger file on its own, so a write landing between the two reads
     could hand the two blocks different snapshots of the same poll. This is
-    the single-read equivalent of calling both.
+    the single-read equivalent of calling them all.
+
+    ``session_id`` scopes the repeat block and nothing else. The first two
+    projections are install-wide by construction -- an open call is open
+    whoever made it -- while a repeat streak is one session's, and two
+    sessions sharing an OMH home must not add up. No session id means no
+    repeat block, never a sum over the file.
     """
     current = float(now if now is not None else time.time())
     snapshot = _read_snapshot(omh_home, now=current)
     shot = _latest_shot_from_entries(snapshot["entries"], snapshot["open_calls"], now=current)
-    return {"parallel_shot": shot, "activity": _activity_from_snapshot(snapshot, shot, now=current)}
+    return {
+        "parallel_shot": shot,
+        "activity": _activity_from_snapshot(snapshot, shot, now=current),
+        "repeat": _repeat_row_projection(snapshot["repeat_streaks"], session_id, now=current),
+    }
