@@ -24,10 +24,11 @@ import argparse
 
 from ..installer import OmhError
 from ..install.config_adapter import (
+    ConfigChange,
     activate_omh_skin,
     display_skin_selection,
     read_config,
-    write_config,
+    update_config,
 )
 from ..skin_pack import (
     SKIN_THEMES,
@@ -228,14 +229,28 @@ def _apply_theme(args: argparse.Namespace, theme: SkinTheme, *, dry_run: bool) -
     """
     language = _language(args)
     paths = _paths(args)
-    config_text = read_config(paths.hermes_config_path)
-    previous_skin = display_skin_selection(config_text)
-    change = activate_omh_skin(config_text, theme.skin_name)
+    # Only a binding for the `nonlocal` below; the mutation runs at least
+    # once on every path that reaches it, including `--dry-run`, so this
+    # value is always replaced before anything reads it.
+    previous_skin = ""
+
+    def _select(config_text: str) -> ConfigChange:
+        # Re-read on a retry means re-deciding: another writer's file is the
+        # one this selection has to land on, and the reported previous skin
+        # has to describe the file that was actually replaced.
+        nonlocal previous_skin
+        previous_skin = display_skin_selection(config_text)
+        return activate_omh_skin(config_text, theme.skin_name)
+
     # Installing is idempotent and offline, so a `use` on a machine whose skins
     # directory was never refreshed still ends with the file Hermes needs.
     install = install_skin(paths.hermes_home, dry_run=dry_run)
-    if change.changed and not dry_run:
-        write_config(paths.hermes_config_path, change.text)
+    # A `ConfigWriteRefused` propagates: it is an `OmhError`, so the CLI
+    # already reports it as one `omh: ...` line and exit 2. Catching it here
+    # to re-raise the same class only lost the subclass that names the cause.
+    change = update_config(
+        paths.hermes_config_path, _select, omh_home=paths.omh_home, dry_run=dry_run
+    )
 
     return {
         "schema_version": THEME_CHANGE_SCHEMA_VERSION,

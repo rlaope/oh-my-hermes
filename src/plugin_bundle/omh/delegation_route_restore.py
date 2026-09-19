@@ -188,6 +188,37 @@ def delegation_route_restore_path(omh_home: str | Path | None = None) -> Path:
     return root / "routing" / DELEGATION_ROUTE_RESTORE_FILE
 
 
+def route_write_lock(omh_home: str | Path | None = None, *, timeout_seconds: float = 5.0):
+    """The lock every writer of this OMH home's routes holds, for CLI writers too.
+
+    `write_route_with_baseline` serializes on the restore record because the
+    route write and its bookkeeping have to be one act. A `config.yaml`
+    write from `omh setup`, `omh theme`, `omh memory`, self-update or
+    `system/targets` can land in the middle of that, so it takes the same
+    lock rather than a second one of its own (#1742).
+
+    The default wait is longer than the telemetry budget the lock ships
+    with: a person is waiting on a CLI command, and dropping their write is
+    worse than making them wait. A timeout raises `TimeoutError`, which the
+    caller reports as a refusal.
+
+    The asymmetry that makes this safe, written down because nothing else
+    records it. `write_route_with_baseline` waits only the lock's own 0.1 s
+    budget and returns an error rather than blocking a dispatch, so a CLI
+    command holding this lock for longer than that DROPS a concurrent route
+    write. Measured hold times for `omh apply`, the CLI writer that does the
+    most work under it: 1.0 ms on a small config and 4.8 ms on a 400-key
+    one, against the route writer's 100 ms. That margin of more than an
+    order of magnitude is the only reason the direction is safe, so a change
+    that makes a CLI writer hold this lock across anything slow -- a network
+    call, an interactive prompt, a subprocess -- breaks it and should
+    release the lock first.
+    """
+    return _awareness_delivery_lock(
+        delegation_route_restore_path(omh_home), timeout_seconds=timeout_seconds
+    )
+
+
 def _valid_route_mapping(value: object) -> dict[str, str] | None:
     """A three-key subset whose values the route writer would accept.
 

@@ -12,14 +12,14 @@ from ..plugin_bundle.omh import runtime_paths
 
 try:
     from ..core.errors import OmhError
-    from ..install.config_adapter import ensure_external_dir, read_config, remove_external_dir, write_config
+    from ..install.config_adapter import ConfigChange, ensure_external_dir, remove_external_dir, update_config
     from ..system.local_store import atomic_write_json, read_json_object_result
     from ..system.paths import managed_command_bin_dir
     from .self_update_platform import SelfUpdatePlatform
     from .self_update_state_validation import parse_gc_entries, parse_generation_entry, parse_marker, parse_state, require_generation_path, same_existing_path
 except ImportError:  # pragma: no cover - direct-source installer smoke.
     from core.errors import OmhError
-    from install.config_adapter import ensure_external_dir, read_config, remove_external_dir, write_config
+    from install.config_adapter import ConfigChange, ensure_external_dir, remove_external_dir, update_config
     from system.local_store import atomic_write_json, read_json_object_result
     from system.paths import managed_command_bin_dir
     from install.self_update_platform import SelfUpdatePlatform
@@ -235,13 +235,14 @@ def migrate_legacy(root: Path, state: dict[str, Any], paths: Any, platform: Self
     if pointer_target(root, platform=platform) is None:
         switch_current(root, bootstrap, platform=platform)
     launcher = _retarget_launcher(root, platform)
-    original = read_config(paths.hermes_config_path)
-    text = original
-    for old in (legacy_skills, default_skills, paths.omh_home / "skills"):
-        text = remove_external_dir(text, old).text
-    text = ensure_external_dir(text, root / "current" / "skills").text
-    if text != original:
-        write_config(paths.hermes_config_path, text)
+    def _retarget_registration(original: str) -> ConfigChange:
+        text = original
+        for stale in (legacy_skills, default_skills, paths.omh_home / "skills"):
+            text = remove_external_dir(text, stale).text
+        text = ensure_external_dir(text, root / "current" / "skills").text
+        return ConfigChange(text != original, "retargeted skills.external_dirs", text)
+
+    update_config(paths.hermes_config_path, _retarget_registration, omh_home=paths.omh_home)
     state["active"] = generation_entry(bootstrap, "bootstrap")
     state["migration"] = {"status": "completed", "launcher_on_pointer": launcher, "registration_on_pointer": True, "completed_at": now()}
     record_pointer(state, root, bootstrap)

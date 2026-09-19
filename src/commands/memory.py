@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from ..install.config_adapter import (
+    ConfigChange,
     clear_memory_provider,
     memory_provider_selection,
     read_config,
     set_memory_provider,
-    write_config,
+    update_config,
 )
 from ..installer import OmhError
 from ..plugin_bundle.omh.memory_governance import SOURCE_CLASSES
@@ -903,17 +904,24 @@ def cmd_memory_provider(args: argparse.Namespace) -> int:
     """Show, take, or hand back Hermes' single external memory-provider slot."""
     paths = _paths(args)
     path = paths.hermes_config_path
-    text = read_config(path)
-    change = None
-    if args.enable:
-        change = set_memory_provider(text, MEMORY_PROVIDER_NAME)
-    elif args.disable:
-        change = clear_memory_provider(text, MEMORY_PROVIDER_NAME)
-    if change is not None and change.changed and not args.dry_run:
+    if not (args.enable or args.disable):
+        # Status only: nothing to write, so nothing to serialize against.
+        text = read_config(path)
+        change = None
+    else:
+        def _claim(config_text: str) -> ConfigChange:
+            if args.enable:
+                return set_memory_provider(config_text, MEMORY_PROVIDER_NAME)
+            return clear_memory_provider(config_text, MEMORY_PROVIDER_NAME)
+
         try:
-            write_config(path, change.text)
+            change = update_config(path, _claim, omh_home=paths.omh_home, dry_run=bool(args.dry_run))
         except OSError as exc:
+            # A `ConfigWriteRefused` is already an `OmhError` and propagates
+            # with the subclass that names its cause; only a bare OSError
+            # from the write still needs wrapping, as it did before.
             raise OmhError(str(exc)) from exc
+        text = change.text
     selection = memory_provider_selection(change.text if change is not None else text)
     _print_json(
         {

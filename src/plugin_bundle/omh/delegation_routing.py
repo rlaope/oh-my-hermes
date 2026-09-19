@@ -294,6 +294,34 @@ def _delegation_child_indents(lines: list[str]) -> dict[int, int]:
     return indents
 
 
+def config_file_signature(path: Path) -> tuple[int, int, int, int] | None:
+    """The stamp this writer compares, exposed for OMH's other config writers.
+
+    Public on purpose and as a one-line alias rather than a second
+    implementation: the whole point of one write discipline is that a CLI
+    write and a route write can each detect the other, which they cannot do
+    if the two sides compute their own idea of "the file changed" (#1742).
+
+    `st_ino` is what carries the compare in practice. Both OMH writer
+    families replace by rename, so the inode changes on every OMH write and
+    the timestamp's resolution never enters into it. `st_mtime_ns` matters
+    only for a third party rewriting the config IN PLACE at exactly the same
+    size, and only on a filesystem that stores whole seconds (ext4 with
+    128-byte inodes, HFS+); APFS and ext4 with 256-byte inodes store
+    nanoseconds and distinguish consecutive rewrites.
+    """
+    return _file_signature(path)
+
+
+def read_config_snapshot(path: Path) -> tuple[str, tuple[int, int, int, int] | None, str]:
+    """Read the config and its stamp together, the way this writer does.
+
+    Same reason as above, plus the `O_NOFOLLOW` refusal of a symlinked
+    config: a writer that reached the file another way would not inherit it.
+    """
+    return _read_config_snapshot(path)
+
+
 def _file_signature(path: Path) -> tuple[int, int, int, int] | None:
     try:
         stat = path.lstat()
