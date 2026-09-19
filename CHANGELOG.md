@@ -4,6 +4,45 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The delegation nudge counts distinct searches, and its budget survives a
+  plugin-host restart.** It watched `search_files` and fired at five direct
+  reads, counting CALLS -- so five different greps and one grep five times
+  were the same event to it. In session `20260919_140745_db409e` the model
+  issued 203 `search_files` calls, the large majority identical; the nudge
+  spent its whole budget of two on the loop, said "delegate this", and was
+  silent for the remaining ~180 calls. The session's actual problem was that
+  it was repeating one search that returned nothing, and the only OMH
+  mechanism watching searches had no way to know.
+
+  The threshold now counts distinct `(tool, argument digest)` pairs, using the
+  digest the repeat guard already computes for the same call at
+  `pre_tool_call` rather than a second hashing path. Five identical searches
+  do not fire it; five different ones still do; the pinned negative at four is
+  unmoved; a hundred repeats followed by a real search pass still has its full
+  budget. The text says "different search/read calls", because the number in
+  it changed meaning.
+
+  The budget also stops refilling itself. `MAX_ENGAGEMENT_NUDGES` is two per
+  kind per SESSION and the counter lived in a per-PROCESS map, so a restart
+  handed the session a fresh one: `db409e` received four delegation nudges in
+  a 2+2 split bracketing a mid-session `omh update`, and `8da9b8` received
+  three. The two counters that bound the spend and the two latches that end it
+  are now written to a session-keyed store under the OMH home, read back once
+  per session, under the same 64-row LRU bound the process map uses. The work
+  counters stay in the process on purpose: losing them across a restart delays
+  a nudge and never adds one, and persisting them would put a file write on
+  every watched tool call rather than on the handful that spend something.
+
+  What the data says about this nudge, stated because it bears on whether the
+  budget is worth defending: across 140 intervention-to-next-assistant pairs
+  in the 2026-09-19 audit, none was followed by an OMH tool call, including
+  the eight delegation nudges. The one intervention with a visible effect is
+  the route hint (`skill_view` follows it 37 times in 60). It is kept because
+  a distinct-search pass is the case it was written for and that case was
+  never actually reached before this change. Whether prose that changes
+  nothing earns 668 characters a session is a product decision and is not
+  taken here.
+
 - **The HUD can tell forty different tool calls from the same call forty
   times.** The activity segment counts calls in flight, which is progress,
   and a loop is the opposite situation wearing the same number. Session
