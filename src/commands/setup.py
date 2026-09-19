@@ -58,6 +58,11 @@ from ..config_adapter import (
     write_config,
 )
 from ..install.compression_defaults import ensure_compression_defaults
+from ..install.config_reversal import (
+    MANAGED_CONFIG_WRITES_STATE_KEY,
+    managed_config_writes,
+    reverse_managed_config,
+)
 from ..doctor import DEFAULT_DOCTOR_NEXT_ACTION, doctor_ok, recommended_next_action, run_doctor
 from ..maintenance.build_identity import probe_build_identity
 from ..maintenance.doctor import run_doctor_advisories
@@ -592,7 +597,9 @@ def _sync_hermes_profiles(args: argparse.Namespace) -> list[dict[str, object]]:
     return results
 
 
-def _uninstall_hermes_profiles(args: argparse.Namespace, *, remove_all: bool) -> list[dict[str, object]]:
+def _uninstall_hermes_profiles(
+    args: argparse.Namespace, *, remove_all: bool, record: dict[str, object]
+) -> list[dict[str, object]]:
     """Reverse the per-profile sync: unregister every bot-profile home.
 
     Full scopes also removes each profile's managed artifacts through the
@@ -611,13 +618,17 @@ def _uninstall_hermes_profiles(args: argparse.Namespace, *, remove_all: bool) ->
         profile_paths = _paths(clone)
         entry: dict[str, object] = {"profile": name}
         try:
-            change = _remove_managed_external_dirs(
-                read_config(profile_paths.hermes_config_path),
+            change, rows = _unregister_and_reverse(
                 profile_paths,
+                read_config(profile_paths.hermes_config_path),
+                remove_all=remove_all,
+                record=record,
             )
             if not args.dry_run and change.changed:
                 write_config(profile_paths.hermes_config_path, change.text)
             touched = change.changed
+            if rows:
+                entry["config_keys"] = rows
             if remove_all:
                 plugin = uninstall_profile_plugin(
                     profile_paths,
@@ -629,8 +640,15 @@ def _uninstall_hermes_profiles(args: argparse.Namespace, *, remove_all: bool) ->
                 touched = touched or bool(plugin["removed_paths"]) or bool(plugin["would_remove"])
                 if plugin["kept_paths"]:
                     entry["kept_paths"] = plugin["kept_paths"]
+            kept_keys = _config_keys_kept(rows)
+            if kept_keys:
+                entry["config_keys_kept"] = kept_keys
             entry["status"] = (
-                ("cleared" if touched else "absent")
+                # "cleared" has to mean cleared. A profile whose config
+                # still names OMH -- because the person changed a value, or
+                # because a pre-record install cannot attribute one -- is
+                # reported as the partial thing it is, with the keys named.
+                ("partially_cleared" if kept_keys else "cleared" if touched else "absent")
                 if remove_all
                 else ("unregistered" if change.changed else "absent")
             )
@@ -647,6 +665,7 @@ _PROFILE_STATUS_LABELS = {
     "unregistered_kept": "left unregistered",
     "failed": "failed",
     "cleared": "cleared",
+    "partially_cleared": "cleared, some config keys kept",
     "unregistered": "unregistered",
     "absent": "nothing to remove",
 }
@@ -738,6 +757,55 @@ def _remove_managed_external_dirs(config_text: str, paths: OmhPaths) -> ConfigCh
         elif not changed:
             message = change.message
     return ConfigChange(changed, message, config_text)
+
+
+def _managed_config_record(paths: OmhPaths) -> dict[str, object]:
+    """The per-config write record, read before anything is removed.
+
+    Read once and passed down, never re-read per home: `uninstall_skill_pack`
+    deletes the OMH home, and the bot-profile loop runs after it. A profile
+    that read its own record at that point found no `state.json` at all and
+    fell back to the no-record subset, which is the difference between a
+    profile config that comes back clean and one that keeps
+    `display.interface` and three collapsed sections.
+    """
+    state, _state_error = read_state_result(paths)
+    return (state or {}).get(MANAGED_CONFIG_WRITES_STATE_KEY) or {}
+
+
+def _unregister_and_reverse(
+    paths: OmhPaths, config_text: str, *, remove_all: bool, record: dict[str, object]
+) -> tuple[ConfigChange, list[dict[str, str]]]:
+    """Unregister, and in the full scope take back the rest of what setup wrote.
+
+    One function for the primary home and for every bot profile, because
+    setup writes the same seven keys to each: `_sync_hermes_profiles` calls
+    `_apply_result` once per profile home. The two sides drifted once
+    already -- uninstall reversed the primary's keys and stripped only the
+    registration from each profile, so a bot home kept `memory.provider:
+    omh` naming the bundle the same run had just removed from it. Sharing
+    the code is what keeps "setup writes it here" and "uninstall takes it
+    back here" the same list.
+
+    Profiles share the primary's OMH store, so `read_state_result` reads one
+    `state.json` for all of them; the record is keyed by config path, which
+    is what makes each home get its own.
+    """
+    change = _remove_managed_external_dirs(config_text, paths)
+    if not remove_all:
+        return change, []
+    reversal, rows = reverse_managed_config(
+        change.text, record, config_path=paths.hermes_config_path
+    )
+    return (
+        ConfigChange(change.changed or reversal.changed, change.message, reversal.text),
+        [row.as_dict() for row in rows],
+    )
+
+
+def _config_keys_kept(rows: list[dict[str, str]]) -> list[str]:
+    """The managed keys a reversal left with the person, by name."""
+    return sorted(str(row.get("key", "")) for row in rows if row.get("status") in {"kept", "unrecorded"})
 
 
 def _external_dir_registered(config: str, path: Path) -> bool:
@@ -1829,6 +1897,18 @@ def _apply_result(args: argparse.Namespace) -> dict[str, object]:
         or memory_provider.changed
     ):
         write_config(paths.hermes_config_path, memory_provider.text)
+    # The record of what this pass added, carried forward from any earlier
+    # one. `omh uninstall` reads it to reverse exactly the keys OMH wrote and
+    # leave every value the person has since changed; without it, three of
+    # the seven keys are indistinguishable from a personal choice and have to
+    # be left behind (#1725).
+    state_before, _state_error = read_state_result(paths)
+    config_writes = managed_config_writes(
+        current,
+        memory_provider.text,
+        config_path=paths.hermes_config_path,
+        previous=(state_before or {}).get(MANAGED_CONFIG_WRITES_STATE_KEY),
+    )
     if not args.dry_run:
         update_state(
             paths,
@@ -1839,6 +1919,7 @@ def _apply_result(args: argparse.Namespace) -> dict[str, object]:
                     read_config(paths.hermes_config_path),
                     _registered_workflow_dir(paths),
                 ),
+                MANAGED_CONFIG_WRITES_STATE_KEY: config_writes,
             },
         )
     return {
@@ -1885,6 +1966,7 @@ def _apply_result(args: argparse.Namespace) -> dict[str, object]:
             "message": memory_provider.message,
             "selected": memory_provider_selection(memory_provider.text),
         },
+        "managed_config_writes": config_writes,
     }
 
 
@@ -1894,13 +1976,34 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         raise OmhError("--registration-only cannot be combined with --remove-files, --all, or --purge")
     paths = _paths(args)
     current = read_config(paths.hermes_config_path)
+    remove_all = bool(args.all or args.purge or (not args.registration_only and not args.remove_files))
+    record = _managed_config_record(paths)
+    # The rest of what setup wrote, and only in the scope that removes the
+    # bundle those keys name. `--registration-only` keeps its narrow meaning:
+    # the registration comes out and every other key stays, because that
+    # scope exists to leave a working install unregistered.
     try:
-        change = _remove_managed_external_dirs(current, paths)
+        change, reversal_rows = _unregister_and_reverse(
+            paths, current, remove_all=remove_all, record=record
+        )
     except ValueError as exc:
         raise OmhError(str(exc)) from exc
-    if not args.dry_run and change.changed:
-        write_config(paths.hermes_config_path, change.text)
-    remove_all = bool(args.all or args.purge or (not args.registration_only and not args.remove_files))
+    config_text = change.text
+    config_changed = change.changed
+    # `config_message` stays the registration message it has always been --
+    # the summary line reads "Hermes registration: {message}" and is mapped
+    # to a translation key by its exact text. Everything the reversal did is
+    # reported per key through `config_keys`.
+    #
+    # This write lands BEFORE the menubar, skill-pack, widget, skin, profile
+    # and command-package removals below, as it always has. A failure in any
+    # of those therefore leaves a reversed config beside a bundle still on
+    # disk. That is the safer of the two directions -- Hermes ignores a
+    # plugin it is not told to load, while a config still naming `omh` after
+    # the bundle is gone is the exact cost #1725 exists to remove -- but the
+    # blast radius went from one key to seven, so it is written down.
+    if not args.dry_run and config_changed:
+        write_config(paths.hermes_config_path, config_text)
     menubar_result = (
         uninstall_menubar_app(paths, dry_run=bool(args.dry_run))
         if remove_all and _uninstall_should_remove_menubar(args)
@@ -1924,7 +2027,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         if remove_all
         else {"status": "not_requested"}
     )
-    profile_results = _uninstall_hermes_profiles(args, remove_all=remove_all)
+    profile_results = _uninstall_hermes_profiles(args, remove_all=remove_all, record=record)
     scope = (
         tr(language, "uninstall_scope_all")
         if remove_all
@@ -1935,8 +2038,9 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     result.update(
         {
             "operation": "uninstall",
-            "config_changed": change.changed,
+            "config_changed": config_changed,
             "config_message": change.message,
+            "config_keys": reversal_rows,
             "scope": scope,
             "registration_only": bool(args.registration_only),
             "dry_run": args.dry_run,
@@ -3946,6 +4050,35 @@ def _doctor_observation_boundary_lines(checks: list[object], *, language: str) -
     return lines
 
 
+def _print_uninstall_config_keys(payload: dict[str, object], *, language: str, dry_run: bool) -> None:
+    """Name every managed `config.yaml` key, including the ones left behind.
+
+    A key that stays is the part a person has to act on, so it is reported by
+    name rather than folded into a count: `memory.provider` still naming a
+    bundle that is gone makes Hermes fetch the plugin catalogue on every
+    agent start, and nobody can act on "1 key kept".
+    """
+    rows = payload.get("config_keys", [])
+    if not isinstance(rows, list) or not rows:
+        return
+    reversed_keys = [str(row.get("key", "")) for row in rows if isinstance(row, dict) and row.get("status") == "reversed"]
+    if reversed_keys:
+        key = "uninstall_config_would_reverse" if dry_run else "uninstall_config_reversed"
+        print(f"  {tr(language, key, keys=', '.join(reversed_keys))}")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("status") == "kept":
+            print(f"  {tr(language, 'uninstall_config_kept', config_key=row.get('key', ''), detail=row.get('detail', ''))}")
+        elif row.get("status") == "unrecorded":
+            print(f"  {tr(language, 'uninstall_config_unrecorded', config_key=row.get('key', ''))}")
+        elif row.get("status") == "reversed" and row.get("kept"):
+            # A key reversed in part still left something with the person,
+            # and naming the key alone under "reversed" would say the
+            # opposite. The names lived only in the JSON before.
+            print(f"  {tr(language, 'uninstall_config_partial', config_key=row.get('key', ''), kept=row.get('kept', ''))}")
+
+
 def _print_uninstall_summary(payload: dict[str, object], *, language: str = "en") -> None:
     use_color = _use_color()
     dry_run = bool(payload.get("dry_run", False))
@@ -3974,6 +4107,7 @@ def _print_uninstall_summary(payload: dict[str, object], *, language: str = "en"
     print(f"  {tr(language, 'scope')}: {payload.get('scope', '')}")
     config_message = _config_change_label(language, str(payload.get("config_message", "")))
     print(f"  {tr(language, 'uninstall_config', message=config_message)}")
+    _print_uninstall_config_keys(payload, language=language, dry_run=dry_run)
     if dry_run:
         print(f"  {tr(language, 'uninstall_would_remove', count=len(would_remove))}")
         for path in would_remove[:8]:

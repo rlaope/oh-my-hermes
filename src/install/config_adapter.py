@@ -54,6 +54,11 @@ def _parse_inline_list(value: str) -> list[str] | None:
     return items
 
 
+def _quoted_inline_items(value: str) -> bool:
+    """Whether an inline flow sequence carries quoting this editor would lose."""
+    return "'" in value or '"' in value
+
+
 def _format_external_dirs(values: list[str]) -> list[str]:
     return ["  external_dirs:", *[f"    - {value}" for value in values]]
 
@@ -269,6 +274,15 @@ def display_skin_selection(config_text: str) -> str:
     return _section_scalar(config_text, "display", "skin")
 
 
+def references_mapping_key(line: str, key: str) -> bool:
+    """Whether `line` uses `key` as a mapping key, quoted, dotted or explicit.
+
+    Public because the uninstall report asks a different question from the
+    writers: they ask "may I edit here", this asks "is the key there at all".
+    """
+    return _references_mapping_key(line, key)
+
+
 def _references_mapping_key(line: str, key: str) -> bool:
     escaped = re.escape(key)
     token = rf"""(?:{escaped}|"{escaped}"|'{escaped}')"""
@@ -294,17 +308,17 @@ def _contains_unsupported_yaml_node_syntax(line: str) -> bool:
     )
 
 
-def _display_node_is_sequence(lines: list[str]) -> bool:
+def _section_node_is_sequence(lines: list[str], section: str) -> bool:
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         if not line.startswith(" ") and stripped.startswith("-"):
             return True
-    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
-    if len(display_indices) != 1:
+    section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
+    if len(section_indices) != 1:
         return False
-    for line in lines[display_indices[0] + 1 :]:
+    for line in lines[section_indices[0] + 1 :]:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
@@ -328,24 +342,70 @@ def _root_is_plain_block_mapping(lines: list[str]) -> bool:
     return True
 
 
-def _display_edit_guard(lines: list[str]) -> str:
+def _document_edit_guard(lines: list[str]) -> str:
+    """Refusals that hold for every key in every section of the document."""
     if lines and lines[0].startswith("\ufeff"):
         return "BOM-prefixed YAML is user-owned; leaving it alone"
     if not _root_is_plain_block_mapping(lines):
         return "non-mapping or multi-document YAML is user-owned; leaving it alone"
-    if _display_node_is_sequence(lines):
-        return "sequence display configuration is user-owned; leaving it alone"
+    return ""
+
+
+def _document_syntax_guard(lines: list[str]) -> str:
+    """Node syntax this hand-rolled editor cannot preserve if it rewrites a line."""
     if any(_contains_potential_quoted_mapping_key(line) for line in lines):
         return "quoted YAML mapping keys are user-owned; leaving them alone"
     if any(_contains_unsupported_yaml_node_syntax(line) for line in lines):
         return "YAML node properties are user-owned; leaving them alone"
-    display_lines = [line for line in lines if _references_mapping_key(line, "display")]
-    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
-    if len(display_lines) > 1:
-        return "duplicate display sections are ambiguous; leaving them alone"
-    if display_lines and not display_indices:
-        return "noncanonical display configuration is user-owned; leaving it alone"
     return ""
+
+
+def _section_shape_guard(lines: list[str], section: str) -> str:
+    """Refusals about one top-level section's own shape."""
+    section_lines = [line for line in lines if _references_mapping_key(line, section)]
+    section_indices = [index for index, line in enumerate(lines) if line == f"{section}:"]
+    if len(section_lines) > 1:
+        return f"duplicate {section} sections are ambiguous; leaving them alone"
+    if section_lines and not section_indices:
+        return f"noncanonical {section} configuration is user-owned; leaving it alone"
+    return ""
+
+
+def section_edit_guard(lines: list[str], section: str, key: str = "") -> str:
+    """The refusal every mutation of `section` (and optionally `section.key`) shares.
+
+    `_display_edit_guard` below is this same sequence pinned to `display`,
+    and the two were one list for a reason that only became visible from the
+    uninstall side: the display writers refused a shape while the memory and
+    plugin writers edited the same file anyway. On a config carrying both a
+    dotted `memory.provider: omh` and a `memory:` block, the owner check read
+    the dotted value and the mutator then deleted the block's value, so OMH's
+    marker survived and the person's provider did not. On a config with
+    `enabled: &plist`, the display path refused over the anchor while the
+    plugin path emptied the list the anchor names, leaving every `*plist`
+    alias resolving to null.
+
+    So this is not defensive tidying. Each clause is a shape where editing
+    one key changes the meaning of something the person owns elsewhere.
+    """
+    guard = _document_edit_guard(lines)
+    if guard:
+        return guard
+    if _section_node_is_sequence(lines, section):
+        return f"sequence {section} configuration is user-owned; leaving it alone"
+    guard = _document_syntax_guard(lines)
+    if guard:
+        return guard
+    guard = _section_shape_guard(lines, section)
+    if guard:
+        return guard
+    if key and any(_references_mapping_key(line, f"{section}.{key}") for line in lines):
+        return f"dotted {section}.{key} is user-owned; leaving it alone"
+    return ""
+
+
+def _display_edit_guard(lines: list[str]) -> str:
+    return section_edit_guard(lines, "display")
 
 
 def _canonical_display_entries(lines: list[str], key: str) -> list[tuple[int, str]]:
@@ -799,6 +859,320 @@ def clear_memory_provider(config_text: str, name: str) -> ConfigChange:
             lines[idx] = "  provider: ''"
             return ConfigChange(True, "cleared memory.provider", "\n".join(lines) + "\n")
     return ConfigChange(False, "memory.provider line not found", config_text)
+
+
+def remove_memory_provider(config_text: str, name: str) -> ConfigChange:
+    """Drop the `memory.provider` line, but only when `name` still holds the slot.
+
+    Not the same act as `clear_memory_provider`, which writes an empty value.
+    That is what `omh memory --disable` means: the person keeps a config
+    that says "no external provider, and I chose that". Uninstall means the
+    key OMH inserted is gone again, so the line goes rather than emptying.
+    """
+    lines = config_text.splitlines()
+    guard = section_edit_guard(lines, "memory", "provider")
+    if guard:
+        return ConfigChange(False, guard, config_text)
+    current = memory_provider_selection(config_text)
+    if not current:
+        return ConfigChange(False, "memory.provider is already unset", config_text)
+    if current != name:
+        return ConfigChange(False, f"memory.provider is {current}, not {name}; leaving it alone", config_text)
+
+    for idx, line in enumerate(lines):
+        if not line.startswith("  ") or line.startswith("    "):
+            continue
+        key, _, _rest = line.strip().partition(":")
+        if key.strip() == "provider" and _enclosing_section(lines, idx) == "memory":
+            del lines[idx]
+            return ConfigChange(True, "removed memory.provider", _joined(lines))
+    return ConfigChange(False, "memory.provider line not found", config_text)
+
+
+def remove_plugin_enabled(config_text: str, name: str) -> ConfigChange:
+    """Take `name` back out of `plugins.enabled`; the inverse of `ensure_plugin_enabled`.
+
+    Only that one item, and only from `enabled`. A name under
+    `plugins.disabled` is the person's own opt-out, which setup never wrote
+    and uninstall must not clean up.
+    """
+    lines = config_text.splitlines()
+    guard = section_edit_guard(lines, "plugins", "enabled")
+    if guard:
+        return ConfigChange(False, guard, config_text)
+    listed = plugin_enablement(config_text)
+    if name not in listed["enabled"]:
+        return ConfigChange(False, f"{name} is not in plugins.enabled", config_text)
+    plugins_index = next(
+        (idx for idx, line in enumerate(lines) if line.strip() == "plugins:" and not line.startswith(" ")),
+        None,
+    )
+    if plugins_index is None:
+        return ConfigChange(False, "plugins section not found", config_text)
+
+    output: list[str] = lines[: plugins_index + 1]
+    changed = False
+    current = ""
+    index = plugins_index + 1
+    while index < len(lines):
+        line = lines[index]
+        if line.strip() and not line.startswith(" "):
+            break
+        stripped = line.strip()
+        # Item shape before key shape, for the reason `plugin_enablement`
+        # documents: a level item (`  - omh`) is a member of the key above
+        # it, not a new key.
+        if stripped.startswith("- "):
+            if current == "enabled" and stripped[2:].strip().strip("\"'") == name:
+                changed = True
+                index += 1
+                continue
+            output.append(line)
+            index += 1
+            continue
+        if stripped and line.startswith("  ") and not line.startswith("    "):
+            key, _, rest = stripped.partition(":")
+            key = key.strip()
+            inline = _parse_inline_list(rest.strip()) if rest.strip() else None
+            if key in {"enabled", "disabled"} and inline is not None:
+                if key == "enabled" and name in inline and _quoted_inline_items(rest.strip()):
+                    # `_parse_inline_list` splits on commas before it strips
+                    # quotes, so `["a,b", omh]` parses as three entries and
+                    # re-renders as two. Rewriting the line would either drop
+                    # the person's quoting or split one entry in half, and
+                    # both are edits to a value OMH never wrote.
+                    return ConfigChange(
+                        False,
+                        "quoted inline plugins.enabled is user-owned; leaving it alone",
+                        config_text,
+                    )
+                if key == "enabled" and name in inline:
+                    remaining = [value for value in inline if value != name]
+                    output.append(f"  enabled: [{', '.join(remaining)}]")
+                    changed = True
+                else:
+                    output.append(line)
+                current = ""
+                index += 1
+                continue
+            current = key if key in {"enabled", "disabled"} else ""
+        output.append(line)
+        index += 1
+    output.extend(lines[index:])
+    if not changed:
+        return ConfigChange(False, f"{name} is not in plugins.enabled", config_text)
+    return ConfigChange(True, f"removed {name} from plugins.enabled", _joined(output))
+
+
+def _locate_display_scalar(lines: list[str], key: str) -> tuple[int, str] | str | None:
+    """Locate one canonical `display.<key>` scalar for a mutation.
+
+    Returns its (index, raw value), `None` when the key is absent, or a
+    refusal message for every shape this hand-rolled editor must not touch.
+    The refusal is a string because each caller reports it as a
+    `ConfigChange` that changed nothing, exactly as
+    `_canonical_display_sections` does one level down.
+    """
+    guard = _display_edit_guard(lines)
+    if guard:
+        return guard
+    if any(_references_mapping_key(line, f"display.{key}") for line in lines):
+        return f"dotted display.{key} is user-owned; leaving it alone"
+    display_indices = [index for index, line in enumerate(lines) if line == "display:"]
+    if not display_indices:
+        return None
+    display_index = display_indices[0]
+    entries: list[tuple[int, str]] = []
+    key_like_lines = 0
+    for index in range(display_index + 1, len(lines)):
+        line = lines[index]
+        if line.strip() and not line.startswith(" "):
+            break
+        if _references_mapping_key(line, key):
+            key_like_lines += 1
+        if line.startswith("  ") and not line.startswith("    "):
+            candidate, separator, rest = line.strip().partition(":")
+            if separator and candidate == key:
+                entries.append((index, rest.strip()))
+    if key_like_lines != len(entries) or len(entries) > 1:
+        return f"ambiguous display.{key} is user-owned; leaving it alone"
+    if not entries:
+        return None
+    index, raw = entries[0]
+    if not _scalar_value(raw) or raw.startswith(("{", "[", "|", ">")):
+        return f"non-scalar display.{key} is user-owned; leaving it alone"
+    return (index, raw)
+
+
+def revert_display_scalar(config_text: str, key: str, expected: str, previous: str = "") -> ConfigChange:
+    """Put one canonical `display.<key>` back, but only while it reads `expected`.
+
+    The uninstall half of `_activate_display_scalar`, and under the same
+    guards: a shape that writer would have refused is a shape this one
+    refuses too, so the pair can never leave a config the editor no longer
+    understands.
+
+    `previous` is the value the person had before consent let OMH migrate
+    them off it. Removing the line in that case would be the wrong inverse:
+    somebody on `display.interface: cli` who accepted the branded TUI is
+    owed `cli` back, not Hermes' default for an unset key. Absent `previous`
+    the key was OMH's insertion and the line goes.
+    """
+    lines = config_text.splitlines()
+    located = _locate_display_scalar(lines, key)
+    if isinstance(located, str):
+        return ConfigChange(False, located, config_text)
+    if located is None:
+        return ConfigChange(False, f"display.{key} is not set", config_text)
+    index, raw = located
+    current = _scalar_value(raw)
+    if current != expected:
+        return ConfigChange(False, f"display.{key} is {current}, not {expected}; leaving it alone", config_text)
+    if previous:
+        lines[index] = f"  {key}: {previous}"
+        return ConfigChange(True, f"restored display.{key} to {previous}", _joined(lines))
+    del lines[index]
+    return ConfigChange(True, f"removed display.{key}", _joined(lines))
+
+
+def remove_display_sections(config_text: str, keys: list[str], expected: str) -> ConfigChange:
+    """Drop the named `display.sections` children that still read `expected`.
+
+    Per key, like the writer: a child the person has since changed stays, and
+    the caller reports it by name. Deciding which keys to pass is the
+    caller's job -- `display_sections_selection` is the reading both sides
+    use -- so this only refuses shapes and removes lines.
+    """
+    lines = config_text.splitlines()
+    guard = _display_edit_guard(lines)
+    if guard:
+        return ConfigChange(False, guard, config_text)
+    if any(_references_mapping_key(line, "display.sections") for line in lines):
+        return ConfigChange(False, "dotted display.sections is user-owned; leaving it alone", config_text)
+    located = _canonical_display_sections(lines)
+    if isinstance(located, str):
+        return ConfigChange(False, located, config_text)
+    if located is None:
+        return ConfigChange(False, "display.sections is not set", config_text)
+    _sections_index, children = located
+    wanted = set(keys)
+    removals = [
+        index
+        for index, key, raw in children
+        if key in wanted and _scalar_value(raw) == expected
+    ]
+    if not removals:
+        return ConfigChange(False, "no display.sections child to remove", config_text)
+    for index in sorted(removals, reverse=True):
+        del lines[index]
+    removed = sorted(key for index, key, _raw in children if index in set(removals))
+    return ConfigChange(True, f"removed display.sections.{', display.sections.'.join(removed)}", _joined(lines))
+
+
+def config_container_paths(config_text: str) -> set[str]:
+    """Top- and second-level mapping keys that carry no inline value.
+
+    The set uninstall compares before and after setup's own writes, so it can
+    drop a `display:` or `skills:` that OMH created and nothing else. Depth
+    two is where every key OMH writes lives, so it is where this stops.
+    """
+    paths: set[str] = set()
+    section = ""
+    for line in config_text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not line.startswith(" "):
+            key, separator, rest = stripped.partition(":")
+            section = ""
+            if separator and not rest.strip() and key.strip():
+                section = key.strip()
+                paths.add(section)
+            continue
+        if section and line.startswith("  ") and not line.startswith("    "):
+            key, separator, rest = stripped.partition(":")
+            key = key.strip()
+            if separator and not rest.strip() and key and not key.startswith("-"):
+                paths.add(f"{section}.{key}")
+    return paths
+
+
+def _container_line_index(lines: list[str], path: str) -> int | None:
+    parts = path.split(".")
+    if len(parts) == 1:
+        for index, line in enumerate(lines):
+            if not line.startswith(" ") and line.strip() == f"{parts[0]}:":
+                return index
+        return None
+    section, key = parts
+    in_section = False
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not line.startswith(" ") and stripped:
+            in_section = stripped == f"{section}:"
+            continue
+        if in_section and line.startswith("  ") and not line.startswith("    ") and stripped == f"{key}:":
+            return index
+    return None
+
+
+def childless_containers(config_text: str) -> set[str]:
+    """The container keys that carry no child lines right now.
+
+    Compared before and after a reversal so uninstall can tell a container
+    its own removals emptied from one the person already kept empty.
+    """
+    lines = config_text.splitlines()
+    empty: set[str] = set()
+    for path in config_container_paths(config_text):
+        index = _container_line_index(lines, path)
+        if index is not None and not _has_child_lines(lines, index):
+            empty.add(path)
+    return empty
+
+
+def _has_child_lines(lines: list[str], index: int) -> bool:
+    indent = len(lines[index]) - len(lines[index].lstrip(" "))
+    for line in lines[index + 1 :]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if len(line) - len(line.lstrip(" ")) > indent:
+            return True
+        return False
+    return False
+
+
+def remove_childless_containers(config_text: str, paths: list[str]) -> ConfigChange:
+    """Drop each listed container key that reversal left with no children.
+
+    Deepest first, so removing `skills.external_dirs` can leave `skills:`
+    childless and both go in one pass. A blank line directly above a removed
+    key goes with it when the line above that is not blank: that separator is
+    the one `ensure_*` wrote when it appended the section, and leaving it
+    behind is the difference between a config that matches the bytes before
+    the install and one that does not.
+    """
+    lines = config_text.splitlines()
+    removed: list[str] = []
+    for path in sorted(paths, key=lambda value: (-value.count("."), value)):
+        index = _container_line_index(lines, path)
+        if index is None or _has_child_lines(lines, index):
+            continue
+        del lines[index]
+        if index > 0 and not lines[index - 1].strip() and (index == 1 or lines[index - 2].strip()):
+            del lines[index - 1]
+        removed.append(path)
+    if not removed:
+        return ConfigChange(False, "no empty managed section to remove", config_text)
+    return ConfigChange(True, f"removed empty {', '.join(sorted(removed))}", _joined(lines))
+
+
+def _joined(lines: list[str]) -> str:
+    """Render edited lines back to config text, never inventing a lone newline."""
+    if not any(line.strip() for line in lines):
+        return ""
+    return "\n".join(lines).rstrip("\n") + "\n"
 
 
 def _section_scalar(config_text: str, section: str, key: str) -> str:

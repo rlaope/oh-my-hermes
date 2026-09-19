@@ -17,7 +17,7 @@ dependency.
 
 from __future__ import annotations
 
-from .config_adapter import ConfigChange
+from .config_adapter import ConfigChange, section_edit_guard
 
 
 def _indent_of(line: str) -> int:
@@ -172,3 +172,69 @@ def ensure_compression_defaults(config_text: str) -> ConfigChange:
     lines = config_text.splitlines()
     lines[int(settings["block_end"]):int(settings["block_end"])] = block
     return ConfigChange(True, "added auxiliary.compression fallback chain", "\n".join(lines) + "\n")
+
+
+def compression_fallback_chain_lines(config_text: str) -> list[str]:
+    """The verbatim lines of `auxiliary.compression.fallback_chain`, or [].
+
+    Verbatim rather than parsed because the only consumer compares them
+    against the ones OMH wrote: a chain that still reads byte for byte the
+    way `ensure_compression_defaults` left it is OMH's to take back, and a
+    chain a person has since edited by one character is not.
+    """
+    settings = compression_settings(config_text)
+    if not settings["configured"] or not settings["has_fallback_chain"]:
+        return []
+    lines = config_text.splitlines()
+    start = _find_mapping_key(
+        lines,
+        "fallback_chain",
+        indent=int(settings["key_indent"]),
+        start=int(settings["block_start"]) + 1,
+        stop=int(settings["block_end"]),
+    )
+    if start is None:
+        return []
+    end = _block_end(lines, start, int(settings["key_indent"]))
+    return lines[start:end]
+
+
+def remove_compression_fallback_chain(config_text: str, expected: list[str]) -> ConfigChange:
+    """Take back a compression fallback chain that still reads exactly `expected`.
+
+    The chain is derived from the person's own providers, so unlike
+    `display.skin: omh` it carries no mark saying OMH wrote it. The recorded
+    lines are that mark, and a mismatch of any kind -- edited, extended,
+    replaced -- leaves the chain alone and is reported.
+    """
+    if not expected:
+        return ConfigChange(False, "no recorded compression fallback chain", config_text)
+    # The same refusal the display and memory removers take. The verbatim
+    # compare below is already strict, but it says nothing about the rest of
+    # the document: deleting lines out of a file whose root is a sequence, or
+    # whose keys carry anchors, changes what a node elsewhere resolves to.
+    guard = section_edit_guard(config_text.splitlines(), "auxiliary", "compression")
+    if guard:
+        return ConfigChange(False, guard, config_text)
+    current = compression_fallback_chain_lines(config_text)
+    if not current:
+        return ConfigChange(False, "auxiliary.compression.fallback_chain is not set", config_text)
+    if current != expected:
+        return ConfigChange(
+            False,
+            "auxiliary.compression.fallback_chain no longer matches the one OMH wrote; leaving it alone",
+            config_text,
+        )
+    lines = config_text.splitlines()
+    settings = compression_settings(config_text)
+    start = _find_mapping_key(
+        lines,
+        "fallback_chain",
+        indent=int(settings["key_indent"]),
+        start=int(settings["block_start"]) + 1,
+        stop=int(settings["block_end"]),
+    )
+    if start is None:
+        return ConfigChange(False, "auxiliary.compression.fallback_chain line not found", config_text)
+    del lines[start : start + len(current)]
+    return ConfigChange(True, "removed auxiliary.compression fallback chain", "\n".join(lines).rstrip("\n") + "\n")

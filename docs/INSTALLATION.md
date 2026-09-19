@@ -1242,7 +1242,8 @@ as an opt-out and frozen on the generation it was installed at. Only a
 profile naming none of them has opted out.
 
 `omh uninstall` is symmetric with the sync. A full uninstall (`omh uninstall`,
-`--all`, or `--purge`) clears every profile's registration and removes its
+`--all`, or `--purge`) clears every profile's registration, reverses the same
+`config.yaml` keys the primary home's reversal takes back, and removes its
 managed artifacts — the plugin bundle, the TUI widget, and the skin — through
 the same manifest checks the primary home gets: a profile directory OMH cannot
 prove it owns is kept and reported, never deleted blind. `--registration-only`
@@ -3159,12 +3160,39 @@ omh uninstall
 This unregisters `~/.omh/skills` from Hermes config, removes `~/.omh`, removes
 the managed `~/.hermes/plugins/omh` plugin bundle when it has an OMH manifest,
 removes generated team role files recorded in OMH team-profile manifests, clears the
-same registration and managed artifacts from every Hermes bot profile
+same registration, config keys and managed artifacts from every Hermes bot profile
 under `~/.hermes/profiles/` (through the same manifest-checked refusals as the primary
 home), and removes the install.sh-managed `omh` command venv/link when the current
 command is running from that managed venv. It does not delete unrelated Hermes files,
 unrelated plugins, unrelated agents, or pipx/development Python environments
 that OMH cannot safely identify as install.sh-managed.
+
+### What a full uninstall takes back out of `config.yaml`
+
+`omh setup` writes seven keys: `skills.external_dirs`,
+`auxiliary.compression.fallback_chain`, `plugins.enabled`, `display.interface`,
+`display.skin`, `display.sections` and `memory.provider`. A full uninstall
+reverses all seven, in the primary home and in every bot profile.
+
+It reverses a key only while the value there is still the one OMH wrote.
+Setup records that at write time, per config path, in
+`$OMH_HOME/runtime/state.json`. Change `memory.provider` to another product
+afterwards and uninstall keeps your value and names the key it left alone.
+A value that consent let OMH migrate you off — only `display.interface` and
+`display.skin` can be replaced at all — is put back rather than removed.
+
+An install made before OMH kept that record gets the honest subset.
+`display.skin: omh`, `plugins.enabled` containing `omh` and
+`memory.provider: omh` name OMH by construction and are reversed anyway.
+`display.interface: tui`, the `display.sections` children and the compression
+fallback chain are values you could equally have chosen yourself, so they are
+left in place and the uninstall output says which and why.
+
+`--registration-only` reverses none of this; it removes the registration and
+nothing else, because that scope exists to leave a working install
+unregistered. `--dry-run` lists every key it would reverse and writes nothing.
+A `config.yaml` that reversal empties is left in place: OMH does not delete a
+file in your Hermes home.
 If `omh` still runs after uninstall, that means the command package is still on
 `PATH`; remove it with the installer-managed venv, pip, or pipx environment
 that installed it.

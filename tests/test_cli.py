@@ -12764,6 +12764,247 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertTrue((hermes_home / "plugins" / "omh" / "plugin.yaml").exists())
             self.assertNotIn(str(omh_home / "skills"), (hermes_home / "config.yaml").read_text(encoding="utf-8"))
 
+    def test_uninstall_restores_the_config_bytes_that_were_there_before_setup(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            hermes_home.mkdir(parents=True, exist_ok=True)
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            config_path = hermes_home / "config.yaml"
+            # A person's own config, including a display key setup migrates
+            # under consent and a compression block it repairs in place.
+            before = (
+                "version: 1\n"
+                "display:\n"
+                "  interface: cli\n"
+                "  compact: true\n"
+                "model:\n"
+                "  fallback_providers:\n"
+                "    - provider: zai\n"
+                "      model: glm-5.3\n"
+                "auxiliary:\n"
+                "  compression:\n"
+                "    provider: og\n"
+            )
+            config_path.write_text(before, encoding="utf-8", newline="")
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin", "--yes"])[0], 0)
+            after_setup = config_path.read_text(encoding="utf-8")
+            self.assertIn("provider: omh", after_setup)
+            self.assertIn("interface: tui", after_setup)
+            self.assertIn("fallback_chain:", after_setup)
+
+            status, stdout, stderr = run_cli(base + ["uninstall", "--dry-run"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            preview = json.loads(stdout)
+            self.assertEqual(
+                {row["key"] for row in preview["config_keys"] if row["status"] == "reversed"},
+                {
+                    "auxiliary.compression.fallback_chain",
+                    "display.interface",
+                    "display.sections",
+                    "display.skin",
+                    "memory.provider",
+                    "plugins.enabled",
+                },
+            )
+            self.assertEqual(config_path.read_text(encoding="utf-8"), after_setup)
+
+            status, stdout, stderr = run_cli(base + ["uninstall"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertEqual(config_path.read_text(encoding="utf-8"), before)
+
+    def test_uninstall_keeps_a_managed_config_key_the_user_has_since_changed(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            config_path = hermes_home / "config.yaml"
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin", "--yes"])[0], 0)
+            moved = config_path.read_text(encoding="utf-8").replace("  provider: omh", "  provider: honcho")
+            config_path.write_text(moved, encoding="utf-8", newline="")
+
+            status, stdout, stderr = run_cli(base + ["uninstall"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            kept = {row["key"]: row["detail"] for row in payload["config_keys"] if row["status"] == "kept"}
+            self.assertIn("memory.provider", kept)
+            self.assertIn("honcho", kept["memory.provider"])
+            self.assertIn("  provider: honcho", config_path.read_text(encoding="utf-8"))
+
+    def test_uninstall_registration_only_reverses_no_other_config_key(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            config_path = hermes_home / "config.yaml"
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin", "--yes"])[0], 0)
+
+            status, stdout, stderr = run_cli(base + ["uninstall", "--registration-only"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual(payload["config_keys"], [])
+            remaining = config_path.read_text(encoding="utf-8")
+            self.assertIn("  provider: omh", remaining)
+            self.assertIn("    - omh", remaining)
+            self.assertIn("  skin: omh", remaining)
+
+    def test_a_bot_profile_does_not_cost_the_primary_home_its_write_record(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            # Every profile shares the primary's OMH home, so one setup run
+            # writes the same runtime/state.json once per Hermes home.
+            (hermes_home / "profiles" / "bot").mkdir(parents=True, exist_ok=True)
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            config_path = hermes_home / "config.yaml"
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin", "--yes"])[0], 0)
+            state = json.loads((omh_home / "runtime" / "state.json").read_text(encoding="utf-8"))
+            recorded = state["hermes_config_writes"]
+            # Keyed by the resolved path the resolver hands every command,
+            # which on macOS is the /private form of a temp directory.
+            self.assertIn(str(config_path.resolve()), recorded)
+            self.assertIn(str((hermes_home / "profiles" / "bot" / "config.yaml").resolve()), recorded)
+
+            status, stdout, stderr = run_cli(base + ["uninstall"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            # With the primary's own record found, the two keys that need it
+            # are reversed rather than reported as unattributable.
+            self.assertEqual(
+                {row["key"] for row in payload["config_keys"] if row["status"] == "unrecorded"},
+                set(),
+            )
+            self.assertNotIn("interface: tui", config_path.read_text(encoding="utf-8"))
+
+    def test_uninstall_reverses_a_bot_profiles_config_the_way_it_does_the_primary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            profile = hermes_home / "profiles" / "bot"
+            profile.mkdir(parents=True, exist_ok=True)
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            before = "version: 1\n"
+            for config in (hermes_home / "config.yaml", profile / "config.yaml"):
+                config.write_text(before, encoding="utf-8", newline="")
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin", "--yes"])[0], 0)
+            # Setup writes the same seven keys to the profile home.
+            self.assertIn("provider: omh", (profile / "config.yaml").read_text(encoding="utf-8"))
+
+            status, stdout, stderr = run_cli(base + ["uninstall"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            payload = json.loads(stdout)
+            self.assertEqual((hermes_home / "config.yaml").read_text(encoding="utf-8"), before)
+            self.assertEqual((profile / "config.yaml").read_text(encoding="utf-8"), before)
+            row = payload["hermes_profiles"][0]
+            self.assertEqual(row["status"], "cleared")
+            self.assertEqual(
+                {entry["key"] for entry in row["config_keys"] if entry["status"] == "reversed"},
+                {
+                    "display.interface",
+                    "display.sections",
+                    "display.skin",
+                    "memory.provider",
+                    "plugins.enabled",
+                },
+            )
+
+    def test_a_profile_that_kept_a_config_key_is_not_reported_as_cleared(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            profile = hermes_home / "profiles" / "bot"
+            profile.mkdir(parents=True, exist_ok=True)
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin", "--yes"])[0], 0)
+            config = profile / "config.yaml"
+            config.write_text(
+                config.read_text(encoding="utf-8").replace("  provider: omh", "  provider: honcho"),
+                encoding="utf-8",
+                newline="",
+            )
+
+            status, stdout, stderr = run_cli(base + ["uninstall"])
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            row = json.loads(stdout)["hermes_profiles"][0]
+            self.assertEqual(row["status"], "partially_cleared")
+            self.assertEqual(row["config_keys_kept"], ["memory.provider"])
+            self.assertIn("  provider: honcho", config.read_text(encoding="utf-8"))
+
+    def test_uninstall_terminal_summary_names_a_partially_kept_display_section(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            config = hermes_home / "config.yaml"
+
+            self.assertEqual(run_cli(base + ["setup", "--with-plugin", "--yes"])[0], 0)
+            config.write_text(
+                config.read_text(encoding="utf-8").replace("    tools: collapsed", "    tools: expanded"),
+                encoding="utf-8",
+                newline="",
+            )
+
+            status, stdout, stderr = run_cli(base + ["uninstall"], output_json=False)
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            # The kept child used to live only in the JSON.
+            self.assertIn("Config key partly kept: display.sections", stdout)
+            self.assertIn("your value(s) for tools stayed", stdout)
+            self.assertIn("    tools: expanded", config.read_text(encoding="utf-8"))
+
+    def test_uninstall_terminal_summary_names_a_config_key_it_left_behind(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            omh_home = root / ".omh"
+            hermes_home = root / ".hermes"
+            hermes_home.mkdir(parents=True, exist_ok=True)
+            base = ["--omh-home", str(omh_home), "--hermes-home", str(hermes_home)]
+            config_path = hermes_home / "config.yaml"
+            # No record at all, which is every install made before #1725:
+            # the two keys that name OMH come out, `display.interface` stays
+            # because `tui` is also a value a person can choose.
+            config_path.write_text(
+                "display:\n  interface: tui\n  skin: omh\nmemory:\n  provider: omh\n",
+                encoding="utf-8",
+                newline="",
+            )
+
+            status, stdout, stderr = run_cli(base + ["uninstall"], output_json=False)
+
+            self.assertEqual(stderr, "")
+            self.assertEqual(status, 0)
+            self.assertIn("Config keys reversed: display.skin, memory.provider", stdout)
+            self.assertIn("Config key left in place: display.interface", stdout)
+            self.assertEqual(config_path.read_text(encoding="utf-8"), "display:\n  interface: tui\n")
+
     def test_uninstall_removes_install_sh_managed_command_package_when_detected(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
