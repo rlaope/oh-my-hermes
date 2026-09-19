@@ -4,6 +4,74 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh uninstall` now reverses every `config.yaml` key setup wrote, not one
+  of seven.** Setup's apply step writes `skills.external_dirs`,
+  `auxiliary.compression.fallback_chain`, `plugins.enabled`,
+  `display.interface`, `display.skin`, `display.sections` and
+  `memory.provider`. Uninstall reversed the registration and left the rest, so
+  a machine kept `plugins.enabled: - omh` and `memory.provider: omh` naming a
+  bundle that was gone.
+
+  Observed against Hermes 0.21.3 in a temp home with the bundle removed: a
+  leftover `memory.provider: omh` makes agent init call
+  `load_memory_provider("omh")`, get nothing, and then look the provider up
+  in the plugin catalogue before warning that it is neither installed nor in
+  it; `hermes doctor` reports it as `omh plugin not found`. The lookup is
+  cached for six hours per home and skipped when
+  `security.allow_lazy_installs` is off, so the recurring cost is the
+  warning rather than a request per start. The stale `plugins.enabled` entry
+  and `display.skin: omh` are silent -- discovery simply never finds them.
+
+  Setup now records what it added, as the difference between the reading
+  before its pass and the reading after it, which is the same test #1750
+  applied to `display.sections`. Uninstall reverses a key only while the
+  current value is still the recorded one, so somebody who moved
+  `memory.provider` to honcho keeps honcho and the report names the key it
+  left alone. A value consent let OMH migrate them off -- `display.interface`
+  and `display.skin` are the only two -- is put back rather than removed.
+
+  Installs made before the record get the honest subset. `display.skin: omh`,
+  `plugins.enabled` containing `omh` and `memory.provider: omh` name OMH by
+  construction and are reversed. `display.interface: tui`, the
+  `display.sections` children and the compression fallback chain are values a
+  person can legitimately hold, so they are kept and the uninstall output
+  says which and why.
+
+  `--registration-only` keeps its narrow meaning and reverses nothing else.
+  `--dry-run` lists every key it would reverse and leaves the file
+  byte-identical.
+
+  The record is keyed by config path, because every Hermes bot profile
+  shares the primary's OMH home and one `omh setup` therefore writes the
+  same `runtime/state.json` once per home. A single slot would end the run
+  holding the last profile's record, and the primary -- the home somebody is
+  most likely to uninstall -- would silently fall back to the no-record
+  subset.
+
+  Bot profiles are reversed the same way the primary is, and through the
+  same function, because setup writes the same seven keys to each of them
+  (`_sync_hermes_profiles` calls the apply pass once per profile home). A
+  profile that still holds a key is reported as `partially_cleared` with the
+  keys named, rather than as `cleared` over a config that still says `omh`.
+
+  Every remover now takes the same refusal its forward writer takes. The
+  display removers always did; the memory, plugin and compression removers
+  took none of it, and two of those shapes were not merely untouched. On a
+  config carrying both a dotted `memory.provider: omh` and a `memory:`
+  block, the owner check read the dotted value and the mutator then deleted
+  the block's `provider: honcho`, leaving OMH's marker and losing the
+  person's provider. On a config with `enabled: &plist`, the display path
+  refused over the anchor while the plugin path emptied the list the anchor
+  names, so every `*plist` alias resolved to null. A quoted inline
+  `plugins.enabled` is also left alone now, because the list parser splits on
+  commas before it strips quotes and `["a,b", omh]` would come back as two
+  entries.
+
+  A row's status is read off the config rather than matched against its own
+  English message. The old substring test reported a key that was present
+  and deliberately untouched as "nothing here", and coupled the
+  absent/kept distinction to the wording of six messages.
+
 - **Fourteen skills stop telling the model to record a coding handoff for work
   that is not coding.** A skill body rendered "Preferred harness for this
   skill: `coding-handling`" and an `omh runtime record --harness
