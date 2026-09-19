@@ -49,11 +49,24 @@ from collections import Counter
 from typing import Any, Final
 
 from .hooks.nudge_budget import (
+    DELEGATION_LATCH_FIELD,
+    DELEGATION_NUDGES_FIELD,
+    DIRECT_READS_FIELD,
+    MUTATIONS_FIELD,
+    PLAN_LATCH_FIELD,
+    PLAN_NUDGES_FIELD,
     bump_engagement_count,
     engagement_count,
     latch_engagement,
+    record_distinct_direct_read,
     session_is_delegated,
 )
+# The one canonicalization of a tool call's arguments in this bundle. The
+# repeat guard computes this same digest for the same call at
+# `pre_tool_call`; a second hashing path here would be a second answer to
+# "is this the same call", and the two would disagree the first time either
+# of them changed.
+from .tool_bursts import tool_args_digest
 
 ENGAGEMENT_NUDGE_SCHEMA_VERSION: Final = "omh_engagement_nudge/v1"
 # Its own JSON key, the way `code_mode_guidance` adds one: a tool result that
@@ -85,13 +98,16 @@ DIRECT_READ_TOOLS: Final[frozenset[str]] = frozenset(
 # prose.
 DELEGATION_TOOLS: Final[frozenset[str]] = frozenset({"delegate_task", "omh_delegate_route"})
 
-# Counter names in the shared per-session map.
-_MUTATIONS: Final = "file_mutations"
-_DIRECT_READS: Final = "direct_reads"
-_PLAN_NUDGES: Final = "plan_nudges"
-_DELEGATION_NUDGES: Final = "delegation_nudges"
-_PLAN_LATCH: Final = "plan_declared"
-_DELEGATION_LATCH: Final = "lane_routed"
+# Counter names in the shared per-session map. Defined at `nudge_budget`,
+# which owns the map, the eviction policy and the list of which of these
+# survive a process restart -- one spelling, in the file that has to name
+# them for that last question.
+_MUTATIONS: Final = MUTATIONS_FIELD
+_DIRECT_READS: Final = DIRECT_READS_FIELD
+_PLAN_NUDGES: Final = PLAN_NUDGES_FIELD
+_DELEGATION_NUDGES: Final = DELEGATION_NUDGES_FIELD
+_PLAN_LATCH: Final = PLAN_LATCH_FIELD
+_DELEGATION_LATCH: Final = DELEGATION_LATCH_FIELD
 
 # Three file-mutating calls. One is a typo fix. Two is an edit and its test --
 # the two shapes where a checklist is pure overhead, and the two a person holds
@@ -99,13 +115,22 @@ _DELEGATION_LATCH: Final = "lane_routed"
 # also where the HUD stops being able to show what is left without a plan to
 # show. The pinned negative case sits at two.
 PLAN_NUDGE_FILE_MUTATION_THRESHOLD: Final = 3
-# Five direct search/read calls. Below that it is ordinary orientation: open a
-# file, grep once, open what the grep found. At five the session has run a
-# search pass that one `explore` lane would have run in a single call and off
-# this context window, which is the case the nudge exists for. opencode fires
-# on the first such call because its target set is grep/glob/webfetch only;
-# Hermes' `read_file` is far more ordinary than that, so the threshold carries
-# what its narrower set carried. The pinned negative case sits at four.
+# Five DISTINCT direct search/read calls. Below that it is ordinary
+# orientation: open a file, grep once, open what the grep found. At five the
+# session has run a search pass that one `explore` lane would have run in a
+# single call and off this context window, which is the case the nudge exists
+# for. opencode fires on the first such call because its target set is
+# grep/glob/webfetch only; Hermes' `read_file` is far more ordinary than that,
+# so the threshold carries what its narrower set carried. The pinned negative
+# case sits at four.
+#
+# Distinct, because counting calls made a loop indistinguishable from a search
+# pass and let it spend the budget meant for one. Measured: session
+# `20260919_140745_db409e` issued 203 `search_files` calls, the large majority
+# identical; the nudge fired twice, said "delegate this", and was silent for
+# the remaining ~180. The session's actual problem was that it was repeating
+# one search that returned nothing, and the only OMH mechanism watching
+# searches had no way to know (#1701).
 DELEGATION_NUDGE_DIRECT_READ_THRESHOLD: Final = 5
 # Two per kind per session. opencode allows three; this text rides a tool
 # result on a surface that already spends a first-turn primer, and a nudge the
@@ -142,8 +167,8 @@ PLAN_NUDGE_TEXT: Final = (
 # repository, so no parity test can hold this the way one holds the router
 # vocabulary, and the call sites are named here so a reader can check by hand.
 DELEGATION_NUDGE_TEXT: Final = (
-    "[OMH delegation] This session has run {count} search/read calls directly "
-    "and routed nothing. A lane does that work in one call and off this "
+    "[OMH delegation] This session has run {count} different search/read calls "
+    "directly and routed nothing. A lane does that work in one call and off this "
     "context window: omh_delegate_route picks the model for the next "
     "dispatch, delegate_task spawns the subagent. Never wait or poll on a "
     "dispatched lane -- carry on with what does not depend on it. Routing is "
@@ -189,11 +214,17 @@ def annotate_engagement_nudge(
     *,
     tool_name: object,
     result: object,
+    args: object = None,
     session_id: str = "",
     omh_home: str = "",
     hermes_home: str = "",
 ) -> str | None:
     """Return *result* carrying a nudge, or ``None`` to pass through untouched.
+
+    ``args`` is the call's arguments, which the host passes this seam already
+    coerced to the tool's schema types. They are read for one purpose: to tell
+    the same search twice from two different searches. Nothing is stored but
+    the digest.
 
     Fail-open by seam contract and by construction: every path that is not a
     clean, budgeted, unlatched nudge returns ``None`` after recording why.
@@ -202,6 +233,7 @@ def annotate_engagement_nudge(
         return _annotate(
             tool_name=tool_name,
             result=result,
+            args=args,
             session_id=session_id,
             omh_home=omh_home,
             hermes_home=hermes_home,
@@ -218,6 +250,7 @@ def _annotate(
     *,
     tool_name: object,
     result: object,
+    args: object,
     session_id: str,
     omh_home: str,
     hermes_home: str,
@@ -228,7 +261,7 @@ def _annotate(
     # Routing is observed before anything else, so a session that delegated on
     # this very call is latched before the call could also be counted as work.
     if name in DELEGATION_TOOLS:
-        latch_engagement(session, _DELEGATION_LATCH)
+        latch_engagement(session, _DELEGATION_LATCH, omh_home=omh_home)
         _declines["routed_this_call"] += 1
         return None
 
@@ -242,7 +275,11 @@ def _annotate(
         return None
 
     if name in FILE_MUTATING_TOOLS:
-        count = bump_engagement_count(session, _MUTATIONS)
+        # Calls, not distinct calls. Writing the same file three times IS
+        # three changes to the repository, which is what this threshold
+        # counts; the distinctness question belongs to the read side, where
+        # the same call twice produces the same answer twice.
+        count = bump_engagement_count(session, _MUTATIONS, omh_home=omh_home)
         return _plan_nudge(
             session=session,
             count=count,
@@ -251,8 +288,14 @@ def _annotate(
             hermes_home=hermes_home,
         )
     if name in DIRECT_READ_TOOLS:
-        count = bump_engagement_count(session, _DIRECT_READS)
-        return _delegation_nudge(session=session, count=count, result=result)
+        # The call counter is still kept, and is still the one the declines
+        # and any later surface can read for "how much searching happened".
+        # It is simply no longer what the threshold reads.
+        _ = bump_engagement_count(session, _DIRECT_READS, omh_home=omh_home)
+        distinct = record_distinct_direct_read(session, f"{name}:{tool_args_digest(args)}")
+        return _delegation_nudge(
+            session=session, count=distinct, result=result, omh_home=omh_home
+        )
 
     _declines["tool_not_watched"] += 1
     return None
@@ -269,41 +312,46 @@ def _plan_nudge(
     if count < PLAN_NUDGE_FILE_MUTATION_THRESHOLD:
         _declines["below_work_threshold"] += 1
         return None
-    if engagement_count(session, _PLAN_LATCH):
+    if engagement_count(session, _PLAN_LATCH, omh_home=omh_home):
         _declines["plan_already_declared"] += 1
         return None
-    if engagement_count(session, _PLAN_NUDGES) >= MAX_ENGAGEMENT_NUDGES:
+    if engagement_count(session, _PLAN_NUDGES, omh_home=omh_home) >= MAX_ENGAGEMENT_NUDGES:
         _declines["plan_budget_spent"] += 1
         return None
     if _plan_declared(session=session, omh_home=omh_home, hermes_home=hermes_home):
         # Latched in the map so the record is read at most a handful of times
         # per session rather than on every mutating call.
-        latch_engagement(session, _PLAN_LATCH)
+        latch_engagement(session, _PLAN_LATCH, omh_home=omh_home)
         _declines["plan_already_declared"] += 1
         return None
     carried = _carry(result, PLAN_NUDGE_TEXT.format(count=count))
     if carried is None:
         _declines["result_not_carryable"] += 1
         return None
-    _ = bump_engagement_count(session, _PLAN_NUDGES)
+    _ = bump_engagement_count(session, _PLAN_NUDGES, omh_home=omh_home)
     return carried
 
 
-def _delegation_nudge(*, session: str, count: int, result: object) -> str | None:
+def _delegation_nudge(*, session: str, count: int, result: object, omh_home: str) -> str | None:
+    """``count`` is DISTINCT `(tool, argument digest)` pairs, not calls.
+
+    A repeat adds nothing to it, so a loop never reaches the threshold and
+    never spends the budget: the whole of #1701 in one substitution.
+    """
     if count < DELEGATION_NUDGE_DIRECT_READ_THRESHOLD:
         _declines["below_read_threshold"] += 1
         return None
-    if engagement_count(session, _DELEGATION_LATCH):
+    if engagement_count(session, _DELEGATION_LATCH, omh_home=omh_home):
         _declines["lane_already_routed"] += 1
         return None
-    if engagement_count(session, _DELEGATION_NUDGES) >= MAX_ENGAGEMENT_NUDGES:
+    if engagement_count(session, _DELEGATION_NUDGES, omh_home=omh_home) >= MAX_ENGAGEMENT_NUDGES:
         _declines["delegation_budget_spent"] += 1
         return None
     carried = _carry(result, DELEGATION_NUDGE_TEXT.format(count=count))
     if carried is None:
         _declines["result_not_carryable"] += 1
         return None
-    _ = bump_engagement_count(session, _DELEGATION_NUDGES)
+    _ = bump_engagement_count(session, _DELEGATION_NUDGES, omh_home=omh_home)
     return carried
 
 

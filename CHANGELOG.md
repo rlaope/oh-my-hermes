@@ -4,6 +4,127 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The delegation nudge counts distinct searches, and its budget survives a
+  plugin-host restart.** It watched `search_files` and fired at five direct
+  reads, counting CALLS -- so five different greps and one grep five times
+  were the same event to it. In session `20260919_140745_db409e` the model
+  issued 203 `search_files` calls, the large majority identical; the nudge
+  spent its whole budget of two on the loop, said "delegate this", and was
+  silent for the remaining ~180 calls. The session's actual problem was that
+  it was repeating one search that returned nothing, and the only OMH
+  mechanism watching searches had no way to know.
+
+  The threshold now counts distinct `(tool, argument digest)` pairs, using the
+  digest the repeat guard already computes for the same call at
+  `pre_tool_call` rather than a second hashing path. Five identical searches
+  do not fire it; five different ones still do; the pinned negative at four is
+  unmoved; a hundred repeats followed by a real search pass still has its full
+  budget. The text says "different search/read calls", because the number in
+  it changed meaning.
+
+  The budget also stops refilling itself. `MAX_ENGAGEMENT_NUDGES` is two per
+  kind per SESSION and the counter lived in a per-PROCESS map, so a restart
+  handed the session a fresh one: `db409e` received four delegation nudges in
+  a 2+2 split bracketing a mid-session `omh update`, and `8da9b8` received
+  three. The two counters that bound the spend and the two latches that end it
+  are now written to a session-keyed store under the OMH home, read back once
+  per session, under the same 64-row LRU bound the process map uses. The work
+  counters stay in the process on purpose: losing them across a restart delays
+  a nudge and never adds one, and persisting them would put a file write on
+  every watched tool call rather than on the handful that spend something.
+
+  What the data says about this nudge, stated because it bears on whether the
+  budget is worth defending: across 140 intervention-to-next-assistant pairs
+  in the 2026-09-19 audit, none was followed by an OMH tool call, including
+  the eight delegation nudges. The one intervention with a visible effect is
+  the route hint (`skill_view` follows it 37 times in 60). It is kept because
+  a distinct-search pass is the case it was written for and that case was
+  never actually reached before this change. Whether prose that changes
+  nothing earns 668 characters a session is a product decision and is not
+  taken here.
+
+- **The HUD can tell forty different tool calls from the same call forty
+  times.** The activity segment counts calls in flight, which is progress,
+  and a loop is the opposite situation wearing the same number. Session
+  `20260919_140745_db409e` issued 203 `search_files` calls, 185 of them
+  refused by the host's own guard, for a pattern matching nothing in the
+  repository; the person noticed only because the transcript's tool-call
+  panel happened to be expanded. Collapsed, that panel is one chevron line
+  reading `Tool calls (203)`, and the HUD was the only place left to see it.
+
+  The status line and the TUI dock header now carry `repeat xN` whenever the
+  repeat guard has a cycle for the reading session: muted while the guard is
+  only watching, `repeat xN blocked` in the warn tone once it has actually
+  refused a call, and `repeat xN approval` in the error tone once it has
+  stopped answering the model and is asking a person. A cycle longer than one
+  call says so (`repeat x8 cycle-of-2`), because the same call eight times
+  and a pair of calls four times over are different things to look at.
+
+  Three properties make the row trustworthy rather than decorative. It is
+  scoped to the reading session, resolved the same way the plan block
+  resolves it, so two sessions sharing one OMH home never add up. It rides
+  the poll's existing ledger read -- one read already backed the parallel
+  shot and the liveness block, and now backs this too -- so the two-second
+  reader takes no new lock and no new file open; measured at the 64-session
+  ceiling, the projection costs 0.006 to 0.018 ms more and the whole HUD read
+  is unchanged inside noise. And the stage is the one the GATE recorded:
+  `escalation_can_reach_a_person` reads process-global maps that the widget's
+  freshly spawned interpreter does not have, where it would answer "attended"
+  for every session, so `pre_tool_call` writes its own answer onto the row
+  and the reader takes that. A row with no recorded answer withholds the
+  escalation stage rather than assuming it.
+
+  Metadata only, and narrower than the ledger: the projection is given no
+  tool name and no argument digest, so the row says that a call repeated and
+  never what it was. Asserted against the serialized payload with a sentinel
+  in the arguments and in the results.
+
+- **The per-turn fanout scan stops growing with the machine's history, a
+  dropped ledger tick is counted, and an unchanged approval-bypass flag is no
+  longer rewritten on every hook call.** Three costs on the path every turn
+  and every tool call takes, measured together because they share a harness.
+
+  `pre_llm_call` read the fanout root twice -- the running-work board and the
+  unacknowledged-dispatch reminder -- and the board opened four JSON files for
+  every fanout directory the machine had ever created. Nothing prunes that
+  root, so the cost only ever grew: 0.8 ms on a fresh home, 147 ms on one with
+  a thousand fanouts. Both readers now keep the eight most recently active
+  directories and open only those, which takes the same turn to 7.2 ms at a
+  thousand and 2.0 ms at the dozen a working home has.
+
+  The bound is by recency and not by name, which matters more than it looks: a
+  fanout id is `fanout-<sha256(goal)[:12]>`, a content hash carrying no order
+  at all, so sorting the names and slicing would have kept an arbitrary eight
+  of a thousand and silently dropped running units. The running-work board
+  orders by when a fanout's in-flight markers last changed, because that is the
+  stamp its own question moves; the dispatch reminder keeps ordering by when a
+  summary was written. The board reports how many directories the bound passed
+  over, so a truncated scan cannot read as a complete one. Pruning that root is
+  still nothing's job, and a bounded scan is what makes that survivable rather
+  than fixed.
+
+  The tool-bursts ledger's three writers are best-effort and must stay that way
+  -- a hook that raised would vanish into the host's own try/except-and-log
+  wrapper -- but the lock's `TimeoutError` is an `OSError`, so a write lost to
+  contention left no trace at all. An entry left open then read identically
+  whether the call was still running or its close had been dropped. The swallow
+  is unchanged in width; what it now does before returning is count the drop,
+  classified as a lock timeout or a write error, folded into the ledger by the
+  next write that does take the lock and reported beside the liveness it
+  bounds. Measured: eight concurrent writers lose nothing at all, twenty-four
+  lose 477 of 9,648 writes, and the counter reads back 477. It is a lower bound
+  by construction, and says so.
+
+  `record_approval_bypass` took a lock, wrote a temp file and renamed it on
+  every hook call -- twice per tool call, once per turn -- for a boolean that
+  changes when a person presses Shift+Tab. It now writes only when the
+  observation is news: 0.201 ms to 0.020 ms. The timestamp is load-bearing in
+  exactly one place, the six-hour staleness cut in `latest_approval_bypass`, so
+  an unchanged value is still refreshed every half hour and can never age into
+  that cut while the hooks are still observing it. No other reader reads the
+  stamp: the widget renders the state and the flag, and the permission
+  rehearsal reads the same two.
+
 - **Fourteen skills stop telling the model to record a coding handoff for work
   that is not coding.** A skill body rendered "Preferred harness for this
   skill: `coding-handling`" and an `omh runtime record --harness

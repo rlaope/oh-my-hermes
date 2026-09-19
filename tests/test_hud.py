@@ -2530,5 +2530,166 @@ class ActivityRowOrderTests(unittest.TestCase):
         self.assertEqual(ACTIVITY_ROW_LIMIT, _ROW_LIMIT)
 
 
+class HudRepeatRowTests(unittest.TestCase):
+    """`repeat xN` on the HUD: the visible half of the repeated-call guard.
+
+    #1687. The transcript's tool-call panel collapses to one chevron line
+    reading `Tool calls (203)`, so when a model repeats one search 203
+    times the only place left to see it is the HUD. These drive the two
+    registered hooks and then read the payload the surfaces render from.
+    """
+
+    def setUp(self) -> None:
+        from omh.plugin_bundle.omh.hooks.nudge_budget import reset_nudge_budget
+        from omh.plugin_bundle.omh.hooks.session_attendance import reset_session_attendance
+
+        self._tmp = TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name) / "omh"
+        (self.home / "runtime").mkdir(parents=True)
+        self.hermes = Path(self._tmp.name) / "hermes"
+        self.hermes.mkdir()
+        reset_session_attendance()
+        reset_nudge_budget()
+        self.addCleanup(reset_session_attendance)
+        self.addCleanup(reset_nudge_budget)
+        self._sequence = 0
+
+    def call(self, *, args, session="session-hud", result="out"):
+        from omh.plugin_bundle.omh.hooks.tool_hooks import post_tool_call, pre_tool_call
+
+        self._sequence += 1
+        call_id = f"call-{self._sequence}"
+        directive = pre_tool_call(
+            tool_name="search_files",
+            tool_input=args,
+            session_id=session,
+            omh_home=str(self.home),
+            tool_call_id=call_id,
+        )
+        blocked = directive is not None and directive.get("action") == "block"
+        post_tool_call(
+            tool_name="search_files",
+            args=args,
+            result=str(directive.get("message")) if blocked else result,
+            status="blocked" if blocked else "ok",
+            session_id=session,
+            omh_home=str(self.home),
+            tool_call_id=call_id,
+        )
+        return directive
+
+    def payload(self, session="session-hud"):
+        from omh.plugin_bundle.omh.runtime_reader import read_omh_hud
+
+        return read_omh_hud(
+            str(self.home),
+            str(self.hermes),
+            status={"runs": [], "active_executors": []},
+            session_ref=session,
+        )
+
+    def loop(self, times, *, session="session-hud", result="out"):
+        for _ in range(times):
+            self.call(args={"pattern": "def render_skill", "path": "src"}, session=session, result=result)
+
+    def test_the_status_line_names_a_repeat_and_stays_silent_for_different_calls(self) -> None:
+        for index in range(6):
+            self.call(args={"pattern": f"p{index}", "path": "src"})
+
+        self.assertNotIn("repeat", self.payload()["display"]["line"])
+        self.assertEqual(self.payload()["repeat"]["status"], "idle")
+
+        self.loop(6, session="session-loop")
+
+        line = self.payload("session-loop")["display"]["line"]
+        self.assertIn("repeat x6", line)
+        # Watching, not yet refusing: the guard has noticed and has not
+        # acted, so the line counts and claims nothing further.
+        self.assertNotIn("blocked", line)
+        self.assertNotIn("approval", line)
+
+    def test_the_line_names_the_stage_once_the_guard_acts(self) -> None:
+        from omh.plugin_bundle.omh.tool_bursts import (
+            REPEAT_CALL_BLOCK_THRESHOLD,
+            REPEAT_CALL_ESCALATION_ATTEMPTS,
+        )
+
+        self.loop(REPEAT_CALL_BLOCK_THRESHOLD)
+        # The stage is already `blocking` here -- the gate decides the NEXT
+        # call from these eight -- and nothing has been refused, so the line
+        # is a count and says nothing about a block that did not happen.
+        watching = self.payload()
+        self.assertEqual(watching["repeat"]["stage"], "blocking")
+        self.assertEqual(watching["repeat"]["intercepted"], 0)
+        self.assertNotIn("blocked", watching["display"]["line"])
+        self.assertIn(f"repeat x{REPEAT_CALL_BLOCK_THRESHOLD}", watching["display"]["line"])
+
+        self.loop(1)
+        blocked = self.payload()
+        self.assertEqual(blocked["repeat"]["intercepted"], 1)
+        self.assertIn(f"repeat x{REPEAT_CALL_BLOCK_THRESHOLD + 1} blocked", blocked["display"]["line"])
+
+        self.loop(REPEAT_CALL_ESCALATION_ATTEMPTS - 1)
+        escalated = self.payload()
+        expected = REPEAT_CALL_BLOCK_THRESHOLD + REPEAT_CALL_ESCALATION_ATTEMPTS
+        self.assertEqual(escalated["repeat"]["stage"], "approval")
+        self.assertIn(f"repeat x{expected} approval", escalated["display"]["line"])
+
+    def test_a_cycle_says_so_on_the_line(self) -> None:
+        for _ in range(4):
+            self.call(args={"pattern": "a", "path": "src"})
+            self.call(args={"pattern": "b", "path": "src"})
+
+        self.assertIn("repeat x8 cycle-of-2", self.payload()["display"]["line"])
+
+    def test_every_preset_carries_the_repeat_segment(self) -> None:
+        from omh.plugin_bundle.omh.runtime_reader import HUD_PRESETS, format_omh_hud_line
+
+        self.loop(6)
+        payload = self.payload()
+
+        for preset in sorted(HUD_PRESETS):
+            with self.subTest(preset=preset):
+                self.assertIn("repeat x6", format_omh_hud_line(payload, preset=preset))
+
+    def test_two_sessions_sharing_the_home_do_not_add_up_in_the_payload(self) -> None:
+        self.loop(6, session="session-one")
+        self.loop(6, session="session-two")
+
+        self.assertEqual(self.payload("session-one")["repeat"]["consecutive"], 6)
+        self.assertEqual(self.payload("session-two")["repeat"]["consecutive"], 6)
+
+    def test_no_argument_or_result_text_reaches_the_serialized_payload(self) -> None:
+        """Asserted against the bytes, with a sentinel on both sides.
+
+        The privacy claim is `metadata_only` and the row's own boundary is
+        narrower still: it says a call repeated, never what it was. A
+        sentinel in the arguments and a different one in every result is
+        the only way to check that against what a surface is actually
+        handed, rather than against a reading of the projection.
+        """
+        args_sentinel = "ZZARGSENTINELZZ"
+        # The same result every time, because a result that changes IS the
+        # poll the guard deliberately never reports (#1706) -- the sentinel
+        # has to ride a sequence the projection actually observes.
+        for _ in range(6):
+            self.call(
+                args={"pattern": args_sentinel, "path": "src"},
+                result="ZZRESULTSENTINELZZ",
+            )
+
+        payload = self.payload()
+        serialized = json.dumps(payload, sort_keys=True)
+
+        self.assertEqual(payload["repeat"]["consecutive"], 6)
+        self.assertNotIn(args_sentinel, serialized)
+        self.assertNotIn("ZZRESULTSENTINELZZ", serialized)
+        # Not the tool name either, from the repeat block: the row is a
+        # count and a stage, and nothing that names the call.
+        self.assertNotIn("search_files", json.dumps(payload["repeat"]))
+        self.assertEqual(payload["privacy"], "metadata_only")
+
+
 if __name__ == "__main__":
     unittest.main()

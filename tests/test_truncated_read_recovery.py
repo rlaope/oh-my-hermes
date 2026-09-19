@@ -565,8 +565,12 @@ class ComposedSeamTests(TruncatedReadRecoveryTestCase):
     def test_the_engagement_nudge_and_the_note_compose_on_one_result(self) -> None:
         """Both passes watch read_file, so one refusal can carry both keys."""
         self.assertIsNone(self.seam(TRUNCATED_READ))
-        for _ in range(DELEGATION_NUDGE_DIRECT_READ_THRESHOLD - 2):
-            _ = self.seam(WHOLE_FILE_READ, path="/src/other.py")
+        # Different paths, because the delegation threshold counts DISTINCT
+        # `(tool, argument digest)` pairs: one path read four times is one
+        # read to it, and the final call below is on PATH again, which was
+        # already counted by the first.
+        for index in range(DELEGATION_NUDGE_DIRECT_READ_THRESHOLD - 1):
+            _ = self.seam(WHOLE_FILE_READ, path=f"/src/other-{index}.py")
 
         both = self.seam(BLOCKED_REFUSAL)
         self.assertIsNotNone(both)

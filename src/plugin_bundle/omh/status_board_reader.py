@@ -48,6 +48,7 @@ Boundaries, in order of importance:
 from __future__ import annotations
 
 from . import runtime_paths
+from .fanout_scan import RECENT_FANOUT_DIR_LIMIT, newest_fanout_dirs, path_mtime
 
 import errno
 import hashlib
@@ -134,7 +135,7 @@ def read_running_work_board(omh_home: str | Path | None, *, limit: int = DEFAULT
     effective_limit = limit if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0 else 0
     home = _home_dir(omh_home)
     fanout_root = home / "coding" / _FANOUT_SUBDIR
-    root_status, fanout_dirs = _list_fanout_dirs(fanout_root)
+    root_status, fanout_dirs, fanout_dirs_omitted = _list_fanout_dirs(fanout_root)
 
     merged: dict[tuple[str, str], dict[str, Any]] = {}
     inflight_unreadable = 0
@@ -162,6 +163,12 @@ def read_running_work_board(omh_home: str | Path | None, *, limit: int = DEFAULT
         "sources": {
             "fanout_root": root_status,
             "fanout_dirs_scanned": len(fanout_dirs),
+            # How many fanout directories the recency bound passed over
+            # without opening. Stated rather than left to inference: this
+            # board is read as "what is running", and a bounded scan that
+            # did not say so would let a truncated answer pass as the
+            # whole of it.
+            "fanout_dirs_omitted": fanout_dirs_omitted,
             "inflight_markers_unreadable": inflight_unreadable,
             "dispatch_summaries_unreadable": dispatch_unreadable,
         },
@@ -265,24 +272,50 @@ def record_running_work_board_emission(omh_home: str | Path | None, *, byte_coun
         return
 
 
-def _list_fanout_dirs(fanout_root: Path) -> tuple[str, list[tuple[Path, str]]]:
-    """Every immediate subdirectory of the fanout root, plus its own read status.
+def _list_fanout_dirs(fanout_root: Path) -> tuple[str, list[tuple[Path, str]], int]:
+    """The most recently active fanout subdirectories, plus the root's read status.
 
     Distinguishes a fanout root that was never created (`absent`, the ordinary
     shape of "no coding fanout has ever run here") from one that exists but
     could not be listed (`unreadable`, e.g. a file sitting where a directory
     is expected, or a permission failure) -- the two mean different things and
     collapsing them would hide the second behind the first.
+
+    Bounded by `RECENT_FANOUT_DIR_LIMIT`, because this used to open four JSON
+    files for every fanout the machine had ever run and nothing prunes the
+    root. The third element is how many directories the bound skipped, which
+    the caller reports; see `fanout_scan` for why a name sort cannot do this
+    job.
     """
     try:
         if not fanout_root.exists():
-            return "absent", []
+            return "absent", [], 0
         if not fanout_root.is_dir():
-            return "unreadable", []
-        children = sorted(fanout_root.iterdir())
+            return "unreadable", [], 0
     except (OSError, ValueError):
-        return "unreadable", []
-    return "present", [(child, child.name) for child in children if child.is_dir() and not child.is_symlink()]
+        return "unreadable", [], 0
+    listed, children, omitted = newest_fanout_dirs(
+        fanout_root,
+        limit=RECENT_FANOUT_DIR_LIMIT,
+        activity_of=_marker_activity,
+    )
+    if not listed:
+        return "unreadable", [], 0
+    return "present", [(child, child.name) for child in children], omitted
+
+
+def _marker_activity(fanout_dir: Path) -> float | None:
+    """When this fanout's in-flight markers last changed, for recency ordering.
+
+    The marker directory's own mtime, because that is the stamp this reader's
+    question moves: adding a marker at dispatch and removing it at completion
+    both write into `inflight/`, while the fanout directory above it is
+    untouched by either. A fanout that never created one has only its own
+    mtime to be placed by, which is the right fallback -- it has no marker
+    this reader could have read anyway.
+    """
+    activity = path_mtime(fanout_dir / _INFLIGHT_DIR_NAME)
+    return activity if activity is not None else path_mtime(fanout_dir)
 
 
 def _read_json_object_result(path: Path) -> tuple[dict[str, Any] | None, str]:

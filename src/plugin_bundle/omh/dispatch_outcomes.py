@@ -21,7 +21,6 @@ unreadable or half-written summary is skipped rather than raised.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import heapq
 import re
 import stat
 from pathlib import Path
@@ -47,6 +46,7 @@ except ImportError:  # pragma: no cover - standalone plugin hosts have no omh pa
     UNIT_STATE_VERIFIED = None
     UNIT_STATE_FAILED = None
 
+from .fanout_scan import RECENT_FANOUT_DIR_LIMIT, newest_fanout_dirs, path_mtime
 from .runtime_reader import (
     # The hardened read (symlink-refusing, size-bounded, confined to the home
     # root) every other bundle reader uses. Restating it here would fork a
@@ -67,8 +67,9 @@ _FANOUT_ID_RE = re.compile(r"^fanout-[0-9a-f]{12}$")
 # Bounds. The reminder runs on every turn, so the scan keeps only the newest
 # few fanouts (by dispatch-summary mtime) and reads a bounded number of unit
 # rows out of each -- the same shape `_hud_local_fanout_record` uses, tighter,
-# because this surface only ever renders a handful of lines.
-RECENT_FANOUT_DIR_LIMIT = 8
+# because this surface only ever renders a handful of lines. The directory
+# bound now lives in `fanout_scan` because the running-work board shares it;
+# re-exported here so importers of this module's name keep working.
 UNIT_ROW_LIMIT = 64
 OUTCOME_LIMIT = 20
 # An outcome older than this is history, not an unanswered event: a plan left
@@ -236,34 +237,26 @@ def _recent_fanout_dirs(home: Path) -> list[Path]:
         return []
     if not stat.S_ISDIR(root_stat.st_mode):
         return []
-    newest: list[tuple[float, str, Path]] = []
-    try:
-        for child in root.iterdir():
-            if not _FANOUT_ID_RE.fullmatch(child.name):
-                continue
-            try:
-                child_stat = child.lstat()
-            except OSError:
-                continue
-            if not stat.S_ISDIR(child_stat.st_mode):
-                continue
-            candidate = (_mtime(child / "dispatch_summary.json"), child.name, child)
-            if candidate[0] <= 0.0:
-                continue
-            if len(newest) < RECENT_FANOUT_DIR_LIMIT:
-                heapq.heappush(newest, candidate)
-            else:
-                heapq.heappushpop(newest, candidate)
-    except OSError:
-        return []
-    return [entry[2] for entry in sorted(newest, reverse=True)]
+    listed, dirs, _omitted = newest_fanout_dirs(
+        root,
+        limit=RECENT_FANOUT_DIR_LIMIT,
+        activity_of=_summary_activity,
+        name_filter=_FANOUT_ID_RE.fullmatch,
+    )
+    return dirs if listed else []
 
 
-def _mtime(path: Path) -> float:
-    try:
-        return path.stat().st_mtime
-    except OSError:
-        return 0.0
+def _summary_activity(fanout_dir: Path) -> float | None:
+    """When this fanout last wrote a dispatch summary, or None if it never did.
+
+    A fanout with no summary has nothing this reader can report on, so it is
+    dropped from the scan rather than ordered into it -- the same condition
+    the old `<= 0.0` guard expressed, now stated as an absence. A stamp at or
+    before the epoch stays dropped for the same reason it was: it is not a
+    time anything wrote.
+    """
+    activity = path_mtime(fanout_dir / "dispatch_summary.json")
+    return activity if activity is not None and activity > 0.0 else None
 
 
 def _parse_timestamp(value: Any) -> datetime | None:

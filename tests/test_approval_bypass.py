@@ -17,6 +17,7 @@ from pathlib import Path
 
 from omh.plugin_bundle.omh.approval_bypass import (
     APPROVAL_BYPASS_FRESH_SECONDS,
+    APPROVAL_BYPASS_REFRESH_SECONDS,
     approval_bypass_path,
     effective_approval_bypass,
     latest_approval_bypass,
@@ -112,6 +113,91 @@ class ApprovalBypassLedgerTest(unittest.TestCase):
         approval_bypass_path(self.home).unlink()
         pre_llm_call(user_message="hello", omh_home=self.home, include_omh_awareness=False)
         self.assertTrue(approval_bypass_path(self.home).exists())
+
+
+class ApprovalBypassWriteEconomyTest(unittest.TestCase):
+    """An unchanged observation costs no write.
+
+    The hooks observe this flag twice per tool call and once per turn, and
+    it changes when a person presses Shift+Tab -- so nearly every one of
+    those locks, temp files and renames wrote bytes identical to the ones
+    already on disk. The skip is safe only because the timestamp is
+    load-bearing in exactly one place, `latest_approval_bypass`'s
+    `APPROVAL_BYPASS_FRESH_SECONDS` cut, and a bounded refresh keeps that
+    cut answerable. No other reader reads the stamp: the widget renders
+    `status` and `enabled`, and the permission rehearsal reads the same two.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = str(Path(self._tmp.name) / "omh")
+        self.host_enabled = True
+        previous = {name: sys.modules.get(name) for name in ("tools", "tools.approval")}
+
+        def restore():
+            for name, module in previous.items():
+                if module is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = module
+
+        self.addCleanup(restore)
+        tools_module = types.ModuleType("tools")
+        approval_module = types.ModuleType("tools.approval")
+        approval_module.is_approval_bypass_active = lambda: self.host_enabled
+        tools_module.approval = approval_module
+        sys.modules["tools"] = tools_module
+        sys.modules["tools.approval"] = approval_module
+
+    def _generation(self):
+        """Something that changes on a write and not otherwise."""
+        path = approval_bypass_path(self.home)
+        stat = path.stat()
+        return (stat.st_ino, stat.st_size, path.read_bytes())
+
+    def test_repeated_identical_observations_produce_one_write(self):
+        record_approval_bypass(omh_home=self.home, now=NOW)
+        first = self._generation()
+        for offset in range(1, 200):
+            record_approval_bypass(omh_home=self.home, now=NOW + offset)
+        self.assertEqual(self._generation(), first)
+        # And the state it is still serving is the right one.
+        self.assertTrue(latest_approval_bypass(self.home, now=NOW + 199)["enabled"])
+
+    def test_a_changed_value_writes_immediately(self):
+        record_approval_bypass(omh_home=self.home, now=NOW)
+        first = self._generation()
+        self.host_enabled = False
+        record_approval_bypass(omh_home=self.home, now=NOW + 1)
+        self.assertNotEqual(self._generation(), first)
+        self.assertFalse(latest_approval_bypass(self.home, now=NOW + 2)["enabled"])
+
+    def test_an_unchanged_value_is_refreshed_before_it_can_expire(self):
+        record_approval_bypass(omh_home=self.home, now=NOW)
+        first = self._generation()
+        record_approval_bypass(omh_home=self.home, now=NOW + APPROVAL_BYPASS_REFRESH_SECONDS - 1)
+        self.assertEqual(self._generation(), first)
+        record_approval_bypass(omh_home=self.home, now=NOW + APPROVAL_BYPASS_REFRESH_SECONDS + 1)
+        self.assertNotEqual(self._generation(), first)
+        # The whole point of the refresh: the record can never age into the
+        # staleness cut while the hooks are still observing it.
+        self.assertLess(APPROVAL_BYPASS_REFRESH_SECONDS, APPROVAL_BYPASS_FRESH_SECONDS)
+
+    def test_a_deleted_or_corrupt_record_is_rewritten(self):
+        record_approval_bypass(omh_home=self.home, now=NOW)
+        approval_bypass_path(self.home).unlink()
+        record_approval_bypass(omh_home=self.home, now=NOW + 1)
+        self.assertTrue(approval_bypass_path(self.home).exists())
+        approval_bypass_path(self.home).write_text("{not json", encoding="utf-8")
+        record_approval_bypass(omh_home=self.home, now=NOW + 2)
+        self.assertEqual(latest_approval_bypass(self.home, now=NOW + 3)["status"], "observed")
+
+    def test_a_clock_that_moved_backwards_does_not_freeze_the_record(self):
+        record_approval_bypass(omh_home=self.home, now=NOW)
+        first = self._generation()
+        record_approval_bypass(omh_home=self.home, now=NOW - 60)
+        self.assertNotEqual(self._generation(), first)
 
 
 if __name__ == "__main__":

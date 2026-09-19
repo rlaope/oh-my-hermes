@@ -37,7 +37,12 @@ from omh.plugin_bundle.omh.engagement_nudges import (
     engagement_nudge_declines,
     reset_engagement_declines,
 )
-from omh.plugin_bundle.omh.hooks.nudge_budget import reset_nudge_budget
+from omh.plugin_bundle.omh.hooks.nudge_budget import (
+    DURABLE_ENGAGEMENT_FIELDS,
+    MAX_TRACKED_SESSIONS,
+    engagement_nudge_store_path,
+    reset_nudge_budget,
+)
 from omh.plugin_bundle.omh.hooks import session_hooks
 from omh.plugin_bundle.omh.hooks.result_transforms import transform_tool_result
 from omh.plugin_bundle.omh.hooks.session_hooks import subagent_start
@@ -55,20 +60,41 @@ class EngagementNudgeTestCase(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.home = str(Path(self._tmp.name) / "omh")
 
-    def fire(self, tool: str, session: str, times: int = 1, result: str = "ok") -> list[str | None]:
+    def fire(
+        self,
+        tool: str,
+        session: str,
+        times: int = 1,
+        result: str = "ok",
+        *,
+        same_args: bool = False,
+    ) -> list[str | None]:
+        """`times` calls, with DIFFERENT arguments unless asked otherwise.
+
+        The delegation threshold counts distinct `(tool, argument digest)`
+        pairs, so "five direct reads" has to mean five different ones or the
+        helper is asserting the loop case by accident. `same_args=True` is
+        the loop, and it has its own cases.
+        """
         return [
             annotate_engagement_nudge(
                 tool_name=tool,
                 result=result,
+                args={"path": "same.py" if same_args else f"file-{index}.py"},
                 session_id=session,
                 omh_home=self.home,
                 hermes_home=self.home,
             )
-            for _ in range(times)
+            for index in range(times)
         ]
 
-    def nudged(self, tool: str, session: str, times: int = 1) -> list[bool]:
-        return [value is not None for value in self.fire(tool, session, times)]
+    def nudged(
+        self, tool: str, session: str, times: int = 1, *, same_args: bool = False
+    ) -> list[bool]:
+        return [
+            value is not None
+            for value in self.fire(tool, session, times, same_args=same_args)
+        ]
 
     def declare_plan(self, session: str, states: tuple[str, ...] = ("active",)) -> None:
         write_todo(
@@ -370,6 +396,263 @@ class NudgeCostTests(EngagementNudgeTestCase):
         self.assertEqual(len([v for v in plan if v]), MAX_ENGAGEMENT_NUDGES)
         self.assertEqual(len([v for v in delegation if v]), MAX_ENGAGEMENT_NUDGES)
         self.assertLess(charged, 2000)
+
+
+class DistinctSearchTests(EngagementNudgeTestCase):
+    """Five different greps and one grep five times are not the same event.
+
+    #1701. The counter this replaced counted CALLS, so a loop read as a
+    search pass and spent the budget meant for one. Measured: session
+    `20260919_140745_db409e` issued 203 `search_files` calls, the large
+    majority identical; the nudge fired twice, said "delegate this", and was
+    silent for the remaining ~180 calls.
+    """
+
+    def test_five_identical_searches_do_not_fire_it(self) -> None:
+        fired = self.nudged(
+            "search_files", "s1", DELEGATION_NUDGE_DIRECT_READ_THRESHOLD, same_args=True
+        )
+
+        self.assertNotIn(True, fired)
+        self.assertEqual(
+            engagement_nudge_declines().get("below_read_threshold"),
+            DELEGATION_NUDGE_DIRECT_READ_THRESHOLD,
+        )
+
+    def test_five_different_searches_still_fire_it(self) -> None:
+        fired = self.nudged("search_files", "s1", DELEGATION_NUDGE_DIRECT_READ_THRESHOLD)
+
+        self.assertEqual(fired[-1], True)
+
+    def test_four_different_searches_still_do_not(self) -> None:
+        # The pinned negative for the threshold, unmoved by the change of
+        # what it counts.
+        fired = self.nudged("search_files", "s1", DELEGATION_NUDGE_DIRECT_READ_THRESHOLD - 1)
+
+        self.assertEqual(fired, [False] * (DELEGATION_NUDGE_DIRECT_READ_THRESHOLD - 1))
+
+    def test_a_long_loop_does_not_consume_the_budget_a_search_pass_needs(self) -> None:
+        """The whole complaint, as one sequence.
+
+        A hundred identical searches, and then the session does what the
+        nudge exists for. The budget has to still be there.
+        """
+        self.assertNotIn(True, self.nudged("search_files", "s1", 100, same_args=True))
+
+        fired = self.nudged(
+            "search_files", "s1", DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + MAX_ENGAGEMENT_NUDGES
+        )
+
+        self.assertEqual(fired.count(True), MAX_ENGAGEMENT_NUDGES)
+
+    def test_the_same_arguments_in_a_different_order_are_the_same_call(self) -> None:
+        # Not a second hashing path: `tool_args_digest` canonicalizes, and
+        # this is the property that says the nudge is using it rather than
+        # something of its own.
+        for _ in range(DELEGATION_NUDGE_DIRECT_READ_THRESHOLD):
+            _ = annotate_engagement_nudge(
+                tool_name="search_files",
+                result="ok",
+                args={"pattern": "def x", "path": "src"},
+                session_id="s1",
+                omh_home=self.home,
+                hermes_home=self.home,
+            )
+            _ = annotate_engagement_nudge(
+                tool_name="search_files",
+                result="ok",
+                args={"path": "src", "pattern": "def x"},
+                session_id="s1",
+                omh_home=self.home,
+                hermes_home=self.home,
+            )
+
+        self.assertEqual(engagement_nudge_declines().get("below_read_threshold"), 10)
+
+    def test_two_tools_with_the_same_arguments_are_two_distinct_reads(self) -> None:
+        """The key is `(tool, digest)`, and the tool half has to carry weight.
+
+        Reading a path and searching it are different work even when the
+        arguments coincide. Driven to the threshold on that difference alone:
+        all four watched tools on one path is four distinct reads, and a
+        fifth call on a different path is the fifth. Keyed on the digest
+        alone the same sequence is two, and does not fire -- which is what
+        makes this a guard rather than a restatement.
+        """
+        fired = []
+        for tool in sorted(nudges.DIRECT_READ_TOOLS):
+            fired.append(
+                annotate_engagement_nudge(
+                    tool_name=tool, result="ok", args={"path": "same.py"},
+                    session_id="s1", omh_home=self.home, hermes_home=self.home,
+                )
+                is not None
+            )
+        self.assertNotIn(True, fired)
+        self.assertEqual(len(nudges.DIRECT_READ_TOOLS), DELEGATION_NUDGE_DIRECT_READ_THRESHOLD - 1)
+
+        last = annotate_engagement_nudge(
+            tool_name="read_file", result="ok", args={"path": "other.py"},
+            session_id="s1", omh_home=self.home, hermes_home=self.home,
+        )
+
+        self.assertIsNotNone(last)
+        self.assertIn("5 different search/read calls", str(last))
+
+    def test_the_digest_is_the_repeat_guards_own(self) -> None:
+        """One canonicalization of a call's arguments in this bundle.
+
+        A second one here would be a second answer to "is this the same
+        call", and the guard and the nudge would disagree the first time
+        either changed.
+        """
+        from omh.plugin_bundle.omh import tool_bursts
+
+        self.assertIs(nudges.tool_args_digest, tool_bursts.tool_args_digest)
+
+
+class NudgeBudgetSurvivesARestartTests(EngagementNudgeTestCase):
+    """`MAX_ENGAGEMENT_NUDGES` is per session; the map is per process.
+
+    Measured 2026-09-19: session `20260919_140745_db409e` received four
+    delegation nudges against a budget of two, in a 2+2 split bracketing a
+    mid-session `omh update`, which restarts the plugin host. `8da9b8`
+    received three. A budget that a restart refills is not a budget.
+    """
+
+    def _spend(self, session: str, start: int, count: int) -> list[bool]:
+        return [
+            annotate_engagement_nudge(
+                tool_name="search_files",
+                result="ok",
+                args={"path": f"file-{index}.py"},
+                session_id=session,
+                omh_home=self.home,
+                hermes_home=self.home,
+            )
+            is not None
+            for index in range(start, start + count)
+        ]
+
+    def test_a_restart_does_not_hand_the_session_a_second_budget(self) -> None:
+        first = self._spend("s1", 0, DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 4)
+        self.assertEqual(first.count(True), MAX_ENGAGEMENT_NUDGES)
+
+        # The restart: a fresh plugin host has empty module state and the
+        # same OMH home on disk.
+        reset_nudge_budget()
+
+        after = self._spend("s1", 100, DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 4)
+
+        self.assertNotIn(True, after)
+        self.assertGreater(engagement_nudge_declines().get("delegation_budget_spent", 0), 0)
+
+    def test_the_plan_budget_and_both_latches_survive_it_too(self) -> None:
+        plan = self.nudged("write_file", "s1", PLAN_NUDGE_FILE_MUTATION_THRESHOLD + 4)
+        self.assertEqual(plan.count(True), MAX_ENGAGEMENT_NUDGES)
+
+        reset_nudge_budget()
+
+        self.assertNotIn(
+            True, self.nudged("write_file", "s1", PLAN_NUDGE_FILE_MUTATION_THRESHOLD + 4)
+        )
+
+    def test_routing_a_lane_stays_latched_across_a_restart(self) -> None:
+        self.assertIsNone(self.fire("omh_delegate_route", "s1")[0])
+
+        reset_nudge_budget()
+
+        fired = self.nudged("search_files", "s1", DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 3)
+        self.assertNotIn(True, fired)
+        self.assertGreater(engagement_nudge_declines().get("lane_already_routed", 0), 0)
+
+    def test_another_session_in_the_same_home_keeps_its_own_budget(self) -> None:
+        self.assertEqual(
+            self._spend("s1", 0, DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 4).count(True),
+            MAX_ENGAGEMENT_NUDGES,
+        )
+
+        reset_nudge_budget()
+
+        self.assertEqual(
+            self._spend("s2", 0, DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 4).count(True),
+            MAX_ENGAGEMENT_NUDGES,
+        )
+
+    def test_an_unreadable_store_restores_the_budget_rather_than_silencing_it(self) -> None:
+        """Which way a broken file fails, stated rather than discovered.
+
+        The alternative is a home whose store cannot be read disabling the
+        nudge forever, which is the same direction `_plan_declared` already
+        rejected for the same reason.
+        """
+        self.assertEqual(
+            self._spend("s1", 0, DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 4).count(True),
+            MAX_ENGAGEMENT_NUDGES,
+        )
+        engagement_nudge_store_path(self.home).write_text("{ truncated", encoding="utf-8")
+
+        reset_nudge_budget()
+
+        self.assertEqual(
+            self._spend("s1", 100, DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 4).count(True),
+            MAX_ENGAGEMENT_NUDGES,
+        )
+
+    def test_the_store_holds_counters_and_no_call_text(self) -> None:
+        sentinel = "ZZNUDGEARGSENTINELZZ"
+        for index in range(DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 2):
+            _ = annotate_engagement_nudge(
+                tool_name="search_files",
+                result=f"{sentinel}-result",
+                args={"pattern": sentinel, "path": f"src/{index}"},
+                session_id="s1",
+                omh_home=self.home,
+                hermes_home=self.home,
+            )
+
+        written = engagement_nudge_store_path(self.home).read_text(encoding="utf-8")
+        stored = json.loads(written)
+
+        self.assertNotIn(sentinel, written)
+        self.assertNotIn("search_files", written)
+        self.assertEqual(stored["privacy"], "metadata_only")
+        self.assertEqual(
+            set(stored["sessions"]["s1"]) - {"ts"},
+            {"plan_nudges", "delegation_nudges", "plan_declared", "lane_routed"},
+        )
+        self.assertEqual(stored["sessions"]["s1"]["delegation_nudges"], MAX_ENGAGEMENT_NUDGES)
+
+    def test_an_evicted_session_does_not_get_its_budget_back(self) -> None:
+        """Eviction must fail toward fewer nudges, not toward more.
+
+        The process map is bounded at `MAX_TRACKED_SESSIONS`, and a spent
+        budget that vanished with the row would be a second budget for a
+        session that is still running -- the same defect the restart case
+        above fixes, reached by a different door. The store outlives the
+        row, so the reload answers.
+        """
+        self.assertEqual(
+            self._spend("s1", 0, DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 4).count(True),
+            MAX_ENGAGEMENT_NUDGES,
+        )
+
+        for index in range(MAX_TRACKED_SESSIONS + 1):
+            _ = self._spend(f"filler-{index}", 0, 1)
+
+        after = self._spend("s1", 100, DELEGATION_NUDGE_DIRECT_READ_THRESHOLD + 4)
+
+        self.assertNotIn(True, after)
+
+    def test_the_durable_field_names_are_the_ones_the_nudges_write(self) -> None:
+        # Two spellings of one string in two files is a drift that shows up
+        # only as a budget that quietly stopped persisting.
+        self.assertEqual(
+            DURABLE_ENGAGEMENT_FIELDS,
+            {nudges._PLAN_NUDGES, nudges._DELEGATION_NUDGES, nudges._PLAN_LATCH, nudges._DELEGATION_LATCH},
+        )
+        self.assertNotIn(nudges._DIRECT_READS, DURABLE_ENGAGEMENT_FIELDS)
+        self.assertNotIn(nudges._MUTATIONS, DURABLE_ENGAGEMENT_FIELDS)
 
 
 if __name__ == "__main__":
