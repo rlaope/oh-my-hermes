@@ -735,6 +735,59 @@ def normalized_phrase(value: str) -> str:
     return _fold_for_match(value)
 
 
+def phrase_is_spoken(message: str, phrase: str) -> bool:
+    """True when `phrase` occurs in `message` as its own run of Latin text.
+
+    Plain containment cannot tell a phrase that was said from a phrase that
+    merely happens to spell part of a longer word. `loop` is inside
+    `CrashLoopBackOff` and `ask` is inside `asked`, and both scored as though
+    the person had named the skill (#1688).
+
+    The two edges answer different questions, so they get different rules.
+
+    A phrase that STARTS mid-word is never the phrase: no reading of
+    `CrashLoopBackOff` contains the word `loop`. So the left edge is rejected
+    whenever the phrase opens with an ASCII alphanumeric and the character
+    before it is one too. Testing ASCII on both sides is deliberate.
+    Japanese and Chinese are written without spaces, so the script-agnostic
+    `isalnum()` check that `contains_boundary_phrase` uses would reject every
+    CJK trigger in the language packs: `アップロード` inside
+    `大きなpdfのアップロード` is the phrase, spoken normally.
+
+    A phrase EXTENDED on the right is a different question, and the answer
+    depends on how much the phrase has already pinned down. One word extended
+    is a different word: `asked` is not `ask`. Several words extended is the
+    same phrase inflected: `attack scenarios` is `attack scenario` and
+    `smooth scrolling` is `smooth scroll`, and the leading words have already
+    established the sense. So the right edge is enforced only for a
+    single-word phrase.
+
+    `message` and `phrase` must already share a fold; this compares them
+    verbatim, the same contract `contains_boundary_phrase` carries.
+    """
+    if not message or not phrase:
+        return False
+    require_right_edge = " " not in phrase
+    start = message.find(phrase)
+    while start != -1:
+        if not _continues_a_latin_word(message, start - 1, phrase[0]):
+            end = start + len(phrase)
+            if not require_right_edge or not _continues_a_latin_word(message, end, phrase[-1]):
+                return True
+        start = message.find(phrase, start + 1)
+    return False
+
+
+def _continues_a_latin_word(message: str, index: int, edge: str) -> bool:
+    if index < 0 or index >= len(message):
+        return False
+    return _is_latin_word_character(message[index]) and _is_latin_word_character(edge)
+
+
+def _is_latin_word_character(character: str) -> bool:
+    return character.isascii() and character.isalnum()
+
+
 @lru_cache(maxsize=8192)
 def _fold_for_match(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()

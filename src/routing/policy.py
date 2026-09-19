@@ -5498,7 +5498,13 @@ SKILL_INVOCATION_MARKERS = frozenset({"skill", "workflow", "스킬", "워크플�
 
 # Korean attaches particles to the noun, so a skill named in Korean word order
 # arrives as "wiki를" or "wiki로" rather than as a bare token.
-_KOREAN_PARTICLES = ("으로", "로", "를", "을", "는", "은", "이", "가", "에게", "에", "도", "만")
+#
+# Public because the scorer needs the same list for a different question:
+# marker-scoped invocation below also requires a run cue, while
+# `recommend._self_name_is_marked` only asks whether the particle is there.
+# Two lists of Korean particles in one router would drift the first time one
+# of them gained an entry.
+KOREAN_NOUN_PARTICLES = ("으로", "로", "를", "을", "는", "은", "이", "가", "에게", "에", "도", "만")
 
 # A marker alone is not an invocation: "does OMH support skill health
 # dashboards?" and "what is oh-my-hermes?" both name a marker and a skill while
@@ -5619,7 +5625,7 @@ def _bare_first_word_reads_as_a_verb(stripped: str, candidate: str, used_prefix:
 def _bare_invocation_is_outscored(message: str, candidate: str) -> bool:
     from .recommend import scored_field_winner_without_explicit_invocation
 
-    winner = scored_field_winner_without_explicit_invocation(message)
+    winner = scored_field_winner_without_explicit_invocation(message, candidate)
     return bool(winner) and winner != candidate
 
 
@@ -5713,7 +5719,7 @@ def _contains_run_cue(message: str) -> bool:
 
 def _invocation_token(word: str) -> str:
     token = word.strip(":,.!?~…'\"()[]").lower()
-    for particle in _KOREAN_PARTICLES:
+    for particle in KOREAN_NOUN_PARTICLES:
         if token.endswith(particle) and len(token) > len(particle):
             return token[: -len(particle)]
     return token

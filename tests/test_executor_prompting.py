@@ -585,7 +585,17 @@ class ExecutorPromptingTests(unittest.TestCase):
         )
 
     def test_contract_rejects_missing_steering_field_and_persists_no_raw_task(self) -> None:
-        raw_task = "do not persist this exact raw task in a durable artifact"
+        # The raw task has to be a CODING request, because the handoff this
+        # asserts on is only attached when the delegation action is
+        # `delegate`. The earlier wording -- "do not persist this exact raw
+        # task in a durable artifact" -- described the assertion rather than
+        # a request, and reached the coding lane only because `ask` matched
+        # inside "raw task" and scored 11 as a skill name (#1688). It still
+        # carries the phrase the not-persisted assertion needs.
+        raw_task = (
+            "implement the retry handler in src/webhooks/payments.py "
+            "and do not persist this exact raw task in a durable artifact"
+        )
         payload = build_coding_delegation_payload(raw_task, executor_target="codex", include_message=True)
         contract = dict(payload["executor_handoff"]["executor_prompting_contract"])
         contract["steering_delta_template"] = contract["steering_delta_template"].replace("{new_evidence}", "")
