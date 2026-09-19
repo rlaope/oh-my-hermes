@@ -328,7 +328,11 @@ ROLE_CONTEXT_CHAR_LIMIT = 2600
 # two changes together, 422364 plus this change's 86, and it ratchets the
 # leftover slack down with it. Re-derived from the producer, both readings
 # measured, never by arithmetic on the limit.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 422450
+# 422450 -> 422474: the six trigger phrases #1688 adds reach the capability
+# rows too. The entry above deliberately left this budget with no slack at
+# all, so the first ordinary change after it has to move the number; that is
+# the ratchet working, not a regression. Re-derived from the producer.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 422474
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -1252,7 +1256,18 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # outside this budget, alongside the requirements-quality checklist #1714 put
 # there. Re-derived from the full-profile skill_context_cost_payload()
 # producer, never by adding deltas.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 977846
+# 977846 -> 977970: six trigger phrases and one replacement (#1688). Once a
+# one-word skill name stopped being credited four times over for a single
+# occurrence, the three sentences that had been carried by that inflation
+# needed the phrasing a person actually types: `plan` gains "make a plan",
+# "write a plan", and "write the plan"; `frontend` gains the locative "in /
+# on / to the frontend"; and `deep-interview` trades its bare `interview`
+# trigger -- every hiring loop and user study in the language -- for
+# "interview me". A raise, because the alternative was leaving three shipped
+# lanes reachable only through a scoring defect. Re-derived from the
+# full-profile skill_context_cost_payload() producer, never by counting the
+# added phrases by hand.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 977970
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

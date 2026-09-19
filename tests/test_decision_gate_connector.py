@@ -29,7 +29,7 @@ _NOW = "2026-09-07T10:06:00Z"
 
 class ConnectorDecisionGateTests(unittest.TestCase):
     def _started_gate(self, paths, *, actor: str = "actor-1", now: str = _OPENED) -> tuple[dict, dict]:
-        session = create_or_resume_wrapper_session(paths, "review plan", source="discord")["session"]
+        session = create_or_resume_wrapper_session(paths, "make a plan for the checkout migration", source="discord")["session"]
         gate = open_wrapper_session_decision_gate(
             paths,
             session_id=str(session["session_id"]),
@@ -60,7 +60,7 @@ class ConnectorDecisionGateTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
             session, gate = self._started_gate(paths)
-            untouched = create_or_resume_wrapper_session(paths, "review another plan", source="discord")["session"]
+            untouched = create_or_resume_wrapper_session(paths, "make a plan for the billing migration", source="discord")["session"]
 
             result = apply_connector_decision_answer(paths, **self._payload(session, gate), trusted_now=_NOW)
 
@@ -73,7 +73,7 @@ class ConnectorDecisionGateTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
             session_a, gate = self._started_gate(paths, actor="actor-bound")
-            session_b = create_or_resume_wrapper_session(paths, "review plan b", source="discord")["session"]
+            session_b = create_or_resume_wrapper_session(paths, "make a plan for the inventory migration", source="discord")["session"]
 
             result = apply_connector_decision_answer(
                 paths,
@@ -239,7 +239,7 @@ class ConnectorDecisionGateTests(unittest.TestCase):
     def test_given_an_unknown_gate_when_an_event_arrives_then_no_receipt_is_written(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
-            session = create_or_resume_wrapper_session(paths, "review plan", source="discord")["session"]
+            session = create_or_resume_wrapper_session(paths, "make a plan for the checkout migration", source="discord")["session"]
             payload = {"gate_id": "gate-unknown", "expected_resume_digest": "a" * 64, "choice": "approve", "actor": "actor-unknown", "connector": "discord", "channel_ref": "channel-unknown", "thread_ref": "thread-unknown", "interaction_ref": "interaction-unknown", "authentication_method": "host_authenticated", "observed_at": _OBSERVED, "event_id": "event-unknown", "wrapper_session_ref": session["session_id"], "wrapper_expected_revision": session["record_revision"]}
 
             result = apply_connector_decision_answer(paths, **payload, trusted_now=_NOW)
@@ -265,7 +265,7 @@ class ConnectorDecisionGateTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmp:
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
-            session = create_or_resume_wrapper_session(paths, "review plan", source="discord")["session"]
+            session = create_or_resume_wrapper_session(paths, "make a plan for the checkout migration", source="discord")["session"]
             gate = open_decision_gate(
                 paths,
                 **wrapper_gate_binding(str(session["session_id"]), int(session["record_revision"])),

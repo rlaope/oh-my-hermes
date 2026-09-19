@@ -15,7 +15,13 @@ from .domain_signals import (
 )
 from .intent import scrub_diagnostic_status_text
 from .reference_regions import executable_routing_text
-from .localization import normalized_phrase, prepare_routing_text, routing_terms, routing_tokens
+from .localization import (
+    normalized_phrase,
+    phrase_is_spoken,
+    prepare_routing_text,
+    routing_terms,
+    routing_tokens,
+)
 from .visual_qa_cues import contains_cue_phrase
 from .missed_route import is_missed_route_feedback
 from .omh_help import is_omh_docs_question
@@ -28,6 +34,7 @@ from .trigger_language_packs import (
     shipped_trigger_language_packs,
 )
 from .policy import (
+    KOREAN_NOUN_PARTICLES,
     PUBLIC_PLUGIN_CONNECTOR_ALIAS_PHRASES,
     PUBLIC_PLUGIN_CONNECTOR_READINESS_CONTEXT_PHRASES,
     PUBLIC_PLUGIN_CONNECTOR_READINESS_EXACT_PHRASES,
@@ -594,6 +601,9 @@ class _PreparedDefinition:
     category_phrase: str
     phase_phrase: str
     metadata_tokens: frozenset[str]
+    # The skill's own name when it is a single word, else "". See
+    # `_one_word_self_name`.
+    one_word_self_name: str
 
 
 _DEFAULT_POLICY = RecommendationPolicy(
@@ -1886,7 +1896,7 @@ def _recommend_skills_cached(query: str, apply_guardrails: bool) -> tuple[Recomm
     )
 
 
-def scored_field_winner_without_explicit_invocation(query: str) -> str:
+def scored_field_winner_without_explicit_invocation(query: str, candidate: str = "") -> str:
     """Return the top skill when the typed skill name earns no invocation bonus.
 
     `explicit_skill_invocation()` uses this to decide whether a bare, sigil-free
@@ -1897,6 +1907,15 @@ def scored_field_winner_without_explicit_invocation(query: str) -> str:
     real owner, so the unbiased field is the only view that shows the competing
     lane. This never calls back into `explicit_skill_invocation()`, so there is
     no recursion.
+
+    `candidate` is the skill whose bare first word is under test, and it keeps
+    its full name evidence here even though #1688 credits a one-word name
+    once everywhere else. The question this function asks is whether that
+    token is the NAME or the verb, so scoring the candidate as though the
+    token were an ordinary word assumes the answer. Without the exemption the
+    dedupe left `research` at 7 against `research-brief` at 10 on "Research
+    the market and competitors for this category.", so the bare-first-word
+    invocation this comparison exists to protect could never stand again.
     """
     routing_query = scrub_diagnostic_status_text(executable_routing_text(query))
     routing_text = prepare_routing_text(_strip_path_like_fragments(routing_query))
@@ -1912,6 +1931,7 @@ def scored_field_winner_without_explicit_invocation(query: str) -> str:
         definitions=[prepared.definition for prepared in prepared_definitions],
         explicit_skill=None,
         apply_guardrails=True,
+        name_credited_skill=candidate or None,
     )
     return field[0].skill if field else ""
 
@@ -1927,6 +1947,7 @@ def _scored_field(
     definitions: list[SkillDefinition],
     explicit_skill: str | None,
     apply_guardrails: bool,
+    name_credited_skill: str | None = None,
 ) -> tuple[Recommendation, ...]:
     ecosystem_identity_connector_match = _ecosystem_identity_connector_explicit_match(normalized_query)
     domain_signal = specialist_domain_route_signal(routing_text.scoring_text)
@@ -1946,6 +1967,7 @@ def _scored_field(
             explicit_skill=explicit_skill,
             domain_signal=None if domain_operator_override is not None else domain_signal,
             domain_operator_override=domain_operator_override,
+            name_credited_skill=name_credited_skill,
         )
         if recommendation is not None:
             scored.append(replace(recommendation, suggested_prompt=_suggested_prompt(recommendation.skill, query)))
@@ -2012,6 +2034,22 @@ _SIBLING_POINTER_METADATA_TOKENS = {
 # `models` and `work` look like observed-work inventory requests.
 _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     "running-work-board": frozenset({"board", "models", "running", "units", "what", "which", "work"}),
+    # `plan` gained "make a plan" and "write a plan"/"write the plan", the
+    # phrasings that carried its own intervention cases once the bare `plan`
+    # token stopped being credited four times over (#1688). `plan` itself is
+    # held back by the one-word self-name rule, `a` and `the` are stopwords,
+    # and `make` and `write` are held here: crediting `write` alone moved
+    # "write a zero downtime migration to add a not-null column" from a
+    # data-analysis clarify to a `plan` one, which is the widening this table
+    # exists to prevent.
+    "plan": frozenset({"make", "write"}),
+    # `research` reaches these two only through "research before spec",
+    # "research before planning", and "compare open source implementations".
+    # As bare tokens they are two of the most ordinary words in a coding
+    # session, and together they scored 8 -- a high-confidence dispatch -- on
+    # "clean up this branch into reviewable commits before I open the PR",
+    # which asks for no research at all. The complete phrases still score +6.
+    "research": frozenset({"before", "open"}),
     # Every word this skill is built from is an everyday word in a coding
     # session, and the scorer credits a multi-word trigger as its separate
     # tokens too. Left as bare tokens they took "add a TODO comment",
@@ -2645,6 +2683,123 @@ def _trigger_token_holdback_for(name: str) -> frozenset[str]:
     ) | _pack_trigger_token_holdback().get(name, frozenset())
 
 
+# A one-word name preceded by one of these is a noun phrase headed by the
+# name, not a word used in passing.
+_NAME_DETERMINERS = ("a", "an", "the", "this", "that", "our", "my", "your", "its")
+
+# ... provided the name is also the END of that noun phrase. English puts a
+# modifier before the noun it modifies, so "a backend engineer" is a request
+# about an ENGINEER and "the backend for observer lookup" is a request about
+# the BACKEND. What tells them apart is the word after the name: a noun
+# continues the phrase, and one of these closes it. A closed set of function
+# words and nothing else -- the moment this needs a content word added, the
+# rule has stopped being grammatical and should be replaced rather than
+# extended.
+_NOUN_PHRASE_CLOSERS = frozenset(
+    {
+        "and", "are", "as", "at", "be", "but", "by", "can", "for", "from", "has", "have",
+        "in", "into", "is", "it", "needs", "of", "on", "or", "should", "so", "still",
+        "that", "to", "was", "were", "when", "which", "will", "with", "would",
+    }
+)
+
+
+def _name_heads_a_noun_phrase(normalized_query: str, name: str) -> bool:
+    """True when a determiner introduces the name and nothing extends it.
+
+    This is the difference between the two senses #1688 could not separate by
+    score, because their evidence is identical: "implement the backend for
+    observer lookup" is a request about the backend, and "should I hire a
+    backend engineer" is a request about an engineer. Both name the skill and
+    nothing else does, so the sentence has to say which, and the only place it
+    does is the word on either side.
+    """
+    words = normalized_query.replace(",", " ").replace(";", " ").replace(".", " ").split()
+    for index, word in enumerate(words):
+        if word != name or index == 0 or words[index - 1] not in _NAME_DETERMINERS:
+            continue
+        if index + 1 == len(words) or words[index + 1] in _NOUN_PHRASE_CLOSERS:
+            return True
+    return False
+
+
+def _self_name_is_marked(normalized_query: str, name: str) -> bool:
+    """True when the message marks the name rather than merely using the word.
+
+    A bare occurrence of a one-word name is indistinguishable from the
+    English word, which is the whole problem #1688 describes. A MARKED
+    occurrence is not: the person put something around the token that only
+    makes sense if it is a name. A sigil is the obvious form and already
+    reaches `explicit_skill_invocation`. Two more do not.
+
+    A noun phrase the name heads -- "the backend for observer lookup", but
+    not "a backend engineer". See `_name_heads_a_noun_phrase`.
+
+    A handoff. "use frontend" names the skill to use, the same way "use the
+    frontend skill" does; `explicit_skill_invocation` already recognises the
+    longer form and the run cue `use`, but only at the head of the message or
+    beside a marker noun. It is also how this repo's own `do_not_use_when`
+    text hands a request to a sibling. Without this, `frontend` and
+    `research` lost their own handoff sentences to their two-word siblings,
+    which kept every credit the one-word names gave up.
+
+    A Hangul particle, which attaches to the noun with no space, so
+    "loop로 해야해?" asks whether to do it WITH loop and no English sense of
+    `loop` takes a Korean particle.
+
+    The particle list is `policy`'s, not a copy: two lists of Korean
+    particles in one router would drift the first time one gained an entry.
+    What differs is the requirement around them -- marker-scoped invocation
+    also needs a run cue, and a naming does not.
+
+    The constructed phrase is folded before comparison. `normalized_phrase`
+    applies NFKD, which decomposes a Hangul syllable into its jamo, so a
+    composed particle literal never appears in a normalized query and a
+    comparison against one silently never matches.
+    """
+    if phrase_is_spoken(normalized_query, f"use {name}"):
+        return True
+    if _name_heads_a_noun_phrase(normalized_query, name):
+        return True
+    if normalized_query.isascii():
+        return False
+    return any(
+        phrase_is_spoken(normalized_query, normalized_phrase(f"{name}{particle}"))
+        for particle in KOREAN_NOUN_PARTICLES
+    )
+
+
+def _one_word_self_name(definition: SkillDefinition) -> str:
+    """The skill's own name when it is a single word, else "".
+
+    One occurrence of such a name was credited four separate times: the
+    `name:` phrase at +5, the identically-spelled trigger phrase at +6, that
+    trigger's token at +3, and the same token again from the metadata fold at
+    +1. Fifteen points for one word, which clears the high-confidence
+    threshold on its own -- so "should I hire a backend engineer" dispatched
+    to `backend` at 17 and "interview questions for a senior backend role" at
+    15 (#1688).
+
+    Four labels in the evidence list also read as four independent findings
+    when they are one, which is what makes the wrong dispatch confident
+    rather than merely wrong.
+
+    Held back here rather than in `_WHOLE_PHRASE_ONLY_TRIGGER_TOKENS` because
+    that table suppresses a token and this suppresses a duplicate: the word
+    still scores, once, as the `name:` match it is, and the invocation forms
+    are untouched. `$backend`, a leading `backend`, `use omh backend`, and
+    "use the backend skill" all still reach `explicit_skill_invocation` and
+    its +12, so a person naming the skill gets a dispatch and a person using
+    the English word gets a clarify.
+
+    A multi-word name is left alone. `live-incident-response` matching in
+    full is not an everyday phrase that arrived by accident, and its parts
+    are held back per skill where they need to be.
+    """
+    name = normalized_phrase(definition.name)
+    return "" if (" " in name or "-" in name) else name
+
+
 def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
     triggers = definition.triggers + tuple(
         phrase
@@ -2668,6 +2823,7 @@ def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
         category_phrase=normalized_phrase(definition.category),
         phase_phrase=normalized_phrase(definition.phase),
         metadata_tokens=metadata_tokens,
+        one_word_self_name=_one_word_self_name(definition),
     )
 
 
@@ -2681,6 +2837,7 @@ def _score_definition(
     explicit_skill: str | None,
     domain_signal: DomainRouteSignal | None,
     domain_operator_override: DomainOperatorOverride | None,
+    name_credited_skill: str | None = None,
 ) -> Recommendation | None:
     definition = prepared.definition
     policy = prepared.policy
@@ -2715,7 +2872,19 @@ def _score_definition(
         score += 12
         matched.update(("explicit_invocation", f"name:{definition.name}"))
 
+    # #1688. One occurrence of a one-word name is one piece of evidence, not
+    # four. `_one_word_self_name` carries the reason; the three duplicate
+    # credits are skipped below and the `name:` match keeps the word's single
+    # score. A MARKED occurrence is exempt -- see `_self_name_is_marked`.
+    self_name = prepared.one_word_self_name
+    if self_name and (
+        definition.name == name_credited_skill or _self_name_is_marked(normalized_query, self_name)
+    ):
+        self_name = ""
+
     for trigger_phrase in prepared.plain_trigger_phrases:
+        if trigger_phrase == self_name:
+            continue
         if _trigger_phrase_match(normalized_query, trigger_phrase):
             score += 6
             matched.add(f"trigger:{trigger_phrase}")
@@ -2725,7 +2894,7 @@ def _score_definition(
             score += 6
             matched.add(f"trigger:{trigger_phrase}")
 
-    if _phrase_match(normalized_query, prepared.name_phrase):
+    if _name_phrase_match(normalized_query, prepared.name_phrase):
         score += 5
         matched.add(f"name:{prepared.name_phrase}")
 
@@ -2751,11 +2920,12 @@ def _score_definition(
         trigger_token_matches -= _ECOSYSTEM_IDENTITY_CONNECTOR_TRIGGER_NOISE
     if not matched and not (trigger_token_matches - _GENERIC_TRIGGER_TOKENS):
         trigger_token_matches -= _GENERIC_TRIGGER_TOKENS
+    trigger_token_matches.discard(self_name)
     for token in trigger_token_matches:
         score += 3
         matched.add(f"trigger:{token}")
 
-    for token in query_tokens & prepared.metadata_tokens:
+    for token in (query_tokens & prepared.metadata_tokens) - {self_name}:
         score += 1
         matched.add(f"metadata:{token}")
 
@@ -3399,6 +3569,18 @@ def _phrase_match(query: str, value: str) -> bool:
     return bool(query and value and (query in value or value in query))
 
 
+def _name_phrase_match(query: str, value: str) -> bool:
+    """A catalog name is named, not merely spelled somewhere in the message.
+
+    `_phrase_match` is bidirectional containment, and for a one-word name that
+    made `loop` match `CrashLoopBackOff` and `ask` match `asked` at +5 apiece
+    (#1688). The reverse arm is dropped here as well: it only fires when the
+    whole message is a fragment of the name, which no catalog name has ever
+    needed and which cannot be evidence that the person meant that skill.
+    """
+    return bool(query and value and phrase_is_spoken(query, value))
+
+
 def _trigger_phrase_match(query: str, value: str) -> bool:
     """A trigger fires when the message contains it, never the reverse.
 
@@ -3409,8 +3591,15 @@ def _trigger_phrase_match(query: str, value: str) -> bool:
     `python -m unittest` at +6 apiece, so one ambiguous word scored 73 and
     routed to `command-operator` at high confidence. A trigger is a phrase the
     user is expected to say; a fragment of one is not evidence they said it.
+
+    Containment alone was still too loose in the other direction. A trigger
+    that is one short word matched INSIDE a longer word: the `loop` trigger
+    fired on `CrashLoopBackOff` and the `ask` trigger on `asked`, both at +6,
+    and both dispatched at high confidence (#1688). `phrase_is_spoken` is the
+    containment test with that hole closed; its docstring carries the edge
+    rules and why they differ left from right.
     """
-    return bool(query and value and value in query)
+    return bool(query and value and phrase_is_spoken(query, value))
 
 
 def _explicit_phrase_match(query: str, value: str) -> bool:

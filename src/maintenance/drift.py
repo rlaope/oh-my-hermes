@@ -263,7 +263,15 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # what a war room is), a military rank, severity as a bug-tracker
             # field, a manufacturing line down for maintenance, and a
             # figurative outage.
-            expected=265,
+            # #1688 adds twelve for the skill-name lane: two Kubernetes
+            # restart-loop sentences (English and Korean) and one past-tense
+            # `asked`, where the name matched inside a longer word; two
+            # hiring sentences naming `backend`, where one word was credited
+            # four times over; the three survey rows that reach their wrong
+            # skill through the metadata fold instead of a name; two verbs
+            # carrying the phrasings `plan` gained; an organisational remark
+            # naming the frontend; and a recorded interview.
+            expected=277,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -314,7 +322,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # same phrase inside a question at clarify/medium. They record the
             # tokenisation tier gap as intended so a scoring change has to
             # move them deliberately (#1607).
-            expected=424,
+            # #1688 adds one: `deep-interview` traded its bare `interview`
+            # trigger for "interview me", so the form the skill is actually
+            # asked for is pinned beside the negative control.
+            expected=425,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",

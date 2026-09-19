@@ -1,6 +1,6 @@
 ---
 name: "omh-plan"
-description: "[omh] Hermes Plan workflow: structured planning before execution. Use when the user says: plan, implementation plan, task breakdown, safe feature, safely add a feature, add a feature, feature request, new feature."
+description: "[omh] Hermes Plan workflow: structured planning before execution. Use when the user says: plan, implementation plan, make a plan, write a plan, write the plan, task breakdown, safe feature, safely add a feature."
 metadata:
   hermes:
     tags: [workflow, oh-my-hermes, planning]
@@ -58,7 +58,7 @@ Bad example:
 
 Use for structured planning when implementation is not ready to start safely, including feature work that needs a safe plan before handoff.
 
-    Strong routing signals: `plan`, `$plan`, `implementation plan`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `project template`, `github pr workflow`, `実装計画`, `タスク分解`, `安全に機能追加`, `機能追加の計画`, `답할 차례`, `준비할 차례`, `재현 계획`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `상태와 다음 행동`, `프로젝트별 운영`, `实现计划`, `任务拆解`, `安全地新增功能`, `新增功能计划`
+    Strong routing signals: `plan`, `$plan`, `implementation plan`, `make a plan`, `write a plan`, `write the plan`, `task breakdown`, `safe feature`, `safely add a feature`, `add a feature`, `feature request`, `new feature`, `product triage`, `bug triage`, `issue triage`, `reproduction plan`, `workflow hub`, `coding handoff`, `project template`, `github pr workflow`, `実装計画`, `タスク分解`, `安全に機能追加`, `機能追加の計画`, `답할 차례`, `준비할 차례`, `재현 계획`, `요구사항 정리`, `작업 허브`, `작업 허브가 필요`, `상태와 다음 행동`, `프로젝트별 운영`, `实现计划`, `任务拆解`, `安全地新增功能`, `新增功能计划`
 
 ## Catalog Metadata
 

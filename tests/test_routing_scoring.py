@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import unittest
 
+from omh.routing.localization import phrase_is_spoken
 from omh.routing.recommend import _phrase_match, _trigger_phrase_match, recommend_skills
+from omh.skills.catalog import routable_definitions
 
 
 class TriggerPhraseDirectionTests(unittest.TestCase):
@@ -21,6 +23,13 @@ class TriggerPhraseDirectionTests(unittest.TestCase):
         # The reverse arm is what inflated ambiguous single words.
         self.assertFalse(_trigger_phrase_match("test", "npm test"))
         self.assertFalse(_trigger_phrase_match("design", "design system contract"))
+
+    def test_a_trigger_does_not_fire_inside_a_longer_word(self) -> None:
+        # `reliability-review` owned every Slack sentence through this: its
+        # `sla` trigger is spelled inside `slack` (#1688).
+        self.assertFalse(_trigger_phrase_match("one-off slack digest", "sla"))
+        self.assertFalse(_trigger_phrase_match("pods in crashloopbackoff", "loop"))
+        self.assertTrue(_trigger_phrase_match("investigate slack sla alerts", "sla"))
 
     def test_general_phrase_match_keeps_both_directions(self) -> None:
         # `_phrase_match` still backs description and use_when scoring, where a
@@ -46,6 +55,151 @@ class TriggerPhraseDirectionTests(unittest.TestCase):
         top = recommend_skills("npm test", limit=1)[0]
         self.assertEqual(top["skill"], "command-operator")
         self.assertIn("trigger:npm test", top["matched"])
+
+
+class SpokenPhraseEdgeTests(unittest.TestCase):
+    """#1688. Containment cannot tell a phrase said from a phrase spelled."""
+
+    def test_a_phrase_does_not_match_inside_a_longer_latin_word(self) -> None:
+        self.assertFalse(phrase_is_spoken("pods stuck in crashloopbackoff", "loop"))
+        self.assertFalse(phrase_is_spoken("a user asked us to delete their data", "ask"))
+        self.assertFalse(phrase_is_spoken("the auditor wants proof", "audit"))
+        # `reliability-review` won every Slack sentence this way: its `sla`
+        # trigger is inside `slack`, and the test guarding it had the same
+        # hole, so the two agreed.
+        self.assertFalse(phrase_is_spoken("one-off slack digest for this incident", "sla"))
+        self.assertTrue(phrase_is_spoken("investigate slack sla alert failures", "sla"))
+
+    def test_the_same_phrase_still_matches_when_it_is_the_word(self) -> None:
+        self.assertTrue(phrase_is_spoken("keep the loop running", "loop"))
+        self.assertTrue(phrase_is_spoken("loop", "loop"))
+        self.assertTrue(phrase_is_spoken("ask claude about this", "ask"))
+        self.assertTrue(phrase_is_spoken("$loop", "loop"))
+
+    def test_a_multi_word_phrase_may_be_inflected_on_its_last_word(self) -> None:
+        # The leading words have already pinned the sense, so a plural or a
+        # participle on the end is the same phrase, not a different one.
+        self.assertTrue(phrase_is_spoken("add smooth scrolling to the site", "smooth scroll"))
+        self.assertTrue(phrase_is_spoken("list the attack scenarios", "attack scenario"))
+
+    def test_a_one_word_phrase_may_not_be_inflected(self) -> None:
+        # This is the arm that separates `asked` from `attack scenarios`.
+        self.assertFalse(phrase_is_spoken("asked", "ask"))
+        self.assertFalse(phrase_is_spoken("looping over the rows", "loop"))
+
+    def test_cjk_has_no_spaces_so_the_left_edge_is_ascii_only(self) -> None:
+        # A script-agnostic left edge would reject every CJK trigger, because
+        # the character before the phrase is always a word character there.
+        self.assertTrue(phrase_is_spoken("大きなpdfのアップロードが失敗", "アップロード"))
+        self.assertTrue(phrase_is_spoken("大きなpdfのアップロード", "pdf"))
+        self.assertTrue(phrase_is_spoken("모델 서빙을 어떻게 하죠", "모델 서빙"))
+        self.assertTrue(phrase_is_spoken("把那个ultrawork搞定", "ultrawork"))
+
+
+class OneWordSkillNameTests(unittest.TestCase):
+    """#1688. One occurrence of a one-word name is one piece of evidence."""
+
+    ONE_WORD_NAMES = tuple(
+        sorted(
+            definition.name
+            for definition in routable_definitions()
+            if "-" not in definition.name and " " not in definition.name
+        )
+    )
+
+    def test_the_catalog_still_has_one_word_names_to_protect(self) -> None:
+        # The rule is derived from the catalog, so an empty set would make
+        # every assertion below vacuously true.
+        self.assertGreaterEqual(len(self.ONE_WORD_NAMES), 15)
+
+    def test_a_name_spelled_inside_a_longer_word_is_not_a_name_match(self) -> None:
+        # The `name:` credit is +5, below the dispatch bar, so no corpus case
+        # fails when this arm regresses -- only the evidence list is wrong,
+        # and a wrong evidence list is what the person is shown.
+        rows = {row["skill"]: row for row in recommend_skills("pods stuck in CrashLoopBackOff", limit=8)}
+        self.assertNotIn("name:loop", rows.get("loop", {}).get("matched", ()))
+
+    def test_a_bare_mention_scores_once_and_stays_under_the_dispatch_bar(self) -> None:
+        # Before: name +5, the identically-spelled trigger phrase +6, that
+        # trigger's token +3, and the same token from the metadata fold +1.
+        top = next(
+            row for row in recommend_skills("should I hire a backend engineer", limit=8)
+            if row["skill"] == "backend"
+        )
+        self.assertEqual([label for label in top["matched"] if label.endswith("backend")], ["name:backend"])
+        self.assertLess(top["score"], 8)
+
+    def test_a_hangul_particle_marks_the_token_as_the_name(self) -> None:
+        # Korean attaches the particle to the noun with no space, so "loop로"
+        # is the name being referred to and not the English word. Folding
+        # matters here: `normalized_phrase` decomposes Hangul into jamo, so a
+        # composed particle literal never matches a normalized query.
+        top = recommend_skills("웹사이트 버튼 색 바꾸는 것도 loop로 해야해?", limit=1)[0]
+        self.assertEqual(top["skill"], "loop")
+        self.assertGreaterEqual(top["score"], 8)
+
+    def test_a_name_heading_its_noun_phrase_keeps_its_weight(self) -> None:
+        # The two senses the score alone cannot separate, because their
+        # evidence is identical: what the sentence is ABOUT is the backend in
+        # the first and an engineer in the second, and the only place it says
+        # so is the word after the name.
+        heads = recommend_skills("implement the backend for observer lookup", limit=1)[0]
+        self.assertEqual(heads["skill"], "backend")
+        self.assertGreaterEqual(heads["score"], 8)
+        modifies = next(
+            row for row in recommend_skills("should I hire a backend engineer", limit=8)
+            if row["skill"] == "backend"
+        )
+        self.assertLess(modifies["score"], 8)
+
+    def test_a_handoff_to_the_name_keeps_its_weight(self) -> None:
+        # How this repo's own `do_not_use_when` text hands a request to a
+        # sibling. Without it the one-word names lost their own handoff
+        # sentences to two-word siblings that kept every credit.
+        top = recommend_skills(
+            "The user wants new UI built or redesigned rather than restructured; use frontend.",
+            limit=1,
+        )[0]
+        self.assertEqual(top["skill"], "frontend")
+
+    def test_the_bare_first_word_test_credits_the_candidate_it_is_testing(self) -> None:
+        # #1638 decides whether a leading catalog name is an invocation or the
+        # sentence's verb by scoring the field WITHOUT the invocation bonus.
+        # Scoring the candidate as though its own name were an ordinary word
+        # assumes the answer, and left `research` at 7 against
+        # `research-brief` at 10 on a sentence research owns.
+        top = recommend_skills("Research the market and competitors for this category.", limit=1)[0]
+        self.assertEqual(top["skill"], "research")
+        self.assertIn("explicit_invocation", top["matched"])
+
+    def test_every_one_word_name_still_answers_its_explicit_forms(self) -> None:
+        # Derived from the catalog, so a new one-word skill joins this gate
+        # without anyone listing it. `research` is excluded: its bare form
+        # reaches `research-department` on main too, which is #1638's lane,
+        # not this one.
+        for name in self.ONE_WORD_NAMES:
+            if name == "research":
+                continue
+            for form in (f"${name}", name, f"use the {name} skill"):
+                with self.subTest(form=form):
+                    self.assertEqual(recommend_skills(form, limit=1)[0]["skill"], name)
+
+
+class TriggerTokenHoldbackTests(unittest.TestCase):
+    """#1688. The phrasings added for `plan` must not widen it by their verbs."""
+
+    def test_the_verbs_that_carry_the_new_plan_phrases_do_not_score_alone(self) -> None:
+        # Without the `_WHOLE_PHRASE_ONLY_TRIGGER_TOKENS` entry, `write` alone
+        # made `plan` the top recommendation for this sentence. The corpus
+        # cannot express this: its `forbidden_candidate` also reads the
+        # clarify's shortlist, where `plan` legitimately appears either way.
+        top = recommend_skills("write a zero downtime migration to add a not-null column", limit=1)[0]
+        self.assertNotEqual(top["skill"], "plan")
+
+    def test_the_complete_phrases_still_reach_plan(self) -> None:
+        for message in ("make a plan for the onboarding rewrite", "write the plan for this experiment"):
+            with self.subTest(message=message):
+                self.assertEqual(recommend_skills(message, limit=1)[0]["skill"], "plan")
 
 
 class GreenfieldBuildGuardTests(unittest.TestCase):

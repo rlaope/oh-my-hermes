@@ -4,6 +4,59 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A skill whose name is an ordinary English word no longer claims every
+  sentence that happens to spell it.** `pods stuck in CrashLoopBackOff after
+  helm upgrade` dispatched to the `loop` goal engine at high confidence, in
+  English and in Korean; `a user asked us to delete all their data` reached
+  the external-advisor `ask` skill; `should I hire a backend engineer or a
+  DevOps person first` reached the `backend` coding lane. A wrong confident
+  dispatch is worse than a question, because the person gets a goal engine
+  for a Kubernetes problem and has no reason to suspect the router.
+
+  Two mechanisms, both now closed. Matching was plain containment, so a name
+  fired INSIDE a longer word -- `loop` in `CrashLoopBackOff`, `ask` in
+  `asked`. Trigger and name matching go through `phrase_is_spoken`, which
+  rejects a match that starts or continues mid-word. Its two edges differ on
+  purpose: a phrase that starts mid-word is never the phrase, while a
+  multi-word phrase extended on the right is the same phrase inflected, so
+  `attack scenarios` still matches the `attack scenario` trigger and `asked`
+  still does not match `ask`. The left-edge test is ASCII-only because
+  Japanese and Chinese are written without spaces.
+
+  Separately, one occurrence of a one-word name was credited four times: the
+  `name:` phrase at +5, the identically-spelled trigger phrase at +6, that
+  trigger's token at +3, and the same token again from the metadata fold at
+  +1. Fifteen points for one word clears the high-confidence bar on its own,
+  and four labels in the evidence list read as four independent findings when
+  they are one. The three duplicates are dropped; the word scores once, as
+  the name it is, which is worth a clarifying question rather than a
+  dispatch. Every invocation form is untouched: `$loop`, a leading `loop`,
+  `use omh loop`, and `use the loop skill` all still dispatch, and so does a
+  Korean particle welded to the name (`loop로`), which marks the token as the
+  name rather than the English word.
+
+  Three lanes had been carried by that inflation and now have the phrasing a
+  person actually types: `plan` gains "make a plan", "write a plan", and
+  "write the plan"; `frontend` gains the locative "in / on / to the
+  frontend"; and `deep-interview` trades its bare `interview` trigger -- every
+  hiring loop and user study in the language -- for "interview me". The verbs
+  `make` and `write`, and two ordinary words `research` reached only through
+  complete phrases (`before`, `open`), are held to whole-phrase-only scoring.
+
+  Measured on the deciding surface over the 94-ask survey in the issue: 41
+  dispatch / 43 clarify / 10 fallback becomes 35 / 48 / 11. Nine asks moved.
+  Six were the wrong confident dispatches above; one was corrected in place
+  (`review this terraform plan before I apply it` now reaches `code-review`,
+  not the planning workflow); two were clarifications whose top candidate
+  changed once a substring artifact stopped scoring. One previously correct
+  dispatch became a clarification that still names the same workflow. The
+  negative-control corpus grows from 265 to 277 cases and the
+  positive-intervention corpus from 424 to 425, both at zero overroutes and
+  zero missed interventions.
+
+  The always-loaded skill-body budget rises from 977,649 to 977,773
+  characters for the six added trigger phrases.
+
 - **Fourteen skills stop telling the model to record a coding handoff for work
   that is not coding.** A skill body rendered "Preferred harness for this
   skill: `coding-handling`" and an `omh runtime record --harness

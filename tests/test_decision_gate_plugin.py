@@ -27,7 +27,7 @@ class DecisionGatePluginTests(unittest.TestCase):
     def test_given_a_bound_event_when_called_then_the_plugin_uses_the_shared_answer_operation(self) -> None:
         with TemporaryDirectory() as tmp, patch.dict(os.environ, {"OMH_HOME": str(Path(tmp) / ".omh")}, clear=False):
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
-            session = create_or_resume_wrapper_session(paths, "review plan", source="discord")["session"]
+            session = create_or_resume_wrapper_session(paths, "make a plan for the checkout migration", source="discord")["session"]
             current = utc_now()
             gate = open_wrapper_session_decision_gate(
                 paths,
@@ -51,7 +51,7 @@ class DecisionGatePluginTests(unittest.TestCase):
     def test_given_no_host_connector_event_when_model_args_are_complete_then_the_plugin_refuses(self) -> None:
         with TemporaryDirectory() as tmp, patch.dict(os.environ, {"OMH_HOME": str(Path(tmp) / ".omh")}, clear=False):
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
-            session = create_or_resume_wrapper_session(paths, "review plan", source="discord")["session"]
+            session = create_or_resume_wrapper_session(paths, "make a plan for the checkout migration", source="discord")["session"]
             current = utc_now()
             gate = open_wrapper_session_decision_gate(
                 paths,
@@ -90,7 +90,7 @@ class DecisionGatePluginTests(unittest.TestCase):
     def test_given_matching_host_connector_event_when_called_then_the_plugin_applies_and_replays(self) -> None:
         with TemporaryDirectory() as tmp, patch.dict(os.environ, {"OMH_HOME": str(Path(tmp) / ".omh")}, clear=False):
             paths = resolve_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")
-            session = create_or_resume_wrapper_session(paths, "review plan", source="discord")["session"]
+            session = create_or_resume_wrapper_session(paths, "make a plan for the checkout migration", source="discord")["session"]
             current = utc_now()
             gate = open_wrapper_session_decision_gate(
                 paths,

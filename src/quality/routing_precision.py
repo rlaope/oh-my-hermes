@@ -2059,6 +2059,136 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_directly",
         "direct_answer",
     ),
+    # #1688. A skill NAME was matched by plain containment, so a name that is
+    # an ordinary English word claimed every sentence that happened to spell
+    # it -- including inside a longer word. Two mechanisms, both pinned here.
+    #
+    # The first three fired INSIDE another word: `loop` inside
+    # `CrashLoopBackOff` and `ask` inside `asked`, each crediting the `name:`
+    # phrase and the identically-spelled trigger for a word nobody typed. The
+    # Kubernetes sentence is kept in both languages because the misfire
+    # reproduced on three separate phrasings, which is what made it a
+    # mechanism rather than an accident. No `forbidden_candidate` is needed
+    # on the Korean one -- it falls back -- but it is set where the wrong
+    # skill would otherwise still be the named candidate through a clarify.
+    RoutingPrecisionCase(
+        "crashloopbackoff-is-not-the-loop-engine",
+        "A Kubernetes restart loop is not the durable goal engine",
+        "pods stuck in CrashLoopBackOff after helm upgrade",
+        "answer_clarification",
+        "",
+        "loop",
+    ),
+    RoutingPrecisionCase(
+        "crashloopbackoff-korean-is-not-the-loop-engine",
+        "A Korean Kubernetes restart loop is not the durable goal engine",
+        "파드가 CrashLoopBackOff 상태인데 어떻게 디버깅하죠",
+        "answer_clarification",
+        "",
+        "loop",
+    ),
+    RoutingPrecisionCase(
+        "asked-is-not-the-advisor-skill",
+        "The past tense of ask is not a request for an external advisor",
+        "a user asked us to delete all their data (GDPR)",
+        "answer_clarification",
+        "",
+        "ask",
+    ),
+    # The second mechanism needs no misspelling at all: one occurrence of a
+    # one-word name was credited four times over -- `name:` at +5, the
+    # identically-spelled trigger phrase at +6, that trigger's token at +3,
+    # and the same token again from the metadata fold at +1. Fifteen points
+    # for one word clears the high-confidence threshold alone, so a hiring
+    # question dispatched to the backend coding lane. Both hiring sentences
+    # keep `backend` as the named candidate through the clarify, so the claim
+    # here is the ACTION: a mention is worth a question, not a dispatch.
+    RoutingPrecisionCase(
+        "hiring-a-backend-engineer-is-not-the-backend-lane",
+        "Deciding which engineer to hire is not backend implementation work",
+        "should I hire a backend engineer or a DevOps person first",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "backend-interview-questions-are-not-the-backend-lane",
+        "Interview questions for a backend role are a hiring task, not a coding one",
+        "interview questions for a senior backend role",
+        "answer_clarification",
+        "",
+    ),
+    # The remaining rows of the #1688 survey reach their wrong skill through
+    # the metadata fold and a curation guard rather than through a name.
+    # Those three already clarify; pinned so a later widening cannot quietly
+    # turn an operational sentence into a workflow dispatch. No
+    # `forbidden_candidate` on any of the five below: the field also reads the
+    # clarify's own shortlist, and a clarification that offers the skill among
+    # its options is the correct outcome here, not the defect. The claim is
+    # the ACTION.
+    RoutingPrecisionCase(
+        "node-memory-pressure-is-not-memory-curation",
+        "A pod running out of memory is not a request to curate stored memories",
+        "node memory climbs until the pod gets OOMKilled",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "database-index-question-is-not-workflow-learning",
+        "A missing database index is not a workflow-learning request",
+        "this query seq-scans 40M rows, what index",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "compute-cost-estimate-is-not-the-observability-card",
+        "Estimating GPU versus CPU spend is not an observability card",
+        "estimate GPU vs CPU cost for this workload",
+        "answer_clarification",
+        "",
+    ),
+    # Negative controls for the phrasings added alongside the #1688 fix.
+    # `plan` gained "make a plan" / "write a plan" / "write the plan", and a
+    # multi-word trigger is scored as its separate tokens too: these two
+    # sentences open with those verbs and ask for something else entirely.
+    # `make` and `write` are held back in
+    # `_WHOLE_PHRASE_ONLY_TRIGGER_TOKENS`; without that hold-back the first
+    # of them moved from a data-analysis clarify to a `plan` one.
+    RoutingPrecisionCase(
+        "write-verb-does-not-reach-the-plan-engine",
+        "Writing a migration is not writing a plan",
+        "write a zero downtime migration to add a not-null column",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "make-verb-does-not-reach-the-plan-engine",
+        "Making a pipeline faster is not making a plan",
+        "make the ci pipeline faster",
+        "answer_clarification",
+        "",
+        "plan",
+    ),
+    # `frontend` gained the locative forms "in/on/to the frontend", which say
+    # the work happens there. Naming the frontend as an organisational fact
+    # does not.
+    RoutingPrecisionCase(
+        "frontend-team-remark-is-not-frontend-work",
+        "Naming the frontend team is not asking for frontend work",
+        "the frontend team is hiring two more people",
+        "answer_clarification",
+        "",
+    ),
+    # `deep-interview` traded its bare `interview` trigger for "interview me".
+    # The bare word is every hiring loop, user study, and recorded
+    # conversation in the language; the pinned positive form lives in
+    # `ROUTING_INTERVENTION_CASES`.
+    RoutingPrecisionCase(
+        "recorded-interview-is-not-the-interview-lane",
+        "A recorded interview is not a request to be interviewed",
+        "we recorded a podcast interview with the founder last week",
+        "answer_clarification",
+        "",
+    ),
 )
 
 
@@ -4490,6 +4620,22 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "web-research",
         "run_hermes_research",
         "web_research",
+    ),
+    # #1688 traded `deep-interview`'s bare `interview` trigger for
+    # "interview me". The bare word is every hiring loop, user study, and
+    # recorded conversation in the language, and at +6 it took
+    # "interview questions for a senior backend role" the moment the `backend`
+    # name stopped taking it first. This pins the form the skill is actually
+    # asked for; the negative control is
+    # `recorded-interview-is-not-the-interview-lane`.
+    RoutingInterventionCase(
+        "interview-me-reaches-the-interview-lane",
+        "Asking to be interviewed reaches the interview lane",
+        "interview me about this feature",
+        "dispatch",
+        "deep-interview",
+        "answer_clarification",
+        "clarification",
     ),
     RoutingInterventionCase(
         "deep-interview-request-stays-clarification",

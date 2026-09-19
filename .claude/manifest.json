@@ -68,7 +68,7 @@
     "omh-frontend-refactor/SKILL.md": "dcdc20d6d0d32c62388b6558518943254cbda21b26440579e21c989e764b3aa2",
     "omh-frontend-refactor/references/refactor-passes.md": "ce187b2323fda67fb536249193b4cc0bab1f04024986c8313bb7a4c5fd87e54f",
     "omh-frontend-refactor/references/state-discipline.md": "04084cfd8d849f9e0b468d8a30fecc58f8c37ca5d5585afeb1e3bce95719faa4",
-    "omh-frontend/SKILL.md": "dbab83e5b1d9c092355b283200e09c9850050e75bec72c57fa35856a3b5e4a74",
+    "omh-frontend/SKILL.md": "bf8aa2381ba6b51fea1e12131bffa5bf77dd9ec4e64173a39b94025a1fcc164c",
     "omh-frontend/references/design-system-contract.md": "5ed9f05a8eb6d5c8ae839313f9adbae7c18b15940777645924fdb2670b64a60c",
     "omh-frontend/references/reference-token-extraction.md": "b36dedde2f859f83a95563cddab06f4002ce8c0a2c3b4ef64abc8a954c1e12bf",
     "omh-frontend/references/screenshot-loop.md": "ddaaf841a154130222c98945d070f4a8b157a564ef59a3f960a3e48e01113e09",
@@ -113,7 +113,7 @@
     "omh-paper-learning/SKILL.md": "06a38802ce7008a51a46a8a0b2db7bf078caaacfc82bce2a28d753f7c075794d",
     "omh-people-ops/SKILL.md": "5d33fc10c45c53089b4cddd92a0308651ae2416510245a51ec7f0c1297f097ad",
     "omh-physical-device-readiness/SKILL.md": "cd5ac7d183d14cd30b4cf8df32de8ffb0c7b0d06efca7f141a2e80cfbbaaaec2",
-    "omh-plan/SKILL.md": "0592d66f73642c8d25cc00f760e2aa5c758e45e38cc71492eeecdab4474ae508",
+    "omh-plan/SKILL.md": "11b3ce3a68b1942125f86e35e488659d272b8a1c3ab6a57aa9fa017adf2cb24f",
     "omh-plan/references/project-constitution.md": "577991e718cf3e1d62ce93704d4a734f7e058a3d516b0722c636cc8cf7a519da",
     "omh-product-brief/SKILL.md": "fdba4b4b12e083f8a2d493cf57d8a435dc722ecdc2ee556a3850a13bf6f79ccd",
     "omh-product-discovery-validation/SKILL.md": "e827fadf56437016fb69516db1b903b7c830c3c57ebb250113384ecd7986bb41",
@@ -161,7 +161,7 @@
     "ulw-context/SKILL.md": "b1542959647255da3e8169854c761bb59f4fc7388447d8ae86a1c900112ab316",
     "ulw-context/references/decision-frontier.md": "122978a41c0a003f8b7a879b00c9ecc2417e75d5fbb787f24ecb3477403a67df",
     "ulw-context/references/project-terms.md": "0b6baee554fc8fa813d9b4b86aab55a9858441d2c3b2d90ef0d037a8f12afd45",
-    "ulw-interview/SKILL.md": "32990a434a1b67277fbce6dc8a52f3004e538ba9161609f81436b5c4406f5f9a",
+    "ulw-interview/SKILL.md": "871b91e100e61c49de23205a8ecdb690649820f301f66f297a95cc2bda59900d",
     "ulw-interview/references/ambiguity-taxonomy.md": "af4b13bcfe583b138e9b1de47a851e40e227ce30b0404fcb10bfa16abe297d3a",
     "ulw-loop/SKILL.md": "4eca60ba2e8584a6735d5227b3c6eb2b483f86afdac6f19f7e0a0fc0bbcfe5cf",
     "ulw-loop/references/goal-constraint-discipline.md": "e9755a82604a6b9d363716b6bf33bc980406ea40bce813d763eda9703e1a093f",
@@ -278,7 +278,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "dc1bdcc2ce201aad39a47249e78fbaa7fbf9e5b30cc4fd9ed44f696c76ec3de9",
+  "source_digest": "a480269d40c088aabb7a04690e1f726c90f483da9303e55938ffa394dbd3b2fd",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"
