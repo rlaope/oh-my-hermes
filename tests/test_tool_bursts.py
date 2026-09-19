@@ -10,13 +10,19 @@ as a parallel shot.
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from omh.plugin_bundle.omh.awareness_delivery import (
+    LOCK_MECHANISM_NONE,
+    _awareness_delivery_lock,
+)
 from omh.plugin_bundle.omh.runtime_reader import read_omh_hud
 from omh.plugin_bundle.omh.tool_bursts import (
     BURST_FRESH_SECONDS,
     MAX_OPEN_TOOL_CALLS,
     MAX_TOOL_BURST_ENTRIES,
     TOOL_CALL_OPEN_TTL_SECONDS,
+    _clear_pending_write_failures,
     latest_parallel_shot,
     record_tool_call,
     record_tool_call_close,
@@ -227,6 +233,109 @@ class ToolBurstLedgerTest(unittest.TestCase):
 
         self.assertTrue(payload["activity"]["live"])
         self.assertEqual(payload["activity"]["open_call_count"], 1)
+
+
+class SwallowedLedgerWriteTest(unittest.TestCase):
+    """Every writer here fails open, and now says how often it did.
+
+    The swallow itself is right: a hook that raised would vanish into
+    Hermes's own try/except-and-log wrapper and the model would lose the
+    awareness this ledger feeds. What was wrong is that the drop left no
+    trace, so an entry left open read identically whether the call was still
+    running or its close had lost the lock. Measured 2026-09-20 on this
+    machine: eight concurrent writers lose nothing at all, twenty-four lose
+    466 of 9,648 writes. These tests pin the counter, never the rate.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = str(Path(self._tmp.name) / "omh")
+        # Process-global, because a failed write cannot record itself where
+        # it happens. Reset around every case so one test's drop is never
+        # another test's count.
+        _clear_pending_write_failures()
+        self.addCleanup(_clear_pending_write_failures)
+
+    def _ledger(self):
+        import json
+
+        return json.loads(tool_bursts_path(self.home).read_text(encoding="utf-8"))
+
+    def test_a_successful_write_counts_nothing(self):
+        record_tool_call("terminal", omh_home=self.home, now=NOW, tool_call_id="c1")
+        self.assertEqual(self._ledger()["write_failures"], {"lock_timeout": 0, "other": 0})
+        self.assertEqual(
+            tool_call_activity(self.home, now=NOW + 1)["write_failures"],
+            {"lock_timeout": 0, "other": 0},
+        )
+
+    def test_a_held_lock_times_a_write_out_and_the_next_write_records_it(self):
+        path = tool_bursts_path(self.home)
+        with _awareness_delivery_lock(path) as mechanism:
+            if mechanism == LOCK_MECHANISM_NONE:  # pragma: no cover - no lock backend
+                self.skipTest("host has neither a POSIX nor a Windows lock backend")
+            # Held by this very process on a separate file description, so
+            # the hook's own acquire cannot take it and gives up after
+            # `_LOCK_TIMEOUT_SECONDS`. The tick is lost, by design.
+            record_tool_call("terminal", omh_home=self.home, now=NOW, tool_call_id="lost")
+            self.assertFalse(path.exists(), "the write must not have landed")
+        # The count rides along with the next write that does take the lock.
+        record_tool_call("terminal", omh_home=self.home, now=NOW + 1, tool_call_id="kept")
+        ledger = self._ledger()
+        self.assertEqual(ledger["write_failures"], {"lock_timeout": 1, "other": 0})
+        self.assertEqual([entry["id"] for entry in ledger["entries"]], ["kept"])
+        activity = tool_call_activity(self.home, now=NOW + 2)
+        self.assertEqual(activity["write_failures"], {"lock_timeout": 1, "other": 0})
+        self.assertIn("LOWER bound", activity["write_failures_claim_boundary"])
+
+    def test_a_dropped_close_is_counted_and_the_entry_stays_open(self):
+        record_tool_call("terminal", omh_home=self.home, now=NOW, tool_call_id="c1")
+        path = tool_bursts_path(self.home)
+        with _awareness_delivery_lock(path) as mechanism:
+            if mechanism == LOCK_MECHANISM_NONE:  # pragma: no cover - no lock backend
+                self.skipTest("host has neither a POSIX nor a Windows lock backend")
+            record_tool_call_close("c1", omh_home=self.home, now=NOW + 1)
+        activity = tool_call_activity(self.home, now=NOW + 2)
+        # Exactly the ambiguity the counter exists to bound: the call reads
+        # as open, and only the count says its close was dropped.
+        self.assertEqual(activity["open_call_count"], 1)
+        self.assertEqual(activity["write_failures"], {"lock_timeout": 1, "other": 0})
+
+    def test_a_non_timeout_write_failure_is_counted_apart(self):
+        from omh.plugin_bundle.omh import tool_bursts
+
+        def exploding_write(*args, **kwargs):
+            raise OSError("no space left on device")
+
+        with patch.object(tool_bursts, "_write_delivery_record", exploding_write):
+            record_tool_call("terminal", omh_home=self.home, now=NOW, tool_call_id="c1")
+        record_tool_call("terminal", omh_home=self.home, now=NOW + 1, tool_call_id="c2")
+        self.assertEqual(self._ledger()["write_failures"], {"lock_timeout": 0, "other": 1})
+
+    def test_a_ledger_written_before_the_counter_existed_reads_as_zero(self):
+        import json
+
+        path = tool_bursts_path(self.home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "omh_tool_bursts/v1",
+                    "entries": [{"tool": "terminal", "ts": NOW, "id": "", "open_at_tick": 1}],
+                    "open_calls": {},
+                    "repeat_streaks": {},
+                    "post_tool_call_observed_at": 0.0,
+                }
+            ),
+            encoding="utf-8",
+        )
+        # Zero means "nobody was counting when this file was written", which
+        # is the truth about it -- never a claim that nothing was lost.
+        self.assertEqual(
+            tool_call_activity(self.home, now=NOW + 1)["write_failures"],
+            {"lock_timeout": 0, "other": 0},
+        )
 
 
 if __name__ == "__main__":

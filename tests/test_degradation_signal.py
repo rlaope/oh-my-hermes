@@ -37,6 +37,7 @@ from omh.plugin_bundle.omh.degradation import (
     degradation_chat_note,
     degradation_component,
     degradation_payload,
+    runtime_binding_degradation,
     safe_error_type,
 )
 from omh.plugin_bundle.omh.hooks import llm_hooks as llm_hooks_module
@@ -669,6 +670,25 @@ class DegradationPayloadUnitTests(unittest.TestCase):
 
         block = degradation_payload([("typo_component", "RuntimeError")])
         self.assertEqual(component_labels(block), [UNKNOWN_COMPONENT])
+
+    def test_the_binding_context_line_names_the_cause_and_carries_no_text(self) -> None:
+        # The structured block is not what a host renders or logs, and a
+        # binding fault leaves no store to record into, so this line is the
+        # whole of what the failure says about itself. Since #1733 every
+        # binding fault returns the same shape on `pre_tool_call`, which
+        # makes the type the only discriminator (#1674 observation 3).
+        class UnattributableSessionError(RuntimeError):
+            pass
+
+        named = runtime_binding_degradation(RuntimeError("/private/PATH_SECRET"))
+        unowned = runtime_binding_degradation(UnattributableSessionError("/private/PATH_SECRET"))
+
+        self.assertIn("error_type=RuntimeError", str(named["context"]))
+        self.assertIn("error_type=UnattributableSessionError", str(unowned["context"]))
+        self.assertNotEqual(named["context"], unowned["context"])
+        for payload in (named, unowned):
+            self.assertIn(f"components={COMPONENT_RUNTIME_STATUS_READ}", str(payload["context"]))
+            self.assertNotIn("PATH_SECRET", json.dumps(payload))
 
     def test_safe_error_type_is_bounded_and_falls_back(self) -> None:
         self.assertEqual(safe_error_type(""), "Exception")

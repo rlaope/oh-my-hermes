@@ -93,12 +93,21 @@ def transform_tool_result(**kwargs: Any) -> str | None:
     nudged = annotate_engagement_nudge(
         tool_name=kwargs.get("tool_name"),
         result=kwargs.get("result"),
+        # The same arguments the recovery pass below reads, and the host
+        # passes them here already coerced to the tool's schema types
+        # (`model_tools.handle_function_call` runs `coerce_tool_args` before
+        # dispatch), so two calls that are the same call digest the same. The
+        # delegation nudge counts DISTINCT searches, and this is the only
+        # thing at this seam that can tell one search twice from two (#1701).
+        args=kwargs.get("args"),
         session_id=session_id,
         # The host passes this seam the identity fields, the result, and the
         # timing — no home (`model_tools._apply_transform_tool_result_hook`).
-        # Empty here means the nudge's plan read falls back to the default
-        # home, the way every other bundle reader does; the kwargs are still
-        # consulted so a bundle-internal caller or a test can bind one.
+        # Empty here means the nudge's plan read and its budget store both
+        # fall back to the default home, the way every other bundle reader
+        # does; the kwargs are still consulted so a bundle-internal caller or
+        # a test can bind one. The two must agree, and they do because they
+        # are the same string.
         omh_home=str(kwargs.get("omh_home", "") or ""),
         hermes_home=str(kwargs.get("hermes_home", "") or ""),
     )

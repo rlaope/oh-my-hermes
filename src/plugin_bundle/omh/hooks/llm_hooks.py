@@ -703,8 +703,17 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         record_running_work_board_emission(omh_home, byte_count=len(board_text), fingerprint=board_fingerprint)
     if degradation:
         payload["omh_degradation"] = degradation
-        # Component labels only: error types stay in the structured payload, so
-        # the model-facing text is minimal and stable.
+        # Component labels only here, which now differs from the binding
+        # degradation on this same hook: that one names the exception type in
+        # its own context line. The difference is what the value is worth to
+        # a reader, not a disagreement about the rule. These components are
+        # OMH-local fallbacks whose exception type tells a person nothing they
+        # can act on, while a binding fault's type is the only thing
+        # separating a session no profile owns from a store that was named
+        # and could not be read, and it has no other surface (#1733).
+        # One caveat for whoever reads the older half of this sentence:
+        # "stays in the structured payload" is not "stays readable". No host
+        # path reads that block, so a value kept only there is dropped.
         context_parts.append(
             "[OMH Degraded] components="
             + ",".join(str(row["component"]) for row in degradation["components"])

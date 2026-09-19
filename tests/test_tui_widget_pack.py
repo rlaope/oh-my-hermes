@@ -65,6 +65,48 @@ const report = (() => {
 process.stdout.write(`${JSON.stringify(report)}\n`, () => process.exit(0))
 """
 
+STATUS_DOCK_HARNESS = r"""
+import { readFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+const [widgetPath, payloadPath, colsArg, rowsArg] = process.argv.slice(2)
+const apps = []
+const sdk = {
+  Box: 'Box', Dialog: 'Dialog', Overlay: 'Overlay', Text: 'Text',
+  h: (type, props, ...children) => (typeof type === 'function' ? type({ ...(props || {}), children }) : { type, props, children }),
+  defineWidgetApp: app => { apps.push(app); return app },
+  openWidget() {},
+  updateWidget() {},
+}
+const mod = await import(pathToFileURL(widgetPath).href)
+mod.default(sdk)
+const app = apps.find(candidate => candidate.id === 'omh-status')
+const report = (() => {
+  if (!app) return { error: 'omh-status not registered' }
+  const theme = { color: { accent: 'accent', border: 'border', error: 'error', label: 'label', muted: 'muted', ok: 'ok', primary: 'primary', statusFg: 'statusFg', text: 'text', warn: 'warn' } }
+  const payload = JSON.parse(readFileSync(payloadPath, 'utf8'))
+  const state = app.reduce(app.init(''), { kind: 'snapshot', payload })
+  const parts = (node, color) => {
+    if (node === null || node === undefined || node === false) return []
+    if (Array.isArray(node)) return node.flatMap(child => parts(child, color))
+    if (typeof node === 'string') return node ? [{ color, text: node }] : []
+    if (typeof node === 'object') return parts(node.children, node.props && node.props.color !== undefined ? node.props.color : color)
+    return []
+  }
+  // A Box is a container, not a row: the status dock nests one (the frame)
+  // inside another (the Hud), so flattening the frame whole would report
+  // the header and every activity row as one string.
+  const lines = node => {
+    if (node === null || node === undefined || node === false) return []
+    if (Array.isArray(node)) return node.flatMap(lines)
+    if (typeof node === 'object' && node.type === 'Box') return lines(node.children)
+    return [node]
+  }
+  const frame = app.render({ cols: Number(colsArg), rows: Number(rowsArg || 40), state, t: theme })
+  const rows = lines(frame).map(node => parts(node, '')).filter(row => row.length)
+  return { rows: rows.map(row => ({ text: row.map(part => part.text).join(''), parts: row })) }
+})()
+process.stdout.write(`${JSON.stringify(report)}\n`, () => process.exit(0))
+"""
 
 class TuiWidgetPackTests(unittest.TestCase):
     def test_setup_installs_byte_correct_widget_without_overwriting_unrelated_widget(self) -> None:
@@ -1438,6 +1480,162 @@ class TodoPanelViewportBudgetTests(unittest.TestCase):
                 marked = [row for row in rows if "[•]" in row]
                 self.assertEqual(len(marked), 1, rows)
                 self.assertIn(f"Task number {active}", marked[0])
+
+
+@unittest.skipUnless(NODE, "node is required to render the status dock")
+class StatusDockRepeatChipTests(unittest.TestCase):
+    """`repeat xN` as the dock-bottom header actually renders it.
+
+    #1687 asks for the row in both surfaces, and a source-string assertion
+    cannot answer the two questions that matter here: what a person sees
+    at each stage, and whether the chip survives a narrow terminal. The
+    header is one `Text` with `wrap: 'truncate-end'` and no drop loop, so
+    a segment's PLACE in the line is its priority.
+    """
+
+    def _payload(self, *, calls, result="out", session="session-dock", args=None):
+        from omh.plugin_bundle.omh.hooks.nudge_budget import reset_nudge_budget
+        from omh.plugin_bundle.omh.hooks.session_attendance import reset_session_attendance
+        from omh.plugin_bundle.omh.hooks.tool_hooks import post_tool_call, pre_tool_call
+
+        reset_session_attendance()
+        reset_nudge_budget()
+        self.addCleanup(reset_session_attendance)
+        self.addCleanup(reset_nudge_budget)
+        root = Path(self._tmp.name)
+        omh_home = root / "omh"
+        hermes_home = root / "hermes"
+        (omh_home / "runtime").mkdir(parents=True, exist_ok=True)
+        hermes_home.mkdir(exist_ok=True)
+        for index in range(calls):
+            payload_args = args(index) if callable(args) else {"pattern": "def render_skill", "path": "src"}
+            directive = pre_tool_call(
+                tool_name="search_files",
+                tool_input=payload_args,
+                session_id=session,
+                omh_home=str(omh_home),
+                tool_call_id=f"call-{index}",
+            )
+            blocked = directive is not None and directive.get("action") == "block"
+            post_tool_call(
+                tool_name="search_files",
+                args=payload_args,
+                result=str(directive.get("message")) if blocked else result,
+                status="blocked" if blocked else "ok",
+                session_id=session,
+                omh_home=str(omh_home),
+                tool_call_id=f"call-{index}",
+            )
+        return read_omh_hud(
+            omh_home,
+            hermes_home,
+            status={"runs": [], "active_executors": []},
+            session_ref=session,
+        )
+
+    def _header(self, payload: dict, *, cols: int) -> dict:
+        root = Path(self._tmp.name)
+        payload_file = root / f"payload-{cols}.json"
+        payload_file.write_text(json.dumps(payload), encoding="utf-8")
+        widget = root / "omh-status.mjs"
+        widget.write_bytes(widget_payload(Path(sys.executable)))
+        harness = root / "status-harness.mjs"
+        harness.write_text(STATUS_DOCK_HARNESS, encoding="utf-8")
+        completed = subprocess.run(
+            [NODE, str(harness), str(widget), str(payload_file), str(cols)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=120,
+            env={**os.environ, "HERMES_HOME": str(root / "hermes"), "HOME": str(root)},
+            cwd=str(root),
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout.strip().splitlines()[-1])
+        self.assertNotIn("error", result, result)
+        rows = [row for row in result["rows"] if "[OMH]" in row["text"]]
+        self.assertEqual(len(rows), 1, [row["text"] for row in result["rows"]])
+        return rows[0]
+
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def _chip(self, header: dict) -> dict:
+        chips = [part for part in header["parts"] if part["text"].startswith("repeat x")]
+        self.assertEqual(len(chips), 1, header["text"])
+        return chips[0]
+
+    def test_a_watched_repeat_is_counted_in_the_muted_tone(self) -> None:
+        header = self._header(self._payload(calls=6), cols=120)
+
+        chip = self._chip(header)
+        self.assertEqual(chip["text"], "repeat x6")
+        # Muted: the guard has noticed and has not acted, which is
+        # information rather than a fault.
+        self.assertEqual(chip["color"], "muted")
+
+    def test_a_refused_repeat_warns_and_an_escalated_one_is_an_error(self) -> None:
+        from omh.plugin_bundle.omh.tool_bursts import (
+            REPEAT_CALL_BLOCK_THRESHOLD,
+            REPEAT_CALL_ESCALATION_ATTEMPTS,
+        )
+
+        blocked = self._chip(
+            self._header(self._payload(calls=REPEAT_CALL_BLOCK_THRESHOLD + 1), cols=120)
+        )
+        self.assertEqual(blocked["text"], f"repeat x{REPEAT_CALL_BLOCK_THRESHOLD + 1} blocked")
+        self.assertEqual(blocked["color"], "warn")
+
+        self.setUp()
+        total = REPEAT_CALL_BLOCK_THRESHOLD + REPEAT_CALL_ESCALATION_ATTEMPTS
+        escalated = self._chip(self._header(self._payload(calls=total), cols=120))
+        self.assertEqual(escalated["text"], f"repeat x{total} approval")
+        self.assertEqual(escalated["color"], "error")
+
+    def test_different_calls_put_no_chip_on_the_header(self) -> None:
+        payload = self._payload(
+            calls=6, args=lambda index: {"pattern": f"p{index}", "path": "src"}
+        )
+
+        header = self._header(payload, cols=120)
+
+        self.assertEqual(payload["repeat"]["status"], "idle")
+        self.assertNotIn("repeat x", header["text"])
+
+    def test_the_chip_outranks_every_droppable_segment_at_both_widths(self) -> None:
+        """The width policy, stated as an ordering rather than a budget.
+
+        The header truncates from the END and never drops a segment out of
+        the middle, so the only way to keep a loop visible on a narrow
+        terminal is to put it ahead of what may be lost. At 60 columns the
+        tokens segment is already gated out by the widget's own 100-column
+        rule; the chip is there at both widths and ahead of the cost, the
+        board tally and the liveness segment at each.
+        """
+        payload = self._payload(calls=6)
+        # The header's cost and token figures are summed from agent rows, so
+        # the crowded line this is about needs one.
+        payload["subagents"]["rows"] = [
+            {"task_id": "t", "scope": "global", "state": "done", "tokens": 184_800, "cost_usd": 1.25}
+        ]
+
+        wide = self._header(payload, cols=120)
+        narrow = self._header(payload, cols=60)
+
+        for label, header in (("wide", wide), ("narrow", narrow)):
+            with self.subTest(width=label):
+                text = header["text"]
+                self.assertIn("repeat x6", text)
+                index = text.index("repeat x6")
+                for later in ("$1.250", "tokens", "yolo mode"):
+                    if later in text:
+                        self.assertLess(index, text.index(later), text)
+        # The segment the line is allowed to lose is the one the widget
+        # already drops below 100 columns, and it is not the chip.
+        self.assertIn("184.8k tokens", wide["text"])
+        self.assertNotIn("tokens", narrow["text"])
+        self.assertIn("repeat x6", narrow["text"])
 
 
 if __name__ == "__main__":

@@ -44,6 +44,22 @@ APPROVAL_BYPASS_FILE = "approval-bypass.json"
 # how long a pre-restart observation can keep claiming a state no process
 # holds any more.
 APPROVAL_BYPASS_FRESH_SECONDS = 6 * 3600.0
+# How long an unchanged observation is left alone before it is rewritten.
+#
+# The flag changes when a person presses Shift+Tab, and the hooks observe it
+# twice per tool call and once per turn -- so nearly every one of those
+# locks, temp files and renames wrote a value byte-identical to the one
+# already on disk. The write is skipped when the observation matches what is
+# recorded.
+#
+# It cannot be skipped indefinitely, because the timestamp is load-bearing:
+# `latest_approval_bypass` reads a record older than
+# `APPROVAL_BYPASS_FRESH_SECONDS` as idle, so a state that stayed unchanged
+# across six hours of steady work would expire while the hooks were still
+# observing it every few seconds. Refreshing at a twelfth of the bound
+# leaves eleven twelfths of the window as margin and turns "one write per
+# hook call" into "at most twice an hour, plus one per actual toggle".
+APPROVAL_BYPASS_REFRESH_SECONDS = APPROVAL_BYPASS_FRESH_SECONDS / 12
 APPROVAL_BYPASS_CLAIM_BOUNDARY = (
     "Hook-observed effective approval-bypass state; it can lag Shift+Tab "
     "toggles and host restarts until the next turn or tool call, and is "
@@ -68,7 +84,14 @@ def approval_bypass_path(omh_home: str = "") -> Path:
 
 def record_approval_bypass(*, omh_home: str = "", now: float | None = None) -> None:
     """Record the current effective bypass state. Best-effort: losing an
-    observation is acceptable, breaking the hook that feeds the model is not."""
+    observation is acceptable, breaking the hook that feeds the model is not.
+
+    Writes only when the observation is news -- a different boolean, an
+    unreadable or absent record, or one whose stamp is older than
+    `APPROVAL_BYPASS_REFRESH_SECONDS`. Every other call is a no-op, which is
+    almost all of them: this ran on every tool call and every turn for a
+    flag that changes when a person presses Shift+Tab.
+    """
     try:
         from tools.approval import is_approval_bypass_active
 
@@ -80,6 +103,8 @@ def record_approval_bypass(*, omh_home: str = "", now: float | None = None) -> N
         return
     tick = float(now if now is not None else time.time())
     path = approval_bypass_path(omh_home)
+    if _recorded_state_still_current(path, enabled=enabled, now=tick):
+        return
     record = {
         "schema_version": APPROVAL_BYPASS_SCHEMA_VERSION,
         "enabled": enabled,
@@ -91,6 +116,36 @@ def record_approval_bypass(*, omh_home: str = "", now: float | None = None) -> N
             _write_delivery_record(path, record)
     except (OSError, ValueError, TypeError):
         return
+
+
+def _recorded_state_still_current(path: Path, *, enabled: bool, now: float) -> bool:
+    """Whether the file already says exactly this, recently enough to stand.
+
+    False for anything the reader would not accept verbatim -- an absent,
+    unparsable, foreign-schema or wrong-shaped record -- so a skipped write
+    can only ever mean the record is already the one this call would have
+    written. A stamp in the future is not current either: a clock that moved
+    backwards must not freeze the file until it catches up.
+    """
+    import json
+
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(record, dict):
+        return False
+    if record.get("schema_version") != APPROVAL_BYPASS_SCHEMA_VERSION:
+        return False
+    if record.get("enabled") is not enabled:
+        return False
+    if record.get("claim_boundary") != APPROVAL_BYPASS_CLAIM_BOUNDARY:
+        return False
+    tick = record.get("observed_ts")
+    if not isinstance(tick, (int, float)) or isinstance(tick, bool):
+        return False
+    age = now - float(tick)
+    return 0.0 <= age <= APPROVAL_BYPASS_REFRESH_SECONDS
 
 
 def _session_yolo_row(

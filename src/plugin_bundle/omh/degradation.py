@@ -62,11 +62,37 @@ DEGRADATION_CHAT_NOTE = (
 
 
 def runtime_binding_degradation(error: BaseException) -> dict[str, object]:
-    """Binding failed before hook I/O; never reflect exception text or retry."""
+    """Binding failed before hook I/O; never reflect exception text or retry.
+
+    The context line names the exception TYPE as well as the component. A
+    binding fault leaves no store to write a record into -- that is what the
+    fault means -- so this payload is all the failure can say, and WHERE it
+    lands differs by hook, which a caller here must not assume.
+
+    Hermes reads a `pre_llm_call` result's `context` and injects it into the
+    turn's user message (`agent/turn_context.py`, the host's only consumer
+    of that key). It reads a `pre_tool_call` result's `action` and nothing
+    else, skipping every other shape (`hermes_cli/plugins.py`,
+    `_get_pre_tool_call_directive_details`). The structured block is read by
+    no host path at all. So on the turn hook this text reaches a person, and
+    on the tool hook the whole payload is discarded.
+
+    The type is carried for the surfaces that do read it, where it is the
+    only thing separating a session no profile owns from a store that was
+    named and could not be read (#1674 observation 3).
+
+    The type only, never `str(error)`: an exception message is free text from
+    whatever raised, and these are raised while resolving paths, so the
+    message is exactly where a path value would appear. `safe_error_type`
+    bounds and character-filters a class name; it is not a redactor for
+    arbitrary text and must not be handed any.
+    """
+    error_type = safe_error_type(type(error).__name__)
     return {
         "omh_degradation": degradation_payload([
-            (COMPONENT_RUNTIME_STATUS_READ, safe_error_type(type(error).__name__))]),
+            (COMPONENT_RUNTIME_STATUS_READ, error_type)]),
         "context": "[OMH Degraded] components=" + COMPONENT_RUNTIME_STATUS_READ
+        + " error_type=" + error_type
         + ". Runtime home binding failed; no runtime state was read or written.",
     }
 

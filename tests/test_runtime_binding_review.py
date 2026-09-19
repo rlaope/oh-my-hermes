@@ -131,7 +131,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
                     paths.runtime_cwd()
                 self.assertNotIn('PRIVATE_PATH', str(caught.exception))
 
-    def test_binding_fault_precedes_hook_io_and_pre_tool_blocks(self):
+    def test_binding_fault_precedes_hook_io_on_every_hook(self):
         for module, name in ((llm_hooks, 'pre_llm_call'), (tool_hooks, 'pre_tool_call'),
                              (tool_hooks, 'post_tool_call'), (session_hooks, 'on_session_end'),
                              (session_hooks, 'on_session_start')):
@@ -148,28 +148,143 @@ class RuntimeBindingReviewTests(unittest.TestCase):
                     self.assertTrue(result['omh_degradation']['degraded'])
                     self.assertNotIn('PRIVATE_PATH', json.dumps(result))
                     if name == 'pre_tool_call':
-                        # A refusal that named a store keeps the veto; only
-                        # `UnattributableSessionError` degrades (#1674).
-                        self.assertEqual(result['action'], 'block')
-                        self.assertNotIsInstance(paths.RuntimeBindingError('x'),
-                                                 paths.UnattributableSessionError)
+                        # #1733: a refusal that named a store degrades too.
+                        # `pre_tool_call` no longer differs from the observer
+                        # hooks on the binding path.
+                        self.assertNotIn('action', result)
 
-    def test_every_other_binding_fault_keeps_the_pre_tool_veto(self):
-        # The veto's boundary, pinned by type: only an unowned session
-        # degrades. A refusal that named a store, and the filesystem and host
-        # faults raised while reading one, all still veto -- a rules file can
-        # exist in a store that was named, and leaving it unread is what the
-        # veto is for (#1674).
+    def test_every_binding_fault_degrades_the_pre_tool_hook(self):
+        # The veto's boundary after #1733: there is none. Every fault the
+        # binding guard catches degrades, including the refusals that named a
+        # store, because the case those protected -- a rules file that exists
+        # and cannot be read -- is itself allowed one level down
+        # (`toolcall_rules` is fail-open by contract, and #1732 rejected
+        # blocking on a rule-gate failure by name). Blocking the
+        # less-informed case while allowing the better-informed one is what
+        # this removes.
         for error in (paths.RuntimeBindingError('PRIVATE_PATH'), OSError('PRIVATE_PATH'),
-                      RuntimeError('PRIVATE_PATH')):
+                      RuntimeError('PRIVATE_PATH'), paths.UnattributableSessionError('PRIVATE_PATH')):
             with self.subTest(error=type(error).__name__):
                 with patch.object(paths, 'plugin_home', side_effect=error), \
                         patch.object(tool_hooks, 'observe_plugin_hook_call') as observer:
                     result = tool_hooks.pre_tool_call(tool_name='read_file', session_id='s')
                 observer.assert_not_called()
-                self.assertEqual(result['action'], 'block')
-                self.assertIn('Tool call blocked', result['message'])
+                self.assertNotIn('action', result)
+                self.assertNotIn('message', result)
+                self.assertNotIn('Tool call blocked', json.dumps(result))
+                self.assertTrue(result['omh_degradation']['degraded'])
                 self.assertNotIn('PRIVATE_PATH', json.dumps(result))
+                # The cause has to stay legible now that the two shapes are
+                # one shape: the type is what tells them apart, and the
+                # context line is the only part of this payload a host
+                # renders (#1674 observation 3).
+                self.assertIn(f'error_type={type(error).__name__}', result['context'])
+
+    def test_the_four_injected_binding_faults_each_degrade(self):
+        # The fault table from #1733, driven through the real binding path
+        # rather than a patched `plugin_home`, standalone lane. Each was
+        # measured returning `action: block` on `origin/main` at 20491cdf.
+        for label, omh_home, hermes_home in (
+            ('unresolvable variable in the configured home', '$OMH_NO_SUCH_VAR_1733/omh', str(self.home)),
+            ('blank home', '   ', str(self.home)),
+            ('NUL byte in the path', '/tmp/a\0b', str(self.home)),
+            ('bad Hermes home', str(self.store), '$OMH_NO_SUCH_VAR_1733/hermes'),
+        ):
+            with self.subTest(fault=label):
+                with patch.object(tool_hooks, 'observe_plugin_hook_call') as observer:
+                    result = tool_hooks.pre_tool_call(tool_name='read_file', session_id='s', args={},
+                                                      omh_home=omh_home, hermes_home=hermes_home)
+                observer.assert_not_called()
+                self.assertNotIn('action', result)
+                self.assertTrue(result['omh_degradation']['degraded'])
+                self.assertIn('error_type=RuntimeBindingError', result['context'])
+
+    def test_a_control_character_in_the_profile_config_no_longer_blocks_every_tool(self):
+        # The issue's headline, end to end in the native lane. The installed
+        # `hermes_cli.config.require_readable_config_before_write` raises
+        # `RuntimeError` on a config carrying a control character (measured
+        # against the host; reproduced here through the same API shape), and
+        # `_configured_home` converts that to a binding error on EVERY call
+        # while the byte is there. It used to take out every tool of every
+        # session in the home.
+        modules = native_modules(self.home, self.store)
+        modules['hermes_cli.config'].require_readable_config_before_write = Mock(
+            side_effect=RuntimeError('Your settings file (PRIVATE_PATH) has a formatting error.'))
+        with patch.dict(sys.modules, modules):
+            result = tool_hooks.pre_tool_call(tool_name='read_file', session_id='s', args={})
+        self.assertNotIn('action', result)
+        self.assertNotIn('Tool call blocked', json.dumps(result))
+        self.assertTrue(result['omh_degradation']['degraded'])
+        self.assertNotIn('PRIVATE_PATH', json.dumps(result))
+
+    def test_a_rules_file_that_loads_and_matches_still_blocks(self):
+        # The narrowing must not disarm the thing the veto was named for.
+        # When the store resolves, the file parses and a rule matches, the
+        # call is still vetoed -- by the rule, with the rule's own message.
+        rules = self.store / 'rules'
+        rules.mkdir(parents=True)
+        (rules / 'toolcall-rules.json').write_text(json.dumps({
+            'schema_version': 'omh_toolcall_rules/v1',
+            'rules': [{'name': 'no-read', 'pattern': '.', 'message': 'ask first', 'repeat': 'always'}]}),
+            encoding='utf-8')
+        result = tool_hooks.pre_tool_call(tool_name='read_file', session_id='s', args={'path': 'x'},
+                                          omh_home=str(self.store), hermes_home=str(self.home))
+        self.assertEqual(result['action'], 'block')
+        self.assertIn('no-read', result['message'])
+
+    def test_a_store_that_resolves_with_an_unreadable_rules_file_allows_the_call(self):
+        # The outcome #1733 proposed keeping the veto for, measured: it is
+        # already an allow, in every shape an unreadable rules file takes,
+        # and that is a decision the repo made deliberately. `toolcall_rules`
+        # catches `OSError` on both the stat and the read and returns no
+        # rules; #1732 added the gate handler for what it did not anticipate.
+        # Pinned so the veto cannot be argued back in on a premise the code
+        # does not hold.
+        from omh.plugin_bundle.omh.toolcall_rule_faults import read_toolcall_rule_faults
+        from omh.plugin_bundle.omh.toolcall_rules import MAX_RULES_FILE_BYTES
+        rules = self.store / 'rules'
+        rules.mkdir(parents=True)
+        path = rules / 'toolcall-rules.json'
+        good = json.dumps({'schema_version': 'omh_toolcall_rules/v1',
+                           'rules': [{'name': 'no-read', 'pattern': '.', 'message': 'ask first',
+                                      'repeat': 'always'}]})
+
+        def call():
+            return tool_hooks.pre_tool_call(tool_name='read_file', session_id='s', args={'path': 'x'},
+                                            omh_home=str(self.store), hermes_home=str(self.home))
+
+        path.write_text('not json at all ][', encoding='utf-8')
+        self.assertIsNone(call(), 'a malformed rules file allows')
+        # A directory in the file's place: the stat succeeds and the read is
+        # the `OSError`. It is the shape a reader is most likely to assume
+        # blocks, which is why it is pinned rather than left to the loader.
+        path.unlink()
+        path.mkdir()
+        self.assertIsNone(call(), 'a directory where the rules file should be allows')
+        path.rmdir()
+        # Oversized is its own branch, refused on the stat before a byte is
+        # read, so it never reaches the parse the malformed case exercises.
+        path.write_text(json.dumps({'schema_version': 'omh_toolcall_rules/v1', 'rules': [],
+                                    'pad': 'x' * (MAX_RULES_FILE_BYTES + 1)}), encoding='utf-8')
+        self.assertGreater(path.stat().st_size, MAX_RULES_FILE_BYTES)
+        self.assertIsNone(call(), 'an oversized rules file allows')
+        path.write_text(good, encoding='utf-8')
+        with patch.object(tool_hooks, 'toolcall_rule_directive', side_effect=ValueError('unanticipated')):
+            self.assertIsNone(call(), 'an unanticipated gate failure allows')
+        self.assertEqual(read_toolcall_rule_faults(str(self.store))['last_error_type'], 'ValueError')
+        # Last, because it is the one shape a platform can refuse to produce.
+        try:
+            path.chmod(0o000)
+            # Read the mode's effect while it is in force: checking after the
+            # restore below always reports the file as readable, which turned
+            # this assertion into a permanent skip.
+            enforced = not os.access(path, os.R_OK)
+            unreadable = call()
+        finally:
+            path.chmod(0o600)
+        if not enforced:  # root, or a filesystem ignoring the mode
+            self.skipTest('cannot make a file unreadable here')
+        self.assertIsNone(unreadable, 'a permission-denied rules file allows')
 
     def test_unowned_session_is_its_own_binding_fault(self):
         # The refusal that names no store at all is the one a caller must be
@@ -187,8 +302,11 @@ class RuntimeBindingReviewTests(unittest.TestCase):
 
     def test_named_store_that_fails_validation_is_not_an_unowned_session(self):
         # A store the profile named and OMH then rejected is the shape where a
-        # rules file can exist unread, so it must NOT wear the unowned type --
-        # `pre_tool_call` reads that distinction to decide whether to veto.
+        # rules file can exist unread, so it must NOT wear the unowned type.
+        # `pre_tool_call` no longer decides a veto on it (#1733), but the
+        # distinction is still what the degradation reports as the cause, and
+        # it is still what separates a misconfigured profile from a session
+        # the multiplexer left unattributed.
         modules = native_modules(self.home, self.store)
         modules['hermes_cli.config'].load_config_readonly.return_value = {
             'plugins': {'entries': {'omh': {'settings': {'omh_home': str(self.root / 'foreign')}}}}}
