@@ -4,6 +4,45 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Three shipped skills can be reached by the phrasing a person uses.** Each
+  lost its own home turf for a different reason, and an unreachable skill is
+  always-loaded context nobody can spend.
+
+  `live-incident-response` shipped for #1563 and lost the sentence it exists
+  for. `we have an incident open right now, the checkout API is down`
+  dispatched to `browser-operator` at 48, with the incident lane third at 7.
+  The browser guard fires on a context token plus an action token, and both
+  sets are ordinary English: `checkout` names a payment page and also the
+  service that takes payments, `open` opens a tab and also describes an
+  incident that has not been closed. A guard boost of 42 cannot be outscored
+  by trigger evidence, so the ordering is the only place this can be decided:
+  a message declaring a live incident now blocks that guard, the way a visual
+  QA request already does. The skill also carried `open incident` but not
+  `incident open`, the order people say it in.
+
+  `inference-serving` never surfaced for `serve a 7B model at 50 requests per
+  second`. It carries `serve this model` and `serve the model`, and a person
+  names the size, which puts it between the two words. The rule is now a
+  serving verb plus a model noun, with the model on the object side of the
+  verb: `serve a 7B model` matches and `which model should we use to serve
+  our support customers` does not. A blocker list could not hold that second
+  shape, for the same reason the trigger could not hold the first.
+
+  `refactor-plan` was dropped before any trigger could score on `this 900
+  line function needs to be broken up`. It offers itself only when the
+  message carries restructuring vocabulary AND planning vocabulary, and a
+  decided refactor described the way people describe one uses neither word.
+  Split vocabulary now stands in for the restructuring half, the way the
+  dependency-upgrade phrases already do, and it needs a unit of software
+  beside it so that a crowd broken up by police is not a refactor.
+
+  Each row gains a positive case and each generic word it introduces gains a
+  negative control: the negative corpus grows from 277 to 280 cases and the
+  positive corpus from 425 to 429, both at zero overroutes and zero missed
+  interventions. Twelve sentences using `serve`, `function`, `down`, `open`,
+  `incident`, `broken up`, and `split` in an unrelated sense score
+  identically before and after.
+
 - **A skill whose name is an ordinary English word no longer claims every
   sentence that happens to spell it.** `pods stuck in CrashLoopBackOff after
   helm upgrade` dispatched to the `loop` goal engine at high confidence, in

@@ -2955,6 +2955,14 @@ def _score_definition(
     if definition.name == "todo-checklist" and _todo_checklist_explicit_match(normalized_query):
         score += 30
         matched.add("direct:todo_checklist")
+    if definition.name == "inference-serving" and _inference_serving_explicit_match(
+        normalized_query, query_tokens
+    ):
+        score += 30
+        matched.add("direct:inference_serving")
+    if definition.name == "refactor-plan" and _refactor_plan_split_match(normalized_query, query_tokens):
+        score += 30
+        matched.add("direct:refactor_plan_split")
     if definition.name == "llm-app-dev" and _llm_app_dev_public_board_match(normalized_query):
         score += 30
         matched.add("direct:llm_app_dev_public_board")
@@ -3613,6 +3621,103 @@ def _adversarial_consensus_explicit_match(normalized_query: str) -> bool:
     )
 
 
+# `inference-serving` carries "serve this model" and "serve the model", and a
+# Korean pack reaches it through 모델 서빙. The English sentence a person
+# actually types puts the model's size between the two words -- "serve a 7B
+# model at 50 requests per second" -- so no trigger matched and the skill
+# never surfaced at all (#1689). Its intent is two tokens apart, which is
+# what a phrase cannot express and a token pair can.
+_INFERENCE_SERVING_ACTION_TOKENS = frozenset({"deploy", "host", "hosting", "serve", "serving"})
+_INFERENCE_SERVING_SUBJECT_TOKENS = frozenset(
+    {"checkpoint", "gguf", "inference", "llm", "model", "vllm"}
+)
+def _inference_serving_explicit_match(normalized_query: str, query_tokens: set[str]) -> bool:
+    """Both halves, and the model has to be what is being served.
+
+    `serve` also takes people as its object. "which model should we use to
+    serve our support customers" contains both halves and asks nothing about
+    hosting, and a blocker list cannot hold that shape: "serve our customers"
+    misses "serve our SUPPORT customers" the same way "serve the model"
+    missed "serve a 7B model". What separates the two senses is not which
+    words are present but which side of the verb the model sits on, because
+    in English the object of `serve` follows it. `serve a 7B model` puts the
+    model after; `which model should we use to serve ...` puts it before, and
+    there `model` is the subject of a different question.
+    """
+    if not (_INFERENCE_SERVING_ACTION_TOKENS & query_tokens):
+        return False
+    if not (_INFERENCE_SERVING_SUBJECT_TOKENS & query_tokens):
+        return False
+    first_action = min(
+        (normalized_query.find(token) for token in _INFERENCE_SERVING_ACTION_TOKENS & query_tokens),
+        default=-1,
+    )
+    last_subject = max(
+        (normalized_query.rfind(token) for token in _INFERENCE_SERVING_SUBJECT_TOKENS & query_tokens),
+        default=-1,
+    )
+    return first_action >= 0 and last_subject > first_action
+
+
+# `refactor-plan` offers itself only when the message carries restructuring
+# vocabulary AND planning vocabulary, so the lane was dropped before any
+# trigger could score on "this 900 line function needs to be broken up" --
+# a decided refactor, described the way people describe one, using neither
+# word (#1689). These phrases stand in for the restructuring half, the same
+# way the dependency-upgrade phrases already do.
+_REFACTOR_PLAN_SPLIT_PHRASES = (
+    "break it up",
+    "break this up",
+    "break them up",
+    "broken up",
+    "break it apart",
+    "break this apart",
+    "broken apart",
+    "split it up",
+    "split this up",
+    "split it apart",
+    "break into smaller",
+    "split into smaller",
+)
+
+
+# Breaking something up is not always code. "the crowd was broken up by
+# police" carries the phrase and nothing else, so the split vocabulary needs
+# the same both-halves treatment the rest of this predicate already uses:
+# the thing being broken up has to be a unit of software.
+_REFACTOR_PLAN_UNIT_TOKENS = frozenset(
+    {
+        "class",
+        "code",
+        "codebase",
+        "component",
+        "controller",
+        "file",
+        "function",
+        "handler",
+        "method",
+        "module",
+        "package",
+        "repo",
+        "repository",
+        "service",
+        "클래스",
+        "모듈",
+        "함수",
+    }
+)
+
+
+def _refactor_plan_split_match(normalized_query: str, query_tokens: set[str]) -> bool:
+    return _contains_any_phrase(normalized_query, _REFACTOR_PLAN_SPLIT_PHRASES) and bool(
+        _REFACTOR_PLAN_UNIT_TOKENS & query_tokens
+    )
+
+
+def _contains_any_phrase(normalized_query: str, phrases: tuple[str, ...]) -> bool:
+    return any(_explicit_phrase_match(normalized_query, phrase) for phrase in phrases)
+
+
 def _todo_checklist_explicit_match(normalized_query: str) -> bool:
     return any(_explicit_phrase_match(normalized_query, phrase) for phrase in _TODO_CHECKLIST_EXPLICIT_PHRASES)
 
@@ -3890,6 +3995,8 @@ def _refactor_plan_offers_itself(normalized_query: str, query_tokens: set[str]) 
     # any trigger could score. The complete upgrade phrases stand in for the
     # restructuring half; a bare `upgrade` still does not.
     if dependency_upgrade_guard_applies(normalized_query):
+        return True
+    if _refactor_plan_split_match(normalized_query, query_tokens):
         return True
     return bool(restructure & query_tokens) and bool(planning & query_tokens)
 
