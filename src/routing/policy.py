@@ -3389,6 +3389,33 @@ _BROWSER_OPERATOR_PROVIDER_AUTH_BLOCKERS = (
     "quota",
     "rate limit",
 )
+# A live incident is not a browser errand. `browser-operator` fires on a
+# context token plus an action token, and both sets are ordinary English:
+# `checkout` names a page and also the service that takes payments, `open`
+# opens a tab and also describes an incident that has not been closed. So
+# "we have an incident open right now, the checkout API is down" crossed the
+# guard at 42 and dispatched a page-operation lane to an outage, with
+# `live-incident-response` third at 7 (#1689).
+#
+# A blocker rather than a score contest: a guard boost of 42 cannot be
+# outscored by trigger evidence, so the ordering is the only place this can
+# be decided. Every phrase here declares an incident that is running; none
+# of them has a browsing sense.
+_BROWSER_OPERATOR_LIVE_INCIDENT_BLOCKERS = (
+    "incident open",
+    "open incident",
+    "active incident",
+    "ongoing incident",
+    "incident response",
+    "incident commander",
+    "production outage",
+    "production is down",
+    "we have an outage",
+    "war room",
+    "sev1",
+    "sev2",
+    "sev3",
+)
 _BROWSER_OPERATOR_VISUAL_QA_BLOCKERS = (
     "visual qa",
     "browser qa",
@@ -8859,6 +8886,8 @@ def _voice_operator_guard_applies(normalized_query: str, query_tokens: set[str])
 
 
 def _browser_operator_guard_applies(normalized_query: str, query_tokens: set[str]) -> bool:
+    if _contains_phrase(normalized_query, _BROWSER_OPERATOR_LIVE_INCIDENT_BLOCKERS):
+        return False
     if _contains_phrase(normalized_query, _BROWSER_OPERATOR_VISUAL_QA_BLOCKERS):
         return False
     if _contains_phrase(normalized_query, _BROWSER_OPERATOR_PROVIDER_AUTH_BLOCKERS):

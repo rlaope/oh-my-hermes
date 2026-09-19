@@ -1267,7 +1267,13 @@ STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # lanes reachable only through a scoring defect. Re-derived from the
 # full-profile skill_context_cost_payload() producer, never by counting the
 # added phrases by hand.
-FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 977970
+# 977970 -> 977984: one trigger phrase (#1689). `live-incident-response`
+# carried "open incident" but not "incident open", the order people say it
+# in -- "we have an incident open right now" matched nothing it owns and the
+# sentence went to a browser lane. Fourteen characters for a shipped skill to
+# reach its own home turf. Re-derived from the full-profile
+# skill_context_cost_payload() producer.
+FULL_PROFILE_SKILL_BODY_CHAR_LIMIT = 977984
 FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 
 

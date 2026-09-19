@@ -8046,6 +8046,7 @@ _DEFINITIONS.append(
             "active incident",
             "ongoing incident",
             "open incident",
+            "incident open",
             "incident commander",
             "incident command",
             "incident bridge",

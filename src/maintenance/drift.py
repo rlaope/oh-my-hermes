@@ -271,7 +271,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # skill through the metadata fold instead of a name; two verbs
             # carrying the phrasings `plan` gained; an organisational remark
             # naming the frontend; and a recorded interview.
-            expected=277,
+            # #1689 adds three: two senses of `serve` that are not a model
+            # being served (a CDN, and people), and something broken up that
+            # is not code.
+            expected=280,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",
@@ -325,7 +328,12 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # #1688 adds one: `deep-interview` traded its bare `interview`
             # trigger for "interview me", so the form the skill is actually
             # asked for is pinned beside the negative control.
-            expected=425,
+            # #1689 adds four: the three shipped skills that lost their own
+            # home turf (live incident, model serving, breaking up a long
+            # function), plus a real page operation, because the guard
+            # ordering that stops `browser-operator` pre-empting an incident
+            # must not cost it its own lane.
+            expected=429,
             sites=(
                 "tests/test_cli.py",
                 "tests/test_hermes_ux_quality.py",

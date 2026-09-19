@@ -2189,6 +2189,39 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_clarification",
         "",
     ),
+    # #1689 reached three shipped skills that their own phrasings could not.
+    # Each new signal is built from an everyday word, so each gets the sense
+    # that is not a request.
+    #
+    # `inference-serving` fires on a serving verb plus a model noun with the
+    # model on the object side. `serve` has two other lives: static content,
+    # and people.
+    RoutingPrecisionCase(
+        "serving-static-assets-is-not-model-serving",
+        "A CDN serving assets is not a model being served",
+        "the CDN should serve static assets from the edge",
+        "answer_clarification",
+        "",
+        "inference-serving",
+    ),
+    RoutingPrecisionCase(
+        "serving-customers-is-not-model-serving",
+        "Choosing a model to serve people is not deploying one",
+        "which model should we use to serve our support customers",
+        "answer_clarification",
+        "",
+        "inference-serving",
+    ),
+    # `refactor-plan` fires on split vocabulary plus a unit of software. The
+    # vocabulary alone is about anything that comes apart.
+    RoutingPrecisionCase(
+        "breaking-up-a-crowd-is-not-a-refactor",
+        "Something broken up that is not code is not a refactor",
+        "the crowd was broken up by police",
+        "answer_directly",
+        "direct_answer",
+        "refactor-plan",
+    ),
 )
 
 
@@ -4620,6 +4653,59 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "web-research",
         "run_hermes_research",
         "web_research",
+    ),
+    # #1689. Three shipped skills lost their own home turf, each for a
+    # different reason, and each is pinned at the phrasing a person types.
+    #
+    # `live-incident-response` shipped for #1563 and lost the sentence it
+    # exists for to `browser-operator`, whose guard fires on a context token
+    # plus an action token: `checkout` names a payment page and also the
+    # service, `open` opens a tab and also describes an incident that is
+    # still running. A guard boost of 42 cannot be outscored, so the
+    # incident declarations block that guard instead. The skill also had
+    # "open incident" but not the order people say it in.
+    RoutingInterventionCase(
+        "an-open-incident-reaches-the-incident-lane",
+        "An incident open right now reaches the incident lane, not a browser errand",
+        "we have an incident open right now, the checkout API is down",
+        "dispatch",
+        "live-incident-response",
+        "prepare_live_incident_record",
+        "live_incident_record",
+    ),
+    # The blocker must not cost `browser-operator` its own turf.
+    RoutingInterventionCase(
+        "a-page-operation-still-reaches-browser-operator",
+        "A real page operation still reaches the browser lane",
+        "open the checkout page in staging and click through the form",
+        "dispatch",
+        "browser-operator",
+        "prepare_browser_operator_card",
+        "browser_operator",
+    ),
+    # `inference-serving` carried "serve this model" and "serve the model".
+    # A person names the size, which puts it between the two words, so no
+    # trigger matched and the skill never surfaced at all.
+    RoutingInterventionCase(
+        "serving-a-sized-model-reaches-inference-serving",
+        "Serving a model of a stated size reaches the serving lane",
+        "serve a 7B model at 50 requests per second",
+        "dispatch",
+        "inference-serving",
+        "prepare_inference_serving",
+        "inference_serving",
+    ),
+    # `refactor-plan` offers itself only when the message carries both
+    # restructuring and planning vocabulary, so a decided refactor described
+    # without either word was dropped before a trigger could score.
+    RoutingInterventionCase(
+        "breaking-up-a-long-function-reaches-refactor-plan",
+        "A long function that needs breaking up reaches the refactor planner",
+        "this 900 line function needs to be broken up",
+        "dispatch",
+        "refactor-plan",
+        "prepare_refactor_plan",
+        "refactor_plan",
     ),
     # #1688 traded `deep-interview`'s bare `interview` trigger for
     # "interview me". The bare word is every hiring loop, user study, and

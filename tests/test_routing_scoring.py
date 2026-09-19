@@ -11,8 +11,16 @@ from __future__ import annotations
 
 import unittest
 
-from omh.routing.localization import phrase_is_spoken
-from omh.routing.recommend import _phrase_match, _trigger_phrase_match, recommend_skills
+from omh.routing.localization import normalized_phrase, phrase_is_spoken
+from omh.routing.policy import _browser_operator_guard_applies
+from omh.routing.recommend import (
+    _inference_serving_explicit_match,
+    _phrase_match,
+    _refactor_plan_split_match,
+    _tokens,
+    _trigger_phrase_match,
+    recommend_skills,
+)
 from omh.skills.catalog import routable_definitions
 
 
@@ -200,6 +208,63 @@ class TriggerTokenHoldbackTests(unittest.TestCase):
         for message in ("make a plan for the onboarding rewrite", "write the plan for this experiment"):
             with self.subTest(message=message):
                 self.assertEqual(recommend_skills(message, limit=1)[0]["skill"], "plan")
+
+
+class UnreachableLaneTests(unittest.TestCase):
+    """#1689. Three shipped skills could not be reached by ordinary phrasing."""
+
+    @staticmethod
+    def _folded(message: str) -> tuple[str, set[str]]:
+        return normalized_phrase(message), _tokens(message)
+
+    def test_a_live_incident_is_not_a_browser_errand(self) -> None:
+        # `checkout` and `open` are a browser context token and a browser
+        # action token, and together they crossed the guard at 42 -- enough
+        # that no trigger evidence could outscore it.
+        self.assertFalse(_browser_operator_guard_applies(
+            *self._folded("we have an incident open right now, the checkout API is down")
+        ))
+
+    def test_the_browser_guard_keeps_a_real_page_operation(self) -> None:
+        self.assertTrue(_browser_operator_guard_applies(
+            *self._folded("open the checkout page in staging and click through the form")
+        ))
+        self.assertTrue(_browser_operator_guard_applies(
+            *self._folded("log into the admin page and capture a screenshot")
+        ))
+
+    def test_the_model_has_to_be_what_is_served(self) -> None:
+        # `serve` takes people as its object too, and a blocker list cannot
+        # hold that shape: "serve our customers" misses "serve our SUPPORT
+        # customers" the way "serve the model" missed "serve a 7B model".
+        # Which side of the verb the noun sits on is what separates them.
+        self.assertTrue(_inference_serving_explicit_match(
+            *self._folded("serve a 7B model at 50 requests per second")
+        ))
+        self.assertTrue(_inference_serving_explicit_match(*self._folded("deploy the llm with vllm")))
+        self.assertFalse(_inference_serving_explicit_match(
+            *self._folded("which model should we use to serve our support customers")
+        ))
+        self.assertFalse(_inference_serving_explicit_match(
+            *self._folded("the CDN should serve static assets from the edge")
+        ))
+
+    def test_breaking_something_up_has_to_be_breaking_up_code(self) -> None:
+        self.assertTrue(_refactor_plan_split_match(
+            *self._folded("this 900 line function needs to be broken up")
+        ))
+        self.assertFalse(_refactor_plan_split_match(*self._folded("the crowd was broken up by police")))
+
+    def test_each_lane_reaches_its_own_sentence_end_to_end(self) -> None:
+        for message, owner in (
+            ("we have an incident open right now, the checkout API is down", "live-incident-response"),
+            ("serve a 7B model at 50 requests per second", "inference-serving"),
+            ("this 900 line function needs to be broken up", "refactor-plan"),
+        ):
+            with self.subTest(message=message):
+                top = recommend_skills(message, limit=1)[0]
+                self.assertEqual(top["skill"], owner)
+                self.assertGreaterEqual(top["score"], 8)
 
 
 class GreenfieldBuildGuardTests(unittest.TestCase):
