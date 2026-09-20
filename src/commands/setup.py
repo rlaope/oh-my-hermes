@@ -807,7 +807,10 @@ def _unregister_and_reverse(
     if not remove_all:
         return change, []
     reversal, rows = reverse_managed_config(
-        change.text, record, config_path=paths.hermes_config_path
+        change.text,
+        record,
+        config_path=paths.hermes_config_path,
+        before_text=config_text,
     )
     return (
         ConfigChange(change.changed or reversal.changed, change.message, reversal.text),

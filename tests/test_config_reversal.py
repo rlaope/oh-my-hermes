@@ -592,6 +592,29 @@ class ReverseManagedConfigTests(unittest.TestCase):
 
         self.assertEqual(change.text, "memory:\n")
 
+    def test_a_pre_record_install_leaves_no_null_skills_or_plugins_containers(self) -> None:
+        """Uninstall on a pre-#1764 install (no write record) must drop the
+        containers OMH created, not leave them as null-valued keys.
+
+        The review fixture for #1767: no record, `skills.external_dirs` plus
+        `plugins.enabled` containing `omh`. `_remove_managed_external_dirs`
+        runs first, so reverse sees an already-empty `skills.external_dirs`;
+        the before-state has to come from the pre-removal text or that
+        container looks like one the person kept empty. After dropping
+        `external_dirs` / `enabled`, the parents have to go too.
+        """
+        never_had = "version: 1\n"
+        installed = ensure_plugin_enabled(
+            ensure_external_dir(never_had, "/tmp/omh/skills").text, "omh"
+        ).text
+        unregistered = remove_external_dir(installed, "/tmp/omh/skills").text
+
+        change, _rows = reverse_managed_config(
+            unregistered, {}, config_path=CONFIG_PATH, before_text=installed
+        )
+
+        self.assertEqual(change.text, never_had)
+
     def test_an_absent_key_reports_absent_rather_than_left_in_place(self) -> None:
         _change, rows = reverse_managed_config("version: 1\n", {}, config_path=CONFIG_PATH)
 

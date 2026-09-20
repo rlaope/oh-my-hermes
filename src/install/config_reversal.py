@@ -310,12 +310,18 @@ def reverse_managed_config(
     record: dict[str, object],
     *,
     config_path: str | Path,
+    before_text: str | None = None,
 ) -> tuple[ConfigChange, list[ReversalRow]]:
     """Take back the managed keys this config still holds at OMH's values.
 
     Returns the accumulated change plus one row per managed key, so the
     uninstall report can name what it reversed, what it left with the person,
     and what it could not attribute at all.
+
+    `before_text` is the document before any removal in this uninstall, including
+    `_remove_managed_external_dirs`. Uninstall calls this with the post-removal
+    text; without the pre-removal snapshot a container that call already emptied
+    looks like one the person kept empty and is left as a null-valued key.
     """
     owned = load_managed_config_writes(record, config_path=config_path)
     keys = owned.get("keys") if isinstance(owned.get("keys"), dict) else {}
@@ -324,7 +330,7 @@ def reverse_managed_config(
     rows: list[ReversalRow] = []
     text = config_text
     changed = False
-    empty_before = childless_containers(config_text)
+    empty_before = childless_containers(before_text if before_text is not None else config_text)
 
     for key in REVERSIBLE_KEYS:
         recorded = keys.get(key) if isinstance(keys, dict) else None  # type: ignore[union-attr]
@@ -338,15 +344,25 @@ def reverse_managed_config(
     # A managed container this pass emptied is OMH's to drop even with no
     # record: everything that was in it was OMH's, or it would still have a
     # child. One the person already kept empty is left exactly as it was.
-    emptied = {
-        path
-        for path in childless_containers(text)
-        if path in MANAGED_CONTAINERS and path not in empty_before
-    }
-    cleanup = remove_childless_containers(text, sorted({*(str(item) for item in containers), *emptied}))
-    if cleanup.changed:
-        text = cleanup.text
+    # The before-state is the pre-removal text: uninstall empties
+    # `skills.external_dirs` before this function runs, and a snapshot of
+    # the already-empty container would look like the person's. Repeat until
+    # no childless managed container remains, so dropping `external_dirs`
+    # also drops `skills:` and dropping `enabled` also drops `plugins:`.
+    recorded_containers = {str(item) for item in containers}
+    cleanup = ConfigChange(False, "no empty managed section to remove", text)
+    while True:
+        emptied = {
+            path
+            for path in childless_containers(text)
+            if path in MANAGED_CONTAINERS and path not in empty_before
+        }
+        step = remove_childless_containers(text, sorted(recorded_containers | emptied))
+        if not step.changed:
+            break
+        text = step.text
         changed = True
+        cleanup = step
 
     if not changed:
         return ConfigChange(False, "no managed config key to reverse", text), rows
