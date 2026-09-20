@@ -4,6 +4,50 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A turn a person opened is asked to open its reply by saying what it
+  understood and what it will do first.** The spinner in the Modern TUI
+  cycles verbs, so you can see that the model is working and never what it is
+  working on; a long turn stays opaque until it ends. The first question was
+  whether OMH was suppressing a rule like this, and it was not. Searching the
+  plugin bundle and `src/skills/` for preamble, terseness and narration
+  instructions returns exactly one hit, and it is not a suppression: the
+  interview skill fixes the shape of a clarifying QUESTION ("one sentence, no
+  preamble, no restating what the user just said") inside a document the
+  model must already have chosen to load. Nothing always-on says anything in
+  either direction. The behaviour had simply never been asked for.
+
+  OMH now asks for it, in one block on the `pre_llm_call` channel:
+
+  > `[OMH Turn Opening]`
+  > Open this reply with one or two short lines: what you understood the
+  > request to be, and the first thing you will do about it. Then continue in
+  > the same reply without waiting for an answer.
+
+  Who gets it is decided by records and never by the message's wording. Only
+  a turn a PERSON opened, through the existing `turn_opened_by_person` -- so
+  a background-process completion, an async delegation batch or a model
+  switch, each of which Hermes writes as a `role="user"` row carrying real
+  text, is not asked to restate a request nobody made. A delegated child is
+  excluded off `subagent_start`'s `child_session_id`, because a child answers
+  its orchestrator rather than a person. A session OMH cannot name gets
+  nothing, since it can hold no budget.
+
+  What it costs is three person-opened turns per session and then silence:
+  207 characters for the block, 326 for the whole injection on a turn that
+  would otherwise have been quiet, under 1,000 for the session's worst case.
+  The budget is the reason this is affordable rather than a refinement of it
+  -- the audit behind `tests/test_injected_context_pressure.py` measured one
+  un-budgeted sentence at 14,280 characters of a single 40-turn session, and
+  a line asking for a per-turn habit is exactly the shape that would repeat
+  that. It is also why the count is durable: every neighbouring budget
+  latches off a record saying the thing happened, and the only thing that
+  would end this one is the model actually opening a reply that way, which is
+  prose OMH can neither read nor claim. Nothing in the payload reports that a
+  briefing was given. There is no "is this turn big enough" gate either,
+  because no record available at turn start says a turn will be long and the
+  only thing that correlates is the message's wording -- the same guess the
+  first-turn primer beside it already declined.
+
 - **The delegation nudge counts distinct searches, and its budget survives a
   plugin-host restart.** It watched `search_files` and fired at five direct
   reads, counting CALLS -- so five different greps and one grep five times

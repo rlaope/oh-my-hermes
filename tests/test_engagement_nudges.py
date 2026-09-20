@@ -39,6 +39,7 @@ from omh.plugin_bundle.omh.engagement_nudges import (
 )
 from omh.plugin_bundle.omh.hooks.nudge_budget import (
     DURABLE_ENGAGEMENT_FIELDS,
+    INTENT_LINE_TURNS_FIELD,
     MAX_TRACKED_SESSIONS,
     engagement_nudge_store_path,
     reset_nudge_budget,
@@ -619,7 +620,18 @@ class NudgeBudgetSurvivesARestartTests(EngagementNudgeTestCase):
         self.assertEqual(stored["privacy"], "metadata_only")
         self.assertEqual(
             set(stored["sessions"]["s1"]) - {"ts"},
-            {"plan_nudges", "delegation_nudges", "plan_declared", "lane_routed"},
+            {
+                "plan_nudges",
+                "delegation_nudges",
+                "plan_declared",
+                "lane_routed",
+                # Not a nudge and not written from here. `turn_intent_line`
+                # shares this store because it shares the bound, the
+                # eviction policy and the reset seam, and every row carries
+                # every durable field -- so a nudge-only session stores it
+                # at zero.
+                "intent_line_turns",
+            },
         )
         self.assertEqual(stored["sessions"]["s1"]["delegation_nudges"], MAX_ENGAGEMENT_NUDGES)
 
@@ -649,7 +661,16 @@ class NudgeBudgetSurvivesARestartTests(EngagementNudgeTestCase):
         # only as a budget that quietly stopped persisting.
         self.assertEqual(
             DURABLE_ENGAGEMENT_FIELDS,
-            {nudges._PLAN_NUDGES, nudges._DELEGATION_NUDGES, nudges._PLAN_LATCH, nudges._DELEGATION_LATCH},
+            {
+                nudges._PLAN_NUDGES,
+                nudges._DELEGATION_NUDGES,
+                nudges._PLAN_LATCH,
+                nudges._DELEGATION_LATCH,
+                # The one durable field no nudge spends: the turn-opening
+                # line's per-session budget, durable because it has no latch
+                # available to it and the count is its whole bound.
+                INTENT_LINE_TURNS_FIELD,
+            },
         )
         self.assertNotIn(nudges._DIRECT_READS, DURABLE_ENGAGEMENT_FIELDS)
         self.assertNotIn(nudges._MUTATIONS, DURABLE_ENGAGEMENT_FIELDS)

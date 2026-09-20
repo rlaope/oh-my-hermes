@@ -13,7 +13,8 @@ from omh.capabilities.hooks import hook_manifest
 from omh.install.hook_integrity import HOOK_REVIEWS, VALID_HOOK_EVENTS
 from omh.plugin_bundle.omh.awareness import awareness_primer_context, awareness_route_hint
 from omh.plugin_bundle.omh.awareness_delivery import read_awareness_delivery
-from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
+from omh.plugin_bundle.omh.hooks.llm_hooks import fence_omh_context, pre_llm_call
+from omh.plugin_bundle.omh.turn_intent_line import TURN_INTENT_LINE
 from omh.plugin_bundle.omh.hooks.tool_hooks import post_tool_call, pre_tool_call
 from omh.plugin_bundle.omh.tool_bursts import tool_call_activity
 
@@ -336,7 +337,15 @@ class HookManifestTests(unittest.TestCase):
                     omh_home=omh_home,
                 )
 
-            self.assertIsNone(result)
+            # Equality against the one block that does not go through the
+            # primer gate -- the turn-opening rule, owed to any turn a person
+            # opened and spent per session -- rather than `is None`. It is
+            # the stronger form of what this asserts: not merely that the
+            # primer was suppressed, but that nothing else took its place.
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result["context"], fence_omh_context([TURN_INTENT_LINE]))
+            self.assertNotIn(primer, result["context"])
 
     def test_user_pasted_primer_in_sidecar_content_does_not_suppress_delivery(self) -> None:
         with TemporaryDirectory() as omh_home:

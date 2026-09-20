@@ -42,7 +42,8 @@ from omh.plugin_bundle.omh.awareness import (
     workflow_declares_plan_todo,
 )
 from omh.plugin_bundle.omh.awareness_delivery import read_awareness_delivery
-from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
+from omh.plugin_bundle.omh.hooks.llm_hooks import fence_omh_context, pre_llm_call
+from omh.plugin_bundle.omh.turn_intent_line import TURN_INTENT_LINE
 from omh.routing.chat import public_chat_route_payload
 from test_kanban_board_reader import build_board, task
 from test_plugin_hermes_delegation import PARENT_ID, _build_state_db
@@ -190,24 +191,34 @@ class FirstTurnCarriesAwarenessTests(unittest.TestCase):
                     assert result is not None
                     self.assertIn("[OMH Awareness]", result["context"])
 
-    def test_a_later_turn_with_no_omh_vocabulary_still_gets_nothing(self) -> None:
+    def test_a_later_turn_with_no_omh_vocabulary_still_gets_no_awareness(self) -> None:
         """The gate is unchanged off the first turn; only the first turn is free.
 
         One of the eight does match the matcher on its own, so it is excluded
         here rather than asserted into a miss it never had.
+
+        The assertion is equality against the one block that does not go
+        through this gate -- the turn-opening rule, which is owed to any turn
+        a person opened and is spent per session -- rather than `is None`.
+        Equality is the stronger form of what this test meant: not merely
+        that no awareness arrived, but that nothing else did either.
         """
         with TemporaryDirectory() as omh_home:
             for index, message in enumerate(ORDINARY_WORK_REQUESTS):
                 if awareness_module.awareness_context_matches_message(message):
                     continue
                 with self.subTest(message=message):
-                    self.assertIsNone(
-                        pre_llm_call(
-                            user_message=message,
-                            is_first_turn=False,
-                            session_id=f"later-{index}",
-                            omh_home=omh_home,
-                        )
+                    result = pre_llm_call(
+                        user_message=message,
+                        is_first_turn=False,
+                        session_id=f"later-{index}",
+                        omh_home=omh_home,
+                    )
+
+                    self.assertIsNotNone(result)
+                    assert result is not None
+                    self.assertEqual(
+                        result["context"], fence_omh_context([TURN_INTENT_LINE])
                     )
 
     def test_the_primer_is_not_repeated_once_it_is_in_the_history(self) -> None:
@@ -227,7 +238,13 @@ class FirstTurnCarriesAwarenessTests(unittest.TestCase):
                 omh_home=omh_home,
             )
 
-            self.assertIsNone(result)
+            # Same shape as the later-turn case above: the primer is what this
+            # test is about, and equality says it is absent along with
+            # everything else the gate withholds.
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result["context"], fence_omh_context([TURN_INTENT_LINE]))
+            self.assertNotIn(primer, result["context"])
 
     def test_route_guidance_fingerprint_suppression_still_holds(self) -> None:
         """Widening the primer must not let the same route guidance go out twice."""

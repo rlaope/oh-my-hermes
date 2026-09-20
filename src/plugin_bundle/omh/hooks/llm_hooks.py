@@ -42,6 +42,7 @@ from ..todo_reconciliation import (
     open_todo_reminder,
 )
 from ..turn_authorship import host_synthesized_turn
+from ..turn_intent_line import turn_intent_line
 from ..status_board_reader import (
     last_running_work_board_fingerprint,
     read_running_work_board,
@@ -605,6 +606,25 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         board_card = _board_lanes_card(hermes_home, session_id)
         if board_card and _claim_board_card(session_id):
             context_parts.append(board_card)
+        # Last in this block on purpose. Everything above states what the
+        # turn's work IS -- the next plan item, a finished dispatch, the
+        # active workflow, an outstanding continuation claim -- and a rule
+        # asking the reply to open by naming what it is about to do has to
+        # read after them, or it asks for a first step chosen before the
+        # blocks that would change it were read.
+        #
+        # `user_message` rather than `request_message`: this asks who opened
+        # the turn, not what they asked for, and the tracker-event zeroing
+        # already folded into `user_message` is the right answer to both --
+        # an event is not someone writing.
+        intent_line = turn_intent_line(
+            user_message=user_message,
+            turn_display_kind=turn_display_kind,
+            session_id=session_id,
+            omh_home=omh_home,
+        )
+        if intent_line:
+            context_parts.append(intent_line)
 
     try:
         try:

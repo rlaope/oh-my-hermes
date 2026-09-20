@@ -157,8 +157,15 @@ PLAN_NUDGES_FIELD = "plan_nudges"
 DELEGATION_NUDGES_FIELD = "delegation_nudges"
 PLAN_LATCH_FIELD = "plan_declared"
 DELEGATION_LATCH_FIELD = "lane_routed"
+# The one counter here that no nudge spends. `turn_intent_line` asks a reply
+# to open by naming what it understood, and it is bounded per session for the
+# same reason the nudges are, so it takes the same map, the same 64-row
+# ceiling, the same eviction policy and the same reset seam rather than a
+# second set of all four -- which is the argument the top of this section
+# makes about where a per-session budget belongs.
+INTENT_LINE_TURNS_FIELD = "intent_line_turns"
 
-# What survives the process, and why only these four. `MAX_ENGAGEMENT_NUDGES`
+# What survives the process, and why only these five. `MAX_ENGAGEMENT_NUDGES`
 # is two per kind per SESSION, and the map above is per PROCESS -- so a plugin
 # host that restarts mid-session hands the session a fresh budget. Measured on
 # 2026-09-19: session `20260919_140745_db409e` received four delegation nudges
@@ -172,8 +179,23 @@ DELEGATION_LATCH_FIELD = "lane_routed"
 # never adds one -- the direction every eviction rule in this module fails in
 # -- and persisting them would put a file write on every watched tool call
 # instead of on the handful that actually spend something.
+#
+# `INTENT_LINE_TURNS_FIELD` is durable on the same measurement and not on an
+# analogy: the intent line has no latch available to it -- only the model
+# actually opening a reply that way would end it, and that is prose OMH
+# cannot read -- so the count IS its whole bound, and a restart that reset it
+# would hand the session a second full budget exactly the way the 2+2 split
+# above did. It is also the cheapest durable field here: it is written at
+# most `TURN_INTENT_LINE_TURNS` times in a session, on a hook that already
+# writes the approval-bypass record and the awareness-delivery claim.
 DURABLE_ENGAGEMENT_FIELDS = frozenset(
-    {PLAN_NUDGES_FIELD, DELEGATION_NUDGES_FIELD, PLAN_LATCH_FIELD, DELEGATION_LATCH_FIELD}
+    {
+        PLAN_NUDGES_FIELD,
+        DELEGATION_NUDGES_FIELD,
+        PLAN_LATCH_FIELD,
+        DELEGATION_LATCH_FIELD,
+        INTENT_LINE_TURNS_FIELD,
+    }
 )
 
 ENGAGEMENT_NUDGE_SCHEMA_VERSION = "omh_engagement_nudges/v1"

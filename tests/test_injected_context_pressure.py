@@ -62,6 +62,12 @@ from omh.plugin_bundle.omh.todo_reconciliation import (
     turn_opened_by_person,
 )
 from omh.plugin_bundle.omh.todo_store import build_todo_record, write_todo
+from omh.plugin_bundle.omh.turn_intent_line import (
+    TURN_INTENT_LINE,
+    TURN_INTENT_LINE_HEAD,
+    TURN_INTENT_LINE_TURNS,
+    turn_intent_line,
+)
 
 SESSION = "tui-session"
 
@@ -281,7 +287,20 @@ class FenceCannotBeClosedFromInsideTest(unittest.TestCase):
 class FenceReachesEveryBlockTest(_InjectionTestCase):
     """Nothing OMH injects may arrive outside the fence."""
 
+    def _spend_intent_line_budget(self):
+        # A person's turn is owed the opening-line rule for its first
+        # `TURN_INTENT_LINE_TURNS` turns, so "quiet" now has a precondition it
+        # did not have: the one injection that arrives with no plan, no route
+        # match and no executor has to be out of budget before the turn is
+        # quiet at all. Spending it here rather than dropping the contract --
+        # a turn with nothing to report must still cost nothing, and that is
+        # what these two assert.
+        for _ in range(TURN_INTENT_LINE_TURNS):
+            _ = self.context(user_message="spend the opening-line budget")
+
     def test_a_quiet_turn_injects_exactly_zero_characters(self):
+        self._spend_intent_line_budget()
+
         self.assertEqual(self.context(user_message="what does this function do?"), "")
 
     def test_the_headless_blocks_are_inside_the_fence_too(self):
@@ -314,6 +333,8 @@ class FenceReachesEveryBlockTest(_InjectionTestCase):
     def test_the_fence_is_absent_when_there_is_nothing_to_fence(self):
         # Not merely "short": the tag itself must not be paid for on a turn
         # that has nothing in it.
+        self._spend_intent_line_budget()
+
         context = self.context(user_message="rename this variable")
 
         self.assertNotIn(OMH_CONTEXT_FENCE_OPEN, context)
@@ -849,6 +870,209 @@ class TurnAuthorshipHasOneHomeTest(unittest.TestCase):
         from omh.plugin_bundle.omh.hooks import llm_hooks
 
         self.assertIs(llm_hooks.host_synthesized_turn, turn_authorship.host_synthesized_turn)
+
+
+class TurnOpeningLineTest(_InjectionTestCase):
+    """The rule that asks a reply to open by saying what it is about to do.
+
+    The reported gap: the spinner shows that the model is working and never
+    what it is working on, so a long turn is opaque until it ends. Nothing
+    always-on in OMH was suppressing a rule like this -- the one preamble
+    instruction in the tree governs a clarifying question's shape inside a
+    skill body -- so this adds one.
+
+    Every assertion below is about what the model is TOLD. None of them
+    claims a reply actually opened that way; OMH cannot read prose and the
+    payload never says it did, which is `test_no_field_claims_a_briefing_happened`.
+    """
+
+    def _row(self, text, kind=None):
+        row = {"role": "user", "content": text}
+        if kind is not None:
+            row["display_kind"] = kind
+        return row
+
+    def _line_count(self, context: str) -> int:
+        return context.count(TURN_INTENT_LINE_HEAD)
+
+    def test_a_person_s_turn_is_asked_to_say_what_it_is_about_to_do(self):
+        context = self.context(user_message="what does this function do?")
+
+        self.assertIn(TURN_INTENT_LINE, context)
+        self.assertEqual(self._line_count(context), 1)
+
+    def test_the_wording_says_what_to_do_and_asks_nobody_to_wait(self):
+        # The properties the string itself has to carry, pinned here so a
+        # later edit to the words has to answer for each of them.
+        self.assertTrue(TURN_INTENT_LINE.startswith(f"{TURN_INTENT_LINE_HEAD}\n"))
+        self.assertIn("this reply", TURN_INTENT_LINE)
+        self.assertNotIn("every reply", TURN_INTENT_LINE)
+        self.assertIn("without waiting", TURN_INTENT_LINE)
+        # Two sentences at most, in the body below the head.
+        body = TURN_INTENT_LINE.split("\n", 1)[1]
+        self.assertLessEqual(body.count("."), 2)
+
+    def test_a_host_written_opener_is_not_asked_to_restate_a_request(self):
+        # Hermes opens turns for its own rows, each carrying real text. There
+        # is no request on such a turn, so there is nothing to restate -- and
+        # presence of text cannot tell them apart, which is why the gate is
+        # the host's own `display_kind` stamp.
+        notice = "[IMPORTANT: 2 background processes completed.]"
+        for kind in (
+            "process_complete",
+            "async_delegation_complete",
+            "internal_notification",
+            "model_switch",
+            "auto_continue",
+        ):
+            with self.subTest(kind=kind):
+                nudge_budget.reset_nudge_budget()
+                context = self.context(
+                    user_message=notice,
+                    conversation_history=[self._row(notice, kind)],
+                )
+
+                self.assertNotIn(TURN_INTENT_LINE_HEAD, context)
+
+    def test_a_steer_row_is_a_person_typing_and_is_asked(self):
+        message = "actually, check the other branch first"
+
+        context = self.context(
+            user_message=message, conversation_history=[self._row(message, "steer")]
+        )
+
+        self.assertIn(TURN_INTENT_LINE, context)
+
+    def test_the_budget_is_spent_and_then_the_line_stops(self):
+        rendered = [
+            self._line_count(self.context(user_message=f"question {index}"))
+            for index in range(TURN_INTENT_LINE_TURNS + 3)
+        ]
+
+        self.assertEqual(
+            rendered, [1] * TURN_INTENT_LINE_TURNS + [0, 0, 0]
+        )
+
+    def test_a_turn_nobody_opened_does_not_spend_the_budget(self):
+        # A host-written opener is refused before the counter is touched, so
+        # a session that received three notices still owes a person three
+        # opening lines.
+        notice = "[IMPORTANT: background process completed]"
+        for _ in range(TURN_INTENT_LINE_TURNS + 2):
+            _ = self.context(
+                user_message=notice,
+                conversation_history=[self._row(notice, "process_complete")],
+            )
+
+        self.assertIn(TURN_INTENT_LINE, self.context(user_message="and now?"))
+
+    def test_the_budget_survives_a_plugin_host_restart(self):
+        # The measured failure this field is durable for: a session that got
+        # its full budget twice, in a 2+2 split bracketing a mid-session `omh
+        # update`. Clearing the process maps is what a restart looks like
+        # from inside; the store under the OMH home is what answers.
+        for index in range(TURN_INTENT_LINE_TURNS):
+            self.assertIn(TURN_INTENT_LINE, self.context(user_message=f"q{index}"))
+
+        nudge_budget.reset_nudge_budget()
+
+        self.assertNotIn(TURN_INTENT_LINE_HEAD, self.context(user_message="after the restart"))
+
+    def test_a_delegated_child_is_not_asked_for_an_opening_line(self):
+        # A child answers its orchestrator, not a person, and the host names
+        # it for us through `subagent_start`'s `child_session_id`.
+        nudge_budget.note_delegated_session(SESSION)
+
+        self.assertNotIn(
+            TURN_INTENT_LINE_HEAD, self.context(user_message="what does this function do?")
+        )
+
+    def test_a_session_omh_cannot_name_is_not_asked_either(self):
+        # No id means no budget, and the budget is the only thing that makes
+        # this affordable, so an unnamed session gets nothing rather than
+        # getting it on every turn forever.
+        for session in ("", "   ", None, 7):
+            with self.subTest(session=session):
+                self.assertEqual(
+                    turn_intent_line(
+                        user_message="what does this function do?",
+                        session_id=session,
+                        omh_home=str(self.home),
+                    ),
+                    "",
+                )
+
+    def test_no_wording_decides_any_of_it(self):
+        # Two messages, one of them about briefings and opening lines and the
+        # other about nothing of the kind. Identical text, identical spend.
+        about_briefings = (
+            "before you start, brief me: say what you understood and what "
+            "you will do first, in one or two lines"
+        )
+        about_anything_else = "왜 이 함수가 두 번 호출되지?"
+
+        self.assertIn(TURN_INTENT_LINE, self.context(user_message=about_briefings))
+        # Same session, so the budget carries: turns 2 and 3 are still owed
+        # the line and turn 4 is not, whichever message arrives.
+        self.assertIn(TURN_INTENT_LINE, self.context(user_message=about_anything_else))
+        self.assertIn(TURN_INTENT_LINE, self.context(user_message=about_briefings))
+        self.assertNotIn(
+            TURN_INTENT_LINE_HEAD, self.context(user_message=about_anything_else)
+        )
+
+    def test_the_caller_s_awareness_opt_out_silences_it(self):
+        context = self.context(
+            user_message="what does this function do?", include_omh_awareness=False
+        )
+
+        self.assertNotIn(TURN_INTENT_LINE_HEAD, context)
+
+    def test_no_field_claims_a_briefing_happened(self):
+        # OMH can ask and cannot verify. Nothing in the payload may report
+        # that the model complied, because there is no record that would say
+        # so -- the only evidence would be the reply's prose.
+        payload = pre_llm_call(
+            omh_home=str(self.home),
+            hermes_home=str(self.hermes),
+            session_id=SESSION,
+            user_message="what does this function do?",
+        )
+
+        self.assertIsNotNone(payload)
+        self.assertIn(TURN_INTENT_LINE, str((payload or {}).get("context", "")))
+        for key in (payload or {}):
+            with self.subTest(key=key):
+                self.assertNotIn("intent", key)
+                self.assertNotIn("briefing", key)
+
+    def test_the_line_reads_after_the_blocks_that_say_what_the_work_is(self):
+        # Ordering is the claim: a rule asking for a first step has to arrive
+        # after the plan line and the dispatch lines, or it asks for a step
+        # chosen before the blocks that would change it were read.
+        record = self.write_plan([("land the fix", "done"), ("open the PR", "active")])
+        _ = self.write_finished_dispatch(record["updated_at"], 1)
+        message = "어디까지 됐어?"
+
+        context = self.context(
+            user_message=message, conversation_history=[self._row(message)]
+        )
+
+        self.assertLess(context.index("[OMH plan todo]"), context.index(TURN_INTENT_LINE_HEAD))
+        self.assertLess(
+            context.index(DISPATCH_AFTER_ANSWER_RULE), context.index(TURN_INTENT_LINE_HEAD)
+        )
+
+    def test_what_one_turn_of_this_costs(self):
+        # The number this PR is answerable for. The line itself, and the
+        # whole injection on an otherwise quiet person turn -- fence, note
+        # and rule -- because that turn used to cost zero.
+        quiet = self.context(user_message="what does this function do?")
+
+        self.assertEqual(len(TURN_INTENT_LINE), 207)
+        self.assertEqual(len(quiet), 326)
+        # And the whole session's worst case, which is what the budget buys:
+        # every one of its turns paying the fence as well, and then silence.
+        self.assertLess(len(quiet) * TURN_INTENT_LINE_TURNS, 1000)
 
 
 if __name__ == "__main__":  # pragma: no cover - module entry point
