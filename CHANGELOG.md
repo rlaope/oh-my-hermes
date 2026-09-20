@@ -89,6 +89,42 @@ All notable changes will be documented here.
   admissible entries is generated from a closed producer so no hand-written
   row can admit a source nothing declares.
 
+- **Interactive `omh setup` now asks whether OMH should watch for its own
+  updates, so the capability stops being invisible.** `omh update-check set
+  --mode off|notify|auto` has shipped for a while and runs from the launch
+  path, but the only way to find it was to already know its name. The wizard
+  now asks once, as its last question — every other group configures how the
+  assistant behaves, this one configures how the install maintains itself,
+  and the apply phase right after it is the answer's first reader
+  (`_release_source_commit_for_state` returns early while the mode is `off`,
+  so an opt-in recorded here is in effect for the same run).
+
+  The shipped default is unchanged. `off` is the pre-selected option, read
+  from `DEFAULT_UPDATE_CHECK_MODE` rather than written beside it as a
+  literal, so Enter through the wizard lands exactly where `--yes` lands and
+  cannot drift from it: pressing Enter must not be how a machine starts
+  making network requests. `--yes`, `--json`, `--no-interactive`, and every
+  run without a terminal never see the question and write nothing at all —
+  the key stays absent, which is what keeps it askable later.
+
+  Asked once, then never again, including when the answer was `off`. That
+  needed a distinction `read_update_check_policy` cannot make: it normalizes
+  an absent record to the shipped `off`, so "never asked" and "answered off"
+  come back identical and a predicate reading it would re-ask on every
+  interactive run forever. The new `update_check_policy_recorded()` reads the
+  stored record instead, which is the only place the two differ, and every
+  answer — `off` included — is written, so the record is the answer rather
+  than the deviation from the default. A corrupt or hand-edited value reads
+  as unanswered, matching what the policy reader already does with it.
+
+  The question states both consequences it is asking consent for, in all four
+  languages: `notify` and `auto` each contact GitHub at most once per 24-hour
+  interval, and `auto` additionally runs `omh update`. The policy lives at
+  `$OMH_HOME/setup-profile.json`, inside OMH's own home, so the default `omh
+  uninstall` — which removes that home — takes it back with everything else;
+  nothing is left under a host-owned root for uninstall to reverse
+  explicitly.
+
 - **The setup keyboard menus stop throwing away keys you pressed while the
   menu was redrawing, and read a whole keypress instead of its first three
   bytes.** `_read_tui_key()` called `tty.setraw(fd)`, whose default is

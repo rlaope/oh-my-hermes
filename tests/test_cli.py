@@ -22,6 +22,7 @@ from omh.commands.language import LANGUAGE_CODES, MESSAGES
 from omh.capabilities.families import CONCEPTUAL_WORKFLOW_SURFACES, capability_family_projection
 from omh.config_adapter import ensure_external_dir, external_dirs
 from omh.maintenance.doctor import _identity_conflicts_check
+from omh.maintenance.update_check import DEFAULT_UPDATE_CHECK_MODE
 from omh.paths import resolve_paths
 from omh.plugin_bundle.omh.memory_governance import canonical_payload_digest
 from omh.record_revision import MAX_MUTATION_ID_CHARS
@@ -2598,7 +2599,14 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             with patch(
                 "omh.commands.setup._try_star_github_repo",
                 return_value={"ok": True, "reason": "starred_or_already_starred"},
-            ) as star, patch("omh.commands.setup._ask_single_choice") as single_choice, patch(
+            ) as star, patch(
+                "omh.commands.setup._ask_single_choice",
+                # A stand-in for a real menu still has to answer in the
+                # vocabulary of the question it stands in for: the one single
+                # choice reached here is the update-check mode, and setup
+                # writes whatever it returns.
+                return_value=DEFAULT_UPDATE_CHECK_MODE,
+            ) as single_choice, patch(
                 "omh.commands.setup._detect_external_cli_profiles",
                 return_value=_NO_EXTERNAL_CLI_DETECTED,
             ), patch(
@@ -2611,10 +2619,13 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
             self.assertEqual(stderr, "")
             self.assertIn("OMH setup", stdout)
             self.assertIn("OMH setup complete.", stdout)
-            # Explicit --omh-home/--hermes-home skips the scope question. The
-            # one remaining recommended choice activates the shared branded
-            # TUI for bare `omh` and `hermes`; star remains opt-in.
-            self.assertEqual(single_choice.call_count, 0)
+            # Explicit --omh-home/--hermes-home skips the scope question. Two
+            # recommended choices remain: the yes/no that activates the shared
+            # branded TUI for bare `omh` and `hermes`, and the update-check
+            # mode, whose pre-selected answer is the shipped `off`. Star
+            # remains opt-in.
+            self.assertEqual(single_choice.call_count, 1)
+            self.assertIn("update", single_choice.call_args.args[0].lower())
             self.assertEqual(yes_no.call_count, 1)
             self.assertTrue(yes_no.call_args.kwargs["default"])
             star.assert_not_called()
@@ -2627,8 +2638,17 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
 
+            titles: list[str] = []
+
+            def single_choice_answer(title, *_args, **_kwargs):
+                # One fake standing in for two unrelated questions has to
+                # answer each in its own vocabulary: a setup scope, then an
+                # update-check mode that setup validates before writing.
+                titles.append(title)
+                return "project" if "scope" in title.lower() else DEFAULT_UPDATE_CHECK_MODE
+
             with patch("omh.paths.Path.cwd", return_value=root), patch(
-                "omh.commands.setup._ask_single_choice", return_value="project"
+                "omh.commands.setup._ask_single_choice", side_effect=single_choice_answer
             ) as single_choice, patch(
                 "omh.commands.setup._detect_external_cli_profiles",
                 return_value=_NO_EXTERNAL_CLI_DETECTED,
@@ -2641,9 +2661,12 @@ Latest runtime run: 20260625T090917585910Z-loop-goal-loop-8b5bec.
                 status, stdout, stderr = run_cli(["setup", "--interactive"], output_json=False)
 
             self.assertEqual(status, 0, stderr)
-            self.assertEqual(single_choice.call_count, 1)
-            title = single_choice.call_args.args[0]
-            self.assertIn("scope", title.lower())
+            # Exactly one of the single choices is about scope, and it is the
+            # first thing asked; the wizard's update-check question is the
+            # other one.
+            self.assertEqual(single_choice.call_count, 2)
+            self.assertEqual([title for title in titles if "scope" in title.lower()], titles[:1])
+            self.assertIn("update", titles[1].lower())
             self.assertEqual(yes_no.call_count, 1)
             self.assertTrue(yes_no.call_args.kwargs["default"])
             star.assert_not_called()

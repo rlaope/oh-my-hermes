@@ -39,6 +39,27 @@ def read_update_check_policy(paths: OmhPaths) -> dict[str, Any]:
     return {"schema_version": UPDATE_CHECK_POLICY_SCHEMA_VERSION, "mode": mode, "interval_hours": interval_hours}
 
 
+def update_check_policy_recorded(paths: OmhPaths) -> bool:
+    """Whether a mode was ever recorded, which `read_update_check_policy` cannot say.
+
+    That reader normalizes an absent, malformed, or unrecognized record to the
+    shipped `off` default, so what it returns answers "what is in effect" and
+    never "was this ever answered". Setup's wizard needs the second question:
+    somebody who chose `off` must not be asked again, and somebody who has
+    never been asked must be. Only the record separates the two, so this reads
+    the record rather than the resolved policy. `write_update_check_policy`
+    always stores a recognized mode, so a stored recognized mode is exactly
+    the set of homes something wrote one into; a corrupt or hand-edited value
+    reads as unanswered here, which matches what the policy reader already
+    does with it.
+    """
+    profile, _error = read_json_object_result(paths.setup_profile_path)
+    raw = (profile or {}).get("update_check")
+    if not isinstance(raw, dict):
+        return False
+    return str(raw.get("mode", "")).strip() in UPDATE_CHECK_MODES
+
+
 def write_update_check_policy(paths: OmhPaths, *, mode: str | None = None, interval_hours: float | None = None) -> dict[str, Any]:
     current = read_update_check_policy(paths)
     resolved_mode = current["mode"] if mode is None else mode

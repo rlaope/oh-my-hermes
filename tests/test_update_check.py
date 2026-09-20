@@ -39,6 +39,7 @@ from omh.maintenance.update_check import (
     record_remote_commit_for_install,
     refresh_cache_after_auto_update,
     update_check_cache_path,
+    update_check_policy_recorded,
     write_update_check_policy,
 )
 from omh.maintenance.update_check_state import write_update_check_cache
@@ -136,6 +137,46 @@ class UpdateCheckPolicyTests(unittest.TestCase):
 
     def test_every_mode_is_a_recognized_choice(self) -> None:
         self.assertEqual(UPDATE_CHECK_MODES, ("off", "notify", "auto"))
+
+    def test_recorded_separates_never_asked_from_answered_off(self) -> None:
+        """The distinction `read_update_check_policy` cannot make.
+
+        Both homes below resolve to mode `off`. Only the record says which of
+        them was answered, which is what lets `omh setup` ask the question
+        once instead of on every interactive run.
+        """
+        with TemporaryDirectory() as tmp:
+            never_asked = _paths(Path(tmp) / "never")
+            answered_off = _paths(Path(tmp) / "answered")
+            write_update_check_policy(answered_off, mode="off")
+
+            self.assertEqual(read_update_check_policy(never_asked)["mode"], "off")
+            self.assertEqual(read_update_check_policy(answered_off)["mode"], "off")
+            self.assertFalse(update_check_policy_recorded(never_asked))
+            self.assertTrue(update_check_policy_recorded(answered_off))
+
+    def test_recorded_is_true_for_every_mode_and_false_for_junk(self) -> None:
+        for mode in UPDATE_CHECK_MODES:
+            with self.subTest(mode=mode), TemporaryDirectory() as tmp:
+                paths = _paths(Path(tmp))
+                write_update_check_policy(paths, mode=mode)
+                self.assertTrue(update_check_policy_recorded(paths))
+        # A value nothing in OMH wrote reads as unanswered, which is what the
+        # policy reader already does with it -- it resolves such a record to
+        # the shipped default rather than honouring it.
+        for junk in ("sometimes", "", None, [], {"interval_hours": 6}, {"mode": "OFF"}):
+            with self.subTest(junk=junk), TemporaryDirectory() as tmp:
+                paths = _paths(Path(tmp))
+                paths.omh_home.mkdir(parents=True, exist_ok=True)
+                atomic_write_json(paths.setup_profile_path, {"update_check": junk})
+                self.assertFalse(update_check_policy_recorded(paths))
+                self.assertEqual(read_update_check_policy(paths)["mode"], DEFAULT_UPDATE_CHECK_MODE)
+
+    def test_recorded_is_false_when_no_profile_exists_at_all(self) -> None:
+        with TemporaryDirectory() as tmp:
+            paths = _paths(Path(tmp))
+            self.assertFalse(paths.setup_profile_path.exists())
+            self.assertFalse(update_check_policy_recorded(paths))
 
 
 class FetchRemoteMainIdentityTests(unittest.TestCase):

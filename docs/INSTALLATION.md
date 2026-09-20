@@ -2780,6 +2780,16 @@ omh update-check set --mode off                  # shipped default
 omh update-check set --interval-hours 12          # default is 24, 1-8760 accepted
 ```
 
+Interactive `omh setup` asks this once, as its last question, and writes
+whichever mode you pick. `off` is the pre-selected answer, so pressing Enter
+through the wizard installs exactly what a non-interactive install installs
+and makes no network request. The question is settled by having been
+answered, not by which answer: choosing `off` records `off` and setup never
+asks again. `omh setup --yes`, `--json`, `--no-interactive`, and any run
+without a terminal never ask and write nothing, which leaves the key absent
+so a later interactive run can still ask. Changing your mind afterwards is
+`omh update-check set`.
+
 `notify` prints a single line such as `OMH update available: 3f2a1c9 ->
 9b7e21d; run \`omh update\`` when the preview channel is behind `origin/main`,
 and nothing when it is current; the line prints only for a launch that

@@ -3458,6 +3458,15 @@ def _wizard_question_groups() -> tuple[_WizardQuestion, ...]:
             _will_ask_mcp_host,
             _ask_mcp_host_choice,
         ),
+        # Last on purpose. Every group above configures how the assistant
+        # behaves; this one configures how the install maintains itself, and
+        # the apply phase right after it is the answer's first reader.
+        _WizardQuestion(
+            "update_check",
+            "wizard_step_update_check",
+            _will_ask_update_check,
+            _ask_update_check_choice,
+        ),
     )
 
 
@@ -3465,10 +3474,14 @@ def _planned_wizard_questions(args: argparse.Namespace, paths: OmhPaths) -> list
     """The groups that will ask something, decided before the first prompt.
 
     Every predicate reads only argparse flags, the Hermes config file, PATH,
-    and whether stdin is a terminal. No group's answer or side effect feeds a
-    later group's predicate -- the two groups that write, write under
-    `omh_home` -- so the total printed in `[k/n]` is the total the operator
-    ends up answering, and the numbering stays contiguous.
+    whether stdin is a terminal, and -- for `update_check` -- the OMH home's
+    own setup profile. No group's answer or side effect feeds a later group's
+    predicate: the groups that write, write under `omh_home`, and the one
+    predicate that reads from there reads a key
+    (`setup-profile.json:update_check`) that only `write_update_check_policy`
+    ever sets, which no earlier group calls. So the total printed in `[k/n]`
+    is the total the operator ends up answering, and the numbering stays
+    contiguous.
     """
     return [question for question in _wizard_question_groups() if question.will_ask(args, paths)]
 
@@ -3593,6 +3606,96 @@ def _default_mcp_host_for_executor(executor: str) -> str:
     if normalized == "claude-code":
         return "claude-code"
     return "generic"
+
+
+def _will_ask_update_check(args: argparse.Namespace, paths: OmhPaths) -> bool:
+    """Whether `_ask_update_check_choice` puts a question on screen.
+
+    Asked at most once per OMH home. What settles it is that a mode was
+    recorded, not which one, so choosing the shipped `off` closes the question
+    exactly as choosing `notify` does -- the answer is the record, not the
+    deviation from the default.
+
+    `read_update_check_policy` cannot express that. It normalizes an absent
+    record to `off`, so "never asked" and "answered off" come back identical
+    and a predicate reading it would re-ask on every interactive run forever.
+    `update_check_policy_recorded` reads the stored record instead, which is
+    the only place the two differ.
+    """
+    if hasattr(args, "_update_check_mode"):
+        return False
+    from ..maintenance.update_check import update_check_policy_recorded
+
+    return not update_check_policy_recorded(paths)
+
+
+def _ask_update_check_choice(args: argparse.Namespace, paths: OmhPaths, language: str) -> None:
+    """Ask, at most once, whether OMH should watch for its own updates at launch.
+
+    The capability already shipped as `omh update-check set --mode
+    off|notify|auto`, default `off`, run from the launch path in `main.py`.
+    Nothing here changes that default: the shipped value stays `off`, so
+    `--yes`, `--json`, `--no-interactive`, and every run without a terminal
+    install exactly what they install today and write nothing. This question
+    exists because the only way to find the capability was to already know the
+    command's name.
+
+    The pre-selected option is `DEFAULT_UPDATE_CHECK_MODE`, read from the
+    module that defines the shipped default rather than written here as a
+    literal, so Enter through the wizard lands where a `--yes` install lands
+    and cannot drift away from it. Enter must not be how a machine starts
+    making network requests.
+
+    Both other modes contact GitHub at most once per interval (24 hours), and
+    `auto` additionally runs `omh update` when `main` is ahead; the option
+    descriptions say so in those terms. Whatever is chosen is written through
+    `write_update_check_policy` into `$OMH_HOME/setup-profile.json`, which is
+    inside OMH's own home and therefore reversed by the same `omh uninstall`
+    that removes the home.
+
+    Deliberately last in the wizard: every other group configures how the
+    assistant behaves, while this one configures how the install maintains
+    itself, and the apply phase right after it is the first reader of the
+    answer. `_release_source_commit_for_state` returns early while the mode
+    is `off`, so an opt-in recorded here is already in effect for this same
+    run's cursor anchoring rather than waiting for the next command.
+    """
+    if not _will_ask_update_check(args, paths):
+        # A repeat call keeps the answer it already has; a first call over an
+        # answered home records "not asked" the way the other groups do.
+        if not hasattr(args, "_update_check_mode"):
+            args._update_check_mode = None
+        return
+    from ..maintenance.update_check import (
+        DEFAULT_UPDATE_CHECK_MODE,
+        UPDATE_CHECK_MODES,
+        write_update_check_policy,
+    )
+
+    # Rows derived from the mode vocabulary, not restated beside it: a mode
+    # added there and not described here raises a missing-message KeyError at
+    # ask time instead of quietly never being offered.
+    options = [
+        {
+            "choice": str(index + 1),
+            "value": mode,
+            "label": tr(language, f"update_check_mode_{mode}"),
+            "description": tr(language, f"update_check_mode_{mode}_desc"),
+        }
+        for index, mode in enumerate(UPDATE_CHECK_MODES)
+    ]
+    default_choice = next(option["choice"] for option in options if option["value"] == DEFAULT_UPDATE_CHECK_MODE)
+    mode = _ask_single_choice(
+        tr(language, "update_check_title"),
+        [tr(language, "update_check_intro")],
+        options,
+        default_choice=default_choice,
+        use_color=_use_color(),
+        language=language,
+    )
+    args._update_check_mode = mode
+    write_update_check_policy(paths, mode=mode)
+    print(tr(language, "update_check_recorded", mode=mode))
 
 
 def _ask_yes_no(prompt: str, *, default: bool, use_color: bool, note: str = "", language: str = "en") -> bool:

@@ -267,6 +267,9 @@ class ModelChainsSetupWizardTests(unittest.TestCase):
                 answers.extend(["3" if has_ultrafast else "2", "qwen3-coder:high"])
             else:
                 answers.append("")
+        # The update-check question follows the interview and reads the same
+        # typed prompt; Enter takes its pre-selected shipped default.
+        answers.append("")
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             responses = iter(answers)
@@ -532,8 +535,10 @@ class ModelChainsSetupTerminalTests(unittest.TestCase):
     def test_declining_on_a_terminal_leaves_the_empty_seed(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            # TUI identity no, then the chain offer declined.
-            transcript = self._run_setup_under_pty(root, ["n", "n"])
+            # TUI identity no, the chain offer declined, then Enter through
+            # the update-check question. Without that third answer the child
+            # blocks on a prompt the pty never closes and the run times out.
+            transcript = self._run_setup_under_pty(root, ["n", "n", ""])
 
             self.assertIn("Walk the per-category model chains now (interview)?", transcript)
             # Default No: a bare Enter has to keep the shipped chains.
@@ -556,6 +561,8 @@ class ModelChainsSetupTerminalTests(unittest.TestCase):
                 answers.extend(["3" if has_ultrafast else "2", "qwen3-coder:high"])
             else:
                 answers.append("")
+        # Enter through the update-check question, which follows the interview.
+        answers.append("")
 
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
