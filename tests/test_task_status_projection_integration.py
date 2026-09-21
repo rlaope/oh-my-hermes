@@ -144,3 +144,41 @@ class TaskStatusProjectionIntegrationTests(unittest.TestCase):
             store.append(event)
 
         self.assertEqual(str(ctx.exception), "event_replay")
+
+    def test_replayed_evidence_is_rejected_after_restore(self) -> None:
+        request = {
+            "request_ref": "request:restore-replay",
+            "operation": "complete",
+            "state": "observed",
+            "task_refs": ["T1"],
+            "observation_ref": "observation:11",
+            "observed_receipts": [
+                {
+                    "state": "observed",
+                    "operation": "complete",
+                    "task_id": "T1",
+                    "landed_status": "done",
+                }
+            ],
+        }
+
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        event = projection_event_from_agent_board(request)
+
+        self.assertIsNotNone(event)
+
+        store.append(event)
+        snapshot = store.snapshot()
+
+        restored = TaskStatusProjectionStore.restore(snapshot)
+
+        with self.assertRaises(ValueError) as ctx:
+            restored.append(event)
+
+        self.assertEqual(str(ctx.exception), "event_replay")
