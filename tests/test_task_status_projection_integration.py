@@ -182,3 +182,115 @@ class TaskStatusProjectionIntegrationTests(unittest.TestCase):
             restored.append(event)
 
         self.assertEqual(str(ctx.exception), "event_replay")
+
+
+    def test_agent_board_lifecycle_preserves_history_and_cursor(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        requests = [
+            {
+                "request_ref": "request:running-1",
+                "operation": "show",
+                "state": "observed",
+                "task_refs": ["T1"],
+                "observation_ref": "observation:20",
+                "observed_receipts": [
+                    {
+                        "state": "observed",
+                        "operation": "show",
+                        "task_id": "T1",
+                        "landed_status": "running",
+                    }
+                ],
+            },
+            {
+                "request_ref": "request:blocked-1",
+                "operation": "block",
+                "state": "observed",
+                "task_refs": ["T1"],
+                "observation_ref": "observation:21",
+                "observed_receipts": [
+                    {
+                        "state": "observed",
+                        "operation": "block",
+                        "task_id": "T1",
+                        "landed_status": "blocked",
+                    }
+                ],
+            },
+            {
+                "request_ref": "request:running-2",
+                "operation": "show",
+                "state": "observed",
+                "task_refs": ["T1"],
+                "observation_ref": "observation:22",
+                "observed_receipts": [
+                    {
+                        "state": "observed",
+                        "operation": "show",
+                        "task_id": "T1",
+                        "landed_status": "running",
+                    }
+                ],
+            },
+            {
+                "request_ref": "request:done-1",
+                "operation": "complete",
+                "state": "observed",
+                "task_refs": ["T1"],
+                "observation_ref": "observation:23",
+                "observed_receipts": [
+                    {
+                        "state": "observed",
+                        "operation": "complete",
+                        "task_id": "T1",
+                        "landed_status": "done",
+                    }
+                ],
+            },
+        ]
+
+        events = [
+            projection_event_from_agent_board(request)
+            for request in requests
+        ]
+
+        self.assertTrue(all(event is not None for event in events))
+
+        rows = [store.append(event) for event in events]
+
+        self.assertEqual(
+            [row["sequence"] for row in rows],
+            [1, 2, 3, 4],
+        )
+        self.assertEqual(
+            [row["status"] for row in rows],
+            ["running", "blocked", "running", "worker_done"],
+        )
+
+        snapshot = store.snapshot()
+
+        self.assertEqual(snapshot["current"]["status"], "worker_done")
+        self.assertEqual(snapshot["cursor"]["sequence"], 4)
+        self.assertEqual(
+            [event["sequence"] for event in snapshot["history"]],
+            [1, 2, 3, 4],
+        )
+        self.assertEqual(
+            [event["status"] for event in snapshot["history"]],
+            ["running", "blocked", "running", "worker_done"],
+        )
+        self.assertEqual(
+            snapshot["cursor"]["event_ref"],
+            snapshot["history"][-1]["event_ref"],
+        )
+
+        restored = TaskStatusProjectionStore.restore(snapshot)
+        restored_snapshot = restored.snapshot()
+
+        self.assertEqual(restored_snapshot, snapshot)
