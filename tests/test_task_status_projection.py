@@ -354,6 +354,30 @@ class TaskStatusProjectionTests(unittest.TestCase):
         with pytest.raises(ValueError, match="history sequence mismatch"):
             TaskStatusProjectionStore.restore(snapshot)
 
+    def test_restored_projection_can_continue_lifecycle(self) -> None:
+        projection = self.store()
+
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+        projection.append(ProjectionEvent("T1", "running", "r2"))
+        projection.mark_retry()
+
+        saved = projection.snapshot()
+        restored = TaskStatusProjectionStore.restore(saved)
+
+        restored.append(ProjectionEvent("T1", "worker_done", "r3"))
+        restored.mark_observed()
+
+        snapshot = restored.snapshot()
+
+        self.assertEqual(snapshot["state"], "observed")
+        self.assertEqual(snapshot["current"]["status"], "worker_done")
+        self.assertEqual(snapshot["current"]["revision"], "r3")
+        self.assertEqual(snapshot["cursor"]["sequence"], 3)
+        self.assertEqual(
+            [event["status"] for event in snapshot["history"]],
+            ["queued", "running", "worker_done"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
