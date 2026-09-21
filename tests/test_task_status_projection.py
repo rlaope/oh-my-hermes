@@ -675,6 +675,65 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
         self.assertEqual(str(ctx.exception), "projection_closed")
 
+    def test_closed_projection_rejects_new_events(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        store.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="revision:1",
+            )
+        )
+        store.close()
+
+        with self.assertRaises(ValueError) as ctx:
+            store.append(
+                ProjectionEvent(
+                    task_ref="T1",
+                    status="worker_done",
+                    revision="revision:2",
+                )
+            )
+
+        self.assertEqual(str(ctx.exception), "projection_closed")
+
+    def test_closed_projection_rejects_delivery_state_changes(
+        self,
+    ) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        store.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="revision:1",
+            )
+        )
+        store.close()
+
+        for method_name in (
+            "mark_observed",
+            "mark_retry",
+            "mark_provider_refused",
+            "mark_ambiguous_delivery",
+        ):
+            with self.subTest(method=method_name):
+                with self.assertRaises(ValueError) as ctx:
+                    getattr(store, method_name)()
+
+                self.assertEqual(str(ctx.exception), "projection_closed")
+
 
 if __name__ == "__main__":
     unittest.main()

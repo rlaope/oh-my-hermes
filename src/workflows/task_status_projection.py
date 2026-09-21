@@ -199,6 +199,8 @@ class TaskStatusProjectionStore:
         event.validate()
 
         with self._lock:
+            if self._state == "closed":
+                raise ValueError("projection_closed")
             if event.task_ref != self._task_ref:
                 raise ValueError("task_ref_mismatch")
 
