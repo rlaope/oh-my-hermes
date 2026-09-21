@@ -378,6 +378,44 @@ class TaskStatusProjectionTests(unittest.TestCase):
             ["queued", "running", "worker_done"],
         )
 
+    def test_restore_preserves_bounded_history_cursor(self) -> None:
+        projection = self.store()
+
+        for index in range(70):
+            projection.append(
+                ProjectionEvent(
+                    "T1",
+                    "running",
+                    f"revision-{index}",
+                )
+            )
+
+        saved = projection.snapshot()
+        restored = TaskStatusProjectionStore.restore(saved)
+
+        snapshot = restored.snapshot()
+
+        self.assertEqual(len(snapshot["history"]), 64)
+        self.assertEqual(snapshot["history"][0]["sequence"], 7)
+        self.assertEqual(snapshot["history"][-1]["sequence"], 70)
+        self.assertEqual(snapshot["cursor"]["sequence"], 70)
+        self.assertEqual(snapshot["cursor"]["event_ref"], "event:70")
+
+        restored.append(
+            ProjectionEvent(
+                "T1",
+                "worker_done",
+                "revision-70",
+            )
+        )
+
+        snapshot = restored.snapshot()
+
+        self.assertEqual(len(snapshot["history"]), 64)
+        self.assertEqual(snapshot["history"][-1]["sequence"], 71)
+        self.assertEqual(snapshot["cursor"]["sequence"], 71)
+        self.assertEqual(snapshot["current"]["status"], "worker_done")
+
 
 if __name__ == "__main__":
     unittest.main()
