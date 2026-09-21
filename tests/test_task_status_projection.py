@@ -451,6 +451,42 @@ class TaskStatusProjectionTests(unittest.TestCase):
         self.assertEqual(snapshot["cursor"]["sequence"], 2)
         self.assertEqual(snapshot["current"]["revision"], "r2")
 
+    def test_disclosure_policy_limits_published_fields(self) -> None:
+        projection = TaskStatusProjectionStore(
+            board_ref="qa-board",
+            task_ref="T1",
+            destination_ref="destination:test",
+            allowed_fields=("task_ref", "status"),
+            max_field_chars=128,
+        )
+
+        projection.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="revision-1",
+            )
+        )
+
+        snapshot = projection.snapshot()
+
+        self.assertEqual(
+            snapshot["disclosure_policy"]["allowed_fields"],
+            ["task_ref", "status"],
+        )
+        self.assertEqual(
+            snapshot["disclosure_policy"]["max_field_chars"],
+            128,
+        )
+        self.assertNotIn(
+            "revision",
+            snapshot["disclosure_policy"]["allowed_fields"],
+        )
+        self.assertNotIn("workspace_path", snapshot)
+        self.assertNotIn("body", snapshot)
+        self.assertNotIn("prompt", snapshot)
+        self.assertNotIn("secret", snapshot)
+
 
 if __name__ == "__main__":
     unittest.main()
