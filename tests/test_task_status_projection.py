@@ -416,6 +416,41 @@ class TaskStatusProjectionTests(unittest.TestCase):
         self.assertEqual(snapshot["cursor"]["sequence"], 71)
         self.assertEqual(snapshot["current"]["status"], "worker_done")
 
+    def test_restore_rejects_replayed_revision(self) -> None:
+        projection = self.store()
+
+        projection.append(
+            ProjectionEvent(
+                "T1",
+                "queued",
+                "r1",
+            )
+        )
+        projection.append(
+            ProjectionEvent(
+                "T1",
+                "running",
+                "r2",
+            )
+        )
+
+        restored = TaskStatusProjectionStore.restore(projection.snapshot())
+
+        with self.assertRaises(ValueError):
+            restored.append(
+                ProjectionEvent(
+                    "T1",
+                    "running",
+                    "r2",
+                )
+            )
+
+        snapshot = restored.snapshot()
+
+        self.assertEqual(len(snapshot["history"]), 2)
+        self.assertEqual(snapshot["cursor"]["sequence"], 2)
+        self.assertEqual(snapshot["current"]["revision"], "r2")
+
 
 if __name__ == "__main__":
     unittest.main()
