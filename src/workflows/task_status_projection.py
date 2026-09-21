@@ -262,6 +262,40 @@ class TaskStatusProjectionStore:
     def to_snapshot(self) -> TaskStatusProjection:
         return self.snapshot()
 
+    @classmethod
+    def restore(cls, snapshot: TaskStatusProjection) -> TaskStatusProjectionStore:
+        if snapshot["schema_version"] != SCHEMA_VERSION:
+            raise ValueError("unsupported projection schema")
+
+        projection = cls(
+            board_ref=snapshot["board_ref"],
+            task_ref=snapshot["task_ref"],
+            destination_ref=snapshot["destination_ref"],
+            allowed_fields=tuple(snapshot["disclosure_policy"]["allowed_fields"]),
+            max_field_chars=snapshot["disclosure_policy"]["max_field_chars"],
+        )
+
+        if snapshot["projection_id"] != projection.projection_id:
+            raise ValueError("projection identity mismatch")
+
+        history = snapshot["history"]
+        if not history:
+            raise ValueError("projection history is required")
+
+        projection._history = list(history)
+        projection._current = dict(snapshot["current"])
+        projection._state = snapshot["state"]
+        projection._sequence = snapshot["cursor"]["sequence"]
+
+        if snapshot["cursor"]["event_ref"] != f"event:{projection._sequence}":
+            raise ValueError("projection cursor mismatch")
+
+        projection._revisions = {
+            event["revision"] for event in projection._history
+        }
+
+        return projection
+
     def snapshot(self) -> TaskStatusProjection:
         with self._lock:
             current = self._current

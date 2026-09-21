@@ -1,4 +1,5 @@
 """Task status projection contract tests."""
+
 from __future__ import annotations
 
 import unittest
@@ -99,6 +100,7 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
     def test_closed_projection_cannot_change_delivery_state(self) -> None:
         projection = self.store()
+
         projection.append(ProjectionEvent("T1", "queued", "r1"))
         projection.close()
 
@@ -182,7 +184,6 @@ class TaskStatusProjectionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             projection.snapshot()
 
-
     def test_to_snapshot_preserves_projection_state(self) -> None:
         projection = self.store()
 
@@ -197,6 +198,31 @@ class TaskStatusProjectionTests(unittest.TestCase):
         self.assertEqual(snapshot["current"]["status"], "running")
         self.assertEqual(snapshot["cursor"]["sequence"], 2)
         self.assertEqual(len(snapshot["history"]), 2)
+
+    def test_restore_preserves_projection_state(self) -> None:
+        projection = self.store()
+
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+        projection.append(ProjectionEvent("T1", "running", "r2"))
+        projection.mark_observed()
+
+        saved = projection.snapshot()
+        restored = TaskStatusProjectionStore.restore(saved)
+
+        self.assertEqual(restored.projection_id, projection.projection_id)
+        self.assertEqual(restored.snapshot()["state"], "observed")
+        self.assertEqual(
+            restored.snapshot()["current"]["status"],
+            "running",
+        )
+        self.assertEqual(
+            restored.snapshot()["cursor"],
+            saved["cursor"],
+        )
+        self.assertEqual(
+            restored.snapshot()["history"],
+            saved["history"],
+        )
 
     def test_cursor_is_monotonic(self) -> None:
         projection = self.store()
@@ -214,4 +240,3 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
