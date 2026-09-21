@@ -267,6 +267,32 @@ class TaskStatusProjectionStore:
         with self._lock:
             self._state = "closed"
 
+    def change_destination(
+        self,
+        destination_ref: str,
+    ) -> TaskStatusProjectionStore:
+        new_destination = _reference(
+            destination_ref,
+            "destination_ref",
+        )
+
+        with self._lock:
+            if self._state == "closed":
+                raise ValueError("projection_closed")
+
+            if new_destination == self._destination_ref:
+                raise ValueError("destination_unchanged")
+
+            self._state = "closed"
+
+            return TaskStatusProjectionStore(
+                board_ref=self._board_ref,
+                task_ref=self._task_ref,
+                destination_ref=new_destination,
+                allowed_fields=self._allowed_fields,
+                max_field_chars=self._max_field_chars,
+            )
+
     def to_snapshot(self) -> TaskStatusProjection:
         return self.snapshot()
 

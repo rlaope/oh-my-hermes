@@ -588,6 +588,93 @@ class TaskStatusProjectionTests(unittest.TestCase):
             "ambiguous_delivery",
         )
 
+    def test_destination_change_closes_old_projection_and_creates_new_one(
+        self,
+    ) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:old",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        store.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="revision:1",
+            )
+        )
+        store.mark_observed()
+
+        old_projection_id = store.projection_id
+
+        new_store = store.change_destination("destination:new")
+
+        old_snapshot = store.snapshot()
+
+        self.assertEqual(old_snapshot["state"], "closed")
+        self.assertEqual(
+            old_snapshot["destination_ref"],
+            "destination:old",
+        )
+
+        self.assertNotEqual(
+            old_projection_id,
+            new_store.projection_id,
+        )
+
+        new_store.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="revision:2",
+            )
+        )
+
+        new_snapshot = new_store.snapshot()
+
+        self.assertEqual(
+            new_snapshot["state"],
+            "prepared",
+        )
+        self.assertEqual(
+            new_snapshot["destination_ref"],
+            "destination:new",
+        )
+        self.assertEqual(
+            new_snapshot["current"]["status"],
+            "running",
+        )
+
+    def test_destination_change_rejects_unchanged_destination(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            store.change_destination("destination:ops")
+
+        self.assertEqual(str(ctx.exception), "destination_unchanged")
+
+    def test_closed_projection_cannot_change_destination(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:old",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        store.close()
+
+        with self.assertRaises(ValueError) as ctx:
+            store.change_destination("destination:new")
+
+        self.assertEqual(str(ctx.exception), "projection_closed")
+
 
 if __name__ == "__main__":
     unittest.main()
