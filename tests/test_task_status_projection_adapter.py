@@ -13,6 +13,82 @@ from omh.workflows.task_status_projection_adapter import (
 )
 
 class TaskStatusProjectionAdapterTests(unittest.TestCase):
+
+    def test_review_status_is_not_claimed_as_reviewed(self) -> None:
+        request = {
+            "request_ref": "request:review",
+            "operation": "request_review",
+            "state": "observed",
+            "task_refs": ["T1"],
+            "observation_ref": "observation:12",
+            "observed_receipts": [
+                {
+                    "state": "observed",
+                    "operation": "request_review",
+                    "task_id": "T1",
+                    "landed_status": "review",
+                }
+            ],
+        }
+
+        self.assertIsNone(projection_event_from_agent_board(request))
+
+    def test_stale_status_is_not_inferred(self) -> None:
+        request = {
+            "request_ref": "request:stale",
+            "operation": "show",
+            "state": "observed",
+            "task_refs": ["T1"],
+            "observation_ref": "observation:13",
+            "observed_receipts": [
+                {
+                    "state": "observed",
+                    "operation": "show",
+                    "task_id": "T1",
+                    "landed_status": "stale",
+                }
+            ],
+        }
+
+        self.assertIsNone(projection_event_from_agent_board(request))
+
+    def test_verification_passed_is_not_inferred(self) -> None:
+        request = {
+            "request_ref": "request:verify",
+            "operation": "show",
+            "state": "observed",
+            "task_refs": ["T1"],
+            "observation_ref": "observation:14",
+            "observed_receipts": [
+                {
+                    "state": "observed",
+                    "operation": "show",
+                    "task_id": "T1",
+                    "landed_status": "verification_passed",
+                }
+            ],
+        }
+
+        self.assertIsNone(projection_event_from_agent_board(request))
+
+    def test_merged_status_is_not_inferred(self) -> None:
+        request = {
+            "request_ref": "request:merged",
+            "operation": "show",
+            "state": "observed",
+            "task_refs": ["T1"],
+            "observation_ref": "observation:15",
+            "observed_receipts": [
+                {
+                    "state": "observed",
+                    "operation": "show",
+                    "task_id": "T1",
+                    "landed_status": "merged",
+                }
+            ],
+        }
+
+        self.assertIsNone(projection_event_from_agent_board(request))
     def test_complete_done_becomes_worker_done(self) -> None:
         request = {
             "request_ref": "request:abc",
