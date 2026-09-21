@@ -1,0 +1,186 @@
+"""Task status projection contract tests."""
+from __future__ import annotations
+
+import unittest
+
+from _local_package import load_local_package
+
+load_local_package()
+
+from omh.workflows.task_status_projection import (
+    CLAIM_BOUNDARY,
+    SCHEMA_VERSION,
+    ProjectionEvent,
+    TaskStatusProjectionStore,
+)
+
+
+class TaskStatusProjectionTests(unittest.TestCase):
+    def store(self) -> TaskStatusProjectionStore:
+        return TaskStatusProjectionStore(
+            board_ref="qa-board",
+            task_ref="T1",
+            destination_ref="destination:test",
+            allowed_fields=("task_ref", "status", "revision"),
+        )
+
+    def test_schema_and_stable_projection_identity(self) -> None:
+        first = self.store()
+        second = self.store()
+
+        self.assertEqual(first.projection_id, second.projection_id)
+
+        first.append(ProjectionEvent("T1", "queued", "r1"))
+        snapshot = first.snapshot()
+
+        self.assertEqual(snapshot["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(snapshot["projection_id"], first.projection_id)
+        self.assertEqual(snapshot["board_ref"], "qa-board")
+        self.assertEqual(snapshot["task_ref"], "T1")
+        self.assertEqual(snapshot["destination_ref"], "destination:test")
+
+    def test_current_status_and_append_only_history(self) -> None:
+        projection = self.store()
+
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+        projection.append(ProjectionEvent("T1", "running", "r2"))
+        projection.append(ProjectionEvent("T1", "worker_done", "r3"))
+
+        snapshot = projection.snapshot()
+
+        self.assertEqual(snapshot["current"]["status"], "worker_done")
+        self.assertEqual(snapshot["current"]["revision"], "r3")
+        self.assertEqual(
+            [event["status"] for event in snapshot["history"]],
+            ["queued", "running", "worker_done"],
+        )
+        self.assertEqual(snapshot["cursor"]["sequence"], 3)
+        self.assertEqual(snapshot["cursor"]["event_ref"], "event:3")
+
+    def test_task_status_and_delivery_state_are_independent(self) -> None:
+        projection = self.store()
+
+        projection.append(ProjectionEvent("T1", "merged", "r7"))
+        projection.mark_provider_refused()
+
+        snapshot = projection.snapshot()
+
+        self.assertEqual(snapshot["current"]["status"], "merged")
+        self.assertEqual(snapshot["state"], "provider_refused")
+
+    def test_delivery_state_transitions(self) -> None:
+        projection = self.store()
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+
+        projection.mark_observed()
+        self.assertEqual(projection.snapshot()["state"], "observed")
+
+        projection.mark_retry()
+        self.assertEqual(projection.snapshot()["state"], "retry")
+
+        projection.mark_ambiguous_delivery()
+        self.assertEqual(projection.snapshot()["state"], "ambiguous_delivery")
+
+        projection.mark_provider_refused()
+        self.assertEqual(projection.snapshot()["state"], "provider_refused")
+
+        projection.close()
+        self.assertEqual(projection.snapshot()["state"], "closed")
+
+    def test_invalid_task_status_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            ProjectionEvent("T1", "completed", "r1").validate()
+
+    def test_foreign_task_is_rejected(self) -> None:
+        projection = self.store()
+
+        with self.assertRaises(ValueError):
+            projection.append(ProjectionEvent("T2", "running", "r1"))
+
+    def test_closed_projection_cannot_change_delivery_state(self) -> None:
+        projection = self.store()
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+        projection.close()
+
+        with self.assertRaises(ValueError):
+            projection.mark_retry()
+
+    def test_history_is_bounded(self) -> None:
+        projection = self.store()
+
+        for index in range(70):
+            projection.append(
+                ProjectionEvent("T1", "running", f"revision-{index}")
+            )
+
+        snapshot = projection.snapshot()
+
+        self.assertEqual(len(snapshot["history"]), 64)
+        self.assertEqual(snapshot["history"][0]["sequence"], 7)
+        self.assertEqual(snapshot["history"][-1]["sequence"], 70)
+
+    def test_claim_boundary_is_explicit(self) -> None:
+        projection = self.store()
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+
+        snapshot = projection.snapshot()
+
+        self.assertEqual(snapshot["claim_boundary"], CLAIM_BOUNDARY)
+        self.assertNotIn("workspace_path", snapshot)
+        self.assertNotIn("body", snapshot)
+        self.assertNotIn("prompt", snapshot)
+        self.assertNotIn("secret", snapshot)
+
+    def test_same_event_reference_is_not_replayed(self) -> None:
+        projection = self.store()
+
+        first = projection.append(
+            ProjectionEvent("T1", "running", "r1")
+        )
+
+        with self.assertRaises(ValueError):
+            projection.append(
+                ProjectionEvent("T1", "running", "r1")
+            )
+
+        snapshot = projection.snapshot()
+        self.assertEqual(len(snapshot["history"]), 1)
+        self.assertEqual(snapshot["cursor"]["event_ref"], first["event_ref"])
+
+    def test_revision_must_advance(self) -> None:
+        projection = self.store()
+
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+
+        with self.assertRaises(ValueError):
+            projection.append(ProjectionEvent("T1", "running", "r1"))
+
+    def test_invalid_revision_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            ProjectionEvent("T1", "queued", "").validate()
+
+    def test_projection_identity_changes_with_destination(self) -> None:
+        first = TaskStatusProjectionStore(
+            board_ref="qa-board",
+            task_ref="T1",
+            destination_ref="destination:a",
+            allowed_fields=("task_ref", "status"),
+        )
+        second = TaskStatusProjectionStore(
+            board_ref="qa-board",
+            task_ref="T1",
+            destination_ref="destination:b",
+            allowed_fields=("task_ref", "status"),
+        )
+
+        self.assertNotEqual(first.projection_id, second.projection_id)
+
+    def test_projection_requires_status_before_snapshot(self) -> None:
+        projection = self.store()
+
+        with self.assertRaises(ValueError):
+            projection.snapshot()
+
+
+if __name__ == "__main__":
+    unittest.main()
