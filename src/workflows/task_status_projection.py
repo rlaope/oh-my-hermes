@@ -259,6 +259,9 @@ class TaskStatusProjectionStore:
         with self._lock:
             self._state = "closed"
 
+    def to_snapshot(self) -> TaskStatusProjection:
+        return self.snapshot()
+
     def snapshot(self) -> TaskStatusProjection:
         with self._lock:
             current = self._current
