@@ -561,6 +561,33 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
             self.assertEqual(str(ctx.exception), "projection_closed")
 
+    def test_delivery_state_survives_snapshot_restore(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        store.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="revision:1",
+            )
+        )
+
+        store.mark_ambiguous_delivery()
+
+        snapshot = store.snapshot()
+
+        restored = TaskStatusProjectionStore.restore(snapshot)
+
+        self.assertEqual(
+            restored.snapshot()["state"],
+            "ambiguous_delivery",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
