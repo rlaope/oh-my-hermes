@@ -224,6 +224,46 @@ class TaskStatusProjectionTests(unittest.TestCase):
             saved["history"],
         )
 
+    def test_restore_rejects_wrong_schema(self) -> None:
+        projection = self.store()
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+
+        snapshot = projection.snapshot()
+        snapshot["schema_version"] = "task_status_projection/v999"
+
+        with self.assertRaises(ValueError):
+            TaskStatusProjectionStore.restore(snapshot)
+
+    def test_restore_rejects_projection_identity_mismatch(self) -> None:
+        projection = self.store()
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+
+        snapshot = projection.snapshot()
+        snapshot["projection_id"] = "projection:tampered"
+
+        with self.assertRaises(ValueError):
+            TaskStatusProjectionStore.restore(snapshot)
+
+    def test_restore_rejects_cursor_mismatch(self) -> None:
+        projection = self.store()
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+
+        snapshot = projection.snapshot()
+        snapshot["cursor"]["sequence"] = 99
+
+        with self.assertRaises(ValueError):
+            TaskStatusProjectionStore.restore(snapshot)
+
+    def test_restore_rejects_empty_history(self) -> None:
+        projection = self.store()
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+
+        snapshot = projection.snapshot()
+        snapshot["history"] = []
+
+        with self.assertRaises(ValueError):
+            TaskStatusProjectionStore.restore(snapshot)
+
     def test_cursor_is_monotonic(self) -> None:
         projection = self.store()
 
