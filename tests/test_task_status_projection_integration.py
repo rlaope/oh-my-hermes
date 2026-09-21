@@ -71,10 +71,13 @@ class TaskStatusProjectionIntegrationTests(unittest.TestCase):
 
         self.assertIsNone(event)
 
-        with self.assertRaises(ValueError) as ctx:
-            store.snapshot()
+        snapshot = store.snapshot()
 
-        self.assertEqual(str(ctx.exception), "projection_has_no_status")
+        self.assertEqual(snapshot["state"], "prepared")
+        self.assertIsNone(snapshot["current"])
+        self.assertEqual(snapshot["history"], [])
+        self.assertEqual(snapshot["cursor"]["sequence"], 0)
+        self.assertEqual(snapshot["cursor"]["event_ref"], "")
 
     def test_foreign_task_evidence_is_rejected(self) -> None:
         request = {

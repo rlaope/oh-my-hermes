@@ -77,7 +77,7 @@ class TaskStatusProjection(TypedDict):
     state: str
     cursor: Cursor
     disclosure_policy: DisclosurePolicy
-    current: CurrentStatus
+    current: CurrentStatus | None
     history: list[LifecycleEvent]
     claim_boundary: str
 
@@ -86,7 +86,8 @@ def _cursor(sequence: int, event_ref: str) -> Cursor:
     if sequence < 0:
         raise ValueError("invalid cursor sequence")
 
-    _bounded_string(event_ref, "event_ref", MAX_CURSOR_CHARS)
+    if not isinstance(event_ref, str) or len(event_ref) > MAX_CURSOR_CHARS:
+        raise ValueError("invalid event_ref")
 
     return {
         "sequence": sequence,
@@ -322,7 +323,25 @@ class TaskStatusProjectionStore:
         history = snapshot["history"]
 
         if not history:
-            raise ValueError("projection history is required")
+            if snapshot["state"] != "prepared":
+                raise ValueError("projection history is required")
+
+            if snapshot["cursor"]["sequence"] != 0:
+                raise ValueError("projection cursor sequence mismatch")
+
+            if snapshot["cursor"]["event_ref"] != "":
+                raise ValueError("projection cursor mismatch")
+
+            if snapshot["current"] is not None:
+                raise ValueError("prepared projection has current status")
+
+            projection._state = "prepared"
+            projection._sequence = 0
+            projection._history = []
+            projection._current = None
+            projection._revisions = set()
+
+            return projection
 
         expected_sequence = history[0]["sequence"]
 
@@ -384,11 +403,7 @@ class TaskStatusProjectionStore:
     def snapshot(self) -> TaskStatusProjection:
         with self._lock:
             current = self._current
-
-            if current is None:
-                raise ValueError("projection_has_no_status")
-
-            event_ref = self._history[-1]["event_ref"]
+            event_ref = self._history[-1]["event_ref"] if self._history else ""
 
             return {
                 "schema_version": SCHEMA_VERSION,
@@ -402,7 +417,7 @@ class TaskStatusProjectionStore:
                     "allowed_fields": list(self._allowed_fields),
                     "max_field_chars": self._max_field_chars,
                 },
-                "current": dict(current),
+                "current": dict(current) if current is not None else None,
                 "history": [
                     dict(item)
                     for item in self._history

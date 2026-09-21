@@ -180,11 +180,16 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
         self.assertNotEqual(first.projection_id, second.projection_id)
 
-    def test_projection_requires_status_before_snapshot(self) -> None:
+    def test_prepared_projection_snapshot_has_no_status(self) -> None:
         projection = self.store()
 
-        with self.assertRaises(ValueError):
-            projection.snapshot()
+        snapshot = projection.snapshot()
+
+        self.assertEqual(snapshot["state"], "prepared")
+        self.assertIsNone(snapshot["current"])
+        self.assertEqual(snapshot["history"], [])
+        self.assertEqual(snapshot["cursor"]["sequence"], 0)
+        self.assertEqual(snapshot["cursor"]["event_ref"], "")
 
     def test_to_snapshot_preserves_projection_state(self) -> None:
         projection = self.store()
@@ -733,6 +738,53 @@ class TaskStatusProjectionTests(unittest.TestCase):
                     getattr(store, method_name)()
 
                 self.assertEqual(str(ctx.exception), "projection_closed")
+
+
+    def test_prepared_projection_can_be_snapshotted(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        snapshot = store.snapshot()
+
+        self.assertEqual(snapshot["state"], "prepared")
+        self.assertEqual(snapshot["projection_id"], store.projection_id)
+        self.assertEqual(snapshot["cursor"]["sequence"], 0)
+        self.assertEqual(snapshot["cursor"]["event_ref"], "")
+        self.assertEqual(snapshot["history"], [])
+        self.assertIsNone(snapshot["current"])
+
+    def test_prepared_projection_can_be_restored_before_first_event(
+        self,
+    ) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        snapshot = store.snapshot()
+        restored = TaskStatusProjectionStore.restore(snapshot)
+
+        self.assertEqual(
+            restored.projection_id,
+            store.projection_id,
+        )
+
+        row = restored.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="revision:1",
+            )
+        )
+
+        self.assertEqual(row["sequence"], 1)
+        self.assertEqual(row["status"], "running")
 
 
 if __name__ == "__main__":
