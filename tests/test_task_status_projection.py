@@ -488,5 +488,79 @@ class TaskStatusProjectionTests(unittest.TestCase):
         self.assertNotIn("secret", snapshot)
 
 
+    def test_prepared_state_is_not_delivery_success(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        self.assertEqual(store._state, "prepared")
+
+    def test_delivery_lifecycle_states_are_distinct(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        event = ProjectionEvent(
+            task_ref="T1",
+            status="running",
+            revision="revision:1",
+        )
+        store.append(event)
+
+        store.mark_observed()
+        self.assertEqual(store.snapshot()["state"], "observed")
+
+        store.mark_retry()
+        self.assertEqual(store.snapshot()["state"], "retry")
+
+        store.mark_provider_refused()
+        self.assertEqual(
+            store.snapshot()["state"],
+            "provider_refused",
+        )
+
+        store.mark_ambiguous_delivery()
+        self.assertEqual(
+            store.snapshot()["state"],
+            "ambiguous_delivery",
+        )
+
+    def test_closed_projection_rejects_lifecycle_changes(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["task_ref", "status"],
+        )
+
+        store.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="revision:2",
+            )
+        )
+        store.close()
+
+        self.assertEqual(store.snapshot()["state"], "closed")
+
+        for operation in (
+            store.mark_observed,
+            store.mark_retry,
+            store.mark_provider_refused,
+            store.mark_ambiguous_delivery,
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                operation()
+
+            self.assertEqual(str(ctx.exception), "projection_closed")
+
+
 if __name__ == "__main__":
     unittest.main()
