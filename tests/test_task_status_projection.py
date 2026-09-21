@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import unittest
 
+import pytest
+
 from _local_package import load_local_package
 
 load_local_package()
@@ -71,8 +73,8 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
     def test_delivery_state_transitions(self) -> None:
         projection = self.store()
-        projection.append(ProjectionEvent("T1", "queued", "r1"))
 
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
         projection.mark_observed()
         self.assertEqual(projection.snapshot()["state"], "observed")
 
@@ -123,8 +125,8 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
     def test_claim_boundary_is_explicit(self) -> None:
         projection = self.store()
-        projection.append(ProjectionEvent("T1", "queued", "r1"))
 
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
         snapshot = projection.snapshot()
 
         self.assertEqual(snapshot["claim_boundary"], CLAIM_BOUNDARY)
@@ -226,8 +228,8 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
     def test_restore_rejects_wrong_schema(self) -> None:
         projection = self.store()
-        projection.append(ProjectionEvent("T1", "queued", "r1"))
 
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
         snapshot = projection.snapshot()
         snapshot["schema_version"] = "task_status_projection/v999"
 
@@ -236,8 +238,8 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
     def test_restore_rejects_projection_identity_mismatch(self) -> None:
         projection = self.store()
-        projection.append(ProjectionEvent("T1", "queued", "r1"))
 
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
         snapshot = projection.snapshot()
         snapshot["projection_id"] = "projection:tampered"
 
@@ -246,8 +248,8 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
     def test_restore_rejects_cursor_mismatch(self) -> None:
         projection = self.store()
-        projection.append(ProjectionEvent("T1", "queued", "r1"))
 
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
         snapshot = projection.snapshot()
         snapshot["cursor"]["sequence"] = 99
 
@@ -256,8 +258,8 @@ class TaskStatusProjectionTests(unittest.TestCase):
 
     def test_restore_rejects_empty_history(self) -> None:
         projection = self.store()
-        projection.append(ProjectionEvent("T1", "queued", "r1"))
 
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
         snapshot = projection.snapshot()
         snapshot["history"] = []
 
@@ -276,6 +278,81 @@ class TaskStatusProjectionTests(unittest.TestCase):
         self.assertLess(first["sequence"], second["sequence"])
         self.assertEqual(first["event_ref"], "event:1")
         self.assertEqual(second["event_ref"], "event:2")
+
+    def test_restore_rejects_history_task_mismatch(self) -> None:
+        projection = self.store()
+
+        projection.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="queued",
+                revision="rev-1",
+            )
+        )
+
+        snapshot = projection.snapshot()
+        snapshot["history"][0]["task_ref"] = "T2"
+
+        with pytest.raises(ValueError, match="history task mismatch"):
+            TaskStatusProjectionStore.restore(snapshot)
+
+    def test_restore_rejects_current_task_mismatch(self) -> None:
+        projection = self.store()
+
+        projection.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="queued",
+                revision="rev-1",
+            )
+        )
+
+        snapshot = projection.snapshot()
+        snapshot["current"]["task_ref"] = "T2"
+
+        with pytest.raises(ValueError, match="current task mismatch"):
+            TaskStatusProjectionStore.restore(snapshot)
+
+    def test_restore_rejects_current_revision_mismatch(self) -> None:
+        projection = self.store()
+
+        projection.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="queued",
+                revision="rev-1",
+            )
+        )
+
+        snapshot = projection.snapshot()
+        snapshot["current"]["revision"] = "rev-2"
+
+        with pytest.raises(ValueError, match="current revision mismatch"):
+            TaskStatusProjectionStore.restore(snapshot)
+
+    def test_restore_rejects_history_sequence_gap(self) -> None:
+        projection = self.store()
+
+        projection.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="queued",
+                revision="rev-1",
+            )
+        )
+        projection.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="rev-2",
+            )
+        )
+
+        snapshot = projection.snapshot()
+        snapshot["history"][1]["sequence"] = 3
+
+        with pytest.raises(ValueError, match="history sequence mismatch"):
+            TaskStatusProjectionStore.restore(snapshot)
 
 
 if __name__ == "__main__":
