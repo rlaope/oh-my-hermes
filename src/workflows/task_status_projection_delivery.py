@@ -8,7 +8,7 @@ import json
 import re
 from typing import TypedDict
 
-from .task_status_projection import Cursor
+from .task_status_projection import Cursor, TaskStatusProjection
 
 SCHEMA_VERSION = "task_status_projection_delivery/v1"
 CLAIM_BOUNDARY = (
@@ -111,3 +111,39 @@ class ProjectionDeliveryRequest:
 def _reference(value: str, field: str) -> None:
     if not isinstance(value, str) or not _REFERENCE.fullmatch(value):
         raise ValueError(f"invalid {field}")
+
+def build_projection_delivery_action(
+    projection: TaskStatusProjection,
+    *,
+    action: str,
+) -> ProjectionDeliveryAction:
+    if not isinstance(projection, dict):
+        raise ValueError("invalid projection")
+
+    if projection.get("schema_version") != "task_status_projection/v1":
+        raise ValueError("unsupported projection schema")
+
+    current = projection.get("current")
+
+    if not isinstance(current, dict):
+        raise ValueError("projection has no current status")
+
+    cursor = projection.get("cursor")
+
+    if not isinstance(cursor, dict):
+        raise ValueError("invalid projection cursor")
+
+    request = ProjectionDeliveryRequest(
+        projection_id=str(projection["projection_id"]),
+        board_ref=str(projection["board_ref"]),
+        task_ref=str(projection["task_ref"]),
+        destination_ref=str(projection["destination_ref"]),
+        cursor={
+            "sequence": cursor["sequence"],
+            "event_ref": cursor["event_ref"],
+        },
+        revision=str(current["revision"]),
+        action=action,
+    )
+
+    return request.build()

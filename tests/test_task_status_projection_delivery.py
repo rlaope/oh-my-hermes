@@ -6,8 +6,13 @@ from omh.workflows.task_status_projection_delivery import (
     CLAIM_BOUNDARY,
     SCHEMA_VERSION,
     ProjectionDeliveryRequest,
+    build_projection_delivery_action,
 )
 
+from omh.workflows.task_status_projection import (
+    TaskStatusProjectionStore,
+    ProjectionEvent,
+)
 
 class TaskStatusProjectionDeliveryTests(unittest.TestCase):
     def _request(self, **overrides: object) -> ProjectionDeliveryRequest:
@@ -25,6 +30,51 @@ class TaskStatusProjectionDeliveryTests(unittest.TestCase):
         }
         values.update(overrides)
         return ProjectionDeliveryRequest(**values)
+
+    def test_builds_delivery_action_from_projection_snapshot(self) -> None:
+        store = TaskStatusProjectionStore(
+            board_ref="board:main",
+            task_ref="T1",
+            destination_ref="destination:ops",
+            allowed_fields=["status"],
+        )
+
+        store.append(
+            ProjectionEvent(
+                task_ref="T1",
+                status="running",
+                revision="rev:1",
+            )
+        )
+
+        projection = store.snapshot()
+
+        action = build_projection_delivery_action(
+            projection,
+            action="update_current",
+        )
+
+        self.assertEqual(action["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(
+            action["projection_id"],
+            projection["projection_id"],
+        )
+        self.assertEqual(
+            action["cursor"]["sequence"],
+            1,
+        )
+        self.assertEqual(
+            action["cursor"]["event_ref"],
+            "event:1",
+        )
+        self.assertEqual(
+            action["revision"],
+            "rev:1",
+        )
+        self.assertEqual(
+            action["claim_boundary"],
+            CLAIM_BOUNDARY,
+        )
 
     def test_builds_provider_neutral_delivery_action(self) -> None:
         action = self._request().build()
