@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .task_status_projection_delivery import (
+    ProjectionDeliveryRequest,
+)
 from .task_status_projection_execution_store import (
     append_if_missing,
 )
 from .task_status_projection_executor import (
-    ProjectionDeliveryExecution,
     prepare_projection_delivery_execution,
 )
 from .task_status_projection_observation import (
@@ -39,35 +41,18 @@ class TaskStatusProjectionWorkflow:
         revision: str,
         observation: DeliveryObservation | None = None,
     ) -> dict:
-        action = {
-            "schema_version": "task_status_projection_delivery/v1",
-            "action_id": self._id(
-                "projection-action",
-                projection_id,
-                task_ref,
-                destination_ref,
-                revision,
-            ),
-            "action": "update_current",
-            "projection_id": projection_id,
-            "board_ref": board_ref,
-            "task_ref": task_ref,
-            "destination_ref": destination_ref,
-            "sequence": 0,
-            "event_ref": "event:0",
-            "revision": revision,
-            "idempotency_key": self._id(
-                "projection-idempotency",
-                projection_id,
-                task_ref,
-                destination_ref,
-                revision,
-            ),
-            "claim_boundary": (
-                "A prepared delivery action is not delivery evidence. "
-                "Only a validated external observation can establish delivery."
-            ),
-        }
+        action = ProjectionDeliveryRequest(
+            projection_id=projection_id,
+            board_ref=board_ref,
+            task_ref=task_ref,
+            destination_ref=destination_ref,
+            cursor={
+                "sequence": 0,
+                "event_ref": "",
+            },
+            revision=revision,
+            action="update_current",
+        ).build()
 
         execution = prepare_projection_delivery_execution(
             action,
@@ -111,16 +96,3 @@ class TaskStatusProjectionWorkflow:
         result["observation"] = observation_record
 
         return result
-
-    def _id(
-        self,
-        prefix: str,
-        *parts: str,
-    ) -> str:
-        import hashlib
-
-        digest = hashlib.sha256(
-            ":".join(parts).encode()
-        ).hexdigest()
-
-        return f"{prefix}:{digest[:32]}"
