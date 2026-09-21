@@ -144,6 +144,7 @@ class TaskStatusProjectionTests(unittest.TestCase):
             )
 
         snapshot = projection.snapshot()
+
         self.assertEqual(len(snapshot["history"]), 1)
         self.assertEqual(snapshot["cursor"]["event_ref"], first["event_ref"])
 
@@ -181,6 +182,20 @@ class TaskStatusProjectionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             projection.snapshot()
 
+    def test_cursor_is_monotonic(self) -> None:
+        projection = self.store()
+
+        projection.append(ProjectionEvent("T1", "queued", "r1"))
+        first = projection.snapshot()["cursor"]
+
+        projection.append(ProjectionEvent("T1", "running", "r2"))
+        second = projection.snapshot()["cursor"]
+
+        self.assertLess(first["sequence"], second["sequence"])
+        self.assertEqual(first["event_ref"], "event:1")
+        self.assertEqual(second["event_ref"], "event:2")
+
 
 if __name__ == "__main__":
     unittest.main()
+

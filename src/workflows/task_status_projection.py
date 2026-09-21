@@ -80,6 +80,14 @@ class TaskStatusProjection(TypedDict):
     history: list[LifecycleEvent]
     claim_boundary: str
 
+def _cursor(sequence: int, event_ref: str) -> Cursor:
+    if sequence < 0:
+        raise ValueError("invalid cursor sequence")
+    _bounded_string(event_ref, "event_ref", MAX_CURSOR_CHARS)
+    return {
+        "sequence": sequence,
+        "event_ref": event_ref,
+    }
 
 def _reference(value: object, name: str) -> str:
     if not isinstance(value, str) or not _REFERENCE.fullmatch(value):
@@ -257,6 +265,8 @@ class TaskStatusProjectionStore:
             if current is None:
                 raise ValueError("projection_has_no_status")
 
+            event_ref = self._history[-1]["event_ref"]
+
             return {
                 "schema_version": SCHEMA_VERSION,
                 "projection_id": self._projection_id,
@@ -264,10 +274,7 @@ class TaskStatusProjectionStore:
                 "task_ref": self._task_ref,
                 "destination_ref": self._destination_ref,
                 "state": self._state,
-                "cursor": {
-                    "sequence": self._sequence,
-                    "event_ref": self._history[-1]["event_ref"],
-                },
+                "cursor": _cursor(self._sequence, event_ref),
                 "disclosure_policy": {
                     "allowed_fields": list(self._allowed_fields),
                     "max_field_chars": self._max_field_chars,
