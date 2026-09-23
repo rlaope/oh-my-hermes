@@ -18,7 +18,7 @@ from .final_review_wave import (
 )
 
 
-_FIXED_REVISION = re.compile(r"[0-9a-f]{40}")
+_FIXED_REVISION = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 
 
 class FinalReviewWaveEngine(Protocol):

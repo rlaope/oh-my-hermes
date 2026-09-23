@@ -7,7 +7,7 @@ import re
 from .diagnostic_execution import DiagnosticExecutionEngine, DiagnosticExecutionRequest
 
 
-_FIXED_COMMIT = re.compile(r"[0-9a-f]{40}")
+_FIXED_COMMIT = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 
 
 def run_post_green_diagnostics(

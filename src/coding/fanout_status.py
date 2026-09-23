@@ -480,7 +480,10 @@ def _resume_for_unit(unit: Mapping[str, object], contract: object, duplicates: f
         and row.get('run_ref') == binding.run_ref and row.get('owner') == receipt.capability.executor
         for row in contract_units):
         return {**unavailable, 'reason': 'binding_mismatch'}
-    if observe_session_binary(receipt.capability.binary_identity.resolved_path) != receipt.capability.binary_identity:
+    if (
+        observe_session_binary(receipt.capability.binary_identity.launch_path)
+        != receipt.capability.binary_identity
+    ):
         return {**unavailable, 'reason': 'binary_changed'}
     recovery = unit.get('session_recovery_snapshot')
     return dict(project_session_resume(receipt.to_dict(), binding=binding,

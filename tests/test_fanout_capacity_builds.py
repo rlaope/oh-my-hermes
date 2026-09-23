@@ -40,6 +40,7 @@ class CapacityDefaultBuildTests(unittest.TestCase):
     def dispatch_fixture(self, *, recognized: bool = True, version: str = '0.154.0',
                          help_flags: str = '--json resume', stderr: str = capacity.CODEX_ADMISSION_ERROR,
                          explicit_fixture: bool = False, mutate_binary: bool = False,
+                         retarget_before_spawn: bool = False,
                          **options: Unpack[SourceOptions]) -> tuple[list[str], str, list[str | None]]:
         with TemporaryDirectory(prefix='g3-default-build-') as directory:
             root = Path(directory).resolve()
@@ -79,6 +80,8 @@ class CapacityDefaultBuildTests(unittest.TestCase):
                 return [executable[0], *command[1:]]
 
             def runner(argv: Sequence[str], **kwargs: Unpack[RunnerOptions]) -> subprocess.CompletedProcess[bytes] | subprocess.CompletedProcess[str]:
+                if retarget_before_spawn and argv[0] == executable[0]:
+                    Path(executable[0]).write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
                 result = signal_safe_unit_runner(argv, **kwargs)
                 if argv[0] == executable[0]:
                     starts.append(list(argv))
@@ -91,6 +94,7 @@ class CapacityDefaultBuildTests(unittest.TestCase):
             setattr(runner, 'accepts_on_spawn', True)
             setattr(runner, 'accepts_output_capture', True)
             setattr(runner, 'accepts_launch', True)
+            setattr(runner, 'accepts_binary_identity', True)
             goal = 'Exercise the default reviewed-build resolver with a labeled fixture.'
             contract = write_fanout_contract(paths, build_fanout_contract(goal, [
                 {'unit_id': name, 'title': name, 'owner': 'codex', 'file_scope': [name + '/']}
@@ -113,7 +117,8 @@ class CapacityDefaultBuildTests(unittest.TestCase):
             summary_capacity = record(record(summary)['capacity'])
             support = text(summary_capacity['native_support'])
             self.assertFalse(summary_capacity['quota_observed'])
-            self.assertEqual(len(starts), 1 if statuses[0] == 'executor_capacity_rejected' else 2)
+            if not retarget_before_spawn:
+                self.assertEqual(len(starts), 1 if statuses[0] == 'executor_capacity_rejected' else 2)
             if statuses[0] == 'executor_capacity_rejected':
                 admission = record(rows[0]['capacity'])
                 self.assertEqual(admission['evidence_kind'], 'fixture')
@@ -128,6 +133,9 @@ class CapacityDefaultBuildTests(unittest.TestCase):
                 self.assertEqual(rows_of(decode(output))[0]['capacity'], admission)
             else:
                 self.assertTrue(all('capacity' not in row for row in rows))
+            if retarget_before_spawn:
+                self.assertNotIn('executor_session', rows[0])
+                self.assertLess(len(starts), len(rows))
         self.assertFalse(root.exists())
         return statuses, support, backtraces
 
@@ -162,6 +170,14 @@ class CapacityDefaultBuildTests(unittest.TestCase):
     def test_postflight_changed_binary_is_not_recognized_or_classified(self) -> None:
         statuses, support, _ = self.dispatch_fixture(mutate_binary=True)
         self.assertEqual(statuses, ['failed', 'failed'])
+        self.assertEqual(support, 'unsupported_without_source_qualified_build')
+
+    def test_spawn_boundary_refuses_changed_identity_without_session_evidence(self) -> None:
+        statuses, support, _ = self.dispatch_fixture(
+            retarget_before_spawn=True,
+            capacity_sources=(),
+        )
+        self.assertEqual(statuses, ['failed', 'completed'])
         self.assertEqual(support, 'unsupported_without_source_qualified_build')
 
 

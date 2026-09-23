@@ -21,7 +21,7 @@ from .local_diagnostic_process import LocalDiagnosticProviderRunner
 
 
 SUPPORTED_LOCAL_PROVIDERS = ("pyright", "basedpyright", "ruff")
-_FIXED_COMMIT = re.compile(r"[0-9a-f]{40}")
+_FIXED_COMMIT = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 _MAX_GIT_OUTPUT_BYTES = 65_536
 _OVER_LIMIT_CHANGED_PATHS = 201
 

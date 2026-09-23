@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import replace
 import os
 import re
@@ -7,9 +8,10 @@ import shutil
 import stat
 from hashlib import sha256
 import subprocess
+from tempfile import TemporaryDirectory
 from collections.abc import Mapping
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from .fanout_executor_sessions import (
@@ -30,7 +32,7 @@ from .pre_handoff_readiness import (
 
 
 def observe_session_binary(binary: str, *, env: Mapping[str, str] | None = None) -> BinaryIdentity | None:
-    """Hash the actual resolved regular executable, not an executor's self-report."""
+    """Keep the PATH launch identity while hashing its canonical regular target."""
     resolved = shutil.which(binary, path=None if env is None else env.get('PATH', ''))
     if resolved is None:
         return None
@@ -54,9 +56,131 @@ def observe_session_binary(binary: str, *, env: Mapping[str, str] | None = None)
             if (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (
                     before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns):
                 return None
-        return BinaryIdentity(str(path), digest.hexdigest())
+        return BinaryIdentity(str(path), digest.hexdigest(), os.path.abspath(resolved))
     except OSError:
         return None
+
+
+class PinnedSessionBinaryError(RuntimeError):
+    pass
+
+
+def _copy_windows_launcher_closure(launcher: Path, mirror: Path) -> None:
+    try:
+        text = launcher.read_text(encoding="utf-8", errors="ignore")
+    except OSError as exc:
+        raise PinnedSessionBinaryError("executor launcher closure is unavailable") from exc
+    packages: set[tuple[str, ...]] = set()
+    for match in re.finditer(r'%(?:~dp0|dp0%)[\\/]*([^"\r\n%]+)', text, re.IGNORECASE):
+        parts = PureWindowsPath(match[1]).parts
+        try:
+            node_modules_index = tuple(part.lower() for part in parts).index("node_modules")
+        except ValueError:
+            continue
+        if node_modules_index + 1 >= len(parts):
+            continue
+        package_end = node_modules_index + (3 if parts[node_modules_index + 1].startswith("@") else 2)
+        if package_end <= len(parts) and ".." not in parts[:package_end]:
+            packages.add(tuple(parts[:package_end]))
+    for parts in packages:
+        source = launcher.parent.joinpath(*parts)
+        destinations = [(source, mirror.joinpath(*parts))]
+        if source.parent.name.startswith("@"):
+            destinations.extend(
+                (sibling, mirror.joinpath(*parts[:-1], sibling.name))
+                for sibling in source.parent.iterdir()
+                if sibling.is_dir() and sibling.name.startswith(source.name + "-")
+            )
+        for package_source, destination in destinations:
+            if package_source.is_dir() and not destination.exists():
+                shutil.copytree(package_source, destination, symlinks=False)
+
+
+@contextmanager
+def pinned_session_binary(identity: BinaryIdentity):
+    """Yield an immutable executable copy whose bytes match the recorded identity."""
+    launch_path = Path(identity.launch_path)
+    try:
+        descriptor = os.open(launch_path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(descriptor, "rb") as source, TemporaryDirectory(
+            prefix="omh-executor-"
+        ) as temporary:
+            observed = os.fstat(source.fileno())
+            canonical = os.stat(identity.resolved_path)
+            if (
+                not stat.S_ISREG(observed.st_mode)
+                or (observed.st_dev, observed.st_ino) != (canonical.st_dev, canonical.st_ino)
+            ):
+                raise PinnedSessionBinaryError("executor binary identity changed before spawn")
+            prefix = source.read(2)
+            source.seek(0)
+            canonical_path = Path(identity.resolved_path)
+            if os.name == "nt":
+                package_mirror = Path(temporary)
+                mirror = package_mirror / canonical_path.parent.name
+                mirror.mkdir(mode=0o700)
+                for sibling in canonical_path.parent.iterdir():
+                    if sibling != canonical_path and sibling.is_file():
+                        shutil.copy2(sibling, mirror / sibling.name)
+                _copy_windows_launcher_closure(canonical_path, mirror)
+            else:
+                package_source = canonical_path.parent.parent
+                if package_source == Path(package_source.anchor):
+                    package_source = canonical_path.parent
+                package_mirror = Path(temporary) / package_source.name
+                mirror = package_mirror / canonical_path.parent.name
+                mirror.mkdir(parents=True, mode=0o700)
+                for sibling in package_source.iterdir():
+                    if sibling != canonical_path.parent:
+                        (package_mirror / sibling.name).symlink_to(
+                            sibling,
+                            target_is_directory=sibling.is_dir(),
+                        )
+                if prefix == b"#!":
+                    for sibling in canonical_path.parent.iterdir():
+                        if sibling == canonical_path:
+                            continue
+                        (mirror / sibling.name).symlink_to(
+                            sibling,
+                            target_is_directory=sibling.is_dir(),
+                        )
+            artifact = mirror / canonical_path.name
+            node_modules = next(
+                (parent for parent in canonical_path.parents if parent.name == "node_modules"),
+                None,
+            )
+            if node_modules is not None and not (Path(temporary) / "node_modules").exists():
+                (Path(temporary) / "node_modules").symlink_to(
+                    node_modules,
+                    target_is_directory=True,
+                )
+            protected_directories = (mirror, package_mirror, Path(temporary))
+            digest = sha256()
+            artifact_descriptor: int | None = None
+            try:
+                with artifact.open("xb") as destination:
+                    while chunk := source.read(65536):
+                        digest.update(chunk)
+                        destination.write(chunk)
+                    destination.flush()
+                    os.fsync(destination.fileno())
+                artifact.chmod(observed.st_mode & 0o555)
+                for directory in protected_directories:
+                    directory.chmod(0o555)
+                if digest.hexdigest() != identity.sha256:
+                    raise PinnedSessionBinaryError("executor binary identity changed before spawn")
+                artifact_descriptor = os.open(artifact, os.O_RDONLY)
+                yield str(artifact)
+            finally:
+                if artifact_descriptor is not None:
+                    os.close(artifact_descriptor)
+                for directory in reversed(protected_directories):
+                    directory.chmod(0o700)
+                if artifact.exists():
+                    artifact.chmod(0o700)
+                artifact.unlink(missing_ok=True)
+    except OSError as exc:
+        raise PinnedSessionBinaryError("executor binary identity changed before spawn") from exc
 
 
 def negotiate_session_capability(owner: str, binary: str, *, env: Mapping[str, str]) -> SessionCapability | None:
@@ -67,19 +191,27 @@ def negotiate_session_capability(owner: str, binary: str, *, env: Mapping[str, s
     capability = SessionCapability(owner, None, identity, None)
     if owner not in ('codex', 'claude-code'):
         return capability
-    version_bytes, version_reason = bounded_session_probe([identity.resolved_path, '--version'], env=env)
-    help_args = ['exec', '--help'] if owner == 'codex' else ['--help']
-    # The help probe reads a document, so it gets a document-sized budget and
-    # keeps what it read when even that was not enough: finding every flag in
-    # the part that was read settles the question, and only a flag MISSING
-    # from a truncated read is ambiguous. Before this, a help page that
-    # outgrew the shared 16 KiB cap silently switched the whole lane off.
-    help_bytes, help_reason = bounded_session_probe(
-        [identity.resolved_path, *help_args],
-        env=env,
-        limit_bytes=SESSION_HELP_PROBE_BYTES,
-        keep_partial=True,
-    )
+    launch_path = identity.launch_path or identity.resolved_path
+    try:
+        with pinned_session_binary(identity) as executable:
+            version_bytes, version_reason = bounded_session_probe(
+                [launch_path, '--version'], env=env, executable=executable
+            )
+            help_args = ['exec', '--help'] if owner == 'codex' else ['--help']
+            # The help probe reads a document, so it gets a document-sized budget and
+            # keeps what it read when even that was not enough: finding every flag in
+            # the part that was read settles the question, and only a flag MISSING
+            # from a truncated read is ambiguous. Before this, a help page that
+            # outgrew the shared 16 KiB cap silently switched the whole lane off.
+            help_bytes, help_reason = bounded_session_probe(
+                [launch_path, *help_args],
+                env=env,
+                limit_bytes=SESSION_HELP_PROBE_BYTES,
+                keep_partial=True,
+                executable=executable,
+            )
+    except PinnedSessionBinaryError:
+        return replace(capability, reason='binary_changed_during_probe')
     if version_bytes is None:
         return replace(capability, reason=f'version_probe_{version_reason}')
     if help_bytes is None:
@@ -95,8 +227,6 @@ def negotiate_session_capability(owner: str, binary: str, *, env: Mapping[str, s
     flags = ('--json', 'resume') if owner == 'codex' else ('--output-format', 'stream-json', '--verbose', '--resume')
     absent = [flag for flag in flags
               if not re.search(r'(?<![\w-])' + re.escape(flag) + r'(?![\w-])', help_text)]
-    if observe_session_binary(identity.resolved_path) != identity:
-        return replace(capability, reason='binary_changed_during_probe')
     if absent:
         # A flag missing from a help page that was cut off is unanswered, not
         # answered "no" -- both refuse the protocol, and the reason says which

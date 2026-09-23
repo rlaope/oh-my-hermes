@@ -139,6 +139,86 @@ class NegotiationOutcomeTests(unittest.TestCase):
         self.assertIsNone(capability.protocol)
         self.assertEqual(capability.reason, "version_output_unrecognized")
 
+    def test_windows_launcher_closure_is_bounded_to_the_selected_package(self) -> None:
+        from omh.coding.executor_readiness import _copy_windows_launcher_closure
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        selected = directory / "node_modules" / "@scope" / "tool"
+        platform_package = directory / "node_modules" / "@scope" / "tool-win32-x64"
+        unrelated = directory / "node_modules" / "unrelated"
+        for package in (selected, platform_package, unrelated):
+            package.mkdir(parents=True)
+            (package / "payload").write_text(package.name, encoding="utf-8")
+        launcher = directory / "tool.cmd"
+        launcher.write_text(
+            '@echo off\r\nnode "%~dp0\\node_modules\\@scope\\tool\\bin\\tool.js"\r\n',
+            encoding="utf-8",
+        )
+        mirror = directory / "mirror"
+        mirror.mkdir()
+
+        _copy_windows_launcher_closure(launcher, mirror)
+
+        self.assertTrue((mirror / "node_modules" / "@scope" / "tool" / "payload").is_file())
+        self.assertTrue(
+            (mirror / "node_modules" / "@scope" / "tool-win32-x64" / "payload").is_file()
+        )
+        self.assertFalse((mirror / "node_modules" / "unrelated").exists())
+
+    @unittest.skipUnless(os.name == "nt", "Windows command-wrapper behavior")
+    def test_pinned_command_wrapper_keeps_adjacent_support_files(self) -> None:
+        from omh.coding.executor_readiness import observe_session_binary
+        from omh.coding.fanout_dispatch import signal_safe_unit_runner
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        wrapper = _fake_cli_wrapper(directory, "2.1.268", "--help")
+        identity = observe_session_binary(wrapper, env=os.environ)
+        self.assertIsNotNone(identity)
+        assert identity is not None
+
+        completed = signal_safe_unit_runner(
+            (wrapper, "--version"),
+            env=os.environ,
+            text=True,
+            capture_output=True,
+            expected_binary_identity=identity,
+        )
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "2.1.268")
+
+    @unittest.skipUnless(os.name == "nt", "Windows npm command-wrapper behavior")
+    def test_pinned_npm_wrapper_keeps_adjacent_node_modules(self) -> None:
+        from omh.coding.executor_readiness import observe_session_binary
+        from omh.coding.fanout_dispatch import signal_safe_unit_runner
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        program = directory / "node_modules" / "package" / "bin" / "cli.py"
+        program.parent.mkdir(parents=True)
+        program.write_text("print('npm-layout')\n", encoding="utf-8")
+        wrapper = directory / "fake-cli.cmd"
+        wrapper.write_text(
+            f'@echo off\r\n"{sys.executable}" "%~dp0\\node_modules\\package\\bin\\cli.py"\r\n',
+            encoding="utf-8",
+        )
+        identity = observe_session_binary(str(wrapper), env=os.environ)
+        self.assertIsNotNone(identity)
+        assert identity is not None
+
+        completed = signal_safe_unit_runner(
+            (str(wrapper),),
+            env=os.environ,
+            text=True,
+            capture_output=True,
+            expected_binary_identity=identity,
+        )
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "npm-layout")
+
 
 if __name__ == "__main__":
     unittest.main()

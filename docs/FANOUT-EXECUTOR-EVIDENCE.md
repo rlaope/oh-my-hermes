@@ -18,7 +18,7 @@ Three rules apply to every record below:
   are never persisted under `.omh`. Complete executor event streams are not
   retained.
 
-## Executor sessions (`fanout_executor_session/v1`)
+## Executor sessions (`fanout_executor_session/v2`)
 
 ### What is observed
 
@@ -36,7 +36,7 @@ Each receipt is bound to the attempt that produced it:
 | Field group | Fields |
 | --- | --- |
 | State | `state` (`observed`, `not_observed`, `not_available`), `reason`, `reference_kind`, `reference`, `event_ref` |
-| Executor | `executor`, `protocol`, `version`, `binary_identity.resolved_path`, `binary_identity.sha256` |
+| Executor | `executor`, `protocol`, `version`, `binary_identity.launch_path`, `binary_identity.resolved_path`, `binary_identity.sha256` |
 | Lineage | `fanout_id`, `unit_id`, `run_ref`, `attempt_id`, `predecessor_attempt_id`, `contract_digest` |
 | Workspace | `worktree_path`, `worktree_incarnation` (`incarnation_id`, `common_dir`, `branch`, `device`, `inode`), `base_sha`, `launch_head`, `end_head` |
 
@@ -63,7 +63,7 @@ preserved untouched by a partial rerun.
 The `resume` block is a projection, not a launch:
 
 ```json
-{"available": true, "reason": "copy_only", "argv": ["<resolved codex>", "exec", "resume", "<uuid>", "-"],
+{"available": true, "reason": "copy_only", "argv": ["<launch codex>", "exec", "resume", "<uuid>", "-"],
  "cwd": "<worktree>", "shell_command": "cd -- <worktree> && ...",
  "execution_policy": "copy_only", "required_input": "follow_up_prompt_on_stdin",
  "native_resume_state": "not_tested"}

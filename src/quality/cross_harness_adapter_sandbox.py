@@ -274,9 +274,10 @@ def sandbox_command(
     # plus --setenv, matching sandbox-exec, which never clears it. Fanout filters
     # that environment itself and adds per-command overrides at spawn time.
     inherit_environment: bool = False,
+    process_exec_literals: Sequence[Path] = (),
 ) -> tuple[str, ...]:
     if selected == "sandbox-exec":
-        executables = (argv[0], "/usr/bin/true")
+        executables = (argv[0], "/usr/bin/true", *(str(path) for path in process_exec_literals))
         if Path(argv[0]).resolve() == Path("/bin/sh").resolve():
             # macOS dispatches `/bin/sh` through `/bin/bash` after consulting
             # `/private/var/select`; the same narrow allowance lets the
@@ -287,6 +288,9 @@ def sandbox_command(
             for item in executables
         )
         process_exec = "(allow process-exec*)" if allow_broad_process_exec else f"(allow process-exec {literals})"
+        pinned_process_exec = (
+            f"(allow process-exec {literals})" if process_exec_literals else ""
+        )
         canonical_roots = unique_roots((*roots, child.root))
         canonical_root_names = {str(root) for root in canonical_roots}
         policy_roots = (
@@ -322,7 +326,7 @@ def sandbox_command(
             for name in macos_mach_lookup_names
         )
         network = "(allow network*)" if allow_network else ""
-        policy = f'(version 1)(deny default)(deny syscall-unix (syscall-number 147 82))(allow process-fork){process_exec}(allow sysctl-read){file_read}{write_data_literals}{write_literal_policy}(allow file-write* {write_subpaths}){mach_lookup}{network}'
+        policy = f'(version 1)(deny default)(deny syscall-unix (syscall-number 147 82))(allow process-fork){process_exec}{pinned_process_exec}(allow sysctl-read){file_read}{write_data_literals}{write_literal_policy}(allow file-write* {write_subpaths}){mach_lookup}{network}'
         return ("/usr/bin/sandbox-exec", "-p", policy, *argv)
     tool = _trusted_bwrap(backend_digest)
     assert tool is not None

@@ -170,7 +170,7 @@ _PHASE_MARKER_PATTERNS: Final[tuple[tuple[str, str], ...]] = (
     # `git commit` prints its own diffstat footer on success.
     (PHASE_MARKER_COMMIT_CREATED, r"\b\d+ files? changed"),
     # `git commit` also prints `[branch 1a2b3c4] subject` as its first line.
-    (PHASE_MARKER_COMMIT_CREATED, r"^\[\S+ [0-9a-f]{7,40}\] "),
+    (PHASE_MARKER_COMMIT_CREATED, r"^\[\S+ [0-9a-f]{7,64}\] "),
 )
 
 # Permission and sandbox denials. Retrying under the same permissions cannot
@@ -258,7 +258,7 @@ _DIGIT_RUN = re.compile(r"\d+")
 # Seven is git's short-sha floor, which is the smallest hex run worth
 # collapsing; forty is a full sha1. Matched before the digit rule so a sha
 # becomes one token instead of a digit/letter mosaic.
-_HEX_RUN = re.compile(r"\b[0-9a-f]{7,40}\b", re.IGNORECASE)
+_HEX_RUN = re.compile(r"\b[0-9a-f]{7,64}\b", re.IGNORECASE)
 _PROMPT_TAIL_RES = tuple(re.compile(pattern, re.I) for pattern in _PROMPT_TAIL_PATTERNS)
 _PHASE_MARKER_RES: Final[tuple[tuple[str, re.Pattern[str]], ...]] = tuple(
     (marker, re.compile(pattern, re.I | re.M)) for marker, pattern in _PHASE_MARKER_PATTERNS

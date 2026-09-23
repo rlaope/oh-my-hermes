@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,8 +16,16 @@ from _cli_harness import run_cli  # noqa: E402
 
 from omh.coding.fanout import build_fanout_contract  # noqa: E402
 from omh.coding.fanout_artifacts import (  # noqa: E402
+    fanout_contract_digest,
     fanout_dispatch_summary_path,
     write_fanout_contract,
+)
+from omh.coding.executor_readiness import observe_session_binary  # noqa: E402
+from omh.coding.fanout_executor_sessions import (  # noqa: E402
+    SessionBinding,
+    SessionCapability,
+    SessionDecoder,
+    observe_session_workspace,
 )
 from omh.coding.inflight import write_inflight_marker  # noqa: E402
 from omh.coding.fanout_dispatch import dispatch_fanout  # noqa: E402
@@ -191,6 +200,84 @@ class FanoutStatusProjectionTests(unittest.TestCase):
             self.assertEqual(unit["owner"], "unknown")
             self.assertEqual(unit["worktree_path"], "unknown")
             self.assertEqual(unit["evidence_ref_count"], 0)
+
+    def test_persisted_v1_executor_session_remains_resumable_in_status(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = root / "repository"
+            repository.mkdir()
+            subprocess.run(("git", "init", "-q"), cwd=repository, check=True)
+            (repository / "tracked").write_text("base\n", encoding="utf-8")
+            subprocess.run(("git", "add", "tracked"), cwd=repository, check=True)
+            subprocess.run(
+                ("git", "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-qm", "base"),
+                cwd=repository,
+                check=True,
+            )
+            worktree = root / "unit"
+            subprocess.run(
+                ("git", "worktree", "add", "-qb", "unit/status", str(worktree)),
+                cwd=repository,
+                check=True,
+            )
+            paths = OmhPaths(omh_home=root / ".omh", hermes_home=root / ".hermes")
+            contract = write_fanout_contract(
+                paths,
+                build_fanout_contract(
+                    "Persist a legacy executor session.",
+                    [{"unit_id": "core", "title": "Core", "owner": "codex", "file_scope": ["src/"]}],
+                ),
+            )
+            fanout_id = str(contract["fanout_id"])
+            run_ref = f"{fanout_id}-core"
+            executable = root / "codex"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o755)
+            identity = observe_session_binary(str(executable), env={"PATH": os.environ.get("PATH", "")})
+            workspace = observe_session_workspace(str(worktree))
+            self.assertIsNotNone(identity)
+            self.assertIsNotNone(workspace)
+            assert identity is not None and workspace is not None
+            attempt_id = "22345678-1234-4234-8234-123456789abc"
+            binding = SessionBinding(
+                fanout_id,
+                "core",
+                run_ref,
+                attempt_id,
+                fanout_contract_digest(contract),
+                str(worktree.resolve()),
+                workspace.incarnation,
+                workspace.head,
+                workspace.head,
+            )
+            decoder = SessionDecoder(SessionCapability("codex", "codex_exec_json", identity, "1.2.3"))
+            decoder.observe(
+                {"type": "thread.started", "thread_id": "12345678-1234-4234-8234-123456789abc"},
+                event_ref="stdout:1",
+            )
+            persisted = decoder.receipt(binding, end_head=workspace.head).to_dict()
+            persisted["schema_version"] = "fanout_executor_session/v1"
+            binary_identity = persisted["binary_identity"]
+            assert isinstance(binary_identity, dict)
+            binary_identity.pop("launch_path")
+            event = _event("core", "executor_session_observed", minutes_ago=1)
+            event.update(
+                {
+                    "target_id": run_ref,
+                    "run_id": run_ref,
+                    "worker_ref": "core",
+                    "attempt_id": attempt_id,
+                    "worktree_ref": str(worktree.resolve()),
+                    "executor_session": persisted,
+                }
+            )
+            _seed_journal(paths, [event])
+
+            roster = project_fanout_status(paths, fanout_id)
+
+            resume = roster["units"][0]["resume"]
+            self.assertTrue(resume["available"])
+            self.assertEqual(resume["argv"][0], str(executable.resolve()))
 
     def test_integration_ready_requires_verification_and_merge_order_position(self) -> None:
         with TemporaryDirectory() as tmp:

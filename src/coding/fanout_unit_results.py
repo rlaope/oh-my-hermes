@@ -76,9 +76,8 @@ FANOUT_UNIT_RESULT_CLAIM_BOUNDARY = (
 # imported so result validation does not depend on the contract builder.
 _UNIT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _FANOUT_ID_RE = re.compile(FANOUT_ID_PATTERN)
-# Short-hex through full: `git rev-parse --short` yields 7+, a full object id
-# is 40. Anything outside that window is not a SHA an executor read from git.
-_GIT_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+# Short SHA-1 through full SHA-1, or a full SHA-256 object ID.
+_GIT_SHA_RE = re.compile(r"^(?:[0-9a-f]{7,40}|[0-9a-f]{64})$")
 
 _CHECK_KEYS = ("command", "status", "evidence_ref", "reported_by", "observed_by", "observation_source")
 
@@ -185,7 +184,7 @@ def _validated_fanout_id(value: object) -> str:
 
 def _validated_sha(value: object, field: str) -> str:
     if not isinstance(value, str) or not _GIT_SHA_RE.match(value):
-        raise ValueError(f"{field} must be a 7-to-40 character lowercase git sha; got {value!r}")
+        raise ValueError(f"{field} must be a lowercase abbreviated SHA-1 or full object ID; got {value!r}")
     return value
 
 

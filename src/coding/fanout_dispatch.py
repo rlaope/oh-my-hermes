@@ -29,8 +29,13 @@ from ..system.local_store import atomic_write_json, ensure_dir, locked_json_upda
 from ..system.security_posture import resolve_security_posture
 from ..system.metadata_safety import redact_metadata_text
 from .fanout_output import FanoutOutput
-from .fanout_executor_sessions import SessionBinding, SessionDecoder, bound_session_fields, observe_session_workspace, read_session_receipt
-from .executor_readiness import negotiate_session_capability, observe_session_binary
+from .fanout_executor_sessions import BinaryIdentity, SessionBinding, SessionDecoder, bound_session_fields, observe_session_workspace, read_session_receipt
+from .executor_readiness import (
+    PinnedSessionBinaryError,
+    negotiate_session_capability,
+    observe_session_binary,
+    pinned_session_binary,
+)
 from .fanout_capacity import (
     AdmissionBinding, CapacityBlocked, CapacityTrip, CodexAdmissionObserver, CodexAdmissionSource, LaunchCallable,
     CODEX_ADMISSION_SUPPORT, CAPACITY_STATUSES, OwnerLaunchGate, capacity_fields,
@@ -107,6 +112,7 @@ from .fanout_confinement import (
     planned_fanout_filesystem_confinement,
     prepare_fanout_filesystem_confinement,
 )
+from .fanout_git_metadata import GitMetadataBoundaryError
 from .fanout_environment import (
     ChildEnvironmentDecision,
     finalize_child_environment,
@@ -272,6 +278,14 @@ def terminate_live_unit_groups(*, grace: float = UNIT_TERMINATE_GRACE_SECONDS) -
     return terminated
 
 
+class ExecutorBinaryIdentityChanged(PinnedSessionBinaryError):
+    pass
+
+
+class PinnedConfinementCommandError(RuntimeError):
+    pass
+
+
 def signal_safe_unit_runner(
     argv: Sequence[str],
     *,
@@ -284,8 +298,10 @@ def signal_safe_unit_runner(
     on_spawn: Callable[[subprocess.Popen[bytes] | subprocess.Popen[str]], None] | None = None,
     on_output: Callable[[str], None] | None = None,
     confinement_command: Sequence[str] | None = None,
+    confinement_command_factory: Callable[[Sequence[str], str], Sequence[str] | None] | None = None,
     output_capture: FanoutOutput | None = None,
     launch: LaunchCallable | None = None,
+    expected_binary_identity: BinaryIdentity | None = None,
 ) -> subprocess.CompletedProcess[bytes] | subprocess.CompletedProcess[str]:
     """Drop-in for `subprocess.run` that owns each child as a process group.
 
@@ -303,55 +319,105 @@ def signal_safe_unit_runner(
     other shape keeps the plain blocking `communicate` exactly as before.
     """
     pipe = subprocess.PIPE if capture_output else None
+    pinned_context = None
     def spawn():
-        return subprocess.Popen(
-            list(confinement_command or argv),
-            cwd=cwd,
-            env=dict(env) if env is not None else None,
-            text=False if output_capture is not None else text,
-            errors=None if output_capture is not None else errors,
-            stdout=pipe,
-            stderr=pipe,
-            start_new_session=os.name != "nt",
-        )
-    process = spawn() if launch is None else launch(spawn)
-    with process:
-        _register_live_unit(process)
+        nonlocal pinned_context
+        if expected_binary_identity is None:
+            return subprocess.Popen(
+                list(confinement_command or argv),
+                cwd=cwd,
+                env=dict(env) if env is not None else None,
+                text=False if output_capture is not None else text,
+                errors=None if output_capture is not None else errors,
+                stdout=pipe,
+                stderr=pipe,
+                start_new_session=os.name != "nt",
+            )
         try:
-            # Register-then-check: a spawn racing the interrupt either lands
-            # in the terminator's snapshot or sees the flag here and dies at
-            # once instead of outliving the dispatcher.
-            if _INTERRUPT_FLAG.is_set():
-                terminate_process_group(process, UNIT_TERMINATE_GRACE_SECONDS, signal.SIGTERM)
+            pinned_context = pinned_session_binary(expected_binary_identity)
+            executable = pinned_context.__enter__()
+        except PinnedSessionBinaryError as exc:
+            raise ExecutorBinaryIdentityChanged(str(exc)) from exc
+        if confinement_command is not None and confinement_command_factory is not None:
+            raise PinnedConfinementCommandError(
+                "confinement command and factory are mutually exclusive"
+            )
+        built_confinement_command = (
+            confinement_command_factory(argv, executable)
+            if confinement_command_factory is not None
+            else confinement_command
+        )
+        command = list(built_confinement_command or argv)
+        popen_executable = None
+        if built_confinement_command is None:
+            if os.name == "nt" and Path(executable).read_bytes()[:2] == b"#!":
+                # Test and custom script launchers are not PE images.  Windows
+                # cannot pass them to CreateProcess as `executable`; preserve
+                # the verified copied bytes by running that copy explicitly
+                # through the current interpreter instead.
+                command = [sys.executable, executable, *command[1:]]
+            else:
+                popen_executable = executable
+        elif confinement_command_factory is None:
+            command[-len(argv)] = executable
+        try:
+            return subprocess.Popen(
+                command,
+                executable=popen_executable,
+                cwd=cwd,
+                env=dict(env) if env is not None else None,
+                text=False if output_capture is not None else text,
+                errors=None if output_capture is not None else errors,
+                stdout=pipe,
+                stderr=pipe,
+                start_new_session=os.name != "nt",
+            )
+        except (Exception, KeyboardInterrupt, SystemExit):
+            pinned_context.__exit__(*sys.exc_info())
+            pinned_context = None
+            raise
+    try:
+        process = spawn() if launch is None else launch(spawn)
+        with process:
+            _register_live_unit(process)
             try:
-                if on_spawn is not None:
-                    on_spawn(process)
-            except Exception:
-                # A raising hook must not leak the child it was handed.
+                # Register-then-check: a spawn racing the interrupt either lands
+                # in the terminator's snapshot or sees the flag here and dies at
+                # once instead of outliving the dispatcher.
+                if _INTERRUPT_FLAG.is_set():
+                    terminate_process_group(process, UNIT_TERMINATE_GRACE_SECONDS, signal.SIGTERM)
+                try:
+                    if on_spawn is not None:
+                        on_spawn(process)
+                except Exception:
+                    # A raising hook must not leak the child it was handed.
+                    terminate_process_group(process, UNIT_TERMINATE_GRACE_SECONDS, signal.SIGTERM)
+                    raise
+                if output_capture is not None:
+                    _capture_binary_output(process, output_capture, timeout=timeout, on_output=on_output)
+                    stdout, stderr = '', ''
+                elif on_output is not None and capture_output and text:
+                    stdout, stderr = _communicate_with_output_polls(
+                        process,
+                        timeout=timeout,
+                        on_output=on_output,
+                        poll_seconds=UNIT_OUTPUT_POLL_SECONDS,
+                    )
+                else:
+                    stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # The whole group dies with the leader — a timed-out unit must
+                # not leave grandchildren running against the worktree.
                 terminate_process_group(process, UNIT_TERMINATE_GRACE_SECONDS, signal.SIGTERM)
                 raise
-            if output_capture is not None:
-                _capture_binary_output(process, output_capture, timeout=timeout, on_output=on_output)
-                stdout, stderr = '', ''
-            elif on_output is not None and capture_output and text:
-                stdout, stderr = _communicate_with_output_polls(
-                    process,
-                    timeout=timeout,
-                    on_output=on_output,
-                    poll_seconds=UNIT_OUTPUT_POLL_SECONDS,
-                )
-            else:
-                stdout, stderr = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            # The whole group dies with the leader — a timed-out unit must
-            # not leave grandchildren running against the worktree.
-            terminate_process_group(process, UNIT_TERMINATE_GRACE_SECONDS, signal.SIGTERM)
-            raise
-        finally:
-            if output_capture is not None:
-                output_capture.finish_pending()
-            _unregister_live_unit(process)
-    return subprocess.CompletedProcess(list(argv), int(process.returncode or 0), stdout, stderr)
+            finally:
+                if output_capture is not None:
+                    output_capture.finish_pending()
+                _unregister_live_unit(process)
+        return subprocess.CompletedProcess(list(argv), int(process.returncode or 0), stdout, stderr)
+    finally:
+        if pinned_context is not None:
+            pinned_context.__exit__(None, None, None)
 
 
 # Capability marker, not an identity check: a wrapper (functools.partial, a
@@ -363,6 +429,8 @@ signal_safe_unit_runner.accepts_on_spawn = True  # type: ignore[attr-defined]
 signal_safe_unit_runner.accepts_on_output = True  # type: ignore[attr-defined]
 setattr(signal_safe_unit_runner, 'accepts_output_capture', True)
 setattr(signal_safe_unit_runner, 'accepts_launch', True)
+setattr(signal_safe_unit_runner, 'accepts_binary_identity', True)
+setattr(signal_safe_unit_runner, 'accepts_pinned_confinement', True)
 
 
 def _capture_binary_output(
@@ -1343,7 +1411,7 @@ def _observed_clean_producer_head(runner: Callable[..., Any], worktree: Path) ->
     if head_sha is None:
         return None
     normalized = head_sha.strip()
-    return normalized if re.fullmatch(r"[0-9a-f]{40}", normalized) else None
+    return normalized if re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", normalized) else None
 
 
 def _run_verification_command(
@@ -1616,7 +1684,10 @@ def _integrated_checkout_contains_producer_heads(
     """Prove the supplied checkout contains every dispatcher-observed producer commit."""
     for entry in results.values():
         head_sha = entry.get("producer_head_sha")
-        if not isinstance(head_sha, str) or re.fullmatch(r"[0-9a-f]{40}", head_sha) is None:
+        if (
+            not isinstance(head_sha, str)
+            or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", head_sha) is None
+        ):
             return False
         if _git_text(
             runner, integrated_worktree, ["git", "merge-base", "--is-ancestor", head_sha, "HEAD"]
@@ -4094,7 +4165,8 @@ def _dispatch_unit(
         flags = ['--json'] if owner == 'codex' else ['--output-format', 'stream-json', '--verbose']
         # Keep the Codex positional prompt last and all original model/permission options.
         index = 2 if owner == 'codex' else 1
-        return [session_capability.binary_identity.resolved_path, *command[1:index], *flags, *command[index:]]
+        binary = session_capability.binary_identity
+        return [binary.launch_path or binary.resolved_path, *command[1:index], *flags, *command[index:]]
     if argv is not None:
         argv = session_argv(argv)
     verification_argv: list[list[str]] = []
@@ -4113,6 +4185,27 @@ def _dispatch_unit(
         else None
     )
     filesystem_confinement = confinement_receipt(confinement, worktree)
+    if (
+        confinement is not None
+        and confinement.selected in {"sandbox-exec", "bwrap"}
+        and (worktree / ".git").is_file()
+        and (
+            filesystem_confinement.get("enforced") is not True
+            or confinement.git_metadata is None
+        )
+    ):
+        return {
+            "unit_id": unit_id,
+            "run_ref": run_ref,
+            "owner": owner,
+            "status": "worktree_failed",
+            "attempt_id": attempt_id,
+            "reason_code": "linked_worktree_git_metadata_boundary_unavailable",
+            "failure_kind": FAILURE_KIND_WORKSPACE_BLOCKED,
+            "filesystem_confinement": filesystem_confinement,
+            "reason": "confinement could not prepare a unit-owned Git metadata boundary",
+            **_dispatch_status_ladder(),
+        }
     if confinement is not None:
         child_env = confinement.command_environment()
     # After the worktree exists and before anything else touches it: a linked
@@ -4211,6 +4304,8 @@ def _dispatch_unit(
     # up to its freshness window. See _open_fanout_progress_binding.
     progress_binding: dict[str, Any] | None = None
     spawn_kwargs: dict[str, Any] = {}
+    if session_capability is not None and getattr(runner, "accepts_binary_identity", False):
+        spawn_kwargs["expected_binary_identity"] = session_capability.binary_identity
     # One entry per FAILED attempt, each carrying why it did or did not lead to
     # another one. An empty list means the unit succeeded first try.
     retry_decisions: list[dict[str, Any]] = []
@@ -4283,9 +4378,18 @@ def _dispatch_unit(
                 telemetry_reporter(stdout_snapshot)
 
             spawn_kwargs["on_output"] = _observe_snapshot
-        confinement_command = confinement.command(argv) if confinement is not None else None
-        if confinement_command is not None:
-            spawn_kwargs["confinement_command"] = confinement_command
+        if confinement is not None:
+            if (
+                "expected_binary_identity" in spawn_kwargs
+                and getattr(runner, "accepts_pinned_confinement", False)
+            ):
+                spawn_kwargs["confinement_command_factory"] = (
+                    confinement.command_with_pinned_executable
+                )
+            else:
+                confinement_command = confinement.command(argv)
+                if confinement_command is not None:
+                    spawn_kwargs["confinement_command"] = confinement_command
         while True:
             attempt += 1
             output_tail = ""
@@ -4301,7 +4405,7 @@ def _dispatch_unit(
                     argv = build_dispatch_argv(owner, prompt, effective_model_route)
                     assert argv is not None  # Same previously admitted owner and route.
                     argv = session_argv(argv)
-                    if confinement is not None:
+                    if confinement is not None and "confinement_command_factory" not in spawn_kwargs:
                         spawn_kwargs['confinement_command'] = confinement.command(argv)
                 if not getattr(runner, 'accepts_launch', False):
                     dispatch_observed()
@@ -4375,7 +4479,11 @@ def _dispatch_unit(
                     del raw_stdout
                 del completed
                 if source is not None and (session_capability is None or
-                        observe_session_binary(source.resolved_path) != session_capability.binary_identity):
+                        observe_session_binary(
+                            session_capability.binary_identity.launch_path,
+                            env=child_env,
+                        )
+                        != session_capability.binary_identity):
                     source = None
                 if source is not None and binary_capture and 'launch' in spawn_kwargs:
                     launch_gate.observe_source(source)
@@ -4390,6 +4498,19 @@ def _dispatch_unit(
                 stderr_tail = capture.error_window('stderr')
                 if exit_code != 0:
                     failure_diagnostic = diagnostic('worker', 'nonzero', exit_code, 'process')
+            except ExecutorBinaryIdentityChanged:
+                capture.finish_pending()
+                dispatch_observed()
+                decoder = None
+                session_binding = None
+                exit_code = 1
+                output_tail = "executor binary identity changed before spawn"
+                failure_diagnostic = diagnostic(
+                    "launch",
+                    "spawn_error",
+                    None,
+                    "not_observed",
+                )
             except CapacityBlocked as exc:
                 entry = _capacity_entry(paths, unit, admission_binding, exc.trip,
                                         worktree_created=True, contract_digest=session_contract_digest)
@@ -4436,6 +4557,14 @@ def _dispatch_unit(
                         'executor_session': decoder.receipt(session_binding).to_dict()})
                 raise
             stdout_text = capture.take_final_text()
+            if exit_code == 0 and confinement is not None:
+                try:
+                    confinement.promote_git_metadata()
+                except (GitMetadataBoundaryError, OSError):
+                    exit_code = 1
+                    failure_diagnostic = diagnostic(
+                        'worktree', 'denial', None, 'not_observed'
+                    )
             session_fields = {}
             if decoder is not None and session_binding is not None:
                 # Only decoded stdout identity events can conflict with a UUID.

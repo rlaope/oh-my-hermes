@@ -156,6 +156,12 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
         "`omh coding fanout dispatch`; runs only the same-backend `/bin/sh` filesystem-refusal "
         "probe before the opt-in fanout owner or verification process is sandboxed."
     ),
+    "src/coding/fanout_git_metadata.py": (
+        "reached only from explicit `omh coding fanout dispatch`; runs a closed set of bounded "
+        "local Git metadata commands for the unit-owned linked-worktree commit boundary, with "
+        "ambient GIT_* routing removed, hooks/fsmonitor disabled, lazy fetch disabled, bounded "
+        "output and timeout, and no remote or executor invocation."
+    ),
     "src/coding/diagnostic_execution_engine.py": (
         "`omh coding fanout dispatch --diagnostics`; imports only subprocess exception classes "
         "to classify an injected or built-in runner's bounded failure and contains no "
@@ -907,6 +913,50 @@ GIT_ARGV_ALLOWLIST: dict[tuple[str, tuple[str, ...]], str] = {
     ("src/coding/workspace_preflight.py", ("ls-tree", "HEAD")): (
         "`git ls-tree -r --name-only HEAD` lists the tracked paths whose casefolds are compared for "
         "collisions on a case-insensitive filesystem; read-only and local-only"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("rev-parse",)): (
+        "bounded local identity, object-format, git-dir, common-dir, HEAD and tree reads for the "
+        "explicit fanout unit; ambient GIT_* routing and lazy fetch are disabled, and no remote is named"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("symbolic-ref",)): (
+        "reads the linked unit worktree's exact local branch ref so promotion can bind and CAS only "
+        "that branch; read-only and names no remote"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("init",)): (
+        "creates only the invocation-owned private Git directory inside the unit worktree write "
+        "boundary, matching the observed local object format and naming no remote"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("config",)): (
+        "reads identity values and configures only the invocation-owned private Git directory; "
+        "system/global config, hooks, fsmonitor, lazy fetch and terminal prompting stay disabled"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("update-ref",)): (
+        "updates only the private unit ref or the exact CAS-bound linked unit branch during local "
+        "promotion/recovery; hooks are disabled and no remote is named"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("read-tree",)): (
+        "materializes the invocation-owned private or temporary unit index from a fixed local commit; "
+        "local-only and names no remote"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("write-tree",)): (
+        "reads a named unit index into a local tree identity for promotion and recovery consistency "
+        "checks; hooks and lazy fetch are disabled and no remote is named"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("merge-base",)): (
+        "checks that the private producer commit descends from the prepared unit base before local "
+        "promotion; read-only, local-only, and not the forbidden merge verb"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("status",)): (
+        "checks the private unit worktree for a clean committed result with hooks and fsmonitor "
+        "disabled; read-only against local metadata and names no remote"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("pack-objects",)): (
+        "serializes only the explicitly selected private producer object graph into a bounded local "
+        "temporary stream; lazy fetch is disabled and no remote is named"
+    ),
+    ("src/coding/fanout_git_metadata.py", ("index-pack",)): (
+        "imports that bounded local pack stream into the linked unit object store without updating "
+        "a ref or contacting a remote; hooks, lazy fetch and terminal prompting remain disabled"
     ),
     ("src/coding/worktree_creator.py", ("worktree", "add")): (
         "creates a local isolated workspace for an executor; touches no remote"

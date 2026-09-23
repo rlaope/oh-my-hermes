@@ -33,6 +33,7 @@ from omh.coding.fanout_dispatch import (  # noqa: E402
     fanout_child_env,
     signal_safe_unit_runner,
 )
+from omh.coding.executor_readiness import observe_session_binary  # noqa: E402
 from omh.system.paths import OmhPaths  # noqa: E402
 
 
@@ -628,10 +629,234 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
             {"PATH": "/usr/bin", "OMH_MARK": "present", "TMPDIR": str(worktree / ".omh" / "confinement-tmp")},
         )
 
+    def test_bwrap_linked_worktree_commit_uses_unit_owned_git_metadata(self) -> None:
+        with TemporaryDirectory() as temporary:
+            worktree = _linked_worktree(Path(temporary))
+            git_dir = Path(
+                subprocess.run(
+                    ("/usr/bin/git", "rev-parse", "--absolute-git-dir"),
+                    cwd=worktree,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip()
+            )
+            _ = subprocess.run(
+                ("/usr/bin/git", "config", "user.name", "test"),
+                cwd=worktree,
+                check=True,
+            )
+            _ = subprocess.run(
+                ("/usr/bin/git", "config", "user.email", "test@example.test"),
+                cwd=worktree,
+                check=True,
+            )
+            original_mode = git_dir.stat().st_mode
+            with (
+                mock.patch("omh.coding.fanout_confinement.backend", return_value="bwrap"),
+                mock.patch("omh.coding.fanout_confinement.backend_available", return_value=True),
+                mock.patch("omh.coding.fanout_confinement.trusted_bwrap", return_value=object()),
+                mock.patch("omh.coding.fanout_confinement.preflight", return_value=(True, "digest")),
+                mock.patch(
+                    "omh.coding.fanout_confinement._probe",
+                    return_value={"status": "observed", "enforced": True},
+                ),
+            ):
+                confinement = prepare_fanout_filesystem_confinement(
+                    worktree,
+                    {
+                        "PATH": "/usr/bin:/bin",
+                        "GIT_DIR": "/tmp/ambient-git-dir",
+                        "GIT_INDEX_FILE": "/tmp/ambient-git-index",
+                    },
+                    (("/usr/bin/git", "status", "--porcelain"),),
+                )
+
+            (worktree / "change").write_text("committed\n", encoding="utf-8")
+            git_dir.chmod(0o500)
+            environment = confinement.command_environment()
+            self.assertNotEqual(environment["GIT_DIR"], "/tmp/ambient-git-dir")
+            self.assertNotIn("GIT_INDEX_FILE", environment)
+            try:
+                added = subprocess.run(
+                    ("/usr/bin/git", "add", "change"),
+                    cwd=worktree,
+                    env=environment,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                committed = subprocess.run(
+                    ("/usr/bin/git", "commit", "-qm", "unit change"),
+                    cwd=worktree,
+                    env=environment,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+            finally:
+                git_dir.chmod(original_mode)
+
+            self.assertEqual(added.returncode, 0, added.stderr)
+            self.assertEqual(committed.returncode, 0, committed.stderr)
+            self.assertNotIn(git_dir, confinement.write_roots)
+            self.assertFalse(
+                confinement.receipt["git_metadata_boundary"]["shared_git_writable"]
+            )
+            producer_head = confinement.promote_git_metadata()
+            status = subprocess.run(
+                ("/usr/bin/git", "status", "--porcelain"),
+                cwd=worktree,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertEqual(
+                subprocess.run(
+                    ("/usr/bin/git", "rev-parse", "HEAD"),
+                    cwd=worktree,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip(),
+                producer_head,
+            )
+            self.assertEqual(status.stdout, "")
+
 
 @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec confinement is exercised on macOS")
 class FanoutFilesystemConfinementTests(_ConfinedSpawnContract, unittest.TestCase):
     probe_refusal = "Operation not permitted"
+
+    def test_runner_authorizes_pinned_executable_and_denies_same_uid_replacement(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = root / "worktree"
+            worktree.mkdir()
+            shim_directory = root / "bin"
+            shim_directory.mkdir()
+            target = shim_directory / "mise"
+            target.write_text("#!/bin/sh\nprintf launched\n", encoding="utf-8")
+            target.chmod(0o755)
+            shim = shim_directory / "claude"
+            shim.symlink_to(target)
+            environment = {"PATH": str(shim_directory)}
+            identity = observe_session_binary("claude", env=environment)
+            self.assertIsNotNone(identity)
+            assert identity is not None
+            confinement = prepare_fanout_filesystem_confinement(
+                worktree,
+                environment,
+                ((str(shim),), ("/bin/sh", "-c", "exit 0")),
+            )
+            replacement = worktree / "replacement"
+            replacement.write_text("#!/bin/sh\nprintf escaped\n", encoding="utf-8")
+            replacement.chmod(0o755)
+            real_popen = subprocess.Popen
+
+            def attack_then_spawn(*args: object, **kwargs: object):
+                command = args[0]
+                self.assertIsInstance(command, list)
+                assert isinstance(command, list)
+                script_index = next(
+                    index
+                    for index, argument in enumerate(command)
+                    if argument == 'exec -a "$0" "$1" "${@:2}"'
+                )
+                self.assertEqual(command[script_index + 1], str(shim))
+                pinned = Path(command[script_index + 2])
+                self.assertIn(f'(literal "{pinned}")', command[2])
+                attack = confinement.command(
+                    (
+                        "/bin/sh",
+                        "-c",
+                        'chmod u+w "$1" && mv "$2" "$3"',
+                        "replace-pinned",
+                        str(pinned.parent),
+                        str(replacement),
+                        str(pinned),
+                    )
+                )
+                self.assertIsNotNone(attack)
+                assert attack is not None
+                attacker = real_popen(
+                    attack,
+                    cwd=worktree,
+                    env=confinement.command_environment(environment),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                _, attacker_stderr = attacker.communicate()
+                self.assertNotEqual(attacker.returncode, 0, attacker_stderr)
+                self.assertTrue(pinned.is_file())
+                return real_popen(*args, **kwargs)
+
+            with mock.patch(
+                "omh.coding.fanout_dispatch.subprocess.Popen",
+                side_effect=attack_then_spawn,
+            ):
+                completed = signal_safe_unit_runner(
+                    (str(shim),),
+                    cwd=str(worktree),
+                    env=confinement.command_environment(environment),
+                    text=True,
+                    capture_output=True,
+                    expected_binary_identity=identity,
+                    confinement_command_factory=confinement.command_with_pinned_executable,
+                )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, "launched")
+
+    def test_linked_worktree_commit_uses_private_metadata_inside_real_sandbox(self) -> None:
+        with TemporaryDirectory() as temporary:
+            worktree = _linked_worktree(Path(temporary).resolve())
+            confinement = prepare_fanout_filesystem_confinement(
+                worktree,
+                {"PATH": "/usr/bin:/bin"},
+                (("/bin/sh", "-c", "exit 0"), ("/usr/bin/git", "status", "--porcelain")),
+            )
+            self.assertIsNotNone(confinement.git_metadata)
+            (worktree / "change").write_text("sandboxed\n", encoding="utf-8")
+            completed = subprocess.run(
+                confinement.command(
+                    (
+                        "/bin/sh",
+                        "-c",
+                        "/usr/bin/git add change && "
+                        "/usr/bin/git -c user.name=Test -c user.email=test@example.test "
+                        "commit -qm unit",
+                    )
+                ),
+                cwd=worktree,
+                env=confinement.command_environment(),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            producer_head = confinement.promote_git_metadata()
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(
+                subprocess.run(
+                    ("/usr/bin/git", "rev-parse", "HEAD"),
+                    cwd=worktree,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip(),
+                producer_head,
+            )
+            self.assertEqual(
+                subprocess.run(
+                    ("/usr/bin/git", "status", "--porcelain"),
+                    cwd=worktree,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout,
+                "",
+            )
 
     def test_selected_owner_state_is_a_write_only_root_and_escape_routes_stay_refused(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -745,6 +970,78 @@ class FanoutFilesystemConfinementTests(_ConfinedSpawnContract, unittest.TestCase
 @unittest.skipUnless(_working_linux_bwrap(), "bwrap confinement is exercised on Linux hosts with a trusted, working bwrap")
 class LinuxBwrapFanoutConfinementTests(_ConfinedSpawnContract, unittest.TestCase):
     probe_refusal = "Read-only file system"
+
+    def test_linked_worktree_commit_uses_private_metadata_inside_real_bwrap(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = _linked_worktree(root)
+            shared_git_dir = Path(
+                subprocess.run(
+                    ("/usr/bin/git", "rev-parse", "--absolute-git-dir"),
+                    cwd=worktree,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip()
+            )
+            escaped = shared_git_dir / "child-escape"
+            host_marker = root / "host-fsmonitor-executed"
+            fsmonitor = worktree / "malicious-fsmonitor"
+            fsmonitor.write_text(
+                f"#!/bin/sh\nprintf escaped > {host_marker}\nexit 0\n",
+                encoding="utf-8",
+            )
+            fsmonitor.chmod(0o755)
+            confinement = prepare_fanout_filesystem_confinement(
+                worktree,
+                {"PATH": "/usr/bin:/bin"},
+                (("/bin/sh", "-c", "exit 0"), ("/usr/bin/git", "status", "--porcelain")),
+            )
+            (worktree / "change").write_text("committed\n", encoding="utf-8")
+            script = (
+                'printf blocked > "$1"; shared_write=$?; '
+                '/usr/bin/git add change && '
+                '/usr/bin/git -c user.name=Test -c user.email=test@example.test commit -qm unit && '
+                '/usr/bin/git config core.fsmonitor "$2"; '
+                'printf "shared_write=%s" "$shared_write"; test "$shared_write" -ne 0'
+            )
+
+            completed = subprocess.run(
+                confinement.command(
+                    ("/bin/sh", "-c", script, "unit", str(escaped), str(fsmonitor))
+                ),
+                cwd=worktree,
+                env=confinement.command_environment(),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            producer_head = confinement.promote_git_metadata()
+
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertIn("shared_write=", completed.stdout)
+            self.assertFalse(escaped.exists())
+            self.assertFalse(host_marker.exists())
+            self.assertEqual(
+                subprocess.run(
+                    ("/usr/bin/git", "rev-parse", "HEAD"),
+                    cwd=worktree,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip(),
+                producer_head,
+            )
+            self.assertEqual(
+                subprocess.run(
+                    ("/usr/bin/git", "status", "--porcelain"),
+                    cwd=worktree,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout,
+                "",
+            )
 
     def test_selected_owner_state_is_a_write_only_root_and_escape_routes_stay_refused(self) -> None:
         with TemporaryDirectory() as temporary:

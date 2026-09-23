@@ -31,8 +31,11 @@ from omh.coding.executor_readiness import (
     _executor_readiness_contract_cached,
     _run_probe,
     executor_readiness_contract,
+    negotiate_session_capability,
 )
-from omh.coding.fanout_dispatch import OMO_RUNTIME_HOST_CANDIDATES
+from omh.coding.fanout_executor_sessions import bounded_session_probe
+from omh.coding.fanout_dispatch import OMO_RUNTIME_HOST_CANDIDATES, signal_safe_unit_runner
+from omh.coding.fanout_confinement import _resolve_executables
 
 
 def _fake_binary(directory: str, name: str, version: str) -> Path:
@@ -81,6 +84,243 @@ class PathResolutionReportTests(unittest.TestCase):
             result = self._probe(os.pathsep.join([link_dir, real_dir]))
             self.assertFalse(result["shadowed"])
             self.assertEqual(len(result["path_resolutions"]), 1)
+
+    def test_a_version_manager_shim_is_probed_through_its_path_identity(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "mise"
+            target.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            target.chmod(target.stat().st_mode | stat.S_IEXEC)
+            shim = root / "claude"
+            shim.symlink_to(target)
+
+            def probe(argv: list[str], **_kwargs: object) -> tuple[bytes | None, str]:
+                if argv[0] != str(shim):
+                    return None, "wrong_launch_identity"
+                output = (
+                    b"1.2.3 (Claude Code)\n"
+                    if argv[1:] == ["--version"]
+                    else b"--output-format stream-json --verbose --resume\n"
+                )
+                return output, "observed"
+
+            with patch("omh.coding.executor_readiness.bounded_session_probe", side_effect=probe):
+                capability = negotiate_session_capability(
+                    "claude-code", "claude", env={"PATH": str(root)}
+                )
+
+            self.assertIsNotNone(capability)
+            assert capability is not None
+            self.assertEqual(capability.protocol, "claude_stream_json")
+            self.assertEqual(capability.binary_identity.launch_path, str(shim))
+            self.assertEqual(capability.binary_identity.resolved_path, str(target.resolve()))
+            self.assertEqual(
+                _resolve_executables((("claude", "--version"),), {"PATH": str(root)}),
+                {"claude": str(shim)},
+            )
+
+    def test_retargeted_shim_is_refused_at_the_runner_spawn_boundary(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            trusted = _fake_binary(temporary, "trusted", "1.2.3")
+            marker = root / "spawned"
+            replacement = root / "replacement"
+            replacement.write_text(
+                f"#!/bin/sh\nprintf spawned > {marker}\n",
+                encoding="utf-8",
+            )
+            replacement.chmod(replacement.stat().st_mode | stat.S_IEXEC)
+            shim = root / "codex"
+            shim.symlink_to(trusted)
+
+            with patch(
+                "omh.coding.executor_readiness.bounded_session_probe",
+                side_effect=((b"1.2.3\n", "observed"), (b"--json resume\n", "observed")),
+            ):
+                capability = negotiate_session_capability("codex", "codex", env={"PATH": str(root)})
+            self.assertIsNotNone(capability)
+            assert capability is not None
+
+            def retarget_then_spawn(spawn):
+                shim.unlink()
+                shim.symlink_to(replacement)
+                return spawn()
+
+            with self.assertRaisesRegex(RuntimeError, "binary identity changed"):
+                signal_safe_unit_runner(
+                    (str(shim),),
+                    env={"PATH": str(root)},
+                    expected_binary_identity=capability.binary_identity,
+                    launch=retarget_then_spawn,
+                )
+
+            self.assertFalse(marker.exists())
+
+    def test_negotiation_executes_verified_bytes_when_shim_changes_at_probe(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            trusted = root / "trusted"
+            trusted.write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = --version ]; then printf '1.2.3\\n'; "
+                "else printf '%s\\n' '--json resume'; fi\n",
+                encoding="utf-8",
+            )
+            trusted.chmod(0o755)
+            marker = root / "probe-escaped"
+            replacement = root / "replacement"
+            replacement.write_text(
+                "#!/bin/sh\n"
+                f"printf escaped > {marker}\n"
+                "if [ \"$1\" = --version ]; then printf '1.2.3\\n'; "
+                "else printf '%s\\n' '--json resume'; fi\n",
+                encoding="utf-8",
+            )
+            replacement.chmod(0o755)
+            shim = root / "codex"
+            shim.symlink_to(trusted)
+            calls = 0
+
+            def retarget_at_probe(argv: list[str], **kwargs: object) -> tuple[bytes | None, str]:
+                nonlocal calls
+                if calls == 0:
+                    shim.unlink()
+                    shim.symlink_to(replacement)
+                calls += 1
+                return bounded_session_probe(argv, **kwargs)
+
+            with patch(
+                "omh.coding.executor_readiness.bounded_session_probe",
+                side_effect=retarget_at_probe,
+            ):
+                capability = negotiate_session_capability(
+                    "codex", "codex", env={"PATH": str(root)}
+                )
+
+            self.assertIsNotNone(capability)
+            assert capability is not None
+            self.assertEqual(capability.protocol, "codex_exec_json")
+            self.assertFalse(marker.exists())
+
+    def test_runner_executes_verified_bytes_when_shim_changes_inside_popen(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            trusted = root / "trusted"
+            trusted.write_text("#!/bin/sh\nprintf trusted\n", encoding="utf-8")
+            trusted.chmod(0o755)
+            marker = root / "spawn-escaped"
+            replacement = root / "replacement"
+            replacement.write_text(
+                f"#!/bin/sh\nprintf escaped > {marker}\nprintf replacement\n",
+                encoding="utf-8",
+            )
+            replacement.chmod(0o755)
+            shim = root / "codex"
+            shim.symlink_to(trusted)
+            identity = negotiate_session_capability(
+                "other", "codex", env={"PATH": str(root)}
+            )
+            self.assertIsNotNone(identity)
+            assert identity is not None
+            real_popen = __import__("subprocess").Popen
+
+            def retarget_inside_popen(*args: object, **kwargs: object):
+                shim.unlink()
+                shim.symlink_to(replacement)
+                return real_popen(*args, **kwargs)
+
+            with patch(
+                "omh.coding.fanout_dispatch.subprocess.Popen",
+                side_effect=retarget_inside_popen,
+            ):
+                completed = signal_safe_unit_runner(
+                    (str(shim),),
+                    env={"PATH": str(root)},
+                    text=True,
+                    capture_output=True,
+                    expected_binary_identity=identity.binary_identity,
+                )
+
+            self.assertEqual(completed.stdout, "trusted")
+            self.assertFalse(marker.exists())
+
+    def test_runner_pinned_artifact_cannot_be_overwritten_inside_popen(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            trusted = root / "codex.js"
+            trusted.write_text("#!/bin/sh\nprintf trusted\n", encoding="utf-8")
+            trusted.chmod(0o755)
+            marker = root / "artifact-overwritten"
+            shim = root / "codex"
+            shim.symlink_to(trusted)
+            identity = negotiate_session_capability(
+                "other", "codex", env={"PATH": str(root)}
+            )
+            self.assertIsNotNone(identity)
+            assert identity is not None
+            real_popen = __import__("subprocess").Popen
+
+            def overwrite_pinned_artifact(*args: object, **kwargs: object):
+                executable = kwargs.get("executable")
+                self.assertIsInstance(executable, str)
+                assert isinstance(executable, str)
+                try:
+                    Path(executable).unlink()
+                    Path(executable).write_text(
+                        f"#!/bin/sh\nprintf escaped > {marker}\n",
+                        encoding="utf-8",
+                    )
+                except PermissionError:
+                    pass
+                return real_popen(*args, **kwargs)
+
+            with patch(
+                "omh.coding.fanout_dispatch.subprocess.Popen",
+                side_effect=overwrite_pinned_artifact,
+            ):
+                completed = signal_safe_unit_runner(
+                    (str(shim),),
+                    env={"PATH": str(root)},
+                    text=True,
+                    capture_output=True,
+                    expected_binary_identity=identity.binary_identity,
+                )
+
+            self.assertEqual(completed.stdout, "trusted")
+            self.assertFalse(marker.exists())
+
+    def test_script_launcher_does_not_require_install_directory_writes(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "package"
+            binary_directory = package / "bin"
+            binary_directory.mkdir(parents=True)
+            trusted = binary_directory / "codex.js"
+            trusted.write_text("#!/bin/sh\nprintf trusted\n", encoding="utf-8")
+            trusted.chmod(0o555)
+            binary_directory.chmod(0o555)
+            package.chmod(0o555)
+            shim = root / "codex"
+            shim.symlink_to(trusted)
+            try:
+                identity = negotiate_session_capability(
+                    "other", "codex", env={"PATH": str(root)}
+                )
+                self.assertIsNotNone(identity)
+                assert identity is not None
+
+                completed = signal_safe_unit_runner(
+                    (str(shim),),
+                    env={"PATH": str(root)},
+                    text=True,
+                    capture_output=True,
+                    expected_binary_identity=identity.binary_identity,
+                )
+
+                self.assertEqual(completed.stdout, "trusted")
+            finally:
+                package.chmod(0o755)
+                binary_directory.chmod(0o755)
 
     def test_same_version_in_two_places_is_not_flagged_as_shadowed(self) -> None:
         # Two distinct binaries printing the same version disagree about

@@ -14,6 +14,30 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  bwrap-confinement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Install package and bubblewrap
+        run: |
+          python -m pip install -e .
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          # Ubuntu 24.04 hosted runners restrict unprivileged user namespaces
+          # through AppArmor; bwrap needs that kernel feature for this test.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Require working bubblewrap
+        run: PYTHONPATH=tests python -c 'from test_fanout_confinement import _working_linux_bwrap; assert _working_linux_bwrap()'
+      - name: Production fanout dispatch through bubblewrap
+        env:
+          OMH_REQUIRE_BWRAP_E2E: "1"
+        run: >-
+          PYTHONPATH=tests python -m unittest
+          tests.test_fanout_production_confinement.FanoutProductionConfinementTests.test_dispatch_retries_pinned_shim_and_promotes_private_commit
+
   # Shard planner (issue #1294). Static source discovery never imports test
   # modules; syntax or unsupported dynamic discovery shapes fail here before
   # any shard runs. Identical inventory + timing history is byte-identical.

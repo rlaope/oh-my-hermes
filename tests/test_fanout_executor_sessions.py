@@ -111,9 +111,9 @@ class SessionsFoundation(unittest.TestCase):
             with patch('subprocess.Popen', side_effect=AssertionError('must not launch')):
                 projection = api.project_session_resume(receipt.to_dict(), binding=self.binding(),
                     workspace=self.workspace(receipt), platform='posix')
-            expected = ([receipt.capability.binary_identity.resolved_path, 'exec', 'resume', SID, '-']
+            expected = ([receipt.capability.binary_identity.launch_path, 'exec', 'resume', SID, '-']
                         if executor == 'codex' else
-                        [receipt.capability.binary_identity.resolved_path, '--resume=' + SID])
+                        [receipt.capability.binary_identity.launch_path, '--resume=' + SID])
             self.assertTrue(projection['available'])
             self.assertEqual(projection['argv'], expected)
             shell_command = projection['shell_command']
@@ -302,6 +302,30 @@ class SessionsFoundation(unittest.TestCase):
         before = json.dumps(summary)
         _ = api.read_session_receipt(summary['executor_session'])
         self.assertEqual(json.dumps(summary), before)
+
+    def test_persisted_v1_receipt_normalizes_launch_path_for_resume(self):
+        api = self.api()
+        persisted = self.receipt().to_dict()
+        persisted['schema_version'] = 'fanout_executor_session/v1'
+        identity = persisted['binary_identity']
+        assert isinstance(identity, dict)
+        identity.pop('launch_path')
+
+        read = api.read_session_receipt(persisted)
+
+        self.assertIsNotNone(read.receipt)
+        assert read.receipt is not None
+        self.assertEqual(
+            read.receipt.capability.binary_identity.launch_path,
+            read.receipt.capability.binary_identity.resolved_path,
+        )
+        projection = api.project_session_resume(
+            persisted,
+            binding=self.binding(),
+            workspace=self.workspace(read.receipt),
+        )
+        self.assertTrue(projection['available'])
+        self.assertEqual(projection['argv'][0], read.receipt.capability.binary_identity.resolved_path)
 
     def test_s6_strict_closed_receipt_validation(self):
         api = self.api()
