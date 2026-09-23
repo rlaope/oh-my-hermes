@@ -7,6 +7,7 @@ import importlib.util
 import json
 from pathlib import Path
 import shlex
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from typing import TYPE_CHECKING, TypeGuard
@@ -387,6 +388,22 @@ class SessionsFoundation(unittest.TestCase):
             data, reason = bounded_session_probe([sys.executable, '-c', program])
             self.assertIsNone(data)
             self.assertEqual(reason, expected)
+
+    def test_windows_pinned_script_probe_uses_the_verified_copy_through_python(self):
+        import sys
+        from omh.coding.fanout_executor_sessions import _session_probe_launch
+
+        with TemporaryDirectory() as temporary:
+            pinned = Path(temporary) / "codex.exe"
+            pinned.write_bytes(b"#!python\nprint('trusted')\n")
+            argv, executable = _session_probe_launch(
+                [r"C:\\tools\\codex.exe", "exec", "--help"],
+                str(pinned),
+                windows=True,
+            )
+
+        self.assertEqual(argv, [sys.executable, str(pinned), "exec", "--help"])
+        self.assertIsNone(executable)
 
     def test_s5_native_telemetry_never_recurses_or_borrows_identity(self):
         from omh.coding.unit_telemetry import native_unit_telemetry

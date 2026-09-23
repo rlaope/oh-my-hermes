@@ -230,7 +230,7 @@ class FanoutStatusProjectionTests(unittest.TestCase):
             )
             fanout_id = str(contract["fanout_id"])
             run_ref = f"{fanout_id}-core"
-            executable = root / "codex"
+            executable = root / ("codex.exe" if os.name == "nt" else "codex")
             executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             executable.chmod(0o755)
             identity = observe_session_binary(str(executable), env={"PATH": os.environ.get("PATH", "")})

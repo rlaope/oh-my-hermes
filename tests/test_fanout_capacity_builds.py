@@ -7,6 +7,7 @@ from hashlib import sha256
 import os
 from pathlib import Path
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 from typing import TypedDict, Unpack
 import unittest
@@ -81,7 +82,12 @@ class CapacityDefaultBuildTests(unittest.TestCase):
 
             def runner(argv: Sequence[str], **kwargs: Unpack[RunnerOptions]) -> subprocess.CompletedProcess[bytes] | subprocess.CompletedProcess[str]:
                 if retarget_before_spawn and argv[0] == executable[0]:
-                    Path(executable[0]).write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
+                    replacement = (
+                        f"#!{sys.executable}\nraise SystemExit(0)\n"
+                        if os.name == "nt"
+                        else "#!/bin/sh\nexit 0\n"
+                    )
+                    Path(executable[0]).write_text(replacement, encoding='utf-8')
                 result = signal_safe_unit_runner(argv, **kwargs)
                 if argv[0] == executable[0]:
                     starts.append(list(argv))

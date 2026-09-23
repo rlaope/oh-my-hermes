@@ -21,6 +21,7 @@ import subprocess
 from uuid import NAMESPACE_URL, uuid5
 import re
 import shlex
+import sys
 
 from ._hermes_child_process import MAX_CAPTURE_BYTES
 from typing import Literal, TypeGuard, TypedDict
@@ -377,6 +378,19 @@ def bound_session_fields(record: Mapping[str, object], *, fanout_id: str,
 SESSION_HELP_PROBE_BYTES: Final[int] = 262_144
 
 
+def _session_probe_launch(
+    argv: list[str], executable: str | None, *, windows: bool | None = None
+) -> tuple[list[str], str | None]:
+    """Launch a pinned script explicitly on Windows; PE executables stay native."""
+    if windows is None:
+        windows = os.name == "nt"
+    if windows and executable is not None:
+        with Path(executable).open("rb") as stream:
+            if stream.read(2) == b"#!":
+                return [sys.executable, executable, *argv[1:]], None
+    return argv, executable
+
+
 def bounded_session_probe(argv: list[str], *, cwd: str | None = None,
                           env: Mapping[str, str] | None = None,
                           limit_bytes: int = MAX_CAPTURE_BYTES,
@@ -394,8 +408,9 @@ def bounded_session_probe(argv: list[str], *, cwd: str | None = None,
     from ._hermes_child_process import start_pipe_drainers, terminate_process_group
 
     try:
-        process = subprocess.Popen(argv, cwd=cwd, env=dict(env) if env is not None else None,
-                                   executable=executable,
+        launch_argv, launch_executable = _session_probe_launch(argv, executable)
+        process = subprocess.Popen(launch_argv, cwd=cwd, env=dict(env) if env is not None else None,
+                                   executable=launch_executable,
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, start_new_session=os.name != 'nt')
     except OSError:

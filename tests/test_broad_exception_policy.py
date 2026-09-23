@@ -68,6 +68,22 @@ class ClassifiedSite(NamedTuple):
 
 CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ClassifiedSite(
+        "src/coding/fanout_dispatch.py",
+        "spawn",
+        INTENTIONAL,
+        "An interruption after entering the pinned-binary context must close that context "
+        "before the process is returned. The handler performs only that ownership cleanup, "
+        "then immediately re-raises the original exception without relabeling it.",
+    ),
+    ClassifiedSite(
+        "src/coding/fanout_git_promotion.py",
+        "promote_fanout_git_metadata",
+        INTENTIONAL,
+        "Any interruption after the linked index transaction starts must run the bounded "
+        "recovery transaction. Known boundary and cancellation failures are re-raised; an "
+        "unexpected failure is surfaced as GitMetadataBoundaryError and never as success.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/engagement_nudges.py",
         "observe_engagement_outcome",
         INTENTIONAL,
@@ -408,8 +424,8 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # function. `_write_candidate_batch`, `_is_catalog_question`, `pre_llm_call`,
 # `_resume_unlocked`, and `_execute_cell` each hold two handlers, so the handler
 # count is five above the anchor count.
-EXPECTED_HANDLER_COUNT = 42
-EXPECTED_ANCHOR_COUNT = 37
+EXPECTED_HANDLER_COUNT = 44
+EXPECTED_ANCHOR_COUNT = 39
 
 
 class DerivedSite(NamedTuple):

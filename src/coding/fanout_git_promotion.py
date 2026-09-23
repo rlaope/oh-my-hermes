@@ -79,10 +79,11 @@ def _safe_private_view(boundary: FanoutGitMetadata, head: str) -> Path:
         ):
             _git_config(boundary.worktree, (key, value), environment=environment)
         alternates = safe_git_dir / "objects" / "info" / "alternates"
-        alternates.write_text(
-            f"{boundary.private_git_dir / 'objects'}\n{boundary.common_git_dir / 'objects'}\n",
-            encoding="utf-8",
+        alternate_paths = (
+            (boundary.private_git_dir / "objects").as_posix(),
+            (boundary.common_git_dir / "objects").as_posix(),
         )
+        alternates.write_bytes(("\n".join(alternate_paths) + "\n").encode("utf-8"))
         _git_update_ref(boundary.worktree, (boundary.branch_ref, head), environment=environment)
         _git_symbolic_ref(boundary.worktree, ("HEAD", boundary.branch_ref), environment=environment)
         _copy_regular_file(boundary.private_git_dir / "index", safe_git_dir / "index")

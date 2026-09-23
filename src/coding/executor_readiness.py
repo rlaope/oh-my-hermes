@@ -103,7 +103,7 @@ def pinned_session_binary(identity: BinaryIdentity):
     try:
         descriptor = os.open(launch_path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
         with os.fdopen(descriptor, "rb") as source, TemporaryDirectory(
-            prefix="omh-executor-"
+            prefix="omh-executor-", ignore_cleanup_errors=True
         ) as temporary:
             observed = os.fstat(source.fileno())
             canonical = os.stat(identity.resolved_path)
@@ -124,18 +124,26 @@ def pinned_session_binary(identity: BinaryIdentity):
                         shutil.copy2(sibling, mirror / sibling.name)
                 _copy_windows_launcher_closure(canonical_path, mirror)
             else:
-                package_source = canonical_path.parent.parent
-                if package_source == Path(package_source.anchor):
-                    package_source = canonical_path.parent
+                executable_directory = canonical_path.parent
+                package_source = (
+                    executable_directory.parent
+                    if executable_directory.name == "bin"
+                    else executable_directory
+                )
                 package_mirror = Path(temporary) / package_source.name
-                mirror = package_mirror / canonical_path.parent.name
+                mirror = (
+                    package_mirror / executable_directory.name
+                    if package_source != executable_directory
+                    else package_mirror
+                )
                 mirror.mkdir(parents=True, mode=0o700)
-                for sibling in package_source.iterdir():
-                    if sibling != canonical_path.parent:
-                        (package_mirror / sibling.name).symlink_to(
-                            sibling,
-                            target_is_directory=sibling.is_dir(),
-                        )
+                if package_source != executable_directory:
+                    for sibling in package_source.iterdir():
+                        if sibling != executable_directory:
+                            (package_mirror / sibling.name).symlink_to(
+                                sibling,
+                                target_is_directory=sibling.is_dir(),
+                            )
                 if prefix == b"#!":
                     for sibling in canonical_path.parent.iterdir():
                         if sibling == canonical_path:
@@ -178,7 +186,6 @@ def pinned_session_binary(identity: BinaryIdentity):
                     directory.chmod(0o700)
                 if artifact.exists():
                     artifact.chmod(0o700)
-                artifact.unlink(missing_ok=True)
     except OSError as exc:
         raise PinnedSessionBinaryError("executor binary identity changed before spawn") from exc
 

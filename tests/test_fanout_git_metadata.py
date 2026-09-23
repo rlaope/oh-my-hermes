@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import stat
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
@@ -109,11 +110,26 @@ class FanoutGitMetadataTests(unittest.TestCase):
             assert boundary is not None
             self.assertEqual(boundary.linked_git_dir, expected_git_dir.resolve())
 
+    def test_private_alternates_uses_git_portable_lf_bytes(self) -> None:
+        with TemporaryDirectory() as temporary:
+            worktree = _linked_worktree(Path(temporary))
+
+            boundary = prepare_fanout_git_metadata(worktree)
+
+            self.assertIsNotNone(boundary)
+            assert boundary is not None
+            alternates = (boundary.private_git_dir / "objects" / "info" / "alternates").read_bytes()
+            self.assertTrue(alternates.endswith(b"\n"))
+            self.assertNotIn(b"\r", alternates)
+
     def test_preparation_rejects_git_file_redirect_to_the_common_repository(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             worktree = _linked_worktree(root)
-            (worktree / ".git").write_text(
+            git_file = worktree / ".git"
+            os.chmod(git_file, stat.S_IREAD | stat.S_IWRITE)
+            git_file.unlink()
+            git_file.write_text(
                 f"gitdir: {root / 'repository' / '.git'}\n",
                 encoding="utf-8",
             )

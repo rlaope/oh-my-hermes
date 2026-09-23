@@ -349,6 +349,7 @@ def signal_safe_unit_runner(
         )
         command = list(built_confinement_command or argv)
         popen_executable = None
+        process_env = dict(env) if env is not None else None
         if built_confinement_command is None:
             if os.name == "nt" and Path(executable).read_bytes()[:2] == b"#!":
                 # Test and custom script launchers are not PE images.  Windows
@@ -356,6 +357,14 @@ def signal_safe_unit_runner(
                 # the verified copied bytes by running that copy explicitly
                 # through the current interpreter instead.
                 command = [sys.executable, executable, *command[1:]]
+            elif Path(command[0]).resolve() == Path(sys.executable).resolve():
+                # A copied Python interpreter must see its copied path as the
+                # command image too; using only Popen(executable=...) leaves
+                # the original interpreter in argv[0] and can make it resolve
+                # or re-execute the wrong script.
+                command[0] = executable
+                if process_env is not None:
+                    process_env.setdefault("PYTHONHOME", sys.base_prefix)
             else:
                 popen_executable = executable
         elif confinement_command_factory is None:
@@ -365,7 +374,7 @@ def signal_safe_unit_runner(
                 command,
                 executable=popen_executable,
                 cwd=cwd,
-                env=dict(env) if env is not None else None,
+                env=process_env,
                 text=False if output_capture is not None else text,
                 errors=None if output_capture is not None else errors,
                 stdout=pipe,

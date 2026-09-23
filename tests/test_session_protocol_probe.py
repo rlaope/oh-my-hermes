@@ -217,7 +217,7 @@ class NegotiationOutcomeTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0)
-        self.assertEqual(completed.stdout, "npm-layout")
+        self.assertEqual(completed.stdout.splitlines(), ["npm-layout"])
 
 
 if __name__ == "__main__":

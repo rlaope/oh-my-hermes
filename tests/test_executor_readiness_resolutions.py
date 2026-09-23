@@ -289,6 +289,38 @@ class PathResolutionReportTests(unittest.TestCase):
             self.assertEqual(completed.stdout, "trusted")
             self.assertFalse(marker.exists())
 
+    def test_generic_script_pin_never_mirrors_its_grandparent_directory(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            trusted = root / "codex"
+            trusted.write_text("#!/bin/sh\nprintf trusted\n", encoding="utf-8")
+            trusted.chmod(0o755)
+            capability = negotiate_session_capability(
+                "other", str(trusted), env={"PATH": temporary}
+            )
+            self.assertIsNotNone(capability)
+            assert capability is not None
+            original_iterdir = Path.iterdir
+            observed: list[Path] = []
+
+            def record_iterdir(path: Path):
+                observed.append(path)
+                return original_iterdir(path)
+
+            with patch.object(Path, "iterdir", record_iterdir):
+                completed = signal_safe_unit_runner(
+                    (str(trusted),),
+                    env={"PATH": temporary},
+                    text=True,
+                    capture_output=True,
+                    expected_binary_identity=capability.binary_identity,
+                )
+
+            self.assertEqual(completed.stdout, "trusted")
+            self.assertIn(root, observed)
+            self.assertNotIn(root.parent, observed)
+
+
     def test_script_launcher_does_not_require_install_directory_writes(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -77,6 +77,11 @@ def restore_index(backup: Path, index: Path) -> None:
 
 
 def fsync_directory(directory: Path) -> None:
+    if os.name == "nt":
+        # Windows does not expose POSIX directory descriptors for fsync.
+        # File contents are flushed before this boundary; the atomic replace
+        # remains the platform's durability primitive for directory entries.
+        return
     descriptor = os.open(directory, os.O_RDONLY)
     try:
         os.fsync(descriptor)

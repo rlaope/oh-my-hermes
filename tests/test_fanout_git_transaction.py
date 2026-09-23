@@ -19,6 +19,10 @@ from test_fanout_git_metadata import _git, _linked_worktree
 
 
 class FanoutGitTransactionTests(unittest.TestCase):
+    def test_windows_directory_fsync_is_an_explicit_noop(self) -> None:
+        with mock.patch.object(fanout_git_transaction.os, "name", "nt"):
+            fanout_git_transaction.fsync_directory(Path("missing-directory"))
+
     def _boundary(
         self, temporary: str
     ) -> tuple[Path, FanoutGitMetadata, dict[str, str]]:

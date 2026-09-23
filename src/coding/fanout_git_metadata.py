@@ -378,7 +378,8 @@ def prepare_fanout_git_metadata(worktree: Path) -> FanoutGitMetadata | None:
         if value is not None:
             _git_config(worktree, (key, value), environment=environment)
     alternates = private_git_dir / "objects" / "info" / "alternates"
-    alternates.write_text(str(identity.common_git_dir / "objects") + "\n", encoding="utf-8")
+    alternate_path = (identity.common_git_dir / "objects").as_posix()
+    alternates.write_bytes((alternate_path + "\n").encode("utf-8"))
     _git_update_ref(worktree, (identity.branch_ref, identity.head), environment=environment)
     _git_symbolic_ref(worktree, ("HEAD", identity.branch_ref), environment=environment)
     _git_read_tree(worktree, ("HEAD",), environment=environment)
