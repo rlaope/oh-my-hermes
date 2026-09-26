@@ -46,15 +46,37 @@ failure this arrangement exists to prevent.
 
 Because the delegators are ordinary discoverable tests, they inherit the
 properties the rest of the suite already has: every one is assigned exactly once
-across the shards and the quarantine list, all three lanes (`test`,
-`test-windows`, `test-quarantine`) consume the same generated plan, and the
-`aggregate` job re-proves the exact-once accounting. Benchmark coverage is
+across the shards and the quarantine list, every lane (`test`,
+`test-windows`, `test-quarantine`) consumes a plan generated from the same
+inventory and quarantine, and the `aggregate` job re-proves the exact-once
+accounting. Benchmark coverage is
 therefore gated by the same green tick as everything else, with no detached
 workflow step to keep in sync.
 
 What has been observed locally is the offline framework running green and the
 generated plan carrying each delegator exactly once. Execution on the Windows
 lane is observed in pull-request CI, from the same plan, and nowhere earlier.
+
+## Per-Lane Shard Counts
+
+The Windows lane runs the same suite more than twice as slowly as the Linux
+lanes, so it gets its own plan. The `plan` job writes two files into the
+`shard-plan` artifact from the same inventory, timing history, and quarantine:
+`plan.json` with 2 shards for `linux-3.11` and `linux-3.12`, and
+`plan-windows.json` with 4 shards for `windows-3.12`. Both are deterministic,
+so identical inputs give byte-identical plans.
+
+`aggregate.py` binds each lane to the plan it ran (`--lane-plan
+windows-3.12=shard-plan/plan-windows.json`; every other lane uses `--plan`).
+It refuses a lane plan that does not assign the same discovered tests and the
+same quarantine as the default plan, and then requires every shard of each
+lane's own plan to be reported, so a missing Windows shard 3 is red even though
+the Linux lanes have no shard 3.
+
+`test-windows (0)` also runs the non-test Windows gates (the native fanout
+smoke before the unit tests, then compile and the PowerShell installer
+checks). On main run 36215915033 those added about 70 seconds to shard 0,
+which the planner does not see.
 
 ## Repository Settings
 

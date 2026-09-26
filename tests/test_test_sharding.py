@@ -116,7 +116,7 @@ def make_quarantine(path: Path, match: str = "test_gamma") -> None:
     )
 
 
-def plan_fixture(root: Path, out: Path, match: str = "test_gamma") -> subprocess.CompletedProcess[str]:
+def plan_fixture(root: Path, out: Path, match: str = "test_gamma", shards: int = 2) -> subprocess.CompletedProcess[str]:
     """Run plan.py against the fixture directory."""
 
     quarantine = root / "quarantine.json"
@@ -126,7 +126,7 @@ def plan_fixture(root: Path, out: Path, match: str = "test_gamma") -> subprocess
     return run_tool(
         PLAN_PY,
         "--shards",
-        "2",
+        str(shards),
         "--durations",
         str(timings),
         "--quarantine",
@@ -145,12 +145,16 @@ class PlanDeterminismTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_fixture(root)
-            first = root / "plan-a.json"
-            second = root / "plan-b.json"
-            for out in (first, second):
-                result = plan_fixture(root, out)
-                self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(first.read_bytes(), second.read_bytes())
+            # CI plans the Linux lanes at 2 shards and Windows at 4.
+            for shards in (2, 4):
+                with self.subTest(shards=shards):
+                    first = root / f"plan-{shards}-a.json"
+                    second = root / f"plan-{shards}-b.json"
+                    for out in (first, second):
+                        result = plan_fixture(root, out, shards=shards)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(first.read_bytes(), second.read_bytes())
+                    self.assertEqual(json.loads(first.read_text(encoding="utf-8"))["shard_count"], shards)
 
     def test_unknown_tests_get_stable_fallback_assignment(self) -> None:
         ids = tuple(f"mod{i:02d}.TestCase.test_x" for i in range(20))
@@ -577,6 +581,128 @@ class AggregateTests(unittest.TestCase):
             {"version": 1, "entries": [{"match": "a", "owner": "", "reason": "", "added": "x"}]},
         )
         self.assertNotEqual(self.aggregate().returncode, 0)
+
+
+class LanePlanAggregateTests(unittest.TestCase):
+    """A lane with its own shard count is reconciled against its own plan."""
+
+    LINUX = ("linux-3.11", "linux-3.12")
+    WINDOWS = "windows-3.12"
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.plan_path = root / "plan.json"
+        self.windows_plan_path = root / "plan-windows.json"
+        self._write_plan(self.plan_path, {"0": ["a.A.t1", "a.A.t2"], "1": ["a.A.t3", "a.A.t4"]})
+        self._write_plan(
+            self.windows_plan_path,
+            {"0": ["a.A.t1"], "1": ["a.A.t2"], "2": ["a.A.t3"], "3": ["a.A.t4"]},
+        )
+        self.quarantine_path = root / "quarantine.json"
+        make_quarantine(self.quarantine_path, match="a")
+        self.results = root / "results"
+        self.results.mkdir()
+        for lane in self.LINUX:
+            self._write_result(lane, 0, ("a.A.t1", "a.A.t2"))
+            self._write_result(lane, 1, ("a.A.t3", "a.A.t4"))
+            self._write_result(lane, None, ("a.A.t5",))
+        for shard, test_id in enumerate(("a.A.t1", "a.A.t2", "a.A.t3", "a.A.t4")):
+            self._write_result(self.WINDOWS, shard, (test_id,))
+        self._write_result(self.WINDOWS, None, ("a.A.t5",))
+
+    @staticmethod
+    def _write_plan(path: Path, shards: dict[str, list[str]], quarantine: tuple[str, ...] = ("a.A.t5",)) -> None:
+        sharded = sum(len(tests) for tests in shards.values())
+        write_json(
+            path,
+            {
+                "version": 1,
+                "shard_count": len(shards),
+                "shards": shards,
+                "quarantine": list(quarantine),
+                "counts": {"discovered": sharded + len(quarantine), "sharded": sharded, "quarantined": len(quarantine)},
+            },
+        )
+
+    def _write_result(self, lane: str, shard: int | None, tests: tuple[str, ...]) -> None:
+        kind = "quarantine" if shard is None else "shard"
+        write_json(
+            self.results / f"{lane}-{kind}-{shard}.json",
+            {
+                "version": 1,
+                "lane": lane,
+                "kind": kind,
+                "shard": shard,
+                "planned": list(tests),
+                "executed": list(tests),
+                "skipped": [],
+                "failures": [],
+                "errors": [],
+                "durations": {test_id: 0.1 for test_id in tests},
+            },
+        )
+
+    def aggregate(self, *lane_plans: str) -> subprocess.CompletedProcess[str]:
+        extra = [argument for lane_plan in lane_plans for argument in ("--lane-plan", lane_plan)]
+        return run_tool(
+            AGGREGATE_PY, "--plan", str(self.plan_path), "--quarantine",
+            str(self.quarantine_path), "--results-dir", str(self.results),
+            "--lanes", ",".join((*self.LINUX, self.WINDOWS)), *extra,
+        )
+
+    def windows_plan(self) -> str:
+        return f"{self.WINDOWS}={self.windows_plan_path}"
+
+    def test_four_shard_lane_reconciles_against_its_own_plan(self) -> None:
+        result = self.aggregate(self.windows_plan())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("windows-3.12 (4 shards): 5 executed", result.stdout)
+        self.assertIn("linux-3.11 (2 shards): 5 executed", result.stdout)
+
+    def test_four_shard_results_fail_against_the_default_plan(self) -> None:
+        result = self.aggregate()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("windows-3.12", result.stderr)
+
+    def test_missing_windows_shard_fails_aggregation(self) -> None:
+        (self.results / f"{self.WINDOWS}-shard-3.json").unlink()
+        result = self.aggregate(self.windows_plan())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing result for windows-3.12 shard 3", result.stderr)
+
+    def test_linux_lane_still_needs_every_default_shard(self) -> None:
+        (self.results / "linux-3.12-shard-1.json").unlink()
+        result = self.aggregate(self.windows_plan())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing result for linux-3.12 shard 1", result.stderr)
+
+    def test_lane_plan_over_a_different_suite_fails(self) -> None:
+        self._write_plan(self.windows_plan_path, {"0": ["a.A.t1"], "1": ["a.A.t2"], "2": ["a.A.t3"], "3": []})
+        result = self.aggregate(self.windows_plan())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not cover the same tests", result.stderr)
+
+    def test_lane_plan_with_a_different_quarantine_fails(self) -> None:
+        self._write_plan(
+            self.windows_plan_path,
+            {"0": ["a.A.t1"], "1": ["a.A.t2"], "2": ["a.A.t3"], "3": ["a.A.t5"]},
+            quarantine=("a.A.t4",),
+        )
+        result = self.aggregate(self.windows_plan())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not cover the same tests", result.stderr)
+
+    def test_lane_plan_for_an_unrequired_lane_fails(self) -> None:
+        result = self.aggregate(self.windows_plan(), f"macos-3.12={self.windows_plan_path}")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("macos-3.12", result.stderr)
+
+    def test_duplicate_or_malformed_lane_plan_fails(self) -> None:
+        for lane_plans in ((self.windows_plan(), self.windows_plan()), ("windows-3.12",), (f"={self.windows_plan_path}",)):
+            with self.subTest(lane_plans=lane_plans):
+                self.assertNotEqual(self.aggregate(*lane_plans).returncode, 0)
 
 
 if __name__ == "__main__":

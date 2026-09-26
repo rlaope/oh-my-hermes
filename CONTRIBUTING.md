@@ -138,8 +138,9 @@ the maintainer. You do not need to label your own PR.
 
 ## Test Sharding (CI)
 
-CI splits the unit-test suite into two deterministic shards per
-platform/version plus a serial quarantine, planned by
+CI splits the unit-test suite into deterministic shards per platform/version
+(two for each Linux lane, four for the slower Windows lane, each lane from its
+own plan over the same inventory) plus a serial quarantine, planned by
 `tools/test_sharding/plan.py` and reconciled fail-closed by
 `tools/test_sharding/aggregate.py`. This changes nothing for local
 development: the full-suite command above

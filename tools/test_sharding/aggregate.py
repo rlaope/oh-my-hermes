@@ -2,7 +2,8 @@
 # ─── How to run ───
 # python tools/test_sharding/aggregate.py --plan plan.json \
 #   --quarantine tools/test_sharding/quarantine.json --results-dir results/ \
-#   --lanes linux-3.11,linux-3.12,windows-3.12
+#   --lanes linux-3.11,linux-3.12,windows-3.12 \
+#   --lane-plan windows-3.12=plan-windows.json
 """Fail-closed, lane-aware reconciliation for deterministic unittest shards."""
 
 from __future__ import annotations
@@ -160,9 +161,38 @@ def parse_lanes(raw: str) -> tuple[str, ...]:
     return lanes
 
 
-def reconcile(expected: dict[int, tuple[str, ...]], lanes: tuple[str, ...], results: list[ShardResult]) -> list[str]:
-    """Prove each lane executes every planned ID once and no lane is absent."""
+def lane_plans(default: dict[int, tuple[str, ...]], lanes: tuple[str, ...], overrides: dict[str, dict[int, tuple[str, ...]]]) -> dict[str, dict[int, tuple[str, ...]]]:
+    """Bind each lane to the plan it ran, and prove every plan covers one suite.
 
+    A lane may run a different shard count (Windows is the long pole), but every
+    plan must assign the same discovered IDs and the same serial quarantine, or
+    the lanes would not be measuring the same suite.
+    """
+
+    unknown = sorted(set(overrides) - set(lanes))
+    if unknown:
+        raise ShardingError(f"lane plan given for a lane that is not required: {unknown[0]}")
+    plans = {lane: overrides.get(lane, default) for lane in lanes}
+    baseline_ids = sorted(test_id for tests in default.values() for test_id in tests)
+    for lane, plan in plans.items():
+        if plan[QUARANTINE_KEY] != default[QUARANTINE_KEY] or sorted(test_id for tests in plan.values() for test_id in tests) != baseline_ids:
+            raise ShardingError(f"plan for {lane} does not cover the same tests and quarantine as the default plan")
+    return plans
+
+
+def parse_lane_plan(raw: str) -> tuple[str, Path]:
+    """Parse one LANE=PATH override, rejecting an empty lane or path."""
+
+    lane, separator, path = raw.partition("=")
+    if not separator or not lane.strip() or not path.strip():
+        raise ShardingError(f"lane plan must be LANE=PATH: {raw}")
+    return lane.strip(), Path(path.strip())
+
+
+def reconcile(plans: dict[str, dict[int, tuple[str, ...]]], results: list[ShardResult]) -> list[str]:
+    """Prove each lane executes every ID of its own plan once and no lane is absent."""
+
+    lanes = tuple(plans)
     indexed: dict[tuple[str, int], ShardResult] = {}
     for result in results:
         key = (result.lane, result.shard)
@@ -171,7 +201,7 @@ def reconcile(expected: dict[int, tuple[str, ...]], lanes: tuple[str, ...], resu
         if key in indexed:
             raise ShardingError(f"duplicate result for {result.lane} shard {result.shard}")
         indexed[key] = result
-    expected_keys = {(lane, shard) for lane in lanes for shard in expected}
+    expected_keys = {(lane, shard) for lane in lanes for shard in plans[lane]}
     unexpected = set(indexed) - expected_keys
     if unexpected:
         lane, shard = sorted(unexpected)[0]
@@ -179,7 +209,7 @@ def reconcile(expected: dict[int, tuple[str, ...]], lanes: tuple[str, ...], resu
     all_durations: dict[str, float] = {}
     executed = skipped = 0
     for lane in lanes:
-        for shard, planned in expected.items():
+        for shard, planned in plans[lane].items():
             label = "quarantine" if shard == QUARANTINE_KEY else f"shard {shard}"
             result = indexed.get((lane, shard))
             if result is None:
@@ -193,12 +223,13 @@ def reconcile(expected: dict[int, tuple[str, ...]], lanes: tuple[str, ...], resu
             all_durations.update({test_id: max(all_durations.get(test_id, 0.0), seconds) for test_id, seconds in result.durations.items()})
             executed += len(result.executed)
             skipped += len(result.skipped)
+    expected = plans[lanes[0]]
     discovered = sum(len(tests) for tests in expected.values())
     quarantined = len(expected[QUARANTINE_KEY])
     lines = [f"test sharding aggregate: reconciled {discovered} tests in {len(lanes)} lanes (performance data only; not test, review, or merge evidence)", f"counts: discovered-per-lane={discovered} sharded-per-lane={discovered - quarantined} quarantined-per-lane={quarantined} executed-total={executed} skipped-total={skipped}"]
     for lane in lanes:
-        lane_results = [indexed[lane, shard] for shard in expected]
-        lines.append(f"{lane}: {sum(len(result.executed) for result in lane_results)} executed, {sum(len(result.skipped) for result in lane_results)} skipped, {sum(sum(result.durations.values()) for result in lane_results):.1f}s cumulative")
+        lane_results = [indexed[lane, shard] for shard in plans[lane]]
+        lines.append(f"{lane} ({len(plans[lane]) - 1} shards): {sum(len(result.executed) for result in lane_results)} executed, {sum(len(result.skipped) for result in lane_results)} skipped, {sum(sum(result.durations.values()) for result in lane_results):.1f}s cumulative")
     slowest = sorted(all_durations.items(), key=lambda item: (-item[1], item[0]))[:TOP_SLOWEST]
     lines.append("slowest tests (performance data):")
     lines.extend(f"  {seconds:.2f}s  {test_id}" for test_id, seconds in slowest)
@@ -229,6 +260,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--quarantine", type=Path, required=True)
     parser.add_argument("--results-dir", type=Path, required=True)
     parser.add_argument("--lanes", required=True)
+    parser.add_argument("--lane-plan", action="append", default=[], help="LANE=PATH: a lane that ran its own plan (repeatable)")
     parser.add_argument("--timings-out", type=Path)
     return parser
 
@@ -239,14 +271,20 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         load_quarantine(args.quarantine)
-        expected, lanes = load_plan(args.plan), parse_lanes(args.lanes)
+        overrides: dict[str, dict[int, tuple[str, ...]]] = {}
+        for raw in args.lane_plan:
+            lane, path = parse_lane_plan(raw)
+            if lane in overrides:
+                raise ShardingError(f"duplicate lane plan for {lane}")
+            overrides[lane] = load_plan(path)
+        plans = lane_plans(load_plan(args.plan), parse_lanes(args.lanes), overrides)
         paths = sorted(args.results_dir.glob("*.json"))
         if not paths:
             raise ShardingError(f"no shard results found in {args.results_dir}")
         results = [load_result(path) for path in paths]
-        lines = reconcile(expected, lanes, results)
+        lines = reconcile(plans, results)
         if args.timings_out is not None:
-            write_timings(args.timings_out, results, {test_id for tests in expected.values() for test_id in tests})
+            write_timings(args.timings_out, results, {test_id for plan in plans.values() for tests in plan.values() for test_id in tests})
     except ShardingError as exc:
         print(f"test sharding aggregate: {exc}", file=sys.stderr)
         return 2

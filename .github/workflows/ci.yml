@@ -42,11 +42,23 @@ jobs:
           --durations timings-history/timings.json
           --quarantine tools/test_sharding/quarantine.json
           --out shard-plan/plan.json
+      # Windows runs the same suite more than twice as slowly as Linux, so its lane
+      # gets its own 4-shard plan over the same inventory and quarantine; the
+      # Linux lanes keep 2. The aggregate validates each lane against the plan
+      # that lane actually ran.
+      - name: Plan Windows test shards
+        run: >-
+          python tools/test_sharding/plan.py --shards 4
+          --durations timings-history/timings.json
+          --quarantine tools/test_sharding/quarantine.json
+          --out shard-plan/plan-windows.json
       - name: Upload shard plan
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: shard-plan
-          path: shard-plan/plan.json
+          path: |
+            shard-plan/plan.json
+            shard-plan/plan-windows.json
 
   test:
     needs: plan
@@ -189,12 +201,12 @@ jobs:
     needs: plan
     runs-on: windows-latest
     strategy:
-      # Each shard runs a disjoint half of the suite, so cancelling the sibling
+      # Each shard runs a disjoint slice of the suite, so cancelling the sibling
       # when one fails leaves that half unmeasured and the blast radius unknown
       # -- and it cancelled a different half on each of two consecutive heads.
       fail-fast: false
       matrix:
-        shard: [0, 1]
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -224,7 +236,7 @@ jobs:
         env:
           PYTHONPATH: tests
         run: >-
-          python tools/test_sharding/run.py --plan shard-plan/plan.json
+          python tools/test_sharding/run.py --plan shard-plan/plan-windows.json
           --lane windows-3.12 --shard ${{ matrix.shard }}
           --out results/result-windows-3.12-${{ matrix.shard }}.json
       - name: Upload shard result
@@ -450,6 +462,7 @@ jobs:
           --quarantine tools/test_sharding/quarantine.json
           --results-dir results
           --lanes linux-3.11,linux-3.12,windows-3.12
+          --lane-plan windows-3.12=shard-plan/plan-windows.json
           --timings-out timings-merged/timings.json
       # Timing history is performance data only. Successful main runs save a
       # bounded immutable cache entry; the next plan restores it over the

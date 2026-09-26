@@ -73,8 +73,16 @@ class CiOfflineBenchmarkTests(unittest.TestCase):
         self.assertIn("python tools/test_sharding/plan.py --shards 2", workflow)
         self.assertEqual(
             workflow.count("python tools/test_sharding/run.py --plan shard-plan/plan.json"),
-            3,
+            2,
         )
+        # The Windows lane runs its own 4-shard plan over the same inventory,
+        # and the aggregate reconciles that lane against it.
+        self.assertIn("python tools/test_sharding/plan.py --shards 4", workflow)
+        self.assertEqual(
+            workflow.count("python tools/test_sharding/run.py --plan shard-plan/plan-windows.json"),
+            1,
+        )
+        self.assertIn("--lane-plan windows-3.12=shard-plan/plan-windows.json", workflow)
         self.assertIn("needs: [test, test-windows, test-quarantine]", workflow)
 
 
