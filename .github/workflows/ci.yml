@@ -58,6 +58,8 @@ jobs:
     needs: plan
     runs-on: ubuntu-latest
     strategy:
+      # MEASUREMENT ONLY (drop before merge): keep every shard's timing.
+      fail-fast: ${{ github.event_name != 'workflow_dispatch' }}
       matrix:
         python-version: ["3.11", "3.12"]
         shard: [0, 1]
