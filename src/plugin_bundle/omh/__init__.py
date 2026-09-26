@@ -77,6 +77,42 @@ def _register_optional_surface(ctx: object, method_name: str, *args: object, **k
         return
 
 
+def _section_already_registered(ctx: object, section_id: str) -> bool:
+    """Whether this context's plugin manager already holds ``section_id``.
+
+    ``register()`` runs on both the plugin loader and the memory-provider loader
+    (see the module docstring), so the awareness system-prompt section is offered
+    twice per process. Hermes tolerates the second registration but logs a warning
+    on every session init ("failed to register_system_prompt_section ... already
+    registered by plugin 'omh'"). Registering only when the manager lacks the
+    section keeps the section exactly once, in the same registry, without the log
+    noise.
+
+    Managers are per HERMES_HOME (``_plugin_managers_by_home``), so the check reads
+    the context's own manager rather than a module global -- a global would silently
+    skip every profile after the first. An unrecognised context shape falls through
+    to registering, i.e. the previous behaviour; a False can never be returned for a
+    manager that does hold the section, so this cannot suppress a needed registration.
+    """
+    candidates = [ctx]
+    inner = getattr(ctx, "_plugin_context", None)  # memory-provider Collector path
+    if callable(inner):
+        try:
+            candidates.append(inner())
+        except Exception:
+            pass
+    for candidate in candidates:
+        sections = getattr(getattr(candidate, "_manager", None), "_system_prompt_sections", None)
+        if sections is None:
+            continue
+        try:
+            if section_id in sections:
+                return True
+        except TypeError:
+            continue
+    return False
+
+
 def _register_optional_hook(ctx: _PluginContext, hook_name: str, callback: object) -> None:
     if not _host_supports_hook(hook_name):
         return
@@ -337,14 +373,15 @@ def register(ctx: _PluginContext) -> None:
     # The session-stable primer moves into the system prompt where the host
     # offers a section for it; `pre_llm_call` keeps delivering it for any
     # session the section did not render for (`llm_hooks`).
-    _register_optional_surface(
-        ctx,
-        "register_system_prompt_section",
-        AWARENESS_SECTION_ID,
-        awareness_system_prompt_section,
-        position="after_memory",
-        max_chars=AWARENESS_SECTION_MAX_CHARS,
-    )
+    if not _section_already_registered(ctx, AWARENESS_SECTION_ID):
+        _register_optional_surface(
+            ctx,
+            "register_system_prompt_section",
+            AWARENESS_SECTION_ID,
+            awareness_system_prompt_section,
+            position="after_memory",
+            max_chars=AWARENESS_SECTION_MAX_CHARS,
+        )
     _ = ctx.register_hook("pre_tool_call", pre_tool_call)
     _register_optional_hook(ctx, "on_session_start", on_session_start)
     _register_optional_hook(ctx, "post_tool_call", post_tool_call)
