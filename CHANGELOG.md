@@ -15,7 +15,10 @@ All notable changes will be documented here.
   of `document_chunk_plan` and its patch missed. The serial runner imports
   every test module before running any, which hid it. Every `sys.modules`
   patch in `tests/` now goes through `tests/_module_patch.py`, and
-  `tests/test_module_patch_policy.py` fails on one that does not.
+  `tests/test_module_patch_policy.py` fails on one that does not. The TUI
+  widget test harnesses no longer call `process.exit`: the widget's first HUD
+  read is a python child in the test's temp directory, and exiting under it
+  left the child holding the directory on Windows (WinError 32 at cleanup).
 - **Hermes turns name the skills a work request may fit.** On a turn whose
   request reads as work, the plugin adds one line naming up to three
   installed skills with the situation each serves, and the model may load
