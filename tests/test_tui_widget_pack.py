@@ -61,8 +61,12 @@ const report = (() => {
   const rows = children.map(child => parts(child, '')).filter(row => row.length)
   return { rows: rows.map(row => ({ text: row.map(part => part.text).join(''), parts: row })) }
 })()
-// A pipe write is asynchronous; exiting before it drains truncates the report.
-process.stdout.write(`${JSON.stringify(report)}\n`, () => process.exit(0))
+// No process.exit: loading the widget started its first HUD read, a python
+// child running in the test's temp directory, and exiting under it left that
+// child holding the directory, which Windows then refused to remove (WinError
+// 32, seen once the suite ran in parallel workers). Node exits once the child
+// and the report's pipe write have both finished.
+process.stdout.write(`${JSON.stringify(report)}\n`)
 """
 
 STATUS_DOCK_HARNESS = r"""
@@ -105,7 +109,8 @@ const report = (() => {
   const rows = lines(frame).map(node => parts(node, '')).filter(row => row.length)
   return { rows: rows.map(row => ({ text: row.map(part => part.text).join(''), parts: row })) }
 })()
-process.stdout.write(`${JSON.stringify(report)}\n`, () => process.exit(0))
+// Exits on its own for the reason given in TODO_PANEL_HARNESS.
+process.stdout.write(`${JSON.stringify(report)}\n`)
 """
 
 class TuiWidgetPackTests(unittest.TestCase):

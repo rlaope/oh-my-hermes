@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import types
 import unittest
 from pathlib import Path
@@ -52,6 +51,7 @@ from omh.plugin_bundle.omh.tools.jev_ask_tool import (  # noqa: E402
 )
 from omh.plugin_bundle.omh.tools.route_answer_tool import omh_route_answer_handler  # noqa: E402
 from omh.routing.chat import route_chat_message  # noqa: E402
+from _module_patch import patch_modules  # noqa: E402
 
 SENTINEL = "sk-SENTINEL-4f1e9a7c2b8d0e6f"
 SESSION = "session-jev-1"
@@ -1083,7 +1083,7 @@ class KeyResolutionTests(_ConsentedCase):
 
         scope.UnscopedSecretError = UnscopedSecretError
         scope.get_secret = lambda name: getter(name, UnscopedSecretError)
-        return patch.dict(sys.modules, {"agent": agent, "agent.secret_scope": scope})
+        return patch_modules({"agent": agent, "agent.secret_scope": scope})
 
     def test_the_host_reader_is_used_when_present(self) -> None:
         with self._with_secret_scope(lambda name, _err: SENTINEL if name == "TYPESAFE_API_KEY" else None):

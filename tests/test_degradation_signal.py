@@ -13,7 +13,6 @@ cached by a healthy case and pass for the wrong reason.
 from __future__ import annotations
 
 import json
-import sys
 from tempfile import TemporaryDirectory
 import unittest
 from unittest import mock
@@ -45,6 +44,7 @@ from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
 from omh.wrapper import contract as contract_module
 from omh.wrapper.contract import build_chat_interaction_payload
 from omh.wrapper.route_hints import build_chat_route_hint_payload
+from _module_patch import patch_modules
 
 # `AGENTS.md` evidence-boundary phrasing, carried verbatim into every degraded
 # surface. A degradation marker observes a local call failure and nothing more.
@@ -110,7 +110,7 @@ class DegradationSignalTestCase(unittest.TestCase):
         )
 
     def catalog_absent(self) -> mock._patch:
-        return mock.patch.dict(sys.modules, {"omh.routing.catalog_questions": None})
+        return patch_modules({"omh.routing.catalog_questions": None})
 
     def status_failure(self) -> mock._patch:
         return mock.patch.object(

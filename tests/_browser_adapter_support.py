@@ -5,13 +5,13 @@ from contextvars import ContextVar
 from copy import deepcopy
 from threading import Event
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from _local_package import load_local_package
 
 load_local_package()
 
 from omh.workflows.browser_adapter import RawCapabilities
+from _module_patch import patch_modules
 
 
 class HostContext:
@@ -48,7 +48,7 @@ def host_session(owner="owner", message="request", principal="principal"):
     session._BROWSER_CONTROL_TRANSPORT_FAMILY.set("local-api")
     registry = SimpleNamespace(CHECK_FN_CACHE_BYPASS="", check_fn_cache_scope=lambda: "",
                                no_cache_check_fn=lambda fn: fn)
-    with patch.dict("sys.modules", {"gateway": SimpleNamespace(session_context=session),
+    with patch_modules({"gateway": SimpleNamespace(session_context=session),
                                    "gateway.session_context": session,
                                    "tools.registry": registry}):
         yield session

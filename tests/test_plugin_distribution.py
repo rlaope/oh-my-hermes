@@ -33,6 +33,7 @@ from omh.install.plugin_pack import _SmokeContext, _collect_resource_records, in
 from omh.plugin_bundle.omh.tools import evidence_tool
 from omh.plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS, TOOL_FILE_STEMS
 from omh.release_smoke_core import CommandResult
+from _module_patch import patch_modules
 
 
 class FakeHermesContext:
@@ -222,7 +223,7 @@ class PluginHermesAdmissionTests(unittest.TestCase):
             host = ModuleType("hermes_cli")
             if version is not None:
                 host.__version__ = version
-            with self.subTest(version=version), mock.patch.dict(sys.modules, {"hermes_cli": host}):
+            with self.subTest(version=version), patch_modules({"hermes_cli": host}):
                 plugin = load_installed_plugin(self.bundle)
                 context = FakeHermesContext()
                 with self.assertRaises(RuntimeError):
@@ -237,7 +238,7 @@ class PluginHermesAdmissionTests(unittest.TestCase):
         self.assertIsNone(admission_error("0.21.1", self.bundle / "plugin.yaml"))
         host = ModuleType("hermes_cli")
         host.__version__ = "0.21.1"
-        with mock.patch.dict(sys.modules, {"hermes_cli": host}):
+        with patch_modules({"hermes_cli": host}):
             plugin = load_installed_plugin(self.bundle)
             context = FakeHermesContext()
             plugin.register(context)
@@ -254,7 +255,7 @@ class PluginHermesAdmissionTests(unittest.TestCase):
             shutil.copytree(self.bundle, bundle)
             for declaration in ("", 'requires_hermes: "not-a-range"\n'):
                 (bundle / "plugin.yaml").write_text(declaration, encoding="utf-8")
-                with self.subTest(declaration=declaration), mock.patch.dict(sys.modules, {"hermes_cli": host}):
+                with self.subTest(declaration=declaration), patch_modules({"hermes_cli": host}):
                     plugin = load_installed_plugin(bundle)
                     context = FakeHermesContext()
                     with self.assertRaises(RuntimeError):
@@ -269,7 +270,7 @@ class PluginHermesAdmissionTests(unittest.TestCase):
         host = ModuleType("hermes_cli")
         host.__version__ = "0.22.0"
         with mock.patch.dict(os.environ, dict(zip(("API_KEY", "PROMPT", "PRIVATE_PATH"), canaries))), \
-                mock.patch.dict(sys.modules, {"hermes_cli": host}):
+                patch_modules({"hermes_cli": host}):
             plugin = load_installed_plugin(self.bundle)
             with self.assertRaises(RuntimeError) as raised:
                 plugin.register(FakeHermesContext())
@@ -761,7 +762,7 @@ print(json.dumps(observed, ensure_ascii=False))
 
         # Case (a): the package genuinely cannot be imported. This is the true
         # standalone fallback and must keep working.
-        with mock.patch.dict(sys.modules, {"omh.context": None}):
+        with patch_modules({"omh.context": None}):
             fallback_payload = json.loads(context_tool.omh_context_handler(dict(args)))
         self.assertEqual(fallback_payload["source_backend"], "standalone_plugin_bundle_fallback")
         self.assertEqual(fallback_payload["schema_version"], "omh_context_brief/v1")
@@ -796,7 +797,7 @@ print(json.dumps(observed, ensure_ascii=False))
             (memories / "MEMORY.md").write_text("a remembered fact", encoding="utf-8")
             env = {"OMH_HOME": str(root / ".omh"), "HERMES_HOME": str(root / ".hermes")}
 
-            with mock.patch.dict(sys.modules, {"omh.memory": None, "omh.paths": None}):
+            with patch_modules({"omh.memory": None, "omh.paths": None}):
                 with mock.patch.dict(os.environ, env):
                     payload = json.loads(memory_tool.omh_memory_handler({}))
 
@@ -829,7 +830,7 @@ print(json.dumps(observed, ensure_ascii=False))
 
         # Case (a): the package genuinely cannot be imported. This is the true
         # standalone fallback and must keep working.
-        with mock.patch.dict(sys.modules, {"omh.routing.recommend": None}):
+        with patch_modules({"omh.routing.recommend": None}):
             fallback_payload = json.loads(recommend_tool.omh_recommend_handler(dict(args)))
         self.assertEqual(fallback_payload["source"], "standalone_plugin_bundle_fallback")
         self.assertIn(fallback_payload["status"], {"recommended", "no_match"})
@@ -1004,9 +1005,7 @@ print(json.dumps(observed, ensure_ascii=False))
                 {"on_session_end", "pre_llm_call", "pre_tool_call"},
             )
 
-            with mock.patch.dict(
-                sys.modules,
-                {"hermes_cli": hermes_cli, "hermes_cli.plugins": hermes_plugins},
+            with patch_modules({"hermes_cli": hermes_cli, "hermes_cli.plugins": hermes_plugins},
             ):
                 status, stdout, stderr = run_cli(
                     [

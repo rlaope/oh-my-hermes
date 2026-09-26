@@ -56,6 +56,7 @@ from omh.plugin_bundle.omh.model_chain_picker import (
     step_effort,
     step_head_model,
 )
+from _module_patch import patch_modules
 
 OVERRIDE_QUICK = (("kimi-k3-ultrafast", "low"), ("glm-5.3", "low"))
 
@@ -161,7 +162,7 @@ class PickerModelTests(unittest.TestCase):
 
             named, ambient = hermes_home("named"), hermes_home("ambient")
             document = root / "named-store" / "routing" / "model-chains.json"
-            with patch.dict("sys.modules", {"hermes_constants": None}), patch.dict(
+            with patch_modules({"hermes_constants": None}), patch.dict(
                 os.environ, {"HERMES_HOME": str(ambient), "HOME": str(root), "USERPROFILE": str(root)}
             ):
                 os.environ.pop("OMH_HOME", None)
