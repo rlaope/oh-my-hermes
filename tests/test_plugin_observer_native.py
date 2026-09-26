@@ -16,6 +16,7 @@ from omh.plugin_bundle import omh as plugin
 from omh.system.paths import OmhPaths
 from omh.workflows.session_activity_receipts import read_session_activity_receipts
 from test_plugin_distribution import FakeHermesContext
+from _module_patch import patch_modules
 
 
 class NativeContext(FakeHermesContext):
@@ -39,8 +40,7 @@ class NativeObserverTests(unittest.TestCase):
     def host(self, root: Path):
         context = NativeContext()
         paths = OmhPaths(root / "omh", root / "hermes")
-        with patch.dict("os.environ", {"OMH_HOME": str(paths.omh_home), "HERMES_HOME": str(paths.hermes_home)}), patch.dict(
-            "sys.modules", {"hermes_cli.plugins": SimpleNamespace(VALID_HOOKS={"on_room_member_activity"}),
+        with patch.dict("os.environ", {"OMH_HOME": str(paths.omh_home), "HERMES_HOME": str(paths.hermes_home)}), patch_modules({"hermes_cli.plugins": SimpleNamespace(VALID_HOOKS={"on_room_member_activity"}),
                             "hermes_constants": SimpleNamespace(get_hermes_home=lambda: paths.hermes_home,
                                 get_hermes_home_override=lambda: str(paths.hermes_home)),
                             "agent.runtime_cwd": SimpleNamespace(resolve_context_cwd=lambda: None, resolve_agent_cwd=Path.cwd),

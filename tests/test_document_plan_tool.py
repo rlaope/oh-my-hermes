@@ -38,6 +38,7 @@ from omh.plugin_bundle.omh.tools.document_plan_tool import (  # noqa: E402
     OMH_DOCUMENT_PLAN_SCHEMA,
     omh_document_plan_handler,
 )
+from _module_patch import patch_modules
 
 _BUNDLE = Path(__file__).resolve().parents[1] / "src" / "plugin_bundle" / "omh"
 _OUTLINE = [
@@ -77,7 +78,7 @@ class _HomeCase(unittest.TestCase):
             )
         )
         # Force the standalone boundary regardless of the developer's host.
-        self.enterContext(mock.patch.dict(sys.modules, {"hermes_constants": None}))
+        self.enterContext(patch_modules({"hermes_constants": None}))
 
 
 class RegistrationTests(unittest.TestCase):

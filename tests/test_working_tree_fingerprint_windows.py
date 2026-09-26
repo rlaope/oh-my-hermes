@@ -6,7 +6,6 @@ import errno
 import hashlib
 import os
 import stat
-import sys
 import unittest
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -23,6 +22,7 @@ from test_working_tree_fingerprint import ContentOS, entry_digest, path_stat
 load_local_package()
 from omh.quality import working_tree_fingerprint_content as content
 from omh.quality import working_tree_fingerprint_windows as windows
+from _module_patch import patch_modules
 
 
 class _WindowsPort(Protocol):
@@ -260,7 +260,7 @@ class WindowsHandleApiTests(unittest.TestCase):
     def test_data_handle_ownership_binary_mode_and_writer_exclusion(self) -> None:
         crt = _CRT()
         platform_os = _HandleOS()
-        with patch.dict(sys.modules, {"msvcrt": crt}), patch.object(windows, "os", platform_os):
+        with patch_modules({"msvcrt": crt}), patch.object(windows, "os", platform_os):
             self.assertEqual(windows.open(b"file"), 42)
             self.api.CreateFileW.assert_called_once_with("file", 0x80000000, 1, None, 3, 0x02200000, None)
             crt.open_osfhandle.assert_called_once_with(123, os.O_RDONLY | 0x80)

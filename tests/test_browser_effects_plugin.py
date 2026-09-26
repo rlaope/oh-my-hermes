@@ -8,7 +8,6 @@ from tempfile import TemporaryDirectory
 from threading import Event, Thread
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
 
 from _browser_adapter_support import HostContext, host_session, request
 from test_browser_effect_attempts import EffectAdapter
@@ -18,6 +17,7 @@ from omh.workflows.browser_adapter import digest
 from omh.workflows.browser_effect_attempts_contract import approval_scope, OPERATIONS
 from omh.plugin_bundle.omh.egress_attempt_receipts import AttemptStore
 from omh.workflows.browser_effect_attempts_store import EffectBindingStore
+from _module_patch import patch_modules
 
 
 class PluginAdapter(EffectAdapter):
@@ -45,7 +45,7 @@ class BrowserEffectsPluginTests(unittest.TestCase):
         self.host = self.stack.enter_context(host_session())
         self.event = SimpleNamespace(_approval_session_id=ContextVar('session', default='owner'),
             _approval_tool_call_id=ContextVar('event', default='event-1'))
-        self.stack.enter_context(patch.dict('sys.modules', {'tools.approval_context': self.event}))
+        self.stack.enter_context(patch_modules({'tools.approval_context': self.event}))
         self.adapter = PluginAdapter(self.home)
         self.ctx = HostContext(self.home, self.adapter)
         self.approvals = {}

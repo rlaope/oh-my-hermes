@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from _browser_adapter_support import Adapter, HostContext, host_session, request
 from omh.plugin_bundle.omh import register
+from _module_patch import patch_modules
 
 
 class BrowserAdmissionTests(unittest.TestCase):
@@ -93,7 +94,7 @@ class BrowserAdmissionTests(unittest.TestCase):
     def test_host_without_uncached_availability_api_cannot_admit(self):
         from types import SimpleNamespace
         unsupported = SimpleNamespace(CHECK_FN_CACHE_BYPASS="", check_fn_cache_scope=lambda: "")
-        with patch.dict("sys.modules", {"tools.registry": unsupported}):
+        with patch_modules({"tools.registry": unsupported}):
             register(self.ctx)
             with self.assertRaisesRegex(ValueError, "host_scope_unavailable"):
                 with self.admit():

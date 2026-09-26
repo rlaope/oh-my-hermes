@@ -3,7 +3,6 @@ import importlib
 import json
 import os
 from pathlib import Path
-import sys
 import tempfile
 import types
 import unittest
@@ -14,6 +13,7 @@ from _local_package import load_local_package
 load_local_package()
 from omh.plugin_bundle.omh import runtime_paths as paths
 from omh.plugin_bundle.omh.hooks import llm_hooks, tool_hooks, session_hooks
+from _module_patch import patch_modules
 
 
 def native_modules(home, store, *, active=True, multiplex=False, scope_active=False):
@@ -41,11 +41,11 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         self.home, self.store = self.root / 'profile', self.root / 'state'
         self.enterContext(patch.dict(os.environ, {"HOME": str(self.root), "USERPROFILE": str(self.root),
             "HERMES_HOME": str(self.home), "OMH_HOME": str(self.store)}))
-        self.enterContext(patch.dict(sys.modules, {'hermes_constants': None}))
+        self.enterContext(patch_modules({'hermes_constants': None}))
 
     def test_colocated_imports_do_not_select_native_config_or_secrets(self):
         modules = native_modules(self.home, self.root / 'native-state', active=False)
-        with patch.dict(sys.modules, modules):
+        with patch_modules(modules):
             self.assertEqual(paths.resolve_homes(), (self.store, self.home))
             self.assertEqual(paths.expand_path('$OMH_HOME'), self.store)
         modules['hermes_cli.config'].load_config_readonly.assert_not_called()
@@ -71,7 +71,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
                     # A wholly absent Hermes is the supported standalone lane.
                     if module == 'hermes_constants' and name is None:
                         continue
-                    with patch.dict(sys.modules, modules), self.assertRaises(paths.RuntimeBindingError) as caught:
+                    with patch_modules(modules), self.assertRaises(paths.RuntimeBindingError) as caught:
                         paths.resolve_homes()
                     self.assertNotIn(str(self.root), str(caught.exception))
                     if callable(config.load_config_readonly):
@@ -82,14 +82,14 @@ class RuntimeBindingReviewTests(unittest.TestCase):
     def test_missing_constants_does_not_downgrade_an_active_native_scope(self):
         modules = native_modules(self.home, self.store, multiplex=True)
         modules['hermes_constants'] = None
-        with patch.dict(sys.modules, modules), self.assertRaises(paths.RuntimeBindingError):
+        with patch_modules(modules), self.assertRaises(paths.RuntimeBindingError):
             paths.resolve_homes()
         with patch.object(paths, '_NATIVE_REGISTERED', True), self.assertRaises(paths.RuntimeBindingError):
             paths.resolve_homes()
 
     def test_unscoped_multiplexer_is_not_standalone(self):
         modules = native_modules(self.home, self.store, active=False, multiplex=True)
-        with patch.dict(sys.modules, modules), self.assertRaises(paths.RuntimeBindingError):
+        with patch_modules(modules), self.assertRaises(paths.RuntimeBindingError):
             paths.resolve_homes()
         modules['hermes_cli.config'].load_config_readonly.assert_not_called()
 
@@ -97,7 +97,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         modules = native_modules(self.home, self.store)
         modules['hermes_cli.config'].load_config_readonly.return_value = {
             'plugins': {'entries': {'omh': {'settings': {'omh_home': str(self.root / 'foreign')}}}}}
-        with patch.dict(sys.modules, modules), self.assertRaises(paths.RuntimeBindingError):
+        with patch_modules(modules), self.assertRaises(paths.RuntimeBindingError):
             paths.resolve_homes()
         self.assertFalse(self.store.exists())
         self.assertFalse((self.root / 'foreign').exists())
@@ -111,7 +111,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
                     config.require_readable_config_before_write.return_value = {}
                 else:
                     config.load_config_readonly.return_value = {}
-                with patch.dict(sys.modules, modules), self.assertRaises(paths.RuntimeBindingError):
+                with patch_modules(modules), self.assertRaises(paths.RuntimeBindingError):
                     paths.resolve_homes()
 
     def test_filesystem_home_faults_are_typed_and_bounded(self):
@@ -126,7 +126,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         modules = native_modules(self.home, self.store, multiplex=True)
         modules['agent.runtime_cwd'].resolve_context_cwd = Mock(side_effect=RuntimeError('PRIVATE_PATH'))
         for native in (False, True):
-            with self.subTest(native=native), patch.dict(sys.modules, modules if native else {'hermes_constants': None}), \
+            with self.subTest(native=native), patch_modules(modules if native else {'hermes_constants': None}), \
                     patch.object(Path, 'cwd', side_effect=OSError('PRIVATE_PATH')):
                 with self.assertRaises(paths.RuntimeBindingError) as caught:
                     paths.runtime_cwd()
@@ -211,7 +211,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         modules = native_modules(self.home, self.store)
         modules['hermes_cli.config'].require_readable_config_before_write = Mock(
             side_effect=RuntimeError('Your settings file (PRIVATE_PATH) has a formatting error.'))
-        with patch.dict(sys.modules, modules):
+        with patch_modules(modules):
             result = tool_hooks.pre_tool_call(tool_name='read_file', session_id='s', args={})
         self.assertNotIn('action', result)
         self.assertNotIn('Tool call blocked', json.dumps(result))
@@ -293,7 +293,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         # raise it; `resolve_homes` re-checks what `default_hermes_home`
         # already refused, so each is driven on its own.
         modules = native_modules(self.home, self.store, active=False, multiplex=True)
-        with patch.dict(sys.modules, modules):
+        with patch_modules(modules):
             for call in (paths.resolve_homes, paths.default_hermes_home):
                 with self.subTest(call=call.__name__):
                     with self.assertRaises(paths.UnattributableSessionError):
@@ -317,7 +317,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
             with self.subTest(scope_active=scope_active):
                 modules = native_modules(self.home, self.store, active=False,
                                          multiplex=True, scope_active=scope_active)
-                with patch.dict(sys.modules, modules):
+                with patch_modules(modules):
                     if expected is None:
                         with self.assertRaises(paths.UnattributableSessionError):
                             paths.default_hermes_home()
@@ -337,7 +337,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         modules = native_modules(self.home, self.store)
         modules['hermes_cli.config'].load_config_readonly.return_value = {
             'plugins': {'entries': {'omh': {'settings': {'omh_home': str(self.root / 'foreign')}}}}}
-        with patch.dict(sys.modules, modules):
+        with patch_modules(modules):
             with self.assertRaises(paths.RuntimeBindingError) as caught:
                 paths.resolve_homes()
         self.assertNotIsInstance(caught.exception, paths.UnattributableSessionError)
@@ -368,7 +368,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         # refused as unowned, and the hook returns a degradation the host
         # discards instead of the block that ended the session.
         modules = native_modules(self.home, self.store, active=False, multiplex=True)
-        with patch.dict(sys.modules, modules):
+        with patch_modules(modules):
             result = tool_hooks.pre_tool_call(tool_name='read_file', session_id='s', args={})
         self.assertTrue(result['omh_degradation']['degraded'])
         self.assertNotIn('action', result)
@@ -422,7 +422,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
                  'route_answer': ('omh_route_answer', {'question_digest': '0' * 64,
                                                        'answered_by': 'main_model',
                                                        'route_choice': 'none'})}
-        with patch.dict(sys.modules, native_modules(self.home, self.store)):
+        with patch_modules(native_modules(self.home, self.store)):
             for file, (name, args) in tools.items():
                 module = importlib.import_module('omh.plugin_bundle.omh.tools.' + file + '_tool')
                 for field in ('omh_home', 'hermes_home'):
@@ -442,7 +442,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         for native, routed in ((False, False), (True, False), (True, True)):
             with self.subTest(native=native, routed=routed):
                 modules = native_modules(self.home, self.store, multiplex=routed) if native else {'hermes_constants': None}
-                with patch.dict(sys.modules, modules):
+                with patch_modules(modules):
                     selected = resolve_paths()
                     self.assertEqual(selected.omh_home_named, routed)
                     expected = self.store if routed else project / '.omh'
@@ -485,7 +485,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
 
     def test_native_observer_ignores_untrusted_home_metadata(self):
         from omh.plugin_bundle.omh.host_observation import observe_plugin_tool_call
-        with patch.dict(sys.modules, native_modules(self.home, self.store)):
+        with patch_modules(native_modules(self.home, self.store)):
             result = observe_plugin_tool_call('omh_status', {'omh_home': str(self.root / 'foreign'),
                 'observation': {'host': 'test-host', 'session_id': 's', 'omh_home': str(self.root / 'foreign')}}, {})
         self.assertEqual(result['status'], 'observed')
@@ -524,11 +524,11 @@ class RuntimeBindingReviewTests(unittest.TestCase):
         def load():
             spec = importlib.util.spec_from_file_location(name, original.__file__)
             module = importlib.util.module_from_spec(spec)
-            with patch.dict(sys.modules, {name: module}):
+            with patch_modules({name: module}):
                 spec.loader.exec_module(module)
             return module
         for module in (None, types.ModuleType('agent.memory_provider')):
-            with self.subTest(module=module), patch.dict(sys.modules, {'agent.memory_provider': module}):
+            with self.subTest(module=module), patch_modules({'agent.memory_provider': module}):
                 loaded = load()
                 self.assertEqual(loaded.OmhMemoryProvider.__bases__, (object,))
                 self.assertEqual(loaded.RecallStatus('OMH', 2).count, 2)
@@ -542,7 +542,7 @@ class RuntimeBindingReviewTests(unittest.TestCase):
                 module.MemoryProvider = base
             if recall is not None:
                 module.RecallStatus = recall
-            with patch.dict(sys.modules, {'agent.memory_provider': module}):
+            with patch_modules({'agent.memory_provider': module}):
                 loaded = load()
                 self.assertEqual(loaded.OmhMemoryProvider.__bases__, (base or object,))
                 if recall is not None:

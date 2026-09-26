@@ -27,6 +27,7 @@ from omh.plugin_bundle.omh import awareness
 from omh.routing import chat as routing_chat
 from omh.routing import recommend as routing_recommend
 from omh.wrapper.route_hints import build_chat_route_hint_payload
+from _module_patch import patch_modules
 
 
 # One phrase, in a language with no shipped pack, so nothing in the catalog or
@@ -223,7 +224,7 @@ class RouteHintTriggerPackTests(TestCase):
         # ImportError such a host raises, without unloading the router for the
         # rest of the process.
         with _omh_home(_PACK_DOCUMENT):
-            with patch.dict(sys.modules, {"omh.routing.chat": None}):
+            with patch_modules({"omh.routing.chat": None}):
                 self.assertEqual(awareness._user_trigger_pack_route_decision(PACK_PHRASE), {})
                 awareness._awareness_route_hint_cached.cache_clear()
                 degraded = awareness.awareness_route_hint(PACK_PHRASE)

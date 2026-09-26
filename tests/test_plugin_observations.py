@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import multiprocessing
 import os
-import sys
 from concurrent.futures import ProcessPoolExecutor
 import unittest
 from pathlib import Path
@@ -17,6 +16,7 @@ from _local_package import load_local_package
 load_local_package()
 from omh.plugin_bundle.omh import host_observation
 from omh.plugin_bundle.omh.host_observation import observe_plugin_hook_call
+from _module_patch import patch_modules
 
 
 def _record_standalone_hooks(
@@ -25,7 +25,7 @@ def _record_standalone_hooks(
     process_index, count, omh_home, start_barrier = work
     # The installed standalone bundle cannot import these core modules. Mask
     # them here so this regression cannot accidentally exercise the core path.
-    with mock.patch.dict(sys.modules, {"omh.paths": None, "omh.plugin_observations": None}), mock.patch.dict(os.environ, {"OMH_HOME": omh_home}):
+    with patch_modules({"omh.paths": None, "omh.plugin_observations": None}), mock.patch.dict(os.environ, {"OMH_HOME": omh_home}):
         start_barrier.wait(timeout=20)
         return [
             observe_plugin_hook_call(
@@ -128,7 +128,7 @@ class PluginHostObservationTests(unittest.TestCase):
     def test_standalone_lock_failure_does_not_escape_the_hook(self) -> None:
         with TemporaryDirectory() as tmp:
             with (
-                mock.patch.dict(sys.modules, {"omh.paths": None, "omh.plugin_observations": None}),
+                patch_modules({"omh.paths": None, "omh.plugin_observations": None}),
                 mock.patch.object(
                     host_observation,
                     "_acquire_standalone_file_lock",

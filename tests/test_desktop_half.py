@@ -30,6 +30,7 @@ from omh.install.plugin_pack import install_plugin_bundle
 from omh.maintenance.doctor import DESKTOP_HALF_FILES, doctor_ok, run_doctor
 from omh.paths import resolve_paths
 from omh.plugin_bundle.omh.dashboard import plugin_api
+from _module_patch import patch_modules
 
 NODE = shutil.which("node")
 
@@ -581,14 +582,14 @@ class DesktopBackendTests(unittest.TestCase):
     def test_resolve_hermes_home_asks_the_host_first(self) -> None:
         host = types.ModuleType("hermes_constants")
         host.get_hermes_home = lambda: str(self.root / "host-home")
-        with mock.patch.dict(sys.modules, {"hermes_constants": host}):
+        with patch_modules({"hermes_constants": host}):
             with mock.patch.dict(os.environ, {"HERMES_HOME": str(self.hermes_home)}):
                 self.assertEqual(plugin_api.resolve_hermes_home(), self.root / "host-home")
 
     def test_resolve_hermes_home_falls_back_to_the_env_then_the_default(self) -> None:
         # `None` in sys.modules makes the import raise wherever this runs, so
         # the fallback branch is pinned on a host with Hermes on its path too.
-        with mock.patch.dict(sys.modules, {"hermes_constants": None}):
+        with patch_modules({"hermes_constants": None}):
             with mock.patch.dict(os.environ, {"HERMES_HOME": str(self.hermes_home)}):
                 self.assertEqual(plugin_api.resolve_hermes_home(), self.hermes_home)
             with mock.patch.dict(os.environ, {"HERMES_HOME": ""}):

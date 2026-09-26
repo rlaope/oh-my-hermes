@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A test shard can run in N worker processes.** `tools/test_sharding/run.py
+  --workers N` hands a shard's test modules to N `-P` interpreters, each with
+  its own temp root, and merges their outcomes into the same result JSON; a
+  worker that dies turns every test it had not reported into an error. N=1 is
+  the unchanged serial path and the quarantine stays serial. The first N=2
+  run surfaced a latent order leak, not a parallelism defect:
+  `mock.patch.dict(sys.modules, ...)` drops the modules a block first imports
+  but leaves the parent package's attribute, so a later test got two copies
+  of `document_chunk_plan` and its patch missed. The serial runner imports
+  every test module before running any, which hid it. Every `sys.modules`
+  patch in `tests/` now goes through `tests/_module_patch.py`, and
+  `tests/test_module_patch_policy.py` fails on one that does not.
 - **Hermes turns name the skills a work request may fit.** On a turn whose
   request reads as work, the plugin adds one line naming up to three
   installed skills with the situation each serves, and the model may load

@@ -26,6 +26,7 @@ from omh.plugin_bundle.omh.hermes_delegation import (
     load_delegation_route_provenance,
 )
 from omh.plugin_bundle.omh.tools.delegate_route_tool import omh_delegate_route_handler
+from _module_patch import patch_modules
 
 
 class DelegationRouteHomeTest(unittest.TestCase):
@@ -43,7 +44,7 @@ class DelegationRouteHomeTest(unittest.TestCase):
             "OMH_HOME": str(self.omh_home),
         }))
         # Force the standalone boundary regardless of the developer's host.
-        self.enterContext(mock.patch.dict("sys.modules", {"hermes_constants": None}))
+        self.enterContext(patch_modules({"hermes_constants": None}))
 
     def _assert_tool_cycle(self, target, *, native=False, **args):
         untouched = (
@@ -103,7 +104,7 @@ class DelegationRouteHomeTest(unittest.TestCase):
         module = types.ModuleType("hermes_constants")
         module.get_hermes_home = lambda: native
         module.get_hermes_home_override = lambda: str(native)
-        with mock.patch.dict("sys.modules", {
+        with patch_modules({
             "hermes_constants": module,
             "agent.runtime_cwd": types.SimpleNamespace(resolve_context_cwd=lambda: None, resolve_agent_cwd=Path.cwd),
             "agent.secret_scope": types.SimpleNamespace(is_multiplex_active=lambda: False,
@@ -119,7 +120,7 @@ class DelegationRouteHomeTest(unittest.TestCase):
     def test_explicit_home_does_not_consult_native_resolver(self):
         module = types.ModuleType("hermes_constants")
         module.get_hermes_home = mock.Mock(side_effect=AssertionError("must not resolve"))
-        with mock.patch.dict("sys.modules", {"hermes_constants": module}):
+        with patch_modules({"hermes_constants": module}):
             # Explicit programmatic/CLI writes remain authoritative. A native
             # model tool's home fields are no longer an offline-operation API.
             write_delegation_route("~/explicit", model="test-child")

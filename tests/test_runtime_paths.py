@@ -13,6 +13,7 @@ from _local_package import load_local_package
 
 load_local_package()
 from omh.plugin_bundle.omh import runtime_paths, runtime_reader
+from _module_patch import patch_modules
 
 
 class RuntimePathsTests(unittest.TestCase):
@@ -71,7 +72,7 @@ class RuntimePathsTests(unittest.TestCase):
                 self.assertEqual(await asyncio.to_thread(runtime_reader._default_omh_home), expected_store)
             async def run():
                 await asyncio.gather(read("alpha"), read("beta"))
-            with patch.dict("sys.modules", modules), patch.dict("os.environ", {
+            with patch_modules(modules), patch.dict("os.environ", {
                 "OMH_HOME": str(root / "launch-state"), "HERMES_HOME": str(root / "launch")
             }):
                 asyncio.run(run())
@@ -82,7 +83,7 @@ class RuntimePathsTests(unittest.TestCase):
         from omh.plugin_bundle.omh import runtime_paths as paths
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            with patch.dict("sys.modules", {"hermes_constants": None}), patch.dict(os.environ, {
+            with patch_modules({"hermes_constants": None}), patch.dict(os.environ, {
                 "HOME": str(root), "USERPROFILE": str(root),
                 "OMH_HOME": str(root / "state"), "HERMES_HOME": str(root / "profile")
             }):
@@ -122,7 +123,7 @@ class RuntimePathsTests(unittest.TestCase):
                 home.mkdir(exist_ok=True)
                 (home / "config.yaml").write_text(text, encoding="utf-8")
 
-            with patch.dict("sys.modules", {"hermes_constants": None}), patch.dict(os.environ, {
+            with patch_modules({"hermes_constants": None}), patch.dict(os.environ, {
                 "HOME": str(root), "USERPROFILE": str(root), "SECRET_TOKEN": "sk-live-not-a-path",
                 "OMH_HOME": str(root / "state"), "HERMES_HOME": str(profile)
             }):
@@ -244,7 +245,7 @@ class RuntimePathsTests(unittest.TestCase):
         from omh.plugin_bundle.omh.tools.evidence_tool import omh_evidence_handler
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            with patch.dict("sys.modules", {"hermes_constants": None}), patch.dict("os.environ", {
+            with patch_modules({"hermes_constants": None}), patch.dict("os.environ", {
                 "OMH_HOME": str(root / "state"), "HERMES_HOME": str(root / "profile"),
                 "SYNTHETIC_PATH_SECRET": "SYNTHETIC_NOT_FOR_OUTPUT",
             }):
@@ -274,7 +275,7 @@ class RuntimePathsTests(unittest.TestCase):
             secrets = types.SimpleNamespace(is_multiplex_active=lambda: True,
                 current_secret_scope=lambda: {"OMH_HOME": str(private)},
                 build_profile_secret_scope=lambda home: {"OMH_HOME": str(public)})
-            with patch.dict("sys.modules", {"agent.secret_scope": secrets}):
+            with patch_modules({"agent.secret_scope": secrets}):
                 with self.assertRaisesRegex(paths.RuntimeBindingError, "ownership is unverified"):
                     paths._profile_variable("OMH_HOME", root / "profile")
                 secrets.current_secret_scope = lambda: {"OMH_HOME": str(public)}
@@ -289,7 +290,7 @@ class RuntimePathsTests(unittest.TestCase):
             managed = config(str(root / "managed"))
             host = types.SimpleNamespace(require_readable_config_before_write=lambda path: config("$UNAVAILABLE_USER_PATH/state"),
                                          load_config_readonly=lambda: managed)
-            with patch.dict("sys.modules", {"hermes_cli.config": host,
+            with patch_modules({"hermes_cli.config": host,
                     "hermes_cli.managed_scope": types.SimpleNamespace(load_managed_config=lambda: managed)}):
                 self.assertEqual(paths._configured_home(root / "profile"), root / "managed")
 

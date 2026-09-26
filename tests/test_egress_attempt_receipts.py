@@ -5,7 +5,6 @@ import importlib.util
 import json
 import os
 import sqlite3
-import sys
 import time
 import unittest
 from abc import ABC
@@ -26,6 +25,7 @@ load_local_package()
 
 from omh.plugin_bundle.omh import egress_attempt_receipts as receipt_module
 from omh.plugin_bundle.omh import egress_attempts as guard_module
+from _module_patch import patch_modules
 
 
 class IndexedParameters(Protocol):
@@ -488,7 +488,7 @@ class EgressAttemptStoreTests(unittest.TestCase):
 
         ctx = RegistrationContext(register_hook=hooks.__setitem__, register_tool=register_tool)
         registry = SimpleNamespace(get_entry=get_entry)
-        with patch.dict(sys.modules, {"tools.registry": SimpleNamespace(registry=registry)}):
+        with patch_modules({"tools.registry": SimpleNamespace(registry=registry)}):
             guard_module.register(ctx, {
                 "omh_home": str(self.home),
                 "tools": {"send_probe": {
