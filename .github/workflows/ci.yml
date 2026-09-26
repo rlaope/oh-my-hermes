@@ -4,6 +4,12 @@ on:
   pull_request:
   push:
     branches: [main]
+  # MEASUREMENT ONLY (drop before merge): dispatch this branch with a worker count.
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: run.py --workers for the unit-test shards
+        default: "2"
 
 # One run per pull request: a new push cancels the run for the commit it
 # superseded, which nobody will merge and which otherwise holds the runners the
@@ -88,6 +94,7 @@ jobs:
         run: >-
           python tools/test_sharding/run.py --plan shard-plan/plan.json
           --lane linux-${{ matrix.python-version }} --shard ${{ matrix.shard }}
+          --workers ${{ inputs.workers || '2' }}
           --out results/result-linux-${{ matrix.python-version }}-${{ matrix.shard }}.json
       - name: Upload shard result
         if: always()
@@ -226,6 +233,7 @@ jobs:
         run: >-
           python tools/test_sharding/run.py --plan shard-plan/plan.json
           --lane windows-3.12 --shard ${{ matrix.shard }}
+          --workers ${{ inputs.workers || '2' }}
           --out results/result-windows-3.12-${{ matrix.shard }}.json
       - name: Upload shard result
         if: always()
@@ -467,6 +475,7 @@ jobs:
           key: test-sharding-timings-${{ github.run_id }}
 
   distribution:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
