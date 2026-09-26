@@ -11,11 +11,27 @@ from typing import Any
 
 HERMES_PROCESS_SCHEMA_VERSION = "hermes_process_observation/v1"
 _SHELL_NAMES = {"sh", "bash", "zsh", "dash"}
-_PERSISTENT_MAIN_COMMANDS = {"chat", "acp"}
+# Long-lived web backends: `serve` (desktop app) and `dashboard`, matching the backend
+# set Hermes itself uses (hermes_cli/profiles.py `_BACKEND_TOKENS`).
+_PERSISTENT_MAIN_COMMANDS = {"chat", "acp", "serve", "dashboard"}
 _PERSISTENT_MAIN_FLAGS = {"--tui", "--cli"}
 _PYTHON_COMMAND = re.compile(
     r"^(?P<executable>.*?python(?:\d+(?:\.\d+)*)?)\s+(?P<arguments>.+)$"
 )
+# Hermes' launchers run entry points as `python -I -c <script> <args>`, in two shapes:
+#   * the published launcher (hermes_cli/_launchers.py `_launcher_script`): a multi-line
+#     script ending `from hermes_cli.main import main` / `sys.exit(main())` plus a trailing
+#     newline. macOS `ps` flattens each newline to a literal backslash-012.
+#   * `runtime_command()` (same file), used when `hermes update` respawns a gateway: one
+#     line ending `runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)`.
+# Whatever follows the script's last statement is the real Hermes argv.
+_LAUNCHER_COMMAND = re.compile(
+    r"^(?P<executable>\S*python(?:\d+(?:\.\d+)*)?)\s+(?:-[A-Za-z]+\s+)*-c\s+(?P<script>.*)$"
+)
+_PS_NEWLINE = "\\012"
+_LAUNCHER_IMPORT = _PS_NEWLINE + "from hermes_cli.main import main" + _PS_NEWLINE
+_LAUNCHER_EXIT = "sys.exit(main())"
+_RUNTIME_ENTRY = "runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"
 _CLAIM_BOUNDARY = (
     "Local process observation is bounded, best-effort, and is not execution, review, CI, or merge evidence."
 )
@@ -71,13 +87,50 @@ def _process_rows(ps_output: str) -> list[dict[str, Any]]:
         except ValueError:
             continue
         parsed_argv = _command_argv(command)
-        if pid in self_pids or _is_filtered_command(parsed_argv):
+        if pid in self_pids:
+            continue
+        launcher_argv = _launcher_argv(command)
+        if launcher_argv is not None:
+            if _is_persistent_main_command(launcher_argv[2:]):
+                rows.append({"pid": pid, "ppid": ppid, "argv": launcher_argv})
+            continue
+        if _is_filtered_command(parsed_argv):
             continue
         argv = parsed_argv if _is_hermes_command(parsed_argv) else _unquoted_hermes_argv(command)
         if not _is_hermes_command(argv):
             continue
         rows.append({"pid": pid, "ppid": ppid, "argv": argv})
     return rows
+
+
+def _launcher_argv(command: str) -> list[str] | None:
+    """`[python, "hermes", *argv]` for a Hermes launcher process, else None."""
+    match = _LAUNCHER_COMMAND.match(command)
+    if not match or not _is_python_executable(Path(match.group("executable")).name):
+        return None
+    script = match.group("script")
+    script_end = _launcher_script_end(script)
+    if script_end is None:
+        return None
+    trailing = script[script_end:]
+    while trailing.startswith(_PS_NEWLINE):
+        trailing = trailing[len(_PS_NEWLINE):]
+    if trailing and not trailing[0].isspace():
+        return None
+    try:
+        return [match.group("executable"), "hermes", *shlex.split(trailing)]
+    except ValueError:
+        return None
+
+
+def _launcher_script_end(script: str) -> int | None:
+    """Index just past the launcher script's final statement, or None if not a launcher."""
+    import_at = script.find(_LAUNCHER_IMPORT)
+    if import_at >= 0:
+        exit_at = script.find(_LAUNCHER_EXIT, import_at + len(_LAUNCHER_IMPORT))
+        return None if exit_at < 0 else exit_at + len(_LAUNCHER_EXIT)
+    entry_at = script.find(_RUNTIME_ENTRY)
+    return None if entry_at < 0 else entry_at + len(_RUNTIME_ENTRY)
 
 
 def _command_argv(command: str) -> list[str]:

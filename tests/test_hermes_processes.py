@@ -191,6 +191,61 @@ class HermesProcessObservationTests(unittest.TestCase):
 
         self.assertEqual(result["rows"][0]["label"], "node entry.js")
 
+    def test_published_launcher_runtimes_are_counted(self) -> None:
+        # Hermes' published launcher runs `python -I -c <script> <args>`; macOS ps
+        # renders the script's newlines as a literal backslash-012.
+        script = (
+            "import os, re, sys\\012os.environ.pop('PYTHONHOME', None)\\012"
+            "sys.path.insert(0, '/Users/u/.hermes/source/hermes-custom')\\012"
+            "import hermes_bootstrap\\012"
+            "if sys.argv[1:2] == ['--run-module']:\\012    import runpy\\012    sys.exit(0)\\012"
+            "from hermes_cli.main import main\\012"
+            "sys.argv[0] = re.sub(r'(-script\\\\.pyw|\\\\.exe)?$', '', sys.argv[0])\\012"
+            "sys.exit(main())\\012"
+        )
+        python = "/Users/u/.hermes/tools/python-3.14.7-darwin-arm64/bin/python3"
+        runtime = (
+            "import os, sys, runpy; os.environ.pop('PYTHONHOME', None); "
+            "sys.path.insert(0, '/Users/u/.hermes/source/hermes-custom'); import hermes_bootstrap; "
+        )
+        ps_output = (
+            f"47551 1 /usr/bin/osascript -e do shell script \"exec hermes gateway run\"\n"
+            f"47577 47551 {python} -I -c {script} --run-module hermes_cli.stderr_timestamp"
+            " --error-log /Users/u/.hermes/logs/gateway.error.log -- /Users/u/.hermes/bin/hermes gateway run\n"
+            f"47584 47577 {python} -I -c {script} gateway run --external-supervisor\n"
+            f"57697 57649 {python} -I -c {script} serve --host 127.0.0.1 --port 0\n"
+            f"57700 57697 {python} -I -c {script} config check\n"
+            f"58089 57697 {python} /var/folders/T/hermes_kernel_x/hermes_kernel_runner.py\n"
+            f"59000 1 {python} -I -c {runtime}runpy.run_module('hermes_cli.main', run_name='__main__',"
+            " alter_sys=True) --profile work gateway run --replace\n"
+            f"59001 1 {python} -I -c {runtime}runpy.run_module('hermes_cli.stderr_timestamp',"
+            " run_name='__main__', alter_sys=True) -- hermes gateway run\n"
+            f"59002 1 {python} -I -c {runtime}runpy.run_module('hermes_cli.main', run_name='__main__',"
+            " alter_sys=True) dashboard --port 9119\n"
+        )
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(ps_output=ps_output)
+
+        self.assertEqual([row["pid"] for row in result["rows"]], [47584, 57697, 59000, 59002])
+        self.assertEqual(result["agent_count"], 4)
+        self.assertEqual(result["process_count"], 4)
+        self.assertEqual({row["label"] for row in result["rows"]}, {"python3 hermes"})
+
+    def test_inline_scripts_without_the_launcher_entrypoint_stay_filtered(self) -> None:
+        ps_output = (
+            "70000 1 /usr/bin/python3 -c import hermes_cli; print(1) gateway run\n"
+            "70001 1 /usr/bin/python3 -c print('from hermes_cli.main import main') serve\n"
+            "70002 1 /bin/bash -c python3 -I -c from hermes_cli.main import main\\012sys.exit(main()) serve\n"
+        )
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(ps_output=ps_output)
+
+        self.assertEqual(result["rows"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
