@@ -29,7 +29,12 @@ _LAUNCHER_COMMAND = re.compile(
     r"^(?P<executable>\S*python(?:\d+(?:\.\d+)*)?)\s+(?:-[A-Za-z]+\s+)*-c\s+(?P<script>.*)$"
 )
 _PS_NEWLINE = "\\012"
-_LAUNCHER_IMPORT = _PS_NEWLINE + "from hermes_cli.main import main" + _PS_NEWLINE
+# Published-launcher entry imports -> the Hermes argv they imply, mirroring
+# hermes_cli/_launchers.py ENTRY_POINTS (`hermes-acp` runs acp_adapter.entry).
+_LAUNCHER_IMPORTS = {
+    _PS_NEWLINE + "from hermes_cli.main import main" + _PS_NEWLINE: (),
+    _PS_NEWLINE + "from acp_adapter.entry import main" + _PS_NEWLINE: ("acp",),
+}
 _LAUNCHER_EXIT = "sys.exit(main())"
 _RUNTIME_ENTRY = "runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"
 _CLAIM_BOUNDARY = (
@@ -112,25 +117,28 @@ def _launcher_argv(command: str) -> list[str] | None:
     script_end = _launcher_script_end(script)
     if script_end is None:
         return None
-    trailing = script[script_end:]
+    end, implied_argv = script_end
+    trailing = script[end:]
     while trailing.startswith(_PS_NEWLINE):
         trailing = trailing[len(_PS_NEWLINE):]
     if trailing and not trailing[0].isspace():
         return None
     try:
-        return [match.group("executable"), "hermes", *shlex.split(trailing)]
+        return [match.group("executable"), "hermes", *implied_argv, *shlex.split(trailing)]
     except ValueError:
         return None
 
 
-def _launcher_script_end(script: str) -> int | None:
-    """Index just past the launcher script's final statement, or None if not a launcher."""
-    import_at = script.find(_LAUNCHER_IMPORT)
-    if import_at >= 0:
-        exit_at = script.find(_LAUNCHER_EXIT, import_at + len(_LAUNCHER_IMPORT))
-        return None if exit_at < 0 else exit_at + len(_LAUNCHER_EXIT)
+def _launcher_script_end(script: str) -> tuple[int, tuple[str, ...]] | None:
+    """(index past the script's final statement, implied argv), or None if not a launcher."""
+    for entry_import, implied_argv in _LAUNCHER_IMPORTS.items():
+        import_at = script.find(entry_import)
+        if import_at < 0:
+            continue
+        exit_at = script.find(_LAUNCHER_EXIT, import_at + len(entry_import))
+        return None if exit_at < 0 else (exit_at + len(_LAUNCHER_EXIT), implied_argv)
     entry_at = script.find(_RUNTIME_ENTRY)
-    return None if entry_at < 0 else entry_at + len(_RUNTIME_ENTRY)
+    return None if entry_at < 0 else (entry_at + len(_RUNTIME_ENTRY), ())
 
 
 def _command_argv(command: str) -> list[str]:

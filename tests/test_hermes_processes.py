@@ -233,6 +233,25 @@ class HermesProcessObservationTests(unittest.TestCase):
         self.assertEqual(result["process_count"], 4)
         self.assertEqual({row["label"] for row in result["rows"]}, {"python3 hermes"})
 
+    def test_hermes_acp_launcher_counts_as_acp_agent(self) -> None:
+        # `hermes-acp` is the same published launcher with acp_adapter.entry as its entry.
+        script = (
+            "import os, re, sys\\012import hermes_bootstrap\\012"
+            "from acp_adapter.entry import main\\012sys.exit(main())\\012"
+        )
+        python = "/Users/u/.hermes/tools/python-3.14.7-darwin-arm64/bin/python3"
+        ps_output = (
+            f"61000 1 {python} -I -c {script}\n"
+            f"61001 1 {python} -I -c import os\\012from acp_adapter.entry import main\\012print(1)\n"
+        )
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(ps_output=ps_output)
+
+        self.assertEqual([row["pid"] for row in result["rows"]], [61000])
+        self.assertEqual(result["agent_count"], 1)
+
     def test_inline_scripts_without_the_launcher_entrypoint_stay_filtered(self) -> None:
         ps_output = (
             "70000 1 /usr/bin/python3 -c import hermes_cli; print(1) gateway run\n"
