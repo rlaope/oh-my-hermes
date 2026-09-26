@@ -10,9 +10,8 @@ post-rollout measurement has been taken: NOT YET OBSERVED.**
 ## The Gate Lives in the Workflow
 
 The required gate is the `aggregate` job in `.github/workflows/ci.yml`. It
-declares `needs: [test, test-windows, test-quarantine]` with `if: always()`,
-then reads each dependency's `result` and exits non-zero unless all three are
-`success`. Failure, cancellation, or a skipped leg is red. A missing result
+declares `needs: [test, test-windows]` with `if: always()`, then reads each
+dependency's `result` and exits non-zero unless both are `success`. Failure, cancellation, or a skipped leg is red. A missing result
 artifact is red, because the aggregate also re-proves that every discovered
 test was assigned exactly once and accounted for exactly once across every
 lane.
@@ -46,15 +45,54 @@ failure this arrangement exists to prevent.
 
 Because the delegators are ordinary discoverable tests, they inherit the
 properties the rest of the suite already has: every one is assigned exactly once
-across the shards and the quarantine list, all three lanes (`test`,
-`test-windows`, `test-quarantine`) consume the same generated plan, and the
-`aggregate` job re-proves the exact-once accounting. Benchmark coverage is
+across the shards and the quarantine list, every lane (`test`,
+`test-windows`) consumes a plan generated from the same inventory and
+quarantine, and the `aggregate` job re-proves the exact-once
+accounting. Benchmark coverage is
 therefore gated by the same green tick as everything else, with no detached
 workflow step to keep in sync.
 
 What has been observed locally is the offline framework running green and the
 generated plan carrying each delegator exactly once. Execution on the Windows
 lane is observed in pull-request CI, from the same plan, and nowhere earlier.
+
+## Per-Lane Shard Counts
+
+The Windows lane runs the same suite more than twice as slowly as the Linux
+lanes, so it gets its own plan. The `plan` job writes two files into the
+`shard-plan` artifact from the same inventory, timing history, and quarantine:
+`plan.json` with 2 shards for `linux-3.11` and `linux-3.12`, and
+`plan-windows.json` with 4 shards for `windows-3.12`. Both are deterministic,
+so identical inputs give byte-identical plans.
+
+`aggregate.py` binds each lane to the plan it ran (`--lane-plan
+windows-3.12=shard-plan/plan-windows.json`; every other lane uses `--plan`).
+It refuses a lane plan that does not assign the same discovered tests and the
+same quarantine as the default plan, and then requires every shard of each
+lane's own plan to be reported, so a missing Windows shard 3 is red even though
+the Linux lanes have no shard 3.
+
+Two loads besides the shard list are seeded into the plan before balancing,
+so the LPT partition accounts for them:
+
+- **Shard 0 gates.** Each lane's shard 0 also runs non-test gates: the native
+  fanout smoke, compile, and the PowerShell installer checks on Windows, and
+  the docs, compile and smoke gates on Linux. `plan.py --shard0-offset` takes
+  their duration as a declared constant: 90 s for Windows and 25 s for Linux,
+  from step-duration medians read on 2026-09-26. The comment beside the `plan`
+  step in `ci.yml` records where the numbers came from. The number is not
+  measured at plan time, so re-read it when those gates change.
+- **Serial quarantine.** The quarantined tests no longer have their own
+  `test-quarantine` jobs. Each lane runs them in a separate `run.py
+  --quarantine` process, serially, after its last shard's tests: shard 1 on
+  Linux, shard 3 on Windows. That job uses the same OS and Python as the rest
+  of the lane. The planner seeds the quarantine's duration onto the last
+  shard, which leaves that shard the lightest share of parallel tests. The
+  aggregate still requires each lane's quarantine result to account for every
+  quarantined test, and fails closed when the result is missing. This removed
+  3 jobs per run: at 0.5 to 0.9 minutes each they were cheap to execute, but
+  under the account's 20-concurrent-job cap they queued for 10 to 17 minutes
+  in bursts.
 
 ## Repository Settings
 
@@ -91,8 +129,9 @@ test-executing jobs in that run, of `completed_at - started_at` in seconds.
 Test-executing jobs are exactly:
 
 - Baseline (pre-sharding): `test (3.11)`, `test (3.12)`, `test-windows`.
-- Post-rollout: every `test (<version>, <shard>)`, every
-  `test-windows (<shard>)`, and every `test-quarantine (...)` job.
+- Post-rollout: every `test (<version>, <shard>)` and every
+  `test-windows (<shard>)` job (before the quarantine was folded into the last
+  shard, also every `test-quarantine (...)` job).
 
 Excluded from the metric in both corpora: `plan`, `aggregate`, `distribution`,
 and any job that is not one of the above. `plan` and `aggregate` are counted
@@ -179,7 +218,7 @@ evidence only. It is never test, review, merge-readiness, or merge evidence.
 
 ## Rolling Back
 
-Revert the workflow's `plan`, `test-quarantine`, and `aggregate` jobs and
+Revert the workflow's `plan` and `aggregate` jobs and the quarantine steps and
 restore the single full-suite `unittest discover` invocation per matrix job.
 Nothing outside `.github/workflows/ci.yml` and `tools/test_sharding/` has to
 change, and because no branch protection references these job names, no

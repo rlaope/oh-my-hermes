@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ─── How to run ───
-# python tools/test_sharding/plan.py --shards 2 \
+# python tools/test_sharding/plan.py --shards 2 --shard0-offset 25 \
 #   --durations tools/test_sharding/timings.json \
 #   --quarantine tools/test_sharding/quarantine.json --out plan.json
 """Build a deterministic, static unittest shard plan without importing tests."""
@@ -143,12 +143,18 @@ def expand_quarantine(entries: tuple[QuarantineEntry, ...], inventory: tuple[str
     return tuple(sorted(selected))
 
 
-def lpt_partition(durations: dict[str, float], shard_count: int) -> list[list[str]]:
-    """Use deterministic longest-processing-time-first balancing."""
+def lpt_partition(durations: dict[str, float], shard_count: int, seeds: tuple[float, ...] = ()) -> list[list[str]]:
+    """Use deterministic longest-processing-time-first balancing.
+
+    ``seeds`` is load a shard already carries before any test is placed (work
+    the job runs besides its shard list); missing entries are zero.
+    """
 
     if shard_count < 1:
         raise ShardingError("shard count must be at least 1")
-    loads = [0.0] * shard_count
+    if len(seeds) > shard_count:
+        raise ShardingError("more shard seeds than shards")
+    loads = [*seeds, *([0.0] * (shard_count - len(seeds)))]
     shards: list[list[str]] = [[] for _ in range(shard_count)]
     for test_id in sorted(durations, key=lambda identifier: (-durations[identifier], identifier)):
         target = min(range(shard_count), key=lambda index: (loads[index], index))
@@ -168,15 +174,28 @@ def count_partition(test_ids: list[str], shard_count: int) -> list[list[str]]:
     return [sorted(shard) for shard in shards]
 
 
-def build_plan(inputs: PlanningInputs, shard_count: int) -> Plan:
-    """Assign all IDs once, using measured durations or a stable median fallback."""
+def build_plan(inputs: PlanningInputs, shard_count: int, shard0_offset: float = 0.0) -> Plan:
+    """Assign all IDs once, using measured durations or a stable median fallback.
+
+    Two known loads are seeded before balancing. ``shard0_offset`` is the
+    declared seconds of non-test gates that shard 0's job runs after its tests.
+    The serial quarantine runs in the last shard's job, after that shard's
+    tests, so its duration is seeded onto the last shard, which the balance
+    then leaves with the lightest share of parallel tests.
+    """
+
+    if not math.isfinite(shard0_offset) or shard0_offset < 0:
+        raise ShardingError("shard 0 offset must be a finite, non-negative number of seconds")
 
     inventory = tuple(sorted(inputs.inventory))
     quarantined = expand_quarantine(inputs.quarantine, inventory)
     remaining = [test_id for test_id in inventory if test_id not in set(quarantined)]
     known = [inputs.durations[test_id] for test_id in remaining if test_id in inputs.durations]
     fallback = statistics.median(known) if known else DEFAULT_DURATION_SECONDS
-    shards = tuple(tuple(shard) for shard in lpt_partition({test_id: inputs.durations.get(test_id, fallback) for test_id in remaining}, shard_count))
+    seeds = [0.0] * max(shard_count, 1)
+    seeds[0] += shard0_offset
+    seeds[-1] += sum(inputs.durations.get(test_id, fallback) for test_id in quarantined)
+    shards = tuple(tuple(shard) for shard in lpt_partition({test_id: inputs.durations.get(test_id, fallback) for test_id in remaining}, shard_count, tuple(seeds)))
     assigned = [test_id for shard in shards for test_id in shard] + list(quarantined)
     tally = collections.Counter(assigned)
     if sorted(assigned) != list(inventory) or any(count > 1 for count in tally.values()):
@@ -194,6 +213,7 @@ def write_plan(plan: Plan, out: Path) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--shards", type=int, required=True)
+    parser.add_argument("--shard0-offset", type=float, default=0.0, help="declared seconds of non-test gates shard 0's job also runs")
     parser.add_argument("--durations", type=Path, required=True)
     parser.add_argument("--quarantine", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
@@ -206,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = _parser().parse_args(argv)
     try:
-        plan = build_plan(PlanningInputs(discover_inventory(args.start_dir), load_timings(args.durations), load_quarantine(args.quarantine)), args.shards)
+        plan = build_plan(PlanningInputs(discover_inventory(args.start_dir), load_timings(args.durations), load_quarantine(args.quarantine)), args.shards, args.shard0_offset)
         write_plan(plan, args.out)
     except ShardingError as exc:
         print(f"test sharding: {exc}", file=sys.stderr)

@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **CI runs the Windows unit tests in four shards.** Each of the two
+  `test-windows` shards ran about 7,200 tests in roughly 35 minutes, against
+  about 13 minutes for a Linux shard, so Windows set the wall clock of every
+  run. The `plan` job now also writes `plan-windows.json`, a 4-shard plan over
+  the same inventory, timing history and quarantine; the Linux lanes keep their
+  2-shard `plan.json`. `aggregate.py`
+  takes `--lane-plan LANE=PATH`, checks each lane against the plan that lane
+  ran, and fails when a lane plan covers different tests or a different
+  quarantine, or when any shard of a lane's own plan is missing. The planner
+  also seeds two known loads before balancing: a declared `--shard0-offset`
+  for the non-test gates shard 0 runs (90 s on Windows, 25 s on Linux, from
+  measured step medians), and the serial quarantine's duration on the last
+  shard. The quarantine now runs in its own process after each lane's last
+  shard instead of in three separate `test-quarantine` jobs, which queued for
+  10 to 17 minutes under the 20-concurrent-job cap. A run now has 12 jobs
+  (was 13 before this change).
+
 - **Hermes turns name the skills a work request may fit.** On a turn whose
   request reads as work, the plugin adds one line naming up to three
   installed skills with the situation each serves, and the model may load

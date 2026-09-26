@@ -291,7 +291,7 @@ Rules:
   file exists. Short of the two triggers above, nothing else heals it at all.
 
   This is a property of the uv-managed dev environment, not of the project. The
-  four test-bearing jobs (`plan`, `test`, `test-windows`, `test-quarantine`)
+  three test-bearing jobs (`plan`, `test`, `test-windows`)
   install with `python -m pip install -e .`, which ignores `[tool.uv]` and uses
   setuptools' default path-hook editable mode — no `build/` tree. Where a job
   does call `uv run` (the ruff gate in `test`, the packaging steps in

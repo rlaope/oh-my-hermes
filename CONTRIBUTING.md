@@ -138,8 +138,10 @@ the maintainer. You do not need to label your own PR.
 
 ## Test Sharding (CI)
 
-CI splits the unit-test suite into two deterministic shards per
-platform/version plus a serial quarantine, planned by
+CI splits the unit-test suite into deterministic shards per platform/version
+(two for each Linux lane, four for the slower Windows lane, each lane from its
+own plan over the same inventory) plus a serial quarantine that runs in its
+own process after each lane's last shard, planned by
 `tools/test_sharding/plan.py` and reconciled fail-closed by
 `tools/test_sharding/aggregate.py`. This changes nothing for local
 development: the full-suite command above
@@ -174,9 +176,8 @@ Rules that keep the plan green:
 
 ### What gates a merge
 
-The `aggregate` job is the gate. It depends on `test`, `test-windows`, and
-`test-quarantine`, runs with `if: always()`, and fails unless every one of
-them succeeded, so a failed, cancelled, or skipped shard cannot produce a
+The `aggregate` job is the gate. It depends on `test` and `test-windows`, runs
+with `if: always()`, and fails unless both succeeded, so a failed, cancelled, or skipped shard cannot produce a
 partial green. A green shard on its own proves only that slice ran; a green
 `aggregate` is what proves the whole suite ran and reconciled.
 
