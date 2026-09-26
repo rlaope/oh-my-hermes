@@ -21,10 +21,15 @@ _PYTHON_COMMAND = re.compile(
 # Hermes' launchers run entry points as `python -I -c <script> <args>`, in two shapes:
 #   * the published launcher (hermes_cli/_launchers.py `_launcher_script`): a multi-line
 #     script ending `from hermes_cli.main import main` / `sys.exit(main())` plus a trailing
-#     newline. macOS `ps` flattens each newline to a literal backslash-012.
+#     newline. macOS `ps` flattens each newline to a literal backslash-012; Linux
+#     procps renders each newline as a single space, so both renderings are accepted
+#     (on Linux only the launcher's exact published frame — see `_launcher_script_end`).
 #   * `runtime_command()` (same file), used when `hermes update` respawns a gateway: one
 #     line ending `runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)`.
 # Whatever follows the script's last statement is the real Hermes argv.
+# Known limit: `ps` joins argv words with single spaces, so on Linux argv words that
+# spell out the published launcher's exact frame are indistinguishable from the
+# launcher itself; on macOS the same holds for words containing a literal `\012`.
 # `ps` joins argv with single spaces and no quoting, so the executable path may itself
 # contain spaces or arrive double-quoted; a space before a flag-like token ends the path.
 # An unquoted executable is a single path — absolute (`/` or `~/`), relative with a `/`
@@ -47,11 +52,32 @@ _LAUNCHER_COMMAND = re.compile(
 )
 _PS_NEWLINE = "\\012"
 _SPACE_PROBE_LIMIT = 64
+# shlex.split (posix=True, comments=False) splits on runs of exactly ' \t\r\n' and
+# interprets nothing else once no quote or backslash character is present.
+_SHLEX_WHITESPACE = re.compile(r"[ \t\r\n]+")
+_SHELL_QUOTE_CHARS = re.compile(r"['\"\\]")
 # Published-launcher entry imports -> the Hermes argv they imply, mirroring
 # hermes_cli/_launchers.py ENTRY_POINTS (`hermes-acp` runs acp_adapter.entry).
 _LAUNCHER_IMPORTS = {
-    _PS_NEWLINE + "from hermes_cli.main import main" + _PS_NEWLINE: (),
-    _PS_NEWLINE + "from acp_adapter.entry import main" + _PS_NEWLINE: ("acp",),
+    "from hermes_cli.main import main": (),
+    "from acp_adapter.entry import main": ("acp",),
+}
+# macOS `ps` renders each script newline as the literal `\012`, so the entry import
+# must sit between two of them.
+_LAUNCHER_IMPORT_NEEDLES = {
+    entry_import: _PS_NEWLINE + entry_import + _PS_NEWLINE
+    for entry_import in _LAUNCHER_IMPORTS
+}
+# Linux procps renders each newline as one space, and `ps` joins argv with single
+# spaces, so a multi-line launcher is accepted only in the published frame
+# (hermes_cli/_launchers.py `_launcher_script`): the first statement, the bootstrap
+# import, then the exact space-rendered tail from the entry import to `sys.exit(main())`.
+_LINUX_LAUNCHER_PREFIX = "import os, re, sys "
+_LINUX_BOOTSTRAP_IMPORT = " import hermes_bootstrap "
+_LINUX_RESUB_STATEMENT = "sys.argv[0] = re.sub(r'(-script\\.pyw|\\.exe)?$', '', sys.argv[0])"
+_LINUX_LAUNCHER_TAILS = {
+    entry_import: f" {entry_import} {_LINUX_RESUB_STATEMENT} sys.exit(main())"
+    for entry_import in _LAUNCHER_IMPORTS
 }
 _LAUNCHER_EXIT = "sys.exit(main())"
 _RUNTIME_ENTRY = "runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"
@@ -109,7 +135,6 @@ def _process_rows(ps_output: str) -> list[dict[str, Any]]:
             ppid = int(raw_ppid)
         except ValueError:
             continue
-        parsed_argv = _command_argv(command)
         if pid in self_pids:
             continue
         launcher_argv = _launcher_argv(command)
@@ -117,6 +142,17 @@ def _process_rows(ps_output: str) -> list[dict[str, Any]]:
             if _is_persistent_main_command(launcher_argv[2:]):
                 rows.append({"pid": pid, "ppid": ppid, "argv": launcher_argv})
             continue
+        # Every Hermes shape needs `python` (a python executable, or `_PYTHON_COMMAND`
+        # for the unquoted form) or `entry.js` (the node ui-tui entry) in the command
+        # text, and shlex never creates letters — but it can join them across removed
+        # quotes (`pyt"hon"`), so the prefilter only applies with no quote/backslash chars.
+        if (
+            "python" not in command
+            and "entry.js" not in command
+            and not _SHELL_QUOTE_CHARS.search(command)
+        ):
+            continue
+        parsed_argv = _command_argv(command)
         if _is_filtered_command(parsed_argv):
             continue
         argv = parsed_argv if _is_hermes_command(parsed_argv) else _unquoted_hermes_argv(command)
@@ -181,17 +217,34 @@ def _unquoted_executable_is_one_argv(executable: str) -> bool:
 
 def _launcher_script_end(script: str) -> tuple[int, tuple[str, ...]] | None:
     """(index past the script's final statement, implied argv), or None if not a launcher."""
-    for entry_import, implied_argv in _LAUNCHER_IMPORTS.items():
-        import_at = script.find(entry_import)
-        if import_at < 0:
-            continue
-        exit_at = script.find(_LAUNCHER_EXIT, import_at + len(entry_import))
-        return None if exit_at < 0 else (exit_at + len(_LAUNCHER_EXIT), implied_argv)
+    if _PS_NEWLINE in script:
+        # macOS rendering: only the `\012`-bounded needles count, first import found wins.
+        for entry_import, implied_argv in _LAUNCHER_IMPORTS.items():
+            needle = _LAUNCHER_IMPORT_NEEDLES[entry_import]
+            import_at = script.find(needle)
+            if import_at < 0:
+                continue
+            exit_at = script.find(_LAUNCHER_EXIT, import_at + len(needle))
+            return None if exit_at < 0 else (exit_at + len(_LAUNCHER_EXIT), implied_argv)
+    elif script.startswith(_LINUX_LAUNCHER_PREFIX):
+        # Linux rendering: only the published launcher's exact space-rendered frame counts.
+        bootstrap_at = script.find(_LINUX_BOOTSTRAP_IMPORT)
+        if bootstrap_at >= 0:
+            search_from = bootstrap_at + len(_LINUX_BOOTSTRAP_IMPORT)
+            for entry_import, implied_argv in _LAUNCHER_IMPORTS.items():
+                tail = _LINUX_LAUNCHER_TAILS[entry_import]
+                tail_at = script.find(tail, search_from)
+                if tail_at >= 0:
+                    return tail_at + len(tail), implied_argv
     entry_at = script.find(_RUNTIME_ENTRY)
     return None if entry_at < 0 else (entry_at + len(_RUNTIME_ENTRY), ())
 
 
 def _command_argv(command: str) -> list[str]:
+    # Without quote or backslash characters, shlex.split(command) is exactly
+    # `_SHLEX_WHITESPACE.split(command)` with empty strings dropped.
+    if not _SHELL_QUOTE_CHARS.search(command):
+        return [token for token in _SHLEX_WHITESPACE.split(command) if token]
     try:
         return shlex.split(command)
     except ValueError:

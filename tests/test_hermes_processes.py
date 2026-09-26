@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 import time
 import unittest
@@ -11,12 +12,52 @@ from _local_package import load_local_package
 load_local_package()
 from omh.surfaces.hermes_processes import (
     HERMES_PROCESS_SCHEMA_VERSION,
+    _command_argv,
     _launcher_argv,
     observe_hermes_processes,
 )
 
 
 NOW = datetime(2026, 8, 16, 4, 30, tzinfo=timezone.utc)
+
+# Linux procps renders each newline of a `python -I -c <script>` launcher as ONE
+# space (macOS ps renders the literal four characters \012), so the script's
+# statements arrive space-joined and the trailing Hermes args follow a double
+# space. The statement lists below mirror the published launcher
+# (hermes_cli/_launchers.py); the repo path `/opt/hermes` is synthetic.
+_LINUX_MAIN_STATEMENTS = [
+    "import os, re, sys",
+    "os.environ.pop('PYTHONHOME', None)",
+    "os.environ.pop('PYTHONPATH', None)",
+    "sys.path.insert(0, '/opt/hermes')",
+    "if sys.argv[1:2] == ['--print-runtime-command']: sys.dont_write_bytecode = True",
+    "from hermes_constants import get_default_hermes_root",
+    "os.environ['HERMES_HOME'] = os.environ.get('HERMES_HOME') or str(get_default_hermes_root())",
+    "if sys.argv[1:2] == ['--print-runtime-command']:     from pathlib import Path     from hermes_cli._launchers import print_runtime_command     print_runtime_command(Path('/opt/hermes'), sys.argv[2:])     sys.exit(0)",
+    "import hermes_bootstrap",
+    "if sys.argv[1:2] == ['--run-module']:     import runpy     if len(sys.argv) < 3: sys.exit('hermes: --run-module needs a module')     module = sys.argv.pop(2)     del sys.argv[1]     runpy.run_module(module, run_name='__main__', alter_sys=True)     sys.exit(0)",
+    "from hermes_cli.main import main",
+    "sys.argv[0] = re.sub(r'(-script\\.pyw|\\.exe)?$', '', sys.argv[0])",
+    "sys.exit(main())",
+]
+# The real `hermes-acp` launcher is the same script with acp_adapter.entry as its
+# entry, including the `sys.argv[0] = re.sub(...)` line.
+_LINUX_ACP_STATEMENTS = [
+    statement.replace("from hermes_cli.main import main", "from acp_adapter.entry import main")
+    for statement in _LINUX_MAIN_STATEMENTS
+]
+LINUX_LAUNCHER_SCRIPT = " ".join(_LINUX_MAIN_STATEMENTS)
+LINUX_ACP_SCRIPT = " ".join(_LINUX_ACP_STATEMENTS)
+LINUX_PYTHON = "/usr/local/bin/python3"
+
+
+def linux_launcher_line(*args: str) -> str:
+    return f"{LINUX_PYTHON} -I -c {LINUX_LAUNCHER_SCRIPT}  {' '.join(args)}"
+
+
+def linux_acp_line() -> str:
+    return f"{LINUX_PYTHON} -I -c {LINUX_ACP_SCRIPT} "
+
 
 
 class HermesProcessObservationTests(unittest.TestCase):
@@ -257,6 +298,18 @@ class HermesProcessObservationTests(unittest.TestCase):
         self.assertEqual([row["pid"] for row in result["rows"]], [61000])
         self.assertEqual(result["agent_count"], 1)
 
+    def test_hermes_main_import_takes_precedence_over_acp_import(self) -> None:
+        # The entry imports are tried in dict order and the first one found anywhere
+        # wins, so a script containing both resolves to the hermes_cli.main entry.
+        script = (
+            "import os\\012from acp_adapter.entry import main\\012"
+            "from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        self.assertEqual(
+            _launcher_argv(f"/usr/bin/python3 -I -c {script} chat"),
+            ["/usr/bin/python3", "hermes", "chat"],
+        )
+
     def test_inline_scripts_without_the_launcher_entrypoint_stay_filtered(self) -> None:
         ps_output = (
             "70000 1 /usr/bin/python3 -c import hermes_cli; print(1) gateway run\n"
@@ -333,6 +386,19 @@ class HermesProcessObservationTests(unittest.TestCase):
             result = observe_hermes_processes(ps_output=ps_output)
 
         self.assertEqual(result["rows"], [])
+
+    def test_text_after_the_final_newline_stays_filtered(self) -> None:
+        # Only rendered `\012` newlines may follow the exit statement; any other text
+        # glued to it is more script, not Hermes argv.
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())"
+        )
+        for suffix in ("\\012print(1) chat", "\\012chat", "\\x chat"):
+            with self.subTest(suffix=suffix):
+                self.assertIsNone(_launcher_argv(f"/usr/bin/python3 -I -c {script}{suffix}"))
+        self.assertIsNone(
+            _launcher_argv(f"/usr/bin/python3 -I -c {LINUX_LAUNCHER_SCRIPT}print(1) gateway run")
+        )
 
     def test_launcher_argv_relative_python_paths_match_and_wrappers_do_not(self) -> None:
         # HEAD accepted a relative python path with no spaces (`.venv/bin/python3`);
@@ -555,6 +621,222 @@ class HermesProcessObservationTests(unittest.TestCase):
                 _launcher_argv(f"{python} -I -c {script}"),
                 [python, "hermes", "acp"],
             )
+
+    def test_linux_launcher_line_with_gateway_run_argv(self) -> None:
+        self.assertEqual(
+            _launcher_argv(linux_launcher_line("gateway", "run")),
+            [LINUX_PYTHON, "hermes", "gateway", "run"],
+        )
+
+    def test_linux_launcher_line_with_profile_argv_and_agent_count(self) -> None:
+        self.assertEqual(
+            _launcher_argv(linux_launcher_line("--profile", "work", "chat")),
+            [LINUX_PYTHON, "hermes", "--profile", "work", "chat"],
+        )
+        ps_output = f"71000 1 {linux_launcher_line('--profile', 'work', 'chat')}\n"
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+
+        self.assertEqual(result["agent_count"], 1)
+        self.assertEqual(result["process_count"], 1)
+        self.assertEqual(result["rows"][0]["pid"], 71000)
+        self.assertEqual(result["rows"][0]["role"], "agent")
+
+    def test_linux_launcher_line_with_one_shot_command_is_not_counted(self) -> None:
+        self.assertEqual(
+            _launcher_argv(linux_launcher_line("gateway", "status")),
+            [LINUX_PYTHON, "hermes", "gateway", "status"],
+        )
+        ps_output = f"71001 1 {linux_launcher_line('gateway', 'status')}\n"
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+
+        self.assertEqual(result["agent_count"], 0)
+        self.assertEqual(result["process_count"], 0)
+        self.assertEqual(result["rows"], [])
+
+    def test_linux_acp_launcher_line_argv(self) -> None:
+        self.assertEqual(
+            _launcher_argv(linux_acp_line()),
+            [LINUX_PYTHON, "hermes", "acp"],
+        )
+
+    def test_linux_launcher_line_with_spaced_python_path_is_counted(self) -> None:
+        python = "/opt/Ex User/bin/python3"
+        line = f"{python} -I -c {LINUX_LAUNCHER_SCRIPT}  gateway run"
+        with patch("omh.surfaces.hermes_processes.os.path.isfile", return_value=False):
+            self.assertEqual(
+                _launcher_argv(line),
+                [python, "hermes", "gateway", "run"],
+            )
+        ps_output = f"71002 1 {line}\n"
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ), patch("omh.surfaces.hermes_processes.os.path.isfile", return_value=False):
+            result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+
+        self.assertEqual(result["agent_count"], 1)
+        self.assertEqual(result["process_count"], 1)
+        self.assertEqual(result["rows"][0]["pid"], 71002)
+
+    def test_linux_launcher_wrappers_stay_none(self) -> None:
+        for wrapper in ("nohup", "timeout 60"):
+            with self.subTest(wrapper=wrapper):
+                self.assertIsNone(
+                    _launcher_argv(f"{wrapper} {linux_launcher_line('gateway', 'run')}")
+                )
+
+    def test_linux_wrapper_parent_and_launcher_child_count_only_the_child(self) -> None:
+        ps_output = (
+            f"123 1 timeout 60 {linux_launcher_line('gateway', 'run')}\n"
+            f"125 123 {linux_launcher_line('gateway', 'run')}\n"
+        )
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+
+        self.assertEqual(result["agent_count"], 1)
+        self.assertEqual(result["process_count"], 1)
+        self.assertEqual([row["pid"] for row in result["rows"]], [125])
+        self.assertEqual(result["rows"][0]["role"], "agent")
+
+    def test_linux_negative_controls_stay_none(self) -> None:
+        self.assertIsNone(
+            _launcher_argv(
+                "/usr/bin/python3 -c import os from acp_adapter.entry import main print(1)"
+            )
+        )
+        self.assertIsNone(
+            _launcher_argv("/usr/bin/python3 -c print('from hermes_cli.main import main') serve")
+        )
+        self.assertIsNone(
+            _launcher_argv(
+                f"/usr/bin/python3 -I -c {LINUX_LAUNCHER_SCRIPT}print(1) gateway run"
+            )
+        )
+        self.assertIsNone(
+            _launcher_argv(f"/usr/bin/python3 -I -c {LINUX_ACP_SCRIPT}print(1)")
+        )
+
+    def test_linux_argv_words_that_look_like_launcher_statements_stay_filtered(self) -> None:
+        # `ps` joins argv with single spaces, so argv words that spell out launcher
+        # statements are not the launcher: only the published frame counts on Linux.
+        decoys = [
+            "/usr/bin/python3 -I -c "
+            "print(1) from hermes_cli.main import main sys.exit(main()) chat",
+            "/usr/bin/python3 -I -c "
+            "import os, re, sys from hermes_cli.main import main sys.exit(main()) chat",
+            "/usr/bin/python3 -I -c "
+            "import os from acp_adapter.entry import main sys.exit(main()) ",
+            f"/usr/bin/python3 -I -c "
+            f"{LINUX_LAUNCHER_SCRIPT.replace('import os, re, sys', 'import os, sys', 1)}"
+            "  gateway run",
+            f"/usr/bin/python3 -I -c "
+            f"{LINUX_LAUNCHER_SCRIPT.replace(' import hermes_bootstrap', '', 1)}"
+            "  gateway run",
+        ]
+        for command in decoys:
+            with self.subTest(command=command[:48]):
+                self.assertIsNone(_launcher_argv(command))
+        ps_output = "".join(
+            f"72{index:03d} 1 {command}\n" for index, command in enumerate(decoys)
+        )
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+
+        self.assertEqual(result["rows"], [])
+
+    def test_mixed_newline_rendering_uses_the_macos_rules(self) -> None:
+        # A `\012` anywhere in the script selects the macOS rules even when the rest
+        # is the full Linux space-rendered frame, matching HEAD's behaviour.
+        command = f"/usr/bin/python3 -I -c print('\\\\012') {LINUX_LAUNCHER_SCRIPT}  chat"
+        self.assertIsNone(_launcher_argv(command))
+
+    def test_linux_ps_dump_counts_the_expected_processes(self) -> None:
+        runpy_script = (
+            "import os, sys, runpy; os.environ.pop('PYTHONHOME', None); "
+            "sys.path.insert(0, '/opt/hermes'); import hermes_bootstrap; "
+            "runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"
+        )
+        spaced_python = "/opt/Ex User/bin/python3"
+        ps_output = "\n".join(
+            [
+                "100 1 /bin/bash",
+                f"101 1 {linux_launcher_line('gateway', 'run')}",
+                f"102 1 {linux_launcher_line('--profile', 'work', 'chat')}",
+                f"103 1 {linux_launcher_line('gateway', 'status')}",
+                f"104 1 {linux_acp_line()}",
+                f"105 1 {LINUX_PYTHON} -I -c {runpy_script} gateway run",
+                f"106 1 {spaced_python} -I -c {LINUX_LAUNCHER_SCRIPT}  gateway run",
+                f"107 1 {LINUX_PYTHON} -I -c {LINUX_LAUNCHER_SCRIPT}  gateway run",
+                f"108 1 timeout 60 {LINUX_PYTHON} -I -c {LINUX_LAUNCHER_SCRIPT}  gateway run",
+                f"109 108 {LINUX_PYTHON} -I -c {LINUX_LAUNCHER_SCRIPT}  gateway run",
+                "110 1 ps -axo pid=,ppid=,command=",
+            ]
+        ) + "\n"
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ), patch("omh.surfaces.hermes_processes.os.path.isfile", return_value=False):
+            result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+
+        self.assertEqual(
+            [row["pid"] for row in result["rows"]], [101, 102, 104, 105, 106, 107, 109]
+        )
+        self.assertEqual(result["agent_count"], 7)
+        self.assertEqual(result["process_count"], 7)
+        self.assertEqual([row["role"] for row in result["rows"]], ["agent"] * 7)
+
+    def test_command_argv_matches_shlex_split(self) -> None:
+        commands = [
+            "python3 -I -c script gateway run",
+            "  python3   -I\t-c  script  gateway  run  ",
+            'python3 -c "script with spaces" gateway run',
+            "python3 -c 'single quoted script' gateway run",
+            "python3 -c script\\ with\\ backslash gateway run",
+            'python3 -c "unbalanced quote',
+            "python3 -c 'unbalanced single",
+            "python3 -c trailing\\",
+            "python3 -c script\\",
+            "",
+            "   ",
+            "\t\t",
+            "a b\tc\rd\ne",
+            "one",
+            "  multiple   spaces   between   words  ",
+            "mixed 'quotes and \"doubles\"' plain",
+            "backslash\\\\double",
+            "python3 -c 'it\\'s escaped' run",
+            "a # b",
+            "x\x0by",
+            "x\x0cy",
+            "tab\tonly",
+            "ünïcode wörds",
+        ]
+        for command in commands:
+            with self.subTest(command=command[:40]):
+                try:
+                    expected = shlex.split(command)
+                except ValueError:
+                    expected = []
+                self.assertEqual(_command_argv(command), expected)
+
+    def test_command_argv_is_fast_on_pathological_lines(self) -> None:
+        payloads = ["a/" * 175000, " a" * 175000, "python " * 50000]
+        for payload in payloads:
+            with self.subTest(payload=payload[:12]):
+                ps_output = "999 1 " + payload
+                start = time.perf_counter()
+                result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+                elapsed = (time.perf_counter() - start) * 1000
+                self.assertEqual(result["rows"], [])
+                self.assertLess(elapsed, 50)
 
 
 if __name__ == "__main__":
