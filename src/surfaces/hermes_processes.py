@@ -25,10 +25,28 @@ _PYTHON_COMMAND = re.compile(
 #   * `runtime_command()` (same file), used when `hermes update` respawns a gateway: one
 #     line ending `runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)`.
 # Whatever follows the script's last statement is the real Hermes argv.
+# `ps` joins argv with single spaces and no quoting, so the executable path may itself
+# contain spaces or arrive double-quoted; a space before a flag-like token ends the path.
+# An unquoted executable is a single path — absolute (`/` or `~/`), relative with a `/`
+# (`.venv/bin/python3`, `venv/bin/python3.12`) — or a bare python name (`python3`,
+# `python3.12`): a space followed by `/` starts a new argv word (a wrapper such as
+# `/usr/bin/time /opt/.../python3`), so it may not be crossed, and any other first word
+# with no `/` (caffeinate, nohup, bash -c) is a wrapper command rather than the
+# launcher's python. A spaced unquoted executable is lexically ambiguous
+# (`/usr/bin/time venv/bin/python3` vs `/Users/Ex User/bin/python3`), so
+# `_unquoted_executable_is_one_argv` walks its spaces and treats one whose prefix is an
+# existing regular file as an argv boundary: a wrapper precedes python and the command
+# is refused. Known limits: a directory whose name contains ` -`, a space followed by `/`,
+# and a spaced executable with more than `_SPACE_PROBE_LIMIT` spaces.
 _LAUNCHER_COMMAND = re.compile(
-    r"^(?P<executable>\S*python(?:\d+(?:\.\d+)*)?)\s+(?:-[A-Za-z]+\s+)*-c\s+(?P<script>.*)$"
+    r'^(?P<executable>"[^"]*python(?:\d+(?:\.\d+)*)?"'
+    r'|~?/(?:[^\s"]|\s(?![\s/-]))*?python(?:\d+(?:\.\d+)*)?'
+    r'|[^\s"~/][^\s"]*python(?:\d+(?:\.\d+)*)?'
+    r"|python(?:\d+(?:\.\d+)*)?)"
+    r"\s+(?:-[A-Za-z]+\s+)*-c\s+(?P<script>.*)$"
 )
 _PS_NEWLINE = "\\012"
+_SPACE_PROBE_LIMIT = 64
 # Published-launcher entry imports -> the Hermes argv they imply, mirroring
 # hermes_cli/_launchers.py ENTRY_POINTS (`hermes-acp` runs acp_adapter.entry).
 _LAUNCHER_IMPORTS = {
@@ -111,7 +129,20 @@ def _process_rows(ps_output: str) -> list[dict[str, Any]]:
 def _launcher_argv(command: str) -> list[str] | None:
     """`[python, "hermes", *argv]` for a Hermes launcher process, else None."""
     match = _LAUNCHER_COMMAND.match(command)
-    if not match or not _is_python_executable(Path(match.group("executable")).name):
+    if not match:
+        return None
+    quoted = match.group("executable").startswith('"')
+    executable = match.group("executable").strip('"')
+    if not _is_python_executable(Path(executable).name):
+        return None
+    if (
+        not quoted
+        and not executable.startswith(("/", "~"))
+        and "/" not in executable
+        and not _is_python_executable(executable)
+    ):
+        return None
+    if not quoted and not _unquoted_executable_is_one_argv(executable):
         return None
     script = match.group("script")
     script_end = _launcher_script_end(script)
@@ -124,9 +155,28 @@ def _launcher_argv(command: str) -> list[str] | None:
     if trailing and not trailing[0].isspace():
         return None
     try:
-        return [match.group("executable"), "hermes", *implied_argv, *shlex.split(trailing)]
+        return [executable, "hermes", *implied_argv, *shlex.split(trailing)]
     except ValueError:
         return None
+
+
+def _unquoted_executable_is_one_argv(executable: str) -> bool:
+    """False when a space in an unquoted executable is an argv boundary (a wrapper
+    precedes python): the text before that space is an existing regular file. A spaced
+    directory (`/Users/Ex User`) is not a file, so it still matches. Probes are capped at
+    `_SPACE_PROBE_LIMIT` so a pathological line cannot trigger unbounded stat calls."""
+    probes = 0
+    start = 0
+    while True:
+        space_at = executable.find(" ", start)
+        if space_at < 0:
+            return True
+        probes += 1
+        if probes > _SPACE_PROBE_LIMIT:
+            return False
+        if os.path.isfile(os.path.expanduser(executable[:space_at])):
+            return False
+        start = space_at + 1
 
 
 def _launcher_script_end(script: str) -> tuple[int, tuple[str, ...]] | None:

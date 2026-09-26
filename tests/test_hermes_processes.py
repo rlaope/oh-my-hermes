@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -8,7 +9,11 @@ from unittest.mock import patch
 from _local_package import load_local_package
 
 load_local_package()
-from omh.surfaces.hermes_processes import HERMES_PROCESS_SCHEMA_VERSION, observe_hermes_processes
+from omh.surfaces.hermes_processes import (
+    HERMES_PROCESS_SCHEMA_VERSION,
+    _launcher_argv,
+    observe_hermes_processes,
+)
 
 
 NOW = datetime(2026, 8, 16, 4, 30, tzinfo=timezone.utc)
@@ -264,6 +269,292 @@ class HermesProcessObservationTests(unittest.TestCase):
             result = observe_hermes_processes(ps_output=ps_output)
 
         self.assertEqual(result["rows"], [])
+
+    def test_launcher_python_path_with_spaces_is_counted(self) -> None:
+        # macOS ps joins argv with single spaces and no quoting, so the launcher's
+        # python can sit under a path with a space.
+        script = (
+            "import os, re, sys\\012import hermes_bootstrap\\012"
+            "from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        python = "/Users/Example User/.hermes/tools/python-3.14.7-darwin-arm64/bin/python3"
+        ps_output = f"62000 1 {python} -I -c {script} gateway run\n"
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ), patch("omh.surfaces.hermes_processes.os.path.isfile", return_value=False):
+            result = observe_hermes_processes(ps_output=ps_output)
+
+        self.assertEqual([row["pid"] for row in result["rows"]], [62000])
+        self.assertEqual(result["agent_count"], 1)
+        self.assertEqual(result["rows"][0]["label"], "python3 hermes")
+
+    def test_launcher_python_path_with_spaces_quoted_is_counted(self) -> None:
+        script = (
+            "import os, re, sys\\012import hermes_bootstrap\\012"
+            "from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        python = "/Users/Example User/.hermes/tools/python-3.14.7-darwin-arm64/bin/python3"
+        ps_output = f'62001 1 "{python}" -I -c {script} gateway run\n'
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(ps_output=ps_output)
+
+        self.assertEqual([row["pid"] for row in result["rows"]], [62001])
+        self.assertEqual(result["agent_count"], 1)
+        self.assertEqual(result["rows"][0]["label"], "python3 hermes")
+
+    def test_launcher_shape_with_a_non_python_executable_stays_filtered(self) -> None:
+        script = (
+            "import os, re, sys\\012import hermes_bootstrap\\012"
+            "from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        ps_output = (
+            "62002 1 /Users/Example User/.hermes/tools/python-3.14.7-darwin-arm64/bin/notpython"
+            f" -I -c {script} gateway run\n"
+        )
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(ps_output=ps_output)
+
+        self.assertEqual(result["rows"], [])
+
+    def test_launcher_with_code_after_the_final_statement_stays_filtered(self) -> None:
+        script = (
+            "import os, re, sys\\012import hermes_bootstrap\\012"
+            "from hermes_cli.main import main\\012sys.exit(main())print(1)"
+        )
+        python = "/Users/u/.hermes/tools/python-3.14.7-darwin-arm64/bin/python3"
+        ps_output = f"63000 1 {python} -I -c {script} gateway run\n"
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(ps_output=ps_output)
+
+        self.assertEqual(result["rows"], [])
+
+    def test_launcher_argv_relative_python_paths_match_and_wrappers_do_not(self) -> None:
+        # HEAD accepted a relative python path with no spaces (`.venv/bin/python3`);
+        # a wrapper in front of it (`/usr/bin/time venv/bin/python3`) must stay None.
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+
+        def wrapper_is_file(path: str) -> bool:
+            return path in {"/usr/bin/time", "/usr/bin/env"}
+
+        with patch(
+            "omh.surfaces.hermes_processes.os.path.isfile", side_effect=wrapper_is_file
+        ):
+            self.assertIsNone(
+                _launcher_argv(f"/usr/bin/time venv/bin/python3 -I -c {script} chat")
+            )
+            self.assertIsNone(
+                _launcher_argv(f"/usr/bin/env FOO=1 venv/bin/python3 -I -c {script} chat")
+            )
+        self.assertIsNone(_launcher_argv(f"nohup venv/bin/python3 -I -c {script} chat"))
+        self.assertIsNone(
+            _launcher_argv(f"caffeinate -is /usr/bin/python3 -I -c {script} chat")
+        )
+        self.assertEqual(
+            _launcher_argv(f".venv/bin/python3 -I -c {script} chat"),
+            [".venv/bin/python3", "hermes", "chat"],
+        )
+        self.assertEqual(
+            _launcher_argv(f"./venv/bin/python3 -I -c {script} chat"),
+            ["./venv/bin/python3", "hermes", "chat"],
+        )
+        self.assertEqual(
+            _launcher_argv(f"venv/bin/python3 -I -c {script} chat"),
+            ["venv/bin/python3", "hermes", "chat"],
+        )
+        self.assertEqual(
+            _launcher_argv(f"../x/bin/python3.12 -I -c {script} chat"),
+            ["../x/bin/python3.12", "hermes", "chat"],
+        )
+
+    def test_relative_python_paths_starting_with_s_are_counted(self) -> None:
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        self.assertEqual(
+            _launcher_argv(f"sbin/python3 -I -c {script} chat"),
+            ["sbin/python3", "hermes", "chat"],
+        )
+        self.assertEqual(
+            _launcher_argv(f"src/venv/bin/python3 -I -c {script} chat"),
+            ["src/venv/bin/python3", "hermes", "chat"],
+        )
+        self.assertEqual(
+            _launcher_argv(f"srv/py/bin/python3 -I -c {script} chat"),
+            ["srv/py/bin/python3", "hermes", "chat"],
+        )
+
+    def test_wrapper_and_launcher_child_pair_counts_only_the_child(self) -> None:
+        # `/usr/bin/time .venv/bin/python3 ...` is a wrapper around the launcher, so
+        # only the child launcher itself is the agent.
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        ps_output = (
+            f"100 1 /usr/bin/time .venv/bin/python3 -I -c {script} gateway run\n"
+            f"101 100 .venv/bin/python3 -I -c {script} gateway run\n"
+        )
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ), patch("omh.surfaces.hermes_processes.os.path.isfile", return_value=True):
+            result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+
+        self.assertEqual(result["agent_count"], 1)
+        self.assertEqual(result["process_count"], 1)
+        self.assertEqual([row["pid"] for row in result["rows"]], [101])
+        self.assertEqual(result["rows"][0]["role"], "agent")
+
+    def test_spaced_absolute_python_path_matches_when_no_prefix_is_a_file(self) -> None:
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        python = "/Users/Ex User/bin/python3"
+        with patch("omh.surfaces.hermes_processes.os.path.isfile", return_value=False):
+            self.assertEqual(
+                _launcher_argv(f"{python} -I -c {script} chat"),
+                [python, "hermes", "chat"],
+            )
+
+    def test_pathological_launcher_line_probes_a_bounded_number_of_spaces(self) -> None:
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        line = "/a" + " b" * 175_000 + f"/python3 -I -c {script} chat"
+        with patch(
+            "omh.surfaces.hermes_processes.os.path.isfile", return_value=False
+        ) as is_file:
+            self.assertIsNone(_launcher_argv(line))
+        self.assertLessEqual(is_file.call_count, 64)
+
+    def test_wrapper_commands_before_an_absolute_python_path_stay_filtered(self) -> None:
+        # A wrapper word (caffeinate, sudo, time, timeout, uv, env, bash -c, nohup)
+        # in front of the launcher's python must not be swallowed into the
+        # executable: the unquoted executable is a single absolute path only.
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        wrappers = [
+            "caffeinate",
+            "sudo",
+            "/usr/bin/time",
+            "timeout 60",
+            "uv run",
+            "/usr/bin/env",
+            "bash -c",
+            "nohup",
+        ]
+        for wrapper in wrappers:
+            with self.subTest(wrapper=wrapper):
+                command = f"{wrapper} /opt/hermes/bin/python3 -I -c {script} gateway run"
+                self.assertIsNone(_launcher_argv(command))
+
+    def test_wrapper_commands_before_a_bare_python_stay_filtered(self) -> None:
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        wrappers = ["/usr/bin/env python3", "bash -c python3", "nohup python3"]
+        for wrapper in wrappers:
+            with self.subTest(wrapper=wrapper):
+                command = f"{wrapper} -I -c {script} gateway run"
+                self.assertIsNone(_launcher_argv(command))
+
+    def test_bare_python_launchers_are_counted(self) -> None:
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        self.assertEqual(
+            _launcher_argv(f"python3 -I -c {script} gateway run"),
+            ["python3", "hermes", "gateway", "run"],
+        )
+        self.assertEqual(
+            _launcher_argv(f"python3.12 -c {script} chat"),
+            ["python3.12", "hermes", "chat"],
+        )
+
+    def test_a_wrapper_command_does_not_shadow_the_real_python_launcher(self) -> None:
+        # ps shows the wrapper (caffeinate) as parent and the real python as its
+        # child; only the python line is the agent.
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        python = "/opt/hermes/bin/python3"
+        ps_output = (
+            f"100 1 caffeinate {python} -I -c {script} gateway run\n"
+            f"101 100 {python} -I -c {script} gateway run\n"
+        )
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(now=NOW, ps_output=ps_output)
+
+        self.assertEqual(result["agent_count"], 1)
+        self.assertEqual(result["process_count"], 1)
+        self.assertEqual([row["pid"] for row in result["rows"]], [101])
+        self.assertEqual(result["rows"][0]["role"], "agent")
+        self.assertEqual(result["rows"][0]["label"], "python3 hermes")
+
+    def test_launcher_with_unbalanced_quote_in_args_stays_filtered(self) -> None:
+        script = (
+            "import os, re, sys\\012import hermes_bootstrap\\012"
+            "from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        python = "/Users/u/.hermes/tools/python-3.14.7-darwin-arm64/bin/python3"
+        ps_output = f'63001 1 {python} -I -c {script} gateway run --name "oops\n'
+        with patch("omh.surfaces.hermes_processes.os.getpid", return_value=90001), patch(
+            "omh.surfaces.hermes_processes.os.getppid", return_value=90000
+        ):
+            result = observe_hermes_processes(ps_output=ps_output)
+
+        self.assertEqual(result["rows"], [])
+
+    def test_pathological_launcher_lines_are_rejected_in_linear_time(self) -> None:
+        # Two adjacent lazy quantifiers over overlapping classes made the relative
+        # branch quadratic on failing input; both shapes must stay under 50 ms.
+        script = (
+            "import os, re, sys\\012from hermes_cli.main import main\\012sys.exit(main())\\012"
+        )
+        slow_lines = [
+            "a/" * 20000 + f" -I -c {script} chat",
+            "x" + "python/" * 5000 + " -c",
+        ]
+        for line in slow_lines:
+            with self.subTest(line=line[:32]):
+                start = time.perf_counter()
+                self.assertIsNone(_launcher_argv(line))
+                elapsed = (time.perf_counter() - start) * 1000
+                self.assertLess(elapsed, 50)
+
+    def test_spaced_absolute_python_path_with_runpy_script_is_counted(self) -> None:
+        script = (
+            "import os, sys, runpy; os.environ.pop('PYTHONHOME', None); "
+            "sys.path.insert(0, '/Users/u/.hermes/source/hermes-custom'); "
+            "runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"
+        )
+        python = "/Users/Ex User/bin/python3"
+        with patch("omh.surfaces.hermes_processes.os.path.isfile", return_value=False):
+            self.assertEqual(
+                _launcher_argv(f"{python} -c {script} chat"),
+                [python, "hermes", "chat"],
+            )
+
+    def test_spaced_absolute_python_path_with_acp_script_is_counted(self) -> None:
+        script = (
+            "import os, re, sys\\012import hermes_bootstrap\\012"
+            "from acp_adapter.entry import main\\012sys.exit(main())\\012"
+        )
+        python = "/Users/Ex User/bin/python3"
+        with patch("omh.surfaces.hermes_processes.os.path.isfile", return_value=False):
+            self.assertEqual(
+                _launcher_argv(f"{python} -I -c {script}"),
+                [python, "hermes", "acp"],
+            )
 
 
 if __name__ == "__main__":
