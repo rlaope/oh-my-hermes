@@ -165,6 +165,27 @@ class PlanDeterminismTests(unittest.TestCase):
         for shard in plan_a.shards:
             self.assertEqual(list(shard), sorted(shard))
 
+    def test_shard0_offset_and_quarantine_seed_shift_load_deterministically(self) -> None:
+        ids = tuple(f"mod{i:02d}.TestCase.test_x" for i in range(12))
+        durations = {test_id: 10.0 for test_id in ids}
+        quarantine = (plan_mod.QuarantineEntry("mod11", "@rlaope", "fixture shared state", "2026-01-01"),)
+        inputs = plan_mod.PlanningInputs(ids, durations, quarantine)
+
+        def loads(plan: plan_mod.Plan) -> list[float]:
+            return [sum(durations[test_id] for test_id in shard) for shard in plan.shards]
+
+        # No declared offset: only the 10 s quarantine is seeded, onto the
+        # last shard, so that shard gets one fewer parallel test.
+        self.assertEqual(loads(plan_mod.build_plan(inputs, 4)), [30.0, 30.0, 30.0, 20.0])
+        # A 20 s shard-0 offset takes two tests (20 s) off shard 0; with the
+        # seeds counted every shard carries 40 or 30 s.
+        offset = plan_mod.build_plan(inputs, 4, shard0_offset=20.0)
+        self.assertEqual(loads(offset), [20.0, 40.0, 30.0, 20.0])
+        self.assertEqual(offset, plan_mod.build_plan(inputs, 4, shard0_offset=20.0))
+        for bad in (-1.0, float("nan"), float("inf")):
+            with self.subTest(offset=bad), self.assertRaises(plan_mod.ShardingError):
+                plan_mod.build_plan(inputs, 4, shard0_offset=bad)
+
     def test_duplicate_inventory_fails_closed(self) -> None:
         duplicate = ("module.Case.test_one", "module.Case.test_one")
         with self.assertRaises(plan_mod.ShardingError):
@@ -671,6 +692,20 @@ class LanePlanAggregateTests(unittest.TestCase):
         result = self.aggregate(self.windows_plan())
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("missing result for windows-3.12 shard 3", result.stderr)
+
+    def test_missing_quarantine_result_fails_aggregation(self) -> None:
+        # The quarantine now runs inside each lane's last shard job; losing
+        # that step's result must still be red, not an empty quarantine.
+        (self.results / f"{self.WINDOWS}-quarantine-None.json").unlink()
+        result = self.aggregate(self.windows_plan())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing result for windows-3.12 quarantine", result.stderr)
+
+    def test_quarantine_result_missing_a_test_fails_aggregation(self) -> None:
+        self._write_result("linux-3.11", None, ())
+        result = self.aggregate(self.windows_plan())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("linux-3.11 quarantine", result.stderr)
 
     def test_linux_lane_still_needs_every_default_shard(self) -> None:
         (self.results / "linux-3.12-shard-1.json").unlink()

@@ -69,22 +69,26 @@ class CiOfflineBenchmarkTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
         self.assertIn('python-version: ["3.11", "3.12"]', workflow)
-        self.assertIn("lane: windows-3.12", workflow)
+        self.assertIn("--lane windows-3.12 --shard", workflow)
         self.assertIn("python tools/test_sharding/plan.py --shards 2", workflow)
+        # Each lane runs its shard list and, in its last shard's job, the
+        # serial quarantine -- both from the plan that lane was given.
         self.assertEqual(
             workflow.count("python tools/test_sharding/run.py --plan shard-plan/plan.json"),
             2,
         )
+        self.assertIn("--lane linux-${{ matrix.python-version }} --quarantine", workflow)
         # The Windows lane runs its own 4-shard plan over the same inventory,
         # and the aggregate reconciles that lane against it.
         self.assertIn("python tools/test_sharding/plan.py --shards 4", workflow)
         self.assertEqual(
             workflow.count("python tools/test_sharding/run.py --plan shard-plan/plan-windows.json"),
-            1,
+            2,
         )
+        self.assertIn("--lane windows-3.12 --quarantine", workflow)
         self.assertIn("--lane-plan windows-3.12=shard-plan/plan-windows.json", workflow)
-        self.assertIn("needs: [test, test-windows, test-quarantine]", workflow)
-
+        self.assertIn("needs: [test, test-windows]", workflow)
+        self.assertNotIn("test-quarantine", workflow)
 
 if __name__ == "__main__":
     unittest.main()
