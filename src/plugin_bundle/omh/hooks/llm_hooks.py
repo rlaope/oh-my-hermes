@@ -36,7 +36,14 @@ from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read
 from ..omh_roles import extract_role_marker, role_context_payload
 from ..dispatch_outcomes import unacknowledged_outcomes
 from ..runtime_reader import read_omh_activity, read_omh_hud, read_omh_status, read_omh_todo
-from ..skill_shortlist import claim_candidate_line, skill_candidate_line, skill_candidates_for_turn
+from ..skill_shortlist import (
+    NO_MATCH_LINE,
+    claim_candidate_line,
+    claim_no_match_line,
+    names_a_skill,
+    skill_candidate_line,
+    skill_candidates_for_turn,
+)
 from .session_attendance import note_session_platform
 from .nudge_budget import session_is_delegated
 from ..jev_consent import clear_turn as clear_jev_turn
@@ -666,6 +673,18 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         candidates = skill_candidates_for_turn(request_message, route_hint_payload=route_hint_payload)
         if claim_candidate_line(session_id, candidates):
             context_parts.append(skill_candidate_line(candidates))
+        # A turn that matched nothing -- no candidates, no route hint, and no
+        # skill named by the person -- says so, once per run of such turns
+        # (`NO_MATCH_LINE`). Silence left the host's skill index as the only
+        # voice, and a live model loaded an OMH skill for "sounds good to me".
+        elif (
+            not candidates
+            and not (route_hint_payload or {}).get("hints")
+            and request_message.strip()
+            and not names_a_skill(request_message)
+            and claim_no_match_line(session_id)
+        ):
+            context_parts.append(NO_MATCH_LINE)
 
     marker = extract_role_marker(user_message)
     if marker:

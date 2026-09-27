@@ -26,6 +26,7 @@ from omh.plugin_bundle.omh.awareness_delivery import read_awareness_delivery, re
 from omh.plugin_bundle.omh import register
 from omh.plugin_bundle.omh.awareness import awareness_primer_context
 from omh.plugin_bundle.omh.hooks import llm_hooks
+from omh.plugin_bundle.omh import skill_shortlist
 
 # Hermes' own limits (`hermes_cli/plugins_dispatch.py`), copied because the
 # host is not importable here. The per-section cap is what `max_chars` may not
@@ -86,6 +87,8 @@ class SectionTestCase(unittest.TestCase):
     def setUp(self) -> None:
         llm_hooks._reset_awareness_section_state()
         self.addCleanup(llm_hooks._reset_awareness_section_state)
+        skill_shortlist.reset_candidate_line_state()
+        self.addCleanup(skill_shortlist.reset_candidate_line_state)
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.omh_home = Path(tmp.name) / "omh"
@@ -94,6 +97,10 @@ class SectionTestCase(unittest.TestCase):
         self.hermes_home.mkdir()
 
     def first_turn_context(self, session_id: str) -> str:
+        # These plain turns match no skill. The session is taken to have seen
+        # the no-match line already, so the turn has nothing of its own to
+        # inject: the case the delivery accounting below is about.
+        skill_shortlist.claim_no_match_line(session_id)
         payload = llm_hooks.pre_llm_call(
             omh_home=str(self.omh_home),
             hermes_home=str(self.hermes_home),
@@ -104,6 +111,7 @@ class SectionTestCase(unittest.TestCase):
         return str((payload or {}).get("context", ""))
 
     def later_turn(self, session_id: str) -> str:
+        skill_shortlist.claim_no_match_line(session_id)
         payload = llm_hooks.pre_llm_call(
             omh_home=str(self.omh_home),
             hermes_home=str(self.hermes_home),

@@ -43,7 +43,7 @@ from omh.plugin_bundle.omh.awareness import (
 )
 from omh.plugin_bundle.omh.awareness_delivery import read_awareness_delivery
 from omh.plugin_bundle.omh.hooks.llm_hooks import fence_omh_context, pre_llm_call
-from omh.plugin_bundle.omh.skill_shortlist import skill_candidate_line, skill_candidates_for_turn
+from omh.plugin_bundle.omh.skill_shortlist import NO_MATCH_LINE, skill_candidate_line, skill_candidates_for_turn
 from omh.routing.chat import public_chat_route_payload
 from test_kanban_board_reader import build_board, task
 from test_plugin_hermes_delegation import PARENT_ID, _build_state_db
@@ -197,7 +197,8 @@ class FirstTurnCarriesAwarenessTests(unittest.TestCase):
         One of the eight does match the matcher on its own, so it is excluded
         here rather than asserted into a miss it never had. What such a turn
         may carry is the skill candidate line (`skill_shortlist`), which reads
-        the request itself rather than OMH vocabulary -- and nothing else.
+        the request itself rather than OMH vocabulary, or the no-match line
+        when that ranking names nothing -- and nothing else.
         """
         with TemporaryDirectory() as omh_home:
             for index, message in enumerate(ORDINARY_WORK_REQUESTS):
@@ -210,10 +211,7 @@ class FirstTurnCarriesAwarenessTests(unittest.TestCase):
                         session_id=f"later-{index}",
                         omh_home=omh_home,
                     )
-                    line = skill_candidate_line(skill_candidates_for_turn(message))
-                    if not line:
-                        self.assertIsNone(result)
-                        continue
+                    line = skill_candidate_line(skill_candidates_for_turn(message)) or NO_MATCH_LINE
                     assert result is not None
                     self.assertEqual(result["context"], fence_omh_context([line]))
 
@@ -234,7 +232,10 @@ class FirstTurnCarriesAwarenessTests(unittest.TestCase):
                 omh_home=omh_home,
             )
 
-            self.assertIsNone(result)
+            # The request ranks no skill, so the turn carries the no-match
+            # line and nothing else.
+            assert result is not None
+            self.assertEqual(result["context"], fence_omh_context([NO_MATCH_LINE]))
 
     def test_route_guidance_fingerprint_suppression_still_holds(self) -> None:
         """Widening the primer must not let the same route guidance go out twice."""

@@ -49,6 +49,7 @@ from omh.plugin_bundle.omh.hooks.llm_hooks import (
     pre_llm_call,
     reset_omh_context_fence_strips,
 )
+from omh.plugin_bundle.omh.skill_shortlist import NO_MATCH_LINE, claim_no_match_line, reset_candidate_line_state
 from omh.plugin_bundle.omh.todo_reconciliation import (
     DISPATCH_AFTER_ANSWER_RULE,
     DISPATCH_COMPLETION_RULE,
@@ -75,7 +76,7 @@ def _stamp(moment: datetime) -> str:
 
 
 class _InjectionTestCase(unittest.TestCase):
-    """A real OMH home, and both process-global memories cleared."""
+    """A real OMH home, and the process-global memories cleared."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -90,9 +91,11 @@ class _InjectionTestCase(unittest.TestCase):
         nudge_budget.reset_nudge_budget()
         _reset_board_card_state()
         reset_omh_context_fence_strips()
+        reset_candidate_line_state()
         self.addCleanup(nudge_budget.reset_nudge_budget)
         self.addCleanup(_reset_board_card_state)
         self.addCleanup(reset_omh_context_fence_strips)
+        self.addCleanup(reset_candidate_line_state)
 
     def write_plan(self, items, *, session_ref=SESSION, updated_at=""):
         record = build_todo_record(
@@ -299,6 +302,12 @@ class FenceReachesEveryBlockTest(_InjectionTestCase):
     """Nothing OMH injects may arrive outside the fence."""
 
     def test_a_quiet_turn_injects_exactly_zero_characters(self):
+        # The first turn that matches no skill carries the no-match line and
+        # nothing else; the next such turn has nothing to say.
+        self.assertEqual(
+            self.context(user_message="what does this function do?"),
+            fence_omh_context([NO_MATCH_LINE]),
+        )
         self.assertEqual(self.context(user_message="what does this function do?"), "")
 
     def test_the_headless_blocks_are_inside_the_fence_too(self):
@@ -330,7 +339,9 @@ class FenceReachesEveryBlockTest(_InjectionTestCase):
 
     def test_the_fence_is_absent_when_there_is_nothing_to_fence(self):
         # Not merely "short": the tag itself must not be paid for on a turn
-        # that has nothing in it.
+        # that has nothing in it. The session has already been told that
+        # nothing matched, so this unmatched turn adds nothing.
+        claim_no_match_line(SESSION)
         context = self.context(user_message="rename this variable")
 
         self.assertNotIn(OMH_CONTEXT_FENCE_OPEN, context)

@@ -516,6 +516,49 @@ class LineTests(unittest.TestCase):
             ) or {}
             self.assertNotIn("Skills that may fit this request", str(opted_out.get("context", "")))
 
+    def test_a_session_sees_the_no_match_line_once_per_run_of_unmatched_turns(self) -> None:
+        work = _candidates(WORK_REQUESTS[0][0])
+        self.assertTrue(bundle.claim_no_match_line("s1"))
+        self.assertFalse(bundle.claim_no_match_line("s1"))
+        self.assertTrue(bundle.claim_no_match_line("s2"))
+        self.assertTrue(bundle.claim_candidate_line("s1", work))
+        self.assertTrue(bundle.claim_no_match_line("s1"))
+        self.assertTrue(bundle.claim_candidate_line("s1", work))
+
+    def test_pre_llm_call_says_no_skill_matched_only_on_an_unmatched_turn(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            kwargs = {"omh_home": f"{tmp}/omh", "hermes_home": f"{tmp}/hermes", "is_first_turn": False}
+
+            def context(message: str, session_id: str, **extra: object) -> str:
+                payload = llm_hooks.pre_llm_call(user_message=message, session_id=session_id, **kwargs, **extra)
+                return str((payload or {}).get("context", ""))
+
+            for message in (EVERYDAY_MESSAGES[3], KOREAN_EVERYDAY_MESSAGES[0], "lol ok"):
+                with self.subTest(message=message):
+                    self.assertIn(bundle.NO_MATCH_LINE, context(message, f"s-chat-{message}"))
+            self.assertNotIn(bundle.NO_MATCH_LINE, context(WORK_REQUESTS[0][0], "s-work"))
+            # A message that names its workflow gets the route hint, not "nothing matched".
+            for named in ("omh-plan please", "run the omh-plan skill", "load planner/omh-plan"):
+                with self.subTest(named=named):
+                    self.assertNotIn(bundle.NO_MATCH_LINE, context(named, f"s-named-{named}"))
+            self.assertNotIn(bundle.NO_MATCH_LINE, context("   ", "s-blank"))
+            self.assertNotIn(
+                bundle.NO_MATCH_LINE,
+                context(EVERYDAY_MESSAGES[3], "s-off", include_omh_awareness=False),
+            )
+            self.assertIn(bundle.NO_MATCH_LINE, context("lol ok", "s-run"))
+            self.assertNotIn(bundle.NO_MATCH_LINE, context("thanks!", "s-run"))
+
+    def test_no_match_line_speaks_about_omh_skills_only(self) -> None:
+        # The host's skill index asks the model to load any relevant skill;
+        # this line scopes OMH's own skills and never instructs about skills
+        # in general.
+        self.assertIn("OMH skill", bundle.NO_MATCH_LINE)
+        for word in ("never", "must", "do not", "don't", "ignore"):
+            self.assertNotIn(word, bundle.NO_MATCH_LINE.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

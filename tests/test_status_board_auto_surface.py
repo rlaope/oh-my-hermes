@@ -319,7 +319,7 @@ class PreLlmCallAutoSurfaceTests(unittest.TestCase):
                 user_message="tell me a short joke about a lighthouse keeper",
                 is_first_turn=False,
             )
-            self.assertIsNone(result)
+            self.assertNotIn("Running coding work", str((result or {}).get("context", "")))
 
     def test_one_running_unit_stays_below_the_threshold(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -331,7 +331,7 @@ class PreLlmCallAutoSurfaceTests(unittest.TestCase):
                 user_message="tell me a short joke about a single sleepy cat",
                 is_first_turn=False,
             )
-            self.assertIsNone(result)
+            self.assertNotIn("Running coding work", str((result or {}).get("context", "")))
 
     def test_two_running_units_surface_a_block_with_both_rows(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -367,7 +367,7 @@ class PreLlmCallAutoSurfaceTests(unittest.TestCase):
             self.assertIn("Running coding work", str(first["context"]))
 
             second = pre_llm_call(**call_kwargs)
-            self.assertIsNone(second)
+            self.assertNotIn("Running coding work", str((second or {}).get("context", "")))
 
 
 if __name__ == "__main__":

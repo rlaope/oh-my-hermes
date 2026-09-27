@@ -25,7 +25,8 @@ dropped, so a message written wholly in it gets no line.
 What reaches the model is one line of candidates, and only when the request
 reads as work: see `skill_candidates_for_turn`. The line names skills the
 model may load; it selects nothing and loads nothing. It is shown once per
-session per candidate set (`claim_candidate_line`).
+session per candidate set (`claim_candidate_line`). A turn that matches no
+skill gets `NO_MATCH_LINE` instead, once per run of such turns.
 """
 
 from __future__ import annotations
@@ -492,9 +493,36 @@ def claim_candidate_line(session_id: str, candidates: tuple[tuple[str, str], ...
     """True when this session has not been shown exactly this candidate set last."""
     if not candidates:
         return False
+    fingerprint = hashlib.sha256("\n".join(label for label, _ in candidates).encode("utf-8")).hexdigest()
+    return _claim_line(session_id, fingerprint)
+
+
+# Recorded in the same slot as a candidate set, so a run of turns that match
+# nothing carries the no-match line once, and it comes back after a turn that
+# showed candidates. Not a sha256 hex digest, so it cannot equal a set's.
+_NO_MATCH_FINGERPRINT = "no-match"
+
+
+_SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)+")
+
+
+def names_a_skill(message: str) -> bool:
+    """Whether `message` spells an installed skill's name, as in "run omh-plan"."""
+    index = _index()
+    if index is None:
+        return False
+    labels = {skill.label for skill in index.skills}
+    return any(word in labels for word in _SKILL_NAME_RE.findall(message.lower()))
+
+
+def claim_no_match_line(session_id: str) -> bool:
+    """True when this session was not shown the no-match line last."""
+    return _claim_line(session_id, _NO_MATCH_FINGERPRINT)
+
+
+def _claim_line(session_id: str, fingerprint: str) -> bool:
     if not session_id:
         return True
-    fingerprint = hashlib.sha256("\n".join(label for label, _ in candidates).encode("utf-8")).hexdigest()
     with _shown_lock:
         if _shown_by_session.get(session_id) == fingerprint:
             return False
@@ -527,7 +555,22 @@ def skill_candidate_line(candidates: tuple[tuple[str, str], ...]) -> str:
     )
 
 
+# The line for a turn whose request matched no skill: small talk, thanks, a
+# personal remark, or work the ranking cannot read (Korean it does not
+# admit). It states what the ranking found and what OMH's skills are for; it
+# says nothing about how the host should treat skills in general. Measured
+# live (GPT-6 Luna, one turn per message, 2026-09-27, tuning sets of 100
+# everyday messages and 100 work requests, repeated runs): everyday OMH loads
+# 19% -> 6%, intended loads on work requests 79.0% -> 78.7%. The Korean work
+# requests that get this line instead of candidates still loaded their skill.
+NO_MATCH_LINE = (
+    "No OMH skill matched this message. If it is conversation rather than a work request, "
+    "none is needed to reply."
+)
+
+
 __all__ = [
+    "NO_MATCH_LINE",
     "ADMISSION_HEAD",
     "ADMISSION_MIN_ANCHORS",
     "ADMISSION_SINGLE_ANCHOR_SCORE",
@@ -536,12 +579,14 @@ __all__ = [
     "HANGUL_ADMISSION_SINGLE_WORD_SCORE",
     "MAX_CANDIDATES",
     "claim_candidate_line",
+    "claim_no_match_line",
     "hangul_ranking",
     "hangul_skill_candidates",
     "hangul_terms",
     "reset_candidate_line_state",
     "lexical_ranking",
     "lexical_terms",
+    "names_a_skill",
     "skill_candidate_line",
     "skill_candidates",
     "skill_candidates_for_turn",

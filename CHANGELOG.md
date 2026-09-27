@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A turn whose message matches no OMH skill now says so, and GPT-6 Luna
+  stops loading an OMH skill for small talk.** On a turn where the skill
+  shortlist names no candidate, no route hint fired, and the person named no
+  skill, the plugin's per-turn context carries one plain line: "No OMH skill
+  matched this message. If it is conversation rather than a work request,
+  none is needed to reply." It is shown once per run of such turns, in the
+  same per-session slot as the candidate line. Measured live on GPT-6 Luna
+  (codex, reasoning low, one turn per message) over tuning sets of 100
+  everyday and 100 work requests: everyday OMH loads 19% -> 6% (two base
+  runs, three with the line), intended loads on work requests 79.0% -> 78.7%.
+  Two primer rewordings alone plateaued at 10%. A turn that matches nothing
+  is therefore no longer zero characters: the first of a run carries the
+  line (about 230 characters with the fence), the rest carry nothing.
+
 - **The cost receipt now counts Hermes kanban workers the conversation
   started.** `omh_cost_receipt/v1` gains a fourth source, `kanban_workers`.
   A worker run belongs to the conversation when its task's `tasks.session_id`

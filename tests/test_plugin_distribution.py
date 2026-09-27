@@ -862,13 +862,18 @@ print(json.dumps(observed, ensure_ascii=False))
 
         message = "tell me a short joke about secret-token-123"
 
-        # Case (a): a genuinely idle host with an empty runtime home. Nothing
-        # to report, so the hook keeps returning None exactly as today.
+        # Case (a): a genuinely idle host with an empty runtime home. No
+        # status to report and no degradation: the turn carries only the
+        # no-match line, since the message matches no skill.
         with TemporaryDirectory() as tmp:
             idle_payload = llm_hooks.pre_llm_call(
                 omh_home=tmp, hermes_home=tmp, user_message=message, is_first_turn=False
             )
-        self.assertIsNone(idle_payload)
+        assert idle_payload is not None
+        self.assertNotIn("omh_degradation", idle_payload)
+        self.assertEqual(
+            idle_payload["context"], llm_hooks.fence_omh_context([llm_hooks.NO_MATCH_LINE])
+        )
 
         # Case (b): the status read raises. This must not be mislabeled as the
         # same idle host.
@@ -1553,7 +1558,12 @@ print(json.dumps(observed, ensure_ascii=False))
                 user_message="tell me a short joke",
                 is_first_turn=False,
             )
-            self.assertIsNone(mid_session_generic_context)
+            # A generic mid-session turn gets no primer and no route hint,
+            # only the no-match line.
+            assert mid_session_generic_context is not None
+            self.assertNotIn("omh_context_brief", mid_session_generic_context)
+            self.assertNotIn("[OMH Awareness]", mid_session_generic_context["context"])
+            self.assertIn("No OMH skill matched this message.", mid_session_generic_context["context"])
 
             suppressed_awareness_context = ctx.hooks["pre_llm_call"](
                 omh_home=str(root / ".empty-omh"),

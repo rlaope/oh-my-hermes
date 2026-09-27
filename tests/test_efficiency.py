@@ -44,7 +44,8 @@ from omh.capabilities.skills import skill_capabilities
 from omh.coding import executor_readiness as executor_readiness_module
 from omh.coding import executors as executors_module
 from omh.context import build_context_brief
-from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
+from omh.plugin_bundle.omh.hooks.llm_hooks import fence_omh_context, pre_llm_call
+from omh.plugin_bundle.omh.skill_shortlist import NO_MATCH_LINE
 from omh.plugin_bundle.omh.tools.capability_tool import standalone_skill_capability_items
 from omh.plugin_bundle.omh import awareness as awareness_module
 from omh.plugin_bundle.omh.awareness import (
@@ -781,7 +782,9 @@ class EfficiencyContractTests(unittest.TestCase):
         matcher_cache = awareness_module._awareness_context_matches_message_cached.cache_info()
         route_hint_cache = awareness_module._awareness_route_hint_cached.cache_info()
 
-        self.assertIsNone(payload)
+        # Nothing matched, so the turn carries the no-match line and nothing else.
+        assert payload is not None
+        self.assertEqual(payload["context"], fence_omh_context([NO_MATCH_LINE]))
         self.assertEqual(matcher_cache.misses, 1)
         self.assertEqual(route_hint_cache.misses, 0)
         self.assertEqual(route_hint_cache.hits, 0)
