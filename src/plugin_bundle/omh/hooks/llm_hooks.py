@@ -674,17 +674,23 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         if claim_candidate_line(session_id, candidates):
             context_parts.append(skill_candidate_line(candidates))
         # A turn that matched nothing -- no candidates, no route hint, and no
-        # skill named by the person -- says so, once per run of such turns
-        # (`NO_MATCH_LINE`). Silence left the host's skill index as the only
-        # voice, and a live model loaded an OMH skill for "sounds good to me".
-        elif (
-            not candidates
-            and not (route_hint_payload or {}).get("hints")
-            and request_message.strip()
-            and not names_a_skill(request_message)
-            and claim_no_match_line(session_id)
-        ):
-            context_parts.append(NO_MATCH_LINE)
+        # skill named by the person -- may say so (`NO_MATCH_LINE`). Silence
+        # left the host's skill index as the only voice, and a live model
+        # loaded an OMH skill for "sounds good to me". Decided below, once the
+        # turn's OMH work context is known, and kept in this position.
+        no_match_slot = (
+            len(context_parts)
+            if (
+                not candidates
+                and not (route_hint_payload or {}).get("hints")
+                and request_message.strip()
+                and not names_a_skill(request_message)
+            )
+            else None
+        )
+
+    else:
+        no_match_slot = None
 
     marker = extract_role_marker(user_message)
     if marker:
@@ -714,6 +720,8 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     # asks for that message to be answered first. It is the variable computed
     # above rather than the raw kwarg on purpose: a host-labelled tracker
     # event is already zeroed there, and an event is not someone writing.
+    todo_reminder = ""
+    workflow_context = None
     if include_awareness:
         outcomes = unacknowledged_outcomes(
             omh_home,
@@ -842,6 +850,22 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     # threshold is a count (>= 2), never a keyword match.
     board_fingerprint = running_work_board_fingerprint(board) if running_count >= 2 else ""
     show_running_work = running_count >= 2 and board_fingerprint != last_running_work_board_fingerprint(omh_home)
+
+    # The no-match line stands down on a turn inside OMH work: "continue",
+    # "next", or "계속" while a plan, a workflow, a role, or coding units are
+    # live is a work turn the ranking cannot read, and the line would argue
+    # against the workflow's own skill. It is claimed only when it is shown,
+    # once per run of unmatched turns (`claim_no_match_line`).
+    if (
+        no_match_slot is not None
+        and not marker
+        and not todo_reminder
+        and not workflow_context
+        and running_count < 2
+        and not status.get("active_executors")
+        and claim_no_match_line(session_id)
+    ):
+        context_parts.insert(no_match_slot, NO_MATCH_LINE)
 
     degradation = degradation_payload(degraded)
     if (

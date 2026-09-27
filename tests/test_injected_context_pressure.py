@@ -23,6 +23,7 @@ assertion here is about what the model is TOLD.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -302,13 +303,16 @@ class FenceReachesEveryBlockTest(_InjectionTestCase):
     """Nothing OMH injects may arrive outside the fence."""
 
     def test_a_quiet_turn_injects_exactly_zero_characters(self):
-        # The first turn that matches no skill carries the no-match line and
-        # nothing else; the next such turn has nothing to say.
+        # Quiet: the session was already told nothing matched, and nothing
+        # else is live.
+        claim_no_match_line(SESSION)
+        self.assertEqual(self.context(user_message="what does this function do?"), "")
+
+    def test_an_unmatched_turn_carries_the_no_match_line_and_nothing_else(self):
         self.assertEqual(
             self.context(user_message="what does this function do?"),
             fence_omh_context([NO_MATCH_LINE]),
         )
-        self.assertEqual(self.context(user_message="what does this function do?"), "")
 
     def test_the_headless_blocks_are_inside_the_fence_too(self):
         # The dispatch outcome lines and the running-work rows are the two
@@ -346,6 +350,72 @@ class FenceReachesEveryBlockTest(_InjectionTestCase):
 
         self.assertNotIn(OMH_CONTEXT_FENCE_OPEN, context)
         self.assertNotIn(OMH_CONTEXT_FENCE_CLOSE, context)
+
+
+class NoMatchLineStandsDownInsideWorkTest(_InjectionTestCase):
+    """A terse turn inside OMH work is a work turn the ranking cannot read."""
+
+    TERSE_TURNS = ("continue", "fix it", "next", "계속", "do the next item")
+
+    def write_active_workflow(self):
+        state = self.home / "state"
+        state.mkdir(parents=True, exist_ok=True)
+        (state / "plan-state.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "workflow": "plan",
+                    "active": True,
+                    "lifecycle_outcome": None,
+                    "session_ref": "sha256:" + hashlib.sha256(SESSION.encode("utf-8")).hexdigest(),
+                    "session_binding": "bound",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def assert_no_line(self, *, prefix: str = "", expect: str = ""):
+        for message in self.TERSE_TURNS:
+            with self.subTest(message=message):
+                reset_candidate_line_state()
+                context = self.context(user_message=prefix + message, is_first_turn=False)
+                self.assertNotIn(NO_MATCH_LINE, context)
+                if expect:
+                    self.assertIn(expect, context)
+
+    def test_the_terse_turns_get_the_line_when_nothing_is_live(self):
+        for message in self.TERSE_TURNS:
+            with self.subTest(message=message):
+                reset_candidate_line_state()
+                self.assertIn(NO_MATCH_LINE, self.context(user_message=message, is_first_turn=False))
+
+    def test_an_active_workflow_holds_the_line_back(self):
+        self.write_active_workflow()
+        self.assert_no_line()
+
+    def test_an_open_plan_holds_the_line_back(self):
+        self.write_plan([("land the fix", "done"), ("open the PR", "active")])
+        self.assert_no_line(expect="[OMH plan todo]")
+
+    def test_a_running_work_board_holds_the_line_back(self):
+        self.write_running_units(2)
+        self.assert_no_line()
+
+    def test_a_role_marker_holds_the_line_back(self):
+        self.assert_no_line(prefix="[omh-role:reviewer] ")
+
+    def test_executor_status_holds_the_line_back(self):
+        from unittest import mock
+
+        from omh.plugin_bundle.omh.hooks import llm_hooks
+
+        activity = {"active_executors": [{"executor": "codex", "status": "running"}]}
+        with (
+            mock.patch.object(llm_hooks, "read_omh_activity", return_value=activity),
+            mock.patch.object(llm_hooks, "read_omh_status", return_value=activity),
+            mock.patch.object(llm_hooks, "read_omh_hud", return_value={}),
+        ):
+            self.assert_no_line()
 
 
 class HostSynthesizedTurnTest(_InjectionTestCase):

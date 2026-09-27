@@ -338,6 +338,25 @@ class DoctorDeliveryTests(SectionTestCase):
         self.assertTrue(check.ok)
         self.assertEqual(check.severity, "ok")
 
+    def test_a_first_turn_carrying_only_the_no_match_line_counts_the_section_once(self) -> None:
+        llm_hooks.awareness_system_prompt_section(_session_info("s-unmatched"))
+        payload = llm_hooks.pre_llm_call(
+            omh_home=str(self.omh_home),
+            hermes_home=str(self.hermes_home),
+            session_id="s-unmatched",
+            user_message="lol ok",
+            is_first_turn=True,
+        )
+        context = str((payload or {}).get("context", ""))
+        self.assertIn(skill_shortlist.NO_MATCH_LINE, context)
+        self.assertNotIn(awareness_primer_context(), context)
+        record = read_awareness_delivery(str(self.omh_home))
+        self.assertEqual(record["delivery_count"], 1)
+        self.assertEqual(record["last_context_chars"], len(context))
+        # The next unmatched turn has nothing to inject and counts nothing.
+        self.assertEqual(self.first_turn_context("s-unmatched"), "")
+        self.assertEqual(read_awareness_delivery(str(self.omh_home))["delivery_count"], 1)
+
     def test_a_routed_first_turn_counts_the_section_once(self) -> None:
         llm_hooks.awareness_system_prompt_section(_session_info("s-routed"))
         payload = llm_hooks.pre_llm_call(

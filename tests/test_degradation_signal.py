@@ -40,8 +40,7 @@ from omh.plugin_bundle.omh.degradation import (
     safe_error_type,
 )
 from omh.plugin_bundle.omh.hooks import llm_hooks as llm_hooks_module
-from omh.plugin_bundle.omh.hooks.llm_hooks import fence_omh_context, pre_llm_call
-from omh.plugin_bundle.omh.skill_shortlist import NO_MATCH_LINE
+from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
 from omh.wrapper import contract as contract_module
 from omh.wrapper.contract import build_chat_interaction_payload
 from omh.wrapper.route_hints import build_chat_route_hint_payload
@@ -228,9 +227,7 @@ class SiteDistinguishabilityTests(DegradationSignalTestCase):
     def test_site_4_runtime_status_read_absence_differs_from_call_failure(self) -> None:
         # Genuine absence: a real empty runtime home has nothing to report.
         healthy = self.call_pre_llm("tell me a short joke about site-four otters")
-        assert healthy is not None
-        self.assertEqual(healthy["context"], fence_omh_context([NO_MATCH_LINE]))
-        self.assertNotIn("omh_degradation", healthy)
+        self.assertIsNone(healthy)
 
         self.setUp()
         with self.status_failure():
@@ -277,16 +274,13 @@ class PreLlmCallDegradationTests(DegradationSignalTestCase):
                 self.assertIsNone(payload)
 
     def test_site_1_failure_flips_a_non_matching_message_from_none_to_a_payload(self) -> None:
-        # The B1 headline case. Healthy, this message carries only the
-        # no-match line; with the locale-pack call failing, the failure is
-        # added to the payload, and it reaches the top level with no nested
-        # block at all.
+        # The B1 headline case. Today this message produces `None`; with the
+        # locale-pack call failing, the failure is the only thing in the
+        # payload, and it reaches the top level with no nested block at all.
         message = "raconte-moi une blague vraiment courte s'il te plait"
 
         healthy = self.call_pre_llm(message)
-        assert healthy is not None
-        self.assertEqual(healthy["context"], fence_omh_context([NO_MATCH_LINE]))
-        self.assertNotIn("omh_degradation", healthy)
+        self.assertIsNone(healthy)
 
         self.setUp()
         with self.locale_failure():

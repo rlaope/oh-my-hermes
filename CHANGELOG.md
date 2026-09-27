@@ -10,13 +10,17 @@ All notable changes will be documented here.
   skill, the plugin's per-turn context carries one plain line: "No OMH skill
   matched this message. If it is conversation rather than a work request,
   none is needed to reply." It is shown once per run of such turns, in the
-  same per-session slot as the candidate line. Measured live on GPT-6 Luna
+  same per-session slot as the candidate line, never on a turn without a
+  session id, and never on a turn that already carries OMH work context (an
+  open plan, an active workflow, a role marker, running coding units, or
+  executor status), so "continue" or "계속" inside a workflow gets no line. Measured live on GPT-6 Luna
   (codex, reasoning low, one turn per message) over tuning sets of 100
   everyday and 100 work requests: everyday OMH loads 19% -> 6% (two base
   runs, three with the line), intended loads on work requests 79.0% -> 78.7%.
   Two primer rewordings alone plateaued at 10%. A turn that matches nothing
   is therefore no longer zero characters: the first of a run carries the
-  line (about 230 characters with the fence), the rest carry nothing.
+  line (228 characters with the fence), the rest carry nothing. No
+  per-turn budget scenario carries it, and no limit moved.
 
 - **The cost receipt now counts Hermes kanban workers the conversation
   started.** `omh_cost_receipt/v1` gains a fourth source, `kanban_workers`.

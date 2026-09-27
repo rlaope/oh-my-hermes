@@ -26,7 +26,8 @@ What reaches the model is one line of candidates, and only when the request
 reads as work: see `skill_candidates_for_turn`. The line names skills the
 model may load; it selects nothing and loads nothing. It is shown once per
 session per candidate set (`claim_candidate_line`). A turn that matches no
-skill gets `NO_MATCH_LINE` instead, once per run of such turns.
+skill gets `NO_MATCH_LINE` instead, once per run of such turns, unless the
+turn already carries OMH work context (`hooks/llm_hooks.py`).
 """
 
 from __future__ import annotations
@@ -516,7 +517,14 @@ def names_a_skill(message: str) -> bool:
 
 
 def claim_no_match_line(session_id: str) -> bool:
-    """True when this session was not shown the no-match line last."""
+    """True when this session was not shown the no-match line last.
+
+    Never for a turn with no session id: there is no run of turns to show it
+    once in, and repeating it on every unmatched turn is the cost the claim
+    exists to avoid.
+    """
+    if not session_id:
+        return False
     return _claim_line(session_id, _NO_MATCH_FINGERPRINT)
 
 
@@ -561,8 +569,9 @@ def skill_candidate_line(candidates: tuple[tuple[str, str], ...]) -> str:
 # says nothing about how the host should treat skills in general. Measured
 # live (GPT-6 Luna, one turn per message, 2026-09-27, tuning sets of 100
 # everyday messages and 100 work requests, repeated runs): everyday OMH loads
-# 19% -> 6%, intended loads on work requests 79.0% -> 78.7%. The Korean work
-# requests that get this line instead of candidates still loaded their skill.
+# 19% -> 6%, intended loads on work requests 79.0% -> 78.7%. The 12 work
+# requests that get this line instead of candidates loaded their skill 9 of
+# 12 times, the same as base.
 NO_MATCH_LINE = (
     "No OMH skill matched this message. If it is conversation rather than a work request, "
     "none is needed to reply."

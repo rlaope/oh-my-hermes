@@ -524,6 +524,8 @@ class LineTests(unittest.TestCase):
         self.assertTrue(bundle.claim_candidate_line("s1", work))
         self.assertTrue(bundle.claim_no_match_line("s1"))
         self.assertTrue(bundle.claim_candidate_line("s1", work))
+        self.assertFalse(bundle.claim_no_match_line(""))
+        self.assertFalse(bundle.claim_no_match_line(""))
 
     def test_pre_llm_call_says_no_skill_matched_only_on_an_unmatched_turn(self) -> None:
         from tempfile import TemporaryDirectory
@@ -550,6 +552,23 @@ class LineTests(unittest.TestCase):
             )
             self.assertIn(bundle.NO_MATCH_LINE, context("lol ok", "s-run"))
             self.assertNotIn(bundle.NO_MATCH_LINE, context("thanks!", "s-run"))
+            # A repeated work turn: its candidate set was already shown, so the
+            # claim fails, and the turn still matched -- no no-match line.
+            self.assertIn("Skills that may fit this request", context(WORK_REQUESTS[0][0], "s-repeat"))
+            self.assertNotIn(bundle.NO_MATCH_LINE, context(WORK_REQUESTS[0][0], "s-repeat"))
+            # A route hint that is not a direct invocation, with no skill name
+            # and no candidates: the message matched a rule, so not "nothing".
+            # A first turn, where the rule table is read for every message.
+            routed = "the doctor said my blood pressure is fine"
+            self.assertFalse(bundle.skill_candidates_for_turn(routed))
+            self.assertFalse(bundle.names_a_skill(routed))
+            first_turn = {**kwargs, "is_first_turn": True}
+            routed_payload = llm_hooks.pre_llm_call(user_message=routed, session_id="s-routed", **first_turn)
+            self.assertIn("[OMH Route Hint]", str((routed_payload or {}).get("context", "")))
+            self.assertNotIn(bundle.NO_MATCH_LINE, str((routed_payload or {}).get("context", "")))
+            # No session id: no run of turns to show it once in, so never.
+            self.assertNotIn(bundle.NO_MATCH_LINE, context("lol ok", ""))
+            self.assertNotIn(bundle.NO_MATCH_LINE, context("lol ok", ""))
 
     def test_no_match_line_speaks_about_omh_skills_only(self) -> None:
         # The host's skill index asks the model to load any relevant skill;
