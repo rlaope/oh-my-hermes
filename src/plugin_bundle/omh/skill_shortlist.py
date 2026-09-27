@@ -26,8 +26,9 @@ What reaches the model is one line of candidates, and only when the request
 reads as work: see `skill_candidates_for_turn`. The line names skills the
 model may load; it selects nothing and loads nothing. It is shown once per
 session per candidate set (`claim_candidate_line`). A turn that matches no
-skill gets `NO_MATCH_LINE` instead, once per run of such turns, unless the
-turn already carries OMH work context (`hooks/llm_hooks.py`).
+skill and is obvious conversation gets `NO_MATCH_LINE` instead, once per run
+of such turns, unless the turn already carries OMH work context
+(`hooks/llm_hooks.py`).
 """
 
 from __future__ import annotations
@@ -516,6 +517,37 @@ def names_a_skill(message: str) -> bool:
     return any(word in labels for word in _SKILL_NAME_RE.findall(message.lower()))
 
 
+# A message this short, none of whose words the catalog uses anywhere, is an
+# acknowledgement or a reaction ("lol ok", "고마워", "yes"). Counted in
+# whitespace-separated words after executable_routing_text, so a Korean
+# sentence counts its eojeol.
+_ACKNOWLEDGEMENT_MAX_WORDS = 4
+
+
+def obvious_conversation(message: str) -> bool:
+    """A conversational request, or a short message in none of the catalog's words.
+
+    The first is `_CONVERSATIONAL_REQUEST_RE`: a joke, a poem, a story, a
+    recommendation, advice, or a feeling. The second is at most
+    `_ACKNOWLEDGEMENT_MAX_WORDS` words, none of whose ASCII terms or Hangul
+    bigrams appear in any skill's vocabulary, so "fix it", "continue",
+    "next" and "계속" are not conversation. A message that merely ranked no
+    skill is not either: a work request the ranking cannot read looks the same.
+    """
+    index = _index()
+    if index is None:
+        return False
+    text = executable_routing_text(message)
+    folded = " ".join(_fold(text).replace("\u2019", "'").split())
+    if _CONVERSATIONAL_REQUEST_RE.search(folded):
+        return True
+    if not folded or len(folded.split()) > _ACKNOWLEDGEMENT_MAX_WORDS:
+        return False
+    if any(term in index.idf for term in lexical_terms(text)):
+        return False
+    return not any(bigram in index.hangul_idf for bigram in hangul_terms(text))
+
+
 def claim_no_match_line(session_id: str) -> bool:
     """True when this session was not shown the no-match line last.
 
@@ -563,15 +595,12 @@ def skill_candidate_line(candidates: tuple[tuple[str, str], ...]) -> str:
     )
 
 
-# The line for a turn whose request matched no skill: small talk, thanks, a
-# personal remark, or work the ranking cannot read (Korean it does not
-# admit). It states what the ranking found and what OMH's skills are for; it
-# says nothing about how the host should treat skills in general. Measured
-# live (GPT-6 Luna, one turn per message, 2026-09-27, tuning sets of 100
-# everyday messages and 100 work requests, repeated runs): everyday OMH loads
-# 19% -> 6%, intended loads on work requests 79.0% -> 78.7%. The 12 work
-# requests that get this line instead of candidates loaded their skill 9 of
-# 12 times, the same as base.
+# The line for a turn that is obvious conversation (`obvious_conversation`)
+# and matched no skill. It states what the ranking found and what OMH's
+# skills are for; it says nothing about how the host should treat skills in
+# general. Shown on every unmatched turn, it cost 2.9 points of intended
+# loads on held-out work requests the ranking found nothing for (Luna, two
+# runs), so it no longer fires on "nothing matched" alone.
 NO_MATCH_LINE = (
     "No OMH skill matched this message. If it is conversation rather than a work request, "
     "none is needed to reply."
@@ -596,6 +625,7 @@ __all__ = [
     "lexical_ranking",
     "lexical_terms",
     "names_a_skill",
+    "obvious_conversation",
     "skill_candidate_line",
     "skill_candidates",
     "skill_candidates_for_turn",

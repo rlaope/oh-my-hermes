@@ -4,23 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **A turn whose message matches no OMH skill now says so, and GPT-6 Luna
-  stops loading an OMH skill for small talk.** On a turn where the skill
-  shortlist names no candidate, no route hint fired, and the person named no
-  skill, the plugin's per-turn context carries one plain line: "No OMH skill
-  matched this message. If it is conversation rather than a work request,
-  none is needed to reply." It is shown once per run of such turns, in the
-  same per-session slot as the candidate line, never on a turn without a
-  session id, and never on a turn that already carries OMH work context (an
-  open plan, an active workflow, a role marker, running coding units, or
-  executor status), so "continue" or "계속" inside a workflow gets no line. Measured live on GPT-6 Luna
-  (codex, reasoning low, one turn per message) over tuning sets of 100
-  everyday and 100 work requests: everyday OMH loads 19% -> 6% (two base
-  runs, three with the line), intended loads on work requests 79.0% -> 78.7%.
-  Two primer rewordings alone plateaued at 10%. A turn that matches nothing
-  is therefore no longer zero characters: the first of a run carries the
-  line (228 characters with the fence), the rest carry nothing. No
-  per-turn budget scenario carries it, and no limit moved.
+- **An obvious-conversation turn that matches no OMH skill now says so.**
+  On a turn that is a conversational request (a joke, a story, a
+  recommendation, advice, a feeling) or a short message of at most four
+  words, none of them in any skill's vocabulary ("lol ok", "고마워", "yes"),
+  and that got no skill candidates, no route hint, and named no skill, the
+  plugin's per-turn context carries one plain line: "No OMH skill matched
+  this message. If it is conversation rather than a work request, none is
+  needed to reply." It is shown once per run of such turns, never on a turn
+  without a session id, and never on a turn that already carries OMH work
+  context (an open plan, an active workflow, a role marker, running coding
+  units, or executor status). A message that merely ranked no skill gets
+  nothing, as before: shown on every unmatched turn, the line cost 2.9
+  points of intended loads on held-out work requests (GPT-6 Luna). Tuning
+  set, GPT-6 Luna, two runs each: OMH loads on the 29 everyday messages the
+  trigger covers 2.5 -> 0 per run; all 100 everyday messages 19% -> 17%;
+  work requests carry identical context to main (the trigger matches none of
+  them), intended loads 79.0% on main and 75.5% on the branch, which is run
+  variance. No per-turn budget scenario carries the line.
 
 - **The cost receipt now counts Hermes kanban workers the conversation
   started.** `omh_cost_receipt/v1` gains a fourth source, `kanban_workers`.

@@ -527,7 +527,23 @@ class LineTests(unittest.TestCase):
         self.assertFalse(bundle.claim_no_match_line(""))
         self.assertFalse(bundle.claim_no_match_line(""))
 
-    def test_pre_llm_call_says_no_skill_matched_only_on_an_unmatched_turn(self) -> None:
+    def test_obvious_conversation_is_a_kind_or_a_short_message_in_no_catalog_word(self) -> None:
+        for message in ("lol ok", "thanks!", "yes", "고마워", "ㅋㅋ ㅇㅋ", "tell me a short joke", "any advice?"):
+            with self.subTest(message=message):
+                self.assertTrue(bundle.obvious_conversation(message))
+        for message in (
+            "fix it",  # a catalog word
+            "계속",  # a catalog bigram
+            "what does this function do?",  # five words
+            "haha that was so funny lol",  # six words, none in the catalog
+            EVERYDAY_MESSAGES[3],
+            WORK_REQUESTS[0][0],
+            "   ",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(bundle.obvious_conversation(message))
+
+    def test_pre_llm_call_says_no_skill_matched_only_on_obvious_conversation(self) -> None:
         from tempfile import TemporaryDirectory
 
         with TemporaryDirectory() as tmp:
@@ -537,37 +553,36 @@ class LineTests(unittest.TestCase):
                 payload = llm_hooks.pre_llm_call(user_message=message, session_id=session_id, **kwargs, **extra)
                 return str((payload or {}).get("context", ""))
 
-            for message in (EVERYDAY_MESSAGES[3], KOREAN_EVERYDAY_MESSAGES[0], "lol ok"):
+            def first_turn_context(message: str, session_id: str) -> str:
+                payload = llm_hooks.pre_llm_call(
+                    user_message=message, session_id=session_id, **{**kwargs, "is_first_turn": True}
+                )
+                return str((payload or {}).get("context", ""))
+
+            for message in ("lol ok", "고마워", "tell me a short joke"):
                 with self.subTest(message=message):
                     self.assertIn(bundle.NO_MATCH_LINE, context(message, f"s-chat-{message}"))
+            # Matched nothing, but not conversation: a work request the ranking
+            # cannot read gets nothing, as before the line existed.
+            for message in ("what does this function do?", "continue", "fix it", "계속", EVERYDAY_MESSAGES[3]):
+                with self.subTest(unmatched=message):
+                    self.assertEqual(context(message, f"s-unmatched-{message}"), "")
             self.assertNotIn(bundle.NO_MATCH_LINE, context(WORK_REQUESTS[0][0], "s-work"))
-            # A message that names its workflow gets the route hint, not "nothing matched".
-            for named in ("omh-plan please", "run the omh-plan skill", "load planner/omh-plan"):
-                with self.subTest(named=named):
-                    self.assertNotIn(bundle.NO_MATCH_LINE, context(named, f"s-named-{named}"))
-            self.assertNotIn(bundle.NO_MATCH_LINE, context("   ", "s-blank"))
+            # Conversation about a skill's subject still ranked a skill.
+            self.assertNotIn(bundle.NO_MATCH_LINE, context("tell me a joke about 빌드 실패 로그 분석", "s-joke"))
+            # A route hint on an obvious message: the rule table matched it.
+            routed = first_turn_context("what are you doing?", "s-routed")
+            self.assertIn("[OMH Route Hint]", routed)
+            self.assertNotIn(bundle.NO_MATCH_LINE, routed)
+            # The person named a skill.
             self.assertNotIn(
-                bundle.NO_MATCH_LINE,
-                context(EVERYDAY_MESSAGES[3], "s-off", include_omh_awareness=False),
+                bundle.NO_MATCH_LINE, context("Show this:\n```bash\n$ulw-work execute\n```", "s-named")
             )
+            self.assertNotIn(bundle.NO_MATCH_LINE, context("   ", "s-blank"))
+            self.assertNotIn(bundle.NO_MATCH_LINE, context("lol ok", "s-off", include_omh_awareness=False))
             self.assertIn(bundle.NO_MATCH_LINE, context("lol ok", "s-run"))
             self.assertNotIn(bundle.NO_MATCH_LINE, context("thanks!", "s-run"))
-            # A repeated work turn: its candidate set was already shown, so the
-            # claim fails, and the turn still matched -- no no-match line.
-            self.assertIn("Skills that may fit this request", context(WORK_REQUESTS[0][0], "s-repeat"))
-            self.assertNotIn(bundle.NO_MATCH_LINE, context(WORK_REQUESTS[0][0], "s-repeat"))
-            # A route hint that is not a direct invocation, with no skill name
-            # and no candidates: the message matched a rule, so not "nothing".
-            # A first turn, where the rule table is read for every message.
-            routed = "the doctor said my blood pressure is fine"
-            self.assertFalse(bundle.skill_candidates_for_turn(routed))
-            self.assertFalse(bundle.names_a_skill(routed))
-            first_turn = {**kwargs, "is_first_turn": True}
-            routed_payload = llm_hooks.pre_llm_call(user_message=routed, session_id="s-routed", **first_turn)
-            self.assertIn("[OMH Route Hint]", str((routed_payload or {}).get("context", "")))
-            self.assertNotIn(bundle.NO_MATCH_LINE, str((routed_payload or {}).get("context", "")))
             # No session id: no run of turns to show it once in, so never.
-            self.assertNotIn(bundle.NO_MATCH_LINE, context("lol ok", ""))
             self.assertNotIn(bundle.NO_MATCH_LINE, context("lol ok", ""))
 
     def test_no_match_line_speaks_about_omh_skills_only(self) -> None:

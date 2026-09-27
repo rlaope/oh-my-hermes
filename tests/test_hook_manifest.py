@@ -14,7 +14,6 @@ from omh.install.hook_integrity import HOOK_REVIEWS, VALID_HOOK_EVENTS
 from omh.plugin_bundle.omh.awareness import awareness_primer_context, awareness_route_hint
 from omh.plugin_bundle.omh.awareness_delivery import read_awareness_delivery
 from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
-from omh.plugin_bundle.omh.skill_shortlist import NO_MATCH_LINE
 from omh.plugin_bundle.omh.hooks.tool_hooks import post_tool_call, pre_tool_call
 from omh.plugin_bundle.omh.tool_bursts import tool_call_activity
 
@@ -337,11 +336,7 @@ class HookManifestTests(unittest.TestCase):
                     omh_home=omh_home,
                 )
 
-            # The primer is not repeated; what remains is the no-match line.
-            assert result is not None
-            self.assertNotIn(primer, result["context"])
-            self.assertNotIn("[OMH Awareness]", result["context"])
-            self.assertIn(NO_MATCH_LINE, result["context"])
+            self.assertIsNone(result)
 
     def test_user_pasted_primer_in_sidecar_content_does_not_suppress_delivery(self) -> None:
         with TemporaryDirectory() as omh_home:

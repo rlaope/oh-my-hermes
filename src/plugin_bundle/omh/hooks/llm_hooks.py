@@ -41,6 +41,7 @@ from ..skill_shortlist import (
     claim_candidate_line,
     claim_no_match_line,
     names_a_skill,
+    obvious_conversation,
     skill_candidate_line,
     skill_candidates_for_turn,
 )
@@ -673,18 +674,19 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         candidates = skill_candidates_for_turn(request_message, route_hint_payload=route_hint_payload)
         if claim_candidate_line(session_id, candidates):
             context_parts.append(skill_candidate_line(candidates))
-        # A turn that matched nothing -- no candidates, no route hint, and no
-        # skill named by the person -- may say so (`NO_MATCH_LINE`). Silence
-        # left the host's skill index as the only voice, and a live model
-        # loaded an OMH skill for "sounds good to me". Decided below, once the
-        # turn's OMH work context is known, and kept in this position.
+        # A turn that is obvious conversation and matched nothing -- no
+        # candidates, no route hint, no skill named -- may say so
+        # (`NO_MATCH_LINE`); a live model loaded an OMH skill for "lol ok".
+        # Never on "nothing matched" alone: a work request the ranking cannot
+        # read gets nothing, as before the line existed. Decided below, once
+        # the turn's OMH work context is known, and kept in this position.
         no_match_slot = (
             len(context_parts)
             if (
                 not candidates
                 and not (route_hint_payload or {}).get("hints")
-                and request_message.strip()
                 and not names_a_skill(request_message)
+                and obvious_conversation(request_message)
             )
             else None
         )

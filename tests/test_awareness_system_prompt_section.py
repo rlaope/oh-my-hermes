@@ -97,10 +97,6 @@ class SectionTestCase(unittest.TestCase):
         self.hermes_home.mkdir()
 
     def first_turn_context(self, session_id: str) -> str:
-        # These plain turns match no skill. The session is taken to have seen
-        # the no-match line already, so the turn has nothing of its own to
-        # inject: the case the delivery accounting below is about.
-        skill_shortlist.claim_no_match_line(session_id)
         payload = llm_hooks.pre_llm_call(
             omh_home=str(self.omh_home),
             hermes_home=str(self.hermes_home),
@@ -111,6 +107,9 @@ class SectionTestCase(unittest.TestCase):
         return str((payload or {}).get("context", ""))
 
     def later_turn(self, session_id: str) -> str:
+        # "thanks" is an acknowledgement, which gets the no-match line once
+        # per run; the session is taken to have had it, so this later turn
+        # has nothing of its own to inject.
         skill_shortlist.claim_no_match_line(session_id)
         payload = llm_hooks.pre_llm_call(
             omh_home=str(self.omh_home),
@@ -353,7 +352,7 @@ class DoctorDeliveryTests(SectionTestCase):
         record = read_awareness_delivery(str(self.omh_home))
         self.assertEqual(record["delivery_count"], 1)
         self.assertEqual(record["last_context_chars"], len(context))
-        # The next unmatched turn has nothing to inject and counts nothing.
+        # The next turn has nothing to inject and counts nothing.
         self.assertEqual(self.first_turn_context("s-unmatched"), "")
         self.assertEqual(read_awareness_delivery(str(self.omh_home))["delivery_count"], 1)
 

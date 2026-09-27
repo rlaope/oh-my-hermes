@@ -202,11 +202,9 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
     - `role_marker`: a later turn carrying an `[omh-role:...]` marker, the
       largest shipped role.
     - `active_workflow`: a later turn while a workflow is active. Its
-      "continue" matches no skill, and the no-match line
-      (`skill_shortlist.NO_MATCH_LINE`, +111) stands down because the turn
-      carries OMH work context.
-    - `running_work_board`: a later turn with a full running-work board; the
-      no-match line stands down the same way.
+      "continue" matches no skill but is not conversation, so it carries no
+      no-match line (`skill_shortlist.NO_MATCH_LINE`, +111 if it did).
+    - `running_work_board`: a later turn with a full running-work board.
     - `all_surfaces_without_section`: `all_surfaces` on the fallback, primer
       included; the fallback's maximum.
     - `all_surfaces`: all of the above in one first turn. The parts add, so
@@ -235,8 +233,9 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
     - the `[OMH Degraded]` line: a fixed sentence plus the failing component
       names, emitted only when a local call failed;
     - the no-match line (`skill_shortlist.NO_MATCH_LINE`, 228 chars with the
-      fence when alone): once per run of turns that match no skill and carry
-      no OMH work context, so it never rides with a seeded surface above.
+      fence when alone): once per run of obvious-conversation turns that match
+      no skill and carry no OMH work context, so it never rides with a seeded
+      surface above.
     """
     no_seed: tuple[Callable[[Path], None], ...] = ()
     later = {"is_first_turn": False}

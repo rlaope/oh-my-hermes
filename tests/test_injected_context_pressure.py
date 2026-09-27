@@ -50,7 +50,7 @@ from omh.plugin_bundle.omh.hooks.llm_hooks import (
     pre_llm_call,
     reset_omh_context_fence_strips,
 )
-from omh.plugin_bundle.omh.skill_shortlist import NO_MATCH_LINE, claim_no_match_line, reset_candidate_line_state
+from omh.plugin_bundle.omh.skill_shortlist import NO_MATCH_LINE, reset_candidate_line_state
 from omh.plugin_bundle.omh.todo_reconciliation import (
     DISPATCH_AFTER_ANSWER_RULE,
     DISPATCH_COMPLETION_RULE,
@@ -303,16 +303,12 @@ class FenceReachesEveryBlockTest(_InjectionTestCase):
     """Nothing OMH injects may arrive outside the fence."""
 
     def test_a_quiet_turn_injects_exactly_zero_characters(self):
-        # Quiet: the session was already told nothing matched, and nothing
-        # else is live.
-        claim_no_match_line(SESSION)
         self.assertEqual(self.context(user_message="what does this function do?"), "")
 
-    def test_an_unmatched_turn_carries_the_no_match_line_and_nothing_else(self):
-        self.assertEqual(
-            self.context(user_message="what does this function do?"),
-            fence_omh_context([NO_MATCH_LINE]),
-        )
+    def test_an_acknowledgement_carries_the_no_match_line_and_nothing_else(self):
+        self.assertEqual(self.context(user_message="lol ok"), fence_omh_context([NO_MATCH_LINE]))
+        # Once per run: the next acknowledgement is quiet again.
+        self.assertEqual(self.context(user_message="thanks!"), "")
 
     def test_the_headless_blocks_are_inside_the_fence_too(self):
         # The dispatch outcome lines and the running-work rows are the two
@@ -343,9 +339,7 @@ class FenceReachesEveryBlockTest(_InjectionTestCase):
 
     def test_the_fence_is_absent_when_there_is_nothing_to_fence(self):
         # Not merely "short": the tag itself must not be paid for on a turn
-        # that has nothing in it. The session has already been told that
-        # nothing matched, so this unmatched turn adds nothing.
-        claim_no_match_line(SESSION)
+        # that has nothing in it.
         context = self.context(user_message="rename this variable")
 
         self.assertNotIn(OMH_CONTEXT_FENCE_OPEN, context)
@@ -353,9 +347,10 @@ class FenceReachesEveryBlockTest(_InjectionTestCase):
 
 
 class NoMatchLineStandsDownInsideWorkTest(_InjectionTestCase):
-    """A terse turn inside OMH work is a work turn the ranking cannot read."""
+    """An acknowledgement inside OMH work is part of that work."""
 
-    TERSE_TURNS = ("continue", "fix it", "next", "계속", "do the next item")
+    ACKNOWLEDGEMENTS = ("lol ok", "thanks!", "yes", "고마워", "ok got it")
+    TERSE_WORK_TURNS = ("continue", "fix it", "next", "계속", "do the next item")
 
     def write_active_workflow(self):
         state = self.home / "state"
@@ -375,7 +370,7 @@ class NoMatchLineStandsDownInsideWorkTest(_InjectionTestCase):
         )
 
     def assert_no_line(self, *, prefix: str = "", expect: str = ""):
-        for message in self.TERSE_TURNS:
+        for message in self.ACKNOWLEDGEMENTS:
             with self.subTest(message=message):
                 reset_candidate_line_state()
                 context = self.context(user_message=prefix + message, is_first_turn=False)
@@ -383,11 +378,18 @@ class NoMatchLineStandsDownInsideWorkTest(_InjectionTestCase):
                 if expect:
                     self.assertIn(expect, context)
 
-    def test_the_terse_turns_get_the_line_when_nothing_is_live(self):
-        for message in self.TERSE_TURNS:
+    def test_acknowledgements_get_the_line_when_nothing_is_live(self):
+        for message in self.ACKNOWLEDGEMENTS:
             with self.subTest(message=message):
                 reset_candidate_line_state()
                 self.assertIn(NO_MATCH_LINE, self.context(user_message=message, is_first_turn=False))
+
+    def test_terse_work_turns_never_get_the_line(self):
+        # They match nothing, and are not conversation either.
+        for message in self.TERSE_WORK_TURNS:
+            with self.subTest(message=message):
+                reset_candidate_line_state()
+                self.assertNotIn(NO_MATCH_LINE, self.context(user_message=message, is_first_turn=False))
 
     def test_an_active_workflow_holds_the_line_back(self):
         self.write_active_workflow()
@@ -402,7 +404,16 @@ class NoMatchLineStandsDownInsideWorkTest(_InjectionTestCase):
         self.assert_no_line()
 
     def test_a_role_marker_holds_the_line_back(self):
-        self.assert_no_line(prefix="[omh-role:reviewer] ")
+        # The marker's own words are catalog words, so only a conversational
+        # kind stays obvious conversation with one in front of it.
+        for message in ("tell me a joke", "any advice?"):
+            with self.subTest(message=message):
+                reset_candidate_line_state()
+                self.assertIn(NO_MATCH_LINE, self.context(user_message=message, is_first_turn=False))
+                reset_candidate_line_state()
+                context = self.context(user_message="[omh-role:reviewer] " + message, is_first_turn=False)
+                self.assertIn("[OMH Role: reviewer]", context)
+                self.assertNotIn(NO_MATCH_LINE, context)
 
     def test_executor_status_holds_the_line_back(self):
         from unittest import mock
