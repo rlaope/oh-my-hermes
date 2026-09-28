@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import importlib.resources as resources
 import importlib.util
+import io
 import json
+import marshal
 import sys
 import tempfile
+from types import CodeType
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -141,7 +144,9 @@ def validate_tool_definitions(tool_definitions: list[dict[str, object]]) -> list
     return failures
 
 
-def host_managed_plugin(target: Path) -> dict[str, str] | None:
+def host_managed_plugin(
+    target: Path, *, metadata_parent: Path | None = None, metadata_name: str | None = None
+) -> dict[str, str] | None:
     """Hermes' own record that `hermes plugins install` put *target* in place, or None.
 
     Both installers replace the whole directory, so the one that wrote last
@@ -156,8 +161,8 @@ def host_managed_plugin(target: Path) -> dict[str, str] | None:
     """
     if not target.is_dir() or read_plugin_manifest(target) is not None:
         return None
-    metadata, _ = read_json_object_result(target.parent / HERMES_INSTALL_METADATA)
-    entry = metadata.get(target.name) if isinstance(metadata, dict) else None
+    metadata, _ = read_json_object_result((metadata_parent or target.parent) / HERMES_INSTALL_METADATA)
+    entry = metadata.get(metadata_name or target.name) if isinstance(metadata, dict) else None
     entry = entry if isinstance(entry, dict) else None
     sidecar, _ = read_json_object_result(target / HERMES_CATALOG_SIDECAR)
     sidecar = sidecar if isinstance(sidecar, dict) and sidecar.get("catalog_name") else None
@@ -198,6 +203,13 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
         raise PluginPackError(f"{target} exists without an OMH plugin manifest; use --force to replace it")
     if dirty and not force:
         raise PluginPackError(f"managed plugin files changed: {', '.join(dirty)}; use --force to replace them")
+    if existing_manifest is not None and not force:
+        unknown = _plugin_unmanaged_entries(existing_manifest, target)
+        if unknown:
+            raise PluginPackError(
+                f"unmanaged plugin entries: {', '.join(unknown)}; plugin directory left unchanged; "
+                "move these entries outside the plugin directory, or use --force to replace them"
+            )
 
     changed = force or unmanaged or existing_manifest is None or _manifest_file_map(existing_manifest) != _record_file_map(source_records)
     result = _plugin_distribution_payload(
@@ -211,7 +223,9 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
     if dry_run:
         result["observed_scope"] = "dry run only; no plugin files were written"
         return result
-    _copy_plugin_bundle(target, source_records)
+    _copy_plugin_bundle(
+        target, source_records, existing_manifest=existing_manifest, initially_occupied=bool(unmanaged), force=force
+    )
     smoke = inspect_plugin_bundle(paths)
     result.update(
         {
@@ -419,6 +433,67 @@ def plugin_local_modifications(manifest: dict[str, Any] | None, plugin_dir: Path
     return modified
 
 
+def _plugin_unmanaged_entries(manifest: dict[str, Any], plugin_dir: Path) -> list[str]:
+    """Find additions using the installed manifest, never the incoming bundle.
+
+    Links below the bundle root are entries, not directories to traverse. The
+    root may itself be a legacy managed link; replacing it leaves its referent
+    intact. Empty user directories also need consent before replacement.
+    """
+    managed = set(_manifest_file_map(manifest)) | {PLUGIN_MANAGED_MANIFEST}
+    managed_dirs = {parent.as_posix() for rel in managed for parent in Path(rel).parents}
+    unknown: list[str] = []
+
+    def visit(directory: Path) -> None:
+        entries = list(directory.iterdir())
+        relative = directory.relative_to(plugin_dir).as_posix()
+        if not entries and relative not in managed_dirs:
+            unknown.append(relative)
+        for entry in entries:
+            rel = entry.relative_to(plugin_dir).as_posix()
+            if is_directory_link(entry):
+                unknown.append(rel)
+            elif entry.is_dir():
+                visit(entry)
+            elif rel not in managed and not _generated_plugin_bytecode(entry, plugin_dir, managed):
+                unknown.append(rel)
+
+    try:
+        visit(plugin_dir)
+    except OSError as exc:
+        raise PluginPackError(f"could not inspect plugin additions; plugin directory left unchanged: {exc}") from exc
+    return sorted(unknown)
+
+
+def _generated_plugin_bytecode(path: Path, plugin_dir: Path, managed: set[str]) -> bool:
+    if path.parent.name != "__pycache__" or path.suffix != ".pyc" or not path.is_file():
+        return False
+    try:
+        source = Path(importlib.util.source_from_cache(str(path)))
+    except ValueError:
+        return False
+    if source.relative_to(plugin_dir).as_posix() not in managed:
+        return False
+    # Parsing marshal data creates a code object but never executes it. Cap
+    # bytes actually read and require exactly one complete code object, not a
+    # plausible header followed by arbitrary user bytes or a trailing payload.
+    with path.open("rb") as file:
+        data = file.read(16 * 1024 * 1024 + 1)
+    if len(data) > 16 * 1024 * 1024:
+        return False
+    stream = io.BytesIO(data)
+    header = stream.read(16)
+    if len(header) != 16 or header[:4] != importlib.util.MAGIC_NUMBER:
+        return False
+    if int.from_bytes(header[4:8], "little") not in (0, 1, 3):
+        return False
+    try:
+        code = marshal.load(stream)
+    except (EOFError, TypeError, ValueError):
+        return False
+    return isinstance(code, CodeType) and stream.read(1) == b""
+
+
 def _collect_resource_records(root: Any, rel: Path, records: list[PluginFileRecord]) -> None:
     for item in root.iterdir():
         if item.name == "__pycache__" or item.name.endswith(".pyc"):
@@ -435,19 +510,23 @@ def _collect_resource_records(root: Any, rel: Path, records: list[PluginFileReco
             records.append(PluginFileRecord(item_rel.as_posix(), sha256_text(item.read_text(encoding="utf-8"))))
 
 
-def _copy_plugin_bundle(target: Path, file_records: list[dict[str, str]]) -> None:
+def _copy_plugin_bundle(
+    target: Path,
+    file_records: list[dict[str, str]],
+    *,
+    existing_manifest: dict[str, Any] | None,
+    initially_occupied: bool,
+    force: bool,
+) -> None:
     root = resources.files("omh.plugin_bundle.omh")
     parent = target.parent
-    tmp = parent / f".{target.name}.installing"
-    backup = parent / f".{target.name}.previous"
     ensure_dir(parent)
-    # `discard_path`, not `shutil.rmtree`: an older OMH layout symlinked the
-    # plugin directory at a shared location, and rmtree cannot unlink a
-    # symlink. The renamed-aside `.omh.previous` link therefore survived every
-    # update, and the next update's `target.rename(backup)` hit ENOTDIR
-    # because rename(2) refuses to rename a directory over a non-directory.
-    discard_path(tmp, ignore_errors=True)
-    discard_path(backup, ignore_errors=True)
+    # Atomically reserve a private sibling on the same filesystem. Fixed
+    # `.omh.previous` / `.omh.installing` siblings may contain user data or a
+    # recovery backup from an earlier invocation; neither belongs to this one.
+    transaction = Path(tempfile.mkdtemp(prefix=f".{target.name}.install-", dir=parent))
+    tmp = transaction / f".{target.name}.installing"
+    backup = transaction / f".{target.name}.previous"
     try:
         _copy_resource_tree(root, tmp)
         atomic_write_json(tmp / PLUGIN_MANAGED_MANIFEST, _new_plugin_manifest(target, file_records))
@@ -457,21 +536,53 @@ def _copy_plugin_bundle(target: Path, file_records: list[dict[str, str]]) -> Non
         # `tmp.rename(target)` renaming a directory over a link, which is the
         # ENOTDIR this change exists to stop -- so --force could not repair the
         # very machine the guard tells the operator to repair with it. The
-        # guard has already established that OMH owns the path or that --force
-        # was given.
+        # initial guard established ownership or force; revalidate after the
+        # rename before replacing anything that appeared while staging.
         if target.exists() or is_directory_link(target):
+            # A relative link is resolved from its original parent. Moving it
+            # under the transaction directory changes where the link points;
+            # inspect that original referent for a late Hermes takeover.
+            linked_target = target.resolve() if is_directory_link(target) else None
             target.rename(backup)
+            if existing_manifest is None and not initially_occupied:
+                raise PluginPackError("plugin directory appeared during staging; original bundle restored")
+            if host_managed_plugin(
+                linked_target or backup, metadata_parent=parent, metadata_name=target.name
+            ) is not None:
+                raise PluginPackError(
+                    f"plugin became Hermes-managed during staging; original bundle restored; "
+                    f"use {HERMES_PLUGIN_UPDATE_COMMAND}"
+                )
+            if not force and existing_manifest is not None and not is_directory_link(backup):
+                if read_plugin_manifest(backup) != existing_manifest:
+                    raise PluginPackError("plugin manifest changed during staging; original bundle restored")
+                dirty = plugin_local_modifications(existing_manifest, backup)
+                if dirty:
+                    raise PluginPackError(f"managed plugin files changed: {', '.join(dirty)}; original bundle restored")
+                unknown = _plugin_unmanaged_entries(existing_manifest, backup)
+                if unknown:
+                    raise PluginPackError(f"unmanaged plugin entries: {', '.join(unknown)}; original bundle restored")
         tmp.rename(target)
-        discard_path(backup, ignore_errors=True)
-    except OSError:
-        discard_path(tmp, ignore_errors=True)
-        # The rollback asks about links too, or it skips the one case it must
-        # not skip. A dangling link renamed aside answers False to
-        # `backup.exists()`, so without this the operator's link would be gone
-        # and `.omh.previous` would be left holding it.
-        if (backup.exists() or is_directory_link(backup)) and not (target.exists() or is_directory_link(target)):
-            backup.rename(target)
+    except (OSError, PluginPackError) as exc:
+        # Link-aware checks also restore a dangling legacy root link. If the
+        # original cannot be restored, retain its private workspace and name
+        # the recovery path rather than deleting it during final cleanup.
+        if backup.exists() or is_directory_link(backup):
+            if target.exists() or is_directory_link(target):
+                raise OSError(f"plugin replacement failed; target is occupied; original bundle retained at {backup}") from exc
+            try:
+                backup.rename(target)
+            except OSError as rollback_error:
+                raise OSError(
+                    f"plugin replacement failed; rollback failed; original bundle retained at {backup}: {rollback_error}"
+                ) from exc
         raise
+    else:
+        discard_path(backup, ignore_errors=True)
+    finally:
+        discard_path(tmp, ignore_errors=True)
+        if not (backup.exists() or is_directory_link(backup)):
+            discard_path(transaction, ignore_errors=True)
 
 
 def _copy_resource_tree(root: Any, dest: Path) -> None:

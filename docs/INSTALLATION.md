@@ -288,6 +288,34 @@ machine state. One deliberate opt-out is honored: after
 update never re-registers a machine whose owner removed the registration on
 purpose.
 
+Plugin reinstalls protect local additions as well as edits to managed files.
+If `$HERMES_HOME/plugins/omh/` contains entries absent from its installed OMH
+manifest, `omh setup` refuses replacement and names those entries. `omh update`
+leaves that plugin tree unchanged and prints a warning while continuing its
+other updates. Dry runs apply the same protection without writing plugin files.
+Move additions outside the plugin directory before retrying, or use
+`omh setup --force` / `omh update --force` only if you intend to discard local
+changes and additions inside that directory. Unchanged files listed in an older
+manifest can still be refreshed or removed when the current bundle retires them.
+Recognizable Python bytecode caches for managed sources do not block refresh:
+only bounded, complete timestamp or hash `.pyc` files with a valid code-object
+payload qualify (the cache is parsed, never executed). Oversized, truncated,
+non-code, or trailing-data payloads remain protected as additions. The staged
+replacement checks the renamed original again before installing; late additions
+or managed edits cause a refusal and restoration of the original directory.
+If a plugin tree appears after an initially empty path was inspected, setup
+restores it instead of treating it as the original tree, even with `--force`.
+A tree that becomes Hermes-managed during staging is likewise never replaced
+by OMH, including forced refreshes.
+
+Replacement uses an invocation-owned private transaction directory alongside
+the plugin. Existing `.omh.previous` and `.omh.installing` siblings, including
+symlinks, are never cleared, even with `--force`. If replacement fails, OMH tries
+to restore the original tree; if rollback also fails, the error names the
+retained backup for manual recovery. Inspect any old recovery directories before
+removing them yourself. Hermes-managed plugin installs remain Hermes-owned:
+`--force` does not override that boundary; use `hermes plugins update omh`.
+
 The Hermes Desktop half needs one switch OMH cannot flip, beyond the
 registration it already manages. Hermes Desktop copies
 `plugins/omh/desktop/plugin.js` into its own `desktop-plugins/omh/` on its

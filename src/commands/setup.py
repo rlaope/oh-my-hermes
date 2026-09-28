@@ -991,9 +991,10 @@ def _refresh_installed_plugin_bundle(args: argparse.Namespace) -> dict[str, obje
         return None
     try:
         result = install_plugin_bundle(paths, force=args.force, dry_run=args.dry_run)
-    except PluginPackError:
-        # An update must not fail over a bundle a later `omh setup --force` can
-        # repair; `omh doctor` reports the drift with the instruction to run it.
+    except PluginPackError as exc:
+        # Preserve the existing partial-update contract, but never silently
+        # claim that a protected plugin tree was refreshed.
+        print(f"note: OMH plugin refresh skipped: {_friendly_plugin_error(paths, str(exc))}", file=sys.stderr)
         return None
     if result.get("status") == "host_managed":
         print(
@@ -5482,6 +5483,8 @@ def _menubar_setup_result(args: argparse.Namespace, paths) -> dict[str, object]:
 
 
 def _friendly_plugin_error(paths, message: str) -> str:
+    if "unmanaged plugin entries" in message:
+        return f"{message}. Inspect {paths.hermes_plugin_dir} before choosing `omh setup --force`."
     if "exists without an OMH plugin manifest" in message:
         return (
             "OMH status helper location already exists, but it does not look like an OMH-managed install: "

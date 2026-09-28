@@ -29,7 +29,14 @@ from omh.config_adapter import external_dirs
 from omh.paths import resolve_paths
 from omh.install.plugin_loader_observation import observe_real_loader_registration
 from omh.plugin_pack import inspect_plugin_bundle
-from omh.install.plugin_pack import _SmokeContext, _collect_resource_records, install_plugin_bundle, validate_tool_definitions
+from omh.install.plugin_pack import (
+    PLUGIN_MANAGED_MANIFEST,
+    PluginPackError,
+    _SmokeContext,
+    _collect_resource_records,
+    install_plugin_bundle,
+    validate_tool_definitions,
+)
 from omh.plugin_bundle.omh.tools import evidence_tool
 from omh.plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS, TOOL_FILE_STEMS
 from omh.release_smoke_core import CommandResult
@@ -1702,6 +1709,342 @@ class PluginToolSchemaValidationTests(unittest.TestCase):
             self.assertIn("does not prove Hermes loaded or used the plugin", plugin["observed_scope"])
 
 
+class PluginReinstallSafetyTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temp = TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.paths = resolve_paths(self.root / ".omh", self.root / ".hermes")
+        install_plugin_bundle(self.paths)
+        self.target = self.paths.hermes_plugin_dir
+
+    def test_unknown_entries_are_not_owned_by_location_or_extension(self) -> None:
+        for relative in (
+            "private.txt", "hooks/local.py", ".private", "private.pyc",
+            "__pycache__/private.txt", "__pycache__/private.pyc", "empty-user-dir",
+        ):
+            with self.subTest(relative=relative):
+                extra = self.target / relative
+                extra.parent.mkdir(parents=True, exist_ok=True)
+                if relative == "empty-user-dir":
+                    extra.mkdir()
+                else:
+                    extra.write_bytes(b"user-owned content\n")
+                with self.assertRaisesRegex(PluginPackError, "unmanaged plugin entries"):
+                    install_plugin_bundle(self.paths)
+                self.assertTrue(extra.exists())
+                if extra.is_dir():
+                    extra.rmdir()
+                else:
+                    self.assertEqual(extra.read_bytes(), b"user-owned content\n")
+                    extra.unlink()
+
+    def test_a_new_bundled_path_is_not_owned_by_the_old_manifest(self) -> None:
+        manifest_path = self.target / PLUGIN_MANAGED_MANIFEST
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["files"] = [record for record in manifest["files"] if record["path"] != "memory_provider.py"]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(PluginPackError, "memory_provider.py"):
+            install_plugin_bundle(self.paths)
+
+    def test_unchanged_obsolete_managed_files_are_removed_on_refresh(self) -> None:
+        obsolete = self.target / "obsolete.py"
+        obsolete.write_bytes(b"# previously shipped\n")
+        manifest_path = self.target / PLUGIN_MANAGED_MANIFEST
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["files"].append({"path": obsolete.name, "sha256": hashlib.sha256(obsolete.read_bytes()).hexdigest()})
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        result = install_plugin_bundle(self.paths)
+        self.assertTrue(result["changed"])
+        self.assertFalse(obsolete.exists())
+        self.assertTrue(inspect_plugin_bundle(self.paths)["plugin_manifest_current"])
+
+    def test_counterfeit_bytecode_is_preserved_until_force(self) -> None:
+        cache = Path(importlib.util.cache_from_source(str(self.target / "__init__.py")))
+        cache.parent.mkdir(exist_ok=True)
+        fake = importlib.util.MAGIC_NUMBER + b"\0" * 12 + b"private user data"
+        cache.write_bytes(fake)
+        with self.assertRaisesRegex(PluginPackError, "unmanaged plugin entries"):
+            install_plugin_bundle(self.paths)
+        self.assertEqual(cache.read_bytes(), fake)
+        install_plugin_bundle(self.paths, force=True)
+        # Import smoke may generate a fresh cache in the replacement tree.
+        if cache.exists():
+            self.assertNotEqual(cache.read_bytes(), fake)
+
+    def test_generated_bytecode_does_not_block_reinstall(self) -> None:
+        import py_compile
+
+        cache = Path(py_compile.compile(str(self.target / "__init__.py"), doraise=True))
+        self.assertTrue(cache.is_file())
+        result = install_plugin_bundle(self.paths)
+        self.assertFalse(result["changed"])
+        self.assertTrue(result["register_smoke"])
+
+    def test_counterfeit_bytecode_variants_are_preserved(self) -> None:
+        import py_compile
+
+        cache_name = py_compile.compile(str(self.target / "__init__.py"), doraise=True)
+        self.assertIsInstance(cache_name, str)
+        cache = Path(cache_name)
+        valid = cache.read_bytes()
+        for payload in (
+            valid[:16],  # no marshal payload
+            valid[:16] + b"N",  # valid marshal value, but not code
+            valid[:-1],  # truncated code object
+            valid + b"private trailing data",
+            valid[:4] + (2).to_bytes(4, "little") + valid[8:],  # invalid flags
+        ):
+            with self.subTest(payload=payload[:20]):
+                cache.write_bytes(payload)
+                with self.assertRaisesRegex(PluginPackError, "unmanaged plugin entries"):
+                    install_plugin_bundle(self.paths)
+                self.assertEqual(cache.read_bytes(), payload)
+
+    def test_hash_generated_bytecode_does_not_block_reinstall(self) -> None:
+        import py_compile
+
+        for mode in (py_compile.PycInvalidationMode.CHECKED_HASH, py_compile.PycInvalidationMode.UNCHECKED_HASH):
+            with self.subTest(mode=mode):
+                cache_name = py_compile.compile(
+                    str(self.target / "__init__.py"), doraise=True, invalidation_mode=mode
+                )
+                self.assertIsInstance(cache_name, str)
+                self.assertTrue(Path(cache_name).is_file())
+                self.assertTrue(install_plugin_bundle(self.paths)["register_smoke"])
+
+    def test_first_install_refuses_competing_catalog_tree_arriving_during_staging(self) -> None:
+        from omh.install import plugin_pack as plugin_pack_module
+
+        shutil.rmtree(self.target)
+        self.assertFalse(self.target.exists())
+        original_copy = plugin_pack_module._copy_resource_tree
+        private = b"private competing plugin data\x00\xff"
+        sidecar = b'{"catalog_name":"omh","repo":"https://example.invalid/omh","sha":"abc123"}\n'
+
+        def inject(root: Any, dest: Path) -> None:
+            original_copy(root, dest)
+            if dest.name == ".omh.installing":
+                self.target.mkdir()
+                (self.target / "private.txt").write_bytes(private)
+                (self.target / ".hermes-catalog.json").write_bytes(sidecar)
+
+        with mock.patch.object(plugin_pack_module, "_copy_resource_tree", side_effect=inject):
+            with self.assertRaises(PluginPackError):
+                install_plugin_bundle(self.paths)
+        self.assertEqual((self.target / "private.txt").read_bytes(), private)
+        self.assertEqual((self.target / ".hermes-catalog.json").read_bytes(), sidecar)
+        self.assertFalse((self.target / PLUGIN_MANAGED_MANIFEST).exists())
+        self.assertEqual({entry.name for entry in self.target.parent.iterdir()}, {"omh"})
+
+    def test_force_does_not_claim_new_managed_tree_after_initially_empty_path(self) -> None:
+        from omh.install import plugin_pack as plugin_pack_module
+
+        private = b"private newly managed data\x00\xff"
+        (self.target / "private.txt").write_bytes(private)
+        manifest = (self.target / PLUGIN_MANAGED_MANIFEST).read_bytes()
+        competing = self.root / "competing-managed-plugin"
+        self.target.rename(competing)
+        self.assertFalse(self.target.exists())
+        original_copy = plugin_pack_module._copy_resource_tree
+
+        def inject(root: Any, dest: Path) -> None:
+            original_copy(root, dest)
+            if dest.name == ".omh.installing":
+                competing.rename(self.target)
+
+        with mock.patch.object(plugin_pack_module, "_copy_resource_tree", side_effect=inject):
+            with self.assertRaisesRegex(PluginPackError, "appeared during staging"):
+                install_plugin_bundle(self.paths, force=True)
+        self.assertEqual((self.target / "private.txt").read_bytes(), private)
+        self.assertEqual((self.target / PLUGIN_MANAGED_MANIFEST).read_bytes(), manifest)
+        self.assertEqual({entry.name for entry in self.target.parent.iterdir()}, {"omh"})
+
+    def test_force_refuses_catalog_takeover_during_staging(self) -> None:
+        from omh.install import plugin_pack as plugin_pack_module
+
+        original_copy = plugin_pack_module._copy_resource_tree
+        private = b"private host-owned plugin data\x00\xff"
+        sidecar = b'{"catalog_name":"omh","repo":"https://example.invalid/omh","sha":"abc123"}\n'
+
+        def inject(root: Any, dest: Path) -> None:
+            original_copy(root, dest)
+            if dest.name == ".omh.installing":
+                (self.target / PLUGIN_MANAGED_MANIFEST).unlink()
+                (self.target / "private.txt").write_bytes(private)
+                (self.target / ".hermes-catalog.json").write_bytes(sidecar)
+
+        with mock.patch.object(plugin_pack_module, "_copy_resource_tree", side_effect=inject):
+            with self.assertRaises(PluginPackError):
+                install_plugin_bundle(self.paths, force=True)
+        self.assertEqual((self.target / "private.txt").read_bytes(), private)
+        self.assertEqual((self.target / ".hermes-catalog.json").read_bytes(), sidecar)
+        self.assertFalse((self.target / PLUGIN_MANAGED_MANIFEST).exists())
+        self.assertEqual({entry.name for entry in self.target.parent.iterdir()}, {"omh"})
+
+    @requires_symlinks
+    def test_force_refuses_catalog_takeover_through_relative_plugin_link(self) -> None:
+        from omh.install import plugin_pack as plugin_pack_module
+
+        shared = self.target.parent / "shared"
+        self.target.rename(shared)
+        self.target.symlink_to("shared", target_is_directory=True)
+        original_copy = plugin_pack_module._copy_resource_tree
+        private = b"host-owned data behind relative link\n"
+        sidecar = b'{"catalog_name":"omh","repo":"https://example.invalid/omh","sha":"abc123"}\n'
+
+        def inject(root: Any, dest: Path) -> None:
+            original_copy(root, dest)
+            if dest.name == ".omh.installing":
+                (shared / PLUGIN_MANAGED_MANIFEST).unlink()
+                (shared / "private.txt").write_bytes(private)
+                (shared / ".hermes-catalog.json").write_bytes(sidecar)
+
+        with mock.patch.object(plugin_pack_module, "_copy_resource_tree", side_effect=inject):
+            with self.assertRaisesRegex(PluginPackError, "Hermes-managed"):
+                install_plugin_bundle(self.paths, force=True)
+        self.assertTrue(self.target.is_symlink())
+        self.assertEqual(os.readlink(self.target), "shared")
+        self.assertEqual((shared / "private.txt").read_bytes(), private)
+        self.assertEqual((shared / ".hermes-catalog.json").read_bytes(), sidecar)
+        self.assertFalse((shared / PLUGIN_MANAGED_MANIFEST).exists())
+
+    def test_force_refuses_metadata_only_host_takeover_during_staging(self) -> None:
+        from omh.install import plugin_pack as plugin_pack_module
+
+        original_copy = plugin_pack_module._copy_resource_tree
+        private = b"host-only private data\x00\xff"
+        metadata = b'{"omh":{"source":"https://example.invalid/omh","revision":"abc123"}}\n'
+
+        def inject(root: Any, dest: Path) -> None:
+            original_copy(root, dest)
+            if dest.name == ".omh.installing":
+                (self.target / PLUGIN_MANAGED_MANIFEST).unlink()
+                (self.target / "private.txt").write_bytes(private)
+                (self.target.parent / ".install-metadata.json").write_bytes(metadata)
+
+        with mock.patch.object(plugin_pack_module, "_copy_resource_tree", side_effect=inject):
+            with self.assertRaises(PluginPackError):
+                install_plugin_bundle(self.paths, force=True)
+        self.assertEqual((self.target / "private.txt").read_bytes(), private)
+        self.assertEqual((self.target.parent / ".install-metadata.json").read_bytes(), metadata)
+        self.assertFalse((self.target / PLUGIN_MANAGED_MANIFEST).exists())
+        self.assertEqual({entry.name for entry in self.target.parent.iterdir()}, {"omh", ".install-metadata.json"})
+
+    def test_addition_during_staging_is_restored_without_replacing_bundle(self) -> None:
+        from omh.install import plugin_pack as plugin_pack_module
+
+        original_copy = plugin_pack_module._copy_resource_tree
+        original_manifest = (self.target / PLUGIN_MANAGED_MANIFEST).read_bytes()
+        extra = self.target / "arrived-during-staging.txt"
+        payload = b"private late arrival\n"
+
+        def inject(root: Any, dest: Path) -> None:
+            original_copy(root, dest)
+            if dest.name == ".omh.installing":
+                extra.write_bytes(payload)
+
+        with mock.patch.object(plugin_pack_module, "_copy_resource_tree", side_effect=inject):
+            with self.assertRaisesRegex(PluginPackError, "arrived-during-staging.txt"):
+                install_plugin_bundle(self.paths)
+        self.assertEqual(extra.read_bytes(), payload)
+        self.assertEqual((self.target / PLUGIN_MANAGED_MANIFEST).read_bytes(), original_manifest)
+        self.assertEqual({entry.name for entry in self.target.parent.iterdir()}, {"omh"})
+
+    def test_managed_edit_during_staging_is_restored_without_replacing_bundle(self) -> None:
+        from omh.install import plugin_pack as plugin_pack_module
+
+        original_copy = plugin_pack_module._copy_resource_tree
+        original_manifest = (self.target / PLUGIN_MANAGED_MANIFEST).read_bytes()
+        managed = self.target / "__init__.py"
+        payload = b"# private late edit\n"
+
+        def inject(root: Any, dest: Path) -> None:
+            original_copy(root, dest)
+            if dest.name == ".omh.installing":
+                managed.write_bytes(payload)
+
+        with mock.patch.object(plugin_pack_module, "_copy_resource_tree", side_effect=inject):
+            with self.assertRaisesRegex(PluginPackError, "managed plugin files changed: __init__.py"):
+                install_plugin_bundle(self.paths)
+        self.assertEqual(managed.read_bytes(), payload)
+        self.assertEqual((self.target / PLUGIN_MANAGED_MANIFEST).read_bytes(), original_manifest)
+        self.assertEqual({entry.name for entry in self.target.parent.iterdir()}, {"omh"})
+
+    def test_existing_transaction_siblings_survive_setup_and_update(self) -> None:
+        base = ["--omh-home", str(self.paths.omh_home), "--hermes-home", str(self.paths.hermes_home)]
+        sentinels = []
+        for name in (".omh.previous", ".omh.installing"):
+            sibling = self.target.parent / name
+            sibling.mkdir()
+            sentinel = sibling / "private.txt"
+            sentinel.write_bytes(b"unrelated sibling data\n")
+            sentinels.append(sentinel)
+        for command in ("setup", "update"):
+            for extra in ([], ["--force"]):
+                with self.subTest(command=command, extra=extra):
+                    status, _, stderr = run_cli(base + [command, *extra])
+                    self.assertEqual(status, 0, stderr)
+                    for sentinel in sentinels:
+                        self.assertTrue(sentinel.is_file())
+                        self.assertEqual(sentinel.read_bytes(), b"unrelated sibling data\n")
+                    self.assertEqual(
+                        {entry.name for entry in self.target.parent.iterdir()},
+                        {"omh", ".omh.previous", ".omh.installing"},
+                    )
+
+    def test_failed_rollback_keeps_original_in_private_transaction(self) -> None:
+        original = (self.target / PLUGIN_MANAGED_MANIFEST).read_bytes()
+        real_rename = Path.rename
+        backups = []
+
+        def fail_install_and_rollback(path: Path, dest: Any) -> Path:
+            if Path(dest) == self.target:
+                raise OSError(errno.EACCES, "forced install and rollback failure")
+            result = real_rename(path, dest)
+            if path == self.target:
+                backups.append(Path(dest))
+            return result
+
+        with mock.patch.object(Path, "rename", fail_install_and_rollback):
+            with self.assertRaises(OSError) as raised:
+                install_plugin_bundle(self.paths)
+        self.assertEqual(len(backups), 1)
+        backup = backups[0]
+        self.assertEqual((backup / PLUGIN_MANAGED_MANIFEST).read_bytes(), original)
+        self.assertNotEqual(backup.parent, self.target.parent)
+        self.assertIn(str(backup), str(raised.exception))
+        self.assertIn("rollback", str(raised.exception))
+        self.assertFalse((backup.parent / ".omh.installing").exists())
+        if os.name != "nt":
+            self.assertEqual(backup.parent.stat().st_mode & 0o777, 0o700)
+
+    @requires_symlinks
+    def test_unknown_symlinks_are_not_traversed_or_removed_without_force(self) -> None:
+        external = self.root / "external"
+        external.mkdir()
+        private = external / "private.txt"
+        private.write_bytes(b"external user data\n")
+        for destination in (external, private, self.root / "missing"):
+            with self.subTest(destination=destination):
+                link = self.target / "local-link"
+                link.symlink_to(destination, target_is_directory=destination != private)
+                real_iterdir = Path.iterdir
+
+                def guarded_iterdir(path: Path):
+                    if path == link or path == external:
+                        self.fail("unknown symlinks must not be traversed")
+                    return real_iterdir(path)
+
+                with mock.patch.object(Path, "iterdir", guarded_iterdir):
+                    with self.assertRaisesRegex(PluginPackError, "local-link"):
+                        install_plugin_bundle(self.paths)
+                self.assertTrue(link.is_symlink())
+                install_plugin_bundle(self.paths, force=True)
+                self.assertFalse(link.is_symlink())
+                self.assertEqual(private.read_bytes(), b"external user data\n")
+
+
 class UpdateRefreshesTheBundleTests(unittest.TestCase):
     """`omh update` used to leave the installed bundle at its old version.
 
@@ -1715,25 +2058,52 @@ class UpdateRefreshesTheBundleTests(unittest.TestCase):
     def _bundle_dir(self, hermes_home: Path) -> Path:
         return hermes_home / "plugins" / "omh"
 
-    def test_update_reinstalls_the_bundle_tree(self) -> None:
-        # The bundle is replaced wholesale by an atomic rename of a freshly
-        # copied tree, so a file the source does not contain cannot survive a
-        # real reinstall. That makes a stray file the honest observable: editing
-        # a managed file instead would trip the drift guard, which is a
-        # different behaviour and correctly refuses.
+    def test_update_preserves_unknown_files_and_reports_refusal(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
             status, _, stderr = run_cli(base + ["setup"])
             self.assertEqual(status, 0, stderr)
 
-            stray = self._bundle_dir(root / ".hermes") / "stray_from_an_older_version.py"
-            stray.write_text("# left behind by an older bundle\n", encoding="utf-8")
+            stray = self._bundle_dir(root / ".hermes") / "private.txt"
+            stray.write_bytes(b"user-owned notes\n")
+            manifest = stray.parent / ".omh-plugin-manifest.json"
+            before = manifest.read_bytes()
 
             status, _, stderr = run_cli(base + ["update"])
             self.assertEqual(status, 0, stderr)
-            self.assertFalse(stray.exists())
+            self.assertTrue(stray.is_file())
+            self.assertEqual(stray.read_bytes(), b"user-owned notes\n")
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertIn("unmanaged plugin entries", stderr)
+            self.assertIn("private.txt", stderr)
+            self.assertIn("--force", stderr)
             self.assertTrue((self._bundle_dir(root / ".hermes") / "memory_provider.py").is_file())
+
+    def test_setup_refuses_unknown_files_until_force_is_given(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = ["--omh-home", str(root / ".omh"), "--hermes-home", str(root / ".hermes")]
+            status, _, stderr = run_cli(base + ["setup"])
+            self.assertEqual(status, 0, stderr)
+            stray = self._bundle_dir(root / ".hermes") / "private.txt"
+            stray.write_bytes(b"user-owned notes\n")
+            manifest = stray.parent / ".omh-plugin-manifest.json"
+            before = manifest.read_bytes()
+
+            for extra in ([], ["--dry-run"]):
+                with self.subTest(extra=extra):
+                    status, stdout, stderr = run_cli(base + ["setup", *extra])
+                    self.assertNotEqual(status, 0)
+                    self.assertIn("unmanaged plugin entries", stdout + stderr)
+                    self.assertIn("private.txt", stdout + stderr)
+                    self.assertIn("--force", stdout + stderr)
+                    self.assertEqual(stray.read_bytes(), b"user-owned notes\n")
+                    self.assertEqual(manifest.read_bytes(), before)
+
+            status, _, stderr = run_cli(base + ["setup", "--force"])
+            self.assertEqual(status, 0, stderr)
+            self.assertFalse(stray.exists())
 
     def test_update_bootstraps_a_bundle_setup_never_installed(self) -> None:
         # Update and setup converge on the same machine state (owner decision,
@@ -1847,7 +2217,8 @@ class SymlinkedPluginDirectoryTests(unittest.TestCase):
 
             status, _, stderr = run_cli(base + ["update"])
             self.assertEqual(status, 0, stderr)
-            self.assertFalse(stale.is_symlink())
+            self.assertTrue(stale.is_symlink())
+            self.assertEqual(os.readlink(stale), str(root / ".hermes" / "gone"))
             self.assertTrue((bundle / "memory_provider.py").is_file())
 
     def test_a_dangling_plugin_link_is_kept_without_force(self) -> None:
@@ -2082,7 +2453,7 @@ class UpdateCarriesRegistrationTests(unittest.TestCase):
             config = self._config(root).read_text(encoding="utf-8")
             self.assertIn("provider: omh", config)
             self.assertIn((root / ".omh" / "skills").resolve().as_posix(), config)
-            self.assertFalse(self._bundle_stray(root).exists())
+            self.assertEqual(self._bundle_stray(root).read_text(encoding="utf-8"), "# older bundle\n")
 
     def _bundle_stray(self, root: Path) -> Path:
         return root / ".hermes" / "plugins" / "omh" / "stray_from_an_older_version.py"

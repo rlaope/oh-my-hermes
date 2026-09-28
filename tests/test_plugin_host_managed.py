@@ -141,7 +141,7 @@ class HostManagedPluginTests(unittest.TestCase):
 
     def test_an_omh_manifest_wins_over_a_stale_hermes_record(self) -> None:
         # OMH wrote last (Hermes' metadata outlived a removed catalog tree), so
-        # OMH still owns the directory and update refreshes it.
+        # OMH still owns the directory, but unknown additions remain protected.
         metadata = {"omh": {"pinned": True, "revision": CATALOG_SHA, "source": SOURCE}}
         (self.plugin_dir.parent / ".install-metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
         self.assertIsNone(host_managed_plugin(self.plugin_dir))
@@ -149,7 +149,12 @@ class HostManagedPluginTests(unittest.TestCase):
         stray.write_text("# stray\n", encoding="utf-8")
         status, _, stderr = run_cli(self.base + ["update"])
         self.assertEqual(status, 0, stderr)
+        self.assertTrue(stray.is_file())
+        self.assertIn("unmanaged plugin entries", stderr)
+        status, _, stderr = run_cli(self.base + ["update", "--force"])
+        self.assertEqual(status, 0, stderr)
         self.assertFalse(stray.exists())
+        self.assertIsNone(host_managed_plugin(self.plugin_dir))
 
     def test_an_unrecorded_foreign_directory_is_still_refused(self) -> None:
         # Negative control: no OMH manifest AND no Hermes record is neither
