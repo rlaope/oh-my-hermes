@@ -63,6 +63,7 @@ from omh.coding.fanout_journal import (  # noqa: E402
     read_fanout_run_journal,
     write_fanout_run_journal,
 )
+from omh.coding.fanout_repair import REPAIR_IN_FLIGHT_STATUS  # noqa: E402
 from omh.coding.fanout_retry import (  # noqa: E402
     CLASS_TERMINAL_FAILURE,
     REPLAY_SAFE,
@@ -182,6 +183,17 @@ def _reason(plan: dict, unit_id: str) -> str:
 
 
 class JournalProjectionTests(unittest.TestCase):
+    def test_an_in_flight_repair_skip_remains_not_attempted_when_resumed(self) -> None:
+        entry = {"unit_id": "core", "run_ref": "run-core", "owner": "codex", "status": REPAIR_IN_FLIGHT_STATUS}
+        journal = build_fanout_run_journal(_summary(entry))
+        row = _rows(journal)["core"]
+        self.assertEqual(row["terminal_state"], TERMINAL_NOT_ATTEMPTED)
+        self.assertTrue(row["replay_safe"])
+        self.assertEqual(row["side_effect"], "no_spawn_observed")
+        plan = plan_fanout_resume(journal, order=["core"], depends_on={"core": []})
+        self.assertEqual(_actions(plan), {"core": RESUME_RERUN_NOT_ATTEMPTED})
+        self.assertEqual(plan["selected_units"], ["core"])
+
     def test_each_terminal_state_is_derived_from_what_was_observed(self) -> None:
         journal = build_fanout_run_journal(
             _summary(

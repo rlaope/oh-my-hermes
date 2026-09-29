@@ -36,7 +36,7 @@ from omh.commands.coding import (  # noqa: E402
 )
 from omh.coding import fanout_dispatch  # noqa: E402
 from omh.coding.fanout import build_fanout_contract  # noqa: E402
-from omh.coding.fanout_artifacts import fanout_run_journal_path, write_fanout_contract  # noqa: E402
+from omh.coding.fanout_artifacts import fanout_dispatch_summary_path, fanout_run_journal_path, write_fanout_contract  # noqa: E402
 from omh.coding.fanout_journal import read_fanout_run_journal  # noqa: E402
 from omh.coding.fanout_contracts import FanoutContractError  # noqa: E402
 from omh.coding.fanout_dispatch import dispatch_fanout  # noqa: E402
@@ -507,7 +507,12 @@ class RepairConcurrencyTests(unittest.TestCase):
         first.start()
         self.assertTrue(in_spawn.wait(timeout=60))
         try:
+            summary_path = fanout_dispatch_summary_path(harness.paths, harness.contract["fanout_id"])
+            before = _unit(json.loads(summary_path.read_text(encoding="utf-8")))
             second_summary = harness.dispatch()
+            after = _unit(json.loads(summary_path.read_text(encoding="utf-8")))
+            self.assertEqual(after, before)
+            self.assertIn("exit_code", after)
         finally:
             release.set()
             first.join(timeout=120)
@@ -584,6 +589,26 @@ class RepairExitScopeTests(unittest.TestCase):
 
 
 class RepairPairingTests(unittest.TestCase):
+    def test_duplicate_commands_consume_distinct_captures_in_order(self) -> None:
+        result = {
+            "status": "completed", "process_succeeded": True, "result_schema_valid": True,
+            "verification_status": "failed",
+            "verification_observed_failures": [
+                observed_check_failure(_CHECK, "nonzero", 1, "process"),
+                observed_check_failure(_CHECK, "nonzero", 7, "process"),
+            ],
+            "verification_checks": [
+                {"command": _CHECK, "status": "failed", "observed_by": "dispatcher"},
+                {"command": _CHECK, "status": "failed", "observed_by": "dispatcher"},
+            ],
+        }
+        self.assertEqual(repair_trigger_checks(result), [
+            {"command": _CHECK, "exit_code": 1, "failure_kind": "nonzero"},
+            {"command": _CHECK, "exit_code": 7, "failure_kind": "nonzero"},
+        ])
+        result["verification_observed_failures"].pop()
+        self.assertEqual(repair_trigger_checks(result), [])
+
     def test_a_task_linked_command_longer_than_the_journal_bound_still_triggers(self) -> None:
         command = "python -m unittest " + " ".join(f"tests/test_module_number_{i:03d}.py" for i in range(20))
         self.assertGreater(len(command), 512)
