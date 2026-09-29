@@ -174,6 +174,45 @@ class ShadowPayloadIsTheRoutersPayloadTests(unittest.TestCase):
                 )
                 self.assertEqual(moved, [])
 
+    def test_recording_a_shadow_question_does_not_change_the_payload(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(omh_home=root / "omh", hermes_home=root / "hermes")
+            recorded = 0
+            for case in ROUTING_PRECISION_CASES:
+                with self.subTest(case=case.id):
+                    baseline = build_chat_interaction_payload(case.message, source="discord", paths=paths)
+                    observations: list[dict[str, object]] = []
+                    observed = build_chat_interaction_payload(
+                        case.message, source="discord", paths=paths, _route_question_sink=observations
+                    )
+                    self.assertEqual(self._emitted(observed), self._emitted(baseline))
+                    self.assertEqual(len(observations), int("route_question" in baseline["route"]))
+                    recorded += len(observations)
+            self.assertGreater(recorded, 0)
+
+    def test_off_records_the_question_before_withholding_it(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = resolve_paths(omh_home=root / "omh", hermes_home=root / "hermes")
+            shadow = build_chat_interaction_payload(UNDECIDABLE_MESSAGE, source="discord", paths=paths)
+            self.assertIn("route_question", shadow["route"])
+            _write_mode(root / "omh", '{"mode": "off"}')
+            observations: list[dict[str, object]] = []
+            off = build_chat_interaction_payload(
+                UNDECIDABLE_MESSAGE, source="discord", paths=paths, _route_question_sink=observations
+            )
+        self.assertNotIn("route_question", off["route"])
+        self.assertEqual(len(observations), 1)
+        observation = observations[0]
+        self.assertEqual(observation["route_question"]["mode"], "off")
+        self.assertEqual(observation["route_question"]["mode_source"], "omh_config")
+        self.assertTrue(observation["route_question"]["built"])
+        self.assertFalse(observation["route_question"]["asked"])
+        self.assertEqual(observation["message_sha256"], message_digest(UNDECIDABLE_MESSAGE))
+        shadow["route"].pop("route_question")
+        self.assertEqual(self._emitted(off), self._emitted(shadow))
+
     def test_the_tool_emits_the_same_bytes_in_shadow_and_without_the_seam(self) -> None:
         from omh.plugin_bundle.omh.tools.chat_tool import omh_interact_handler
 
