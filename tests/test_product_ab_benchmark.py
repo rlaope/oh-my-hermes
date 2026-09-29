@@ -1085,6 +1085,36 @@ class GradingTests(unittest.TestCase):
             )
 
 
+class GitDiffTests(unittest.TestCase):
+    def test_pinned_diff_bytes_do_not_inherit_display_preferences(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repository = Path(tmp)
+            repo_lib.git(repository, "init", "-q")
+            repo_lib.git(repository, "config", "user.name", "Test")
+            repo_lib.git(repository, "config", "user.email", "test@example.invalid")
+            source = repository / "example.py"
+            source.write_text("before\ncontext\nlast\n", encoding="utf-8")
+            repo_lib.git(repository, "add", "example.py")
+            repo_lib.git(repository, "commit", "-qm", "base")
+            base = repo_lib.resolve(repository, "HEAD")
+            source.write_text("after\ncontext\nlast\n", encoding="utf-8")
+            repo_lib.git(repository, "commit", "-qam", "head")
+            head = repo_lib.resolve(repository, "HEAD")
+            baseline = repo_lib.diff_text(repository, base, head, ["example.py"])
+            self.assertIn("-before\n+after\n", baseline)
+            for key, value in (
+                ("core.abbrev", "12"), ("diff.noprefix", "true"),
+                ("diff.mnemonicPrefix", "true"), ("diff.context", "0"),
+                ("diff.algorithm", "histogram"), ("diff.indentHeuristic", "false"),
+                ("color.ui", "always"), ("diff.interHunkContext", "20"),
+            ):
+                with self.subTest(config=key):
+                    repo_lib.git(repository, "config", key, value)
+                    self.assertEqual(repo_lib.diff_text(repository, base, head, ["example.py"]), baseline)
+            self.assertRegex(baseline, r"index [0-9a-f]{40}\.\.[0-9a-f]{40}")
+            self.assertEqual(repo_lib.diff_text(repository, base, head, []), "")
+
+
 class WorkspaceTests(unittest.TestCase):
     def test_a_stale_registration_does_not_block_the_next_workspace(self) -> None:
         """A crashed run leaves a registration pointing at a deleted directory."""

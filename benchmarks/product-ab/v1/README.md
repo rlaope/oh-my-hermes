@@ -12,6 +12,16 @@ lane measures one prompt prefix on a synthetic corpus. This lane measures the
 product: the route OMH resolves, the calibration that route selects, and the
 verification gate, on tasks a maintainer of this repository would recognize.
 
+## Reproducible diff digests
+
+Test-diff hashes use full object IDs and a fixed Git diff format, independent
+of local abbreviation, color, prefix, context, and algorithm preferences.
+The canonical format also disables external diff and text-conversion helpers.
+The corpus pins were regenerated from the same historical commits and test
+paths when this format was introduced; task text and validator blobs did not
+change. Older artifacts retain their original corpus digest and must not be
+combined with records bearing the new digest.
+
 ## What one task is
 
 One task is one merged `feat` or `fix` pull request.
@@ -94,7 +104,7 @@ a reader see the tasks, not to produce a number to quote against the headline.
 
 ### What this corpus is made of
 
-Numbers describe the pinned corpus at digest `edefed9f3d9e`. Every
+Numbers describe the pinned corpus at digest `9b5ff901ebcb`. Every
 figure in the tables below is re-derived from `corpus/evaluation.json` and
 `corpus/provenance.json` by a test, so none can drift from the files.
 

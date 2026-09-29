@@ -1,5 +1,5 @@
 {
-  "corpus_digest": "edefed9f3d9e16c4c178c2323451a76b203b2d0ff63bddb18d63d12319d48941",
+  "corpus_digest": "9b5ff901ebcb1bad72c4efcd00e4831b2f749bab6fa3cfcf7de592d58d4c45dd",
   "repository": "rlaope/oh-my-hermes",
   "schema_version": "omh_product_ab_corpus/v1",
   "selection": {
@@ -130,7 +130,7 @@
         "tests/test_candidate_handoff.py": "76bae6f0e7b6a2d0fd6ab7448f6becd3235e090e042a19b525f6cbc2a39eca00",
         "tests/test_router_content.py": "e6860d10ae16018f4efd019d2136d34a9f70e843d60c458ce36d1effe833abab"
       },
-      "test_diff_sha256": "373e1f1b48d52cfee1bfd7ba250ad07f4b40bf298bc4012cc6475204e2d76fcc",
+      "test_diff_sha256": "f99f10834404b8452a12b289a54d0b20b29361c1bfe160a319d054dcb75d2283",
       "test_lines": 73,
       "test_modules": [
         "tests/test_candidate_handoff.py",
@@ -231,7 +231,7 @@
       "test_blobs": {
         "tests/test_model_routing.py": "8b89826e08d993eee713574b68d23fc37499b00d78c7d0b5753f373e0b13ee44"
       },
-      "test_diff_sha256": "9d3970dfdefc66fd674fe40c103608c3f9297fc70e4afcc14f510291a1e6cd21",
+      "test_diff_sha256": "539e6c406305f3cdff29f3c536b21694178ca090771c8ca75ea57114df64cee6",
       "test_lines": 26,
       "test_modules": [
         "tests/test_model_routing.py"
@@ -332,7 +332,7 @@
       "test_blobs": {
         "tests/test_wrapper_sessions.py": "b6881b46c7edfd55143947f2d4164e32e7e6c24255fa7ccca1f23c82981382a8"
       },
-      "test_diff_sha256": "0bbf273cd43621184ea58e57d797d2fe24b3597af32d7902fa0ec433eb84e7c7",
+      "test_diff_sha256": "b3af89952902ff7fff00a02d4f5ba11902f208f20ec1238975c4f1691eedffb1",
       "test_lines": 107,
       "test_modules": [
         "tests/test_wrapper_sessions.py"
@@ -428,7 +428,7 @@
       "test_blobs": {
         "tests/test_memory_reapproval_path.py": "b8cf0ba544674bacf6c12ddaf0ce2132c952b0e324323965fbadeafcf4f00652"
       },
-      "test_diff_sha256": "10be2b9df0f8b2bdf5ef5e9816579a420e8f950360b8f915122a5e2dcf4268de",
+      "test_diff_sha256": "fd793f945d138078ca4c07f6cfd4d02342bfa8c946efa044f4a89d335dbd4bbc",
       "test_lines": 128,
       "test_modules": [
         "tests/test_memory_reapproval_path.py"
@@ -531,7 +531,7 @@
         "tests/test_handoff_safety_contract.py": "45fc5c5448946d57a85109a35967524af92d56ef5f2f608f07bd316e1d9ac523",
         "tests/test_runtime_reader_external_effect_receipts.py": "5b3a1fc3c7bac9315964e4e469e35ff199b0a0ec9ec95a8b67aad4d5ab13c97b"
       },
-      "test_diff_sha256": "bc002628497404f6192c153d46af46ab5c79cb3da6d4b991ce7c6905c2c5c855",
+      "test_diff_sha256": "38e4646a3dee14df3c80c907b2e49210829b636a9d6ebaf4f6506bfe5420bb9d",
       "test_lines": 92,
       "test_modules": [
         "tests/test_external_effect_receipts.py",
@@ -647,7 +647,7 @@
         "tests/test_routing_precision.py": "61750b95f7e1e74900ddd1725bbf507c12df99c1ce59eb44d003a178ed8775b2",
         "tests/test_routing_scoring.py": "8683fbd4c273c5c66a826984e1de5b3989ddd1f92d556833f4473ad301fced6b"
       },
-      "test_diff_sha256": "4bc6e5f51c333fddf5dbedfae8068dca2154a433f7408fe88327922a52fc0c4e",
+      "test_diff_sha256": "2ee440cb0ae65414087f76533e1f285337697ad86b419de9d79bb34c2ac9302c",
       "test_lines": 140,
       "test_modules": [
         "tests/test_capability_toggles.py",
@@ -756,7 +756,7 @@
       "test_blobs": {
         "tests/test_memory_provider.py": "7ec47878bf957664b29e53915dcf90f4a0576e246833aa075d379e9e5d8d4c38"
       },
-      "test_diff_sha256": "f71add782394ccf342facd5105a1c567d10fa31b1fe88331ae8346074be7d295",
+      "test_diff_sha256": "62be9aa04da92cc947ed39c0a8ac6dac6328d9a2fcd6acaf0f098eade6958c48",
       "test_lines": 44,
       "test_modules": [
         "tests/test_memory_provider.py"
@@ -851,7 +851,7 @@
       "test_blobs": {
         "tests/test_memory.py": "f0c6359bb6fb14a0e7ff0d95c3539cd91de1e142cd856ecced926f376a24c2f8"
       },
-      "test_diff_sha256": "d3a98b4e39d880024d11e5b7b986f1af8027c32e4a2444eafa23e01b659ab5f4",
+      "test_diff_sha256": "158c48efae844fda86baae5ea2788b34de615c9f50b14b60877e0caf8932037b",
       "test_lines": 54,
       "test_modules": [
         "tests/test_memory.py"
@@ -948,7 +948,7 @@
       "test_blobs": {
         "tests/test_memory_governance_retention.py": "5300a82790a3bc33c83e3a7182a1ca89b07f518fac05278cebe01978c34341dd"
       },
-      "test_diff_sha256": "feccc59adf7a8f2746dfdc52df5ae7f0231aa9ae5e331ff7e1b7c0b8b4d1371a",
+      "test_diff_sha256": "6b7e198e839765451d8885e722d7e7fc819832aa1ff0a76649412a7d7e3374fa",
       "test_lines": 89,
       "test_modules": [
         "tests/test_memory_governance_retention.py"
@@ -1046,7 +1046,7 @@
       "test_blobs": {
         "tests/test_memory.py": "a7a0cff14b9b78a68b76b2abb5c66b2558f430e14b09b72986ad20ad334b56dc"
       },
-      "test_diff_sha256": "6d92398518b91a296855d7f2efbd065595a3e5fb16197b6002a6dbbe3163b2ea",
+      "test_diff_sha256": "6ebe1e1c3eda06e47ac83240af5d40e88b12d2155ee6196d03d387d56d15786d",
       "test_lines": 73,
       "test_modules": [
         "tests/test_memory.py"
@@ -1141,7 +1141,7 @@
         "tests/test_delegate_route_tool.py": "f67af062549fda6cfc8b62886a7326e7ffaa840776d176b486be2c5610ea70f9",
         "tests/test_plugin_hermes_delegation.py": "05753a63cdae866fd1c58389362ca81486d2cd3665444979e6cc2e43ab005e27"
       },
-      "test_diff_sha256": "f7cbf2bec6ed8e10967ab08ec0de869fb9541fca8e1c9ec324777481a2b1b081",
+      "test_diff_sha256": "a75ea282385dea3b10cb28d3bd5e1c8c169f8770797986dd6500fdefb1136715",
       "test_lines": 31,
       "test_modules": [
         "tests/test_delegate_route_tool.py",
@@ -1275,7 +1275,7 @@
         "tests/test_model_setup_flow.py": "ef5471b8c817a3bb0b900713dc02f7e359aa2c1ad1e1ccd462c93c3cc0f42b48",
         "tests/test_plugin_hermes_delegation.py": "4fce4072e24868d3f4309b5cce16e11cc7db9db18a3b77ed171b2ac65f5aa1cf"
       },
-      "test_diff_sha256": "7c041d21a7c00d439ce315d44ceaca1a666b1aa6a768ad623a3954d73e8df0c0",
+      "test_diff_sha256": "9f2b98bbbcc6458fffba546e6d9972b587a4b6617e10c8258fdcee502bdd6824",
       "test_lines": 38,
       "test_modules": [
         "tests/test_model_recommendations.py",
@@ -1376,7 +1376,7 @@
       "test_blobs": {
         "tests/test_plugin_distribution.py": "9fc7cc21810acaadd7b84503772b999f6c7a49e35ee6a4b245aaa894ea6fa976"
       },
-      "test_diff_sha256": "112e4586c2ced63d2326edea67ca87e652bb1a16ab1cc6a0cce1ad4946cca840",
+      "test_diff_sha256": "90d971aab5efbee98fda633a65ef16e24c8da18aae91d4b101423a9fb21757c8",
       "test_lines": 38,
       "test_modules": [
         "tests/test_plugin_distribution.py"
@@ -1467,7 +1467,7 @@
       "test_blobs": {
         "tests/test_plugin_distribution.py": "b9bfea352d2ce628be100d0724fa10159816a29919447c8dd8649f1535c1e65d"
       },
-      "test_diff_sha256": "55eea2e502b5bad400c3094376cc003a5974a82c9bfc019ac4da1dd9a3352363",
+      "test_diff_sha256": "cd3f227863bdf3a63badf873f7a4f6d05c0ff483e0fbf3a2a9c6032ed619ff32",
       "test_lines": 20,
       "test_modules": [
         "tests/test_plugin_distribution.py"
@@ -1572,7 +1572,7 @@
         "tests/test_model_routing.py": "07aa2a269d8fd45aaed4d9b9da1dbef8d04f0fbfbf3e72bc7c6e48438cffc24d",
         "tests/test_unit_prompt_protocol.py": "e3b2bd1e38718c6fca2712ac36346450173666cbb6f9c403a989ba03a70f04b2"
       },
-      "test_diff_sha256": "89d3495def807699fc67b461c109b70cf4b3d2921c57b3838057bf344321905c",
+      "test_diff_sha256": "2190f385c631c1ba2a92b74797df0411dc6d050bbb57e822012f0fa95162b255",
       "test_lines": 18,
       "test_modules": [
         "tests/test_model_routing.py",
@@ -1695,7 +1695,7 @@
         "tests/test_plugin_distribution.py": "306142c6bf7ef6a59be1987f3ab5c09bbffc2b9ff46382817b035996b60ed556",
         "tests/test_tui_widget_pack.py": "bba2e5c796293c99107764718902aa9252e4b08e53a41df72d0630bd558f3b63"
       },
-      "test_diff_sha256": "10f538fbaee72469a7967dd9da4d08515ff6699a04e14a41605926b12edff6fd",
+      "test_diff_sha256": "90b892f06849f954dee3c40f4d3242648ac91b90b2cacaccaa0bc7a018bb864d",
       "test_lines": 361,
       "test_modules": [
         "tests/test_cli.py",
@@ -1803,7 +1803,7 @@
       "test_blobs": {
         "tests/test_router_content.py": "0c19c7f292fbdeed7e69143244c79654483e98db3fc3a9949d02767708818608"
       },
-      "test_diff_sha256": "968e055263bdeef33a39961ba8eb55d3ab97e0f0c485c0675f253c8ae37eeb75",
+      "test_diff_sha256": "7a8514ef90d8c2be834f9735e40985b1f7c3085a51c641117b1ed960b25eb03d",
       "test_lines": 21,
       "test_modules": [
         "tests/test_router_content.py"
@@ -1897,7 +1897,7 @@
       "test_blobs": {
         "tests/test_fanout_chaos.py": "2d2ccf375d4bd72df3f422e59eca123b7d1d0ee295a1b1475446ed44cc6056ab"
       },
-      "test_diff_sha256": "51b84a0d73231c1efe0b797d5c5da9a70c48574eec508feff8ca830c29b4aad1",
+      "test_diff_sha256": "465f7af110952a50bd8f5277c01e6e4e899e00c0c52892d4eddf6288e1d31abe",
       "test_lines": 245,
       "test_modules": [
         "tests/test_fanout_chaos.py"
@@ -1992,7 +1992,7 @@
       "test_blobs": {
         "tests/test_tui_widget_pack.py": "0fe376c6bfd9d181a13c40b96991efd3f49d6fe07d3b0b845b845a4d9199ac3e"
       },
-      "test_diff_sha256": "a08d1b26d404e1acfc6c71349afb594d0900ac38c95d30db442cc4c7045baa32",
+      "test_diff_sha256": "9f21a0ac267e0ee84f54ca51e636924ba32a954701976c4a5c9f4238d9c87e09",
       "test_lines": 8,
       "test_modules": [
         "tests/test_tui_widget_pack.py"
@@ -2094,7 +2094,7 @@
         "tests/test_fanout_chaos.py": "801adc5dae1343aa6dacb21335831993fa33e04c17ee263ed77e44ba9cdbc0dc",
         "tests/test_maestro_skill.py": "e71b750df6181887032ffb84b8727209e485054aebda3c2f19fe7285188497f0"
       },
-      "test_diff_sha256": "41b32a0e69ef48c169aaac8acc8c1a8db3cf918e5b44f418f5ea4cf4d7cb13ee",
+      "test_diff_sha256": "67cc2a278d73c28eda8bffcef9de030d64142343d67c93d9a8e66fff79a852b3",
       "test_lines": 52,
       "test_modules": [
         "tests/test_fanout_chaos.py",
@@ -2218,7 +2218,7 @@
         "tests/test_release_smoke.py": "d47d24176b5ae42b28a3fc987bb5c774727b648d8c9fc13e509db3ac90639154",
         "tests/test_routing_precision.py": "95bf7f1faa8de007110ddf63bde356e9c4c0ce77e594676b7c4a062a5709384f"
       },
-      "test_diff_sha256": "0587bd9c4633086a50196b62bc144c8bcf7e06acf198daa77863237c76563b17",
+      "test_diff_sha256": "eca6dcbc864f807d067291d5273ff52fac5c6d0be90520fc19350b2ee790aae5",
       "test_lines": 106,
       "test_modules": [
         "tests/test_cli.py",
@@ -2348,7 +2348,7 @@
         "tests/test_release_smoke.py": "2baf8c9f7ada8e59c95f4022b03486ee7d602389c6b1eabe944d207036b1dc96",
         "tests/test_routing_precision.py": "5cc57bf0b79489abba8820f7f3f843b7f4d615ea635040c6f88d1b6a9db42c46"
       },
-      "test_diff_sha256": "cfd9e5d2a2fefba8285ea94899d4d862e4e1c07192397311269fcd3e07e27b04",
+      "test_diff_sha256": "4c1b9d9b6e8bbf1a4715e6014a4e31dde7c4d42a2c3880ef65fc6cb6ef5985e6",
       "test_lines": 74,
       "test_modules": [
         "tests/test_cli.py",
@@ -2463,7 +2463,7 @@
         "tests/test_release_smoke.py": "b6593f6d46980e66d9c041b7bb12364cc5cfde5356145e4c3e58deeb76e568db",
         "tests/test_routing_precision.py": "892d571191547a0ff0abd8098eb1707c6896233185641f9f1d17ba825f704e1f"
       },
-      "test_diff_sha256": "0fa5d63f121df66881b4e3d99e7d58f7b131ae1ffcc704528e607d328f7fe33f",
+      "test_diff_sha256": "34df368cdfa9a32757aad7861bc0503f7085d396e1b6c34937deee6ecada33bf",
       "test_lines": 56,
       "test_modules": [
         "tests/test_cli.py",
@@ -2567,7 +2567,7 @@
       "test_blobs": {
         "tests/test_coding_delegation.py": "7ac8ae85ea6e3ae5ac27802f5d70477e2a022025a2013987dabbba643d1e87f5"
       },
-      "test_diff_sha256": "97145a7ae715435042e2ac0330b50477308b605adf1d899cbba968a74b24d76a",
+      "test_diff_sha256": "12adf493b681b063a3e543e29ec68b69d0e70723ec976035fdf6c7f56c88c7fe",
       "test_lines": 55,
       "test_modules": [
         "tests/test_coding_delegation.py"
@@ -2674,7 +2674,7 @@
         "tests/test_fanout_dispatch.py": "1490817bfe6f45962dcf0ae1940f56f0581acc3611e1408123ba79f7a449a518",
         "tests/test_fanout_signal_safety.py": "244127fe4f3a70beab777d60cc0b0f95634089e398624cda0299aea47e2df68c"
       },
-      "test_diff_sha256": "72023302eb852601d753015a8d33acaa7ea07179da9d0a4d700fdd5fab6236e3",
+      "test_diff_sha256": "2050c7713922b08678032657a058db6f801a38318a6ad80c658dc6f5c9058559",
       "test_lines": 276,
       "test_modules": [
         "tests/test_broad_exception_policy.py",
@@ -2778,7 +2778,7 @@
       "test_blobs": {
         "tests/test_fanout_dispatch.py": "14bd4bd24ee63b61baf46c1c6914edf504f6e0d8e6e6d0332380966b352bf584"
       },
-      "test_diff_sha256": "249157803c4c3df5c01022826d4d949328538b6dcdfaf0f4ff38d7bf5b02cf5c",
+      "test_diff_sha256": "c3991b3d4a54778ade9ed8a838ad3f548bc8a9707be8ae914f68b7ef98d34879",
       "test_lines": 30,
       "test_modules": [
         "tests/test_fanout_dispatch.py"
@@ -2874,7 +2874,7 @@
       "test_blobs": {
         "tests/test_fanout_unit_results.py": "ead5b0b1a581e3ab72b16fbb2633a4009b77951a5a664e40d51ad7d560c3621d"
       },
-      "test_diff_sha256": "2c0eac6d65cfe4f4a5f2b8bf6d438fcc5328b200c5219d80f4dc6127476a38dd",
+      "test_diff_sha256": "a2a8ac1ee86f2dcd9ea028ab42588090655316a2d3e64d347435be9423b5cb14",
       "test_lines": 32,
       "test_modules": [
         "tests/test_fanout_unit_results.py"
@@ -2977,7 +2977,7 @@
         "tests/test_catalog_deference_policy.py": "517952f30db502c03d783db2e4c0a700731189912f93271165c82ddcb787d396",
         "tests/test_efficiency.py": "bf9687b60edb393d6de56e11904758778d7fe888b781ca272a93f9ab55ddc8f1"
       },
-      "test_diff_sha256": "7f74cb2941708a0f921a0936a9c405631df91c58068237dcf59cb26f0ad9d783",
+      "test_diff_sha256": "67b50923e161925cbf8671251612f3f58eac759a0443888fb88e3db54ef4d4c1",
       "test_lines": 17,
       "test_modules": [
         "tests/test_catalog_deference_policy.py",
@@ -3074,7 +3074,7 @@
       "test_blobs": {
         "tests/test_routing_observation_surfaces.py": "c0f1599537ef1293677b665d9d90e9483d77dad6883fe74985d1ec58180d79bb"
       },
-      "test_diff_sha256": "8176971ecf018b61fe8bcc83584e7f728f11fbee842608ebfecc06e314e9fb38",
+      "test_diff_sha256": "65c9810887d8434e07cf30b3756851c807b53bddde6604d1d0bc3567c0ddbd90",
       "test_lines": 41,
       "test_modules": [
         "tests/test_routing_observation_surfaces.py"
@@ -3167,7 +3167,7 @@
       "test_blobs": {
         "tests/test_plugin_hermes_delegation.py": "24aebae50322cb7a4106bf7fbf69d9019019d171a2155ab07f8ce1c59f645669"
       },
-      "test_diff_sha256": "76fa968119a10e85fdfdd1380de5619aab939f58f9a43ddd815e57884e4c64eb",
+      "test_diff_sha256": "3abc6c7d7195ed99f94ad788d939d29f27b1e5b7f18aa7a5b8043c727ed8a14a",
       "test_lines": 41,
       "test_modules": [
         "tests/test_plugin_hermes_delegation.py"
@@ -3258,7 +3258,7 @@
       "test_blobs": {
         "tests/test_plugin_enablement_check.py": "483101be180d0da724d2cb04aff5b6ff08bc147bd22f88791d38f0b087e03dbe"
       },
-      "test_diff_sha256": "01150a0337811ff46c8b2a6fc60362cb5916bedb6008728fe910ce94e471c2b9",
+      "test_diff_sha256": "84d2bc2e82d774166db0f6b1b978d197be37bcccc00194ab8ed9d050de011a16",
       "test_lines": 59,
       "test_modules": [
         "tests/test_plugin_enablement_check.py"
@@ -3365,7 +3365,7 @@
       "test_blobs": {
         "tests/test_request_complexity.py": "61ee06834146055ed02b2253d9562fe59c466e829825c7b2fd33e385ec94b535"
       },
-      "test_diff_sha256": "5d97c6b3282680b063d7b41c8e5e719f7b4e4772e3d12876f9c5bc13593004cd",
+      "test_diff_sha256": "86bcc034fb4437b46375e2b903bb58826009a6887cae6b1fa28f6a3e9bdf8e46",
       "test_lines": 4,
       "test_modules": [
         "tests/test_request_complexity.py"
@@ -3492,7 +3492,7 @@
         "tests/test_unit_telemetry.py": "4264eae46dfe0c90b693fea0915686ff3d6476421ceee11dde8bfb8086886637",
         "tests/test_wrapper_contract.py": "db7bb2219e765d3109e5e763c5b15f816a69c2fe52f9a5f9d7bcc554699aa8b7"
       },
-      "test_diff_sha256": "49054b0181cb2d4c12ba27e4027a6aa61f0e4b24c2f54ca9b37531bdb1b80fbc",
+      "test_diff_sha256": "41d72915f5b39ae322c2de9d408638abb90e429beaeccaac807c737a404fb094",
       "test_lines": 136,
       "test_modules": [
         "tests/test_auto_release.py",
@@ -3627,7 +3627,7 @@
       "test_blobs": {
         "tests/test_task_authority_envelope.py": "bf99ca4a93f0146344f03c1c0d18a92148cedcdd00b29c3edaa2405cb336af2f"
       },
-      "test_diff_sha256": "5b31f33f5265adbc09478c101af0e5053d224f1fd3e6480c2cdbda6d11244536",
+      "test_diff_sha256": "0862b90da4ec2f88eabf096c62b50e41e6308419e9b761ab15788200ebc843b3",
       "test_lines": 262,
       "test_modules": [
         "tests/test_task_authority_envelope.py"
@@ -3732,7 +3732,7 @@
         "tests/test_task_authority_envelope.py": "2666ffc7a02aec0ed2d6690b546b2445ba344bc077055feb3b36a7fb10a86581",
         "tests/test_windows_install_path.py": "3f41346cd2f5bd8c7994fc5dbfd353e66bf166edef3808b442dc4c964abd8251"
       },
-      "test_diff_sha256": "747ea90274d0d73b93b5e7d2ed9f05eac3a9c3805b3ce4fc5623674ae1488991",
+      "test_diff_sha256": "f4963d90972216091ea78969665c5deb94b2951487a405fcd853aa22143bfb81",
       "test_lines": 261,
       "test_modules": [
         "tests/test_task_authority_envelope.py",
@@ -3831,7 +3831,7 @@
         "tests/test_staged_self_update.py": "220641b7cfb7fb196a6ba1b36bad520ce31a39bd2a414c53d6d766d5fa027586",
         "tests/test_update_check_command.py": "399531538bc54c50d29a02fc42258898f4afb54cadf6fb9cceae86411a73ec03"
       },
-      "test_diff_sha256": "b6c2178fae1607ed98a3542dca22c24a7492cd413dc2912ab8dee0656559f969",
+      "test_diff_sha256": "4e210347ee9182cf18a58eab905f25e0b1c757f1c6a04b09d64d2801a28d242d",
       "test_lines": 55,
       "test_modules": [
         "tests/test_staged_self_update.py",
@@ -3944,7 +3944,7 @@
         "tests/test_config_adapter.py": "fe9240803a514ef24d108ab2b281ff77c5e5bd29c83143b7b75b826469e7c21f",
         "tests/test_doctor_advisory.py": "a5cf71ad4a649de4bcdab555fbe4f1b867e7606d8a8e019f92d84c6d70e03235"
       },
-      "test_diff_sha256": "e40682b12eb05738df409584ac2510a530f6c5789551f71f8e203a2b3cd537c5",
+      "test_diff_sha256": "7714304ae702c77f3769d5309710965d414549c7f00724b170631b94b91831de",
       "test_lines": 51,
       "test_modules": [
         "tests/test_config_adapter.py",
@@ -4048,7 +4048,7 @@
       "test_blobs": {
         "tests/test_memory_provider.py": "27359d4ad6605f61ee30d0983e1c88bb2490e0787e3a3b355d0ad3264d28e327"
       },
-      "test_diff_sha256": "bb703b5425bb2bbebc7d9e2b58993ee189af897c9e99225f8fc3cd738aaabb89",
+      "test_diff_sha256": "6f454ad7d993de2c8f11d27c120fab315c30073e5c60cf2a5fed140388057758",
       "test_lines": 11,
       "test_modules": [
         "tests/test_memory_provider.py"
@@ -4197,7 +4197,7 @@
         "tests/test_plugin_distribution.py": "e0ffe8e0cd277415f9c7e800f64879202cf869ed303e0fda84d72a15e56e933d",
         "tests/test_router_content.py": "56120509d8f9d4b879dbef1fa8b26bf3c5f8dbabc01440c0335b934b59f1c00b"
       },
-      "test_diff_sha256": "3bf21f63f0d5b384fabf0465138477ea4e99c00fd6832cd94b06925f78cce22d",
+      "test_diff_sha256": "cd45b6dd544712b0fae2b9c341cdb6d618bad4fc56438a3caae885b8f52e5b60",
       "test_lines": 55,
       "test_modules": [
         "tests/test_executor_progress_projection.py",
@@ -4337,7 +4337,7 @@
         "tests/test_model_recommendation_routing.py": "063a45fb1fae2e667656f38dc4849e6a214af555ace1ce034e0f1528373a06e0",
         "tests/test_plugin_hermes_delegation.py": "d28c84d1854ed207f6a732a77083ea3329254da9c27bc09b9874840036d0250b"
       },
-      "test_diff_sha256": "a0440b4ccf8f8f7fb70f2052d4408936a6203b34cf28b626a785e393925ae662",
+      "test_diff_sha256": "6110aed6e74dfcb0264efc17d74cc55098e52dbc21a08eea37bc7aafa54072c8",
       "test_lines": 189,
       "test_modules": [
         "tests/test_model_contract_coverage.py",

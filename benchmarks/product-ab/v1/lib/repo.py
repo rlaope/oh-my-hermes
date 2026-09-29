@@ -125,7 +125,14 @@ def numstat(repo: Path, base: str, head: str) -> dict[str, tuple[int, int]]:
 def diff_text(repo: Path, base: str, head: str, paths: Sequence[str]) -> str:
     if not paths:
         return ""
-    return git(repo, "diff", "-M", "--no-renames", base, head, "--", *paths)
+    # This text is hashed into the corpus. Object-count-dependent short IDs and
+    # the operator's display preferences must not change its identity.
+    return git(
+        repo, "diff", "--no-renames", "--full-index", "--no-color",
+        "--no-ext-diff", "--no-textconv", "--default-prefix", "--no-relative",
+        "--diff-algorithm=myers", "--indent-heuristic", "--unified=3",
+        "--inter-hunk-context=0", base, head, "--", *paths,
+    )
 
 
 def file_bytes(repo: Path, commit: str, path: str) -> bytes | None:
