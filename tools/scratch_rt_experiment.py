@@ -1,4 +1,6 @@
 """Scratch v2: Everyone as a restricting SID -- what starts, what can be written. Not for merge."""
+import ctypes
+from ctypes import wintypes
 import os
 from pathlib import Path
 import subprocess
@@ -8,6 +10,25 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "coding"))
 import fanout_restricted_token as rt  # noqa: E402
+
+advapi32, kernel32 = rt._windows()
+advapi32.GetTokenInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+
+
+def logon_sid(token):
+    needed = wintypes.DWORD()
+    advapi32.GetTokenInformation(token, 28, None, 0, ctypes.byref(needed))
+    buffer = ctypes.create_string_buffer(needed.value)
+    if not advapi32.GetTokenInformation(token, 28, buffer, needed, ctypes.byref(needed)):
+        return None
+    # TOKEN_GROUPS: DWORD GroupCount; (padding) SID_AND_ATTRIBUTES Groups[]
+    count = ctypes.c_uint32.from_buffer(buffer).value
+    offset = ctypes.sizeof(ctypes.c_void_p)
+    entry = rt._SidAndAttributes.from_buffer(buffer, offset)
+    text = wintypes.LPWSTR()
+    advapi32.ConvertSidToStringSidW(entry.Sid, ctypes.byref(text))
+    return count, text.value
+
 
 root = Path(tempfile.mkdtemp()).resolve()
 granted = root / "granted"
@@ -54,9 +75,14 @@ def run(label, sids, argv):
     print(completed.stderr.strip()[-500:])
 
 
-for extra in ([], ["S-1-1-0"]):
+token = wintypes.HANDLE()
+advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x8, ctypes.byref(token))
+logon = logon_sid(token)[1]
+print("logon", logon)
+for extra in (["S-1-1-0", logon], ["S-1-1-0", logon, "S-1-5-12"], ["S-1-1-0", "S-1-5-12"], ["S-1-1-0", logon, "S-1-5-32-545"]):
     sids = [sid, *extra]
     run(f"cmd {extra}", sids, ["cmd.exe", "/c", "echo cmd-ok"])
+    run(f"git-abs {extra}", sids, [r"C:\\Program Files\\Git\\cmd\\git.exe", "--version"])
     run(f"python {extra}", sids, [sys.executable, "-I", "-B", "-c", "print('py-ok')"])
     run(f"git {extra}", sids, ["git", "--version"])
     run(f"node {extra}", sids, ["node", "-e", "require('fs').writeFileSync(process.argv[1], 'x'); console.log('node-ok')", str(granted / "node")])
