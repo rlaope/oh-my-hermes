@@ -35,6 +35,7 @@ from .cross_harness_adapter_sandbox import (
     allocate_child as _allocate_child,
     backend as _backend,
     backend_available as _backend_available,
+    WRITE_ONLY_BACKENDS as _WRITE_ONLY_BACKENDS,
     environment_is_safe as _environment_is_safe,
     observe_process as _observe_process,
     preflight as _preflight,
@@ -232,7 +233,7 @@ def _prelaunch_failure(request: AdapterRequest, spec: ExecutionSpec, backend: st
         return "argv_digest_mismatch"
     if spec.version_argv and Path(spec.version_argv[0]).name != request.executable:
         return "argv_digest_mismatch"
-    if not _backend_available(backend):
+    if not _backend_available(backend) or backend in _WRITE_ONLY_BACKENDS:
         return "sandbox_backend_unavailable"
     if not _environment_is_safe(spec.environment):
         return "credential_environment_rejected"

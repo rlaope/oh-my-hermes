@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 from typing import cast
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ from ..quality.cross_harness_adapter_sandbox import (
     sandbox_command,
     unique_roots,
 )
+from .fanout_restricted_token import grant_write_root, launcher_command, write_root_sid
 
 FANOUT_FILESYSTEM_CONFINEMENT_SCHEMA_VERSION = "fanout_filesystem_confinement/v1"
 FANOUT_FILESYSTEM_CONFINEMENT_CLAIM_BOUNDARY = (
@@ -41,6 +43,32 @@ _FANOUT_MACOS_TOOLCHAIN_WRITE_DATA_LITERALS = (Path("/dev/null"),)
 # credential access.
 _FANOUT_MACOS_CREDENTIAL_MACH_SERVICES = ("com.apple.securityd.xpc", "com.apple.SecurityServer")
 _FANOUT_TOOLCHAIN_TEMP_DIRECTORY = Path(".omh") / "confinement-tmp"
+_TOOLCHAIN_TEMP_VARIABLES = ("TEMP", "TMP", "TMPDIR")
+# The Windows probe is two interpreter starts (launcher, then probe) on a host
+# where a cold start under real-time scanning is far slower than /bin/sh.
+_PROBE_TIMEOUT_SECONDS = {"restricted-token": 30}
+# The Windows probe, in Python because there is no /bin/sh: the same three
+# writes, the same report line, and the same exit verdict as the POSIX script.
+_PYTHON_PROBE = (
+    "import sys\n"
+    "def attempt(path, text):\n"
+    "    try:\n"
+    "        with open(path, 'w', encoding='ascii') as handle:\n"
+    "            handle.write(text)\n"
+    "    except OSError as error:\n"
+    "        sys.stderr.write('%s\\n' % error)\n"
+    "        return error.errno or 1\n"
+    "    return 0\n"
+    "inside = attempt(sys.argv[1], 'inside')\n"
+    "state = 0\n"
+    "for path in sys.argv[3:]:\n"
+    "    code = attempt(path, 'state')\n"
+    "    print('owner_state_exit=%s' % code)\n"
+    "    state = state or code\n"
+    "outside = attempt(sys.argv[2], 'outside')\n"
+    "print('inside_exit=%s owner_state_exit=%s outside_exit=%s' % (inside, state, outside))\n"
+    "sys.exit(0 if inside == 0 and state == 0 and outside != 0 else 1)\n"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +189,12 @@ class FanoutFilesystemConfinement:
         executable = self.executables.get(str(argv[0]))
         if not executable:
             return None
+        if self.selected == "restricted-token":
+            return launcher_command(
+                sys.executable,
+                _restricting_sids(self.write_roots, self.write_literals),
+                (executable, *[str(argument) for argument in argv[1:]]),
+            )
         return sandbox_command(
             (executable, *[str(argument) for argument in argv[1:]]),
             self.selected,
@@ -184,9 +218,21 @@ class FanoutFilesystemConfinement:
         if (
             self.receipt.get("enforced") is not True
             or self.child is None
-            or self.selected not in {"sandbox-exec", "bwrap"}
+            or self.selected not in {"sandbox-exec", "bwrap", "restricted-token"}
         ):
             return dict(selected_environment)
+        if self.selected == "restricted-token":
+            # Windows tools read TEMP/TMP, and environment names are
+            # case-insensitive there, so every spelling is replaced, not added to.
+            scratch = str(self.child.work / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY)
+            return {
+                **{
+                    key: value
+                    for key, value in selected_environment.items()
+                    if key.upper() not in _TOOLCHAIN_TEMP_VARIABLES
+                },
+                **dict.fromkeys(_TOOLCHAIN_TEMP_VARIABLES, scratch),
+            }
         return {
             **selected_environment,
             "TMPDIR": str(self.child.work / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY),
@@ -275,7 +321,7 @@ def prepare_fanout_filesystem_confinement(
     # while still reading the whole host tree (#1602). The macOS probe keeps its
     # narrow read layout, so such a directory is readable to the probe; it is
     # the directory the same executable is about to run from under broad read.
-    if selected in {"sandbox-exec", "bwrap"}:
+    if selected in {"sandbox-exec", "bwrap", "restricted-token"}:
         scratch_directory = worktree / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY
         scratch_directory.mkdir(parents=True, exist_ok=True)
         gitignore = scratch_directory / ".gitignore"
@@ -299,16 +345,24 @@ def prepare_fanout_filesystem_confinement(
     # -- which is what the receipt attests -- is byte-identical to the command.
     # sandbox-exec keeps its stricter probe policy unchanged.
     linux_layout = selected == "bwrap"
-    ready, backend_digest = preflight(
-        selected, roots, child, True, environment,
-        allow_broad_file_read=linux_layout, inherit_environment=linux_layout,
-    )
+    if selected == "restricted-token":
+        # Windows has no preflight binary to run. Its preparation is granting
+        # each write root to that root's SID; the probe below is still what
+        # attests that the grants and the token produce the boundary.
+        ready, backend_digest = _grant_write_roots(write_roots, write_literals), ""
+        failure_reason = "sandbox_write_grant_failed"
+    else:
+        ready, backend_digest = preflight(
+            selected, roots, child, True, environment,
+            allow_broad_file_read=linux_layout, inherit_environment=linux_layout,
+        )
+        failure_reason = "sandbox_preflight_failed"
     if not ready:
         return _unconfined(
             worktree,
             selected,
             environment,
-            "sandbox_preflight_failed",
+            failure_reason,
             roots=roots,
             write_roots=write_roots,
             write_literals=write_literals,
@@ -382,6 +436,31 @@ def _unconfined(
     )
 
 
+def _restricting_sids(write_roots: Sequence[Path], write_literals: Sequence[Path]) -> tuple[str, ...]:
+    return tuple(write_root_sid(path) for path in unique_roots((*write_roots, *write_literals)))
+
+
+def _grant_write_roots(write_roots: Sequence[Path], write_literals: Sequence[Path]) -> bool:
+    """Grant each existing write root to its SID; False when Windows refuses one.
+
+    An absent owner state directory is skipped rather than created, as on
+    macOS: the probe's write into it then fails and the run is reported
+    unconfined. An absent file literal is skipped too, and unlike the macOS
+    literal rule nothing here lets the child create it, because creating a
+    file is a write to its parent directory, which is not granted.
+    """
+    try:
+        for root in unique_roots(write_roots):
+            if root.is_dir():
+                _ = grant_write_root(root, write_root_sid(root), directory=True)
+        for literal in unique_roots(write_literals):
+            if literal.is_file():
+                _ = grant_write_root(literal, write_root_sid(literal), directory=False)
+    except OSError:
+        return False
+    return True
+
+
 def _resolve_executables(
     commands: Sequence[Sequence[str]], environment: Mapping[str, str]
 ) -> dict[str, str]:
@@ -421,20 +500,26 @@ def _probe(
         'printf "inside_exit=%s owner_state_exit=%s outside_exit=%s\\n" "$inside" "$state" "$outside"; '
         'test "$inside" -eq 0 -a "$state" -eq 0 -a "$outside" -ne 0'
     )
-    argv = ("/bin/sh", "-c", script, "omh-confinement-probe", str(inside), str(outside), *(str(path) for path in state_writes))
+    paths = (str(inside), str(outside), *(str(path) for path in state_writes))
+    if selected == "restricted-token":
+        argv: tuple[str, ...] = (sys.executable, "-I", "-B", "-c", _PYTHON_PROBE, *paths)
+        command = launcher_command(sys.executable, _restricting_sids(write_roots, write_literals), argv)
+    else:
+        argv = ("/bin/sh", "-c", script, "omh-confinement-probe", *paths)
+        command = sandbox_command(
+            argv, selected, roots, child, True, environment, backend_digest,
+            write_roots=write_roots, write_literals=write_literals,
+            allow_broad_file_read=selected == "bwrap", inherit_environment=selected == "bwrap",
+        )
     try:
         completed = subprocess.run(
-            sandbox_command(
-                argv, selected, roots, child, True, environment, backend_digest,
-                write_roots=write_roots, write_literals=write_literals,
-                allow_broad_file_read=selected == "bwrap", inherit_environment=selected == "bwrap",
-            ),
+            command,
             cwd=child.work,
             env=environment,
             stdin=subprocess.DEVNULL,
             text=True,
             capture_output=True,
-            timeout=5,
+            timeout=_PROBE_TIMEOUT_SECONDS.get(selected, 5),
             check=False,
         )
         match = re.search(r"inside_exit=(\d+) owner_state_exit=(\d+) outside_exit=(\d+)", completed.stdout)

@@ -180,11 +180,20 @@ def terminate_process_group(process_id: int, process: subprocess.Popen[bytes], d
     return process_group_absent(process_id)
 
 
+# `restricted-token` is a write fence only (`omh.coding.fanout_restricted_token`):
+# it cannot narrow reads or refuse the network, so the adapter lane, whose
+# policy is narrow reads plus a network switch, refuses it before launch and
+# `sandbox_command` never builds one. Fanout, which confines writes only, uses it.
+WRITE_ONLY_BACKENDS: Final = frozenset({"restricted-token"})
+
+
 def backend(selected: str) -> str:
     if selected != "auto":
         return selected
     if sys.platform == "darwin":
         return "sandbox-exec"
+    if sys.platform == "win32":
+        return "restricted-token"
     return "bwrap" if sys.platform.startswith("linux") else "unsupported"
 
 
@@ -192,6 +201,7 @@ def backend_available(selected: str) -> bool:
     return (
         (selected == "sandbox-exec" and sys.platform == "darwin")
         or (selected == "bwrap" and sys.platform.startswith("linux"))
+        or (selected == "restricted-token" and sys.platform == "win32")
     )
 
 

@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+import time
 import unittest
 from unittest import mock
 
@@ -16,10 +18,17 @@ load_local_package()
 
 from omh.coding.fanout_confinement import (  # noqa: E402
     FanoutFilesystemConfinement,
+    _grant_write_roots,
     _probe,
     owner_state_directories,
     owner_state_files,
     prepare_fanout_filesystem_confinement,
+)
+from omh.coding.fanout_restricted_token import (  # noqa: E402
+    launcher_command,
+    main as restricted_token_main,
+    parse_launcher_arguments,
+    write_root_sid,
 )
 from omh.quality.cross_harness_adapter_sandbox import (  # noqa: E402
     ChildContext,
@@ -891,6 +900,371 @@ class LinuxBwrapFanoutConfinementTests(_ConfinedSpawnContract, unittest.TestCase
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             self.assertIn("Read-only file system", completed.stderr)
             self.assertFalse(marker.exists())
+
+
+def _restricted_token_confinement(worktree: Path, **changes: object) -> FanoutFilesystemConfinement:
+    child = ChildContext(
+        worktree, worktree, worktree, worktree, worktree,
+        worktree / "request", worktree / "artifact", "fanout-filesystem-confinement",
+    )
+    fields: dict[str, object] = {
+        "selected": "restricted-token",
+        "roots": (worktree,),
+        "write_roots": (worktree,),
+        "write_literals": (),
+        "child": child,
+        "environment": {},
+        "backend_digest": "",
+        "executables": {},
+        "receipt": {"enforced": True},
+    }
+    fields.update(changes)
+    return FanoutFilesystemConfinement(**fields)  # type: ignore[arg-type]
+
+
+class RestrictedTokenPolicyTests(unittest.TestCase):
+    """The Windows backend's pure logic, checked on every host."""
+
+    def test_each_write_root_has_its_own_stable_sid(self) -> None:
+        first = Path("C:/Work/Unit-A") if sys.platform == "win32" else Path("/work/unit-a")
+        second = first.parent / "unit-b"
+        sid = write_root_sid(first)
+
+        self.assertRegex(sid, r"^S-1-5-21-\d+-\d+-\d+-\d+$")
+        self.assertTrue(all(int(part) < 2**32 for part in sid.split("-")[4:]))
+        self.assertEqual(write_root_sid(first), sid)
+        # Windows compares paths without case, so the grant must too.
+        self.assertEqual(write_root_sid(Path(str(first).upper())), sid)
+        self.assertNotEqual(write_root_sid(second), sid)
+
+    def test_launcher_arguments_round_trip_and_reject_a_malformed_list(self) -> None:
+        sids = ("S-1-5-21-1-2-3-4", "S-1-5-21-5-6-7-8")
+        command = launcher_command("python", sids, ("tool", "--flag", "a b"))
+
+        self.assertEqual(command[:3], ("python", "-I", "-B"))
+        self.assertTrue(command[3].endswith("fanout_restricted_token.py"))
+        self.assertEqual(parse_launcher_arguments(command[4:]), (sids, ("tool", "--flag", "a b")))
+        malformed_lists = (
+            (),
+            ("S-1-5-21-1-2-3-4", "tool"),
+            ("", "--", "tool"),
+            ("Everyone", "--", "tool"),
+            ("S-1-5-21-1-2-3-4", "--"),
+        )
+        for malformed in malformed_lists:
+            with self.subTest(arguments=malformed), self.assertRaises(ValueError):
+                _ = parse_launcher_arguments(malformed)
+
+    def test_launcher_reports_usage_and_refuses_off_windows(self) -> None:
+        with mock.patch("sys.stderr"):
+            self.assertEqual(restricted_token_main(("S-1-5-21-1-2-3-4", "tool")), 2)
+            if sys.platform != "win32":
+                self.assertEqual(restricted_token_main(("S-1-5-21-1-2-3-4", "--", "tool")), 125)
+
+    def test_command_names_one_restricting_sid_per_write_root_and_literal(self) -> None:
+        worktree = Path("/tmp/fanout-restricted-worktree").resolve()
+        state = Path("/tmp/fanout-restricted-state").resolve()
+        literal = Path("/tmp/fanout-restricted-state.json").resolve()
+        confinement = _restricted_token_confinement(
+            worktree,
+            write_roots=(worktree, state),
+            write_literals=(literal,),
+            executables={"tool": "/opt/tool"},
+        )
+
+        self.assertEqual(
+            confinement.command(("tool", "run")),
+            launcher_command(
+                sys.executable,
+                (write_root_sid(worktree), write_root_sid(state), write_root_sid(literal)),
+                ("/opt/tool", "run"),
+            ),
+        )
+        self.assertIsNone(confinement.command(("unresolved", "run")))
+        unproven = _restricted_token_confinement(
+            worktree, executables={"tool": "/opt/tool"}, receipt={"enforced": False}
+        )
+        self.assertIsNone(unproven.command(("tool", "run")))
+
+    def test_command_environment_replaces_every_spelling_of_the_temp_variables(self) -> None:
+        worktree = Path("/tmp/fanout-restricted-worktree").resolve()
+        confinement = _restricted_token_confinement(worktree)
+        scratch = str(worktree / ".omh" / "confinement-tmp")
+
+        environment = confinement.command_environment(
+            {"PATH": "bin", "Temp": "host-temp", "tmp": "host-tmp", "OMH_MARK": "present"}
+        )
+
+        self.assertEqual(
+            environment,
+            {"PATH": "bin", "OMH_MARK": "present", "TEMP": scratch, "TMP": scratch, "TMPDIR": scratch},
+        )
+
+    def test_a_refused_grant_degrades_with_its_own_reason(self) -> None:
+        with TemporaryDirectory() as temporary:
+            worktree = Path(temporary) / "worktree"
+            worktree.mkdir()
+            with (
+                mock.patch("omh.coding.fanout_confinement.backend", return_value="restricted-token"),
+                mock.patch("omh.coding.fanout_confinement.backend_available", return_value=True),
+                mock.patch(
+                    "omh.coding.fanout_confinement.grant_write_root",
+                    side_effect=OSError(5, "SetNamedSecurityInfoW failed (Windows error 5)"),
+                ),
+            ):
+                confinement = prepare_fanout_filesystem_confinement(
+                    worktree, {}, ((sys.executable, "-c", "pass"),)
+                )
+
+            self.assertEqual(confinement.receipt["backend"], "restricted-token")
+            self.assertEqual(confinement.receipt["status"], "prepared_not_observed")
+            self.assertFalse(confinement.receipt["enforced"])
+            self.assertEqual(confinement.receipt["reason_code"], "sandbox_write_grant_failed")
+            self.assertIsNone(confinement.command((sys.executable, "-c", "pass")))
+
+    def test_only_existing_write_roots_are_granted(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = root / "worktree"
+            worktree.mkdir()
+            literal = root / "state.json"
+            literal.write_text("{}", encoding="utf-8")
+            calls: list[tuple[Path, str, bool]] = []
+
+            def record(path: Path, sid: str, *, directory: bool) -> bool:
+                calls.append((path, sid, directory))
+                return True
+
+            with mock.patch("omh.coding.fanout_confinement.grant_write_root", side_effect=record):
+                granted = _grant_write_roots((worktree, root / "absent-state"), (root / "absent.json", literal))
+
+            self.assertTrue(granted)
+            self.assertEqual(
+                calls,
+                [(worktree, write_root_sid(worktree), True), (literal, write_root_sid(literal), False)],
+            )
+
+
+_WRITE_CHILD = "import sys; open(sys.argv[1], 'w').write('child')"
+
+
+@unittest.skipUnless(sys.platform == "win32", "the restricted-token backend is exercised on Windows")
+class WindowsRestrictedTokenFanoutConfinementTests(unittest.TestCase):
+    """The real Windows fence: a write-restricted token, granted per root, refused elsewhere."""
+
+    def _prepare(
+        self, worktree: Path, environment: dict[str, str] | None = None, *, owner: str = ""
+    ) -> FanoutFilesystemConfinement:
+        confinement = prepare_fanout_filesystem_confinement(
+            worktree,
+            dict(os.environ) if environment is None else environment,
+            ((sys.executable, "-c", "pass"),),
+            owner=owner,
+        )
+        self.assertTrue(confinement.receipt["enforced"], confinement.receipt)
+        return confinement
+
+    def _run(
+        self, confinement: FanoutFilesystemConfinement, worktree: Path, code: str, *arguments: Path | str
+    ) -> subprocess.CompletedProcess[str]:
+        command = confinement.command(
+            (sys.executable, "-c", "import sys\n" + code, *(str(argument) for argument in arguments))
+        )
+        assert command is not None
+        return subprocess.run(
+            command,
+            cwd=worktree,
+            env=confinement.command_environment(),
+            stdin=subprocess.DEVNULL,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+
+    def test_probe_receipt_requires_an_inside_write_and_an_outside_refusal(self) -> None:
+        with TemporaryDirectory() as temporary:
+            worktree = Path(temporary).resolve() / "worktree"
+            worktree.mkdir()
+
+            confinement = self._prepare(worktree)
+
+            self.assertEqual(confinement.receipt["status"], "observed")
+            self.assertEqual(confinement.receipt["backend"], "restricted-token")
+            self.assertEqual(confinement.receipt["probe"]["inside_write_exit_code"], 0)
+            self.assertNotEqual(confinement.receipt["probe"]["outside_write_exit_code"], 0)
+            self.assertIn("Permission denied", confinement.receipt["probe"]["refusal"])
+            self.assertFalse(any(worktree.parent.glob(".omh-confinement-outside-*")))
+
+    def test_owner_state_is_writable_and_escape_routes_stay_refused(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = root / "worktree"
+            worktree.mkdir()
+            state = root / "claude-state"
+            state.mkdir()
+            sibling = root / "sibling-worktree"
+            sibling.mkdir()
+            existing = root / "existing"
+            existing.write_text("original", encoding="utf-8", newline="")
+            outside = root / "outside"
+            outside_directory = root / "outside-directory"
+            junction_target = root / "junction-target"
+            junction_target.mkdir()
+            source = worktree / "rename-source"
+            source.write_text("source", encoding="utf-8", newline="")
+            canary = Path.home() / f"omh-confinement-canary-{os.getpid()}"
+            self.addCleanup(lambda: canary.unlink(missing_ok=True))
+            # A second unit's worktree carries its own grant, to its own SID.
+            _ = self._prepare(sibling)
+            confinement = self._prepare(
+                worktree, {**os.environ, "CLAUDE_CONFIG_DIR": str(state)}, owner="claude-code"
+            )
+            self.assertEqual(confinement.receipt["write_roots"], [str(worktree), str(state)])
+            self.assertEqual(confinement.receipt["probe"]["owner_state_write_exit_codes"], [0])
+
+            spawn_child = "import subprocess; subprocess.run([sys.executable, '-c', %r, sys.argv[1]], check=True)" % _WRITE_CHILD
+            allowed = {
+                "worktree": ("open(sys.argv[1], 'w').write('inside')", (worktree / "inside",)),
+                "owner_state": ("open(sys.argv[1], 'w').write('state')", (state / "state",)),
+                "child_process_inside": (spawn_child, (worktree / "child-inside",)),
+                "toolchain_temp": (
+                    "import os, tempfile; handle, path = tempfile.mkstemp(); os.close(handle); "
+                    "assert os.path.dirname(path) == sys.argv[1], (path, sys.argv[1])",
+                    (worktree / ".omh" / "confinement-tmp",),
+                ),
+            }
+            for name, (code, arguments) in allowed.items():
+                with self.subTest(allowed=name):
+                    completed = self._run(confinement, worktree, code, *arguments)
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+
+            escapes = {
+                "direct": ("open(sys.argv[1], 'w').write('x')", (outside,)),
+                "overwrite_existing": ("open(sys.argv[1], 'w').write('x')", (existing,)),
+                "append_existing": ("open(sys.argv[1], 'a').write('x')", (existing,)),
+                "delete_existing": ("import os; os.remove(sys.argv[1])", (existing,)),
+                "rename_out": ("import os; os.replace(sys.argv[1], sys.argv[2])", (source, outside)),
+                "mkdir_out": ("import os; os.mkdir(sys.argv[1])", (outside_directory,)),
+                "child_process": (spawn_child, (outside,)),
+                "hardlink_then_write": (
+                    "import os; os.link(sys.argv[1], sys.argv[2]); open(sys.argv[2], 'w').write('x')",
+                    (existing, worktree / "hardlink"),
+                ),
+                "junction_then_write": (
+                    "import os, subprocess; "
+                    "subprocess.run(['cmd', '/c', 'mklink', '/J', sys.argv[1], sys.argv[2]], check=True, capture_output=True); "
+                    "open(os.path.join(sys.argv[1], 'file'), 'w').write('x')",
+                    (worktree / "junction", junction_target),
+                ),
+                "acl_change": (
+                    "import subprocess; "
+                    "subprocess.run(['icacls', sys.argv[1], '/grant', '*S-1-1-0:F'], check=True, capture_output=True)",
+                    (existing,),
+                ),
+                "sibling_unit_worktree": ("open(sys.argv[1], 'w').write('x')", (sibling / "file",)),
+                "user_profile": ("open(sys.argv[1], 'w').write('x')", (canary,)),
+                "chdir_then_relative": ("import os; os.chdir('..'); open('outside', 'w').write('x')", ()),
+            }
+            for name, (code, arguments) in escapes.items():
+                with self.subTest(escape=name):
+                    completed = self._run(confinement, worktree, code, *arguments)
+                    self.assertNotEqual(completed.returncode, 0, f"{name} was not refused: {completed.stderr}")
+            self.assertFalse(outside.exists())
+            self.assertFalse(outside_directory.exists())
+            self.assertEqual(existing.read_text(encoding="utf-8"), "original")
+            self.assertTrue(source.is_file())
+            self.assertFalse((junction_target / "file").exists())
+            self.assertFalse((sibling / "file").exists())
+            self.assertFalse(canary.exists())
+
+    def test_terminating_the_launcher_ends_the_confined_process_tree(self) -> None:
+        with TemporaryDirectory() as temporary:
+            worktree = Path(temporary).resolve() / "worktree"
+            worktree.mkdir()
+            started = worktree / "started"
+            marker = worktree / "late-write"
+            confinement = self._prepare(worktree)
+            late_writer = "import sys, time; time.sleep(4); open(sys.argv[1], 'w').write('late')"
+            code = (
+                "import subprocess, time\n"
+                f"subprocess.Popen([sys.executable, '-c', {late_writer!r}, sys.argv[2]])\n"
+                "open(sys.argv[1], 'w').write('started')\n"
+                "time.sleep(60)\n"
+            )
+            command = confinement.command((sys.executable, "-c", "import sys\n" + code, str(started), str(marker)))
+            assert command is not None
+            launcher = subprocess.Popen(
+                command, cwd=worktree, env=confinement.command_environment(),
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            try:
+                deadline = time.monotonic() + 60
+                while not started.exists() and time.monotonic() < deadline:
+                    time.sleep(0.1)
+                self.assertTrue(started.exists())
+            finally:
+                launcher.kill()
+                _ = launcher.wait(timeout=30)
+            time.sleep(6)
+            self.assertFalse(marker.exists())
+
+    def test_verification_command_is_confined_when_it_has_no_owner_receipt(self) -> None:
+        with TemporaryDirectory() as temporary:
+            worktree = Path(temporary).resolve() / "worktree"
+            worktree.mkdir()
+            inside = worktree / "inside"
+            outside = worktree.parent / "outside"
+            script = (
+                "import sys\n"
+                "open('inside', 'w').write('inside')\n"
+                "try:\n"
+                "    open('../outside', 'w').write('outside')\n"
+                "except PermissionError:\n"
+                "    sys.exit(0)\n"
+                "sys.exit(1)\n"
+            )
+            command = shlex.join([sys.executable, "-c", script])
+
+            status, detail, _truncation = _run_verification_command(command, worktree, signal_safe_unit_runner)
+
+            self.assertEqual(status, "passed", detail)
+            self.assertTrue(inside.is_file())
+            self.assertFalse(outside.exists())
+
+    def test_git_runs_in_a_confined_linked_worktree(self) -> None:
+        git = shutil.which("git")
+        if git is None:
+            self.skipTest("git is not installed")
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            repo = root / "repo"
+            repo.mkdir()
+            identity = ("-c", "user.name=test", "-c", "user.email=test@example.test")
+            _ = subprocess.run((git, "init", "-q"), cwd=repo, check=True)
+            (repo / "seed").write_text("seed", encoding="utf-8", newline="")
+            _ = subprocess.run((git, "add", "seed"), cwd=repo, check=True)
+            _ = subprocess.run((git, *identity, "commit", "-qm", "init"), cwd=repo, check=True)
+            worktree = root / "linked-worktree"
+            _ = subprocess.run(
+                (git, "worktree", "add", "-qb", "agent/unit", str(worktree), "HEAD"), cwd=repo, check=True
+            )
+            confinement = prepare_fanout_filesystem_confinement(
+                worktree, dict(os.environ), ((git, "--version"), (sys.executable, "-c", "pass"))
+            )
+            self.assertTrue(confinement.receipt["enforced"], confinement.receipt)
+
+            for argv in ((git, "--version"), (git, "status", "--porcelain")):
+                with self.subTest(argv=argv[1:]):
+                    command = confinement.command(argv)
+                    assert command is not None
+                    completed = subprocess.run(
+                        command, cwd=worktree, env=confinement.command_environment(),
+                        stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=120, check=False,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    if argv[1] == "status":
+                        self.assertEqual(completed.stdout.strip(), "")
 
 
 if __name__ == "__main__":

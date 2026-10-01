@@ -343,10 +343,20 @@ class EnforcementFactsTests(unittest.TestCase):
         self.assertTrue(entries)
         for entry in entries:
             with self.subTest(limit=entry["limit"]):
+                # The Windows backend is a write fence: the network row is out
+                # of its reach on every Windows host, available or not.
+                out_of_reach = (
+                    facts["host_confinement_backend"] == "restricted-token"
+                    and entry["limit"] == "runtime_network_confinement"
+                )
                 self.assertFalse(entry["enforced_here"])
-                self.assertEqual(entry["host_can_enforce"], facts["host_confinement_available"])
+                self.assertEqual(
+                    entry["host_can_enforce"], facts["host_confinement_available"] and not out_of_reach
+                )
                 expected = (
-                    {
+                    "restricted_token_backend_cannot_confine_network"
+                    if out_of_reach
+                    else {
                         "runtime_filesystem_confinement": "no_observed_fanout_filesystem_confinement_probe_receipt",
                         "runtime_network_confinement": "fanout_lane_does_not_request_network_confinement",
                     }[entry["limit"]]
@@ -428,6 +438,31 @@ class EnforcementFactsTests(unittest.TestCase):
         self.assertEqual(missing["host_confinement_backend"], "sandbox-exec")
         self.assertFalse(missing["host_confinement_available"])
         self.assertEqual(missing["host_confinement_unavailable_reason"], "sandbox_exec_absent")
+
+        with mock.patch("sys.platform", "win32"), mock.patch.object(module, "_restricted_token_apis_present", lambda: True):
+            windows = module.data_boundary_enforcement_facts()
+        self.assertEqual(windows["host_confinement_backend"], "restricted-token")
+        self.assertTrue(windows["host_confinement_available"])
+        rows = {entry["limit"]: entry for entry in windows["limits"]}
+        self.assertTrue(rows["runtime_filesystem_confinement"]["host_can_enforce"])
+        self.assertEqual(
+            rows["runtime_filesystem_confinement"]["blocked_by"],
+            "no_observed_fanout_filesystem_confinement_probe_receipt",
+        )
+        self.assertFalse(rows["runtime_network_confinement"]["host_can_enforce"])
+        self.assertEqual(
+            rows["runtime_network_confinement"]["blocked_by"], "restricted_token_backend_cannot_confine_network"
+        )
+
+        with mock.patch("sys.platform", "win32"), mock.patch.object(module, "_restricted_token_apis_present", lambda: False):
+            bare_windows = module.data_boundary_enforcement_facts()
+        self.assertFalse(bare_windows["host_confinement_available"])
+        self.assertEqual(bare_windows["host_confinement_unavailable_reason"], "restricted_token_api_unavailable")
+        rows = {entry["limit"]: entry for entry in bare_windows["limits"]}
+        self.assertEqual(rows["runtime_filesystem_confinement"]["blocked_by"], "restricted_token_api_unavailable")
+        self.assertEqual(
+            rows["runtime_network_confinement"]["blocked_by"], "restricted_token_backend_cannot_confine_network"
+        )
 
     def test_no_platform_answer_moves_the_pinned_revision(self) -> None:
         import omh.quality.safety_preflight as module

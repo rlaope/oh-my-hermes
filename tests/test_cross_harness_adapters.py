@@ -292,6 +292,16 @@ namespace["_abort"]()
             self.assertEqual((outcome.status, outcome.reason_code), ("unavailable", "sandbox_backend_unavailable"))
             self.assertFalse((root / "launched").exists())
 
+    def test_a_write_only_backend_is_refused_even_where_it_is_available(self) -> None:
+        """The Windows fence cannot narrow reads or stop the network, which this lane's policy needs."""
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request, spec = _spec(root, "passing", backend="restricted-token")
+            with patch("src.quality.cross_harness_adapters._backend_available", return_value=True):
+                outcome = run_adapter(request, spec, _output(root))
+            self.assertEqual((outcome.status, outcome.reason_code), ("unavailable", "sandbox_backend_unavailable"))
+            self.assertFalse((root / "launched").exists())
+
     def test_preflight_failure_never_launches_adapter(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

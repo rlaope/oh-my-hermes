@@ -49,6 +49,7 @@ it.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import ctypes
 import hashlib
 import os
 import re
@@ -538,6 +539,11 @@ DATA_BOUNDARY_LIMIT_NAMES: Final = tuple(entry[0] for entry in DATA_BOUNDARY_LIM
 # neither can never enforce a runtime limit no matter what else lands.
 _MACOS_CONFINEMENT_TOOL: Final = "/usr/bin/sandbox-exec"
 _NO_HOST_BACKEND_REASON: Final = "no_os_confinement_backend_on_this_platform"
+# The Windows backend is a write fence only: a write-restricted token has no
+# way to refuse a socket, so it can never enforce the network row.
+_WRITE_ONLY_BACKEND_LIMITS: Final = {"restricted-token": frozenset({"runtime_filesystem_confinement"})}
+_WRITE_ONLY_BACKEND_NETWORK_REASON: Final = "restricted_token_backend_cannot_confine_network"
+_WINDOWS_RESTRICTED_TOKEN_APIS: Final = ("CreateRestrictedToken", "CreateProcessAsUserW", "SetNamedSecurityInfoW")
 
 
 def safety_rule_profile() -> dict[str, object]:
@@ -691,10 +697,13 @@ def data_boundary_enforcement_facts() -> dict[str, object]:
       OS feature is involved, so there is nothing for a host to lack.
     * `host_confinement` limits need an OS-level confinement backend. macOS has
       `sandbox-exec` in the base system; Linux needs a root-owned, non
-      group/other-writable `bwrap` actually present on disk; every other
-      platform has neither. That probe is real: the Linux half asks the same
-      trust snapshot the sandbox lane spawns under, so a host that would be
-      refused there is not reported as capable here.
+      group/other-writable `bwrap` actually present on disk; Windows needs the
+      advapi32 exports its write-restricted token uses; every other platform
+      has none. That probe is real: the Linux half asks the same trust
+      snapshot the sandbox lane spawns under, so a host that would be refused
+      there is not reported as capable here. The Windows backend confines
+      writes only, so on Windows the network row is out of its reach and says
+      so rather than borrowing the filesystem row's capability.
     * `advisory` limits are enforced nowhere, on any host, and report the same
       blocker on every host: no host fact bears on them, so a missing
       confinement backend is not an explanation for one.
@@ -712,8 +721,12 @@ def data_boundary_enforcement_facts() -> dict[str, object]:
     """
     backend, capable, unavailable_reason = _host_confinement_backend()
     limits: list[dict[str, object]] = []
+    confinable = _WRITE_ONLY_BACKEND_LIMITS.get(backend)
     for limit, kind, symbols, blocker in DATA_BOUNDARY_LIMITS:
-        host_can_enforce = kind == "refused_before_handoff" or (kind == "host_confinement" and capable)
+        out_of_reach = kind == "host_confinement" and confinable is not None and limit not in confinable
+        host_can_enforce = kind == "refused_before_handoff" or (
+            kind == "host_confinement" and capable and not out_of_reach
+        )
         enforced_here = kind == "refused_before_handoff"
         # A missing confinement backend explains a `host_confinement` limit and
         # nothing else. Substituting it wherever `host_can_enforce` was false
@@ -722,6 +735,8 @@ def data_boundary_enforcement_facts() -> dict[str, object]:
         # into a host-dependent one.
         if enforced_here:
             blocked_by = ""
+        elif out_of_reach:
+            blocked_by = _WRITE_ONLY_BACKEND_NETWORK_REASON
         elif kind == "host_confinement" and not capable:
             blocked_by = unavailable_reason or blocker
         else:
@@ -754,7 +769,23 @@ def _host_confinement_backend() -> tuple[str, bool, str]:
     if sys.platform.startswith("linux"):
         present = _trusted_bwrap_present()
         return "bwrap", present, "" if present else "bwrap_absent_or_untrusted"
+    if sys.platform == "win32":
+        present = _restricted_token_apis_present()
+        return "restricted-token", present, "" if present else "restricted_token_api_unavailable"
     return "unsupported", False, _NO_HOST_BACKEND_REASON
+
+
+def _restricted_token_apis_present() -> bool:
+    """Whether advapi32 exports what the Windows write fence calls.
+
+    Presence, not proof: as on the other platforms, only a dispatch's own probe
+    receipt says the fence held. Nothing here spawns a process.
+    """
+    try:
+        advapi32 = ctypes.WinDLL("advapi32")  # type: ignore[attr-defined]
+    except (AttributeError, OSError):
+        return False
+    return all(hasattr(advapi32, name) for name in _WINDOWS_RESTRICTED_TOKEN_APIS)
 
 
 def _trusted_bwrap_present() -> bool:
