@@ -16,6 +16,13 @@ jobs:
       - name: whoami
         run: whoami /groups /priv
         continue-on-error: true
+      - name: experiment
+        run: python tools/scratch_rt_experiment.py
+        continue-on-error: true
+      - name: experiment piped
+        shell: cmd
+        run: python tools/scratch_rt_experiment.py < NUL > exp.txt 2>&1 & type exp.txt
+        continue-on-error: true
       - name: confinement tests
         env:
           PYTHONPATH: tests
