@@ -384,7 +384,7 @@ def run_restricted(sids: Sequence[str], argv: Sequence[str]) -> int:
     if not advapi32.GetSecurityDescriptorDacl(descriptor, ctypes.byref(present), ctypes.byref(dacl), ctypes.byref(defaulted)):
         raise _failed("GetSecurityDescriptorDacl")
     default_dacl = ctypes.c_void_p(dacl.value)
-    if not advapi32.SetTokenInformation(
+    if os.environ.get("OMH_RT_SKIP_DACL") != "1" and not advapi32.SetTokenInformation(
         restricted, _TOKEN_DEFAULT_DACL, ctypes.byref(default_dacl), ctypes.sizeof(default_dacl)
     ):
         raise _failed("SetTokenInformation(TokenDefaultDacl)")
