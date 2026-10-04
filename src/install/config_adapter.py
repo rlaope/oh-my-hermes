@@ -34,6 +34,26 @@ class _InlineExternalDirs:
     values: list[str]
 
 
+def _classify_dotted_external_dirs(line: str) -> _InlineExternalDirs:
+    match = re.match(r"^skills\.external_dirs:\s*(?P<value>\S.*)$", line)
+    if not match:
+        return _InlineExternalDirs(False, False, [])
+    value = match.group("value").strip()
+    if value in _BARE_YAML_NULLS:
+        return _InlineExternalDirs(True, True, [])
+    parsed = _parse_inline_list(value)
+    return _InlineExternalDirs(True, parsed is not None, parsed or [])
+
+
+def _dotted_plugin_list(line: str) -> tuple[str, list[str] | None] | None:
+    if line.startswith(" "):
+        return None
+    key, sep, value = line.strip().partition(":")
+    if not sep or key not in {"plugins.enabled", "plugins.disabled"}:
+        return None
+    return key.split(".", 1)[1], _parse_inline_list(value.strip())
+
+
 _BARE_YAML_NULLS = {"null", "Null", "NULL", "~"}
 # `'[]'` and `"[]"` are strings to YAML, not sequences: Hermes reads either as
 # no plugins at all, and a list item cannot be added under a closed scalar.
@@ -304,6 +324,15 @@ def _validate_external_dirs_mutation_shape(config_text: str) -> None:
     for line in config_text.splitlines():
         stripped = line.strip()
         if not line.startswith(" ") and stripped:
+            dotted = _classify_dotted_external_dirs(line)
+            if dotted.matched:
+                external_dirs_declarations += 1
+                if external_dirs_declarations > 1:
+                    raise ValueError(_DUPLICATE_EXTERNAL_DIRS_SHAPE)
+                if not dotted.supported:
+                    raise ValueError(_UNSUPPORTED_EXTERNAL_DIRS_SHAPE)
+                in_skills = False
+                continue
             in_skills = stripped == "skills:"
             continue
         if in_skills and line.startswith("  ") and not line.startswith("    "):
@@ -324,6 +353,13 @@ def external_dirs(config_text: str) -> list[str]:
     for line in lines:
         stripped = line.strip()
         if not line.startswith(" ") and stripped:
+            dotted = _classify_dotted_external_dirs(line)
+            if dotted.matched:
+                if dotted.supported:
+                    result.extend(dotted.values)
+                in_skills = False
+                in_external = False
+                continue
             in_skills = stripped == "skills:"
             in_external = False
             continue
@@ -371,6 +407,14 @@ def plugin_enablement(config_text: str) -> dict[str, list[str]]:
     for line in config_text.splitlines():
         stripped = line.strip()
         if not line.startswith(" ") and stripped:
+            dotted = _dotted_plugin_list(line)
+            if dotted is not None:
+                key, values = dotted
+                if values is not None:
+                    lists[key] = list(values)
+                in_plugins = False
+                current = ""
+                continue
             current = ""
             node = _plugins_node_line_shape(line)
             in_plugins = node is not None and node[0] == _PLUGINS_NODE_BLOCK
@@ -631,6 +675,22 @@ def ensure_plugin_enabled(config_text: str, name: str) -> ConfigChange:
         return ConfigChange(False, "plugin already enabled", config_text)
 
     lines = config_text.splitlines()
+    dotted_plugin_index = None
+    for idx, line in enumerate(lines):
+        dotted = _dotted_plugin_list(line)
+        if dotted is None:
+            continue
+        key, values = dotted
+        if values is None:
+            raise ValueError(f"unsupported plugins.{key} shape; use an inline YAML list")
+        if dotted_plugin_index is None:
+            dotted_plugin_index = idx
+        if key == "enabled":
+            lines[idx] = f"plugins.enabled: [{', '.join([*values, name])}]"
+            return ConfigChange(True, "expanded dotted plugins.enabled", "\n".join(lines) + "\n")
+    if dotted_plugin_index is not None:
+        lines.insert(dotted_plugin_index, f"plugins.enabled: [{name}]")
+        return ConfigChange(True, "inserted dotted plugins.enabled", "\n".join(lines) + "\n")
     plugins_index = _plugins_block_index(lines)
     if plugins_index is None:
         # Only reachable when the document names no `plugins` key at all:
@@ -1831,6 +1891,14 @@ def ensure_external_dir(config_text: str, skill_dir: str | Path) -> ConfigChange
         return ConfigChange(False, "external dir already present", config_text)
 
     lines = config_text.splitlines()
+    for idx, line in enumerate(lines):
+        dotted = _classify_dotted_external_dirs(line)
+        if dotted.matched:
+            if not dotted.supported:
+                raise ValueError(_UNSUPPORTED_EXTERNAL_DIRS_SHAPE)
+            values = [*dotted.values, target]
+            lines[idx] = f"skills.external_dirs: [{', '.join(values)}]"
+            return ConfigChange(True, "expanded dotted skills.external_dirs", "\n".join(lines) + "\n")
     if not lines:
         text = f"skills:\n  external_dirs:\n    - {target}\n"
         return ConfigChange(True, "created skills.external_dirs", text)
@@ -1898,6 +1966,17 @@ def remove_external_dir_entries(config_text: str, entries: Iterable[str]) -> Con
 def _remove_external_dir_items(config_text: str, should_remove: Callable[[str], bool]) -> ConfigChange:
     _validate_external_dirs_mutation_shape(config_text)
     lines = config_text.splitlines()
+    for idx, line in enumerate(lines):
+        dotted = _classify_dotted_external_dirs(line)
+        if dotted.matched:
+            if not dotted.supported:
+                raise ValueError(_UNSUPPORTED_EXTERNAL_DIRS_SHAPE)
+            removed = [value for value in dotted.values if should_remove(value)]
+            if not removed:
+                return ConfigChange(False, "external dir absent", config_text)
+            remaining = [value for value in dotted.values if not should_remove(value)]
+            lines[idx] = f"skills.external_dirs: [{', '.join(remaining)}]"
+            return ConfigChange(True, "removed external dir", "\n".join(lines).rstrip() + "\n")
     changed = False
     output: list[str] = []
     in_skills = False

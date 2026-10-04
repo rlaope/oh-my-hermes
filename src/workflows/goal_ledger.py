@@ -26,6 +26,16 @@ from ..wrapper.message_gate import (
 
 
 GOAL_LEDGER_SCHEMA = "goal_ledger/v1"
+MAX_GOAL_TELEMETRY_EVENTS = 50
+
+
+def _append_goal_telemetry(goal: dict[str, Any], event: dict[str, Any]) -> None:
+    existing = goal.get("telemetry")
+    history = [item for item in existing if isinstance(item, dict)] if isinstance(existing, list) else []
+    history.append({"recorded_at": utc_now(), **event})
+    goal["telemetry"] = history[-MAX_GOAL_TELEMETRY_EVENTS:]
+
+
 GOAL_COMPLETION_GATE_SCHEMA = "goal_completion_gate/v1"
 GOAL_CONTINUATION_SCHEMA = "goal_continuation/v1"
 GOAL_STATUS_CARD_SCHEMA = "goal_status_card/v1"
@@ -383,6 +393,7 @@ def create_goal_ledger(
         "blockers": [],
         "quality_gates": [],
         "linked_runtime_runs": _linked_runtime_runs(linked_runtime_runs),
+        "telemetry": [{"event": "start", "recorded_at": now}],
     }
     validation = validate_goal_ledger(goal)
     if not validation["ok"]:
@@ -479,6 +490,7 @@ def record_goal_checkpoint(
         }
         goal["checkpoints"].append(checkpoint)
         goal["current_checkpoint"] = checkpoint["checkpoint_id"]
+        _append_goal_telemetry(goal, {"event": "checkpoint", "checkpoint_id": checkpoint_id, "status": status})
         if status == "done":
             for criterion in goal["acceptance_criteria"]:
                 if criterion["id"] in refs:
@@ -552,6 +564,10 @@ def record_goal_blocker(
         )
         if mark_goal_blocked:
             goal["status"] = "blocked"
+        _append_goal_telemetry(
+            goal,
+            {"event": "blocked" if mark_goal_blocked else "blocker_recorded", "status": goal["status"]},
+        )
         return goal
 
     goal, replayed = _guarded_goal_update(
@@ -912,6 +928,13 @@ def complete_goal_ledger(
             outcome["goal"] = goal
             return None
         goal["status"] = "complete"
+        _append_goal_telemetry(goal, {"event": "finish", "outcome": "complete"})
+        try:
+            started = datetime.fromisoformat(str(goal.get("created_at", "")).replace("Z", "+00:00"))
+            ended = datetime.fromisoformat(str(goal["telemetry"][-1]["recorded_at"]).replace("Z", "+00:00"))
+            goal["telemetry"][-1]["duration_seconds"] = max(0.0, round((ended - started).total_seconds(), 6))
+        except (TypeError, ValueError):
+            pass
         goal["quality_gates"].append(
             {
                 "quality_gate_id": quality_gate_id,

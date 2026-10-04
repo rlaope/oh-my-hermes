@@ -849,6 +849,20 @@ class ReleaseSmokeTests(unittest.TestCase):
         self.assertIn("does not prove a later chat session", payload["proof_boundary"])
         self.assertFalse(payload["installed_command_smoke"]["observed"])
 
+    def test_live_smoke_fails_when_skill_install_reports_structured_block(self) -> None:
+        def runner(command, _timeout, _env):
+            if tuple(command[:3]) == ("hermes", "skills", "install"):
+                return CommandResult(command, 0, '{"decision":"blocked","warnings":["offline cache"]}', "")
+            return CommandResult(command, 0, "ok", "")
+
+        with patch("omh.release.shutil.which", return_value="/usr/local/bin/hermes"):
+            payload = run_hermes_release_smoke(runner=runner, timeout_seconds=5, hermes_home="/tmp/hermes-smoke")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["failed_step"], "skill_install")
+        install_result = next(result for result in payload["results"] if result["name"] == "skill_install")
+        self.assertFalse(install_result["ok"])
+        self.assertIn("offline cache", install_result["stdout_excerpt"])
+
     def test_live_smoke_can_include_installed_command_smoke(self) -> None:
         seen: list[list[str]] = []
 

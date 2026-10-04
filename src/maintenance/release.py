@@ -4281,6 +4281,33 @@ def first_use_status_smoke_plan(
     }
 
 
+def _skill_install_blocked(stdout: str, stderr: str) -> bool:
+    import json
+
+    combined = f"{stdout}\n{stderr}"
+    try:
+        payload = json.loads(stdout)
+    except (TypeError, ValueError):
+        payload = None
+
+    def blocked(value: object) -> bool:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if str(key).casefold() in {"decision", "verdict", "status", "result"} and isinstance(item, str):
+                    if item.casefold() in {"blocked", "dangerous", "rejected", "denied"}:
+                        return True
+                if blocked(item):
+                    return True
+        elif isinstance(value, list):
+            return any(blocked(item) for item in value)
+        return False
+
+    if payload is not None and blocked(payload):
+        return True
+    folded = combined.casefold()
+    return any(marker in folded for marker in ("decision: blocked", "verdict: dangerous"))
+
+
 def run_hermes_release_smoke(
     *,
     install_path: str = "tap",
@@ -4374,7 +4401,8 @@ def run_hermes_release_smoke(
     failed_step = ""
     for step in steps:
         result = execute(step.command, timeout_seconds, smoke_env)
-        step_ok = result.returncode == 0
+        hermes_install_blocked = step.name == "skill_install" and _skill_install_blocked(result.stdout, result.stderr)
+        step_ok = result.returncode == 0 and not hermes_install_blocked
         ok = ok and step_ok
         results.append(
             {

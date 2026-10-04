@@ -8,13 +8,14 @@ from typing import TypedDict
 
 from ..catalogs.roles import roles_reference_markdown
 from ..installer import OmhError
+from ..install.manifest import read_manifest
 from ..local_store import atomic_write_text
 from ..skill_pack import builtin_skill_reference_templates, builtin_skill_templates
 from ..skills.catalog import omh_skill_display_name
 from ..skills.context_cost import skill_context_cost_markdown, skill_context_cost_payload
 from ..skills.render import workflow_reference_markdown, workflow_reference_payload
 from ..skills.validation import harness_inspection_payload, harness_summary_payload, validate_catalog_contract
-from .common import _print_json
+from .common import _paths, _print_json
 
 
 def cmd_docs_agent_skills(args: argparse.Namespace) -> int:
@@ -61,7 +62,50 @@ def cmd_docs_agent_skills(args: argparse.Namespace) -> int:
     return 0
 
 
+def _installed_workflow_reference_markdown(args: argparse.Namespace) -> str:
+    paths = _paths(args)
+    manifest = read_manifest(paths.manifest_path)
+    if not manifest:
+        raise OmhError(f"installed workflow docs require an OMH manifest: {paths.manifest_path}")
+    raw_skills = manifest.get("skills", [])
+    if not isinstance(raw_skills, list):
+        raise OmhError("installed workflow manifest skills must be a list")
+    installed_names = {str(item.get("name") or "") for item in raw_skills if isinstance(item, dict) and item.get("name")}
+    catalog = workflow_reference_payload()
+    skills = [skill for skill in catalog["skills"] if str(skill.get("name") or "") in installed_names]
+    harness_names = {str(skill.get("primary_harness") or "") for skill in skills if skill.get("primary_harness")}
+    harnesses = [item for item in catalog["harnesses"] if str(item.get("name") or "") in harness_names]
+    lines = ["# Installed Workflow Reference", "", "Generated from the local OMH install manifest and canonical workflow catalog.", "",
+             f"- Installed manifest skills: `{len(installed_names)}`", f"- Catalog workflows documented: `{len(skills)}`", "",
+             "Installed guidance only; this is not runtime execution evidence.", "", "## Installed Workflows", ""]
+    for skill in skills:
+        triggers = ", ".join(f"`{item}`" for item in skill.get("triggers", []))
+        lines.extend([f"### {skill['name']}", "", str(skill.get("description") or ""), "",
+                      f"- Category: `{skill.get('category', '')}`", f"- Phase: `{skill.get('phase', '')}`",
+                      f"- Hermes role: `{skill.get('hermes_role', '')}`", f"- Primary harness: `{skill.get('primary_harness', '')}`",
+                      f"- Preferred usage: {skill.get('preferred_usage', '')}", f"- Handoff policy: {skill.get('handoff_policy', '')}",
+                      f"- Why this exists: {skill.get('why_this_exists', '')}", f"- Use when: {skill.get('use_when', '')}",
+                      f"- Strong routing signals: {triggers}", ""])
+    lines.extend(["## Relevant Harnesses", ""])
+    for item in harnesses:
+        lines.extend([f"### {item['name']}", "", str(item.get("purpose") or ""), "",
+                      f"- Use when: {item.get('use_when', '')}", f"- Quality tier: `{item.get('quality_tier', '')}`",
+                      f"- Privacy default: `{item.get('privacy_default', '')}`", ""])
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def cmd_docs_workflows(args: argparse.Namespace) -> int:
+    if args.installed:
+        if args.json or args.check:
+            raise OmhError("docs workflows --installed cannot be combined with --json or --check")
+        content = _installed_workflow_reference_markdown(args)
+        if args.output:
+            output = Path(args.output).expanduser().resolve()
+            atomic_write_text(output, content)
+            _print_json({"written": str(output), "scope": "installed"})
+            return 0
+        print(content.rstrip())
+        return 0
     if args.json:
         if args.check:
             raise OmhError("docs workflows --json cannot be combined with --check")
@@ -475,6 +519,7 @@ def _add_docs_commands(sub) -> None:
 
     docs_workflows = docs_sub.add_parser("workflows")
     docs_workflows.add_argument("--output", default=None)
+    docs_workflows.add_argument("--installed", action="store_true", help="Render workflows recorded in the local OMH install manifest.")
     docs_workflows.add_argument("--check", action="store_true")
     docs_workflows.add_argument("--json", action="store_true", help="Print machine-readable workflow and harness catalog metadata.")
     docs_workflows.set_defaults(func=cmd_docs_workflows)
