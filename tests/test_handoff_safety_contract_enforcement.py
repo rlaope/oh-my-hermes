@@ -1116,6 +1116,22 @@ GIT_ARGV_ALLOWLIST: dict[tuple[str, tuple[str, ...]], str] = {
         "between the base and the producer HEAD the dispatcher already observed clean, the changed paths a "
         "task-linked postcondition selects its tests from; read-only, local-only, names no remote"
     ),
+    ("src/coding/fanout_confinement.py", ("symbolic-ref", "HEAD")): (
+        "`symbolic-ref -q HEAD` in `_git_write_roots` reads which branch the unit's linked worktree has "
+        "checked out, so git write roots are granted only when it is the unit's own `agent/<unit>` "
+        "branch; read-only local ref lookup, names no remote, writes nothing"
+    ),
+    ("src/coding/fanout_confinement.py", ("symbolic-ref",)): (
+        "`symbolic-ref -q refs/heads/<unit-branch>` in `_git_write_roots` refuses a unit branch that is "
+        "itself a symbolic ref (it could redirect commits to another branch); read-only local ref "
+        "lookup, names no remote, writes nothing"
+    ),
+    ("src/coding/fanout_confinement.py", ("rev-parse",)): (
+        "`rev-parse --path-format=absolute --git-dir/--git-common-dir` in `_git_write_roots` locates "
+        "the unit worktree's own gitdir and the shared repository so only those paths become write "
+        "roots; also run against the dispatcher's repo_root to prove both are the same repository. "
+        "Read-only, local-only, names no remote"
+    ),
     ("src/coding/fanout_dispatch.py", ("rev-parse",)): (
         "`rev-parse --show-toplevel`, run BEFORE the `add -N` above, to prove the recovery probe is "
         "standing in the unit's own worktree and not in whatever repository encloses it; read-only, "

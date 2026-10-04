@@ -895,3 +895,174 @@ class LinuxBwrapFanoutConfinementTests(_ConfinedSpawnContract, unittest.TestCase
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(_working_linux_bwrap(), "bwrap confinement is exercised on Linux hosts with a trusted, working bwrap")
+class LinkedWorktreeGitWriteRootTests(unittest.TestCase):
+    """A dispatched unit commits on its own agent/<unit> branch and nothing else in the shared repository is writable."""
+
+    def _run(self, confinement: FanoutFilesystemConfinement, worktree: Path, script: str) -> subprocess.CompletedProcess[str]:
+        argv = ("/bin/sh", "-c", script)
+        return subprocess.run(
+            confinement.command(argv), cwd=worktree, env=confinement.command_environment(),
+            text=True, capture_output=True, check=False,
+        )
+
+    _repo: Path | None = None
+
+    def _prepare(self, worktree: Path, unit_branch: str) -> FanoutFilesystemConfinement:
+        return prepare_fanout_filesystem_confinement(
+            worktree, {}, (("/bin/sh", "-c", "exit 0"),), owner="", unit_branch=unit_branch, repo_root=self._repo,
+        )
+
+    def test_own_branch_commits_and_shared_metadata_stays_read_only(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = _linked_worktree(root)
+            self._repo = root / "repo"
+            common = (root / "repo" / ".git").resolve()
+            _ = subprocess.run(("/usr/bin/git", "branch", "release/x"), cwd=root / "repo", check=True)
+            main_before = subprocess.run(("/usr/bin/git", "rev-parse", "HEAD"), cwd=root / "repo", text=True, capture_output=True, check=True).stdout
+            confinement = self._prepare(worktree, "agent/unit")
+            self.assertTrue(confinement.receipt["enforced"])
+            roots = set(confinement.receipt["write_roots"])
+            self.assertNotIn(str(common), roots)
+            self.assertIn(str(common / "objects"), roots)
+            self.assertIn(str(common / "refs" / "heads" / "agent"), roots)
+            commit = self._run(
+                confinement, worktree,
+                "echo y >> seed && /usr/bin/git add seed && "
+                "/usr/bin/git -c user.name=t -c user.email=t@example.test commit -qm unit",
+            )
+            self.assertEqual(commit.returncode, 0, commit.stderr)
+            refused = {
+                "hooks": f'printf x > "{common}/hooks/post-checkout"',
+                "config": f'printf "[x]" >> "{common}/config"',
+                "packed_refs": f'printf x > "{common}/packed-refs"',
+                "default_branch": "/usr/bin/git update-ref refs/heads/master HEAD",
+                "other_branch": "/usr/bin/git update-ref refs/heads/release/x HEAD",
+                "tag": "/usr/bin/git tag unit-tag",
+            }
+            for name, script in refused.items():
+                with self.subTest(name=name):
+                    self.assertNotEqual(self._run(confinement, worktree, script).returncode, 0)
+            self.assertFalse((common / "hooks" / "post-checkout").exists())
+            self.assertNotIn("[x]", (common / "config").read_text(encoding="utf-8"))
+            main_after = subprocess.run(("/usr/bin/git", "rev-parse", "HEAD"), cwd=root / "repo", text=True, capture_output=True, check=True).stdout
+            self.assertEqual(main_before, main_after)
+
+    def test_no_git_write_root_unless_head_is_the_units_own_agent_branch(self) -> None:
+        cases = {
+            "branch_mismatch": ("agent/other", None),
+            "empty_branch": ("", None),
+            "path_traversal_branch": ("agent/unit/../master", None),
+            "detached_head": ("agent/unit", ("/usr/bin/git", "checkout", "-q", "--detach")),
+        }
+        # A non-linked repository (gitdir == common dir) never receives a git root either.
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = _linked_worktree(root)
+            repo = root / "repo"
+            _ = subprocess.run(("/usr/bin/git", "checkout", "-qb", "agent/main-unit"), cwd=repo, check=True)
+            self._repo = repo
+            confinement = self._prepare(repo, "agent/main-unit")
+            common = (repo / ".git").resolve()
+            self.assertFalse(
+                [r for r in confinement.receipt["write_roots"] if Path(r) == common or common in Path(r).parents]
+            )
+        for name, (unit_branch, setup) in cases.items():
+            with self.subTest(name=name), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                worktree = _linked_worktree(root)
+                self._repo = root / "repo"
+                common = (root / "repo" / ".git").resolve()
+                if setup is not None:
+                    _ = subprocess.run(setup, cwd=worktree, check=True)
+                confinement = self._prepare(worktree, unit_branch)
+                self.assertTrue(confinement.receipt["enforced"])
+                self.assertFalse(
+                    [r for r in confinement.receipt["write_roots"] if Path(r) == common or common in Path(r).parents]
+                )
+
+    def test_symlinked_namespace_or_objects_gets_no_git_root(self) -> None:
+        for target in ("refs/heads/agent", "objects"):
+            with self.subTest(target=target), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                worktree = _linked_worktree(root)
+                self._repo = root / "repo"
+                common = (root / "repo" / ".git").resolve()
+                real = root / "moved"
+                (common / target).rename(real)
+                (common / target).symlink_to(common if target != "objects" else real, target_is_directory=True)
+                confinement = self._prepare(worktree, "agent/unit")
+                self.assertTrue(confinement.receipt["enforced"])
+                self.assertFalse(
+                    [r for r in confinement.receipt["write_roots"] if Path(r) == common or common in Path(r).parents]
+                )
+
+    def test_planted_symlink_or_alternates_gets_no_git_root(self) -> None:
+        for plant in ("ns_symlink", "alternates"):
+            with self.subTest(plant=plant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                worktree = _linked_worktree(root)
+                self._repo = root / "repo"
+                common = (root / "repo" / ".git").resolve()
+                if plant == "ns_symlink":
+                    (common / "refs" / "heads" / "agent" / "hooks").symlink_to(common / "hooks", target_is_directory=True)
+                else:
+                    (common / "objects" / "info").mkdir(exist_ok=True)
+                    (common / "objects" / "info" / "alternates").write_text("/tmp/x\n", encoding="utf-8")
+                confinement = self._prepare(worktree, "agent/unit")
+                self.assertFalse(
+                    [r for r in confinement.receipt["write_roots"] if Path(r) == common or common in Path(r).parents]
+                )
+
+    def test_gitdir_of_another_repository_gets_no_git_root(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = _linked_worktree(root)
+            other_root = root / "other"
+            other_root.mkdir()
+            other_worktree = _linked_worktree(other_root)
+            other_common = (other_root / "repo" / ".git").resolve()
+            (worktree / ".git").write_text(f"gitdir: {other_common}/worktrees/{other_worktree.name}\n", encoding="utf-8")
+            self._repo = root / "repo"
+            confinement = self._prepare(worktree, "agent/unit")
+            self.assertFalse(
+                [r for r in confinement.receipt["write_roots"] if Path(r) == other_common or other_common in Path(r).parents]
+            )
+
+    def test_unreadable_or_special_entries_get_no_git_root(self) -> None:
+        for plant in ("unreadable_dir", "fifo_ref", "fifo_commit_graph"):
+            with self.subTest(plant=plant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                worktree = _linked_worktree(root)
+                self._repo = root / "repo"
+                common = (root / "repo" / ".git").resolve()
+                hidden = None
+                if plant == "unreadable_dir":
+                    hidden = common / "refs" / "heads" / "agent" / "x"
+                    hidden.mkdir()
+                    (hidden / "hooks").symlink_to(common / "hooks", target_is_directory=True)
+                    hidden.chmod(0)
+                elif plant == "fifo_ref":
+                    os.mkfifo(common / "refs" / "heads" / "agent" / "stall")
+                else:
+                    (common / "objects" / "info").mkdir(exist_ok=True)
+                    os.mkfifo(common / "objects" / "info" / "commit-graph")
+                try:
+                    confinement = self._prepare(worktree, "agent/unit")
+                    self.assertFalse(
+                        [r for r in confinement.receipt["write_roots"] if Path(r) == common or common in Path(r).parents]
+                    )
+                finally:
+                    if hidden is not None:
+                        hidden.chmod(0o755)
+
+    def test_git_failure_adds_no_root_and_never_falls_back_to_unconfined(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            worktree = _linked_worktree(root)
+            with mock.patch("subprocess.run", side_effect=FileNotFoundError("git")):
+                from omh.coding.fanout_confinement import _git_write_roots
+                self.assertEqual(_git_write_roots(worktree, "agent/unit", root / "repo"), ())

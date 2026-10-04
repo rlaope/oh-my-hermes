@@ -193,6 +193,202 @@ class FanoutFilesystemConfinement:
         }
 
 
+# Diagnostics only (why a unit got no git write root). Never read for a security decision.
+_GIT_ROOTS_LAST_SKIP: dict[str, str] = {}
+_GIT_ROOTS_SKIP_LIMIT = 1024
+_UNIT_BRANCH_RE = __import__("re").compile(r"^agent/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_GIT_ENV_STRIP = (
+    "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_INDEX_FILE", "GIT_NAMESPACE", "GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+)
+
+
+def git_roots_skip_reason(worktree: Path) -> str:
+    """Why the last _git_write_roots call for this worktree added no git root ("" = roots were added)."""
+    return _GIT_ROOTS_LAST_SKIP.get(str(worktree), "")
+
+
+def _real_dir_chain(base: Path, parts: tuple[str, ...], *, create: bool) -> bool:
+    """Walk base/parts one component at a time with openat + O_NOFOLLOW.
+
+    A component that is a symlink (ELOOP) or not a directory (ENOTDIR) fails the walk.
+    With create=True a missing component is made with mkdirat relative to the verified
+    parent fd, so nothing is ever created through a symlink.
+    """
+    import os
+
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(str(base), flags)
+    try:
+        for part in parts:
+            if part in ("", ".", "..") or "/" in part:
+                return False
+            try:
+                nfd = os.open(part, flags, dir_fd=fd)
+            except FileNotFoundError:
+                if not create:
+                    return False
+                try:
+                    os.mkdir(part, 0o755, dir_fd=fd)
+                except FileExistsError:
+                    pass
+                nfd = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = nfd
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+
+
+def _git_write_roots(worktree: Path, unit_branch: str = "", repo_root: Path | None = None) -> tuple[Path, ...]:
+    """Write roots git itself needs so a unit can commit on its own branch.
+
+    A linked worktree's git metadata lives under the shared repository, outside the
+    unit worktree. Only these are added, and only when the unit is on its own branch:
+      - the unit's gitdir (<C>/worktrees/<wt>: index, HEAD, logs/HEAD),
+      - <C>/objects (new objects for the commit),
+      - <C>/refs/heads/agent and <C>/logs/refs/heads/agent (the unit branch ref + reflog).
+    hooks/, config, packed-refs and every ref outside refs/heads/agent stay read-only.
+    The bind set, not this check, is the boundary: a unit that moves its own HEAD after
+    the check can still only write inside these roots. Residual exposure (recorded, not
+    closed here): sibling refs under refs/heads/agent, and objects/ (delete, replace,
+    objects/info/alternates). Policy (start-state hygiene): HEAD must be the symbolic ref
+    refs/heads/<unit_branch> with unit_branch = agent/<name>, that ref must not itself be
+    symbolic, the worktree must be linked (<C>/worktrees/<wt>) with <C>/worktrees/<wt>/gitdir naming
+    this worktree's .git and <C> == repo_root's common dir, and every bound root must
+    be a real directory reached without a symlink component below <C>. Otherwise, and on
+    any error, no git root is added (the unit stays sandboxed and cannot commit).
+    """
+    import os
+    import stat
+    import subprocess
+
+    key = str(worktree)
+
+    def _skip(reason: str) -> tuple[Path, ...]:
+        _GIT_ROOTS_LAST_SKIP.pop(key, None)
+        while len(_GIT_ROOTS_LAST_SKIP) >= _GIT_ROOTS_SKIP_LIMIT:  # FIFO trim: drop the oldest entry only
+            _GIT_ROOTS_LAST_SKIP.pop(next(iter(_GIT_ROOTS_LAST_SKIP), None), None)
+        _GIT_ROOTS_LAST_SKIP[key] = reason
+        return ()
+
+    try:
+        if not unit_branch or not _UNIT_BRANCH_RE.match(unit_branch) or ".." in unit_branch:
+            return _skip("name")
+        env = {k: v for k, v in os.environ.items() if k not in _GIT_ENV_STRIP}
+
+        def _ran(completed: subprocess.CompletedProcess[str]) -> tuple[int, str]:
+            return completed.returncode, (completed.stdout or "").strip()
+
+        wt = str(worktree)
+        # Every git argv is spelled as a literal so the no-remote-mutation gate can read its verb.
+        rc, head_ref = _ran(subprocess.run(
+            ("git", "symbolic-ref", "-q", "HEAD"),
+            cwd=wt, capture_output=True, text=True, timeout=10, check=False, env=env,
+        ))
+        if rc == 1:
+            return _skip("detached")
+        if rc != 0 or not head_ref:
+            return _skip("git_error")
+        expected = f"refs/heads/{unit_branch}"
+        if head_ref != expected:
+            return _skip("name")
+        rc_sym, _ = _ran(subprocess.run(
+            ("git", "symbolic-ref", "-q", expected),
+            cwd=wt, capture_output=True, text=True, timeout=10, check=False, env=env,
+        ))
+        if rc_sym == 0:  # defensive: symbolic-ref HEAD already resolves chains, so this is normally unreachable
+            return _skip("symref")
+        if rc_sym != 1:
+            return _skip("git_error")
+        rc1, git_dir = _ran(subprocess.run(
+            ("git", "rev-parse", "--path-format=absolute", "--git-dir"),
+            cwd=wt, capture_output=True, text=True, timeout=10, check=False, env=env,
+        ))
+        rc2, common = _ran(subprocess.run(
+            ("git", "rev-parse", "--path-format=absolute", "--git-common-dir"),
+            cwd=wt, capture_output=True, text=True, timeout=10, check=False, env=env,
+        ))
+        if rc1 != 0 or rc2 != 0 or not git_dir or not common:
+            return _skip("git_error")
+        common_dir = Path(common).resolve()
+        if Path(git_dir).resolve() == common_dir:
+            return _skip("not_linked")
+        # git canonicalizes --git-dir, so read the path the worktree's .git file actually names
+        # and require it to be <C>/worktrees/<name> with no symlink component (alias gitdirs fail closed).
+        gitfile = Path(worktree) / ".git"
+        if gitfile.is_symlink() or not gitfile.is_file():
+            return _skip("layout")
+        first = gitfile.read_text(encoding="utf-8", errors="strict").splitlines()[:1]
+        if not first or not first[0].startswith("gitdir: "):
+            return _skip("layout")
+        named = Path(first[0][len("gitdir: "):].strip())
+        if not named.is_absolute():
+            named = (Path(worktree) / named)
+        named = Path(os.path.normpath(str(named)))
+        if named.parent != common_dir / "worktrees" or Path(git_dir).resolve() != named:
+            return _skip("layout")
+        wt_name = named.name
+        if not _real_dir_chain(common_dir, ("worktrees", wt_name), create=False):
+            return _skip("symlink")
+        # Back-link: <C>/worktrees/<name>/gitdir must name THIS worktree's .git, and <C> must be the
+        # repository the dispatcher created the worktree from (not another repo/worktree the .git file names).
+        backlink = common_dir / "worktrees" / wt_name / "gitdir"
+        if backlink.is_symlink() or not backlink.is_file():
+            return _skip("layout")
+        named_back = Path(os.path.normpath(backlink.read_text(encoding="utf-8", errors="strict").strip()))
+        if named_back != Path(os.path.normpath(str(Path(worktree).resolve() / ".git"))):
+            return _skip("layout")
+        if repo_root is None:
+            return _skip("layout")
+        expected = subprocess.run(
+            ("git", "rev-parse", "--path-format=absolute", "--git-common-dir"),
+            cwd=str(repo_root), capture_output=True, text=True, timeout=10, check=False, env=env,
+        )
+        expected_common = (expected.stdout or "").strip()
+        if expected.returncode != 0 or not expected_common or Path(expected_common).resolve() != common_dir:
+            return _skip("layout")
+        if not _real_dir_chain(common_dir, ("objects",), create=False):
+            return _skip("symlink")
+        if not _real_dir_chain(common_dir, ("refs", "heads", "agent"), create=True):
+            return _skip("symlink")
+        if not _real_dir_chain(common_dir, ("logs", "refs", "heads", "agent"), create=True):
+            return _skip("symlink")
+        # Start-state hygiene: an earlier unit (which held these same binds) may have planted symlinks
+        # inside the namespaces or written objects/info/alternates. Any such entry -> no git root.
+        # Unreadable subdirectories raise (onerror) -> git_error, never "checked clean".
+        def _raise(error: OSError) -> None:
+            raise error
+
+        if (common_dir / "objects" / "info" / "alternates").exists() or (common_dir / "objects" / "info" / "alternates").is_symlink():
+            return _skip("hygiene")
+        for ns_root in (common_dir / "refs" / "heads" / "agent", common_dir / "logs" / "refs" / "heads" / "agent"):
+            for dirpath, dirnames, filenames in os.walk(ns_root, followlinks=False, onerror=_raise):
+                for entry in (*dirnames, *filenames):
+                    full = os.path.join(dirpath, entry)
+                    st = os.lstat(full)
+                    if stat.S_ISLNK(st.st_mode) or not (stat.S_ISDIR(st.st_mode) or stat.S_ISREG(st.st_mode)):
+                        return _skip("hygiene")
+        for sub in ((), ("info",), ("pack",)):
+            target = common_dir.joinpath("objects", *sub)
+            if sub and not target.exists():
+                continue
+            for top in os.scandir(target):
+                if top.is_symlink() or not (top.is_dir(follow_symlinks=False) or top.is_file(follow_symlinks=False)):
+                    return _skip("hygiene")
+        _GIT_ROOTS_LAST_SKIP.pop(key, None)
+        return unique_roots((
+            common_dir / "worktrees" / wt_name,
+            common_dir / "objects",
+            common_dir / "refs" / "heads" / "agent",
+            common_dir / "logs" / "refs" / "heads" / "agent",
+        ))
+    except Exception:  # noqa: BLE001 - containment is the point: never let this escape to _unconfined
+        return _skip("git_error")
+
+
 def planned_fanout_filesystem_confinement(
     worktree: Path,
     *,
@@ -205,7 +401,7 @@ def planned_fanout_filesystem_confinement(
     if selected == "unsupported":
         reason_code = "no_os_confinement_backend_on_this_platform"
     owner_state_roots = owner_state_directories(owner, {} if environment is None else environment)
-    write_roots = unique_roots((worktree, *owner_state_roots))
+    write_roots = unique_roots((worktree, *_git_write_roots(worktree), *owner_state_roots))
     write_literals = owner_state_files(owner, {} if environment is None else environment)
     return _receipt(
         status="prepared_not_observed",
@@ -225,13 +421,15 @@ def prepare_fanout_filesystem_confinement(
     *,
     owner: str = "",
     intake_root: Path | None = None,
+    unit_branch: str = "",
+    repo_root: Path | None = None,
 ) -> FanoutFilesystemConfinement:
     """Probe one unit's backend before allowing its owner or checks to use it."""
     worktree = worktree.resolve()
     owner_state_roots = owner_state_directories(owner, environment)
     # This exact invocation-owned directory is removed by the dispatcher.
     intake_roots = () if intake_root is None else (intake_root.resolve(),)
-    write_roots = unique_roots((worktree, *owner_state_roots, *intake_roots))
+    write_roots = unique_roots((worktree, *_git_write_roots(worktree, unit_branch, repo_root), *owner_state_roots, *intake_roots))
     write_literals = owner_state_files(owner, environment)
     selected = backend("auto")
     if selected == "unsupported":

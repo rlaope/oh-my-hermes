@@ -136,6 +136,17 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "and surfaced nowhere because there is no channel left to surface it on.",
     ),
     ClassifiedSite(
+        "src/coding/fanout_confinement.py",
+        "_git_write_roots",
+        INTENTIONAL,
+        "Deciding which git paths a unit may write is fail-closed: any error while reading the "
+        "worktree layout (git missing or timing out, an unreadable file, an unexpected layout) "
+        "returns no git write root, so the unit stays sandboxed and simply cannot commit. The "
+        "reason is recorded as `git_error` in the bounded skip map the receipt reports, so the "
+        "failure is visible rather than relabeled, and no exception can reach the caller and make "
+        "it fall back to an unconfined run.",
+    ),
+    ClassifiedSite(
         "src/coding/fanout_dispatch.py",
         "signal_safe_unit_runner",
         INTENTIONAL,
@@ -469,8 +480,8 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # function. `_write_candidate_batch`, `_is_catalog_question`, `pre_llm_call`,
 # `_resume_unlocked`, and `_execute_cell` each hold two handlers, so the handler
 # count is five above the anchor count.
-EXPECTED_HANDLER_COUNT = 49
-EXPECTED_ANCHOR_COUNT = 44
+EXPECTED_HANDLER_COUNT = 50
+EXPECTED_ANCHOR_COUNT = 45
 
 
 class DerivedSite(NamedTuple):

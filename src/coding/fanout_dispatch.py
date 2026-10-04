@@ -112,6 +112,7 @@ from .fanout_confinement import (
     FanoutFilesystemConfinement,
     confinement_receipt,
     owner_state_directories,
+    git_roots_skip_reason,
     planned_fanout_filesystem_confinement,
     prepare_fanout_filesystem_confinement,
 )
@@ -4591,11 +4592,16 @@ def _dispatch_unit(
         prepare_fanout_filesystem_confinement(
             worktree, child_env, (argv, *verification_argv), owner=owner,
             intake_root=intake_root,
+            # Same expression ensure_fanout_unit_worktree used to create this unit's branch.
+            unit_branch=str(unit.get("branch_suggestion", f"agent/{unit_id}")),
+            repo_root=repo_root,
         )
         if runner is signal_safe_unit_runner
         else None
     )
     filesystem_confinement = confinement_receipt(confinement, worktree)
+    if confinement is not None and isinstance(filesystem_confinement, dict):
+        filesystem_confinement["git_roots_skip"] = git_roots_skip_reason(worktree.resolve())
     if confinement is not None:
         child_env = confinement.command_environment()
     # After the worktree exists and before anything else touches it: a linked
