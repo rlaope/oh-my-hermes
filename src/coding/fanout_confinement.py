@@ -358,6 +358,10 @@ def _git_write_roots(worktree: Path, unit_branch: str = "", repo_root: Path | No
             return _skip("symlink")
         if not _real_dir_chain(common_dir, ("logs", "refs", "heads", "agent"), create=True):
             return _skip("symlink")
+        # git-lfs clean/smudge filters run on `git add`/`checkout` and write `<C>/lfs/{tmp,objects,cache}`;
+        # without it a unit in an LFS repository cannot stage anything.
+        if not _real_dir_chain(common_dir, ("lfs",), create=True):
+            return _skip("symlink")
         # Start-state hygiene: an earlier unit (which held these same binds) may have planted symlinks
         # inside the namespaces or written objects/info/alternates. Any such entry -> no git root.
         # Unreadable subdirectories raise (onerror) -> git_error, never "checked clean".
@@ -386,6 +390,7 @@ def _git_write_roots(worktree: Path, unit_branch: str = "", repo_root: Path | No
             common_dir / "objects",
             common_dir / "refs" / "heads" / "agent",
             common_dir / "logs" / "refs" / "heads" / "agent",
+            common_dir / "lfs",
         ))
     except Exception:  # noqa: BLE001 - containment is the point: never let this escape to _unconfined
         return _skip("git_error")

@@ -926,6 +926,7 @@ class LinkedWorktreeGitWriteRootTests(unittest.TestCase):
             self.assertNotIn(str(common), roots)
             self.assertIn(str(common / "objects"), roots)
             self.assertIn(str(common / "refs" / "heads" / "agent"), roots)
+            self.assertIn(str(common / "lfs"), roots)  # git-lfs filters write <C>/lfs/tmp on `git add`
             commit = self._run(
                 confinement, worktree,
                 "echo y >> seed && /usr/bin/git add seed && "
@@ -982,13 +983,14 @@ class LinkedWorktreeGitWriteRootTests(unittest.TestCase):
                 )
 
     def test_symlinked_namespace_or_objects_gets_no_git_root(self) -> None:
-        for target in ("refs/heads/agent", "objects"):
+        for target in ("refs/heads/agent", "objects", "lfs"):
             with self.subTest(target=target), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve()
                 worktree = _linked_worktree(root)
                 self._repo = root / "repo"
                 common = (root / "repo" / ".git").resolve()
                 real = root / "moved"
+                (common / target).mkdir(parents=True, exist_ok=True)  # lfs/ exists only once git-lfs has run
                 (common / target).rename(real)
                 (common / target).symlink_to(common if target != "objects" else real, target_is_directory=True)
                 confinement = self._prepare(worktree, "agent/unit")
