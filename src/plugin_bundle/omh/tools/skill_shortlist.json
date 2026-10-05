@@ -2018,7 +2018,7 @@
 }
 },
 {
-"anchors":"adopt adoption affordabl agentchat agy antigravity assistant audio auth auto awar backend barg behavior blockchain bridg chainlink chat clawsocial cli comparison composio control cost crustocean crypto cryptocurrency demo devic discovery enough evaluat gateway genai generat generation graph handl home identity integration integrity keychain maco mailbox matrix messag microsoft minivers monero multimodal nextcloud oauth oci onequery oracl pair peer platform plugin privat real realtim receipt reliabl safety screenshot smart social solana spoken sql stack text transaction trial universal video voic weather websocket windy windymail wire workspac wxtrain xmr",
+"anchors":"adopt adoption affordabl agentchat agy antigravity assistant audio auth auto awar backend barg behavior blockchain bridg chainlink chat clawsocial cli comparison composio control cost crustocean crypto cryptocurrency demo devic discovery enough evaluat gateway genai generat generation graph handl home identity integration integrity keychain maco mailbox matrix messag microsoft minivers multimodal nextcloud oauth oci onequery oracl pair peer platform plugin privat real realtim receipt reliabl safety screenshot smart social solana spoken sql stack text transaction trial universal video voic weather websocket windy windymail wire workspac wxtrain xmr",
 "hangul":"그인 기기 기준 넥터 데모 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스크 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 제품 준비 채택 커넥 턴트 트홈 티모 플러 홈어",
 "hangul_anchors":"그인 기기 기준 넥터 데모 도입 라우 러그 리스 마트 멀티 모달 비도 비용 생성 스마 스크 스턴 시스 어시 연동 영상 외부 우팅 인증 자동 제어 제품 채택 커넥 턴트 트홈 티모 플러 홈어",
 "label":"omh-external-connector-readiness",
@@ -2026,7 +2026,7 @@
 "situation":"Evaluating a plugin, connector, or API for adoption",
 "terms":{
 "1":"answer assess automatic befor choic coding deletion enabl evidenc executor fallback fresh freshness herm hook inventory miss modality named optional owner paus remov runtim scop toolbelt whether",
-"2":"agent agentchat agy antigravity assistant audio auto awar backend barg behavior benchmark blockchain bridg capability chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency delet demo devic disabl discovery enough failur gateway genai generat generation graph handl home integration integrity keychain lifecycl maco mailbox matrix messag microsoft migration minivers monero new nextcloud oauth observabl oci onequery oracl pair peer platform portability postur privat product read real realtim receipt reliabl risk rollback screenshot smart social solana spoken sql stack sync text time tool transaction turn universal video voic weather websocket windy windymail wire workspac wxtrain xmr",
+"2":"agent agentchat agy antigravity assistant audio auto awar backend barg behavior benchmark blockchain bridg capability chainlink chat clawsocial cli comparison composio control crustocean crypto cryptocurrency delet demo devic disabl discovery enough failur gateway genai generat generation graph handl home integration integrity keychain lifecycl maco mailbox matrix messag microsoft migration minivers new nextcloud oauth observabl oci onequery oracl pair peer platform portability postur privat product read real realtim receipt reliabl risk rollback screenshot smart social solana spoken sql stack sync text time tool transaction turn universal video voic weather websocket windy windymail wire workspac wxtrain xmr",
 "3":"adopt affordabl auth compar cost evaluat export identity multimodal retention safe safety switch",
 "4":"adoption rout",
 "5":"data memory trial",

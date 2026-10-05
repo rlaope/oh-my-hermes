@@ -76,6 +76,15 @@ STOPWORDS: frozenset[str] = frozenset(
     """.split()
 )
 
+# Terms that carry routing meaning in the source catalog but cannot be copied
+# into the generated plugin sidecar. Hermes scans every bundled JSON string
+# with the same critical threat patterns it applies to executable files; the
+# cryptocurrency name below is therefore classified as crypto-mining code even
+# when it is only lexical index data. The explicit multi-word routing phrases
+# remain in `recommend.py`, so removing the standalone token from BM25 neither
+# removes nor weakens that route.
+SIDECAR_EXCLUDED_TERMS: frozenset[str] = frozenset({"monero"})
+
 
 # Words whose final s or es is not an inflection.
 _STEM_EXCEPTIONS = frozenset({"series", "species", "news", "does", "goes", "yes", "this", "thus", "bus", "gas", "lens", "atlas"})
@@ -215,7 +224,7 @@ def _document(definition: SkillDefinition) -> tuple[dict[str, float], float]:
     for field, weight in FIELD_WEIGHTS:
         # A word counts once per field, so a long description that repeats a
         # word does not outweigh a name that states it.
-        for term in set(lexical_terms(_field_text(definition, field))):
+        for term in set(lexical_terms(_field_text(definition, field))) - SIDECAR_EXCLUDED_TERMS:
             weights[term] += weight
             length += weight
     return dict(weights), length
@@ -282,7 +291,7 @@ def _anchor_vocabulary(skill: str) -> frozenset[str]:
     said.update(lexical_terms(_field_text(definition, "triggers")))
     said.update(lexical_terms(_field_text(definition, "name")))
     held_back = {stem(token) for token in held_back_trigger_tokens(skill)}
-    return frozenset(said - held_back)
+    return frozenset(said - held_back - SIDECAR_EXCLUDED_TERMS)
 
 
 # A word more than this many skills' catalog text uses is catalog-common:
@@ -333,6 +342,7 @@ __all__ = [
     "LEXICAL_SCORE_FLOOR",
     "HANGUL_REQUEST_ENDING",
     "HANGUL_STOPWORDS",
+    "SIDECAR_EXCLUDED_TERMS",
     "STOPWORDS",
     "hangul_anchor_terms",
     "hangul_terms",

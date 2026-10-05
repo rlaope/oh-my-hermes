@@ -19,6 +19,7 @@ from omh.plugin_bundle.omh import skill_shortlist as bundle
 from omh.plugin_bundle.omh.awareness import awareness_route_hint
 from omh.plugin_bundle.omh.hooks import llm_hooks
 from omh.routing import lexical_shortlist as core
+from omh.routing.recommend import recommend_skills
 from omh.routing.skill_shortlist_sidecar import standalone_skill_shortlist_json
 from omh.skills.catalog import routable_definitions
 from omh.skills.catalog_types import omh_skill_display_name
@@ -102,6 +103,21 @@ class SidecarParityTests(unittest.TestCase):
         for message in PARITY_MESSAGES:
             with self.subTest(message=message):
                 self.assertEqual(bundle.lexical_terms(message), core.lexical_terms(message))
+
+    def test_host_scanner_exclusion_is_projected_without_weakening_the_explicit_route(self) -> None:
+        sidecar = standalone_skill_shortlist_json()
+        self.assertIn("monero", core.SIDECAR_EXCLUDED_TERMS)
+        self.assertNotIn("monero", sidecar.casefold())
+        self.assertEqual(
+            bundle.lexical_terms("assess the monero gateway connector"),
+            core.lexical_terms("assess the monero gateway connector"),
+        )
+        connector = next(
+            item
+            for item in recommend_skills("assess the monero gateway connector", limit=5)
+            if item["skill"] == "external-connector-readiness"
+        )
+        self.assertIn("trigger:monero gateway", connector["matched"])
 
     def test_the_stemmer_matches_the_core_stemmer(self) -> None:
         for token in ("issues", "pages", "queries", "fixes", "matches", "failing", "failed", "running",

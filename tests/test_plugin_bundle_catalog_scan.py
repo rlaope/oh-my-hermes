@@ -1,4 +1,4 @@
-"""The plugin bundle must pass the Hermes install scanner's `hardcoded_secret` rule.
+"""The plugin bundle must pass critical Hermes install-scanner rules.
 
 `hermes plugins validate` runs the install scanner, and a `dangerous` verdict
 fails a curated-catalog entry (hermes-agent `plugin-catalog/README.md`,
@@ -14,7 +14,9 @@ critical; the same regex is `tools/threat_patterns.py`), compiled with
 `scan_file`. `tools/plugin_guard.py` then lowers some hits (comments, docs,
 test trees) to a reviewer-read warning; this guard applies none of those
 exemptions, because a warning is still something a catalog reviewer must read
-past. Read at hermes-agent 577990c3a0 (2026-09-19).
+past. The `crypto_mining` pattern is pinned for the same reason: it treats a
+cryptocurrency name as critical even when that word appears only in generated
+lexical-index data. Read at hermes-agent 577990c3a0 (2026-09-19).
 """
 
 from __future__ import annotations
@@ -26,6 +28,9 @@ from pathlib import Path
 HERMES_HARDCODED_SECRET = re.compile(
     r'(?:api[_-]?key|token|secret|password)\s*[=:]\s*["\'][A-Za-z0-9+/=_-]{20,}', re.IGNORECASE
 )
+HERMES_CRYPTO_MINING = re.compile(
+    r"xmrig|stratum\+tcp|monero|coinhive|cryptonight", re.IGNORECASE
+)
 BUNDLE = Path(__file__).resolve().parents[1] / "src" / "plugin_bundle" / "omh"
 # `SCANNABLE_EXTENSIONS` in hermes-agent `tools/skills_guard.py`.
 SCANNABLE_EXTENSIONS = {
@@ -34,13 +39,13 @@ SCANNABLE_EXTENSIONS = {
 }
 
 
-def hardcoded_secret_hits(root: Path) -> list[str]:
+def scanner_hits(root: Path, pattern: re.Pattern[str]) -> list[str]:
     hits: list[str] = []
     for path in sorted(root.rglob("*")):
         if "__pycache__" in path.parts or not path.is_file() or path.suffix.lower() not in SCANNABLE_EXTENSIONS:
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), start=1):
-            if HERMES_HARDCODED_SECRET.search(line):
+            if pattern.search(line):
                 hits.append(f"{path.relative_to(root).as_posix()}:{number}: {line.strip()}")
     return hits
 
@@ -51,10 +56,16 @@ class PluginBundleCatalogScanTests(unittest.TestCase):
         # weakens it cannot leave the bundle scan below passing vacuously.
         self.assertTrue(HERMES_HARDCODED_SECRET.search('PRIVATE_TOKEN = "__omh_egress_attempt_token"'))
         self.assertFalse(HERMES_HARDCODED_SECRET.search('PRIVATE_ARGUMENT_KEY = "__omh_egress_attempt_token"'))
+        self.assertTrue(HERMES_CRYPTO_MINING.search('"anchors": "blockchain monero xmr"'))
+        self.assertFalse(HERMES_CRYPTO_MINING.search('"anchors": "blockchain xmr"'))
 
     def test_no_bundle_line_matches_the_hermes_hardcoded_secret_rule(self) -> None:
         self.assertTrue((BUNDLE / "plugin.yaml").is_file(), BUNDLE)
-        self.assertEqual(hardcoded_secret_hits(BUNDLE), [])
+        self.assertEqual(scanner_hits(BUNDLE, HERMES_HARDCODED_SECRET), [])
+
+    def test_no_bundle_line_matches_the_hermes_crypto_mining_rule(self) -> None:
+        self.assertTrue((BUNDLE / "plugin.yaml").is_file(), BUNDLE)
+        self.assertEqual(scanner_hits(BUNDLE, HERMES_CRYPTO_MINING), [])
 
 
 if __name__ == "__main__":
