@@ -5539,16 +5539,16 @@ Answer these four in the lane report before writing a new test; each answer eith
 
 1. Behavior protected: name the observable behavior, invariant, or contract a caller depends on. If none exists, there is nothing for a test to witness: say so in the lane report, as the "Too simple to test" row below allows, and let the reviewer judge.
 2. Plausible regression: name a concrete code change someone could make that this test would turn red. A test no plausible change can break guards nothing.
-3. Why existing coverage misses it: point to the closest existing test and say why that regression slips past it. If that test already catches the regression, add nothing; if it owns the same contract but lacks this case, add the case to that test rather than a near-copy beside it.
+3. Why existing coverage misses it: point to the closest existing test and say why that regression slips past it. If that test already catches the regression, add nothing: its red run on the unimplemented code is the witness the Evidence Ledger asks for, and if it is already green the behavior exists and there is nothing to implement. If it owns the same contract but lacks this case, add the case to that test rather than a near-copy beside it.
 4. Production seam: say whether the test needs an export, flag, or hook that no production caller uses. If it does, test through the real entry point instead; if a new seam is unavoidable, name it in the lane report for the reviewer.
 
 ## Tests That Guard Nothing
 
-A new test with any of these shapes is not evidence for the lane, red or green. Rewrite it before the red commit so it observes the behavior from question 1:
+A new test with any of these shapes is not evidence for the lane, red or green. Rewrite it before the red commit so it observes the behavior from question 1. If the shape is found after the red commit, rewrite the test to observe that behavior, run it red again, and explain the test diff in the lane report as the red-commit rule requires:
 
 - No-assertion probe: the test calls the code and passes as long as nothing raises. When not raising is the contract, assert that outcome explicitly and name it.
 - Self-comparison: the assertion compares a value with itself or with a copy of itself, so no change to the code can make it fail.
-- Expected value from the code under test: the test computes its expected value by calling the code it checks, so the assertion agrees with whatever that code returns. Write the expected value down independently.
+- Expected value from the code under test: the test computes its expected value by calling the code it checks, so the assertion agrees with whatever that code returns. Write the expected value down independently; a committed, reviewed artifact or an independent oracle does not count as the code under test.
 - Negative control passing for an unrelated reason: the rejected input fails on a typo, a missing fixture, or a different guard than the one under test. Assert the reason for the rejection, not only that one happened.
 - Name promising more than the inputs: the test name claims a general rule while its inputs exercise one case. Narrow the name or widen the inputs.
 
@@ -5588,7 +5588,7 @@ Commit the failing test as a checkpoint before the first implementation edit. Th
 
 ## Composition
 
-Hermes bundles the superpowers `test-driven-development` skill. When it is loaded, follow its cycle; this reference reinforces it and never overrides it. What OMH adds is the evidence vocabulary: the observed red-before-green rule, the red-commit checkpoint, the `prepared_not_observed` labeling of unwitnessed cycles, and the questions a new test must answer before it is written.
+Hermes bundles the superpowers `test-driven-development` skill. When it is loaded, follow its cycle; this reference reinforces it and never overrides it. What OMH adds is the evidence vocabulary - the observed red-before-green rule, the red-commit checkpoint, and the `prepared_not_observed` labeling of unwitnessed cycles - plus authoring checks applied before a test counts: the questions a new test must answer, the shapes of tests that guard nothing, and the pre-fix failure rule for bug regressions.
 
 ## What This Does Not Change
 

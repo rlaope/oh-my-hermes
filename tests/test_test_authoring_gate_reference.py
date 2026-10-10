@@ -8,8 +8,9 @@ bug's regression test fails on the unfixed code for the bug's own reason.
 
 `ultrawork` already has its one entry in `MECHANISM_POINTERS` (the
 file-ownership manifest), so this file asserts the same contract for this
-reference directly: the always-loaded body names it, its named
-mechanism tokens are present, and it records no date or volatile count. The
+reference directly: its named mechanism tokens are present and it records no
+date or volatile count. That the always-loaded body names the reference is
+owned by `tests/test_router_content.py` and is not repeated here. The
 body itself is not edited by this change, so the body byte ceiling is owned by
 `tests/test_skill_reference_mechanisms.py` and is not repeated here.
 
@@ -20,7 +21,7 @@ from __future__ import annotations
 
 import unittest
 
-from omh.skills.packaging import builtin_skill_reference_templates, builtin_skill_templates
+from omh.skills.packaging import builtin_skill_reference_templates
 from test_skill_reference_mechanisms import _DATE, _VOLATILE_COUNT
 
 SKILL = "ultrawork"
@@ -50,6 +51,23 @@ PRE_FIX_TOKENS = (
     "fail because of that bug",
 )
 
+# Question 3's "add nothing" branch: the existing test's red run is the
+# Evidence Ledger witness, and an already-green run means nothing to build.
+EXISTING_WITNESS_TOKENS = (
+    "its red run on the unimplemented code is the witness the Evidence Ledger asks for",
+    "if it is already green the behavior exists and there is nothing to implement",
+)
+
+# A guards-nothing shape found after the red commit: rewrite, re-run red, and
+# explain the diff under the red-commit rule.
+AFTER_RED_COMMIT_TOKENS = (
+    "If the shape is found after the red commit",
+    "run it red again, and explain the test diff in the lane report",
+)
+
+# An expected value from a reviewed artifact or an oracle is not self-derived.
+INDEPENDENT_EXPECTED_TOKEN = "a committed, reviewed artifact or an independent oracle does not count as the code under test"
+
 
 def _reference() -> str:
     matches = [
@@ -63,10 +81,6 @@ def _reference() -> str:
 
 
 class TestAuthoringGateReferenceTests(unittest.TestCase):
-    def test_ultrawork_body_names_the_tdd_reference(self) -> None:
-        bodies = {template.name: template.content for template in builtin_skill_templates()}
-        self.assertIn(REFERENCE_PATH, bodies[SKILL], f"{SKILL} body no longer names {REFERENCE_PATH}")
-
     def test_reference_names_each_of_the_four_pre_add_questions(self) -> None:
         content = _reference()
         for token in QUESTION_TOKENS:
@@ -84,6 +98,21 @@ class TestAuthoringGateReferenceTests(unittest.TestCase):
         for token in PRE_FIX_TOKENS:
             with self.subTest(token=token):
                 self.assertIn(token, content, f"{REFERENCE_PATH} lost the pre-fix failure rule ({token!r})")
+
+    def test_question_three_names_the_existing_tests_red_run_as_the_witness(self) -> None:
+        content = _reference()
+        for token in EXISTING_WITNESS_TOKENS:
+            with self.subTest(token=token):
+                self.assertIn(token, content, f"{REFERENCE_PATH} lost the existing-test witness rule ({token!r})")
+
+    def test_a_shape_found_after_the_red_commit_is_rewritten_and_rerun_red(self) -> None:
+        content = _reference()
+        for token in AFTER_RED_COMMIT_TOKENS:
+            with self.subTest(token=token):
+                self.assertIn(token, content, f"{REFERENCE_PATH} lost the after-red-commit rule ({token!r})")
+
+    def test_an_independent_expected_value_is_not_the_code_under_test(self) -> None:
+        self.assertIn(INDEPENDENT_EXPECTED_TOKEN, _reference(), f"{REFERENCE_PATH} lost the independent-oracle clause")
 
     def test_reference_records_no_date_or_volatile_count(self) -> None:
         content = _reference()
