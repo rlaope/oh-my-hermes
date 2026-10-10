@@ -3350,7 +3350,22 @@ Before trusting any reading, confirm the process executed the source you are loo
 - A cached bytecode file is validated by timestamp and size, so two edits of equal length in the same second can reuse the old compile.
 - A test that reads its own teardown output, or a lock that times out inside a best-effort swallow, leaves the same trace as the fault being hunted; put the discriminator in the assertion message.
 
-## 6. Evidence boundary
+## 6. After three failed fixes
+
+Count fix attempts from executed results, never from the conversation. A fix counts as failed when the executor applied it, ran the same reproduction command from section 1, and observed the same symptom; for an intermittent fault, the same loop at the same run count still shows it. A different command, a different symptom, or a run that was planned but not executed is not a failed attempt, so a flaky reproduction cannot inflate the count.
+
+After the third failed fix, stop fixing. Every fix was tested against a structure all of them assumed, and three failures on the same command make that structure the suspect.
+
+- **Prepare no fourth fix.** Another diff on the same assumption is the same guess again.
+- **Name the shared assumptions.** What owns the state, which boundary the data crosses, what ordering the design relies on, whether the component is used the way it was built to be. Write each with the observation that would refute it, as in section 2.
+- **Look for the structural pattern.** Each fix exposes shared state or coupling in a new place, each fix moves the symptom elsewhere, or the next fix would need a wide restructuring to land.
+- **Hand the choice back.** Present the re-examination and end the turn with the next step as a question the user owns: fix inside the current design under a named new hypothesis, or change the design at the assumption that failed.
+
+| Thought | Why it does not hold |
+| --- | --- |
+| One more fix will do it | After three failed fixes on the same command and symptom, the untested part is the assumption they shared, not the next diff. |
+
+## 7. Evidence boundary
 
 | Claim | Evidence |
 | --- | --- |
