@@ -10,9 +10,15 @@ All notable changes will be documented here.
   may not edit (checked against the diff at judging time); a judge that is not
   the builder; prior human approval before a loop changes its own rules, kept
   separate from memory capture's `approved_auto_safe` admission; and a
-  pre-launch check where any open item stops the launch and goes to the user.
-  It starts after `loopability_assessment/v1` and leaves scored loops to
-  `references/measured-loop-discipline.md`. A new `docs/SKILL-SOURCES.md` row
+  pre-launch check whose open items the model repairs itself where the skill
+  allows, asking the user only for a choice that is theirs. The fence check
+  diffs the working tree and untracked files against a recorded start SHA
+  with renames split, so a moved or uncommitted edit to a fenced path still
+  fails. A retry cap counts failures of one item's acceptance check and then
+  hands over to the existing exhaustion ladder, and with no second session to
+  judge, the loop stops at its verification gate instead of grading itself.
+  It starts after `loopability_assessment/v1` and leaves a scored loop's
+  contract to `references/measured-loop-discipline.md`. A new `docs/SKILL-SOURCES.md` row
   watches `affaan-m/everything-claude-code` (`loop-design-check`) for `loop`
   (#2049).
 - **`app-debugging` stops after three failed fixes and re-examines the

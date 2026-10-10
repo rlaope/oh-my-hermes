@@ -139,7 +139,8 @@ MECHANISM_TOKENS: dict[str, tuple[str, ...]] = {
         "loopability_assessment/v1",      # the existing classifier this review starts after
         "measured-loop-discipline.md",    # the scored case, named instead of restated
         "fence",                          # the paths the loop may not edit, beside the finish line
-        "git diff --name-only",           # how the fence is checked at judging time
+        "--no-renames",                   # a renamed fenced file still shows its old path
+        "verification_plan",              # the per-iteration acceptance check, apart from the finish line
         "Is Not the Builder",             # the judge separation
         "self-modifying",                 # loops that change their own rules
         "approved_auto_safe",             # the memory-capture rule this one is kept apart from

@@ -14,6 +14,7 @@ from __future__ import annotations
 import unittest
 
 from omh.skills.catalog import omh_skill_display_name
+from omh.skills.packaging import builtin_skill_reference_templates
 from omh.skills.render import (
     agent_skill_reference_templates,
     agent_skill_templates,
@@ -21,6 +22,23 @@ from omh.skills.render import (
 )
 
 POINTER = "references/loop-design-review.md"
+
+# The pre-launch check's five rows, by the names the table gives them.
+FAILURE_CHECK_ITEMS = (
+    "| Undecidable finish |",
+    "| Self-grading |",
+    "| Unfenced check |",
+    "| Questions left for mid-run |",
+    "| Stale working context |",
+)
+
+
+def _reference() -> str:
+    return next(
+        template.content
+        for template in builtin_skill_reference_templates()
+        if template.skill_name == "loop" and template.relative_path == POINTER
+    )
 
 
 class LoopDesignReviewProjectionTests(unittest.TestCase):
@@ -39,6 +57,37 @@ class LoopDesignReviewProjectionTests(unittest.TestCase):
         self.assertEqual(portable_loop, [omh_skill_display_name("loop")], f"portable bodies naming {POINTER}")
         naming = [line for line in bodies[portable_loop[0]].splitlines() if POINTER in line]
         self.assertEqual(len(naming), 1, "the portable pointer is one line")
+
+
+class LoopDesignReviewFenceCommandTests(unittest.TestCase):
+    """The fence check is only as good as the exact command it names.
+
+    `git diff --name-only <start>..HEAD` passed review once and missed two
+    ways around the fence: a rename reports only the new path, so moving a
+    fenced test out of the way hid it, and a commit range never sees staged,
+    unstaged, or untracked edits. These pins hold the command form that
+    closes both, so a reword back to the range form fails here.
+    """
+
+    def test_the_diff_sees_renames_as_a_deletion(self) -> None:
+        self.assertIn("git diff --no-renames --name-status <start-sha>\n", _reference())
+
+    def test_the_diff_covers_the_working_tree_and_untracked_files(self) -> None:
+        content = _reference()
+        self.assertIn("git ls-files --others --exclude-standard\n", content)
+        self.assertIn("staged and unstaged edits included", content)
+        self.assertNotIn("..HEAD", content, "a commit range misses uncommitted edits")
+
+    def test_the_start_is_a_recorded_sha_not_a_branch(self) -> None:
+        content = _reference()
+        self.assertIn("by its full SHA, never by a branch name", content)
+        self.assertIn("record that commit's SHA as the new start", content)
+
+    def test_all_five_failure_check_items_are_rows(self) -> None:
+        content = _reference()
+        for item in FAILURE_CHECK_ITEMS:
+            with self.subTest(item=item):
+                self.assertIn(item, content)
 
 
 if __name__ == "__main__":
