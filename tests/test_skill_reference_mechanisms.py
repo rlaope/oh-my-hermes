@@ -2,10 +2,10 @@
 
 The first seven are the rows of issue #1714's table, each one skill that
 declared a discipline in its body and shipped no procedure for it; `loop`'s
-design review (issue #2049) joined later under the same contract. The
-capability is the reference file, and the body pointer is the only thing that
-makes it reachable -- a reference nothing points at is a file in the pack, not
-a capability.
+design review and `agent-debug`'s session forensics rules (issue #2049)
+joined later under the same contract. The capability is the reference file,
+and the body pointer is the only thing that makes it reachable -- a reference
+nothing points at is a file in the pack, not a capability.
 
 Everything here re-derives from the producers (`builtin_skill_reference_templates()`
 and `builtin_definitions()`), never from the generated `skills/` tree, so
@@ -69,6 +69,10 @@ MECHANISM_POINTERS: dict[str, tuple[str, str]] = {
     "loop": (
         "references/loop-design-review.md",
         "references/loop-design-review.md",
+    ),
+    "agent-debug": (
+        "references/session-forensics.md",
+        "references/session-forensics.md",
     ),
 }
 
@@ -147,6 +151,17 @@ MECHANISM_TOKENS: dict[str, tuple[str, ...]] = {
         "Self-grading",                   # pre-launch failure-check items
         "Unfenced check",
         "Questions left for mid-run",
+    ),
+    "agent-debug": (
+        "Intake before any query",        # the question is written before the first read
+        "mode=ro",                        # read-only open of the session store
+        "--max-row-bytes",                # the existing bounded read, named instead of restated
+        "substr(content, 1, <cap>)",      # bounding a cell inside SQLite
+        "_compressed_summary",            # a software-written row in the user's slot
+        "parent agent",                   # who the user is in a delegated child's transcript
+        "not computed",                   # what an uncomputed figure is written as
+        "distinct `tool_call_id`",        # the count compaction does not inflate
+        "--confirm-export",               # sharing waits for the user's review
     ),
 }
 

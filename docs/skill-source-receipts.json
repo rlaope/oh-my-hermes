@@ -386,6 +386,17 @@
       "reviewed_on": "2026-10-10",
       "rationale": "Adopted one rule: agreeing to an idea consents to that idea only, and a plan, handoff, or code change written later is accepted at its own gate; the request-path classification is deferred to a follow-up.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-agent-debug-superpowers",
+      "candidate_key": "agent-debug@github.com/obra/superpowers",
+      "prior_checkpoint": null,
+      "next_checkpoint": "8ca22dba9a94f28898bbce59f2537ff4d87c747d",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted intake before analysis, read-only and length-bounded session reads, speaker attribution for software-written rows and a child's parent agent, only computed figures, and user review before sharing, in OMH wording.",
+      "supersedes": null
     }
   ]
 }

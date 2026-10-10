@@ -1693,6 +1693,7 @@ _FEATURE_SURFACE_SKILLS = (
         ),
         extra_quality_bar=(
             "Hold at least two competing failure hypotheses at once, each with observed evidence for and against; a diagnosis that never named a rival hypothesis is a guess.",
+            "Before reading a Hermes session store, a session record, or a delegated child's transcript, load `references/session-forensics.md`: intake first, read-only and length-bounded reads, who actually wrote each row, and only numbers computed from the session.",
             "Order probes cheapest-discriminating-first: run the cheapest check that splits the surviving hypotheses before any expensive capture, rerun, or restart.",
             "When a run that used to work now fails, bisect from last-known-good to first-bad change (prompt, config, tool, model, or environment) instead of debugging the newest symptom.",
             "Name a cause only after revert-verify: remove the suspect change and observe the failure disappear, or state that causation is unproven.",
@@ -1705,6 +1706,21 @@ _FEATURE_SURFACE_SKILLS = (
             "agent keeps failing the same way",
             "why did the agent stall",
         ),
+        portable_overrides={
+            "quality_bar": (
+                "Name the user-facing workflow objective, required context, next action, and stop condition.",
+                "Separate prepared guidance from observed platform, runtime, connector, file, memory, or delivery evidence.",
+                "Expose missing tools, credentials, targets, or observations as user-visible gaps.",
+                "Hold at least two competing failure hypotheses at once, each with observed evidence for and against; a diagnosis that never named a rival hypothesis is a guess.",
+                "Order probes cheapest-discriminating-first: run the cheapest check that splits the surviving hypotheses before any expensive capture, rerun, or restart.",
+                "When a run that used to work now fails, bisect from last-known-good to first-bad change (prompt, config, tool, model, or environment) instead of debugging the newest symptom.",
+                "Name a cause only after revert-verify: remove the suspect change and observe the failure disappear, or state that causation is unproven.",
+                "Reproduce the failure before preparing any recovery action; a fix without a reproduced failure first is a guess.",
+            ),
+        },
+        portable_override_shadows={
+            "quality_bar": "099faef99aa130511954871433ce8b83a464d61d322220b533897f5a026c509f",
+        },
     ),
     _feature_surface_skill(
         "failure-signal-audit",
