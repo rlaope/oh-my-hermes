@@ -15,6 +15,11 @@ The control plane passes its own ``file_lock`` and ``utc_now`` through
 same OS lock on the same ``.<name>.lock`` sidecar, so a CLI and a plugin
 session against one home exclude each other. Stdlib only; no import of the
 ``omh`` control plane.
+
+Refusing an instruction-shaped summary from the model's own capture path, naming
+why and how to restate it, follows the hint admission rule of oh-my-openagent
+(https://github.com/code-yeongyu/oh-my-openagent, commit 657ea5a2a; concept
+only, link-only); the vocabulary and wording here are OMH's own.
 """
 
 from __future__ import annotations
@@ -284,6 +289,31 @@ def capture_project_memory_candidate(
             "safety": structural_safety,
             "redaction_policy": "metadata_only",
             "claim_boundary": "Credential-like structural metadata is rejected before project-memory persistence.",
+        }
+    # The model's own capture path replays into later sessions as context, so
+    # a summary written as an order to its reader would come back carrying a
+    # user turn's authority. Only that source is screened: demotion, rollup,
+    # design direction and the CLI store text a person or a derivation chose,
+    # and a refused demotion would end its staging run.
+    instruction_cue = (
+        _instruction_shaped_reason(str(summary or ""), str(record_type or ""))
+        if source == MODEL_CAPTURE_SOURCE
+        else ""
+    )
+    if instruction_cue:
+        return {
+            "schema_version": PROJECT_MEMORY_CAPTURE_SCHEMA_VERSION,
+            "captured": False,
+            "auto_approved": False,
+            "policy": policy,
+            "reason": "instruction_shaped_summary",
+            "instruction_cue": instruction_cue,
+            "next_action": (
+                "Nothing was saved. Restate it as an observation of what holds (what the user prefers, "
+                "what the project does, what was decided), not as an order to the reader, and capture it again."
+            ),
+            "redaction_policy": "metadata_only",
+            "claim_boundary": "An instruction-shaped summary from the model capture path is refused before persistence.",
         }
     # Absolute deadlines: "the contract ends on the 18th" is a date, not a
     # day count, and forcing the captor to do the subtraction moved the
@@ -1363,6 +1393,64 @@ _RELATIVE_TIME_PATTERN = re.compile(
     r"|d['’]ici\s+(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|la\s+fin\s+(?:de\s+la\s+semaine|du\s+mois)))\b",
     re.IGNORECASE,
 )
+
+
+# The capture source the `omh_memory` tool passes; the only one screened for
+# instruction-shaped summaries.
+MODEL_CAPTURE_SOURCE = "hermes_model"
+# Second-person modal phrases, matched as consecutive words inside one clause,
+# so "thank you; must ship" or "Ask what you need. To be safe" is not a cue.
+# Opening with an imperative verb is deliberately not a cue: lessons and
+# decisions open that way ("Prefer the release branch"). Nor is a summary that
+# opens with "your": file names ("your.yaml") and observations ("Your config was
+# wrong because ...") open that way too, and no closed rule tells them apart.
+_INSTRUCTION_SECOND_PERSON_PHRASES = (
+    ("you", "must"),
+    ("you", "should"),
+    ("you", "need", "to"),
+    ("you", "have", "to"),
+    ("you", "ought", "to"),
+)
+# Clause boundaries the phrases may not cross (ASCII and CJK punctuation).
+_INSTRUCTION_CLAUSE_BOUNDARY_PATTERN = re.compile(r"[.,;:!?。，、；：！？]+")
+# Korean request endings, matched only where a sentence ends: at the end of the
+# summary or before closing punctuation, after any trailing quotes, brackets,
+# tildes or emoji.
+_INSTRUCTION_KOREAN_REQUEST_ENDINGS = ("해줘", "해 줘", "해주세요", "해 주세요", "하세요", "해라", "하십시오")
+_INSTRUCTION_KOREAN_REQUEST_PATTERN = re.compile(
+    "(" + "|".join(re.escape(ending) for ending in _INSTRUCTION_KOREAN_REQUEST_ENDINGS) + ")"
+)
+_INSTRUCTION_SENTENCE_END = frozenset(".!?。！？")
+# Fixed greetings that end in a request ending but order nothing. 안녕히 가세요
+# and 안녕히 계세요 need no entry: no ending in the vocabulary matches them.
+_INSTRUCTION_KOREAN_GREETINGS = ("안녕하세요", "수고하세요", "고생하세요")
+# Invisible characters that would split a cue without changing how it reads.
+_INSTRUCTION_ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\ufeff"))
+# A procedure is a how-to by definition; its steps may address the reader.
+_INSTRUCTION_EXEMPT_RECORD_TYPES = ("procedure",)
+
+
+def _instruction_shaped_reason(summary: str, record_type: str) -> str:
+    """The cue that makes a summary read as an order to its reader, or ""."""
+    if record_type in _INSTRUCTION_EXEMPT_RECORD_TYPES:
+        return ""
+    text = unicodedata.normalize("NFKC", summary).translate(_INSTRUCTION_ZERO_WIDTH)
+    for clause in _INSTRUCTION_CLAUSE_BOUNDARY_PATTERN.split(text.lower()):
+        words = re.findall(r"[a-z']+", clause)
+        for phrase in _INSTRUCTION_SECOND_PERSON_PHRASES:
+            width = len(phrase)
+            if any(tuple(words[index : index + width]) == phrase for index in range(len(words) - width + 1)):
+                return " ".join(phrase)
+    for match in _INSTRUCTION_KOREAN_REQUEST_PATTERN.finditer(text):
+        if text[: match.end()].endswith(_INSTRUCTION_KOREAN_GREETINGS):
+            continue
+        rest = text[match.end() :]
+        closers = 0
+        while closers < len(rest) and (rest[closers].isspace() or unicodedata.category(rest[closers])[0] in "PS"):
+            closers += 1
+        if closers == len(rest) or _INSTRUCTION_SENTENCE_END.intersection(rest[:closers]):
+            return match.group(1)
+    return ""
 
 
 def _relative_time_phrase(value: str) -> str:

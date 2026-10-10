@@ -331,14 +331,20 @@ def _map_capture_payload(payload: dict) -> dict[str, object]:
                 duplicate_of=duplicate_of,
                 next_action="Nothing new was saved; the same fact is already held.",
             )
+        if payload.get("instruction_cue"):
+            # A vocabulary item from admission's closed cue list, never the
+            # user's text, so the model sees which words made it an order.
+            fields["instruction_cue"] = str(payload["instruction_cue"])
         return _capture_result(
             "refused",
             **fields,
             reason=reason,
+            # A refusal that names its own fix (an instruction-shaped summary)
+            # passes it through, so the model learns how to restate it.
             next_action=(
                 "Memory is turned off in OMH settings; nothing was saved."
                 if reason == "project_memory_disabled"
-                else "Nothing was saved. Do not retry the same text."
+                else str(payload.get("next_action", "") or "") or "Nothing was saved. Do not retry the same text."
             ),
         )
     if payload.get("auto_approved"):

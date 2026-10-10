@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Memory the model captures cannot be written as an instruction.**
+  `omh_memory(action="capture")` now refuses a summary phrased as an order to
+  its reader: a second-person modal (`you must`, `you should`, `you need to`,
+  `you have to`, `you ought to`) within one clause, or a sentence that closes
+  on a Korean request ending (`해줘`, `해 주세요`, `하세요`, `해라`, `하십시오`),
+  after NFKC normalization with zero-width characters removed. Fixed greetings
+  (`안녕하세요`, `수고하세요`, `고생하세요`) are not requests, and a summary
+  opening with `your` is not a cue. Nothing is written, and the result carries
+  `reason: instruction_shaped_summary`, the matched cue, and a `next_action`
+  that asks for the same fact restated as an observation; there is no review
+  step. `procedure` records are exempt, and opening with an imperative verb is
+  not a cue. Only the model capture source (`hermes_model`) is screened: L1
+  demotion, episode rollup, design-direction promotion, the workflows adapter
+  and the `omh memory capture` CLI store the same sentence as before. The rule
+  follows oh-my-openagent's hint admission as a concept only (#2049).
 - **`agent-debug` reads a past session as evidence under fixed rules.** A
   new Hermes-only `references/session-forensics.md`, named by one quality-bar
   line, writes the question down (session, turn range, expected, observed, the
