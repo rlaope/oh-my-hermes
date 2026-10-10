@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`plan` surfaces untested inputs before execution, and `ralplan` plans
+  for the ideal state of the person the change affects.** `plan` now asks for
+  a `Review Focus` section of at most 5 inputs or failure modes the
+  requirements imply but no task's tests exercise, each with the owning task
+  that adds its test, one checkable action per step, and a proportion check
+  that catches a plan which has written the code early. `ralplan` names who the
+  change affects, how they use the surface today, and the ideal state before
+  comparing options, records a `Success criteria` table
+  (`Criterion | Task | Verification scenario`) with one row per gap, and closes
+  with an `Ideal-state fidelity` check whose shortfall becomes a new task; it
+  never cuts to an MVP or phase 1 the user did not ask for, and gives effort as
+  a fixed band. Both rules reach the portable `agent-skills/` projection, and
+  new `docs/SKILL-SOURCES.md` rows watch `obra/superpowers` (`writing-plans`)
+  for `plan` and, link-only, `code-yeongyu/oh-my-openagent` for `ralplan`
+  (#2049).
 - **A workflow name inside a block quote, a relayed line, or a link no longer
   starts that workflow, and a delegated child is not told to start an
   orchestrating engine its brief names.** `> $ulw-work fix the build`,

@@ -93,6 +93,16 @@ _MODEL_SETUP_FIVE_STEP_BAR = (
     "applicable item.",
 )
 
+# Shared by ralplan's Hermes quality_bar and its portable override, which
+# replaces that section wholesale; one literal keeps the two from drifting.
+_RALPLAN_IDEAL_STATE_BAR = (
+    "Before comparing options, name who the change affects (a person, another programmer, or a consuming program), how they use the surface today, the ideal state in which nothing snags, regresses, or degrades for them, and each gap from today with its reason.",
+    "Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per ideal-state gap, so every gap names the task that delivers it and the scenario that proves it.",
+    "Close with an `Ideal-state fidelity` check: a gap that no task delivers or no scenario proves becomes a new task, never a note.",
+    "Never cut the plan to an MVP or phase 1 the user did not ask for; when the user asks for a split or phases, plan that split, and when the ideal state is larger than the request, say so in one line and plan it.",
+    "Give effort as one fixed band - `Quick`, `S`, `M`, `L`, or `XL` - never as hours or days.",
+)
+
 
 _DEFINITIONS = [
     SkillDefinition(
@@ -6661,6 +6671,9 @@ _DEFINITIONS = [
             "Where the repository declares non-negotiable principles, load `references/project-constitution.md` and record the check: a plan conflicting with a MUST is resolved by changing the plan, never by reinterpreting the principle.",
             "Keep draft plans unapproved until a user or wrapper accepts them.",
             "Only prepare coding handoff guidance after the plan is accepted.",
+            "Add a `Review Focus` section of at most 5 inputs or failure modes the requirements imply but no task's tests exercise, most likely first, each with the expected behavior and the owning task that adds its test; requirements silent on an input still expect it not to break the result, and an empty section states that the check found none.",
+            "Write each step as one action with a checkable result - a test with its assertions, an exact signature and file, or a command with the output that means pass; a step that decides nothing (`TBD`, `handle edge cases`) is a gap.",
+            "Run a proportion check before acceptance: a plan longer than the code it describes, or one that is mostly code bodies, has written the code early; replace bodies with signatures, test names, and assertions.",
             ENGINE_FIT_RECOMMENDATION_RULE,
         ),
         situations=(
@@ -6717,6 +6730,7 @@ _DEFINITIONS = [
             "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
             "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
             "List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `ultrawork` can prepare board rows from the plan without re-planning; planning itself stays a bounded in-session lane.",
+            *_RALPLAN_IDEAL_STATE_BAR,
             "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
             "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.",
             "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
@@ -6752,6 +6766,7 @@ _DEFINITIONS = [
             "Observed repo facts and source/web evidence gaps are named.",
             "At least two options or one chosen option plus rejected alternatives are recorded.",
             "Risks, acceptance criteria, and verification commands are testable or explicitly blocked.",
+            "Every ideal-state gap has a `Success criteria` row with a task and a verification scenario, and the `Ideal-state fidelity` check left none unmapped.",
             "The plan exists as a recorded file-backed artifact, not only as chat narration.",
             "The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.",
             "The follow-on engine or executor path was started only after the user's explicit go-ahead in this conversation, never from plan acceptance alone.",
@@ -6788,6 +6803,7 @@ _DEFINITIONS = [
                 "Start from observed repo facts and source/web evidence when freshness or external behavior matters.",
                 "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
                 "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
+                *_RALPLAN_IDEAL_STATE_BAR,
                 "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
                 "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.",
                 "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
@@ -6803,7 +6819,7 @@ _DEFINITIONS = [
             "artifact_expectations": "a8eb07c3491b92fb1f72dc0bbd8bd5da29398f9b8aa6cae9b64b2b2c5aa3bae6",
             "safety_rules": "72126c765975b034ab683d27aa0349dbe84c564e45f29832f2b8424a1b3d28cc",
             "opening_steps": "d8ef54a1ea61e051cb069ffb43b846f0d28a88eda400436d13f357c5373d8f0c",
-            "quality_bar": "0e6567f48619d36a9957c8a05c0b6c088dc76654f3762005e007dfface3c2e0f",
+            "quality_bar": "500a46764aef36a18df176892b82fa8daf343f8f06802d0bea7eb62374a6cf09",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
         },
     ),

@@ -52,6 +52,7 @@ Bad example:
 - Observed repo facts and source/web evidence gaps are named.
 - At least two options or one chosen option plus rejected alternatives are recorded.
 - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
+- Every ideal-state gap has a `Success criteria` row with a task and a verification scenario, and the `Ideal-state fidelity` check left none unmapped.
 - The plan exists as a recorded file-backed artifact, not only as chat narration.
 - The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.
 - The follow-on engine or executor path was started only after the user's explicit go-ahead in this conversation, never from plan acceptance alone.
@@ -82,6 +83,11 @@ Quality bar:
 - Start from observed repo facts and source/web evidence when freshness or external behavior matters.
 - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
 - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
+- Before comparing options, name who the change affects (a person, another programmer, or a consuming program), how they use the surface today, the ideal state in which nothing snags, regresses, or degrades for them, and each gap from today with its reason.
+- Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per ideal-state gap, so every gap names the task that delivers it and the scenario that proves it.
+- Close with an `Ideal-state fidelity` check: a gap that no task delivers or no scenario proves becomes a new task, never a note.
+- Never cut the plan to an MVP or phase 1 the user did not ask for; when the user asks for a split or phases, plan that split, and when the ideal state is larger than the request, say so in one line and plan it.
+- Give effort as one fixed band - `Quick`, `S`, `M`, `L`, or `XL` - never as hours or days.
 - Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.
 - When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.
 - Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.
