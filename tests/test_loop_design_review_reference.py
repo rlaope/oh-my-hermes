@@ -65,18 +65,38 @@ class LoopDesignReviewFenceCommandTests(unittest.TestCase):
     `git diff --name-only <start>..HEAD` passed review once and missed two
     ways around the fence: a rename reports only the new path, so moving a
     fenced test out of the way hid it, and a commit range never sees staged,
-    unstaged, or untracked edits. These pins hold the command form that
-    closes both, so a reword back to the range form fails here.
+    unstaged, or untracked edits. A later review found that ignored files and
+    fence entries untracked at the start reach neither listing. These pins
+    hold the command forms and the direct checks that close all of those, so
+    a reword back to a weaker form fails here.
     """
 
     def test_the_diff_sees_renames_as_a_deletion(self) -> None:
-        self.assertIn("git diff --no-renames --name-status <start-sha>\n", _reference())
+        self.assertIn(
+            "`git -c core.quotePath=false diff --no-renames --name-status <start-sha>`", _reference()
+        )
 
     def test_the_diff_covers_the_working_tree_and_untracked_files(self) -> None:
         content = _reference()
-        self.assertIn("git ls-files --others --exclude-standard\n", content)
+        self.assertIn("`git -c core.quotePath=false ls-files --others --exclude-standard`", content)
         self.assertIn("staged and unstaged edits included", content)
         self.assertNotIn("..HEAD", content, "a commit range misses uncommitted edits")
+
+    def test_entries_the_listings_cannot_see_are_checked_directly(self) -> None:
+        """Ignored files never reach either listing, and a file untracked at
+        the start is never compared by them, so both need their own step."""
+        content = _reference()
+        self.assertIn("run `test -e <path>`", content)
+        self.assertIn("gitignored or not", content)
+        self.assertIn("`git ls-files --error-unmatch <path>` reports as untracked", content)
+        self.assertIn("the entry's sha256", content)
+        self.assertIn("`git -C <sub> status --porcelain`", content)
+
+    def test_a_rebase_keeps_the_approved_anchor(self) -> None:
+        self.assertIn(
+            "the rebased copy of the most recent approved re-anchor commit, or the new base when there is none",
+            _reference(),
+        )
 
     def test_the_start_is_a_recorded_sha_not_a_branch(self) -> None:
         content = _reference()

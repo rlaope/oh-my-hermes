@@ -191,7 +191,7 @@
     "ulw-interview/references/ambiguity-taxonomy.md": "af4b13bcfe583b138e9b1de47a851e40e227ce30b0404fcb10bfa16abe297d3a",
     "ulw-loop/SKILL.md": "797243a7bc87a30ffdbe6cb7c11fe6e94afbedcbefa3a199709561fa174a3dac",
     "ulw-loop/references/goal-constraint-discipline.md": "e9755a82604a6b9d363716b6bf33bc980406ea40bce813d763eda9703e1a093f",
-    "ulw-loop/references/loop-design-review.md": "9dd68f3ae864edb283cb34d71295fa52cc8987f6b6f933aac0f5a41552c372e9",
+    "ulw-loop/references/loop-design-review.md": "03305b52330d8f16c67bfdca4f25f1b289bd9d45c18fff7568e2a4c930428a00",
     "ulw-loop/references/measured-loop-discipline.md": "1c3da401271e023ea21cf5aa0a1cee488cdb9bb8ca966251dc0bca767af00dfb",
     "ulw-perf/SKILL.md": "4189814b67cd81e446f42dc0dbb0e91168c065d2833b9dbc895539226bb927ad",
     "ulw-plan/SKILL.md": "1ebcf52fe9527760cfdd93a7b63eb18ca74e77a7827d7584a709332be284fe26",
@@ -317,7 +317,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "9cb7ec9939fc1184d91b026ac4c91b6eba56faa4a1ecf40036fd4dc19b883207",
+  "source_digest": "5e388dd7d2dc054a25b1534a8e268c141f6eef694c81d56176d5d5e32a06279c",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"

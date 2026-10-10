@@ -12,9 +12,12 @@ All notable changes will be documented here.
   separate from memory capture's `approved_auto_safe` admission; and a
   pre-launch check whose open items the model repairs itself where the skill
   allows, asking the user only for a choice that is theirs. The fence check
-  diffs the working tree and untracked files against a recorded start SHA
-  with renames split, so a moved or uncommitted edit to a fenced path still
-  fails. A retry cap counts failures of one item's acceptance check and then
+  is a numbered judging procedure: it diffs the working tree and untracked
+  files against a recorded start SHA with renames split, so a moved or
+  uncommitted edit to a fenced path still fails, and it checks what those
+  listings cannot see directly - `test -e` for files fenced as absent
+  (ignored ones included), launch-time sha256 for entries untracked at the
+  start or outside the repository, and recorded commits for submodules. A retry cap counts failures of one item's acceptance check and then
   hands over to the existing exhaustion ladder, and with no second session to
   judge, the loop stops at its verification gate instead of grading itself.
   It starts after `loopability_assessment/v1` and leaves a scored loop's
