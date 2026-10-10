@@ -3,18 +3,22 @@ from __future__ import annotations
 from . import runtime_paths
 
 import errno
+import hashlib
 import heapq
 import json
 import math
 import os
 import re
 import stat
+import time
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable
 
 from .approval_bypass import effective_approval_bypass
+from .awareness_delivery import _awareness_delivery_lock
 from .hermes_delegation import read_hermes_native_subagents
 from .kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from .live_session import (
@@ -22,6 +26,7 @@ from .live_session import (
     live_tui_session_rows,
     tui_session_durable_id,
 )
+from .memory_state_files import write_text_atomic
 from .subagent_graph import project_subagent_graph
 from .subagent_graph_contract import (
     GRAPH_CONTRACT_UNIT_LIMIT,
@@ -213,6 +218,15 @@ _FANOUT_GRAPH_STATUSES = {
     "prepared_not_observed",
 }
 _FANOUT_ROSTER_SCHEMA_VERSION = "omh_running_work_board/v1"
+# The fanout record shared between concurrent HUD readers of one home
+# (`_hud_local_fanout_record`). The TTL bounds how long a change the stat key
+# cannot see may stay hidden. The lock wait is kept under the widget's 1500ms
+# reader timeout, so a reader that waits and then has to scan itself anyway
+# has some of that budget left.
+HUD_FANOUT_CACHE_FILE = "hud-fanout-cache.json"
+HUD_FANOUT_CACHE_SCHEMA_VERSION = "omh_hud_fanout_cache/v1"
+HUD_FANOUT_CACHE_TTL_SECONDS = 3.0
+HUD_FANOUT_CACHE_LOCK_SECONDS = 1.0
 
 
 def _expand_path(value: str | Path) -> Path:
@@ -1049,6 +1063,181 @@ def _hud_subagent_graph(
 
 
 def _hud_local_fanout_record(
+    home: Path,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str, str] | str | None:
+    """The fanout record, shared across concurrent readers of one home (#2030).
+
+    Every TUI's status widget spawns its own reader every few seconds, and
+    this record does not depend on the reading session, so N TUIs used to
+    recompute the same scan N times. The first reader to miss computes it
+    under the bundle's lock and stores it; the rest read that entry.
+
+    An entry is reused only when its key still matches -- the home, the code
+    that computed it, and the lstat of every file the scan reads -- and it is
+    younger than `HUD_FANOUT_CACHE_TTL_SECONDS`. Any cache fault, including a
+    lock that does not come free in time, computes the record directly: the
+    cache may cost a scan, never the HUD. Only cache faults are caught, so an
+    error raised by the scan itself reaches the caller exactly once.
+    """
+    fanout_root = home / "coding" / "fanout"
+    try:
+        if not stat.S_ISDIR(fanout_root.lstat().st_mode):
+            return _compute_hud_local_fanout_record(home)
+        key = _hud_fanout_cache_key(home, fanout_root)
+    except OSError:
+        return _compute_hud_local_fanout_record(home)
+    cache_path = home / "runtime" / HUD_FANOUT_CACHE_FILE
+    hit, record = _read_hud_fanout_cache(cache_path, home=home, key=key)
+    if hit:
+        return record
+    lock = ExitStack()
+    try:
+        lock.enter_context(
+            _awareness_delivery_lock(cache_path, timeout_seconds=HUD_FANOUT_CACHE_LOCK_SECONDS)
+        )
+    except OSError:
+        return _compute_hud_local_fanout_record(home)
+    with lock:
+        hit, record = _read_hud_fanout_cache(cache_path, home=home, key=key)
+        if hit:
+            return record
+        record = _compute_hud_local_fanout_record(home)
+        _write_hud_fanout_cache(cache_path, key=key, record=record)
+        return record
+
+
+def _hud_fanout_cache_key(home: Path, fanout_root: Path) -> str:
+    """Digest of everything `_compute_hud_local_fanout_record` reads.
+
+    A stat signature, not a content hash: hashing would read every file the
+    cache exists to stop reading. `st_ctime_ns` moves on any write, chmod or
+    utime and cannot be set back, so a rewrite that keeps the size and the
+    mtime still misses. The two directories above the fanout ids contribute
+    only their type and inode, because writing this cache can touch their
+    mtime and the entries below them are listed anyway. The code part is
+    the three bundle modules the scan runs: this one, and the contract check
+    and record names it imports, which import nothing else from the bundle.
+    """
+    module_dir = Path(__file__).parent
+
+    def signature(path: Path) -> list[int] | None:
+        try:
+            info = path.lstat()
+        except (FileNotFoundError, NotADirectoryError):
+            return None
+        return [info.st_mode, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+
+    def identity(path: Path) -> list[int]:
+        info = path.lstat()
+        return [info.st_mode, info.st_ino]
+
+    rows: list[Any] = []
+    with os.scandir(fanout_root) as entries:
+        names = sorted(entry.name for entry in entries if _FANOUT_GRAPH_ID_RE.fullmatch(entry.name))
+    for name in names:
+        fanout_dir = fanout_root / name
+        inflight_dir = fanout_dir / "inflight"
+        inflight = signature(inflight_dir)
+        markers: list[Any] = []
+        if inflight is not None and stat.S_ISDIR(inflight[0]):
+            with os.scandir(inflight_dir) as entries:
+                marker_names = sorted(entry.name for entry in entries)
+            markers = [[marker, signature(inflight_dir / marker)] for marker in marker_names]
+        rows.append(
+            [
+                name,
+                signature(fanout_dir),
+                signature(fanout_dir / FANOUT_CONTRACT_FILE),
+                signature(fanout_dir / CONTRACT_PROVENANCE_FILE),
+                signature(fanout_dir / DISPATCH_SUMMARY_FILE),
+                inflight,
+                markers,
+            ]
+        )
+    material = [
+        HUD_FANOUT_CACHE_SCHEMA_VERSION,
+        str(home),
+        identity(home / "coding"),
+        identity(fanout_root),
+        [
+            signature(module_dir / module)
+            for module in ("runtime_reader.py", "subagent_graph_contract.py", "run_records.py")
+        ],
+        rows,
+    ]
+    return hashlib.sha256(json.dumps(material, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _read_hud_fanout_cache(
+    cache_path: Path,
+    *,
+    home: Path,
+    key: str,
+) -> tuple[bool, tuple[dict[str, Any], dict[str, Any], dict[str, Any], str, str] | str | None]:
+    """`(True, record)` for a live entry under `key`, `(False, None)` otherwise."""
+    text = _read_hud_text(cache_path, root=home)
+    if text is None:
+        return False, None
+    try:
+        entry = json.loads(text)
+    except (ValueError, RecursionError):
+        return False, None
+    if (
+        not isinstance(entry, dict)
+        or entry.get("schema_version") != HUD_FANOUT_CACHE_SCHEMA_VERSION
+        or entry.get("key") != key
+        or not isinstance(entry.get("stored_at"), (int, float))
+        or not 0 <= time.time() - entry["stored_at"] <= HUD_FANOUT_CACHE_TTL_SECONDS
+    ):
+        return False, None
+    kind = entry.get("kind")
+    if kind == "none":
+        return True, None
+    if kind == "blocker" and isinstance(entry.get("blocker"), str):
+        return True, entry["blocker"]
+    record = entry.get("record")
+    if (
+        kind == "record"
+        and isinstance(record, list)
+        and len(record) == 5
+        and all(isinstance(part, dict) for part in record[:3])
+        and all(isinstance(part, str) for part in record[3:])
+    ):
+        contract, provenance, roster, fanout_id, status_blocker = record
+        return True, (contract, provenance, roster, fanout_id, status_blocker)
+    return False, None
+
+
+def _write_hud_fanout_cache(
+    cache_path: Path,
+    *,
+    key: str,
+    record: tuple[dict[str, Any], dict[str, Any], dict[str, Any], str, str] | str | None,
+) -> None:
+    entry: dict[str, Any] = {
+        "schema_version": HUD_FANOUT_CACHE_SCHEMA_VERSION,
+        "key": key,
+        "stored_at": time.time(),
+    }
+    if record is None:
+        entry["kind"] = "none"
+    elif isinstance(record, str):
+        entry["kind"] = "blocker"
+        entry["blocker"] = record
+    else:
+        entry["kind"] = "record"
+        entry["record"] = list(record)
+    try:
+        text = json.dumps(entry, separators=(",", ":"))
+        # An entry the reader would refuse as oversized is never written, so
+        # a huge record costs its scan and not a write on every poll as well.
+        if len(text.encode("utf-8")) <= MAX_HUD_METADATA_BYTES:
+            write_text_atomic(cache_path, text)
+    except (OSError, ValueError, TypeError, RecursionError):
+        return
+
+
+def _compute_hud_local_fanout_record(
     home: Path,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str, str] | str | None:
     fanout_root = home / "coding" / "fanout"
@@ -3026,43 +3215,48 @@ def _progress_bindings(
     limit: int,
     hud_safe: bool = False,
 ) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
+    candidates: list[tuple[dict[str, Any], Path]] = []
     roots = (
         (runtime_dir / "runs", "run"),
         (runtime_dir / "wrapper_sessions", "wrapper_session"),
     )
+    child_files = _hud_child_files if hud_safe else _child_files
+    json_reader = (
+        partial(_read_hud_json, root=runtime_dir)
+        if hud_safe
+        else _read_json
+    )
+    jsonl_reader = (
+        partial(_read_hud_jsonl, root=runtime_dir)
+        if hud_safe
+        else _read_jsonl
+    )
     for root, target_type in roots:
-        child_files = _hud_child_files if hud_safe else _child_files
-        json_reader = (
-            partial(_read_hud_json, root=runtime_dir)
-            if hud_safe
-            else _read_json
-        )
-        jsonl_reader = (
-            partial(_read_hud_jsonl, root=runtime_dir)
-            if hud_safe
-            else _read_jsonl
-        )
         for binding_path in sorted(child_files(root, "executor_progress", EXECUTOR_PROGRESS_BINDING_FILE), reverse=True):
             binding = json_reader(binding_path)
             if not _valid_progress_binding(binding, target_type):
                 continue
-            progress_dir = binding_path.parent
-            events = jsonl_reader(progress_dir / EVENTS_FILE)
-            reports = jsonl_reader(progress_dir / EXECUTOR_PROGRESS_REPORTS_FILE)
-            binding_id = str(binding.get("binding_id", ""))
-            instance_id = str(binding.get("instance_id", ""))
-            matching_events = [event for event in events if _valid_progress_event(event, binding_id, instance_id)]
-            matching_reports = [report for report in reports if _valid_progress_report(report, binding_id, instance_id)]
-            items.append(
-                {
-                    "binding": binding,
-                    "latest_event": matching_events[-1] if matching_events else {},
-                    "latest_report": matching_reports[-1] if matching_reports else {},
-                }
-            )
-    items.sort(key=lambda item: str(item["binding"].get("updated_at", "")), reverse=True)
-    return items[:limit]
+            candidates.append((binding, binding_path.parent))
+    # The order and the cut depend on the binding alone, so the event and
+    # report logs -- the bulk of this read -- are opened only for the bindings
+    # that survive the cut (#2030).
+    candidates.sort(key=lambda candidate: str(candidate[0].get("updated_at", "")), reverse=True)
+    items: list[dict[str, Any]] = []
+    for binding, progress_dir in candidates[:limit]:
+        events = jsonl_reader(progress_dir / EVENTS_FILE)
+        reports = jsonl_reader(progress_dir / EXECUTOR_PROGRESS_REPORTS_FILE)
+        binding_id = str(binding.get("binding_id", ""))
+        instance_id = str(binding.get("instance_id", ""))
+        matching_events = [event for event in events if _valid_progress_event(event, binding_id, instance_id)]
+        matching_reports = [report for report in reports if _valid_progress_report(report, binding_id, instance_id)]
+        items.append(
+            {
+                "binding": binding,
+                "latest_event": matching_events[-1] if matching_events else {},
+                "latest_report": matching_reports[-1] if matching_reports else {},
+            }
+        )
+    return items
 
 
 def _projected_binding_state(runtime_dir: Path, binding: dict[str, Any]) -> str:

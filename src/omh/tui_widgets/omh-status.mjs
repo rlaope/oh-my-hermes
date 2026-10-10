@@ -1766,12 +1766,13 @@ export default function register(sdk) {
   let lastSnapshot = ''
   let lastStructural = ''
   let lastPaintAt = 0
+  // Returns whether it repainted; the refresh cadence below reads that.
   const applySnapshot = payload => {
-    if (!payload) return
+    if (!payload) return false
     const serialized = JSON.stringify(payload)
-    if (serialized === lastSnapshot) return
+    if (serialized === lastSnapshot) return false
     const structural = structuralKey(payload)
-    if (structural === lastStructural && Date.now() - lastPaintAt < METRICS_REPAINT_MS) return
+    if (structural === lastStructural && Date.now() - lastPaintAt < METRICS_REPAINT_MS) return false
     lastSnapshot = serialized
     lastStructural = structural
     lastPaintAt = Date.now()
@@ -1781,19 +1782,28 @@ export default function register(sdk) {
     const apply = state => ({ ...state, payload, receivedAt: Date.now(), tick: state.tick + 1 })
     updateWidget(todoApp, apply)
     updateWidget(app, apply)
+    return true
   }
+  // Every poll spawns a reader process, once per open TUI, so a host running
+  // many TUIs pays for each idle poll many times over (#2030). A poll that
+  // repaints nothing doubles the wait before the next one, up to
+  // REFRESH_MAX_MS; any repaint returns it to REFRESH_MIN_MS. A failed read
+  // repaints nothing too, so a reader timing out under load backs off rather
+  // than piling more readers onto that load.
+  const REFRESH_MIN_MS = 2000
+  const REFRESH_MAX_MS = 8000
   const timerKey = Symbol.for('omh.hermes-tui-widget.refresh')
   const generationKey = Symbol.for('omh.hermes-tui-widget.generation')
   const generation = (globalThis[generationKey] || 0) + 1
   globalThis[generationKey] = generation
-  const schedule = () => {
+  const schedule = delay => {
     if (generation !== globalThis[generationKey]) return
     globalThis[timerKey] = setTimeout(async () => {
       const payload = await readHud()
       if (generation !== globalThis[generationKey]) return
-      applySnapshot(payload)
-      schedule()
-    }, 2000)
+      const repainted = applySnapshot(payload)
+      schedule(repainted ? REFRESH_MIN_MS : Math.min(delay * 2, REFRESH_MAX_MS))
+    }, delay)
     globalThis[timerKey].unref?.()
   }
   clearTimeout(globalThis[timerKey])
@@ -1801,5 +1811,5 @@ export default function register(sdk) {
     if (generation !== globalThis[generationKey]) return
     applySnapshot(payload)
   })
-  schedule()
+  schedule(REFRESH_MIN_MS)
 }
