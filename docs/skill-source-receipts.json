@@ -320,6 +320,28 @@
       "reviewed_on": "2026-10-10",
       "rationale": "Adopted critique as an evidence-bound lane of its own as a concept; the license is not OSI-approved, so the source stays link-only.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-plan-superpowers",
+      "candidate_key": "plan@github.com/obra/superpowers",
+      "prior_checkpoint": null,
+      "next_checkpoint": "8ca22dba9a94f28898bbce59f2537ff4d87c747d",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted a capped Review Focus list pinned to owning tasks, one checkable action per step, and a proportion check as plan quality-bar lines in OMH wording.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-ralplan-oh-my-openagent",
+      "candidate_key": "ralplan@github.com/code-yeongyu/oh-my-openagent",
+      "prior_checkpoint": null,
+      "next_checkpoint": "657ea5a2a73e69506df16cc8ce50f07874d1e37d",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted ideal-state anchoring, a success-criteria table, a fidelity check that adds tasks, no invented MVP cuts, and effort bands as a concept; the license is not OSI-approved, so the source stays link-only.",
+      "supersedes": null
     }
   ]
 }

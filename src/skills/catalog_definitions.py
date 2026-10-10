@@ -70,6 +70,7 @@ from .catalog_types import (
     ProcedureStep,
     SkillDefinition,
     SkillExample,
+    _CATEGORY_FINAL_CHECKLISTS,
     _HANDOFF_FINAL_CHECKLIST,
     _HERMES_SETUP_FIVE_STEP_BAR,
     _HERMES_SETUP_SKIP_SEMANTICS,
@@ -91,6 +92,16 @@ _MODEL_SETUP_FIVE_STEP_BAR = (
     "user explicitly approves it; never edit dotenv files or credential material.",
     "Verify: re-inspect the allowlisted Hermes config metadata and report a completion checklist covering every "
     "applicable item.",
+)
+
+# Shared by ralplan's Hermes quality_bar and its portable override, which
+# replaces that section wholesale; one literal keeps the two from drifting.
+_RALPLAN_IDEAL_STATE_BAR = (
+    "Before comparing options, write the target state: name each consumer of the result (a person, a maintainer, or a program reading its output), their current workflow on this surface, the state in which that workflow keeps working with no new friction or loss, and every difference between current and target, each with why it matters.",
+    "Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per target-state difference naming its owning task and the scenario that shows the difference closed; these rows are the acceptance criteria above, extended to the target state.",
+    "End with a `Target-state coverage` check: a difference with no owning task or no verification scenario is added to the plan as its own task, unless the user excluded it, in which case the plan records it as a non-goal with that reason; a difference blocked on missing evidence stays in the evidence-gap record below instead.",
+    "Never shrink scope on your own: plan an MVP or a first phase only when the user requested one, plan a split or phasing the user requested as given, and when the target state exceeds what was literally asked, state that in one sentence and plan the full target state.",
+    "Size each task as one band, never as hours or days: `XS` (one small edit), `S` (one file and its test), `M` (several files in one module), `L` (several modules or one contract change), `XL` (crosses subsystems; split it into smaller tasks).",
 )
 
 
@@ -6661,8 +6672,13 @@ _DEFINITIONS = [
             "Where the repository declares non-negotiable principles, load `references/project-constitution.md` and record the check: a plan conflicting with a MUST is resolved by changing the plan, never by reinterpreting the principle.",
             "Keep draft plans unapproved until a user or wrapper accepts them.",
             "Only prepare coding handoff guidance after the plan is accepted.",
+            "When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.",
+            "When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.",
+            "When the plan describes code changes, run a proportion check before acceptance: if the plan text outgrows the code it leads to, or is mostly function bodies, implementation has leaked into it; reduce bodies to test names, assertions, and signatures.",
             ENGINE_FIT_RECOMMENDATION_RULE,
         ),
+        final_checklist=_CATEGORY_FINAL_CHECKLISTS["planning"]
+        + ("When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning tasks, or one stating the check found none.",),
         situations=(
             "how should we build this feature",
             "break this work into steps",
@@ -6717,6 +6733,7 @@ _DEFINITIONS = [
             "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
             "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
             "List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `ultrawork` can prepare board rows from the plan without re-planning; planning itself stays a bounded in-session lane.",
+            *_RALPLAN_IDEAL_STATE_BAR,
             "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
             "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.",
             "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
@@ -6752,6 +6769,7 @@ _DEFINITIONS = [
             "Observed repo facts and source/web evidence gaps are named.",
             "At least two options or one chosen option plus rejected alternatives are recorded.",
             "Risks, acceptance criteria, and verification commands are testable or explicitly blocked.",
+            "Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped.",
             "The plan exists as a recorded file-backed artifact, not only as chat narration.",
             "The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.",
             "The follow-on engine or executor path was started only after the user's explicit go-ahead in this conversation, never from plan acceptance alone.",
@@ -6788,6 +6806,7 @@ _DEFINITIONS = [
                 "Start from observed repo facts and source/web evidence when freshness or external behavior matters.",
                 "Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.",
                 "Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.",
+                *_RALPLAN_IDEAL_STATE_BAR,
                 "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
                 "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.",
                 "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
@@ -6803,7 +6822,7 @@ _DEFINITIONS = [
             "artifact_expectations": "a8eb07c3491b92fb1f72dc0bbd8bd5da29398f9b8aa6cae9b64b2b2c5aa3bae6",
             "safety_rules": "72126c765975b034ab683d27aa0349dbe84c564e45f29832f2b8424a1b3d28cc",
             "opening_steps": "d8ef54a1ea61e051cb069ffb43b846f0d28a88eda400436d13f357c5373d8f0c",
-            "quality_bar": "0e6567f48619d36a9957c8a05c0b6c088dc76654f3762005e007dfface3c2e0f",
+            "quality_bar": "bf48dff97fc7a10064d0c3110dace00ef6f46c0954adcc575ea85f9f7d6aae49",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
         },
     ),

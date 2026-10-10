@@ -1716,7 +1716,7 @@ FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # above removes. So it takes the same policy: the measurement plus
 # `FULL_PROFILE_SKILL_BODY_HEADROOM_PERCENT`, rounded UP to the next multiple
 # of `FULL_PROFILE_SKILL_BODY_REPEATED_CEILING_STEP_CHARS` (10,000, about a
-# tenth of the measurement). The 12,258 chars of headroom (130,000 - 117,742)
+# tenth of the measurement). The 12,537 chars of headroom (130,000 - 117,463)
 # hold about eight median lane members, while a renderer change that stamps
 # one more shared sentence longer than about 86 chars into every one of the
 # 142 bodies, or a few skills that copy other skills' own sections, still
@@ -1740,7 +1740,11 @@ FULL_PROFILE_SKILL_BODY_REVIEWED_EXCEPTION_CHARS = 0
 # 117,742; one worst-case ordinary lane member (+2,547) no longer fit under
 # 120,000, which is the re-derive signal above. 117,742 plus 10%, rounded up
 # to the next 10,000, is 130,000.
-FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 117742
+# 130,000 -> 130,000 (measurement 117,742 -> 117,463): `plan` now carries
+# its own completion checklist (the planning default plus a `Review Focus`
+# line, #2049), so that section is no longer byte-identical to another
+# skill's. 117,463 plus 10%, rounded up to the next 10,000, is still 130,000.
+FULL_PROFILE_SKILL_BODY_REPEATED_MEASURED_CHARS = 117463
 FULL_PROFILE_SKILL_BODY_REPEATED_CEILING_STEP_CHARS = 10000
 FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT = 130000
 
