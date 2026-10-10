@@ -7,9 +7,11 @@ All notable changes will be documented here.
 - **Memory the model captures cannot be written as an instruction.**
   `omh_memory(action="capture")` now refuses a summary phrased as an order to
   its reader: a second-person modal (`you must`, `you should`, `you need to`,
-  `you have to`, `you ought to`), a summary opening with `your`, or a sentence
-  that closes on a Korean request ending (`해줘`, `해 주세요`, `하세요`, `해라`,
-  `하십시오`). Nothing is written, and the result carries
+  `you have to`, `you ought to`) within one clause, or a sentence that closes
+  on a Korean request ending (`해줘`, `해 주세요`, `하세요`, `해라`, `하십시오`),
+  after NFKC normalization with zero-width characters removed. Fixed greetings
+  (`안녕하세요`, `수고하세요`, `고생하세요`) are not requests, and a summary
+  opening with `your` is not a cue. Nothing is written, and the result carries
   `reason: instruction_shaped_summary`, the matched cue, and a `next_action`
   that asks for the same fact restated as an observation; there is no review
   step. `procedure` records are exempt, and opening with an imperative verb is

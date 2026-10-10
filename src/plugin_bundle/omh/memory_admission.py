@@ -1398,10 +1398,12 @@ _RELATIVE_TIME_PATTERN = re.compile(
 # The capture source the `omh_memory` tool passes; the only one screened for
 # instruction-shaped summaries.
 MODEL_CAPTURE_SOURCE = "hermes_model"
-# Second-person modal phrases, matched as consecutive words anywhere in the
-# summary. A summary whose first word is "your" also counts. Opening with an
-# imperative verb is deliberately not a cue: lessons and decisions open that way
-# ("Prefer the release branch").
+# Second-person modal phrases, matched as consecutive words inside one clause,
+# so "thank you; must ship" or "Ask what you need. To be safe" is not a cue.
+# Opening with an imperative verb is deliberately not a cue: lessons and
+# decisions open that way ("Prefer the release branch"). Nor is a summary that
+# opens with "your": file names ("your.yaml") and observations ("Your config was
+# wrong because ...") open that way too, and no closed rule tells them apart.
 _INSTRUCTION_SECOND_PERSON_PHRASES = (
     ("you", "must"),
     ("you", "should"),
@@ -1409,12 +1411,21 @@ _INSTRUCTION_SECOND_PERSON_PHRASES = (
     ("you", "have", "to"),
     ("you", "ought", "to"),
 )
-# Korean request endings, matched only where a sentence ends: before closing
-# punctuation or at the end of the summary.
+# Clause boundaries the phrases may not cross (ASCII and CJK punctuation).
+_INSTRUCTION_CLAUSE_BOUNDARY_PATTERN = re.compile(r"[.,;:!?。，、；：！？]+")
+# Korean request endings, matched only where a sentence ends: at the end of the
+# summary or before closing punctuation, after any trailing quotes, brackets,
+# tildes or emoji.
 _INSTRUCTION_KOREAN_REQUEST_ENDINGS = ("해줘", "해 줘", "해주세요", "해 주세요", "하세요", "해라", "하십시오")
 _INSTRUCTION_KOREAN_REQUEST_PATTERN = re.compile(
-    "(" + "|".join(re.escape(ending) for ending in _INSTRUCTION_KOREAN_REQUEST_ENDINGS) + r")(?:\s*[.!?。！？]+|\s*$)"
+    "(" + "|".join(re.escape(ending) for ending in _INSTRUCTION_KOREAN_REQUEST_ENDINGS) + ")"
 )
+_INSTRUCTION_SENTENCE_END = frozenset(".!?。！？")
+# Fixed greetings that end in a request ending but order nothing. 안녕히 가세요
+# and 안녕히 계세요 need no entry: no ending in the vocabulary matches them.
+_INSTRUCTION_KOREAN_GREETINGS = ("안녕하세요", "수고하세요", "고생하세요")
+# Invisible characters that would split a cue without changing how it reads.
+_INSTRUCTION_ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\ufeff"))
 # A procedure is a how-to by definition; its steps may address the reader.
 _INSTRUCTION_EXEMPT_RECORD_TYPES = ("procedure",)
 
@@ -1423,15 +1434,23 @@ def _instruction_shaped_reason(summary: str, record_type: str) -> str:
     """The cue that makes a summary read as an order to its reader, or ""."""
     if record_type in _INSTRUCTION_EXEMPT_RECORD_TYPES:
         return ""
-    words = re.findall(r"[a-z']+", summary.lower())
-    if words[:1] == ["your"]:
-        return "your"
-    for phrase in _INSTRUCTION_SECOND_PERSON_PHRASES:
-        width = len(phrase)
-        if any(tuple(words[index : index + width]) == phrase for index in range(len(words) - width + 1)):
-            return " ".join(phrase)
-    match = _INSTRUCTION_KOREAN_REQUEST_PATTERN.search(summary)
-    return match.group(1) if match else ""
+    text = unicodedata.normalize("NFKC", summary).translate(_INSTRUCTION_ZERO_WIDTH)
+    for clause in _INSTRUCTION_CLAUSE_BOUNDARY_PATTERN.split(text.lower()):
+        words = re.findall(r"[a-z']+", clause)
+        for phrase in _INSTRUCTION_SECOND_PERSON_PHRASES:
+            width = len(phrase)
+            if any(tuple(words[index : index + width]) == phrase for index in range(len(words) - width + 1)):
+                return " ".join(phrase)
+    for match in _INSTRUCTION_KOREAN_REQUEST_PATTERN.finditer(text):
+        if text[: match.end()].endswith(_INSTRUCTION_KOREAN_GREETINGS):
+            continue
+        rest = text[match.end() :]
+        closers = 0
+        while closers < len(rest) and (rest[closers].isspace() or unicodedata.category(rest[closers])[0] in "PS"):
+            closers += 1
+        if closers == len(rest) or _INSTRUCTION_SENTENCE_END.intersection(rest[:closers]):
+            return match.group(1)
+    return ""
 
 
 def _relative_time_phrase(value: str) -> str:

@@ -17,6 +17,7 @@ import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import unicodedata
 import unittest
 from unittest.mock import patch
 
@@ -27,6 +28,7 @@ load_local_package()
 from omh.memory import approve_project_memory_candidate, build_memory_rollup, stage_memory_demotion
 from omh.plugin_bundle.omh.hermes_memory import HERMES_MEMORY_DELIMITER
 from omh.plugin_bundle.omh.memory_admission import MODEL_CAPTURE_SOURCE, capture_project_memory_candidate
+from omh.plugin_bundle.omh.tools import memory_tool
 from omh.plugin_bundle.omh.tools.memory_tool import omh_memory_handler
 from omh.workflows import memory as workflows_memory
 from project_identity_fixture import memory_paths, seed_project_identity
@@ -39,11 +41,40 @@ INSTRUCTION_SENTENCES = (
     (SECOND_PERSON, "you must"),
     ("You should squash fixup commits before review.", "you should"),
     ("Before merging, you need to rerun the docs gates.", "you need to"),
-    ("Your next step is the changelog entry.", "your"),
     (KOREAN_REQUEST, "하세요"),
     ("커밋 전에 린트를 해 주세요", "해 주세요"),
     ("로그는 매일 정리해줘!", "해줘"),
     ("배포 순서를 문서로 남겨라", None),  # not in the closed vocabulary
+)
+# Review repros: a request ending followed by closers, and cues hidden by
+# fullwidth forms, decomposed Hangul or zero-width characters.
+DISGUISED_INSTRUCTIONS = (
+    ("실행하세요 🙏", "하세요"),
+    ("실행하세요~", "하세요"),
+    ("실행하세요)", "하세요"),
+    ('실행하세요"', "하세요"),
+    ("실행하세요…", "하세요"),
+    ("Ｙｏｕ ｍｕｓｔ rerun the docs gates.", "you must"),
+    (unicodedata.normalize("NFD", KOREAN_REQUEST), "하세요"),
+    ("You\u200b must rerun the docs gates.", "you must"),
+    ("실행하\u200d세요.", "하세요"),
+)
+# Review repros that read as observations: an opening "your" token, a fixed
+# Korean greeting, and second-person words split across a clause boundary.
+OBSERVATION_REPROS = (
+    "사용자 설정 파일은 your.yaml이다.",
+    "릴리스 노트 파일명은 your-notes.md이다.",
+    "`your_config.yaml` is the source of truth.",
+    "Your config was wrong because the env var shadowed it.",
+    "Your next step is the changelog entry.",
+    "사용자 인사말은 안녕하세요.",
+    "봇의 기본 인사는 안녕하세요",
+    "The project greets with 안녕하세요!",
+    "Decision: 기본 응답은 '수고하세요.'로 끝낸다.",
+    "팀의 퇴근 인사는 고생하세요.",
+    "Users wrote thank you; must ship by Friday per the decision.",
+    "Ask what you need. To be safe the team pins versions.",
+    "Thank you, have to wait?",
 )
 OBSERVATIONS = (
     "The release gates run before every tag.",
@@ -80,6 +111,7 @@ class ModelCaptureRefusalTests(unittest.TestCase):
                 self.assertEqual((result["status"], result["reason"]), ("refused", "instruction_shaped_summary"), result)
                 self.assertIn("Nothing was saved", result["next_action"])
                 self.assertIn("observation", result["next_action"])
+                self.assertEqual(result["instruction_cue"], cue)
                 self.assertIsNone(result["record_id"])
                 self.assertIsNone(result["candidate_id"])
         self.assertEqual(self.stored_files(), [])
@@ -98,6 +130,35 @@ class ModelCaptureRefusalTests(unittest.TestCase):
                 self.assertEqual(payload["instruction_cue"], cue)
                 self.assertIn("observation", payload["next_action"])
                 self.assertNotIn("candidate", payload)
+
+    def test_disguised_instructions_are_refused_and_name_their_cue(self) -> None:
+        for summary, cue in DISGUISED_INSTRUCTIONS:
+            with self.subTest(summary=summary):
+                result = self.call(summary=summary, record_type="lesson")
+                self.assertEqual((result["status"], result["reason"]), ("refused", "instruction_shaped_summary"), result)
+                self.assertEqual(result["instruction_cue"], cue)
+        self.assertEqual(self.stored_files(), [])
+
+    def test_review_repro_observations_are_admitted(self) -> None:
+        for summary in OBSERVATION_REPROS:
+            with self.subTest(summary=summary):
+                payload = capture_project_memory_candidate(
+                    self.store, summary, source=MODEL_CAPTURE_SOURCE, on_duplicate="skip", scope_kind="user-global"
+                )
+                self.assertTrue(payload["captured"], payload)
+
+    def test_another_refusal_keeps_the_generic_next_action(self) -> None:
+        real_capture = memory_tool.capture_project_memory_candidate
+
+        def user_scope_without_principal(omh_home, summary, **kwargs):
+            # A real admission refusal that carries no next_action of its own.
+            return real_capture(omh_home, summary, **{**kwargs, "scope_kind": "user", "scope_ref": None})
+
+        with patch.object(memory_tool, "capture_project_memory_candidate", user_scope_without_principal):
+            result = self.call(summary="The release gates run before every tag.", record_type="lesson")
+        self.assertEqual((result["status"], result["reason"]), ("refused", "principal_context_required"), result)
+        self.assertEqual(result["next_action"], "Nothing was saved. Do not retry the same text.")
+        self.assertNotIn("instruction_cue", result)
 
     def test_a_procedure_may_address_its_reader(self) -> None:
         result = self.call(summary=SECOND_PERSON, record_type="procedure")

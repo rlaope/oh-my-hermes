@@ -331,6 +331,10 @@ def _map_capture_payload(payload: dict) -> dict[str, object]:
                 duplicate_of=duplicate_of,
                 next_action="Nothing new was saved; the same fact is already held.",
             )
+        if payload.get("instruction_cue"):
+            # A vocabulary item from admission's closed cue list, never the
+            # user's text, so the model sees which words made it an order.
+            fields["instruction_cue"] = str(payload["instruction_cue"])
         return _capture_result(
             "refused",
             **fields,
