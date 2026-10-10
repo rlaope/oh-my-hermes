@@ -351,7 +351,7 @@
       "disposition": "adopted",
       "decision_ref": "#2049",
       "reviewed_on": "2026-10-10",
-      "rationale": "Adopted the stop after three failed fixes, counted from executed runs of the same reproduction command and symptom, then an architecture re-examination and a user-owned next step, in OMH wording.",
+      "rationale": "Adopted the three-failed-fix stop, the architecture signals, and asking the user before a fourth fix. OMH's change: only executed runs of the same reproduction count, and a persisting or new symptom marks a fix failed.",
       "supersedes": null
     }
   ]

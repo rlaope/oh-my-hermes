@@ -15,8 +15,8 @@
     "omh-ai-slop-cleaner/SKILL.md": "51fa0d8d39f31cde15eb99d44fed95bd5b04ee429524d50af904a44c0c4f1154",
     "omh-ai-slop-cleaner/references/cleanup-passes.md": "d713b686c3cc076cbba63aa278176581dc09aae94c07697c3413e8d124c5845d",
     "omh-ai-slop-cleaner/references/prose-lexicon.md": "efd209984c3e5823995484dd5b6e38e3161a059db9e841b4599dbbd330417ee5",
-    "omh-app-debugging/SKILL.md": "cad05ad207053cc2079f90166bb4f83bdfb25e6d4b2d9b2ea9004766673592e0",
-    "omh-app-debugging/references/hypothesis-and-race-method.md": "56b951818985cd1a9d70ece5da38205dcfa7a742f710daaa16c294a1f553a3bf",
+    "omh-app-debugging/SKILL.md": "d3745246463da3b2757d4325efa7ed1e33335902ed5599539cec5323e065191e",
+    "omh-app-debugging/references/hypothesis-and-race-method.md": "9755d58f690e78066c24aedf1ced2bad16ea7a137d73be744fa1c7ff22bee1d9",
     "omh-apple-design/SKILL.md": "badde9a499244a4630c1f2f950f3318998f895b51fd0d229a97e591c4b0ed582",
     "omh-apple-design/references/materials-and-accessibility.md": "09588fbd807e527ed354fc317fc0fc3c654006878da42eb59461e45fb1ad9c26",
     "omh-apple-design/references/platform-foundations.md": "4984a8f9f3eb0b1876be5b4f4bc024b002c8738be53ccaa1dc29467d3aaeffa0",
@@ -316,7 +316,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "e93541deff441286e0a2344037e8c1f92be88d140b48694d20e415130006e1fb",
+  "source_digest": "4ee53abf36871f0b9dcb676da638492db090826f71c3a4aa0dd6b8f94bfd112a",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"

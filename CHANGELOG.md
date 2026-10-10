@@ -5,12 +5,14 @@ All notable changes will be documented here.
 ## Unreleased
 
 - **`app-debugging` stops after three failed fixes and re-examines the
-  architecture instead of trying a fourth.** A fix counts as failed only when
-  the same reproduction command, executed after it, still shows the same
-  symptom, so a planned run or a different symptom does not move the count.
-  After the third, the skill prepares no fourth fix, names the assumptions
-  every fix shared with the observation that would refute each, and ends the
-  turn with the next step as a question the user owns. The rule is one
+  architecture instead of trying a fourth.** Only an executed run of the same
+  reproduction command counts; a planned run or a different command does not.
+  On that run a fix failed when the original symptom persists or a new symptom
+  appears, so a fault that moves elsewhere still counts. After a first or
+  second failed fix, the root cause is open again and the skill returns to its
+  hypotheses. After the third, the skill prepares no fourth fix, names the
+  assumptions every fix shared with the observation that would refute each,
+  and ends the turn with the next step as a question the user owns. The rule is one
   quality-bar line in the body; the procedure is a new section of the existing
   `references/hypothesis-and-race-method.md`, and a new `docs/SKILL-SOURCES.md`
   row watches `obra/superpowers` (`systematic-debugging`) for `app-debugging`

@@ -64,18 +64,20 @@ Before trusting any reading, confirm the process executed the source you are loo
 
 ## 6. After three failed fixes
 
-Count fix attempts from executed results, never from the conversation. A fix counts as failed when the executor applied it, ran the same reproduction command from section 1, and observed the same symptom; for an intermittent fault, the same loop at the same run count still shows it. A different command, a different symptom, or a run that was planned but not executed is not a failed attempt, so a flaky reproduction cannot inflate the count.
+Count fix attempts from executed results, never from the conversation. After each fix, the executor runs the same reproduction command from section 1; for an intermittent fault, the same loop at the same run count. A run that was planned but not executed, or a run of some other command, does not count, so only executed runs of the one reproduction move the count. On that run the fix failed when the original symptom is still there, or when a new symptom shows up that the run did not show before: a fault that moved is a failed fix, not progress.
 
-After the third failed fix, stop fixing. Every fix was tested against a structure all of them assumed, and three failures on the same command make that structure the suspect.
+After the first or second failed fix, the root cause is open again. Record the fix as the observation that eliminated its hypothesis, then return to section 2 and choose the next observation from the hypotheses still standing.
+
+After the third failed fix, stop fixing. Every fix was tested against a structure all of them assumed, and three failures on the same reproduction make that structure the suspect.
 
 - **Prepare no fourth fix.** Another diff on the same assumption is the same guess again.
 - **Name the shared assumptions.** What owns the state, which boundary the data crosses, what ordering the design relies on, whether the component is used the way it was built to be. Write each with the observation that would refute it, as in section 2.
-- **Look for the structural pattern.** Each fix exposes shared state or coupling in a new place, each fix moves the symptom elsewhere, or the next fix would need a wide restructuring to land.
+- **Look for the structural pattern.** Each fix surfaces coupling or shared state at a new site, a fault that was fixed comes back as a different one, or the next fix would need a wide restructuring to land.
 - **Hand the choice back.** Present the re-examination and end the turn with the next step as a question the user owns: fix inside the current design under a named new hypothesis, or change the design at the assumption that failed.
 
 | Thought | Why it does not hold |
 | --- | --- |
-| One more fix will do it | After three failed fixes on the same command and symptom, the untested part is the assumption they shared, not the next diff. |
+| One more fix will do it | After three failed fixes on the same reproduction, the untested part is the assumption they shared, not the next diff. |
 
 ## 7. Evidence boundary
 
