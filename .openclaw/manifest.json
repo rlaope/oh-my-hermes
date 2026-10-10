@@ -32,7 +32,7 @@
     "omh-backend/SKILL.md": "10441cdec74a910a76e4f43ee79d07b864236dcf2471d0026e253ade905a8991",
     "omh-backend/references/consumer-impact.md": "843ec98391847e3de4e28057ab4aeb95d24a4d8e593b1c812e630723a4f006b9",
     "omh-backend/references/schema-migration.md": "e20aebd284f51d18962e28959b2e35702c9662e4d3d13fb1854c60f1279a6054",
-    "omh-backend/references/service-contract.md": "984cd9cb634b88a505cbd76214e281b2e22edf3d75fc6a3b9a0a88fcc4a265f5",
+    "omh-backend/references/service-contract.md": "814852a6128be317df68d33310c9e56a869a2be24b2b6c137de7e3a35eb47848",
     "omh-build-failure-triage/SKILL.md": "d02513dd1b5b629000cf31f25fd6c974d47c69ba10d0e4c9fc14f570380a2753",
     "omh-cancel/SKILL.md": "735cb62ac316ff6c35a5c54ac9bfdf0d38d81e8d41f651a4c29ca86f9aa7ded8",
     "omh-code-review/SKILL.md": "64a62cd6c7e6eece6c65694faf001e08d00531d3069c387abef3ca647f074114",
@@ -317,7 +317,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "911f79b465fc2ae14c638807a7cf7b9b9046b3b79c0d49d2cbb04c93749be1f2",
+  "source_digest": "8a5072c05dfa143bed7b85bdb1696d4ac7fb22ef6b56872034740849436948f8",
   "targets": {
     "repo": ".agents/skills",
     "user": ".agents/skills"
