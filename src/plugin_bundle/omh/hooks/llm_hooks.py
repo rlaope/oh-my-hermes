@@ -17,6 +17,7 @@ from ..awareness import (
     awareness_route_hint,
     awareness_route_hint_context_from_payload,
     route_hint_for_installed_skills,
+    route_hint_without_engine_workflows,
 )
 from ..context_brief import build_context_brief
 from ..degradation import (
@@ -488,6 +489,21 @@ def _tracker_event_is_present(kwargs: dict) -> bool:
     return False
 
 
+def _rendered_route_hint(
+    payload: dict[str, object], installed: frozenset[str] | None, *, delegated: bool
+) -> dict[str, object]:
+    """The route hint this turn renders: installed skills only, no orchestrating engine for a child.
+
+    A delegated child's request is its orchestrator's brief, which names the
+    engine already running; the host runs the child's `pre_llm_call` in the
+    parent's process, so `subagent_start` has registered it by now. Only the
+    rendered block is cut -- the payload the brief and the candidate line read
+    still records what the message named.
+    """
+    hint = route_hint_for_installed_skills(payload, installed)
+    return route_hint_without_engine_workflows(hint) if delegated else hint
+
+
 def pre_llm_call(**kwargs) -> dict[str, object] | None:
     """Inject bounded OMH role/status context without storing prompts."""
     # First, before anything can return early or raise: this turn has not
@@ -551,10 +567,11 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     # (`jev_consent`).
     # The raw message, not `request_message`'s `str()`: a native-vision turn
     # is a content list whose image parts are what mark it a media turn.
+    delegated = session_is_delegated(session_id, omh_home=omh_home)
     note_jev_turn(
         session_id,
         kwargs.get("user_message") if request_message else "",
-        delegated=session_is_delegated(session_id, omh_home=omh_home),
+        delegated=delegated,
         platform=kwargs.get("platform"),
         turn_id=kwargs.get("turn_id"),
         sender_id=kwargs.get("sender_id"),
@@ -574,7 +591,7 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         if is_first_turn:
             route_hint_payload = awareness_route_hint(request_message)
             route_hint_context = awareness_route_hint_context_from_payload(
-                route_hint_for_installed_skills(route_hint_payload, installed_skills)
+                _rendered_route_hint(route_hint_payload, installed_skills, delegated=delegated)
             )
             message_matches_awareness = bool(route_hint_context)
             route_degradation = route_hint_payload.get("degradation")
@@ -594,7 +611,7 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
         if message_matches_awareness and route_hint_payload is None:
             route_hint_payload = awareness_route_hint(request_message)
             route_hint_context = awareness_route_hint_context_from_payload(
-                route_hint_for_installed_skills(route_hint_payload, installed_skills)
+                _rendered_route_hint(route_hint_payload, installed_skills, delegated=delegated)
             )
         if route_hint_context:
             route_fingerprint = hashlib.sha256(route_hint_context.encode("utf-8")).hexdigest()

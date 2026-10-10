@@ -321,7 +321,8 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     mentioned_workflows = _mentioned_workflows(matching_normalized, matching_tokens)
     mentioned_runtime_terms = _mentioned_runtime_terms(matching_normalized)
     # Reference mentions remain diagnostic context, never execution cues.
-    for chunk in reference_regions(message).references:
+    regions = reference_regions(message)
+    for chunk in (*regions.references, *regions.quoted_lines):
         reference = _normalize_workflow_mentions(chunk)
         mentioned_workflows = _compact_tuple((*mentioned_workflows, *_mentioned_workflows(reference, routing_tokens(reference))))
         mentioned_runtime_terms = _compact_tuple((*mentioned_runtime_terms, *_mentioned_runtime_terms(reference)))
@@ -645,9 +646,10 @@ def _normalize_workflow_mentions(message: str) -> str:
 
 
 def _quoted_known_term_reference(message: str) -> bool:
+    regions = reference_regions(message)
     return any(
         contains_cue_phrase(_normalize_workflow_mentions(chunk), _normalized_known_terms())
-        for chunk in reference_regions(message).references
+        for chunk in (*regions.references, *regions.quoted_lines)
     )
 
 

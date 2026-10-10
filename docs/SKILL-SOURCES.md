@@ -270,8 +270,10 @@ only, so a borrowing that lives in code carries no row and is recorded here and
 in the module's own docstring. `src/quality/completion_integrity.py` takes its
 placeholder evidence values and its negative-case naming vocabulary from
 oh-my-openagent (omo), and `src/plugin_bundle/omh/engagement_nudges.py` takes
-the shape of omo's `agent-usage-reminder` hook. omo is published under the
-Sustainable Use License 1.0, which is not OSI-approved, so both are
+the shape of omo's `agent-usage-reminder` hook, and the block-quote, relay-header
+and URL masks in `src/plugin_bundle/omh/reference_regions.py` take their mask
+list from omo's skill-pointer arming guard. omo is published under the
+Sustainable Use License 1.0, which is not OSI-approved, so all three are
 link-only concept borrowings. The nine skills whose "Why This Exists" line
 credits ECC (`affaan-m/everything-claude-code`) were compared section by
 section against ECC at `ef648e01899ba3e8dc6371642deaaf64b4477775`; they share a

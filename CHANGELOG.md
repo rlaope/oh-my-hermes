@@ -4,6 +4,26 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A workflow name inside a block quote, a relayed line, or a link no longer
+  starts that workflow, and a delegated child is not told to start an
+  orchestrating engine its brief names.** `> $ulw-work fix the build`,
+  `[REPORT] ...`, `planner -> reviewer: $ulw-plan ...` and
+  `Reviewer (agent-7) to lead: ...` dispatched or named the quoted workflow,
+  and a URL path such as `https://example.com/docs/ulw-plan` drew a route hint
+  for it. The routing lexer now masks `>` block-quote lines (a `>` followed by
+  a space or the line end, and not by a number; read as diagnostic context but
+  never opening the text-transform fast path), relay header lines (a closed
+  list of relay tags, and arrows or `(agent-N) to <role>:` senders between
+  agent roles only, so `v1 -> v2:`, `Deploy (v2) to staging:` and a person's
+  own `[summary]` keep routing) and scheme URLs (ending at a `$`, trailing
+  punctuation or an unbalanced bracket; an apostrophe inside the link stays in
+  it). A masked link still counts as the request's concrete target. An
+  invocation on another line, beside the link, or after a leading link still
+  dispatches. A session registered by `subagent_start` no longer receives
+  route hint lines or context cards for the orchestrating engines (`ultrawork`,
+  `ralplan`, `loop`, `maestro` and the retired engines that fold into
+  `ultrawork`); task engines such as `research` and `ultraqa` and every other
+  hint are unchanged (#2049).
 - **The upstream tracker now watches the superpowers and oh-my-openagent
   material shipped skills already adapt.** Five skill credits had no row in
   `docs/SKILL-SOURCES.md`, so upstream could change what OMH adapted and no

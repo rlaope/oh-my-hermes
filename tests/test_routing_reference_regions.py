@@ -401,5 +401,165 @@ class RoutingReferenceHintTests(unittest.TestCase):
                 self.assertTrue(route['routing_prompt'].endswith(message))
 
 
+def blank(text: str) -> str:
+    return ''.join(char if char in "\r\n" else ' ' for char in text)
+
+
+QUOTED_LINE_FORMS = (
+    '> $ulw-work fix the build',
+    '   > $ulw-work fix the build',
+    '>> $ulw-work fix the build',
+)
+RELAY_LINE_FORMS = (
+    '[REPORT] ralplan finished the rollout plan',
+    '[report] ralplan finished the rollout plan',
+    '[Forwarded] $ulw-work fix the build',
+    '[planner -> reviewer] $ulw-plan the rollout',
+    'planner -> reviewer: $ulw-plan the rollout',
+    'planner \u2192 reviewer: $ulw-plan the rollout',
+    'Reviewer (agent-7) to lead: $ulw-work fix the build',
+)
+URL_FORMS = (
+    'https://example.com/docs/ulw-plan',
+    'https://github.com/rlaope/oh-my-hermes/tree/main/skills/ulw-work',
+    'https://example.com/?q=ultrawork+this+refactor+until+the+tests+pass',
+)
+
+
+class QuotedRelayUrlMaskTests(unittest.TestCase):
+    def test_block_quote_lines_are_quoted_lines_with_positions_kept(self) -> None:
+        for line in QUOTED_LINE_FORMS:
+            for before, after in (('', ''), ('context\n', '\n$ultraqa audit'), ('x\r\n', '\r\n')):
+                message = before + line + after
+                with self.subTest(message=message):
+                    result = reference_regions(message)
+                    quoted = line.lstrip(' ')
+                    indent = line[: len(line) - len(quoted)]
+                    self.assertEqual(result.executable_text, before + indent + blank(quoted) + after)
+                    # Diagnostic context like a quote, but never `references`:
+                    # a pasted `> error` line must not open the fast path.
+                    self.assertEqual(result.quoted_lines, (quoted,))
+                    self.assertEqual((result.references, result.masked_spans), ((), ()))
+
+    def test_relay_header_lines_and_urls_are_masked_but_not_references(self) -> None:
+        for text in (*RELAY_LINE_FORMS, *URL_FORMS):
+            for before, after in (('', ''), ('context\n', '\nnext line')):
+                message = before + text + after
+                with self.subTest(message=message):
+                    result = reference_regions(message)
+                    self.assertEqual(result.executable_text, before + blank(text) + after)
+                    # The text-transform fast path opens on `references`;
+                    # a relayed line or a link must never open it.
+                    self.assertEqual(result.references, ())
+                    self.assertEqual(result.masked_spans, (text,))
+                    self.assertEqual(result.links, (text,) if '://' in text else ())
+
+    def test_url_ends_at_cjk_quote_sigil_and_trailing_punctuation(self) -> None:
+        for prefix, url, tail in (
+            ('see ', 'https://example.com/ulw-plan', '\ub97c \uc694\uc57d\ud574\uc918'),
+            ('see ', 'https://example.com/ulw-plan', '\u3092\u8aac\u660e\u3057\u3066'),
+            ('see ', 'https://example.com/ulw-plan', '\u7684\u610f\u601d'),
+            ('see ', 'https://example.com/ulw-plan', ' $ultraqa'),
+            ('see ', 'https://example.com/x', ',$ulw-work fix it'),
+            ('see ', 'https://example.com/x', '; then $ulw-work fix it'),
+            ('(', 'https://example.com/a', ')$ulw-work fix the build'),
+            ('[', 'https://example.com/a', ']$ulw-work fix the build'),
+            ('see ', 'https://example.com/a', '. Then $ulw-work fix it'),
+            ('see ', 'https://en.wikipedia.org/wiki/A_(b)', ' now'),
+        ):
+            message = prefix + url + tail
+            with self.subTest(message=message):
+                result = reference_regions(message)
+                self.assertEqual(result.executable_text, prefix + blank(url) + tail)
+                self.assertEqual(result.masked_spans, (url,))
+        quoted = '"https://example.com/ulw-plan" $ultraqa'
+        self.assertEqual(executable_routing_text(quoted), blank(quoted[:-9]) + ' $ultraqa')
+
+    def test_apostrophe_glued_to_a_url_stays_inside_it(self) -> None:
+        # Masking up to the apostrophe would leave a lone `'` that a later
+        # pass over the projected text reads as an opening quote to EOF.
+        for message, url in (
+            ("Look at https://github.com/a/b/pull/1's diff and $ulw-work fix it", "https://github.com/a/b/pull/1's"),
+            ("Per https://example.com/it's-broken $ulw-work fix the build", "https://example.com/it's-broken"),
+        ):
+            with self.subTest(message=message):
+                result = reference_regions(message)
+                self.assertEqual(result.links, (url,))
+                self.assertEqual(result.references, ())
+                self.assertTrue(result.executable_text.endswith(message[message.index(url) + len(url):]))
+                self.assertEqual(reference_regions(result.executable_text).references, ())
+        self.assertEqual(reference_regions("'https://example.com/a' $ultraqa").links, ())
+
+    def test_quote_and_fence_spans_own_the_block_quote_lines_inside_them(self) -> None:
+        crossing = '"a\n> b" c'
+        result = reference_regions(crossing)
+        self.assertEqual(result.executable_text, '  \n     c')
+        self.assertEqual((result.references, result.quoted_lines), (('"a\n> b"',), ()))
+        fenced = '```\n> x\n```'
+        result = reference_regions(fenced)
+        self.assertEqual((result.references, result.quoted_lines), ((fenced,), ()))
+
+    def test_escapes_tags_and_scheme_less_paths_stay_executable(self) -> None:
+        for message in (
+            '\\> $ulw-work fix the build',
+            '[WIP] $ulw-work fix the build',
+            '[urgent] ultrawork this refactor until the tests pass',
+            './ulw-plan the rollout',
+            '/omh use ultraqa',
+            'mailto:me@example.com',
+            'a > b means greater',
+            'I said hi -> then left',
+            '> 5 tests fail after the merge, $ulw-work fix them',
+            '>$ulw-work fix the build',
+            '[summary] $ulw-work the release checklist',
+            '[result] $ulw-work fix the failing tests',
+            'v1 -> v2: $ulw-work the migration',
+            'staging -> prod: $ulw-work the release',
+            'api->db: ultrawork the schema migration',
+            'Deploy (v2) to staging: $ulw-work the rollout',
+            'Move service (auth) to k8s: $ulw-work',
+            'Migrate users (batch 3) to postgres: $ulw-work',
+        ):
+            with self.subTest(message=message):
+                result = reference_regions(message)
+                self.assertEqual(result.executable_text, message)
+                self.assertEqual((result.references, result.masked_spans), ((), ()))
+        for message, skill in (('./ulw-plan the rollout', 'ralplan'), ('[WIP] $ulw-work fix the build', 'ultrawork')):
+            with self.subTest(message=message):
+                route = route_chat_message(message, source="discord")
+                self.assertEqual((route["action"], route["selected_skill"]), ("dispatch", skill))
+
+    def test_stray_delimiter_inside_a_masked_line_opens_nothing(self) -> None:
+        for masked in ('> he said "ultrawork', '[REPORT] it\'s `ultrawork', 'planner -> reviewer: "ralplan'):
+            message = masked + '\n$ultraqa audit the dashboard'
+            with self.subTest(message=message):
+                self.assertTrue(executable_routing_text(message).endswith('\n$ultraqa audit the dashboard'))
+                route = route_chat_message(message, source="discord")
+                self.assertEqual((route["action"], route["selected_skill"]), ("dispatch", "ultraqa"))
+
+    def test_masked_forms_never_dispatch_or_hint_the_named_workflow(self) -> None:
+        for message in (*QUOTED_LINE_FORMS, *RELAY_LINE_FORMS, *URL_FORMS):
+            with self.subTest(message=message):
+                route = route_chat_message(message, source="discord")
+                self.assertNotEqual(route["action"], "dispatch")
+                for surface, hint in (
+                    ('awareness', awareness_route_hint(message)),
+                    ('wrapper', build_chat_route_hint_payload(message)['route_hint']),
+                ):
+                    self.assertNotIn(hint['primary_workflow'], ('ulw-work', 'ulw-plan', 'workflow-learning'), surface)
+
+    def test_direct_hints_survive_a_neighbouring_masked_line_or_link(self) -> None:
+        for message, expected in HINT_DIRECT_CONTROLS:
+            for mixed in (
+                message + ' https://example.com/ulw-plan',
+                '> $ulw-plan the rollout\n' + message,
+                '[REPORT] ralplan finished\n' + message,
+            ):
+                with self.subTest(message=mixed):
+                    self.assertEqual(awareness_route_hint(mixed)['primary_workflow'], expected)
+                    payload = build_chat_route_hint_payload(mixed)
+                    self.assertEqual(payload['route_hint']['primary_workflow'], expected)
+
+
 if __name__ == "__main__":
     unittest.main()
