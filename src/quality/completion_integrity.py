@@ -39,6 +39,11 @@ deletion. The refusal is waived for the whole claim, not line by line, the
 moment any diff adds a negative-case-named test or an evidence entry names
 "adversarial"/"regression" -- a boundary that loses its guard without a
 regression proving it still refuses is the exact hole this rule closes.
+
+Attribution: the placeholder evidence values and the negative-case naming
+vocabulary follow oh-my-openagent (omo), which is published under the
+Sustainable Use License 1.0. It is a link-only source, recorded in the note on
+code-level borrowings in `docs/SKILL-SOURCES.md`.
 """
 
 from __future__ import annotations

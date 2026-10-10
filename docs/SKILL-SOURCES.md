@@ -199,6 +199,11 @@ A new row added to the table needs either a receipt with a null
 | `frontend` chart styling | frontend | https://github.com/mui/mui-x | `docs/data/charts/styling/styling.md` (palette as a function of mode, piecewise/continuous/ordinal color maps with `unknownColor`, `tickLabelStyle`/`labelStyle` as the layout-measured path, loading and no-data overlays; concepts only) | MIT (`@mui/x-charts` community package) | 2026-10-07 | b3b49d90634d862cb9f0091b8c9c30cbca132846 |
 | `frontend` neobrutalism preset | frontend | https://github.com/ekmas/neobrutalism-components | published style description at https://www.neobrutalism.com/docs (outlined elements, zero-blur offset shadows, flat loud fills, no gradients or glass, active press into the shadow; the offset value is not published; no text reproduced) | MIT | 2026-10-07 | 3306a802724874a85f93079702b2795370a279d4 |
 | `frontend` semantic color pairs (daisyUI) | frontend | https://github.com/saadeghi/daisyui | themes documentation and `llms.txt` (`X`/`X-content` pairs, `data-theme` switching, semantic colors over raw palette, no `dark:` on semantic colors; concepts only) | MIT | 2026-10-07 | 9adbeaa259816be46b98bf497a09cd2ab127e3cf |
+| `ultrawork` TDD red/green (issue #2049) | execution | https://github.com/obra/superpowers | `skills/test-driven-development/SKILL.md` (the tests-first iron law, watch-it-fail verification, the rationalization table, and the red flags, rewritten in OMH's evidence vocabulary as `references/tdd-red-green.md`; no text reproduced) | MIT | 2026-10-10 | 8ca22dba9a94f28898bbce59f2537ff4d87c747d |
+| `code-review` review dispatch and response halves (issue #2049) | review | https://github.com/obra/superpowers | `skills/requesting-code-review/SKILL.md`, `skills/receiving-code-review/SKILL.md` (a named commit range per review request, verify before implementing, an all-or-nothing clarification gate, push-back and fix ordering, rewritten as `references/review-dispatch.md` and `references/review-response.md`; no text reproduced) | MIT | 2026-10-10 | 8ca22dba9a94f28898bbce59f2537ff4d87c747d |
+| `frontend` design-system contract and taste direction (issue #2049) | frontend | https://github.com/code-yeongyu/oh-my-openagent | `packages/shared-skills/skills/frontend/SKILL.md`, `packages/shared-skills/skills/frontend/references/design/README.md` (a `DESIGN.md` contract before component code, paired with taste-direction material and an evidence-bound critique lane; concepts only, no text reproduced) | Sustainable Use License 1.0 (concepts only, link-only) | 2026-10-10 | 9c62b6278bbe322f1629ad50564d54c7adca4c40 |
+| `visual-qa` reference-fidelity verdict (issue #2049) | materials | https://github.com/code-yeongyu/oh-my-openagent | `packages/shared-skills/skills/frontend/SKILL.md` final visual-QA step and `packages/shared-skills/skills/visual-qa/SKILL.md` (a verdict against the reference as the visual contract, pixel diff as evidence that aims the review rather than decides it; concepts only, no text reproduced) | Sustainable Use License 1.0 (concepts only, link-only) | 2026-10-10 | 9c62b6278bbe322f1629ad50564d54c7adca4c40 |
+| `design-quality-gate` critique lane (issue #2049) | materials | https://github.com/code-yeongyu/oh-my-openagent | `packages/shared-skills/skills/frontend/SKILL.md` and `packages/shared-skills/skills/frontend/references/designpowers/lane-c-review.md` (critique as its own evidence-bound lane with pass/fail behavior; concepts only, no text reproduced) | Sustainable Use License 1.0 (concepts only, link-only) | 2026-10-10 | 9c62b6278bbe322f1629ad50564d54c7adca4c40 |
 
 Note on the `apple-design` row: no license file was present at the reviewed
 revision, and the README's HIG-derived-material note is not a redistribution
@@ -259,6 +264,21 @@ rather than a source - its agentic-eval entry links to
 via `refactor-plan`. The row names the repository the content actually lives
 in, because that is what a tracker can diff; the index stays a discovery
 pointer.
+
+Note on code-level borrowings (issue #2049): the table audits skill rows
+only, so a borrowing that lives in code carries no row and is recorded here and
+in the module's own docstring. `src/quality/completion_integrity.py` takes its
+placeholder evidence values and its negative-case naming vocabulary from
+oh-my-openagent (omo), and `src/plugin_bundle/omh/engagement_nudges.py` takes
+the shape of omo's `agent-usage-reminder` hook. omo is published under the
+Sustainable Use License 1.0, which is not OSI-approved, so both are
+link-only concept borrowings. The nine skills whose "Why This Exists" line
+credits ECC (`affaan-m/everything-claude-code`) were compared section by
+section against ECC at `ef648e01899ba3e8dc6371642deaaf64b4477775`; they share a
+posture rather than a section structure, a rule list, or ECC's own terms, so
+they carry no row. `tests/test_skill_source_attribution_coverage.py` lists each
+of them with that reason and fails when a new upstream credit lands without a
+row or a listed reason.
 
 ## Candidate rows (researched, not yet shipped)
 

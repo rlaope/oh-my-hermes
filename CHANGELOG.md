@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The upstream tracker now watches the superpowers and oh-my-openagent
+  material shipped skills already adapt.** Five skill credits had no row in
+  `docs/SKILL-SOURCES.md`, so upstream could change what OMH adapted and no
+  issue would be raised. The `ultrawork` TDD reference and the `code-review`
+  dispatch and response references now have `obra/superpowers` rows, and
+  `frontend`, `visual-qa`, and `design-quality-gate` have link-only
+  `code-yeongyu/oh-my-openagent` rows (Sustainable Use License 1.0, concepts
+  only). Each row opens with a null-prior closure receipt. The nine skills
+  that credit ECC were compared against ECC and share a posture rather than
+  its structure, so they get no row; a note under the table records that and
+  the code-level omo borrowings. `tests/test_skill_source_attribution_coverage.py`
+  fails when a shipped skill credits one of these upstreams with neither a row
+  nor a listed reason (#2049).
 - **Concurrent TUIs share one fanout scan, and an idle widget polls less.**
   Each open TUI's status widget spawned a fresh reader every 2s, and each
   reader rescanned every fanout record under `coding/fanout` -- the same,
