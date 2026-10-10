@@ -265,6 +265,61 @@
       "reviewed_on": "2026-10-07",
       "rationale": "Adopted X/X-content pairs and the no-dark-variant rule on semantic colors as contract wording.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-ultrawork-superpowers",
+      "candidate_key": "ultrawork@github.com/obra/superpowers",
+      "prior_checkpoint": null,
+      "next_checkpoint": "8ca22dba9a94f28898bbce59f2537ff4d87c747d",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted the tests-first iron law, the watched-failure rule, pre-answered rationalizations, and forbidden moves in OMH evidence vocabulary; the copy Hermes bundles stays primary.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-code-review-superpowers",
+      "candidate_key": "code-review@github.com/obra/superpowers",
+      "prior_checkpoint": null,
+      "next_checkpoint": "8ca22dba9a94f28898bbce59f2537ff4d87c747d",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted the named-range review request and the verify-first, clarify-everything-before-implementing response contract as OMH reference wording.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-frontend-oh-my-openagent",
+      "candidate_key": "frontend@github.com/code-yeongyu/oh-my-openagent",
+      "prior_checkpoint": null,
+      "next_checkpoint": "9c62b6278bbe322f1629ad50564d54c7adca4c40",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted the pairing of a design-system contract file with taste direction and a critique lane as a concept; the license is not OSI-approved, so the source stays link-only.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-visual-qa-oh-my-openagent",
+      "candidate_key": "visual-qa@github.com/code-yeongyu/oh-my-openagent",
+      "prior_checkpoint": null,
+      "next_checkpoint": "9c62b6278bbe322f1629ad50564d54c7adca4c40",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted verdicts against a reference with pixel diff as a secondary aid as a concept; the license is not OSI-approved, so the source stays link-only.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-design-quality-gate-oh-my-openagent",
+      "candidate_key": "design-quality-gate@github.com/code-yeongyu/oh-my-openagent",
+      "prior_checkpoint": null,
+      "next_checkpoint": "9c62b6278bbe322f1629ad50564d54c7adca4c40",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted critique as an evidence-bound lane of its own as a concept; the license is not OSI-approved, so the source stays link-only.",
+      "supersedes": null
     }
   ]
 }
