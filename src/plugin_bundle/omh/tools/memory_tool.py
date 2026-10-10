@@ -335,10 +335,12 @@ def _map_capture_payload(payload: dict) -> dict[str, object]:
             "refused",
             **fields,
             reason=reason,
+            # A refusal that names its own fix (an instruction-shaped summary)
+            # passes it through, so the model learns how to restate it.
             next_action=(
                 "Memory is turned off in OMH settings; nothing was saved."
                 if reason == "project_memory_disabled"
-                else "Nothing was saved. Do not retry the same text."
+                else str(payload.get("next_action", "") or "") or "Nothing was saved. Do not retry the same text."
             ),
         )
     if payload.get("auto_approved"):

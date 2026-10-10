@@ -15,6 +15,11 @@ The control plane passes its own ``file_lock`` and ``utc_now`` through
 same OS lock on the same ``.<name>.lock`` sidecar, so a CLI and a plugin
 session against one home exclude each other. Stdlib only; no import of the
 ``omh`` control plane.
+
+Refusing an instruction-shaped summary from the model's own capture path, naming
+why and how to restate it, follows the hint admission rule of oh-my-openagent
+(https://github.com/code-yeongyu/oh-my-openagent, commit 657ea5a2a; concept
+only, link-only); the vocabulary and wording here are OMH's own.
 """
 
 from __future__ import annotations
@@ -284,6 +289,31 @@ def capture_project_memory_candidate(
             "safety": structural_safety,
             "redaction_policy": "metadata_only",
             "claim_boundary": "Credential-like structural metadata is rejected before project-memory persistence.",
+        }
+    # The model's own capture path replays into later sessions as context, so
+    # a summary written as an order to its reader would come back carrying a
+    # user turn's authority. Only that source is screened: demotion, rollup,
+    # design direction and the CLI store text a person or a derivation chose,
+    # and a refused demotion would end its staging run.
+    instruction_cue = (
+        _instruction_shaped_reason(str(summary or ""), str(record_type or ""))
+        if source == MODEL_CAPTURE_SOURCE
+        else ""
+    )
+    if instruction_cue:
+        return {
+            "schema_version": PROJECT_MEMORY_CAPTURE_SCHEMA_VERSION,
+            "captured": False,
+            "auto_approved": False,
+            "policy": policy,
+            "reason": "instruction_shaped_summary",
+            "instruction_cue": instruction_cue,
+            "next_action": (
+                "Nothing was saved. Restate it as an observation of what holds (what the user prefers, "
+                "what the project does, what was decided), not as an order to the reader, and capture it again."
+            ),
+            "redaction_policy": "metadata_only",
+            "claim_boundary": "An instruction-shaped summary from the model capture path is refused before persistence.",
         }
     # Absolute deadlines: "the contract ends on the 18th" is a date, not a
     # day count, and forcing the captor to do the subtraction moved the
@@ -1363,6 +1393,45 @@ _RELATIVE_TIME_PATTERN = re.compile(
     r"|d['’]ici\s+(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|la\s+fin\s+(?:de\s+la\s+semaine|du\s+mois)))\b",
     re.IGNORECASE,
 )
+
+
+# The capture source the `omh_memory` tool passes; the only one screened for
+# instruction-shaped summaries.
+MODEL_CAPTURE_SOURCE = "hermes_model"
+# Second-person modal phrases, matched as consecutive words anywhere in the
+# summary. A summary whose first word is "your" also counts. Opening with an
+# imperative verb is deliberately not a cue: lessons and decisions open that way
+# ("Prefer the release branch").
+_INSTRUCTION_SECOND_PERSON_PHRASES = (
+    ("you", "must"),
+    ("you", "should"),
+    ("you", "need", "to"),
+    ("you", "have", "to"),
+    ("you", "ought", "to"),
+)
+# Korean request endings, matched only where a sentence ends: before closing
+# punctuation or at the end of the summary.
+_INSTRUCTION_KOREAN_REQUEST_ENDINGS = ("해줘", "해 줘", "해주세요", "해 주세요", "하세요", "해라", "하십시오")
+_INSTRUCTION_KOREAN_REQUEST_PATTERN = re.compile(
+    "(" + "|".join(re.escape(ending) for ending in _INSTRUCTION_KOREAN_REQUEST_ENDINGS) + r")(?:\s*[.!?。！？]+|\s*$)"
+)
+# A procedure is a how-to by definition; its steps may address the reader.
+_INSTRUCTION_EXEMPT_RECORD_TYPES = ("procedure",)
+
+
+def _instruction_shaped_reason(summary: str, record_type: str) -> str:
+    """The cue that makes a summary read as an order to its reader, or ""."""
+    if record_type in _INSTRUCTION_EXEMPT_RECORD_TYPES:
+        return ""
+    words = re.findall(r"[a-z']+", summary.lower())
+    if words[:1] == ["your"]:
+        return "your"
+    for phrase in _INSTRUCTION_SECOND_PERSON_PHRASES:
+        width = len(phrase)
+        if any(tuple(words[index : index + width]) == phrase for index in range(len(words) - width + 1)):
+            return " ".join(phrase)
+    match = _INSTRUCTION_KOREAN_REQUEST_PATTERN.search(summary)
+    return match.group(1) if match else ""
 
 
 def _relative_time_phrase(value: str) -> str:

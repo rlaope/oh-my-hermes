@@ -404,7 +404,7 @@ one `status`:
 | `remembered` | Auto-safe approval ran; `receipt_state` says how far the write was observed, `replay_ready` only when admission's own replay evaluation cleared it. |
 | `pending_review` | A candidate was persisted and held; `review_reason` is `unsafe_content`, `relative_time_phrase`, `duplicate`, `derived_content`, or `policy_review_first`. |
 | `already_remembered` | A live record has the same normalized summary; `duplicate_of` names it and nothing was written. |
-| `refused` | Nothing was written: invalid input, memory turned off, or a project scope this session cannot resolve. |
+| `refused` | Nothing was written: invalid input, memory turned off, a project scope this session cannot resolve, or an `instruction_shaped_summary` (a second-person order or a Korean request ending, outside `procedure` records), whose `next_action` asks for the fact restated as an observation. |
 | `error` | Admission raised (an unreadable store, a lock held past its 10 s wait); `reason` names the exception class and nothing is confirmed saved. |
 
 `scope` defaults to `project` when the session's working directory resolves a
