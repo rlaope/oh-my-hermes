@@ -10,12 +10,14 @@ All notable changes will be documented here.
   the accepted plan leaves open (a name, an internal structure) and record it
   as one `Ruling: <decision> — <reason> — <cost if wrong>` line in the
   existing goal ledger, then keep working. Irreversible or destructive steps,
-  security-sensitive steps, side effects outside the worktree, and a plan
-  where every way forward is a guess stay decisions the user owns, alongside
+  security-sensitive steps, side effects outside the worktree the user has
+  not already authorized, and a plan where every way forward is a guess stay
+  decisions the user owns, alongside
   the follow-up authority rule and every other stop the skill already has. A
   change gets at most two re-reviews, each by a reviewer that has not seen it
   before; a lane never starts its own reviewer. Evidence is reused per check
-  until something it covers changes since its `observed_tree`, with one full
+  until a diff from the commit recorded with its capture reaches something it
+  covers (`observed_tree` stays the identity stamp), with one full
   rerun against the final tree before the closing brief, and a defect outside
   the change's blast radius stays open as a tracked issue instead of passing
   a criterion. The existing `docs/SKILL-SOURCES.md` rows for `ultrawork`

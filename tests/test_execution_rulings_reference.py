@@ -59,9 +59,32 @@ REVIEW_ROUND_TOKENS = (
 
 EVIDENCE_REUSE_TOKENS = (
     "observed_tree",
+    "a commit to diff from",
+    "`git stash create`",
+    "the diff runs against the recorded commit",
+    "is assessed against the current tree",
     "the whole set runs once more against the final tree",
     "never proof of completion",
     "stale_tree",
+)
+
+# Each sentence that names a change to state outside the worktree carries the
+# authorization condition; without it the stop list contradicts ulw-work's
+# plan-to-PR contract and its follow-up authority rule.
+EXTERNAL_STATE_AUTHORIZED_TOKENS = (
+    "A side effect outside the worktree that the user has not already authorized:",
+    "rewriting shared history the user has not already authorized",
+    "changes external state not already authorized is described first",
+    "so it waits for approval unless filing was already authorized",
+)
+
+# Review classification, review owner, and ledger-limit rulings from review.
+COORDINATION_TOKENS = (
+    "the campaign orchestrator when the user selected `campaign-orchestrator` mode",
+    "not by the label the reviewer gave it",
+    "a new reviewer instance under the same review owner",
+    "Keep the line under 240 characters",
+    "`--notes-summary`",
 )
 
 BLAST_RADIUS_TOKENS = (
@@ -97,6 +120,16 @@ class ExecutionRulingsReferenceTests(unittest.TestCase):
 
     def test_stop_cases_stay_under_the_user_owned_decision_rule(self) -> None:
         self._assert_tokens(USER_OWNED_LINK_TOKENS, "the link to the user-owned decision stop")
+
+    def test_external_state_stops_wait_only_for_unauthorized_steps(self) -> None:
+        self._assert_tokens(EXTERNAL_STATE_AUTHORIZED_TOKENS, "the authorization condition")
+        for line in _reference().splitlines():
+            if "outside the worktree" in line or "external state" in line:
+                with self.subTest(line=line[:60]):
+                    self.assertIn("already authorized", line, f"{REFERENCE_PATH} names external state without the authorization condition")
+
+    def test_reference_names_the_coordinator_and_its_classification(self) -> None:
+        self._assert_tokens(COORDINATION_TOKENS, "a coordination rule")
 
     def test_reference_caps_review_rounds_with_a_new_reviewer(self) -> None:
         self._assert_tokens(REVIEW_ROUND_TOKENS, "the review-round rule")
