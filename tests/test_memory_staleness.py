@@ -862,6 +862,26 @@ class RelativeTimeProseTests(unittest.TestCase):
                 "le mois dernier on a changé",
                 "décidé l’année dernière",
                 "déploiement fait avant-hier",
+                # Spelled numbers, vague quantifiers and anchored weekdays
+                # (#2048): the everyday forms, not only the digit one.
+                "we migrated two weeks ago",
+                "the flag flipped ten days ago",
+                "rotated a few days ago",
+                "switched several weeks ago",
+                "upgraded a couple of days ago",
+                "renew the cert in two weeks",
+                "the freeze starts in a few days",
+                "decided last Monday",
+                "ship it next Friday",
+                "on a migré il y a une semaine",
+                "décidé il y a deux semaines",
+                "changé il y a quelques jours",
+                "migré il y a plusieurs semaines",
+                "renouveler dans deux semaines",
+                "gel du code dans quelques jours",
+                "décidé lundi dernier",
+                "livré vendredi dernier",
+                "revue jeudi prochain",
             ):
                 with self.subTest(summary=summary):
                     captured = capture_project_memory_candidate(paths, summary)
@@ -900,6 +920,14 @@ class RelativeTimeProseTests(unittest.TestCase):
                 "the other branch is stale",
                 "il y a des cas limites",
                 "le dernier commit est sur main",
+                # Spelled quantities and weekdays still need their anchor; a
+                # weekday rule ("the last Friday of each month") is recurring.
+                "the release goes out the last Friday of each month",
+                "le déploiement a lieu le dernier vendredi du mois",
+                "one day we will migrate to postgres 16",
+                "the config lives in two places",
+                "deux semaines de congés par an",
+                "last Friday of the month is the release window",
             ):
                 with self.subTest(summary=summary):
                     captured = capture_project_memory_candidate(paths, summary)

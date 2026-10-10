@@ -1305,17 +1305,34 @@ def _project_memory_safety(
 # and a false negative is the status quo. Patterns are deliberately tight --
 # bare "후/전" ("리뷰 후 머지") never match; a number-plus-unit or an
 # unambiguous deictic word must be present.
+#
+# The quantity slot takes spelled numbers and vague quantifiers as well as
+# digits, because "two weeks ago" and "il y a quelques jours" are how people
+# actually write these phrases; the anchor ("ago", "in", "il y a", "dans")
+# stays mandatory, so "two weeks of leave" and "in two places" never match.
+_EN_QUANTITY = (
+    r"(?:\d{1,4}|an?|one|two|three|four|five|six|seven|eight|nine|ten"
+    r"|(?:a\s+)?few|several|(?:a\s+)?couple(?:\s+of)?)"
+)
+_EN_TIME_UNIT = r"(?:days?|weeks?|months?|years?|hours?|minutes?)"
+# A weekday bound to "last"/"next" is relative; "the last Friday" and
+# "last Friday of the month" are a recurring rule and are held back.
+_EN_WEEKDAY = r"(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
+_FR_QUANTITY = r"(?:\d{1,4}|une?|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|quelques|plusieurs)"
+_FR_TIME_UNIT = r"(?:jours?|semaines?|mois|ann[ée]es?|ans?|heures?|minutes?)"
+_FR_WEEKDAY = r"(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)"
 _RELATIVE_TIME_PATTERN = re.compile(
     r"(?<!\d)\d{1,4}\s*(?:일|주|개월|달|년|시간|분)\s*(?:뒤|후|이내|안에|내로)"
     # Deictic words may carry an ordinary particle (내일부터, 오늘은) -- the
     # idiomatic majority -- but a following non-particle hangul syllable
     # (오늘의집, 내일정) means a compound, not a time reference.
     r"|(?<![가-힣])(?:그저께|어제|오늘|내일|모레|다음\s*주|다음\s*달|이번\s*주)(?:은|는|이|가|에|에는|부터|까지|도|만)?(?![가-힣])"
-    r"|\b(?:yesterday|today|tomorrow|next\s+(?:week|month|year)|in\s+\d{1,4}\s+(?:days?|weeks?|months?|years?|hours?|minutes?)"
+    r"|\b(?:yesterday|today|tomorrow|next\s+(?:week|month|year)|in\s+" + _EN_QUANTITY + r"\s+" + _EN_TIME_UNIT
     # Past-relative English has the same hidden anchor: a number plus a unit
     # before "ago", "last" bound to a time noun, or the fixed "the other day".
     # Bare "ago", "last" and "other" ("the last step") never match.
-    r"|(?:\d{1,4}|an?|one)\s+(?:days?|weeks?|months?|years?|hours?|minutes?)\s+ago|last\s+(?:week|month|year)|the\s+other\s+day)\b"
+    + r"|" + _EN_QUANTITY + r"\s+" + _EN_TIME_UNIT + r"\s+ago|last\s+(?:week|month|year)|the\s+other\s+day"
+    r"|(?<!\bthe\s)(?:last|next)\s+" + _EN_WEEKDAY + r"(?!\s+(?:of|in)\b))\b"
     r"|(?<!\d)\d{1,4}\s*(?:日|週間|ヶ月|か月|年)\s*(?:後|以内)"
     r"|(?<!\d)\d{1,4}\s*(?:天|周|個月|个月|年)\s*(?:后|後|以内|以內|内|內)"
     r"|明日|昨日|来週|来月|明天|昨天|下周(?!期)|下個月|下个月"
@@ -1324,13 +1341,16 @@ _RELATIVE_TIME_PATTERN = re.compile(
     # "prochaine" ("la prochaine version") never match, and neither does
     # "hier": it is German for "here", and German prose must not lose
     # auto-approval to a French cue.
-    r"|\b(?:(?:dans|d['’]ici)\s+\d{1,4}\s+(?:jours?|semaines?|mois|ann[ée]es?|ans?|heures?|minutes?)"
-    r"|(?:la\s+)?semaine\s+prochaine|(?:le\s+)?mois\s+prochain|(?:l['’])?ann[ée]e\s+prochaine"
+    r"|\b(?:(?:dans|d['’]ici)\s+" + _FR_QUANTITY + r"\s+" + _FR_TIME_UNIT
+    + r"|(?:la\s+)?semaine\s+prochaine|(?:le\s+)?mois\s+prochain|(?:l['’])?ann[ée]e\s+prochaine"
     r"|demain|aujourd['’]hui|avant-hier"
     # Past-relative French: "il y a" only with a number plus a unit ("il y a
     # des cas" is ordinary), and "dernier/dernière" only bound to a time noun
     # ("le dernier commit" is ordinary).
-    r"|il\s+y\s+a\s+\d{1,4}\s+(?:jours?|semaines?|mois|ann[ée]es?|ans?|heures?|minutes?)"
+    r"|il\s+y\s+a\s+" + _FR_QUANTITY + r"\s+" + _FR_TIME_UNIT
+    # A weekday bound to "dernier"/"prochain" after it; "le dernier vendredi
+    # du mois" puts the adjective first and is a recurring rule.
+    + r"|" + _FR_WEEKDAY + r"\s+(?:dernier|prochain)"
     r"|(?:la\s+)?semaine\s+derni[èe]re|(?:le\s+)?mois\s+dernier|(?:l['’])?ann[ée]e\s+derni[èe]re|l['’]an\s+dernier"
     r"|d['’]ici\s+(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|la\s+fin\s+(?:de\s+la\s+semaine|du\s+mois)))\b",
     re.IGNORECASE,
