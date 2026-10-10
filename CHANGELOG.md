@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`ulw-work`'s TDD reference checks that a new test guards something before
+  it counts.** `references/tdd-red-green.md` now asks four questions before a
+  test is written (the behavior it protects, a plausible regression that turns
+  it red, why the closest existing test misses that regression, and whether it
+  needs a seam no production caller uses), lists shapes of tests that guard
+  nothing (a no-assertion probe, a self-comparison, an expected value got by
+  calling the code under test, a negative control rejected for an unrelated reason,
+  a name that promises more than its inputs exercise), and requires a bug's
+  regression test to fail on the code before the fix for that bug's own
+  reason. The `ulw-work` body is unchanged; its existing pointer reaches the
+  new sections. A new `docs/SKILL-SOURCES.md` row watches
+  `code-yeongyu/oh-my-openagent` (`.omo/rules/test-discipline.md`, concepts
+  only) for `ultrawork` (#2049).
 - **`loop` reviews a loop's design before it launches.** A new
   `references/loop-design-review.md`, named by one quality-bar line, asks for
   a finish line a program can decide, written beside a fence of paths the loop
