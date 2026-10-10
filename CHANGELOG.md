@@ -12,10 +12,12 @@ All notable changes will be documented here.
   auto-safe and aged into a lie (#2048). The quantity slot now takes `one` to
   `ten`, `a few`, `several` and `a couple of` (French `un`/`une` to `dix`,
   `quelques`, `plusieurs`), and a weekday bound to `last`/`next` (French
-  `dernier`/`prochain` after it) counts. The anchor stays mandatory, and a
-  recurring rule ("the last Friday of each month", "le dernier vendredi du
-  mois") stays untouched. `recently`/`récemment` are left out: the anchor is
-  the same, but in neutral prose they would cost a review prompt too often.
+  `dernier`/`prochain` after it) counts, and so do `recently`/`récemment`
+  except as a sort order ("least recently used", "le plus récemment
+  modifié"). The anchor stays mandatory, a recurring rule ("the last Friday
+  of each month", "le dernier vendredi du mois") stays untouched, and
+  `in a`/`in one <unit>` is read as a duration ("built in a day"), so only
+  a number or a vague quantifier after `in` counts.
 - **A default-store install names `~/.omh` for the plugin, so multiplexed
   processes load it.** Setup and update recorded
   `plugins.entries.omh.settings.omh_home` only when the store was not
