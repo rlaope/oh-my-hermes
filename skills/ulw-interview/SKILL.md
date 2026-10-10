@@ -61,6 +61,8 @@ Bad example:
 
 This interview is bounded: at most 6 rounds, one question per round.
 
+A yes to an idea approves only the idea; a later plan, handoff, or change is accepted at its own gate.
+
 Before each question, find the most recent round header you emitted in this thread and add 1.
 If there is no header, you are at Round 1. If you have already asked questions here but cannot
 recover the number (for example after context compaction), do not restart at Round 1 — run the
@@ -127,8 +129,6 @@ question is Round 4; if they choose to plan, stop rule 2 applies.
 
 These are stop rules you follow, not caps OMH enforces. When torn between one more question and
 stopping, stop and plan.
-
-A yes to an idea approves only the idea; a later plan, handoff, or change is accepted at its own gate.
 
 ## Use When
 
