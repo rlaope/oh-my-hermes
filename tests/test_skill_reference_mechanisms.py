@@ -1,9 +1,11 @@
-"""Contract for the seven reference-file mechanisms added by issue #1714.
+"""Contract for the reference-file mechanisms registered below.
 
-Each row of the issue's table is one skill that declared a discipline in its
-body and shipped no procedure for it. The capability is the reference file, and
-the body pointer is the only thing that makes it reachable -- a reference
-nothing points at is a file in the pack, not a capability.
+The first seven are the rows of issue #1714's table, each one skill that
+declared a discipline in its body and shipped no procedure for it; `loop`'s
+design review (issue #2049) joined later under the same contract. The
+capability is the reference file, and the body pointer is the only thing that
+makes it reachable -- a reference nothing points at is a file in the pack, not
+a capability.
 
 Everything here re-derives from the producers (`builtin_skill_reference_templates()`
 and `builtin_definitions()`), never from the generated `skills/` tree, so
@@ -12,7 +14,7 @@ generated file still sits on disk.
 
 The structural-token assertions are the part that has to earn its place. They
 do not check that a reference is well written; they check that the specific
-mechanism the issue named is present, by the named artifact it is built from:
+mechanism its issue named is present, by the named artifact it is built from:
 the id scheme, the three coverage states, the manifest section names, the
 ownership rule. A reference rewritten into an essay that keeps the heading and
 drops the ids fails here, which is the whole point -- the failure mode for this
@@ -63,6 +65,10 @@ MECHANISM_POINTERS: dict[str, tuple[str, str]] = {
     "plan": (
         "references/project-constitution.md",
         "references/project-constitution.md",
+    ),
+    "loop": (
+        "references/loop-design-review.md",
+        "references/loop-design-review.md",
     ),
 }
 
@@ -128,6 +134,19 @@ MECHANISM_TOKENS: dict[str, tuple[str, ...]] = {
         "SHOULD",
         "changing the plan",  # the conflict direction, the whole mechanism
         "Amendment",
+    ),
+    "loop": (
+        "loopability_assessment/v1",      # the existing classifier this review starts after
+        "measured-loop-discipline.md",    # the scored case, named instead of restated
+        "fence",                          # the paths the loop may not edit, beside the finish line
+        "--no-renames",                   # a renamed fenced file still shows its old path
+        "verification_plan",              # the per-iteration acceptance check, apart from the finish line
+        "Is Not the Builder",             # the judge separation
+        "self-modifying",                 # loops that change their own rules
+        "approved_auto_safe",             # the memory-capture rule this one is kept apart from
+        "Self-grading",                   # pre-launch failure-check items
+        "Unfenced check",
+        "Questions left for mid-run",
     ),
 }
 
@@ -202,11 +221,11 @@ class ReferenceMechanismTests(unittest.TestCase):
     def test_no_reference_records_a_date_or_a_volatile_count(self) -> None:
         """Cache-placement rule: a reference body outlives the state it describes.
 
-        Scoped to the seven this change ships, deliberately. Eight references
-        that predate it carry a date, mostly a platform or specification
+        Scoped to the references registered above, deliberately. Eight references
+        that predate #1714 carry a date, mostly a platform or specification
         version where the date is the fact rather than a timestamp of when
         someone wrote the file. Widening this assertion to the whole set would
-        fail on content nobody in this change reviewed, and the honest way to
+        fail on content nobody registering here reviewed, and the honest way to
         adopt those is to read each one, not to make them my gate's problem.
         """
         references = _references_by_key()

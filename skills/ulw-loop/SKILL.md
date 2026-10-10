@@ -98,6 +98,7 @@ Quality bar:
 - Use cheap inner-loop checks frequently and expensive outer-loop checks sparingly.
 - Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.
 - Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.
+- Before a loop launches, or when asked whether one will hold, load `references/loop-design-review.md`: a finish line written beside the fence of files the loop may not edit, a judge other than the builder, and the pre-launch failure check.
 - Session-bound host_observed resumable_goal plus explicit coding ownership prepares one executor goal. Otherwise use native `/goal` and `/goal gate add`. Never prepare two controllers.
 - Ingest bounded snapshots via `omh loop goal-driver-observe`. External state guides recovery, not checkpoint decisions; native turns still require activation and contiguous same-session evidence.
 - Treat ticks as preparation only. Advance one legal role phase through loop_phase_transition/v1 only after its named gate has observed evidence.

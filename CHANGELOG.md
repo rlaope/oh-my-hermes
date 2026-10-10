@@ -4,6 +4,26 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`loop` reviews a loop's design before it launches.** A new
+  `references/loop-design-review.md`, named by one quality-bar line, asks for
+  a finish line a program can decide, written beside a fence of paths the loop
+  may not edit (checked against the diff at judging time); a judge that is not
+  the builder; prior human approval before a loop changes its own rules, kept
+  separate from memory capture's `approved_auto_safe` admission; and a
+  pre-launch check whose open items the model repairs itself where the skill
+  allows, asking the user only for a choice that is theirs. The fence check
+  is a numbered judging procedure: it diffs the working tree and untracked
+  files against a recorded start SHA with renames split, so a moved or
+  uncommitted edit to a fenced path still fails, and it checks what those
+  listings cannot see directly - `test -e` for files fenced as absent
+  (ignored ones included), launch-time sha256 for entries untracked at the
+  start or outside the repository, and recorded commits for submodules. A retry cap counts failures of one item's acceptance check and then
+  hands over to the existing exhaustion ladder, and with no second session to
+  judge, the loop stops at its verification gate instead of grading itself.
+  It starts after `loopability_assessment/v1` and leaves a scored loop's
+  contract to `references/measured-loop-discipline.md`. A new `docs/SKILL-SOURCES.md` row
+  watches `affaan-m/everything-claude-code` (`loop-design-check`) for `loop`
+  (#2049).
 - **`app-debugging` stops after three failed fixes and re-examines the
   architecture instead of trying a fourth.** Only an executed run of the same
   reproduction command counts; a planned run or a different command does not.
