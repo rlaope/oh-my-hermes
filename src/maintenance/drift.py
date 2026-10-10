@@ -510,7 +510,14 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # The quoted/relay/URL masks (#2049) add three: an invocation
             # beside a URL, after a block-quote line, and after a relay header
             # line, each still dispatching.
-            expected=637,
+            # Their review (#2049) adds nineteen that dispatched before the
+            # masks and must keep dispatching: an apostrophe touching a link
+            # (two), arrows and parentheses between ordinary names (six), the
+            # person's own `[summary]`/`[result]` tags (two), a pasted `> error`
+            # line before a Korean request, a leading link as the target
+            # (four), punctuation ending a link (two), and a `>` that is not a
+            # block-quote marker (two).
+            expected=656,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

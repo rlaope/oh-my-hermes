@@ -2450,7 +2450,14 @@ def _route_chat_message_cached(
     # of dispatching (or clarifying generically) on guesswork. Explicit `$`
     # invocation always wins -- it is a deliberate user choice, not a heuristic
     # match -- so it stays outside the gate.
-    if candidate_skill in _HEAVY_LANE_ROUTE_SKILLS and action in {"dispatch", "clarify"} and not explicit_skill:
+    # A link is masked out of `routing_message` but still names the target, so
+    # it exempts the message the way a path would.
+    if (
+        candidate_skill in _HEAVY_LANE_ROUTE_SKILLS
+        and action in {"dispatch", "clarify"}
+        and not explicit_skill
+        and not reference_regions(message).links
+    ):
         heavy_vagueness_reason = _heavy_lane_vagueness_reason(routing_message, candidate_skill)
         if heavy_vagueness_reason:
             selected_skill = _ROUTER_SKILL

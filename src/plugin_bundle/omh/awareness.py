@@ -6751,18 +6751,19 @@ def route_hint_for_installed_skills(
 
 
 def route_hint_without_engine_workflows(payload: dict[str, object]) -> dict[str, object]:
-    """The route hint with every workflow-engine hint left out, for a delegated child.
+    """The route hint with every orchestrating-engine hint left out, for a delegated child.
 
     A child's request is the brief its orchestrator wrote, and the brief names
     the workflow the orchestrator is already running; a hint telling the child
-    to select that engine again would start a second orchestration inside the
-    first. Engine hints and their context cards go, the way an uninstalled
-    skill's do above; every other hint stays. Engines are matched by the
-    vendored `_ULW_ENGINE_WORKFLOWS` through the module's own display-name
-    table, so the bundle needs no catalog import.
+    to select an orchestrating engine again would start a second orchestration
+    inside the first. Those hints and their context cards go, the way an
+    uninstalled skill's do above; every other hint stays, including the task
+    engines a child is often delegated to run (`research`, `ultraqa`, ...).
+    Engines are matched by the vendored `_ULW_ORCHESTRATING_ENGINES` through
+    the module's own display-name table, so the bundle needs no catalog import.
     """
     names = _canonical_workflow_by_display_name()
-    return _route_hint_without(payload, lambda name: names.get(name, name) in _ULW_ENGINE_WORKFLOWS)
+    return _route_hint_without(payload, lambda name: names.get(name, name) in _ULW_ORCHESTRATING_ENGINES)
 
 
 def _route_hint_without(
@@ -7515,6 +7516,26 @@ _ULW_ENGINE_WORKFLOWS = frozenset(
         "ultraprocess",
         "ultraperf",
         "ultraqa",
+        "ultrawork",
+    }
+)
+
+# The engines that orchestrate other work (fan out, loop, or drive a plan to
+# delivery), and so must not be started again inside a delegated child. The
+# retired ones fold into `ultrawork` and orchestrate the same way. The rest of
+# `_ULW_ENGINE_WORKFLOWS` (context, deep-interview, research, ultraperf,
+# ultraqa) does one bounded task a child is commonly delegated to run.
+# `tests/test_awareness_delivery.py` pins the split, so a new engine has to be
+# classified on one side.
+_ULW_ORCHESTRATING_ENGINES = frozenset(
+    {
+        "loop",
+        "maestro",
+        "ralph",
+        "ralplan",
+        "team",
+        "ultragoal",
+        "ultraprocess",
         "ultrawork",
     }
 )

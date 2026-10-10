@@ -492,7 +492,7 @@ def _tracker_event_is_present(kwargs: dict) -> bool:
 def _rendered_route_hint(
     payload: dict[str, object], installed: frozenset[str] | None, *, delegated: bool
 ) -> dict[str, object]:
-    """The route hint this turn renders: installed skills only, and no engine for a child.
+    """The route hint this turn renders: installed skills only, no orchestrating engine for a child.
 
     A delegated child's request is its orchestrator's brief, which names the
     engine already running; the host runs the child's `pre_llm_call` in the

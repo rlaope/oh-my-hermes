@@ -9810,6 +9810,126 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "[REPORT] tests are red\n$ulw-work fix the build",
         "dispatch", "ultrawork", "present_plan", "plan",
     ),
+    # Review of #2049's masks: each of these dispatched before the masks and
+    # must keep dispatching. A possessive or apostrophe touching a link, an
+    # arrow or parenthesis between ordinary names, a person's own `[summary]`
+    # tag, a pasted `> error` line before a Korean request, a leading link as
+    # the request's target, punctuation ending a link before a glued
+    # invocation, and a `>` that is not a block-quote marker.
+    RoutingInterventionCase(
+        "possessive-glued-to-a-url-still-dispatches",
+        "An apostrophe glued to a link is a possessive, not a quote that runs to the end",
+        "Look at https://github.com/a/b/pull/1's diff and $ulw-work fix it",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "apostrophe-inside-a-url-path-still-dispatches",
+        "An apostrophe inside a link's path opens no quote",
+        "Per https://example.com/it's-broken $ulw-work fix the build",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "version-arrow-prefix-is-not-a-relay-header",
+        "An arrow between two versions is the person's own scope, not a relay between agents",
+        "v1 -> v2: $ulw-work the migration",
+        "dispatch", "ultrawork", "forward_plan_to_selected_workflow", "plan",
+    ),
+    RoutingInterventionCase(
+        "environment-arrow-prefix-is-not-a-relay-header",
+        "An arrow between two environments is the person's own scope",
+        "staging -> prod: $ulw-work the release",
+        "dispatch", "ultrawork", "forward_plan_to_selected_workflow", "plan",
+    ),
+    RoutingInterventionCase(
+        "component-arrow-prefix-is-not-a-relay-header",
+        "An arrow between two components keeps the request it prefixes",
+        "api->db: ultrawork the schema migration",
+        "dispatch", "backend", "prepare_backend_handoff", "backend_contract",
+    ),
+    RoutingInterventionCase(
+        "parenthesized-version-to-target-is-not-a-relay-sender",
+        "A version in parentheses before `to <target>:` is not an agent id",
+        "Deploy (v2) to staging: $ulw-work the rollout",
+        "dispatch", "ultrawork", "forward_plan_to_selected_workflow", "plan",
+    ),
+    RoutingInterventionCase(
+        "parenthesized-service-to-target-is-not-a-relay-sender",
+        "A service name in parentheses before `to <target>:` is not an agent id",
+        "Move service (auth) to k8s: $ulw-work",
+        "dispatch", "ultrawork", "forward_plan_to_selected_workflow", "plan",
+    ),
+    RoutingInterventionCase(
+        "parenthesized-batch-to-target-is-not-a-relay-sender",
+        "A batch number in parentheses before `to <target>:` is not an agent id",
+        "Migrate users (batch 3) to postgres: $ulw-work",
+        "dispatch", "ultrawork", "forward_plan_to_selected_workflow", "plan",
+    ),
+    RoutingInterventionCase(
+        "summary-tag-prefix-is-the-person-s-own-request",
+        "A `[summary]` tag is a person's own label, not a relay header",
+        "[summary] $ulw-work the release checklist",
+        "dispatch", "ultrawork", "forward_plan_to_selected_workflow", "plan",
+    ),
+    RoutingInterventionCase(
+        "result-tag-prefix-is-the-person-s-own-request",
+        "A `[result]` tag is a person's own label, not a relay header",
+        "[result] $ulw-work fix the failing tests",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "block-quoted-error-does-not-open-the-korean-transform-path",
+        "A pasted `> error` line is context, not text to transform; the invocation below it still dispatches",
+        "> TypeError: x is undefined\n이 에러 $ulw-work로 고쳐서 요약해줘",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "leading-url-then-please-invocation-still-dispatches",
+        "A leading link still names the target of the invocation after it",
+        "https://example.com/a please $ulw-work fix it",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "leading-url-then-korean-deictic-invocation-still-dispatches",
+        "A leading link is the target a Korean deictic invocation points at",
+        "https://example.com/issues/1 이거 $ulw-work로 고쳐줘",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "leading-url-then-korean-invocation-still-dispatches",
+        "A leading link is the target of a Korean invocation with no other noun",
+        "https://example.com/issues/1 $ulw-work로 고쳐줘",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "leading-url-then-korean-workflow-name-still-dispatches",
+        "A leading link is the target of a Korean request naming the workflow",
+        "https://example.com/issues/1 이거 ultrawork로 고쳐줘",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "url-ends-at-a-comma-before-an-invocation",
+        "A comma ends the link, so the invocation glued after it is the person's own",
+        "see https://example.com/x,$ulw-work fix it",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "url-ends-at-a-closing-parenthesis-before-an-invocation",
+        "An unbalanced closing parenthesis ends the link, so the invocation glued after it is the person's own",
+        "(https://example.com/a)$ulw-work fix the build",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "greater-than-number-is-a-comparison-not-a-quote",
+        "`> 5` at the start of a chat line reads as a comparison, not a block quote",
+        "> 5 tests fail after the merge, $ulw-work fix them",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "greater-than-glued-to-an-invocation-is-not-a-quote",
+        "A `>` with no space after it is not a block-quote marker",
+        ">$ulw-work fix the build",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
     # The route question's decline predicate (#1817), on turns the router is
     # supposed to act on. A clarify naming its only candidate has nothing left
     # for a Choice to decide; a clarify over four candidates does.

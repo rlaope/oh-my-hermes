@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import threading
 import unittest
@@ -24,9 +25,11 @@ from omh.plugin_bundle.omh.awareness_delivery import (
     read_awareness_delivery,
     record_awareness_delivery,
 )
+from omh.plugin_bundle.omh import awareness as awareness_module
 from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
 from omh.plugin_bundle.omh.hooks.nudge_budget import reset_nudge_budget
 from omh.plugin_bundle.omh.hooks.session_hooks import subagent_start
+from omh.skills.catalog_types import ULW_ENGINE_SKILL_NAMES
 
 
 class AwarenessDeliveryLedgerTests(unittest.TestCase):
@@ -514,13 +517,32 @@ class DelegatedChildRouteHintTests(unittest.TestCase):
                 self.assertIn("- selected=ulw-work; lane=coding_handoff", context)
                 self.assertIn("next_action=prepare_parallel_delivery", context)
 
-    def test_registered_child_keeps_its_other_skill_hints(self) -> None:
-        brief = "ultrawork this refactor until the tests pass"
-        plain = self._context(brief, delegated=False)
-        child = self._context(brief, delegated=True)
-        self.assertIn("- selected=workflow-learning;", plain)
-        self.assertIn("- selected=workflow-learning;", child)
-        self.assertIn("selected=workflow-learning; confidence=medium", child)
+    def _hinted_workflows(self, brief: str, *, delegated: bool) -> set[str]:
+        names = awareness_module._canonical_workflow_by_display_name()
+        return {
+            names.get(display, display)
+            for display in re.findall(r"^- selected=([\w-]+);", self._context(brief, delegated=delegated), re.MULTILINE)
+        }
+
+    def test_registered_child_keeps_every_hint_but_the_orchestrating_engines(self) -> None:
+        # The brief draws an orchestrating-engine hint (`ultrawork`) and a
+        # task-engine hint that is right for it (`research`); the child loses
+        # exactly the first.
+        brief = "ultrawork the upload fix and research the retry library options"
+        plain = self._hinted_workflows(brief, delegated=False)
+        child = self._hinted_workflows(brief, delegated=True)
+        self.assertTrue({"ultrawork", "research"} <= plain, plain)
+        self.assertEqual(child, plain - awareness_module._ULW_ORCHESTRATING_ENGINES)
+        self.assertIn("research", child)
+
+    def test_every_engine_is_classified_orchestrating_or_task(self) -> None:
+        # A new engine fails here until someone decides whether a delegated
+        # child may still be pointed at it.
+        self.assertLessEqual(awareness_module._ULW_ORCHESTRATING_ENGINES, set(ULW_ENGINE_SKILL_NAMES))
+        self.assertEqual(
+            set(ULW_ENGINE_SKILL_NAMES) - awareness_module._ULW_ORCHESTRATING_ENGINES,
+            {"context", "deep-interview", "research", "ultraperf", "ultraqa"},
+        )
 
 
 if __name__ == "__main__":

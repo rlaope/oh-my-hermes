@@ -427,7 +427,7 @@ URL_FORMS = (
 
 
 class QuotedRelayUrlMaskTests(unittest.TestCase):
-    def test_block_quote_lines_are_references_with_positions_kept(self) -> None:
+    def test_block_quote_lines_are_quoted_lines_with_positions_kept(self) -> None:
         for line in QUOTED_LINE_FORMS:
             for before, after in (('', ''), ('context\n', '\n$ultraqa audit'), ('x\r\n', '\r\n')):
                 message = before + line + after
@@ -436,8 +436,10 @@ class QuotedRelayUrlMaskTests(unittest.TestCase):
                     quoted = line.lstrip(' ')
                     indent = line[: len(line) - len(quoted)]
                     self.assertEqual(result.executable_text, before + indent + blank(quoted) + after)
-                    self.assertEqual(result.references, (quoted,))
-                    self.assertEqual(result.masked_spans, ())
+                    # Diagnostic context like a quote, but never `references`:
+                    # a pasted `> error` line must not open the fast path.
+                    self.assertEqual(result.quoted_lines, (quoted,))
+                    self.assertEqual((result.references, result.masked_spans), ((), ()))
 
     def test_relay_header_lines_and_urls_are_masked_but_not_references(self) -> None:
         for text in (*RELAY_LINE_FORMS, *URL_FORMS):
@@ -450,21 +452,52 @@ class QuotedRelayUrlMaskTests(unittest.TestCase):
                     # a relayed line or a link must never open it.
                     self.assertEqual(result.references, ())
                     self.assertEqual(result.masked_spans, (text,))
+                    self.assertEqual(result.links, (text,) if '://' in text else ())
 
-    def test_url_ends_at_cjk_and_quote_boundaries(self) -> None:
-        for url, tail in (
-            ('https://example.com/ulw-plan', '\ub97c \uc694\uc57d\ud574\uc918'),
-            ('https://example.com/ulw-plan', '\u3092\u8aac\u660e\u3057\u3066'),
-            ('https://example.com/ulw-plan', '\u7684\u610f\u601d'),
-            ('https://example.com/ulw-plan', ' $ultraqa'),
+    def test_url_ends_at_cjk_quote_sigil_and_trailing_punctuation(self) -> None:
+        for prefix, url, tail in (
+            ('see ', 'https://example.com/ulw-plan', '\ub97c \uc694\uc57d\ud574\uc918'),
+            ('see ', 'https://example.com/ulw-plan', '\u3092\u8aac\u660e\u3057\u3066'),
+            ('see ', 'https://example.com/ulw-plan', '\u7684\u610f\u601d'),
+            ('see ', 'https://example.com/ulw-plan', ' $ultraqa'),
+            ('see ', 'https://example.com/x', ',$ulw-work fix it'),
+            ('see ', 'https://example.com/x', '; then $ulw-work fix it'),
+            ('(', 'https://example.com/a', ')$ulw-work fix the build'),
+            ('[', 'https://example.com/a', ']$ulw-work fix the build'),
+            ('see ', 'https://example.com/a', '. Then $ulw-work fix it'),
+            ('see ', 'https://en.wikipedia.org/wiki/A_(b)', ' now'),
         ):
-            message = 'see ' + url + tail
+            message = prefix + url + tail
             with self.subTest(message=message):
                 result = reference_regions(message)
-                self.assertEqual(result.executable_text, 'see ' + blank(url) + tail)
+                self.assertEqual(result.executable_text, prefix + blank(url) + tail)
                 self.assertEqual(result.masked_spans, (url,))
         quoted = '"https://example.com/ulw-plan" $ultraqa'
         self.assertEqual(executable_routing_text(quoted), blank(quoted[:-9]) + ' $ultraqa')
+
+    def test_apostrophe_glued_to_a_url_stays_inside_it(self) -> None:
+        # Masking up to the apostrophe would leave a lone `'` that a later
+        # pass over the projected text reads as an opening quote to EOF.
+        for message, url in (
+            ("Look at https://github.com/a/b/pull/1's diff and $ulw-work fix it", "https://github.com/a/b/pull/1's"),
+            ("Per https://example.com/it's-broken $ulw-work fix the build", "https://example.com/it's-broken"),
+        ):
+            with self.subTest(message=message):
+                result = reference_regions(message)
+                self.assertEqual(result.links, (url,))
+                self.assertEqual(result.references, ())
+                self.assertTrue(result.executable_text.endswith(message[message.index(url) + len(url):]))
+                self.assertEqual(reference_regions(result.executable_text).references, ())
+        self.assertEqual(reference_regions("'https://example.com/a' $ultraqa").links, ())
+
+    def test_quote_and_fence_spans_own_the_block_quote_lines_inside_them(self) -> None:
+        crossing = '"a\n> b" c'
+        result = reference_regions(crossing)
+        self.assertEqual(result.executable_text, '  \n     c')
+        self.assertEqual((result.references, result.quoted_lines), (('"a\n> b"',), ()))
+        fenced = '```\n> x\n```'
+        result = reference_regions(fenced)
+        self.assertEqual((result.references, result.quoted_lines), ((fenced,), ()))
 
     def test_escapes_tags_and_scheme_less_paths_stay_executable(self) -> None:
         for message in (
@@ -476,6 +509,16 @@ class QuotedRelayUrlMaskTests(unittest.TestCase):
             'mailto:me@example.com',
             'a > b means greater',
             'I said hi -> then left',
+            '> 5 tests fail after the merge, $ulw-work fix them',
+            '>$ulw-work fix the build',
+            '[summary] $ulw-work the release checklist',
+            '[result] $ulw-work fix the failing tests',
+            'v1 -> v2: $ulw-work the migration',
+            'staging -> prod: $ulw-work the release',
+            'api->db: ultrawork the schema migration',
+            'Deploy (v2) to staging: $ulw-work the rollout',
+            'Move service (auth) to k8s: $ulw-work',
+            'Migrate users (batch 3) to postgres: $ulw-work',
         ):
             with self.subTest(message=message):
                 result = reference_regions(message)
