@@ -133,7 +133,7 @@
     "omh-paper-learning/SKILL.md": "f0db3970f7d6b79eb36f63e6fae2e7e3f1b293c3a041610f62b9bbf09ed84042",
     "omh-people-ops/SKILL.md": "f7eb49c19e0ed7ce96aaebfb423f1b9e5ed1a6ee2e592644a2d418d5f076e140",
     "omh-physical-device-readiness/SKILL.md": "e9e418d01d6975cff79ac46f8b09e94c346d7a77114a9f4620ba191ed555117d",
-    "omh-plan/SKILL.md": "d3e4b756f9de166c29703003fd28aad1cb6d9858f2830f9ecfd9122d79c4c3fc",
+    "omh-plan/SKILL.md": "af2118b8a42919a7f6998c4e1150a4d8ede386f30a838eeee2de73aa22f36946",
     "omh-plan/references/project-constitution.md": "577991e718cf3e1d62ce93704d4a734f7e058a3d516b0722c636cc8cf7a519da",
     "omh-product-brief/SKILL.md": "85e18adc44db15f9ff177c4a69066eab223e586f85a1a2ded9896bf2a24a5f9b",
     "omh-product-discovery-validation/SKILL.md": "3f0d9fdc1d1179146d186885a51e74633606e751bd2a1c431966de3e2bf64097",
@@ -193,7 +193,7 @@
     "ulw-loop/references/goal-constraint-discipline.md": "e9755a82604a6b9d363716b6bf33bc980406ea40bce813d763eda9703e1a093f",
     "ulw-loop/references/measured-loop-discipline.md": "1c3da401271e023ea21cf5aa0a1cee488cdb9bb8ca966251dc0bca767af00dfb",
     "ulw-perf/SKILL.md": "4189814b67cd81e446f42dc0dbb0e91168c065d2833b9dbc895539226bb927ad",
-    "ulw-plan/SKILL.md": "c8f16374d37ad98ca22e9277e8fd9230f38c28b1d354c1f9c057561626bd5a5e",
+    "ulw-plan/SKILL.md": "1ebcf52fe9527760cfdd93a7b63eb18ca74e77a7827d7584a709332be284fe26",
     "ulw-qa/SKILL.md": "11049ec3a49f47c5b0447cb8faa6b36ade31da65219def1a9d5526d9f535479f",
     "ulw-research/SKILL.md": "ca887a0cb672c2418d5d3f959c25d25d50187df964c3219a8d0586888faa0f58",
     "ulw-research/references/briefing-format.md": "466c21fb7bedefe1e42dbdb3f8ddaf3321504882140af507a292188678243dac",
@@ -316,7 +316,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "b8099c9f42d3db945792d260c2b7437e2954dbab54827f25108b54c11b4fe072",
+  "source_digest": "cce6002c87ef56a9b636c000dead3f45c8f3641f95ed7c1b7e1f34132b9bf80f",
   "targets": {
     "repo": ".agents/skills",
     "user": ".agents/skills"

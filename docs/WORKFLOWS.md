@@ -4670,14 +4670,15 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Where the repository declares non-negotiable principles, load `references/project-constitution.md` and record the check: a plan conflicting with a MUST is resolved by changing the plan, never by reinterpreting the principle.
   - Keep draft plans unapproved until a user or wrapper accepts them.
   - Only prepare coding handoff guidance after the plan is accepted.
-  - Add a `Review Focus` section of at most 5 inputs or failure modes the requirements imply but no task's tests exercise, most likely first, each with the expected behavior and the owning task that adds its test; requirements silent on an input still expect it not to break the result, and an empty section states that the check found none.
-  - Write each step as one action with a checkable result - a test with its assertions, an exact signature and file, or a command with the output that means pass; a step that decides nothing (`TBD`, `handle edge cases`) is a gap.
-  - Run a proportion check before acceptance: a plan longer than the code it describes, or one that is mostly code bodies, has written the code early; replace bodies with signatures, test names, and assertions.
+  - When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.
+  - When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.
+  - When the plan describes code changes, run a proportion check before acceptance: if the plan text outgrows the code it leads to, or is mostly function bodies, implementation has leaked into it; reduce bodies to test names, assertions, and signatures.
   - Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `ultrawork` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a single owner, `ultrawork` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.
 - Completion checklist:
   - The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
   - Draft recommendations, accepted decisions, and executor handoffs are separate states.
   - Rejected options or unresolved tradeoffs are recorded before handoff.
+  - When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning tasks, or one stating the check found none.
 - Recovery notes:
   - If acceptance criteria or verification are missing, route back to clarification before handoff.
   - If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
@@ -4738,11 +4739,11 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Include planner view, critic/risk review, alternative paths, rejected options, and a testability check before handoff.
   - Produce testable acceptance criteria and exact verification commands or explain why they are not yet knowable.
   - List every lane of the accepted plan in node-prompt shape - `TASK`, `DELIVERABLE`, `SCOPE`, `VERIFY`, `STOP WHEN` - with `depends_on` per lane, so `ultrawork` can prepare board rows from the plan without re-planning; planning itself stays a bounded in-session lane.
-  - Before comparing options, name who the change affects (a person, another programmer, or a consuming program), how they use the surface today, the ideal state in which nothing snags, regresses, or degrades for them, and each gap from today with its reason.
-  - Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per ideal-state gap, so every gap names the task that delivers it and the scenario that proves it.
-  - Close with an `Ideal-state fidelity` check: a gap that no task delivers or no scenario proves becomes a new task, never a note.
-  - Never cut the plan to an MVP or phase 1 the user did not ask for; when the user asks for a split or phases, plan that split, and when the ideal state is larger than the request, say so in one line and plan it.
-  - Give effort as one fixed band - `Quick`, `S`, `M`, `L`, or `XL` - never as hours or days.
+  - Before comparing options, write the target state: name each consumer of the result (a person, a maintainer, or a program reading its output), their current workflow on this surface, the state in which that workflow keeps working with no new friction or loss, and every difference between current and target, each with why it matters.
+  - Record a `Success criteria` table with columns `Criterion | Task | Verification scenario`, one row per target-state difference naming its owning task and the scenario that shows the difference closed; these rows are the acceptance criteria above, extended to the target state.
+  - End with a `Target-state coverage` check: a difference with no owning task or no verification scenario is added to the plan as its own task, unless the user excluded it, in which case the plan records it as a non-goal with that reason; a difference blocked on missing evidence stays in the evidence-gap record below instead.
+  - Never shrink scope on your own: plan an MVP or a first phase only when the user requested one, plan a split or phasing the user requested as given, and when the target state exceeds what was literally asked, state that in one sentence and plan the full target state.
+  - Size each task as one band, never as hours or days: `XS` (one small edit), `S` (one file and its test), `M` (several files in one module), `L` (several modules or one contract change), `XL` (crosses subsystems; split it into smaller tasks).
   - Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.
   - When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.
   - Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.
@@ -4754,7 +4755,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Observed repo facts and source/web evidence gaps are named.
   - At least two options or one chosen option plus rejected alternatives are recorded.
   - Risks, acceptance criteria, and verification commands are testable or explicitly blocked.
-  - Every ideal-state gap has a `Success criteria` row with a task and a verification scenario, and the `Ideal-state fidelity` check left none unmapped.
+  - Every target-state difference has a `Success criteria` row with a task and a verification scenario or is recorded as a user-excluded non-goal, and the `Target-state coverage` check left none unmapped.
   - The plan exists as a recorded file-backed artifact, not only as chat narration.
   - The implementation handoff is prepared only after plan acceptance and remains prepared_not_observed.
   - The follow-on engine or executor path was started only after the user's explicit go-ahead in this conversation, never from plan acceptance alone.
