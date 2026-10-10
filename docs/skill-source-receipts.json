@@ -364,6 +364,17 @@
       "reviewed_on": "2026-10-10",
       "rationale": "Adopted a program-decidable finish line written beside a fence of paths the loop may not edit, a judge other than the builder, prior human approval for self-modifying loops, and a pre-launch failure check, in OMH wording.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-ultrawork-oh-my-openagent",
+      "candidate_key": "ultrawork@github.com/code-yeongyu/oh-my-openagent",
+      "prior_checkpoint": null,
+      "next_checkpoint": "657ea5a2a73e69506df16cc8ce50f07874d1e37d",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted four questions a new test must answer, shapes of tests that guard nothing, and a pre-fix red run for bug regressions, in OMH's TDD evidence terms; the license is not OSI-approved, so the source stays link-only.",
+      "supersedes": null
     }
   ]
 }
