@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import unittest
 
+from omh.quality.agent_debug_incident import OBSERVABLES
 from omh.skills.catalog import omh_skill_display_name
 from omh.skills.packaging import builtin_skill_reference_templates
 from omh.skills.render import agent_skill_reference_templates, agent_skill_templates
@@ -41,16 +42,31 @@ class SessionForensicsRuleTests(unittest.TestCase):
         self.assertIn("sqlite3 'file:<hermes_home>/state.db?mode=ro'", content)
         self.assertIn("is opened for reading only. Never edit, rename, move, truncate, or remove one", content)
 
+    def test_profile_store_is_reached_through_the_global_hermes_home_flag(self) -> None:
+        self.assertIn("`omh --hermes-home <hermes_home>/profiles/<name> quality-evidence agent-debug …`", _reference())
+
+    def test_replay_waits_for_the_users_go_ahead(self) -> None:
+        content = _reference()
+        self.assertNotIn("replay it", content)
+        self.assertIn("Replaying or re-running the session needs the user's own go-ahead", content)
+        self.assertIn("propose the reproduction to the user and wait for their answer", content)
+
     def test_every_read_is_length_bounded(self) -> None:
         content = _reference()
         self.assertIn("select `length(content)` first, then the text through `substr(content, 1, <cap>)`", content)
         self.assertIn("read through a per-line byte cap", content)
         self.assertIn("A row over the cap is reported as unread", content)
+        self.assertIn("never select a whole `content` or `tool_calls` column", content)
 
     def test_software_written_rows_are_not_the_users_words(self) -> None:
         content = _reference()
         self.assertIn("Only text the human typed is the user's words.", content)
-        for speaker in ("hook output and injected system reminders", "`_compressed_summary`", "tool results"):
+        for speaker in (
+            "hook output and injected system reminders",
+            "plugin or OMH context blocks",
+            "`_compressed_summary`",
+            "tool results",
+        ):
             with self.subTest(speaker=speaker):
                 self.assertIn(speaker, content)
 
@@ -62,6 +78,16 @@ class SessionForensicsRuleTests(unittest.TestCase):
         intake = content.index("## 1. Intake before any query")
         self.assertLess(intake, content.index("## 2. Read-only, every source"))
         self.assertIn("A question you filled in on the user's behalf does not count as their answer", content)
+
+    def test_observable_maps_onto_the_commands_accepted_kinds(self) -> None:
+        # Read from the --observable choices tuple, so a new kind the reference
+        # does not name fails here instead of leaving an example that matches none.
+        content = _reference()
+        self.assertIn("map the observable to the closest accepted `--observable <kind>`", content)
+        for kind in OBSERVABLES:
+            with self.subTest(kind=kind):
+                self.assertIn(f"`{kind}`", content)
+        self.assertIn("`omh quality-evidence agent-debug --help` lists the current set", content)
 
     def test_only_computed_numbers_are_reported(self) -> None:
         content = _reference()

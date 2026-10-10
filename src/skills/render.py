@@ -3414,19 +3414,19 @@ Write the question down before the first read. It has five parts:
 | Observed | what they saw instead |
 | Observable | the one thing to measure: a repeated tool call, a stall, token spend, a wrong result, a skill that never loaded |
 
-The observable is also the `--observable <kind>` value for the agent-debug command. "It was slow" or "why did it do that" names a grievance and leaves the question open: ask for the missing part, one part per message. A request that already names one event, one measurement, or one turn is a complete question; answer it first and ask about the rest afterward. When the user cannot answer now, end the turn with the open parts as questions. A question you filled in on the user's behalf does not count as their answer, so no query runs on it.
+For the agent-debug command, map the observable to the closest accepted `--observable <kind>`: `looping`, `repeated_work`, `goal_drift`, `context_loss`, `tool_stall`, `unexpected_cost`, or `unspecified` when none fits, which is where a wrong result or a skill that never loaded usually lands; `omh quality-evidence agent-debug --help` lists the current set. "It was slow" or "why did it do that" names a grievance and leaves the question open: ask for the missing part, one part per message. A request that already names one event, one measurement, or one turn is a complete question; answer it first and ask about the rest afterward. When the user cannot answer now, end the turn with the open parts as questions. A question you filled in on the user's behalf does not count as their answer, so no query runs on it.
 
 ## 2. Read-only, every source
 
-- Open SQLite stores through a read-only URI, for example `sqlite3 'file:<hermes_home>/state.db?mode=ro'`. The primary home and each profile under `profiles/<name>/` keep separate stores; count rows that match the session id in each before reading, and read the one that holds it.
+- Open SQLite stores through a read-only URI, for example `sqlite3 'file:<hermes_home>/state.db?mode=ro'`. The primary home and each profile under `profiles/<name>/` keep separate stores; count rows that match the session id in each before reading, and read the one that holds it. The command reads a profile's store when the global flag comes before the subcommand: `omh --hermes-home <hermes_home>/profiles/<name> quality-evidence agent-debug …`.
 - A session record, a log, or a transcript file is opened for reading only. Never edit, rename, move, truncate, or remove one, and never write a scratch file next to it; working copies go to a scratch location outside the Hermes home.
-- Asking for a diagnosis of their own session lets you read it. It does not let you change it, replay it, or reset the agent that produced it.
+- Asking for a diagnosis of their own session lets you read it. It does not let you change it or reset the agent that produced it. Replaying or re-running the session needs the user's own go-ahead: when the quality bar calls for a reproduced failure, propose the reproduction to the user and wait for their answer, because the diagnosis request alone does not authorize it.
 
 ## 3. Bound the length of every read
 
 A single row or line can hold megabytes: a tool result with a whole file, an encoded image, a serialized context. An unbounded read of one such row fills the context that the analysis needs.
 
-- In SQL, select `length(content)` first, then the text through `substr(content, 1, <cap>)`; never select a whole content column across a session.
+- In SQL, select `length(content)` first, then the text through `substr(content, 1, <cap>)`; never select a whole `content` or `tool_calls` column across a session.
 - For a JSON Lines record, read through a per-line byte cap: the agent-debug command's `--session-record` mode with `--max-row-bytes`, or a line filter that cuts each line at a fixed width.
 - A row over the cap is reported as unread, by reference, and nothing is inferred from it. A count taken over a capped or row-limited read is labelled partial.
 
