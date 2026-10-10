@@ -4,6 +4,25 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`ulw-work` settles small mid-run questions itself and caps review
+  rounds.** A new `references/execution-rulings.md`, named by one
+  quality-bar line, lets the coordinator decide a reversible, in-scope detail
+  the accepted plan leaves open (a name, an internal structure) and record it
+  as one `Ruling: <decision> — <reason> — <cost if wrong>` line in the
+  existing goal ledger, then keep working. Irreversible or destructive steps,
+  security-sensitive steps, side effects outside the worktree the user has
+  not already authorized, and a plan where every way forward is a guess stay
+  decisions the user owns, alongside
+  the follow-up authority rule and every other stop the skill already has. A
+  change gets at most two re-reviews, each by a reviewer that has not seen it
+  before; a lane never starts its own reviewer. Evidence is reused per check
+  until a diff from the commit recorded with its capture reaches something it
+  covers (`observed_tree` stays the identity stamp), with one full
+  rerun against the final tree before the closing brief, and a defect outside
+  the change's blast radius stays open as a tracked issue instead of passing
+  a criterion. The existing `docs/SKILL-SOURCES.md` rows for `ultrawork`
+  (`obra/superpowers` and `code-yeongyu/oh-my-openagent`, concepts only for
+  the latter) now list the additional upstream files studied (#2049).
 - **`ulw-work`'s TDD reference checks that a new test guards something before
   it counts.** `references/tdd-red-green.md` now asks four questions before a
   test is written (the behavior it protects, a plausible regression that turns
