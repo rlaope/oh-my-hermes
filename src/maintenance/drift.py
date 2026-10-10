@@ -423,7 +423,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # The design-reference lane adds six: a migration course, an email
             # footer, wrong chart numbers, NLP text splitting, a quarterly
             # theme, and a marquee signing, none of which names frontend.
-            expected=434,
+            # The quoted/relay/URL masks (#2049) add five: a block-quoted
+            # invocation, a relayed report, an arrow-relayed and a
+            # sender-relayed invocation, and a workflow name in a URL path.
+            expected=439,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -504,7 +507,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # The design-reference lane adds seven: chart theming, footer
             # design, neobrutalism, split-text animation, two Korean
             # dispatches, and a Korean logo marquee that names frontend.
-            expected=634,
+            # The quoted/relay/URL masks (#2049) add three: an invocation
+            # beside a URL, after a block-quote line, and after a relay header
+            # line, each still dispatching.
+            expected=637,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

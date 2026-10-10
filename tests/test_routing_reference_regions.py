@@ -401,5 +401,122 @@ class RoutingReferenceHintTests(unittest.TestCase):
                 self.assertTrue(route['routing_prompt'].endswith(message))
 
 
+def blank(text: str) -> str:
+    return ''.join(char if char in "\r\n" else ' ' for char in text)
+
+
+QUOTED_LINE_FORMS = (
+    '> $ulw-work fix the build',
+    '   > $ulw-work fix the build',
+    '>> $ulw-work fix the build',
+)
+RELAY_LINE_FORMS = (
+    '[REPORT] ralplan finished the rollout plan',
+    '[report] ralplan finished the rollout plan',
+    '[Forwarded] $ulw-work fix the build',
+    '[planner -> reviewer] $ulw-plan the rollout',
+    'planner -> reviewer: $ulw-plan the rollout',
+    'planner \u2192 reviewer: $ulw-plan the rollout',
+    'Reviewer (agent-7) to lead: $ulw-work fix the build',
+)
+URL_FORMS = (
+    'https://example.com/docs/ulw-plan',
+    'https://github.com/rlaope/oh-my-hermes/tree/main/skills/ulw-work',
+    'https://example.com/?q=ultrawork+this+refactor+until+the+tests+pass',
+)
+
+
+class QuotedRelayUrlMaskTests(unittest.TestCase):
+    def test_block_quote_lines_are_references_with_positions_kept(self) -> None:
+        for line in QUOTED_LINE_FORMS:
+            for before, after in (('', ''), ('context\n', '\n$ultraqa audit'), ('x\r\n', '\r\n')):
+                message = before + line + after
+                with self.subTest(message=message):
+                    result = reference_regions(message)
+                    quoted = line.lstrip(' ')
+                    indent = line[: len(line) - len(quoted)]
+                    self.assertEqual(result.executable_text, before + indent + blank(quoted) + after)
+                    self.assertEqual(result.references, (quoted,))
+                    self.assertEqual(result.masked_spans, ())
+
+    def test_relay_header_lines_and_urls_are_masked_but_not_references(self) -> None:
+        for text in (*RELAY_LINE_FORMS, *URL_FORMS):
+            for before, after in (('', ''), ('context\n', '\nnext line')):
+                message = before + text + after
+                with self.subTest(message=message):
+                    result = reference_regions(message)
+                    self.assertEqual(result.executable_text, before + blank(text) + after)
+                    # The text-transform fast path opens on `references`;
+                    # a relayed line or a link must never open it.
+                    self.assertEqual(result.references, ())
+                    self.assertEqual(result.masked_spans, (text,))
+
+    def test_url_ends_at_cjk_and_quote_boundaries(self) -> None:
+        for url, tail in (
+            ('https://example.com/ulw-plan', '\ub97c \uc694\uc57d\ud574\uc918'),
+            ('https://example.com/ulw-plan', '\u3092\u8aac\u660e\u3057\u3066'),
+            ('https://example.com/ulw-plan', '\u7684\u610f\u601d'),
+            ('https://example.com/ulw-plan', ' $ultraqa'),
+        ):
+            message = 'see ' + url + tail
+            with self.subTest(message=message):
+                result = reference_regions(message)
+                self.assertEqual(result.executable_text, 'see ' + blank(url) + tail)
+                self.assertEqual(result.masked_spans, (url,))
+        quoted = '"https://example.com/ulw-plan" $ultraqa'
+        self.assertEqual(executable_routing_text(quoted), blank(quoted[:-9]) + ' $ultraqa')
+
+    def test_escapes_tags_and_scheme_less_paths_stay_executable(self) -> None:
+        for message in (
+            '\\> $ulw-work fix the build',
+            '[WIP] $ulw-work fix the build',
+            '[urgent] ultrawork this refactor until the tests pass',
+            './ulw-plan the rollout',
+            '/omh use ultraqa',
+            'mailto:me@example.com',
+            'a > b means greater',
+            'I said hi -> then left',
+        ):
+            with self.subTest(message=message):
+                result = reference_regions(message)
+                self.assertEqual(result.executable_text, message)
+                self.assertEqual((result.references, result.masked_spans), ((), ()))
+        for message, skill in (('./ulw-plan the rollout', 'ralplan'), ('[WIP] $ulw-work fix the build', 'ultrawork')):
+            with self.subTest(message=message):
+                route = route_chat_message(message, source="discord")
+                self.assertEqual((route["action"], route["selected_skill"]), ("dispatch", skill))
+
+    def test_stray_delimiter_inside_a_masked_line_opens_nothing(self) -> None:
+        for masked in ('> he said "ultrawork', '[REPORT] it\'s `ultrawork', 'planner -> reviewer: "ralplan'):
+            message = masked + '\n$ultraqa audit the dashboard'
+            with self.subTest(message=message):
+                self.assertTrue(executable_routing_text(message).endswith('\n$ultraqa audit the dashboard'))
+                route = route_chat_message(message, source="discord")
+                self.assertEqual((route["action"], route["selected_skill"]), ("dispatch", "ultraqa"))
+
+    def test_masked_forms_never_dispatch_or_hint_the_named_workflow(self) -> None:
+        for message in (*QUOTED_LINE_FORMS, *RELAY_LINE_FORMS, *URL_FORMS):
+            with self.subTest(message=message):
+                route = route_chat_message(message, source="discord")
+                self.assertNotEqual(route["action"], "dispatch")
+                for surface, hint in (
+                    ('awareness', awareness_route_hint(message)),
+                    ('wrapper', build_chat_route_hint_payload(message)['route_hint']),
+                ):
+                    self.assertNotIn(hint['primary_workflow'], ('ulw-work', 'ulw-plan', 'workflow-learning'), surface)
+
+    def test_direct_hints_survive_a_neighbouring_masked_line_or_link(self) -> None:
+        for message, expected in HINT_DIRECT_CONTROLS:
+            for mixed in (
+                message + ' https://example.com/ulw-plan',
+                '> $ulw-plan the rollout\n' + message,
+                '[REPORT] ralplan finished\n' + message,
+            ):
+                with self.subTest(message=mixed):
+                    self.assertEqual(awareness_route_hint(mixed)['primary_workflow'], expected)
+                    payload = build_chat_route_hint_payload(mixed)
+                    self.assertEqual(payload['route_hint']['primary_workflow'], expected)
+
+
 if __name__ == "__main__":
     unittest.main()

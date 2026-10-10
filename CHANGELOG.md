@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A workflow name inside a block quote, a relayed line, or a link no longer
+  starts that workflow, and a delegated child is not told to start the engine
+  its brief names.** `> $ulw-work fix the build`, `[REPORT] ...`,
+  `planner -> reviewer: $ulw-plan ...` and `Reviewer (agent-7) to lead: ...`
+  dispatched or named the quoted workflow, and a URL path such as
+  `https://example.com/docs/ulw-plan` drew a route hint for it. The routing
+  lexer now masks `>` block-quote lines (kept as quoted references), relay
+  header lines and scheme URLs (masked without becoming references, so they
+  never open the text-transform fast path). An invocation on another line or
+  beside the link still dispatches. A session registered by `subagent_start`
+  no longer receives route hint lines or context cards for workflow-engine
+  skills; its other hints are unchanged (#2049).
 - **The upstream tracker now watches the superpowers and oh-my-openagent
   material shipped skills already adapt.** Five skill credits had no row in
   `docs/SKILL-SOURCES.md`, so upstream could change what OMH adapted and no

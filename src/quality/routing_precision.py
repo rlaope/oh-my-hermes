@@ -3521,6 +3521,51 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_clarification",
         "",
     ),
+    # Quoted, relayed and linked workflow names (#2049). A `>` block-quote line,
+    # a relay header line and a scheme URL carry someone else's words or an
+    # address, never this person's request. The three invocation forms below
+    # dispatched before the lexer masked their lines; the relay report and the
+    # URL named the workflow as a candidate or a route hint.
+    RoutingPrecisionCase(
+        "block-quoted-invocation-does-not-dispatch",
+        "A block-quoted invocation is quoted text, not a request to run it",
+        "> $ulw-work fix the build",
+        "answer_directly",
+        "direct_answer",
+        "ultrawork",
+    ),
+    RoutingPrecisionCase(
+        "relay-report-header-does-not-name-the-workflow",
+        "A relayed report that a workflow finished does not route to that workflow",
+        "[REPORT] ralplan finished the rollout plan",
+        "answer_directly",
+        "direct_answer",
+        "ralplan",
+    ),
+    RoutingPrecisionCase(
+        "relay-arrow-header-invocation-does-not-dispatch",
+        "An invocation relayed between two agents is addressed to someone else",
+        "planner -> reviewer: $ulw-plan the rollout",
+        "answer_directly",
+        "direct_answer",
+        "ralplan",
+    ),
+    RoutingPrecisionCase(
+        "relay-sender-header-invocation-does-not-dispatch",
+        "A named sender's relayed invocation is not this person's request",
+        "Reviewer (agent-7) to lead: $ulw-work fix the build",
+        "answer_directly",
+        "direct_answer",
+        "ultrawork",
+    ),
+    RoutingPrecisionCase(
+        "workflow-name-in-url-path-stays-a-question",
+        "A workflow name inside a URL path is part of an address, not a request",
+        "what is https://example.com/docs/ulw-plan ?",
+        "answer_directly",
+        "direct_answer",
+        "ralplan",
+    ),
 )
 
 
@@ -9742,6 +9787,28 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "tech-debt-audit",
         "prepare_tech_debt_audit",
         "tech_debt_audit",
+    ),
+    # The other half of the quoted/relayed/linked masks (#2049): an invocation
+    # outside the masked line or link still dispatches, so a mask that ate the
+    # whole message, or a link's scheme swallowing the words before it, fails
+    # here.
+    RoutingInterventionCase(
+        "invocation-beside-a-url-still-dispatches",
+        "A request that carries a link keeps its own invocation",
+        "ultrawork this refactor until the tests pass https://github.com/rlaope/oh-my-hermes/pull/1",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "invocation-after-a-block-quote-still-dispatches",
+        "An invocation on the line after a block quote is the person's own request",
+        "> the old note said this\n$ulw-work fix the build",
+        "dispatch", "ultrawork", "present_plan", "plan",
+    ),
+    RoutingInterventionCase(
+        "invocation-after-a-relay-header-still-dispatches",
+        "An invocation on the line after a relayed report is the person's own request",
+        "[REPORT] tests are red\n$ulw-work fix the build",
+        "dispatch", "ultrawork", "present_plan", "plan",
     ),
     # The route question's decline predicate (#1817), on turns the router is
     # supposed to act on. A clarify naming its only candidate has nothing left

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import lru_cache
 import hashlib
 import re
@@ -6744,7 +6745,30 @@ def route_hint_for_installed_skills(
     left out is returned unchanged, so a full install, or an install whose
     set could not be read (`installed` is `None`), renders the same bytes.
     """
-    if installed is None or payload.get("status") != "hinted":
+    if installed is None:
+        return payload
+    return _route_hint_without(payload, lambda name: skill_not_installed(name, installed))
+
+
+def route_hint_without_engine_workflows(payload: dict[str, object]) -> dict[str, object]:
+    """The route hint with every workflow-engine hint left out, for a delegated child.
+
+    A child's request is the brief its orchestrator wrote, and the brief names
+    the workflow the orchestrator is already running; a hint telling the child
+    to select that engine again would start a second orchestration inside the
+    first. Engine hints and their context cards go, the way an uninstalled
+    skill's do above; every other hint stays. Engines are matched by the
+    vendored `_ULW_ENGINE_WORKFLOWS` through the module's own display-name
+    table, so the bundle needs no catalog import.
+    """
+    names = _canonical_workflow_by_display_name()
+    return _route_hint_without(payload, lambda name: names.get(name, name) in _ULW_ENGINE_WORKFLOWS)
+
+
+def _route_hint_without(
+    payload: dict[str, object], left_out: Callable[[str], bool]
+) -> dict[str, object]:
+    if payload.get("status") != "hinted":
         return payload
     raw_hints = payload.get("hints", [])
     kept: list[object] = []
@@ -6753,11 +6777,11 @@ def route_hint_for_installed_skills(
         if not isinstance(hint, dict):
             kept.append(hint)
             continue
-        if skill_not_installed(str(hint.get("workflow", "")), installed):
+        if left_out(str(hint.get("workflow", ""))):
             changed = True
             continue
         adjacent = [str(item) for item in hint.get("adjacent_workflows", [])]
-        loadable = [item for item in adjacent if not skill_not_installed(item, installed)]
+        loadable = [item for item in adjacent if not left_out(item)]
         if len(loadable) != len(adjacent):
             changed = True
             hint = {**hint, "adjacent_workflows": loadable}
