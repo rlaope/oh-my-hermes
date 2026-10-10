@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`loop` reviews a loop's design before it launches.** A new
+  `references/loop-design-review.md`, named by one quality-bar line, asks for
+  a finish line a program can decide, written beside a fence of paths the loop
+  may not edit (checked against the diff at judging time); a judge that is not
+  the builder; prior human approval before a loop changes its own rules, kept
+  separate from memory capture's `approved_auto_safe` admission; and a
+  pre-launch check where any open item stops the launch and goes to the user.
+  It starts after `loopability_assessment/v1` and leaves scored loops to
+  `references/measured-loop-discipline.md`. A new `docs/SKILL-SOURCES.md` row
+  watches `affaan-m/everything-claude-code` (`loop-design-check`) for `loop`
+  (#2049).
 - **`app-debugging` stops after three failed fixes and re-examines the
   architecture instead of trying a fourth.** Only an executed run of the same
   reproduction command counts; a planned run or a different command does not.

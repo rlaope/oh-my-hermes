@@ -353,6 +353,17 @@
       "reviewed_on": "2026-10-10",
       "rationale": "Adopted the three-fix stop, architecture signals, and asking the user before a fourth fix. OMH's change: only executed runs of one reproduction count; a fix fails if its symptom persists or it causes, not unmasks, a new one.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-loop-everything-claude-code",
+      "candidate_key": "loop@github.com/affaan-m/everything-claude-code",
+      "prior_checkpoint": null,
+      "next_checkpoint": "ef648e01899ba3e8dc6371642deaaf64b4477775",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted a program-decidable finish line written beside a fence of paths the loop may not edit, a judge other than the builder, prior human approval for self-modifying loops, and a pre-launch failure check, in OMH wording.",
+      "supersedes": null
     }
   ]
 }

@@ -94,6 +94,7 @@ Quality bar:
 - Use cheap inner-loop checks frequently and expensive outer-loop checks sparingly.
 - Keep the practical small-loop recipe visible: test as stop signal, plan -> execute -> verify, one task at a time.
 - Surface verification_gap, comprehension_debt, and cognitive_surrender as warnings before a loop starts looking self-steering.
+- Before a loop launches, or when asked whether one will hold, load `references/loop-design-review.md`: a finish line written beside the fence of files the loop may not edit, a judge other than the builder, and the pre-launch failure check.
 - Use `omh loop assess`, `start`, `status`, `tick`, and `feedback` as local metadata control-plane commands. Execute authorized work through the current host. The default hermes_goal driver label is prepared metadata, not an available host goal controller. Do not invoke native /goal controls on another host.
 - Only an explicitly selected coding owner with a session-bound host_observed resumable_goal capability may use the external goal-driver CLI path. Otherwise keep a host-owned evidence ledger; report unavailable native goal activation rather than fabricating it.
 - Treat ticks as preparation only. Record host phase results separately; never manufacture native phase-transition evidence from a host task declaration.

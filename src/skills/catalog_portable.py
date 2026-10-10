@@ -332,6 +332,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'context-budget-review/references/cache-placement.md',
     'loop/references/goal-constraint-discipline.md',
     'loop/references/measured-loop-discipline.md',
+    'loop/references/loop-design-review.md',
     'adversarial-consensus/references/consensus-protocol.md',
     'ultrawork/references/dependency-topology.md',
     'idea-to-deploy/references/project-bootstrap.md',
