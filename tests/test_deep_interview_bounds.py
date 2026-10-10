@@ -32,7 +32,10 @@ SKILL_MD = REPO_ROOT / "skills" / "ulw-interview" / "SKILL.md"
 # 10_300 -> 10_600: the tail sentence grew to carry the reply rule (the
 # user's words, the host's voice, record terms stay in records); the body
 # measures 10,347. Headroom restored rather than cleared by a hair.
-DEEP_INTERVIEW_SKILL_CHAR_CEILING = 10_600
+# 10_600 -> 10_900: the interview protocol gained the idea-approval sentence (a
+# yes to an idea approves only the idea; a later plan, handoff, or change is
+# accepted at its own gate); the body measures 10,688. Same headroom rule.
+DEEP_INTERVIEW_SKILL_CHAR_CEILING = 10_900
 
 
 def _skill_body() -> str:

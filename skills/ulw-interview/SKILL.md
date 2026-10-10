@@ -128,6 +128,8 @@ question is Round 4; if they choose to plan, stop rule 2 applies.
 These are stop rules you follow, not caps OMH enforces. When torn between one more question and
 stopping, stop and plan.
 
+A yes to an idea approves only the idea; a later plan, handoff, or change is accepted at its own gate.
+
 ## Use When
 
 Use before planning or execution when requirements are materially ambiguous.

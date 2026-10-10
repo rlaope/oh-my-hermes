@@ -104,6 +104,13 @@ _RALPLAN_IDEAL_STATE_BAR = (
     "Size each task as one band, never as hours or days: `XS` (one small edit), `S` (one file and its test), `M` (several files in one module), `L` (several modules or one contract change), `XL` (crosses subsystems; split it into smaller tasks).",
 )
 
+# Shared by ralplan's Hermes quality_bar and its portable override for the same
+# reason as the target-state bar above. Host-neutral on purpose: the portable
+# projection has no `omh hermes plan-accept` and no Hermes `clarify` tool.
+_RALPLAN_ACCEPTANCE_ANSWER_RULE = (
+    "Take plan acceptance only from the answer the user gave — the response status and value the question tool returns, or the user's own reply — never from the wording of the question you asked: when the acceptance question times out, is dismissed, or returns with no answer, the plan stays unaccepted, so record no acceptance, prepare no handoff, and start nothing; a missing answer is not a refusal either, so ask again later or report the plan as awaiting acceptance."
+)
+
 
 _DEFINITIONS = [
     SkillDefinition(
@@ -6740,6 +6747,7 @@ _DEFINITIONS = [
             "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
             "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.",
             "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
+            _RALPLAN_ACCEPTANCE_ANSWER_RULE,
             "End with a selected executor/runtime handoff shape only after the plan is accepted.",
             ENGINE_FIT_RECOMMENDATION_RULE,
             "Do not implement directly from consensus planning.",
@@ -6813,6 +6821,7 @@ _DEFINITIONS = [
                 "Record unresolved tradeoffs and evidence gaps instead of flattening uncertainty.",
                 "When plan-shaping evidence is missing — current external behavior, contested claims, or unstudied reference implementations — run the `research` workflow as a bounded in-plan stage (not an exhaustive deep-research run) before comparing options, record its dossier the way the `research` artifact contract requires, and consume it instead of planning on assumptions.",
                 "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
+                _RALPLAN_ACCEPTANCE_ANSWER_RULE,
                 "End with a selected executor/runtime handoff shape only after the plan is accepted.",
                 "Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `ultrawork` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a single owner, `ultrawork` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.",
                 "Do not implement directly from consensus planning.",
@@ -6825,7 +6834,7 @@ _DEFINITIONS = [
             "artifact_expectations": "a8eb07c3491b92fb1f72dc0bbd8bd5da29398f9b8aa6cae9b64b2b2c5aa3bae6",
             "safety_rules": "72126c765975b034ab683d27aa0349dbe84c564e45f29832f2b8424a1b3d28cc",
             "opening_steps": "d8ef54a1ea61e051cb069ffb43b846f0d28a88eda400436d13f357c5373d8f0c",
-            "quality_bar": "bf48dff97fc7a10064d0c3110dace00ef6f46c0954adcc575ea85f9f7d6aae49",
+            "quality_bar": "fe43f8d9c720c840aae9ded32d5889414dcc799e58a9c74c928af36407e9f194",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
         },
     ),

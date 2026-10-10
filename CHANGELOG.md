@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`ralplan` counts acceptance only from the user's answer, and
+  `deep-interview` keeps an idea's approval to the idea.** A new `ralplan`
+  quality-bar line, shared by the Hermes and portable projections, takes plan
+  acceptance from the answer the question tool returns or the user's own
+  reply, never from how the question was worded; an acceptance question that
+  times out, is dismissed, or gets no answer leaves the plan unaccepted, with
+  no acceptance recorded, no handoff prepared, and nothing started, and that
+  missing answer is not read as a refusal either. `deep-interview`'s interview
+  protocol gains one sentence: agreeing to an idea consents to that idea only,
+  and a plan, handoff, or code change written later is accepted at its own
+  gate. The `ralplan` row for `code-yeongyu/oh-my-openagent` (concepts only)
+  now lists the question-gate file studied, and a new `docs/SKILL-SOURCES.md`
+  row watches `obra/superpowers` (`skills/brainstorming/SKILL.md`) for
+  `deep-interview` (#2049).
 - **`ulw-work` settles small mid-run questions itself and caps review
   rounds.** A new `references/execution-rulings.md`, named by one
   quality-bar line, lets the coordinator decide a reversible, in-scope detail
