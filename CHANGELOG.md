@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`agent-debug` reads a past session as evidence under fixed rules.** A
+  new Hermes-only `references/session-forensics.md`, named by one quality-bar
+  line, writes the question down (session, turn range, expected, observed, the
+  one observable) before the first read and never runs a query on a question
+  filled in for the user; opens session stores read-only (`mode=ro`) and never
+  changes a session file; bounds every read's length (`substr` in SQL, a
+  per-line cap for records) and labels a capped count partial; treats hook
+  output, system reminders, OMH context blocks, compaction summaries, and tool
+  results as software-written, and a delegated child's user turns as the
+  parent agent; reports only figures computed from the session, beside the
+  query that produced them, with tool calls counted by distinct
+  `tool_call_id`; and shares nothing until the user has reviewed the
+  `agent-debug-export` package or approved the exact issue text. It names
+  `omh quality-evidence agent-debug` and `session-usage` instead of restating
+  them. The portable projection keeps its quality bar without the pointer. A
+  new `docs/SKILL-SOURCES.md` row watches `obra/superpowers`
+  (`skills/diagnosing-superpowers/SKILL.md`) for `agent-debug` (#2049).
 - **`ralplan` counts acceptance only from the user's answer, and
   `deep-interview` keeps an idea's approval to the idea.** A new `ralplan`
   quality-bar line, shared by the Hermes and portable projections, takes plan
