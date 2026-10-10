@@ -1327,12 +1327,18 @@ _RELATIVE_TIME_PATTERN = re.compile(
     # idiomatic majority -- but a following non-particle hangul syllable
     # (오늘의집, 내일정) means a compound, not a time reference.
     r"|(?<![가-힣])(?:그저께|어제|오늘|내일|모레|다음\s*주|다음\s*달|이번\s*주)(?:은|는|이|가|에|에는|부터|까지|도|만)?(?![가-힣])"
-    r"|\b(?:yesterday|today|tomorrow|next\s+(?:week|month|year)|in\s+" + _EN_QUANTITY + r"\s+" + _EN_TIME_UNIT
+    # "in" takes a number or a vague quantifier but not a bare "a"/"one":
+    # "built in a day" and "done in one week" are durations, and the
+    # deictic reading ("ship in a week") is the rarer of the two.
+    r"|\b(?:yesterday|today|tomorrow|next\s+(?:week|month|year)|in\s+(?!(?:an?|one)\s+(?!few\b|couple\b))" + _EN_QUANTITY + r"\s+" + _EN_TIME_UNIT
     # Past-relative English has the same hidden anchor: a number plus a unit
     # before "ago", "last" bound to a time noun, or the fixed "the other day".
     # Bare "ago", "last" and "other" ("the last step") never match.
     + r"|" + _EN_QUANTITY + r"\s+" + _EN_TIME_UNIT + r"\s+ago|last\s+(?:week|month|year)|the\s+other\s+day"
-    r"|(?<!\bthe\s)(?:last|next)\s+" + _EN_WEEKDAY + r"(?!\s+(?:of|in)\b))\b"
+    r"|(?<!\bthe\s)(?:last|next)\s+" + _EN_WEEKDAY + r"(?!\s+(?:of|in)\b)"
+    # "recently" carries the same hidden anchor; "most/least recently" is a
+    # sort order ("least recently used"), not a time reference.
+    r"|(?<!\bmost\s)(?<!\bleast\s)recently)\b"
     r"|(?<!\d)\d{1,4}\s*(?:日|週間|ヶ月|か月|年)\s*(?:後|以内)"
     r"|(?<!\d)\d{1,4}\s*(?:天|周|個月|个月|年)\s*(?:后|後|以内|以內|内|內)"
     r"|明日|昨日|来週|来月|明天|昨天|下周(?!期)|下個月|下个月"
@@ -1351,6 +1357,8 @@ _RELATIVE_TIME_PATTERN = re.compile(
     # A weekday bound to "dernier"/"prochain" after it; "le dernier vendredi
     # du mois" puts the adjective first and is a recurring rule.
     + r"|" + _FR_WEEKDAY + r"\s+(?:dernier|prochain)"
+    # Likewise "récemment", except after "plus"/"moins" (a sort order).
+    r"|(?<!\bplus\s)(?<!\bmoins\s)r[ée]cemment"
     r"|(?:la\s+)?semaine\s+derni[èe]re|(?:le\s+)?mois\s+dernier|(?:l['’])?ann[ée]e\s+derni[èe]re|l['’]an\s+dernier"
     r"|d['’]ici\s+(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|la\s+fin\s+(?:de\s+la\s+semaine|du\s+mois)))\b",
     re.IGNORECASE,

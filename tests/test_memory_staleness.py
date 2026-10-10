@@ -882,6 +882,8 @@ class RelativeTimeProseTests(unittest.TestCase):
                 "décidé lundi dernier",
                 "livré vendredi dernier",
                 "revue jeudi prochain",
+                "we recently moved the cache to redis",
+                "on a récemment migré la base",
             ):
                 with self.subTest(summary=summary):
                     captured = capture_project_memory_candidate(paths, summary)
@@ -928,6 +930,13 @@ class RelativeTimeProseTests(unittest.TestCase):
                 "the config lives in two places",
                 "deux semaines de congés par an",
                 "last Friday of the month is the release window",
+                # "in a/one <unit>" reads as a duration; "most/least recently"
+                # and "plus/moins récemment" are a sort order.
+                "the prototype was built in a day",
+                "the migration finished in one week",
+                "evict the least recently used entry",
+                "list the most recently updated files first",
+                "trier par le plus récemment modifié",
             ):
                 with self.subTest(summary=summary):
                     captured = capture_project_memory_candidate(paths, summary)
