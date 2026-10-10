@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Concurrent TUIs share one fanout scan, and an idle widget polls less.**
+  Each open TUI's status widget spawned a fresh reader every 2s, and each
+  reader rescanned every fanout record under `coding/fanout` -- the same,
+  session-independent answer computed once per TUI per poll -- so reader CPU
+  grew with the number of TUIs (#2030). The fanout record is now stored for
+  at most 3s under `<omh_home>/runtime/hud-fanout-cache.json` and reused only
+  while its key still matches the home, the reader's code, and the lstat of
+  every file the scan reads, so a status change is seen on the next poll;
+  any cache fault scans directly. The executor-progress projection, whose
+  active/stale/expired state is computed at read time, is not cached; it now
+  opens event and report logs only for the bindings it keeps. The widget
+  doubles its poll interval, up to 8s, while a poll repaints nothing, and
+  returns to 2s on any repaint.
 - **Spelled-out and vague relative time now routes a memory capture to
   review.** The capture-time relative-time lint caught "3 days ago" and
   "il y a 3 jours" but not "two weeks ago", "a few days ago", "in two

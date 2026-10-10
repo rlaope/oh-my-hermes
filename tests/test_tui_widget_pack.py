@@ -1739,5 +1739,91 @@ class StatusDockRepeatChipTests(unittest.TestCase):
         self.assertIn("repeat x6", narrow["text"])
 
 
+
+# Drives the widget's refresh timer by hand. `setTimeout` is replaced before
+# the widget loads, so every delay the widget asks for is recorded and its
+# callback runs only when the harness calls it; between polls the harness
+# rewrites the payload the stand-in reader prints. The real `setTimeout` is
+# kept for the harness's own wait on the first read.
+REFRESH_CADENCE_HARNESS = r"""
+import { writeFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+const [widgetPath, payloadPath, stepsArg] = process.argv.slice(2)
+const steps = JSON.parse(stepsArg)
+const realSetTimeout = globalThis.setTimeout
+const delays = []
+let pending = null
+globalThis.setTimeout = (fn, ms) => { delays.push(ms); pending = fn; return { unref() {} } }
+let paints = 0
+const sdk = {
+  Box: 'Box', Dialog: 'Dialog', Overlay: 'Overlay', Text: 'Text',
+  h: (type, props, ...children) => ({ type, props, children }),
+  defineWidgetApp: app => app,
+  openWidget() {},
+  updateWidget() { paints += 1 },
+}
+writeFileSync(payloadPath, steps[0])
+const mod = await import(pathToFileURL(widgetPath).href)
+mod.default(sdk)
+for (let i = 0; i < 400 && paints === 0; i += 1) await new Promise(resolve => realSetTimeout(resolve, 25))
+const painted = [paints > 0]
+for (const step of steps.slice(1)) {
+  const before = paints
+  writeFileSync(payloadPath, step)
+  const poll = pending
+  pending = null
+  await poll()
+  painted.push(paints > before)
+}
+process.stdout.write(`${JSON.stringify({ delays, painted })}\n`)
+"""
+
+
+@unittest.skipUnless(NODE, "node is not installed; the widget harness needs it")
+@unittest.skipIf(os.name == "nt", "the stand-in reader is a POSIX shell script")
+class StatusWidgetRefreshCadenceTests(unittest.TestCase):
+    """#2030: an idle widget polls less often, and any repaint restores 2s.
+
+    Each poll spawns a reader process, once per open TUI, so the cadence is
+    what a host with many TUIs pays for. Driven under node against the
+    installed-form widget, with a stand-in reader that prints a payload the
+    test controls, so the delays asserted are the ones the timer was given.
+    """
+
+    def test_idle_polls_back_off_to_eight_seconds_and_a_repaint_resets_them(self) -> None:
+        first = json.dumps({"schema_version": "omh_hud/v1", "version": "a"})
+        changed = json.dumps({"schema_version": "omh_hud/v1", "version": "b"})
+        steps = [first, first, first, first, changed, changed, "not json"]
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hermes_home = root / "hermes"
+            hermes_home.mkdir()
+            payload_file = hermes_home / "payload.json"
+            reader = root / "reader.sh"
+            reader.write_text('#!/bin/sh\nexec cat "$HERMES_HOME/payload.json"\n', encoding="utf-8")
+            reader.chmod(0o755)
+            widget = root / "omh-status.mjs"
+            widget.write_bytes(widget_payload(reader))
+            harness = root / "cadence-harness.mjs"
+            harness.write_text(REFRESH_CADENCE_HARNESS, encoding="utf-8")
+            completed = subprocess.run(
+                [NODE, str(harness), str(widget), str(payload_file), json.dumps(steps)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=120,
+                env={**os.environ, "HERMES_HOME": str(hermes_home), "HOME": str(root)},
+                cwd=str(root),
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout.strip().splitlines()[-1])
+
+        # The first read paints; three unchanged polls double the wait to the
+        # 8s cap and hold it there; the changed payload repaints and the next
+        # wait is 2s again; then an unchanged poll and an unreadable one back
+        # off once more.
+        self.assertEqual(result["painted"], [True, False, False, False, True, False, False])
+        self.assertEqual(result["delays"], [2000, 4000, 8000, 8000, 2000, 4000, 8000])
+
 if __name__ == "__main__":
     unittest.main()

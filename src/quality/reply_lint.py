@@ -164,6 +164,7 @@ _SCHEMA_ID_TERMS: tuple[str, ...] = (
     "omh_group_activity_observer_status/v1",
     "omh_hook_manifest/v1",
     "omh_hud/v1",
+    "omh_hud_fanout_cache/v1",
     "omh_inflight_marker/v1",
     "omh_interact_result/v1",
     "omh_jev_ask_record/v1",
