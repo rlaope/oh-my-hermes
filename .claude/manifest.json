@@ -194,7 +194,7 @@
     "ulw-loop/references/loop-design-review.md": "03305b52330d8f16c67bfdca4f25f1b289bd9d45c18fff7568e2a4c930428a00",
     "ulw-loop/references/measured-loop-discipline.md": "1c3da401271e023ea21cf5aa0a1cee488cdb9bb8ca966251dc0bca767af00dfb",
     "ulw-perf/SKILL.md": "4189814b67cd81e446f42dc0dbb0e91168c065d2833b9dbc895539226bb927ad",
-    "ulw-plan/SKILL.md": "1ebcf52fe9527760cfdd93a7b63eb18ca74e77a7827d7584a709332be284fe26",
+    "ulw-plan/SKILL.md": "b4083d2acaca9857391e0212e10f917802a5f77a05a86ecbeb6e3e9f8f08c080",
     "ulw-qa/SKILL.md": "11049ec3a49f47c5b0447cb8faa6b36ade31da65219def1a9d5526d9f535479f",
     "ulw-research/SKILL.md": "ca887a0cb672c2418d5d3f959c25d25d50187df964c3219a8d0586888faa0f58",
     "ulw-research/references/briefing-format.md": "466c21fb7bedefe1e42dbdb3f8ddaf3321504882140af507a292188678243dac",
@@ -317,7 +317,7 @@
     "ulw-work"
   ],
   "source": "agent-skills",
-  "source_digest": "5e388dd7d2dc054a25b1534a8e268c141f6eef694c81d56176d5d5e32a06279c",
+  "source_digest": "911f79b465fc2ae14c638807a7cf7b9b9046b3b79c0d49d2cbb04c93749be1f2",
   "targets": {
     "repo": ".claude/skills",
     "user": ".claude/skills"
