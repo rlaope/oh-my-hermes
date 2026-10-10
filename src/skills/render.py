@@ -3350,7 +3350,24 @@ Before trusting any reading, confirm the process executed the source you are loo
 - A cached bytecode file is validated by timestamp and size, so two edits of equal length in the same second can reuse the old compile.
 - A test that reads its own teardown output, or a lock that times out inside a best-effort swallow, leaves the same trace as the fault being hunted; put the discriminator in the assertion message.
 
-## 6. Evidence boundary
+## 6. After three failed fixes
+
+Count fix attempts from executed results, never from the conversation. After each fix, the executor runs the same reproduction command from section 1; for an intermittent fault, the same loop at the same run count. A run that was planned but not executed, or a run of some other command, does not count, so only executed runs of the one reproduction move the count. On that run the fix failed when the original symptom is still there. When the original symptom is gone and a new symptom shows up, one more observation decides. The new symptom may have been there all along, hidden behind the first: add that as a hypothesis in section 2 and test it cheaply on the tree before the fix, for example by running only the later check or stubbing the step that failed first. If the pre-fix tree already shows it, the fix holds, its hypothesis is not eliminated, and the new symptom is a separate fault with its own count. If it does not, the fix moved the fault, and a fault that moved is a failed fix, not progress.
+
+After the first or second failed fix, the root cause is open again. Record the fix as the observation that eliminated its hypothesis, then return to section 2 and choose the next observation from the hypotheses still standing.
+
+After the third failed fix, stop fixing. Every fix was tested against a structure all of them assumed, and three failures on the same reproduction make that structure the suspect.
+
+- **Prepare no fourth fix.** Another diff on the same assumption is the same guess again.
+- **Name the shared assumptions.** What owns the state, which boundary the data crosses, what ordering the design relies on, whether the component is used the way it was built to be. Write each with the observation that would refute it, as in section 2.
+- **Look for the structural pattern.** Each fix surfaces coupling or shared state at a new site, a fault that was fixed comes back as a different one, or the next fix would need a wide restructuring to land.
+- **Hand the choice back.** Present the re-examination and end the turn with the next step as a question the user owns: fix inside the current design under a named new hypothesis, or change the design at the assumption that failed.
+
+| Thought | Why it does not hold |
+| --- | --- |
+| One more fix will do it | After three failed fixes on the same reproduction, the untested part is the assumption they shared, not the next diff. |
+
+## 7. Evidence boundary
 
 | Claim | Evidence |
 | --- | --- |

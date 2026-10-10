@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`app-debugging` stops after three failed fixes and re-examines the
+  architecture instead of trying a fourth.** Only an executed run of the same
+  reproduction command counts; a planned run or a different command does not.
+  On that run a fix failed when the original symptom persists, or when a new
+  symptom appears that the fix caused. Before counting a new symptom, the skill
+  checks the pre-fix tree for a fault the original one was hiding; such a fault
+  is separate, with its own count, and the fix stands. After a first or second
+  failed fix, the root cause is open again and the skill returns to its
+  hypotheses. After the third, the skill prepares no fourth fix, names the
+  assumptions every fix shared with the observation that would refute each,
+  and ends the turn with the next step as a question the user owns. The rule
+  is one quality-bar line in the body; the procedure is a new section of the existing
+  `references/hypothesis-and-race-method.md`, and a new `docs/SKILL-SOURCES.md`
+  row watches `obra/superpowers` (`systematic-debugging`) for `app-debugging`
+  (#2049).
 - **`plan` surfaces untested inputs before execution, and `ralplan` plans
   for the target state of whoever consumes the change.** When a plan describes
   code changes, `plan` now asks for a `Review Focus` section of at most 5

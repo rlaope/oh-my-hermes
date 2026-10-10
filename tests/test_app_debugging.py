@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 
 from _local_package import load_local_package
@@ -63,6 +64,68 @@ class AppDebuggingCatalogTests(unittest.TestCase):
         body = next(template.content for template in builtin_skill_templates() if template.name == SKILL)
         self.assertIn(REFERENCE_PATH, body)
         self.assertNotIn("Races and lost updates", body)
+
+    def test_three_failed_fixes_stop_for_an_architecture_review(self) -> None:
+        """#2049: the count comes from executed runs of one command, and the next step is the user's."""
+
+        body = next(template.content for template in builtin_skill_templates() if template.name == SKILL)
+        rules = [line for line in body.splitlines() if "third failed fix" in line]
+        self.assertEqual(len(rules), 1, "the escalation rule is one body line")
+        for token in (
+            "same reproduction command",
+            "executed",
+            "original symptom",
+            "new symptom",
+            "caused rather than unmasked",
+            "planned runs and other commands do not count",
+            "no fourth",
+            "architecture",
+            "question",
+        ):
+            with self.subTest(body_token=token):
+                self.assertIn(token, rules[0])
+        pointers = [line for line in body.splitlines() if REFERENCE_PATH in line]
+        self.assertEqual(len(pointers), 1, "the rule reuses the existing pointer instead of adding one")
+
+        reference = next(
+            template.content
+            for template in builtin_skill_reference_templates()
+            if template.skill_name == SKILL and template.relative_path == REFERENCE_PATH
+        )
+        heading = re.search(r"^## \d+\. After three failed fixes$", reference, re.MULTILINE)
+        self.assertIsNotNone(heading, "the method reference keeps the escalation section")
+        start = heading.start()
+        section = reference[start : reference.index("\n## ", start + 1)]
+        for token in (
+            "never from the conversation",
+            "same reproduction command",
+            "planned but not executed",
+            "only executed runs of the one reproduction move the count",
+            "the original symptom is still there",
+            "a new symptom shows up",
+            "a fault that moved is a failed fix",
+            "hidden behind the first",
+            "on the tree before the fix",
+            "its hypothesis is not eliminated",
+            "a separate fault with its own count",
+            "the fix moved the fault",
+            "the root cause is open again",
+            "observation that eliminated its hypothesis",
+            "return to section 2",
+            "Prepare no fourth fix",
+            "shared assumptions",
+            "as a question the user owns",
+            "| One more fix will do it |",
+        ):
+            with self.subTest(reference_token=token):
+                self.assertIn(token, section)
+        leads = re.findall(r"^- (\*\*[^*]+\*\*)", section, re.MULTILINE)
+        self.assertTrue(leads, "the section keeps its bolded bullet leads")
+        for lead in leads:
+            with self.subTest(section_lead_absent_from_body=lead):
+                self.assertNotIn(lead, body)
+        self.assertNotIn("| One more fix", body)
+        self.assertIsNone(re.search(r"\b(19|20)\d{2}-\d{2}-\d{2}\b", section))
 
 
 class AppDebuggingRoutingTests(unittest.TestCase):
