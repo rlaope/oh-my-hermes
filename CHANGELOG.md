@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Spelled-out and vague relative time now routes a memory capture to
+  review.** The capture-time relative-time lint caught "3 days ago" and
+  "il y a 3 jours" but not "two weeks ago", "a few days ago", "in two
+  weeks", "last Monday", "il y a une semaine", "dans quelques jours" or
+  "lundi dernier", so the forms people write most often auto-approved under
+  auto-safe and aged into a lie (#2048). The quantity slot now takes `one` to
+  `ten`, `a few`, `several` and `a couple of` (French `un`/`une` to `dix`,
+  `quelques`, `plusieurs`), and a weekday bound to `last`/`next` (French
+  `dernier`/`prochain` after it) counts. The anchor stays mandatory, and a
+  recurring rule ("the last Friday of each month", "le dernier vendredi du
+  mois") stays untouched. `recently`/`récemment` are left out: the anchor is
+  the same, but in neutral prose they would cost a review prompt too often.
 - **A default-store install names `~/.omh` for the plugin, so multiplexed
   processes load it.** Setup and update recorded
   `plugins.entries.omh.settings.omh_home` only when the store was not
