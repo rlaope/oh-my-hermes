@@ -397,6 +397,17 @@
       "reviewed_on": "2026-10-10",
       "rationale": "Adopted intake before analysis, read-only and length-bounded session reads, speaker attribution for software-written rows and a child's parent agent, only computed figures, and user review before sharing, in OMH wording.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-10-10-backend-everything-claude-code",
+      "candidate_key": "backend@github.com/affaan-m/everything-claude-code",
+      "prior_checkpoint": null,
+      "next_checkpoint": "ef648e01899ba3e8dc6371642deaaf64b4477775",
+      "disposition": "adopted",
+      "decision_ref": "#2049",
+      "reviewed_on": "2026-10-10",
+      "rationale": "Adopted one authoritative contract file per service boundary, contract text read as data, and an allowlist for $ref targets, in the backend service-contract reference; consumer enumeration stays in consumer-impact.",
+      "supersedes": null
     }
   ]
 }
