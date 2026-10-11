@@ -27,7 +27,7 @@ from omh.plugin_bundle.omh.awareness_delivery import (
 )
 from omh.plugin_bundle.omh import awareness as awareness_module
 from omh.plugin_bundle.omh.hooks.llm_hooks import pre_llm_call
-from omh.plugin_bundle.omh.hooks.nudge_budget import reset_nudge_budget, session_is_delegated
+from omh.plugin_bundle.omh.hooks.nudge_budget import reset_nudge_budget
 from omh.plugin_bundle.omh.hooks.session_hooks import subagent_start
 from omh.skills.catalog_types import ULW_ENGINE_SKILL_NAMES
 
@@ -480,8 +480,10 @@ class DelegatedChildRouteHintTests(unittest.TestCase):
     The gate reads an in-process registry that `subagent_start` fills, so it
     cuts the engine hint only when the child's own `pre_llm_call` runs in the
     process that saw `subagent_start`. The same brief is routed twice: once on
-    a registered child session, once on a session nobody registered; a third
-    case pins the fail-open for a child this process never registered.
+    a registered child session, once on a session nobody registered. The
+    second case is also what a child gets when its `subagent_start` was seen
+    by another process: the registry is process memory, so that child is
+    unregistered here and keeps the full hint.
     """
 
     def setUp(self) -> None:
@@ -516,29 +518,6 @@ class DelegatedChildRouteHintTests(unittest.TestCase):
                 context = self._context(brief, delegated=False)
                 self.assertIn("- selected=ulw-work; lane=coding_handoff", context)
                 self.assertIn("next_action=prepare_parallel_delivery", context)
-
-    def test_child_registered_by_another_process_fails_open_to_the_full_hint(self) -> None:
-        # `subagent_start` ran, but its registration is lost the way it would be
-        # if the child's turn ran in a process that never saw it: the registry
-        # is process memory, so emptying it is that process's view. The child
-        # then routes as before the gate and still gets the engine hint.
-        brief = "$ulw-work fix the build"
-        with TemporaryDirectory() as omh_home, TemporaryDirectory() as hermes_home:
-            subagent_start(
-                parent_session_id="parent-session", child_session_id="child-session",
-                omh_home=omh_home, hermes_home=hermes_home,
-            )
-            self.assertTrue(session_is_delegated("child-session", omh_home=omh_home))
-            reset_nudge_budget()
-            self.assertFalse(session_is_delegated("child-session", omh_home=omh_home))
-            result = pre_llm_call(
-                user_message=brief, is_first_turn=True, session_id="child-session",
-                platform="subagent", omh_home=omh_home, hermes_home=hermes_home,
-            )
-        assert result is not None
-        context = str(result["context"])
-        self.assertIn("- selected=ulw-work; lane=coding_handoff", context)
-        self.assertIn("next_action=prepare_parallel_delivery", context)
 
     def _hinted_workflows(self, brief: str, *, delegated: bool) -> set[str]:
         names = awareness_module._canonical_workflow_by_display_name()

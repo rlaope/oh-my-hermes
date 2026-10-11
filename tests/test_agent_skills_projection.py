@@ -212,6 +212,21 @@ class AgentSkillsProjectionTests(unittest.TestCase):
                 self.assertIn(str(line), hermes[definition.name])
                 self.assertNotIn(str(line), agent_skill_template(definition).content)
 
+    def test_a_hermes_reference_line_outside_quality_bar_is_refused(self):
+        # The portable projection filters quality_bar only, so the same line in
+        # another section would ship a pointer to a missing reference.
+        from dataclasses import replace
+
+        from omh.skills.catalog import installable_skill_definitions
+        from omh.skills.catalog_types import HermesReferenceLine
+        from omh.skills.render import agent_skill_template
+
+        definition = next(d for d in installable_skill_definitions() if d.name == "agent-debug")
+        line = HermesReferenceLine("Load `references/session-forensics.md` first.", "references/session-forensics.md")
+        misplaced = replace(definition, final_checklist=(*definition.final_checklist, line))
+        with self.assertRaisesRegex(ValueError, r"agent-debug: HermesReferenceLine is honoured only in quality_bar, found in \['final_checklist'\]"):
+            agent_skill_template(misplaced)
+
     def test_every_portable_override_pins_the_section_it_shadows(self):
         """The #1786 gate, recorded beside the override it protects.
 

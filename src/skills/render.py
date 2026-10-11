@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Literal
 from functools import lru_cache
 import json
@@ -2592,6 +2592,16 @@ def _target_definition(
         return definition
     if target != "agent-skills":
         raise ValueError(f"Unsupported skill target: {target}")
+    misplaced = sorted(
+        field.name for field in fields(definition)
+        if field.name != "quality_bar"
+        and isinstance(getattr(definition, field.name), tuple)
+        and any(isinstance(item, HermesReferenceLine) for item in getattr(definition, field.name))
+    )
+    if misplaced:
+        # Only quality_bar is filtered below; anywhere else the line would
+        # reach the portable body pointing at a reference it does not ship.
+        raise ValueError(f"{definition.name}: HermesReferenceLine is honoured only in quality_bar, found in {misplaced}")
     if any(isinstance(line, HermesReferenceLine) for line in definition.quality_bar):
         definition = replace(definition, quality_bar=tuple(
             line for line in definition.quality_bar if not isinstance(line, HermesReferenceLine)
