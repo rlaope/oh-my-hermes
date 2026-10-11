@@ -434,7 +434,16 @@ def note_delegated_session(child_session_id: object, *, omh_home: str = "") -> N
 
 
 def session_is_delegated(session_id: object, *, omh_home: str = "") -> bool:
-    """Whether this session is a delegated child the host told us about."""
+    """Whether this session is a delegated child the host told this process about.
+
+    Every miss answers False, which callers treat as "not a child". A miss
+    happens when the child was registered by `subagent_start` in another
+    process (the registry is this process's memory only), when it was
+    registered under an `omh_home` whose nudge-store directory differs from
+    the one asked with (the key includes that resolved directory), or when
+    more than `MAX_TRACKED_SESSIONS` later children were registered after it
+    and evicted it (oldest registration first; a lookup does not refresh it).
+    """
     key = _session_key(session_id)
     return bool(key) and _engagement_key(key, omh_home) in _DELEGATED_SESSIONS
 

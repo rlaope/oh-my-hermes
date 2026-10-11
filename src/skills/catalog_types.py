@@ -790,6 +790,29 @@ def _default_recovery_notes(name: str, category: str, hermes_role: str, quality_
     return _CATEGORY_RECOVERY_NOTES.get(category, _GENERAL_RECOVERY_NOTES)
 
 
+class HermesReferenceLine(str):
+    """A quality-bar line that points at a reference only the Hermes projection ships.
+
+    It is the plain line everywhere it is read or rendered, so Hermes bytes do
+    not depend on it. The Agent Skills projection drops it (`_target_definition`
+    in `render.py`), because `reference` is not copied to that target and the
+    line would point at a file the host does not have. This replaces a
+    whole-section `portable_overrides` copy kept only to leave one such line out.
+    """
+
+    reference: str
+
+    def __new__(cls, text: str, reference: str) -> HermesReferenceLine:
+        if reference not in text:
+            raise ValueError(f"HermesReferenceLine must name its reference {reference!r} in the line")
+        line = super().__new__(cls, text)
+        line.reference = reference
+        return line
+
+    def __getnewargs__(self) -> tuple[str, str]:
+        return (str(self), self.reference)
+
+
 @dataclass(frozen=True)
 class SkillExample:
     prompt: str

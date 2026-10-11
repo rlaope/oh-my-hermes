@@ -477,11 +477,13 @@ class WindowsRetryTests(unittest.TestCase):
 class DelegatedChildRouteHintTests(unittest.TestCase):
     """A delegated child's brief is not a request to start an engine (#2049).
 
-    Hermes builds a `delegate_task` child as an in-process agent and runs its
-    loop on a worker thread of the parent process, so `subagent_start` has
-    registered the child's session before the child's own `pre_llm_call`
-    fires. The same brief is routed twice: once on a registered child session,
-    once on a session nobody registered.
+    The gate reads an in-process registry that `subagent_start` fills, so it
+    cuts the engine hint only when the child's own `pre_llm_call` runs in the
+    process that saw `subagent_start`. The same brief is routed twice: once on
+    a registered child session, once on a session nobody registered. The
+    second case is also what a child gets when its `subagent_start` was seen
+    by another process: the registry is process memory, so that child is
+    unregistered here and keeps the full hint.
     """
 
     def setUp(self) -> None:

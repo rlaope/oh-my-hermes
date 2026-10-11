@@ -792,6 +792,8 @@ def stage_memory_demotion(paths: OmhPaths, *, file_label: str | None = None, max
             entry_text,
             record_type="fact",
             tags=["hermes-demotion"],
+            # Not screened for instruction-shaped text; the reason sits
+            # at the screen in `capture_project_memory_candidate`.
             source="hermes_demotion",
             source_ref=origin_ref,
         )

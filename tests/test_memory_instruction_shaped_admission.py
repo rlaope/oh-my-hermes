@@ -198,6 +198,23 @@ class OtherCapturePathsAcceptTheSameSentenceTests(unittest.TestCase):
                     self.assertTrue(captured["captured"], captured)
                     self.assertEqual(captured["candidate"]["summary"], summary)
 
+    def test_admission_screens_the_model_source_and_not_demotion(self) -> None:
+        # The same instruction-shaped sentence at the one admission seam both
+        # paths share: refused from `hermes_model`, admitted from
+        # `hermes_demotion` (#2071 kept demotion unscreened on purpose).
+        with TemporaryDirectory() as tmp:
+            store = Path(tmp) / ".omh"
+            for source, captured in ((MODEL_CAPTURE_SOURCE, False), ("hermes_demotion", True)):
+                with self.subTest(source=source):
+                    payload = capture_project_memory_candidate(
+                        store, SECOND_PERSON, source=source, on_duplicate="skip", scope_kind="user-global"
+                    )
+                    self.assertEqual(payload["captured"], captured, payload)
+                    if not captured:
+                        self.assertEqual(payload["reason"], "instruction_shaped_summary")
+                    else:
+                        self.assertNotIn("instruction_cue", payload)
+
     def test_l1_demotion_stages_every_entry(self) -> None:
         with TemporaryDirectory() as tmp:
             paths = memory_paths(Path(tmp) / ".omh", Path(tmp) / ".hermes")

@@ -189,6 +189,44 @@ class AgentSkillsProjectionTests(unittest.TestCase):
             "the field that replaced it, or drop the entry.",
         )
 
+    def test_hermes_reference_lines_name_unshipped_references_and_drop_from_portable(self):
+        # A line marked Hermes-only is dropped from the portable body, so the
+        # mark is only honest while its reference really stays out of that
+        # target; the line itself stays in the Hermes body.
+        from omh.skills.catalog import installable_skill_definitions
+        from omh.skills.catalog_portable import PORTABLE_REFERENCE_PATHS
+        from omh.skills.catalog_types import HermesReferenceLine
+        from omh.skills.render import agent_skill_template, builtin_skill_templates
+
+        hermes = {t.name: t.content for t in builtin_skill_templates()}
+        marked = [
+            (definition, line)
+            for definition in installable_skill_definitions()
+            for line in definition.quality_bar
+            if isinstance(line, HermesReferenceLine)
+        ]
+        self.assertTrue(marked, "no HermesReferenceLine in the catalog; the check below would be vacuous")
+        for definition, line in marked:
+            with self.subTest(skill=definition.name, reference=line.reference):
+                self.assertNotIn(f"{definition.name}/{line.reference}", PORTABLE_REFERENCE_PATHS)
+                self.assertIn(str(line), hermes[definition.name])
+                self.assertNotIn(str(line), agent_skill_template(definition).content)
+
+    def test_a_hermes_reference_line_outside_quality_bar_is_refused(self):
+        # The portable projection filters quality_bar only, so the same line in
+        # another section would ship a pointer to a missing reference.
+        from dataclasses import replace
+
+        from omh.skills.catalog import installable_skill_definitions
+        from omh.skills.catalog_types import HermesReferenceLine
+        from omh.skills.render import agent_skill_template
+
+        definition = next(d for d in installable_skill_definitions() if d.name == "agent-debug")
+        line = HermesReferenceLine("Load `references/session-forensics.md` first.", "references/session-forensics.md")
+        misplaced = replace(definition, final_checklist=(*definition.final_checklist, line))
+        with self.assertRaisesRegex(ValueError, r"agent-debug: HermesReferenceLine is honoured only in quality_bar, found in \['final_checklist'\]"):
+            agent_skill_template(misplaced)
+
     def test_every_portable_override_pins_the_section_it_shadows(self):
         """The #1786 gate, recorded beside the override it protects.
 

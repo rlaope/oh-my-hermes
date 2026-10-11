@@ -292,9 +292,16 @@ def capture_project_memory_candidate(
         }
     # The model's own capture path replays into later sessions as context, so
     # a summary written as an order to its reader would come back carrying a
-    # user turn's authority. Only that source is screened: demotion, rollup,
-    # design direction and the CLI store text a person or a derivation chose,
-    # and a refused demotion would end its staging run.
+    # user turn's authority. Only that source is screened. Rollup, design
+    # direction and the CLI store text a person or a derivation chose.
+    # `hermes_demotion` is left unscreened on purpose: it copies an entry that
+    # already sits in a Hermes L1 memory file, so a refusal would leave that
+    # entry where it is, and because `stage_memory_demotion` ends its run at
+    # the first refused capture, it would also stop every row after it.
+    # Holding demoted entries for review on this cue instead (#2071) was not
+    # taken: the owner's direction is that memory capture puts no person's
+    # approval in the loop, and a demoted candidate already follows the
+    # store's own policy like any other capture.
     instruction_cue = (
         _instruction_shaped_reason(str(summary or ""), str(record_type or ""))
         if source == MODEL_CAPTURE_SOURCE

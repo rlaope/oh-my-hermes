@@ -38,7 +38,7 @@ Every lane prompt stands alone and contains, in order:
 4. `VERIFY`: the literal command or action plus one binary pass/fail observable.
 5. `STOP WHEN`: the observable state that ends the lane.
 
-Use one role per node. Missing markers, vague scopes, or non-binary verification are definition defects fixed before dispatch.
+`DELIVERABLE` and `SCOPE` name exact paths. Use one role per node. A dependency edge only orders execution: it never stands in for an upstream lane's output, so a prompt restates whatever it needs from upstream. Missing markers, vague scopes, or non-binary verification are definition defects fixed before dispatch.
 
 ## Verification Fan-In
 
