@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`ulw-work` keeps reference-only detail in its references.** The
+  per-turn body drops two quality-bar lines that restated
+  `references/dependency-topology.md` (the node prompt contract and the
+  verification fan-in) for one pointer to it, and the tests-first line now
+  points at `references/tdd-red-green.md` instead of restating its contract;
+  the external-owner line names `ulw-maestro`'s contract without listing its
+  parts. `dependency-topology.md` gains the two clauses only the body carried:
+  exact paths in `DELIVERABLE` and `SCOPE`, and a dependency edge never
+  standing in for upstream output. The body measures 26,353 bytes against the
+  unchanged 27,100-byte ceiling. A quality-bar line can now be declared
+  Hermes-only by the reference it points at, and the Agent Skills projection
+  drops it; `agent-debug`'s whole-list portable override is gone with no
+  change to either projection. The delegated-child route-hint gate and the
+  unscreened `hermes_demotion` capture source now say what they do in code and
+  are pinned by tests (#2071).
 - **`backend` names one authoritative contract per service boundary.**
   `references/service-contract.md` gains a section for boundaries that a
   caller outside the change reads: the prepared contract names the one file

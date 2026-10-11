@@ -35,6 +35,7 @@ from .catalog_types import (
     DELEGATION_TRANSPARENCY_RULES,
     EXECUTION_WAIT_DISCIPLINE_RULE,
     HERMES_SCANNER_EXCLUDED_TERMS,
+    HermesReferenceLine,
     LLM_APP_DEV_EVAL_DELIVERABLES,
     LLM_APP_DEV_PUBLIC_BOARD_ACTIONS,
     LLM_APP_DEV_RAILS,
@@ -2591,6 +2592,10 @@ def _target_definition(
         return definition
     if target != "agent-skills":
         raise ValueError(f"Unsupported skill target: {target}")
+    if any(isinstance(line, HermesReferenceLine) for line in definition.quality_bar):
+        definition = replace(definition, quality_bar=tuple(
+            line for line in definition.quality_bar if not isinstance(line, HermesReferenceLine)
+        ))
     overrides = definition.portable_overrides
     return replace(definition, **{
         field: "\n".join(lines) if isinstance(getattr(definition, field), str) else lines
@@ -5662,7 +5667,7 @@ Every lane prompt stands alone and contains, in order:
 4. `VERIFY`: the literal command or action plus one binary pass/fail observable.
 5. `STOP WHEN`: the observable state that ends the lane.
 
-Use one role per node. Missing markers, vague scopes, or non-binary verification are definition defects fixed before dispatch.
+`DELIVERABLE` and `SCOPE` name exact paths. Use one role per node. A dependency edge only orders execution: it never stands in for an upstream lane's output, so a prompt restates whatever it needs from upstream. Missing markers, vague scopes, or non-binary verification are definition defects fixed before dispatch.
 
 ## Verification Fan-In
 

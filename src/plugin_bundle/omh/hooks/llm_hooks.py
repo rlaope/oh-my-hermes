@@ -495,10 +495,14 @@ def _rendered_route_hint(
     """The route hint this turn renders: installed skills only, no orchestrating engine for a child.
 
     A delegated child's request is its orchestrator's brief, which names the
-    engine already running; the host runs the child's `pre_llm_call` in the
-    parent's process, so `subagent_start` has registered it by now. Only the
-    rendered block is cut -- the payload the brief and the candidate line read
-    still records what the message named.
+    engine already running. `delegated` comes from `session_is_delegated`,
+    which reads a registry held in this process's memory and filled by
+    `subagent_start`. The cut therefore applies only when the child's
+    `pre_llm_call` runs in the same process that saw its `subagent_start`. A
+    child whose turn runs anywhere else is not in that registry and fails
+    open to the behavior before this gate: the full hint is rendered, engines
+    included. Only the rendered block is cut -- the payload the brief and the
+    candidate line read still records what the message named.
     """
     hint = route_hint_for_installed_skills(payload, installed)
     return route_hint_without_engine_workflows(hint) if delegated else hint

@@ -434,7 +434,11 @@ def note_delegated_session(child_session_id: object, *, omh_home: str = "") -> N
 
 
 def session_is_delegated(session_id: object, *, omh_home: str = "") -> bool:
-    """Whether this session is a delegated child the host told us about."""
+    """Whether this session is a delegated child the host told this process about.
+
+    The registry lives in this process's memory only; a child registered by
+    `subagent_start` in another process answers False here.
+    """
     key = _session_key(session_id)
     return bool(key) and _engagement_key(key, omh_home) in _DELEGATED_SESSIONS
 
