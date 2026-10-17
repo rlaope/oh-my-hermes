@@ -294,7 +294,12 @@ class RoutingLanguagePolicyTests(unittest.TestCase):
         # The link the old constant hid: Hangul, Han, and Kana are supported
         # because ko/ja/zh packs ship, not because a tuple in
         # `input_language.py` says so. Deleting a pack has to remove its script.
-        self.assertEqual(set(shipped_trigger_pack_languages()), {"ko", "ja", "zh"})
+        #
+        # `id` is the first Latin-script pack and deliberately does not move
+        # `trigger_backed_scripts()`: Latin was already backed by the English
+        # catalog, so a Latin pack adds a language to a supported script rather
+        # than a script to the supported set.
+        self.assertEqual(set(shipped_trigger_pack_languages()), {"ko", "ja", "zh", "id"})
 
     def test_every_routable_skill_is_reachable_in_english(self) -> None:
         missing = [

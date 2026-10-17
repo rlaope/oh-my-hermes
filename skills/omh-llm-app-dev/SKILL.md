@@ -75,7 +75,7 @@ Bad example:
 
 Use when the work is building or hardening an LLM-powered feature - provider calls, structured outputs, prompt files, retrieval grounding, a user-requested public-board communication path, or the eval suite that guards a prompt or model swap - and the request needs engineering discipline before a coding handoff.
 
-    Strong routing signals: `llm-app-dev`, `$llm-app-dev`, `llm app development`, `llm application development`, `build an llm app`, `build an llm feature`, `llm feature development`, `build a rag pipeline`, `rag pipeline`, `retrieval augmented generation`, `structured output schema`, `json schema output`, `prompt versioning`, `llm eval suite`, `golden set`, `LLMアプリ開発`, `LLM機能開発`, `RAGパイプライン構築`, `構造化出力スキーマ`, `プロンプトのバージョン管理`, `LLM評価セット`, `llm 앱 개발`, `llm 애플리케이션 개발`, `llm 기능 개발`, `rag 파이프라인`, `rag 파이프라인 구축`, `구조화된 출력 스키마`, `프롬프트 버전 관리`, `llm 평가셋`, `골든셋`, `大模型应用开发`, `检索增强生成`, `结构化输出模式`, `提示词版本管理`, `评测集`
+    Strong routing signals: `llm-app-dev`, `$llm-app-dev`, `llm app development`, `llm application development`, `build an llm app`, `build an llm feature`, `llm feature development`, `build a rag pipeline`, `rag pipeline`, `retrieval augmented generation`, `structured output schema`, `json schema output`, `prompt versioning`, `llm eval suite`, `golden set`, `LLMアプリ開発`, `LLM機能開発`, `RAGパイプライン構築`, `構造化出力スキーマ`, `プロンプトのバージョン管理`, `LLM評価セット`, `llm 앱 개발`, `llm 애플리케이션 개발`, `llm 기능 개발`, `rag 파이프라인`, `rag 파이프라인 구축`, `구조화된 출력 스키마`, `프롬프트 버전 관리`, `llm 평가셋`, `골든셋`, `大模型应用开发`, `检索增强生成`, `结构化输出模式`, `提示词版本管理`, `评测集`, `bangun aplikasi berbasis LLM`, `bantu buat fitur dengan LLM`, `buat pipeline RAG`, `rancang chatbot dengan retrieval`, `siapkan evaluasi untuk fitur LLM`, `buat keluaran terstruktur dari LLM`
 
 ## Catalog Metadata
 

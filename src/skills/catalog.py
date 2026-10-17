@@ -1230,10 +1230,18 @@ def _with_shipped_trigger_packs(definitions: tuple[SkillDefinition, ...]) -> tup
         return definitions
     merged: list[SkillDefinition] = []
     for definition in definitions:
-        extra = tuple(
+        added = tuple(
             phrase
             for phrase in phrases_by_skill.get(definition.name, ())
             if phrase not in definition.triggers
+        )
+        # Packs merge in language-code order, and `id` sorts before `ja`. The
+        # SKILL.md description and the capability row show only a skill's
+        # first triggers, so a phrase written wholly in ASCII goes after every
+        # pack phrase that is not: a Latin-script pack then takes none of the
+        # slots the Hangul, Kana and Han phrases already had.
+        extra = tuple(phrase for phrase in added if not phrase.isascii()) + tuple(
+            phrase for phrase in added if phrase.isascii()
         )
         if not extra:
             merged.append(definition)

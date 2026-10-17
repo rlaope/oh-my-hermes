@@ -60,7 +60,7 @@ Bad example:
 
 Use when Hermes should prepare a Rust change: ownership and lifetime shape, error and API types, cargo/clippy gates, and the mandatory UB escalation when the change touches unsafe, raw pointers, FFI, MaybeUninit, or lock-free primitives.
 
-    Strong routing signals: `rust`, `rust code`, `rust skill`, `rustlang`, `borrow checker`, `lifetime error`, `ownership error`, `trait bound`, `cargo build`, `cargo clippy`, `clippy lint`, `unsafe rust`, `unsafe block`, `raw pointer`, `maybeuninit`, `rust ffi`, `extern c`, `undefined behavior`, `miri`, `loom`, `ボローチェッカー`, `所有権エラー`, `ライフタイムエラー`, `トレイト境界`, `러스트`, `러스트 코드`, `빌림 검사기`, `소유권 에러`, `라이프타임 에러`, `언세이프`, `미정의 동작`, `借用检查器`, `所有权错误`, `生命周期错误`, `特征约束`
+    Strong routing signals: `rust`, `rust code`, `rust skill`, `rustlang`, `borrow checker`, `lifetime error`, `ownership error`, `trait bound`, `cargo build`, `cargo clippy`, `clippy lint`, `unsafe rust`, `unsafe block`, `raw pointer`, `maybeuninit`, `rust ffi`, `extern c`, `undefined behavior`, `miri`, `loom`, `ボローチェッカー`, `所有権エラー`, `ライフタイムエラー`, `トレイト境界`, `러스트`, `러스트 코드`, `빌림 검사기`, `소유권 에러`, `라이프타임 에러`, `언세이프`, `미정의 동작`, `借用检查器`, `所有权错误`, `生命周期错误`, `特征约束`, `bantu atasi error borrow checker`, `perbaiki masalah ownership Rust`, `jelaskan error lifetime Rust`, `tolong beresin error cargo clippy`, `tinjau blok unsafe Rust ini`
 
 ## Catalog Metadata
 

@@ -4170,6 +4170,29 @@ def _trigger_token_holdback_for(name: str) -> frozenset[str]:
     ) | _pack_trigger_token_holdback().get(name, frozenset())
 
 
+@lru_cache(maxsize=1)
+def _shipped_ascii_pack_phrases() -> dict[str, frozenset[str]]:
+    """Shipped pack phrases written wholly in ASCII, by skill.
+
+    A pack in a Latin-script language shares the English token space. Its
+    phrases borrow English words (`bug`, `crash`, `error`, `file`), so if their
+    tokens entered `trigger_tokens` each would score for the skill on an
+    unrelated English message. Such a phrase therefore scores only as a whole
+    phrase. A phrase with any Hangul, Kana or Han character is not ASCII and
+    keeps scoring as before.
+    """
+    known_skills = frozenset(definition.name for definition in builtin_definitions())
+    return {
+        skill: frozenset(phrase for phrase in phrases if phrase.isascii())
+        for skill, phrases in merged_trigger_phrases(shipped_trigger_language_packs(known_skills)).items()
+    }
+
+
+def shipped_ascii_pack_phrases(skill: str) -> frozenset[str]:
+    """`skill`'s shipped pack phrases that score only as whole phrases."""
+    return _shipped_ascii_pack_phrases().get(skill, frozenset())
+
+
 # A one-word name preceded by one of these is a noun phrase headed by the
 # name, not a word used in passing.
 _NAME_DETERMINERS = ("a", "an", "the", "this", "that", "our", "my", "your", "its")
@@ -4294,6 +4317,7 @@ def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
         if phrase not in definition.triggers
     )
     trigger_phrases = tuple(normalized_phrase(trigger) for trigger in triggers)
+    phrase_only = shipped_ascii_pack_phrases(definition.name)
     metadata_tokens = frozenset(
         _tokens(" ".join((definition.name, definition.description, definition.use_when)))
     ) - _SIBLING_POINTER_METADATA_TOKENS.get(definition.name, frozenset())
@@ -4303,7 +4327,8 @@ def _prepare_definition(definition: SkillDefinition) -> _PreparedDefinition:
         trigger_phrases=trigger_phrases,
         command_trigger_phrases=tuple(trigger for trigger in trigger_phrases if trigger in _COMMAND_TRIGGER_PHRASES),
         plain_trigger_phrases=tuple(trigger for trigger in trigger_phrases if trigger and trigger not in _COMMAND_TRIGGER_PHRASES),
-        trigger_tokens=frozenset(_tokens(" ".join(triggers))) - _trigger_token_holdback_for(definition.name),
+        trigger_tokens=frozenset(_tokens(" ".join(trigger for trigger in triggers if trigger not in phrase_only)))
+        - _trigger_token_holdback_for(definition.name),
         name_phrase=normalized_phrase(definition.name),
         description_phrase=normalized_phrase(definition.description),
         use_when_phrase=normalized_phrase(definition.use_when),

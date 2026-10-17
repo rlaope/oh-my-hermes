@@ -19,11 +19,15 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from copy import copy
 from pathlib import Path
+from unittest import mock
 
 from omh.commands.language import LANGUAGE_CODES
+from omh.routing import lexical_shortlist
 from omh.routing.localization import normalized_phrase
 from omh.routing.recommend import (
+    _prepare_definition,
     _prepared_routable_definitions,
     _tokens,
     recommend_skills,
@@ -40,6 +44,7 @@ from omh.routing.trigger_language_packs import (
     trigger_pack_state,
     user_trigger_pack_dir,
 )
+from omh.skills import catalog
 from omh.skills.catalog import builtin_definitions, routable_definitions
 
 
@@ -212,6 +217,121 @@ class ShippedTriggerPackTests(unittest.TestCase):
             "author believes is live: " + "; ".join(dead[:20]),
         )
 
+    def test_a_latin_script_pack_adds_whole_phrases_and_nothing_else(self) -> None:
+        """An ASCII pack phrase scores as a phrase; its words never score alone.
+
+        `ja`, `zh` and `ko` phrases carry Hangul, Kana or Han, so their words
+        never meet an English message. A pack in a Latin-script language shares
+        the English token space: the first `id` draft's phrases borrowed `bug`,
+        `crash`, `error` and `file`, and with those words scoring on their own,
+        or in the lexical index, English routes and shortlists moved (#2154).
+        So each skill's scored tokens, lexical-index document and shortlist
+        anchors must equal the view with that skill's shipped ASCII pack
+        phrases taken out of its triggers. The view is built here from the
+        packs, not from `shipped_ascii_pack_phrases`, so a fault in that
+        function shows up as a difference. That the phrase itself still scores
+        is held by `test_every_shipped_pack_phrase_is_live_in_its_skills_scored_surface`;
+        that a pack's hold-backs remove no English word is held by
+        `test_a_pack_holds_back_only_words_its_own_scored_phrases_carry`.
+
+        An ASCII pack phrase that repeats one of the skill's authored triggers
+        stays in the view, so it fails here: the rule would take that trigger's
+        words out of scoring.
+        """
+        ascii_phrases: dict[str, set[str]] = {}
+        for pack in shipped_trigger_language_packs(_known_skills()):
+            for skill, phrases in pack.skills:
+                ascii_phrases.setdefault(skill, set()).update(phrase for phrase in phrases if phrase.isascii())
+        # Without an ASCII pack phrase this compares the catalog with itself.
+        self.assertTrue(any(ascii_phrases.values()))
+        authored = {definition.name: set(definition.triggers) for definition in catalog._DEFINITIONS}
+        without = {}
+        for definition in builtin_definitions():
+            taken_out = ascii_phrases.get(definition.name, set()) - authored.get(definition.name, set())
+            view = copy(definition)
+            object.__setattr__(view, "triggers", tuple(t for t in definition.triggers if t not in taken_out))
+            without[definition.name] = view
+        # `_anchor_vocabulary` finds the skill through `routable_definitions`;
+        # its uncached body runs against the view, and the cached live answers
+        # are read only outside the patch.
+        with mock.patch.object(lexical_shortlist, "routable_definitions", return_value=tuple(without.values())):
+            anchors_without = {
+                name: lexical_shortlist._anchor_vocabulary.__wrapped__(name) for name in without
+            }
+
+        moved: list[str] = []
+        for prepared in _prepared_routable_definitions():
+            definition = prepared.definition
+            view = without[definition.name]
+            if prepared.trigger_tokens != _prepare_definition(view).trigger_tokens:
+                moved.append(f"{definition.name}: trigger tokens")
+            if lexical_shortlist._document(definition) != lexical_shortlist._document(view):
+                moved.append(f"{definition.name}: lexical document")
+            if lexical_shortlist._anchor_vocabulary(definition.name) != anchors_without[definition.name]:
+                moved.append(f"{definition.name}: anchors")
+
+        self.assertEqual(
+            moved,
+            [],
+            "A Latin-script pack moved what its words score on their own; its phrases "
+            "must count only as whole phrases (`shipped_ascii_pack_phrases`): " + "; ".join(moved[:20]),
+        )
+
+    def test_ascii_pack_phrases_come_after_every_other_trigger(self) -> None:
+        """A Latin-script pack takes none of the first places in a trigger list.
+
+        The SKILL.md description and the capability row show only a skill's
+        first triggers, and packs merge in language-code order, where `id`
+        sorts before `ja`. With the `id` phrases in front, the description of
+        `design-orchestration` lost three Japanese cues, `deep-interview` two
+        and `ultraqa` one. So every shipped ASCII pack phrase that the
+        authored triggers do not already carry sits after every other trigger.
+        """
+        ascii_phrases: dict[str, set[str]] = {}
+        for pack in shipped_trigger_language_packs(_known_skills()):
+            for skill, phrases in pack.skills:
+                ascii_phrases.setdefault(skill, set()).update(phrase for phrase in phrases if phrase.isascii())
+        authored = {definition.name: set(definition.triggers) for definition in catalog._DEFINITIONS}
+        misplaced: list[str] = []
+        for definition in builtin_definitions():
+            latin = ascii_phrases.get(definition.name, set()) - authored.get(definition.name, set())
+            if latin and set(definition.triggers[len(definition.triggers) - len(latin):]) != latin:
+                misplaced.append(definition.name)
+
+        self.assertEqual(misplaced, [], "ASCII pack phrases ahead of another trigger in: " + ", ".join(misplaced))
+
+    def test_a_pack_holds_back_only_words_its_own_scored_phrases_carry(self) -> None:
+        """An ASCII hold-back word must come from one of the pack's non-ASCII phrases.
+
+        A `whole_phrase_only_tokens` entry stops a word scoring for the skill on
+        its own, which is what a pack needs for the words of its own phrases. A
+        phrase written wholly in ASCII already scores only as a whole phrase,
+        so its words need no entry. An ASCII entry that none of the pack's
+        non-ASCII phrases for the skill carries can then only take the skill's
+        English words away: its English trigger tokens and shortlist anchors.
+        The first `id` draft's list did that (`codex`, `chatbot`, `debug`), and
+        the parity test above cannot see it, because both sides of its
+        comparison read the same hold-backs.
+        """
+        stray: list[str] = []
+        for pack in shipped_trigger_language_packs(_known_skills()):
+            phrases = pack.phrases_by_skill()
+            for skill, entries in pack.whole_phrase_only_tokens:
+                scored: set[str] = set()
+                for phrase in phrases.get(skill, ()):
+                    if not phrase.isascii():
+                        scored |= set(_tokens(phrase))
+                for entry in entries:
+                    if {token for token in _tokens(entry) if token.isascii()} - scored:
+                        stray.append(f"{pack.language}/{skill}: {entry!r}")
+
+        self.assertEqual(
+            stray,
+            [],
+            "Hold-back entries whose ASCII words none of the pack's own non-ASCII phrases "
+            "carry, so they can only remove the skill's English words: " + "; ".join(stray[:20]),
+        )
+
     def test_the_seed_packs_reach_their_lane_end_to_end(self) -> None:
         """One live probe per seed language, through the ordinary router."""
         probes = (
@@ -224,6 +344,10 @@ class ShippedTriggerPackTests(unittest.TestCase):
             ("zh", "段错误和核心转储怎么排查", "native-debugging"),
             ("zh", "前端落地页需要响应式布局", "frontend"),
             ("ko", "빌드 실패 원인 봐줘", "build-failure-triage"),
+            ("id", "lakukan riset mendalam", "research"),
+            ("id", "review kode ini", "code-review"),
+            ("id", "audit aksesibilitas", "accessibility-audit"),
+            ("id", "build gagal", "build-failure-triage"),
         )
 
         for language, message, expected in probes:

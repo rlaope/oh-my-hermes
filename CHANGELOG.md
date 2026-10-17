@@ -4,6 +4,26 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Indonesian ships as a trigger language pack.** `src/routing/trigger_packs/id.json`,
+  contributed by @fauzibrevy-hub (#2154), covers the 21 skills the `ja` and
+  `zh` packs cover, with phrases such as `tinjau kode`, `audit aksesibilitas`,
+  `build gagal` and `lakukan riset mendalam`. It is the first pack in a
+  Latin-script language, and that shares the English token space: Indonesian
+  borrows `bug`, `crash`, `error` and `file`. So a shipped pack phrase written
+  entirely in ASCII now scores only as a whole phrase. Its words never join the
+  skill's trigger tokens, and the lexical shortlist leaves it out of the
+  skill's English document and anchors. Tests hold every skill's trigger
+  tokens, lexical document and anchors equal to the view with its ASCII pack
+  phrases taken out, and refuse an ASCII hold-back entry that none of the
+  pack's own non-ASCII phrases carries. ASCII pack phrases merge after the
+  `ja`, `ko` and `zh` ones, so `SKILL.md` descriptions and capability rows,
+  which show only a skill's first triggers, keep the cues they showed before.
+  Phrases that routed ordinary Indonesian chat (a team work plan, "ask me one
+  at a time", a medicine reminder) did not ship, and neither did a few that
+  read as word-for-word translations. `ultrawork` carries one Indonesian
+  phrase, `implementasi paralel`: its always-loaded body had room for one
+  under the byte ceiling. `id` is an input language only: it is not a
+  `--language` / `OMH_LANG` output choice.
 - **OMH TUI tool calls read as in Claude Code.** Each call is one row,
   `⏺ read_file(README.md)  0.2s`: a `⏺` in the accent while it runs, green
   once done, red when it failed or was denied, in place of the `✓` and `✗`

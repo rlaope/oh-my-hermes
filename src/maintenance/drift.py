@@ -673,7 +673,12 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # second); reading a Korean "-기 전에" clause as a step adds one
             # that masks customer information before it goes to the dev team
             # (1, main named the review in the clarify).
-            expected=832,
+            # The Indonesian trigger pack adds six Indonesian chat turns it
+            # must not route: five that phrases dropped from the pack reached
+            # (a work plan, two ask-first instructions, a medicine reminder, a
+            # parent's blood pressure) and a question about what a cron request
+            # means, which must not dispatch (6).
+            expected=838,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -976,7 +981,12 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # dev team then a vendor in a later sentence (5); and in English an
             # export sent where a company wants it, and one a company wants
             # delivered, named in the next sentence (2).
-            expected=870,
+            # The Indonesian trigger pack adds eleven requests that route
+            # differently without it: code review (bare phrase, request, and a
+            # sentence), accessibility audit (bare and a WCAG sentence), build
+            # failure (bare and a sentence), a RAG pipeline, parallel
+            # implementation, verify-before-merge and a screenshot check (11).
+            expected=881,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

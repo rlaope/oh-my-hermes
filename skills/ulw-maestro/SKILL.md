@@ -68,7 +68,7 @@ Bad example:
 
 Use once a lane's coding owner is an explicit external CLI and the work needs a prompt composed from that CLI's own installed skills, its readiness and permission checked, and its session captured for steering.
 
-    Strong routing signals: `$maestro`, `ulw-maestro`, `coding handoff`, `prepare the handoff`, `prepare a coding handoff`, `hand off the coding work`, `external executor handoff`, `handoff prompt`, `delegation prompt`, `コーディング委任`, `委任プロンプト`, `ハンドオフを準備`, `外部の実行エージェントに渡す`, `코딩 위임`, `위임 프롬프트`, `핸드오프 준비`, `외부 실행기 위임`, `코딩 에이전트에 넘기`, `编码委托`, `移交提示词`, `准备交接`, `交给编码代理`
+    Strong routing signals: `$maestro`, `ulw-maestro`, `coding handoff`, `prepare the handoff`, `prepare a coding handoff`, `hand off the coding work`, `external executor handoff`, `handoff prompt`, `delegation prompt`, `コーディング委任`, `委任プロンプト`, `ハンドオフを準備`, `外部の実行エージェントに渡す`, `코딩 위임`, `위임 프롬프트`, `핸드오프 준비`, `외부 실행기 위임`, `코딩 에이전트에 넘기`, `编码委托`, `移交提示词`, `准备交接`, `交给编码代理`, `siapkan handoff coding`, `buat prompt delegasi untuk agen coding`, `susun instruksi implementasi untuk eksekutor coding`, `siapkan serah terima ke agen coding pilihan saya`, `bantu bikin brief untuk eksekutor coding`, `kemas tugas coding untuk agen yang sudah dipilih`
 
 ## Catalog Metadata
 

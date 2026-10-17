@@ -1,0 +1,161 @@
+{
+  "schema_version": "trigger_language_pack/v1",
+  "language": "id",
+  "skills": {
+    "accessibility-audit": [
+      "audit aksesibilitas",
+      "tolong periksa aksesibilitas situs ini",
+      "cek kepatuhan WCAG",
+      "uji navigasi keyboard",
+      "cek urutan fokus",
+      "uji dengan pembaca layar"
+    ],
+    "adversarial-consensus": [
+      "kritisi proposal ini dari berbagai sudut pandang",
+      "cari kelemahan proposal teknis ini",
+      "uji rencana ini dengan pendekatan red team",
+      "minta pendapat independen untuk menguji proposal",
+      "bantu bantah asumsi dalam rancangan ini",
+      "tinjau proposal secara adversarial"
+    ],
+    "automation-blueprint": [
+      "rancang otomatisasi terjadwal",
+      "bikin alur kerja otomatis setiap hari",
+      "rancang pengiriman ringkasan otomatis"
+    ],
+    "backend": [
+      "rancang API backend",
+      "buat kontrak endpoint",
+      "desain layanan sisi server",
+      "bantu rancang alur autentikasi backend",
+      "tentukan format respons API",
+      "susun penanganan error di backend"
+    ],
+    "build-failure-triage": [
+      "build gagal",
+      "bantu perbaiki error kompilasi",
+      "cek penyebab pipeline CI gagal",
+      "typecheck gagal",
+      "tolong beresin lint yang gagal",
+      "tes gagal di CI"
+    ],
+    "code-review": [
+      "tinjau kode",
+      "review kode ini",
+      "bantu tinjau kode PR ini",
+      "tolong periksa diff ini untuk mencari bug",
+      "cek perubahan kode sebelum merge",
+      "ulas pull request ini",
+      "cari bug di perubahan ini",
+      "review PR ini dong"
+    ],
+    "deep-interview": [
+      "perjelas kebutuhan fitur ini",
+      "bantu gali kebutuhan sebelum bikin solusi",
+      "urai kebutuhan yang masih ambigu",
+      "klarifikasi permintaan ini lewat tanya jawab"
+    ],
+    "design-orchestration": [
+      "tangani desain produk ini secara menyeluruh",
+      "koordinasikan seluruh proses desain",
+      "bantu urus desain produk dari awal",
+      "siapkan arahan desain untuk tim eksekusi",
+      "susun handoff desain produk"
+    ],
+    "design-quality-gate": [
+      "pastikan desain memenuhi standar premium",
+      "tingkatkan kualitas desain sebelum publikasi",
+      "tolong poles desain sampai siap dipublikasikan",
+      "cek standar kualitas desain ini",
+      "rapikan konten dan tata letak agar layak terbit"
+    ],
+    "frontend": [
+      "bangun antarmuka UI frontend",
+      "bantu bikin landing page",
+      "rapikan tampilan frontend",
+      "buat halaman yang responsif",
+      "implementasikan desain UI",
+      "rancang antarmuka terminal",
+      "tambahkan animasi scroll",
+      "desain ulang tampilan dashboard"
+    ],
+    "llm-app-dev": [
+      "bangun aplikasi berbasis LLM",
+      "bantu buat fitur dengan LLM",
+      "buat pipeline RAG",
+      "rancang chatbot dengan retrieval",
+      "siapkan evaluasi untuk fitur LLM",
+      "buat keluaran terstruktur dari LLM"
+    ],
+    "long-document-reading": [
+      "baca seluruh dokumen ini",
+      "rangkum PDF panjang ini",
+      "tolong baca laporan ini sampai selesai",
+      "ringkas dokumen ini tanpa melewatkan bagian",
+      "baca manual ini dari awal sampai akhir",
+      "bantu rangkum seluruh isi PDF ini"
+    ],
+    "maestro": [
+      "siapkan handoff coding",
+      "buat prompt delegasi untuk agen coding",
+      "susun instruksi implementasi untuk eksekutor coding",
+      "siapkan serah terima ke agen coding pilihan saya",
+      "bantu bikin brief untuk eksekutor coding",
+      "kemas tugas coding untuk agen yang sudah dipilih"
+    ],
+    "native-debugging": [
+      "bantu debug segfault ini",
+      "analisis core dump",
+      "telusuri penyebab use after free",
+      "debug crash pada binary native"
+    ],
+    "plan": [
+      "susun rencana implementasi",
+      "pecah fitur ini jadi langkah pengerjaan",
+      "bantu rencanakan penambahan fitur",
+      "tolong bikin rencana perbaikan bug",
+      "susun tahapan implementasi sebelum mulai coding"
+    ],
+    "research": [
+      "lakukan riset mendalam",
+      "teliti implementasi referensi open source",
+      "buat tinjauan literatur",
+      "bandingkan implementasi OSS sebelum menyusun spesifikasi",
+      "bantu riset teknis secara menyeluruh",
+      "verifikasi klaim teknis dari berbagai sumber"
+    ],
+    "rust": [
+      "bantu atasi error borrow checker",
+      "perbaiki masalah ownership Rust",
+      "jelaskan error lifetime Rust",
+      "tolong beresin error cargo clippy",
+      "tinjau blok unsafe Rust ini"
+    ],
+    "ultraqa": [
+      "uji skenario ekstrem",
+      "lakukan QA adversarial",
+      "uji skenario kegagalan sebelum rilis",
+      "bantu cari celah lewat pengujian end to end",
+      "uji aplikasi dengan kondisi pengguna nyata",
+      "jalankan siklus pengujian dan perbaikan berulang"
+    ],
+    "ultrawork": [
+      "implementasi paralel"
+    ],
+    "verification-gate": [
+      "verifikasi sebelum merge",
+      "buktikan perubahan ini sudah selesai",
+      "cek bukti build lint dan tes",
+      "pastikan semua pemeriksaan lulus sebelum merge",
+      "tolong validasi hasil implementasi ini"
+    ],
+    "visual-qa": [
+      "cek tampilan dari screenshot",
+      "tolong periksa layout yang berantakan",
+      "uji visual halaman yang sudah dirender",
+      "cek elemen yang terpotong di layar",
+      "tinjau hasil render antarmuka",
+      "bantu periksa tata letak dari tangkapan layar"
+    ]
+  }
+}

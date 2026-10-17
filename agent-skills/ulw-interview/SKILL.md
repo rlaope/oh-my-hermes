@@ -58,7 +58,7 @@ Bad example:
 
 Use before planning or execution when requirements are materially ambiguous.
 
-    Strong routing signals: `deep-interview`, `$deep-interview`, `interview me`, `don't assume`, `clarify`, `feature shaping`, `ambiguous product request`, `one question`, `要件を詰めて`, `曖昧な要求`, `一問一答で確認`, `オンボーディング`, `온보딩`, `부드럽게`, `모호한 제품 요청`, `기획자`, `개발자 사이`, `澄清需求`, `需求不明确`, `一次问一个问题`
+    Strong routing signals: `deep-interview`, `$deep-interview`, `interview me`, `don't assume`, `clarify`, `feature shaping`, `ambiguous product request`, `one question`, `要件を詰めて`, `曖昧な要求`, `一問一答で確認`, `オンボーディング`, `온보딩`, `부드럽게`, `모호한 제품 요청`, `기획자`, `개발자 사이`, `澄清需求`, `需求不明确`, `一次问一个问题`, `perjelas kebutuhan fitur ini`, `bantu gali kebutuhan sebelum bikin solusi`, `urai kebutuhan yang masih ambigu`, `klarifikasi permintaan ini lewat tanya jawab`
 
 ## Catalog Metadata
 

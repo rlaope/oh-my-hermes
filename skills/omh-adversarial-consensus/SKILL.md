@@ -69,7 +69,7 @@ Bad example:
 
 Use when a proposal, plan, or direction needs independent perspectives to attack it before a plan is written, and the distilled result is meant as input to planning rather than as the plan.
 
-    Strong routing signals: `adversarial-consensus`, `$adversarial-consensus`, `adversarial planning`, `adversarial plan review`, `red team this plan`, `red-team this plan`, `red team the proposal`, `multi-perspective review`, `multiple perspectives`, `independent perspectives`, `attack this proposal`, `poke holes in this`, `hyperplan`, `敵対的レビュー`, `多角的レビュー`, `レッドチームレビュー`, `この計画に反論`, `穴を探して`, `적대적 검토`, `다관점 검토`, `여러 관점에서 검토`, `레드팀 검토`, `이 계획 반박`, `허점 찾아`, `对抗式评审`, `多视角评审`, `红队评审`, `反驳这个方案`, `找出漏洞`
+    Strong routing signals: `adversarial-consensus`, `$adversarial-consensus`, `adversarial planning`, `adversarial plan review`, `red team this plan`, `red-team this plan`, `red team the proposal`, `multi-perspective review`, `multiple perspectives`, `independent perspectives`, `attack this proposal`, `poke holes in this`, `hyperplan`, `敵対的レビュー`, `多角的レビュー`, `レッドチームレビュー`, `この計画に反論`, `穴を探して`, `적대적 검토`, `다관점 검토`, `여러 관점에서 검토`, `레드팀 검토`, `이 계획 반박`, `허점 찾아`, `对抗式评审`, `多视角评审`, `红队评审`, `反驳这个方案`, `找出漏洞`, `kritisi proposal ini dari berbagai sudut pandang`, `cari kelemahan proposal teknis ini`, `uji rencana ini dengan pendekatan red team`, `minta pendapat independen untuk menguji proposal`, `bantu bantah asumsi dalam rancangan ini`, `tinjau proposal secara adversarial`
 
 ## Catalog Metadata
 

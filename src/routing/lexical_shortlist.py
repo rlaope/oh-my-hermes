@@ -37,7 +37,7 @@ import re
 import unicodedata
 
 from .localization import routing_terms
-from .recommend import held_back_trigger_tokens
+from .recommend import held_back_trigger_tokens, shipped_ascii_pack_phrases
 from ..skills.catalog import routable_definitions
 from ..skills.catalog_types import HERMES_SCANNER_EXCLUDED_TERMS, SkillDefinition
 
@@ -204,7 +204,11 @@ def _field_text(definition: SkillDefinition, field: str) -> str:
     if field == "name":
         return definition.name
     if field == "triggers":
-        return " ".join(trigger for trigger in definition.triggers if trigger.isascii())
+        # A shipped pack phrase written in ASCII scores only as a whole phrase
+        # (`shipped_ascii_pack_phrases`), so its words must not rank the skill
+        # here or become its anchors either.
+        phrase_only = shipped_ascii_pack_phrases(definition.name)
+        return " ".join(trigger for trigger in definition.triggers if trigger.isascii() and trigger not in phrase_only)
     if field == "situations":
         return " ".join(definition.situations)
     if field == "description":

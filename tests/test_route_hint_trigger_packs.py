@@ -266,12 +266,14 @@ class RouteHintTriggerPackTests(TestCase):
         self.assertEqual(completed.stdout.strip(), "hinted dispatch")
 
 
-# The reproduction in #2129 (reported by @fauzibrevy-hub): an Indonesian pack,
-# a language OMH ships no pack for.
-HOST_PACK_PHRASE = "riset kompetitor"
+# The reproduction in #2129 (reported by @fauzibrevy-hub) used an Indonesian
+# pack. `id` now ships one (src/routing/trigger_packs/id.json), so the fixture
+# is a pack in a language OMH ships none for, with the same "competitor
+# research" meaning: the user pack stays the only source of its phrase.
+HOST_PACK_PHRASE = "pesquisa de concorrentes"
 _HOST_PACK_DOCUMENT = {
     "schema_version": "trigger_language_pack/v1",
-    "language": "id",
+    "language": "pt-br",
     "skills": {"research": [HOST_PACK_PHRASE]},
 }
 

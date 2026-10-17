@@ -72,7 +72,7 @@ Bad example:
 
 Use for review-shaped requests; findings come first and must cite concrete evidence.
 
-    Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `代码评审`, `代码审查`, `找出缺陷`
+    Strong routing signals: `code-review`, `$code-review`, `review`, `audit`, `find bugs`, `release gate`, `claim audit`, `evidence audit`, `README claim`, `what actually happened`, `code review`, `review gate`, `コードレビュー`, `バグを見つけて`, `実際に何をしたか`, `리뷰`, `코드 리뷰`, `리뷰까지`, `릴리즈 전`, `실제 코드와 맞는가`, `실제로 뭐 했는지`, `검증된 결과`, `代码评审`, `代码审查`, `找出缺陷`, `tinjau kode`, `review kode ini`, `bantu tinjau kode PR ini`, `tolong periksa diff ini untuk mencari bug`, `cek perubahan kode sebelum merge`, `ulas pull request ini`, `cari bug di perubahan ini`, `review PR ini dong`
 
 ## Catalog Metadata
 

@@ -1833,6 +1833,62 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_directly",
         "direct_answer",
     ),
+    # Indonesian. The review of the contributed `id` pack (#2154) found five
+    # phrases generic enough to route ordinary chat -- a team's work plan, "ask
+    # me one at a time", "don't assume, ask first", a medicine reminder, a
+    # parent's blood pressure -- and one whole phrase that dispatched a
+    # question about what that phrase means. Those phrases did not ship. Each
+    # case below is pinned to the outcome the router gave before the pack, and
+    # forbids the lane the dropped phrase reached; the cron question names
+    # `automation-blueprint` in its clarification either way, so it pins only
+    # that it does not dispatch.
+    RoutingPrecisionCase(
+        "indonesian-team-work-plan-is-not-a-plan-request",
+        "An Indonesian team work plan stays out of the plan lane",
+        "Buat rencana kerja tim marketing untuk bulan depan.",
+        "answer_clarification",
+        "",
+        "plan",
+    ),
+    RoutingPrecisionCase(
+        "indonesian-ask-me-one-at-a-time-is-not-an-interview",
+        "Asking to be asked one question at a time stays out of the interview lane",
+        "Kalau ada yang kurang jelas, tanya saya satu per satu ya.",
+        "answer_clarification",
+        "",
+        "deep-interview",
+    ),
+    RoutingPrecisionCase(
+        "indonesian-ask-before-assuming-is-not-an-interview",
+        "Asking to be asked before an assumption stays out of the interview lane",
+        "Jangan berasumsi tanya dulu kalau kamu ragu soal data penjualan.",
+        "answer_clarification",
+        "",
+        "deep-interview",
+    ),
+    RoutingPrecisionCase(
+        "indonesian-medicine-reminder-is-not-an-automation",
+        "A recurring medicine reminder stays out of the automation blueprint",
+        "Tolong siapkan tugas berulang untuk mengingatkan saya minum obat.",
+        "answer_clarification",
+        "",
+        "automation-blueprint",
+    ),
+    RoutingPrecisionCase(
+        "indonesian-blood-pressure-monitoring-is-not-an-automation",
+        "Watching a parent's blood pressure stays out of the automation blueprint",
+        "Atur pemantauan berkala tekanan darah ibu saya.",
+        "answer_clarification",
+        "",
+        "automation-blueprint",
+    ),
+    RoutingPrecisionCase(
+        "indonesian-cron-meaning-question-does-not-dispatch",
+        "An Indonesian question about what a cron request means does not dispatch",
+        "Buat jadwal cron untuk Hermes itu apa sih artinya?",
+        "answer_clarification",
+        "",
+    ),
     # Vagueness gate on heavy-mode routing (P2-12): a filler-only vague
     # request that does not name `ultrawork`/`maestro` stays on its existing
     # light-lane clarify path -- the new heavy-lane gate never engages.
@@ -10948,6 +11004,118 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "adversarial-consensus",
         "forward_plan_to_selected_workflow",
         "plan",
+    ),
+    # Indonesian. Every case here routed differently before the `id` pack
+    # shipped. An `id` phrase is written in ASCII, so it scores as a whole
+    # phrase and its words never score alone; a bare phrase or one inside a
+    # sentence either dispatches or clarifies with the skill named, and the
+    # clarify cases pin the tier.
+    RoutingInterventionCase(
+        "indonesian-bare-code-review-phrase-clarifies",
+        "A bare Indonesian code-review phrase clarifies with code-review named",
+        "tinjau kode",
+        "clarify",
+        "oh-my-hermes",
+        "answer_clarification",
+        "clarification",
+        "code-review",
+        "medium",
+    ),
+    RoutingInterventionCase(
+        "indonesian-review-this-code-dispatches",
+        "An Indonesian review-this-code request reaches the review check",
+        "review kode ini",
+        "dispatch",
+        "code-review",
+        "prepare_review_or_followup_handoff",
+        "review_check",
+    ),
+    RoutingInterventionCase(
+        "indonesian-pr-review-in-sentence-clarifies",
+        "An Indonesian PR review request in a sentence clarifies with code-review named",
+        "Tolong tinjau kode di PR saya sebelum merge.",
+        "clarify",
+        "oh-my-hermes",
+        "answer_clarification",
+        "clarification",
+        "code-review",
+        "medium",
+    ),
+    RoutingInterventionCase(
+        "indonesian-accessibility-audit-dispatches",
+        "An Indonesian accessibility audit request reaches the audit",
+        "audit aksesibilitas",
+        "dispatch",
+        "accessibility-audit",
+        "prepare_accessibility_audit",
+        "accessibility_audit",
+    ),
+    RoutingInterventionCase(
+        "indonesian-wcag-check-in-sentence-dispatches",
+        "An Indonesian WCAG compliance check in a sentence reaches the audit",
+        "Cek kepatuhan WCAG untuk situs kami.",
+        "dispatch",
+        "accessibility-audit",
+        "prepare_accessibility_audit",
+        "accessibility_audit",
+    ),
+    RoutingInterventionCase(
+        "indonesian-build-failed-dispatches",
+        "A bare Indonesian build failure reaches build triage",
+        "build gagal",
+        "dispatch",
+        "build-failure-triage",
+        "prepare_build_failure_triage",
+        "build_failure_triage",
+    ),
+    RoutingInterventionCase(
+        "indonesian-build-failed-in-sentence-dispatches",
+        "An Indonesian build failure after a dependency update reaches build triage",
+        "Build gagal setelah saya update dependency, bisa bantu?",
+        "dispatch",
+        "build-failure-triage",
+        "prepare_build_failure_triage",
+        "build_failure_triage",
+    ),
+    RoutingInterventionCase(
+        "indonesian-rag-pipeline-clarifies",
+        "An Indonesian RAG pipeline request clarifies with the LLM app lane named",
+        "Buat pipeline RAG untuk dokumen internal perusahaan.",
+        "clarify",
+        "oh-my-hermes",
+        "answer_clarification",
+        "clarification",
+        "llm-app-dev",
+        "medium",
+    ),
+    RoutingInterventionCase(
+        "indonesian-parallel-implementation-clarifies",
+        "An Indonesian parallel implementation request clarifies with ultrawork named",
+        "implementasi paralel",
+        "clarify",
+        "oh-my-hermes",
+        "answer_clarification",
+        "clarification",
+        "ultrawork",
+        "medium",
+    ),
+    RoutingInterventionCase(
+        "indonesian-verify-before-merge-dispatches",
+        "An Indonesian verify-before-merge request reaches the verification gate",
+        "verifikasi sebelum merge",
+        "dispatch",
+        "verification-gate",
+        "prepare_verification_gate",
+        "verification_gate",
+    ),
+    RoutingInterventionCase(
+        "indonesian-screenshot-check-dispatches",
+        "An Indonesian screenshot check reaches visual QA",
+        "cek tampilan dari screenshot",
+        "dispatch",
+        "visual-qa",
+        "prepare_visual_qa",
+        "visual_qa",
     ),
     # Vagueness gate on heavy-mode routing (P2-12): `ultrawork`/`maestro`
     # requests that name no concrete target clarify with a specific
