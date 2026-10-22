@@ -1783,6 +1783,23 @@
 }
 },
 {
+"anchors":"acc benchmark comparison condition differ evaluation harness hellaswag identify norm paper provenanc repro result",
+"hangul":"",
+"hangul_anchors":"",
+"label":"omh-repro-audit",
+"name":"repro-audit",
+"situation":"Evaluation logs versus reported paper conditions",
+"terms":{
+"1":"evidenc exact gated never new review scor versus",
+"2":"acc against benchmark check comparison differ exist harness identify miss norm provenanc record research set whether without",
+"3":"model report",
+"4":"paper run suppli",
+"5":"compar hellaswag repro result",
+"6":"condition evaluation log",
+"8":"audit"
+}
+},
+{
 "anchors":"authoritativ conversion coordinat cover coverag declar declaration differ footprint geojson geospatial measurement pair parcel polygon shar sum uniqu wrong",
 "hangul":"",
 "hangul_anchors":"",

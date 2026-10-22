@@ -45,7 +45,27 @@ class SkillContextCostTests(unittest.TestCase):
         # Three science methods carry their lane/evidence rails: 122343
         # producer bytes. 126000 retains approximately 3% headroom; toolkit
         # bytes remain on-demand and do not enter this measurement.
-        self.assertLess(profile["repeated"]["bytes"], 126_000)
+        # Repro-audit's required standalone lane/evidence rails add 1,943
+        # producer-measured bytes to main's 124,345. The measured 126,288
+        # uses a 130,000 ceiling with 2.94% headroom, not a scoring tolerance.
+        # The audit-specific increment/body caps below prevent unbounded growth.
+        self.assertLess(profile["repeated"]["bytes"], 130_000)
+
+    def test_repro_audit_context_increment_stays_bounded(self) -> None:
+        from omh.skills.context_cost import _skill_context_cost_profile
+        from omh.skills.packaging import builtin_skill_reference_templates, builtin_skill_templates
+
+        templates = builtin_skill_templates()
+        references = builtin_skill_reference_templates()
+        full = _skill_context_cost_profile("full", templates, references)
+        without = _skill_context_cost_profile(
+            "full", [template for template in templates if template.name != "repro-audit"], references
+        )
+        audit = next(template for template in templates if template.name == "repro-audit")
+        increment = full["repeated"]["bytes"] - without["repeated"]["bytes"]
+        self.assertGreaterEqual(increment, 0)
+        self.assertLessEqual(increment, 2_000)
+        self.assertLessEqual(len(audit.content.encode("utf-8")), 8_000)
 
     def test_ulw_context_reports_bounded_static_body_and_progressive_references(self) -> None:
         payload = skill_context_cost_payload()

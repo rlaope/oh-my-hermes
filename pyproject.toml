@@ -71,6 +71,7 @@ packages = [
   "omh.surfaces",
   "omh.system",
   "omh.workflows",
+  "omh.workflows.repro_audit",
   "omh.wrapper",
 ]
 
@@ -99,9 +100,11 @@ packages = [
 "omh.system" = "src/system"
 "omh.tui" = "src/tui"
 "omh.workflows" = "src/workflows"
+"omh.workflows.repro_audit" = "src/workflows/repro_audit"
 "omh.wrapper" = "src/wrapper"
 
 [tool.setuptools.package-data]
+"omh.workflows.repro_audit" = ["data/contract.json"]
 # Closed optional companion data, not packages/imported production modules.
 "omh.skills" = [
   "geospatial_analysis_toolkit/README.md", "geospatial_analysis_toolkit/LICENSE.upstream",

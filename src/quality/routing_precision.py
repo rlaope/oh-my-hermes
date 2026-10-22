@@ -84,6 +84,7 @@ class RoutingInterventionCase:
 # helpful but should not hijack the answer into workflow selection, catalog
 # pickers, coding handoffs, or generic workflow acknowledgements.
 ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
+    RoutingPrecisionCase("repro-audit-vocabulary", "Audit vocabulary is not retained research evidence", "Explain the word audit in this essay.", "answer_clarification", "", "repro-audit"),
     RoutingPrecisionCase("gis-map-metaphor", "Map prose needs no coordinate computation", "Explain the map metaphor in this essay.", "answer_directly", "direct_answer", "geospatial-analysis"),
     RoutingPrecisionCase("bio-ui-variant", "Variant vocabulary alone is not biological evidence", "Explain the word variant in a UI experiment.", "answer_directly", "direct_answer", "biomedical-evidence"),
     RoutingPrecisionCase("docking-boat-reservation", "Boat docking is not a molecular search", "Explain the boat docking reservation policy.", "answer_directly", "direct_answer", "molecular-docking"),
@@ -8586,6 +8587,7 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
 # Positive-intervention corpus. These are real OMH-shaped turns where the router
 # should still step in after the direct-answer fallback was added.
 ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
+    RoutingInterventionCase("repro-audit-log-conditions", "Compare retained results to reported conditions", "Compare this HellaSwag log to the paper's reported conditions", "dispatch", "repro-audit", "prepare_repro_audit", "repro_audit"),
     RoutingInterventionCase("gis-metric-overlay", "Supplied geometry requires actual metric computation", "Intersect these two GeoJSON layers in a metric CRS and compute overlap area.", "dispatch", "geospatial-analysis", "prepare_geospatial_analysis", "geospatial_analysis"),
     RoutingInterventionCase("bio-public-source-comparison", "Public claims require source-labelled reconciliation", "Cross-check this public BRAF V600E melanoma query with a ClinVar cross-check and trial registry records, retaining disagreements and update dates.", "dispatch", "biomedical-evidence", "prepare_biomedical_evidence", "biomedical_evidence"),
     RoutingInterventionCase("docking-prepared-search", "Prepared inputs require actual bounded pose search", "Run rigid-receptor docking for these prepared PDBQT inputs and declared binding box, returning real poses and replay settings.", "dispatch", "molecular-docking", "prepare_molecular_docking", "molecular_docking"),

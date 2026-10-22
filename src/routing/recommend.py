@@ -1676,6 +1676,11 @@ _SKILL_POLICIES = {
             "with covered / next / missing before claiming coverage."
         ),
     ),
+    "repro-audit": RecommendationPolicy(
+        next_action="prepare_repro_audit",
+        evidence_boundary="A prepared audit is not imported evidence review, completed evaluation or scientific reproduction. Missing conditions and human confirmation remain unknown.",
+        wrapper_guidance="Select acc or acc_norm explicitly, import supplied local Harness results, preserve original and derived hashes, and audit normalized conditions without running a model.",
+    ),
     "paper-learning": RecommendationPolicy(
         next_action="prepare_paper_learning",
         evidence_boundary=(

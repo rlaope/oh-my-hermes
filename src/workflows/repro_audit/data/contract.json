@@ -1,0 +1,787 @@
+{
+  "schema_id": "reprodiff.spec-contract/v0.1",
+  "document_kind": "normative_typed_registry_not_executable_schema",
+  "status": "spec_complete",
+  "language": "ko",
+  "profile_id": "hellaswag-acc-audit-v0.1",
+  "policy_id": "exact-display-v0.1",
+  "extension_v02": {
+    "backward_compatible": true,
+    "profiles": {"hellaswag-acc-audit-v0.1": "acc", "hellaswag-acc-norm-audit-v0.2": "acc_norm"},
+    "note": "Additive import02 extension; v0.1 profile_id remains default. New cases and reports use their closed-map profile, replacing v0.1 literal-only restrictions only for the added profile. Exact-display policy, provenance and all old acceptance recipes remain unchanged. See spec/extension-v02.md.",
+    "native_import": "Explicit metric; results.hellaswag; old bare or exact none-filter keys; whitelisted derived extract; original-byte SHA and JSON pointers; operator review pending, confirmed=false; no evaluation or completed-execution inference."
+  },
+  "claims": {
+    "implementation": false,
+    "native_parser_compatibility_verified": false,
+    "current_upstream_compatibility_verified": false,
+    "runtime_attestation": false,
+    "independent_review": false,
+    "customer_value_observed": false
+  },
+  "source_refs": [
+    {
+      "id": "SRC-CHARTER",
+      "path": "../charter.md"
+    },
+    {
+      "id": "SRC-INTEGRATION",
+      "path": "../integration-brief.md"
+    },
+    {
+      "id": "SRC-PRODUCT-PRODUCT-MD",
+      "path": "../inputs/product/product.md"
+    },
+    {
+      "id": "SRC-PRODUCT-HANDOFF-JSON",
+      "path": "../inputs/product/handoff.json"
+    },
+    {
+      "id": "SRC-PROTOCOL-PROTOCOL-MD",
+      "path": "../inputs/protocol/protocol.md"
+    },
+    {
+      "id": "SRC-PROTOCOL-CONTRACT-JSON",
+      "path": "../inputs/protocol/contract.json"
+    },
+    {
+      "id": "SRC-PROTOCOL-HANDOFF-JSON",
+      "path": "../inputs/protocol/handoff.json"
+    },
+    {
+      "id": "SRC-ACCEPTANCE-ACCEPTANCE-MD",
+      "path": "../inputs/acceptance/acceptance.md"
+    },
+    {
+      "id": "SRC-ACCEPTANCE-CASES-JSON",
+      "path": "../inputs/acceptance/cases.json"
+    },
+    {
+      "id": "SRC-ACCEPTANCE-HANDOFF-JSON",
+      "path": "../inputs/acceptance/handoff.json"
+    },
+    {
+      "id": "SRC-RESEARCH",
+      "path": "/Users/rlaope/.hermes/output/ai-researcher-oss-20261022/research-brief-ko.md"
+    }
+  ],
+  "enums": {
+    "field": [
+      "equal",
+      "different",
+      "unknown",
+      "not_applicable"
+    ],
+    "overall": [
+      "comparable",
+      "blocked_mismatch",
+      "blocked_unknown"
+    ],
+    "run": [
+      "not_run",
+      "completed",
+      "failed",
+      "cancelled"
+    ],
+    "metric": [
+      "within_tolerance",
+      "outside_tolerance",
+      "not_computed"
+    ],
+    "validation": [
+      "accepted",
+      "rejected"
+    ],
+    "knowledge": [
+      "known",
+      "unknown",
+      "not_applicable"
+    ],
+    "provenance": [
+      "human_confirmed_reported",
+      "imported_observed",
+      "manual_declaration"
+    ],
+    "role": [
+      "reported",
+      "actual"
+    ],
+    "revision_kind": [
+      "git_commit",
+      "content_addressed",
+      "unresolved"
+    ],
+    "raw_unit": [
+      "fraction",
+      "percent"
+    ],
+    "source_rounding": [
+      "exact",
+      "rounded",
+      "not_reported"
+    ],
+    "chat_mode": [
+      "raw",
+      "chat"
+    ],
+    "selection_mode": [
+      "full_split",
+      "subset"
+    ],
+    "evidence_kind": [
+      "document",
+      "log",
+      "config",
+      "normalized_spec",
+      "sample_index"
+    ],
+    "mapping_disposition": [
+      "retained",
+      "modified",
+      "deferred"
+    ]
+  },
+  "required_fields": [
+    "model.identity",
+    "tokenizer.identity",
+    "data.identity",
+    "data.split",
+    "data.selection",
+    "data.sample_count",
+    "data.ordered_samples_digest",
+    "evaluator.identity",
+    "task.name",
+    "task.config_digest",
+    "prompt.spec_digest",
+    "chat.mode",
+    "chat.template_digest",
+    "fewshot.count",
+    "fewshot.examples_digest",
+    "random.seeds",
+    "scoring.spec_digest",
+    "metric.definition",
+    "numerics.spec",
+    "generation.config"
+  ],
+  "context_fields": [
+    "environment.hardware",
+    "environment.platform",
+    "environment.libraries",
+    "environment.execution"
+  ],
+  "fields": [
+    {
+      "path": "model.identity",
+      "type": "identity",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "불변 모델 식별; 로컬 digest로 논문 revision 역추정 금지",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "tokenizer.identity",
+      "type": "identity",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "불변 tokenizer 식별",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "data.identity",
+      "type": "data_identity",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "source/config/불변 데이터 revision",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "data.split",
+      "type": "nonempty_string",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "원문 split literal",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "data.selection",
+      "type": "selection",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "full/subset 및 명시 선택 규칙",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "data.sample_count",
+      "type": "positive_integer",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "해당 평가 sample 수",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "data.ordered_samples_digest",
+      "type": "sha256",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "유일 ID+레코드 내용 hash의 평가 순서 목록",
+      "not_applicable_allowed": false,
+      "payload_type": "sample_index"
+    },
+    {
+      "path": "evaluator.identity",
+      "type": "identity",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "evaluator source 및 불변 revision",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "task.name",
+      "type": "nonempty_string",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "reported anchor hellaswag",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "task.config_digest",
+      "type": "sha256",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "선언된 normalized task configuration",
+      "not_applicable_allowed": false,
+      "payload_type": "task_config"
+    },
+    {
+      "path": "prompt.spec_digest",
+      "type": "sha256",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "prompt/system/preprocess/tokenization 선언",
+      "not_applicable_allowed": false,
+      "payload_type": "prompt_spec"
+    },
+    {
+      "path": "chat.mode",
+      "type": "enum:chat_mode",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "raw 또는 chat",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "chat.template_digest",
+      "type": "sha256",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "UTF-8 chat template bytes",
+      "not_applicable_allowed": true,
+      "payload_type": "utf8_text"
+    },
+    {
+      "path": "fewshot.count",
+      "type": "nonnegative_integer",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "fewshot 수",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "fewshot.examples_digest",
+      "type": "sha256",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "예시 ID+내용 hash의 순서 목록",
+      "not_applicable_allowed": true,
+      "payload_type": "sample_index"
+    },
+    {
+      "path": "random.seeds",
+      "type": "seed_map",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "명시된 seed map; 미보고는 unknown",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "scoring.spec_digest",
+      "type": "sha256",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "scoring 선언; generation 미사용 gate",
+      "not_applicable_allowed": false,
+      "payload_type": "scoring_spec"
+    },
+    {
+      "path": "metric.definition",
+      "type": "metric_definition",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "acc/mean_sample_accuracy/fraction",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "numerics.spec",
+      "type": "numerics_spec",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "weight/compute dtype 및 quantization",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "generation.config",
+      "type": "json_object",
+      "category": "semantic",
+      "required": true,
+      "comparison": "exact_typed",
+      "meaning": "본 profile의 loglikelihood에서는 검증된 N/A만",
+      "not_applicable_allowed": true
+    },
+    {
+      "path": "environment.hardware",
+      "type": "nonempty_string",
+      "category": "context",
+      "required": true,
+      "comparison": "warning_only",
+      "meaning": "CPU/accelerator 설명",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "environment.platform",
+      "type": "nonempty_string",
+      "category": "context",
+      "required": true,
+      "comparison": "warning_only",
+      "meaning": "OS/architecture 설명",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "environment.libraries",
+      "type": "string_map",
+      "category": "context",
+      "required": true,
+      "comparison": "warning_only",
+      "meaning": "명시적 라이브러리 버전 map",
+      "not_applicable_allowed": false
+    },
+    {
+      "path": "environment.execution",
+      "type": "execution_context",
+      "category": "context",
+      "required": true,
+      "comparison": "warning_only",
+      "meaning": "batch/parallelism",
+      "not_applicable_allowed": false
+    }
+  ],
+  "primitives": {
+    "nonempty_string": "UTF-8 JSON string length>=1; no coercion",
+    "string": "UTF-8 JSON string including empty",
+    "sha256": "^[0-9a-f]{64}$",
+    "git_sha40": "^[0-9a-f]{40}$",
+    "integer": "JSON integer excluding boolean",
+    "positive_integer": "integer>=1",
+    "nonnegative_integer": "integer>=0",
+    "boolean": "JSON boolean",
+    "decimal_string": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$; finite; exponent forbidden",
+    "json_object": "strict JSON object; data only; no executable interpretation",
+    "string_map": "object nonempty_string -> nonempty_string; sorted keys; no inferred versions",
+    "seed_map": "object nonempty_string -> integer; empty map known only if source explicitly states no seeds/randomness",
+    "relative_artifact_path": "artifacts/下 POSIX relative path; forbid dot/dotdot, empty segments, backslash, percent, NUL, absolute paths, all symlinks",
+    "enum:NAME": "exact case-sensitive member of enums[NAME]"
+  },
+  "types": {
+    "revision": {
+      "kind": "enum:revision_kind",
+      "value": "nonempty_string"
+    },
+    "identity": {
+      "source_id": "nonempty_string",
+      "revision": "revision"
+    },
+    "data_identity": {
+      "source_id": "nonempty_string",
+      "config": "nonempty_string",
+      "revision": "revision"
+    },
+    "selection": {
+      "mode": "enum:selection_mode",
+      "rule": "nonempty_string"
+    },
+    "metric_definition": {
+      "name": "nonempty_string",
+      "aggregation": "nonempty_string",
+      "unit": "enum:raw_unit"
+    },
+    "numerics_spec": {
+      "weight_dtype": "nonempty_string",
+      "compute_dtype": "nonempty_string",
+      "quantization": "nonempty_string"
+    },
+    "execution_context": {
+      "batch_size": "positive_integer",
+      "parallelism": "positive_integer"
+    },
+    "envelope": {
+      "state": "enum:knowledge",
+      "value": "field.type or null",
+      "evidence_refs": "array of unique evidence.id",
+      "reason": "nonempty_string or null"
+    },
+    "score": {
+      "state": "enum:knowledge (known|unknown only)",
+      "raw_value": "decimal_string or null",
+      "raw_unit": "enum:raw_unit or null",
+      "source_rounding": "enum:source_rounding",
+      "evidence_refs": "array of unique evidence.id",
+      "reason": "nonempty_string or null"
+    },
+    "imported_run": {
+      "claimed_state": "enum:run",
+      "evidence_refs": "array of unique evidence.id",
+      "processed_sample_count": "nonnegative_integer or null"
+    },
+    "manifest": {
+      "manifest_id": "nonempty_string",
+      "version": "positive_integer",
+      "role": "enum:role",
+      "values": "all semantic+context paths -> envelope; exact keyset",
+      "score": "score"
+    },
+    "actual_manifest_extension": {
+      "imported_run": "imported_run"
+    },
+    "case": {
+      "schema_id": "literal reprodiff.normalized-case/v0.1",
+      "case_id": "nonempty_string",
+      "profile_id": "literal hellaswag-acc-audit-v0.1",
+      "policy_id": "literal exact-display-v0.1"
+    },
+    "evidence_index": {
+      "schema_id": "literal reprodiff.evidence/v0.1",
+      "evidence": "array of evidence"
+    },
+    "evidence": {
+      "id": "unique nonempty_string",
+      "level": "enum:provenance",
+      "kind": "enum:evidence_kind",
+      "source_path": "relative_artifact_path",
+      "source_sha256": "sha256",
+      "locator": "nonempty_string",
+      "document_id": "nonempty_string",
+      "document_version": "nonempty_string",
+      "excerpt": "string",
+      "reviewer": "nonempty_string",
+      "confirmed": "boolean",
+      "field_paths": "array of unique registry path or score or imported_run",
+      "payload": "payload_ref or null"
+    },
+    "payload_ref": {
+      "artifact_path": "relative_artifact_path",
+      "sha256": "sha256",
+      "type": "nonempty_string from payload_types"
+    }
+  },
+  "record_rules": {
+    "exact_keys": "모든 record는 위 declared keys만 허용; all required unless explicitly null. actual manifest extends manifest. Additional data allowed only inside explicitly json_object/string_map/seed_map.",
+    "revision": "git_commit full40; content_addressed sha256:<64hex>. unresolved preserves literal main/latest/tag/abbreviation and is effective unknown; invalid kind/format is rejected, no repair.",
+    "envelope": "known requires non-null typed value. unknown requires null+nonempty reason (not_reported if absent in source). N/A requires null+allowlisted reason; missing evidence becomes effective unknown not validation success evidence.",
+    "score": "known requires raw_value and raw_unit, allowed finite range; unknown requires both null and reason. N/A forbidden. source_rounding not_reported does not invent precision.",
+    "actual_null": "actual.json may be null; all comparison fields unknown; effective run not_run",
+    "source_locator": "문서는 PDF 1-based page와 표/행/열 또는 section/line; 로그/설정은 JSON pointer 또는 1-based 행 범위. locator는 사람 확인이 필수이며 native 구조 자동 파싱하지 않음.",
+    "mapping": "evidence.field_paths binds claim; absent/mismatched binding/confirmed=false -> effective unknown. Invalid reference ID, referenced file missing/hash mismatch -> validation rejected.",
+    "raw_unit": "metric.definition.unit is canonical fraction only when explicit score unit or cited metric definition supports it; unknown unit never inferred from numeric size.",
+    "identity": "source_id and immutable revision both required; git/content_addressed never interchangeable; equality is declared identity not verified loaded bytes.",
+    "manifest_id": "reported/actual manifest IDs must differ; changed content requires new version by workflow. Each audit records exact input digests; no signed history or automatic detection of edits to an unavailable previous version is claimed."
+  },
+  "payload_types": {
+    "sample_index": {
+      "shape": "ordered JSON array of {id:nonempty_string,record_sha256:sha256}; unique ids; nonempty for data; fewshot may empty only with count=0 gate",
+      "hash": "canonical entire array; list order preserved",
+      "cross_checks": "data length == data.sample_count; fewshot length == fewshot.count; record hashes are imported statements, not independently verified source records"
+    },
+    "task_config": {
+      "shape": {
+        "task_name": "nonempty_string",
+        "task_revision": "revision",
+        "config": "json_object"
+      },
+      "hash": "canonical entire object; source mapping human-confirmed; no YAML/Jinja execution"
+    },
+    "prompt_spec": {
+      "shape": {
+        "template": "string",
+        "system_instruction": "string",
+        "preprocess": "nonempty_string",
+        "tokenization": "nonempty_string"
+      },
+      "hash": "canonical entire object; exact strings; no strip/Unicode normalization or tokenizer execution"
+    },
+    "scoring_spec": {
+      "shape": {
+        "output_type": "literal loglikelihood",
+        "choice_scoring": "nonempty_string",
+        "length_normalization": "nonempty_string",
+        "tie_break": "nonempty_string",
+        "aggregation": "literal mean_sample_accuracy"
+      },
+      "hash": "canonical entire object; describes imported semantics, no evaluation code"
+    },
+    "utf8_text": {
+      "shape": "UTF-8 file bytes",
+      "hash": "SHA-256 raw bytes; no newline normalization"
+    }
+  },
+  "digest_policy": {
+    "algorithm": "SHA-256 lowercase hex",
+    "canonical_json": "UTF-8; sorted object keys; compact separators; ensure_ascii=false; finite JSON only; no Unicode normalization; preserve arrays; decimal score values remain strings",
+    "source_digest": "hash exact bytes read once; source digest and canonical payload digest distinct",
+    "field_digest": "digest fields need matching payload_ref type and recomputed payload digest; missing payload or unresolved revision inside an otherwise well-typed payload -> effective unknown (e.g. unresolved task_revision); supplied malformed/incorrect digest or invalid payload schema -> rejected",
+    "case_input_digest": "canonical {case,reported,actual,evidence}; excludes no fields",
+    "no_proof": "형식/해시/목록 일치는 진짜 평가 수행·원문 진실·실제 source record bytes 동일성의 독립 증명이 아님"
+  },
+  "profile_rules": {
+    "reported_anchors": {
+      "task.name": "hellaswag",
+      "metric.definition.name": "acc",
+      "metric.definition.aggregation": "mean_sample_accuracy",
+      "metric.definition.unit": "fraction",
+      "evaluator.identity.source_id": "EleutherAI/lm-evaluation-harness"
+    },
+    "unsupported_reported": "known supported-evidence reported anchor contradicts profile -> validation rejected unsupported_profile; unknown anchor stays accepted but blocks; actual contradiction stays different",
+    "version": "no forced upstream commit or CPU preset; compare imported immutable evaluator revision exactly",
+    "generation": "no generation for this design profile; verified N/A only; known generation settings not supported. AC-015 deferred rather than pretending temperature affects acc."
+  },
+  "provenance_policy": {
+    "reported_usable": [
+      "human_confirmed_reported"
+    ],
+    "actual_usable": [
+      "imported_observed"
+    ],
+    "human_confirmed_reported": "reviewed paper or explicitly paper-linked immutable supplement; defaults/inference forbidden",
+    "imported_observed": "operator-confirmed mapping from existing local log/config to normalized field; artifact bytes+locator; NOT this tool observing runtime or verifying native schema semantics",
+    "manual_declaration": "retained claim but effective unknown; not upgraded by matching values",
+    "synthetic": "case recipes only; never usable evidence for a real case",
+    "trust_limit": "local evidence binding and human mapping; no signed/remote/independent execution proof"
+  },
+  "comparison_policy": {
+    "pair": "reported_vs_actual_only",
+    "semantic_fields": [
+      "model.identity",
+      "tokenizer.identity",
+      "data.identity",
+      "data.split",
+      "data.selection",
+      "data.sample_count",
+      "data.ordered_samples_digest",
+      "evaluator.identity",
+      "task.name",
+      "task.config_digest",
+      "prompt.spec_digest",
+      "chat.mode",
+      "chat.template_digest",
+      "fewshot.count",
+      "fewshot.examples_digest",
+      "random.seeds",
+      "scoring.spec_digest",
+      "metric.definition",
+      "numerics.spec",
+      "generation.config"
+    ],
+    "context_fields": [
+      "environment.hardware",
+      "environment.platform",
+      "environment.libraries",
+      "environment.execution"
+    ],
+    "validation_first": "rejected => comparison/imported_run/metric null; no normal status summary or partial comparison",
+    "field_rules": [
+      "unknown on either side -> unknown even same raw bytes/null",
+      "both usable known exact typed values -> equal or different",
+      "both verified same N/A gate -> not_applicable",
+      "verified applicable vs verified N/A -> different; unverified applicability -> unknown"
+    ],
+    "precedence": [
+      "blocked_mismatch",
+      "blocked_unknown",
+      "comparable"
+    ],
+    "overall_rules": "any semantic different => blocked_mismatch; else any semantic unknown => blocked_unknown; else comparable; preserve all blocking reasons",
+    "context": "field states reported separately as warnings; never enter overall; show context_incomplete/context_different",
+    "not_applicable": {
+      "chat.template_digest": {
+        "reason": "CHAT_DISABLED",
+        "requires": {
+          "chat.mode": "raw"
+        }
+      },
+      "fewshot.examples_digest": {
+        "reason": "ZERO_SHOT",
+        "requires": {
+          "fewshot.count": 0
+        }
+      },
+      "generation.config": {
+        "reason": "LL_NO_GENERATION",
+        "requires": {
+          "task.name": "hellaswag",
+          "scoring.spec_digest.payload.output_type": "loglikelihood"
+        }
+      }
+    },
+    "override": "none; notes do not change source values, policy or blocked states"
+  },
+  "imported_run_policy": {
+    "states": "enums.run",
+    "current_tool_execution": "always none",
+    "no_actual_or_no_usable_record": "effective state not_run; means no supported imported run record, not proof that no historic run happened",
+    "known_record": "claimed_state and imported_observed evidence of terminal record; operator-confirmed; no this-tool execution attestation",
+    "completed": "usable imported terminal completion plus processed_sample_count == usable actual data.sample_count. If count unknown -> not_run with incomplete_completion_evidence; if known contradictory count -> rejected inconsistent_completion",
+    "failed_cancelled": "preserve supported imported failed/cancelled; never compare partial score; no kill/signal handling in P0",
+    "unsupported_claim": "preserve claimed_state; effective not_run, unverified_imported_run diagnostic",
+    "integrity": "corrupt referenced artifact rejects entire audit; never invent effective failed from a corrupt file"
+  },
+  "metric_policy": {
+    "policy_id": "exact-display-v0.1",
+    "comparison_target": "imported displayed decimal values, not latent unrounded accuracy",
+    "absolute_tolerance_fraction": "0",
+    "relative_tolerance": null,
+    "user_override": false,
+    "posthoc_change": false,
+    "rounding_interval": false,
+    "allowed_units": [
+      "fraction",
+      "percent"
+    ],
+    "normalization": "explicit fraction unchanged; explicit percent divide by exactly 100; preserve raw value/unit/method; unknown unit blocks score; no heuristic conversion",
+    "score_domain": "fraction [0,1]; percent [0,100]; reject nonfinite/invalid domain/type",
+    "arithmetic": "decimal strings -> exact integer ratios with powers-of-ten denominators; no JSON float, no Decimal context rounding",
+    "within": "absolute exact rational delta <= 0",
+    "outside": "absolute exact rational delta > 0",
+    "rounding": "source_rounding recorded independently; rounded/not_reported warnings, never widening tolerance; exact-display equality only",
+    "gate": [
+      "validation accepted",
+      "overall comparable",
+      "effective imported run completed",
+      "both scores usable and finite",
+      "fixed policy exact-display-v0.1"
+    ],
+    "otherwise": "not_computed with reason; no delta/score success badge/leaderboard; raw scores may be reference only",
+    "scientific_verdict": "not_assessed; neither within nor outside establishes paper truth/reproduction/significance"
+  },
+  "input_artifacts": {
+    "case.json": "case",
+    "reported.json": "manifest role=reported",
+    "actual.json": "manifest+actual_manifest_extension role=actual OR null",
+    "evidence.json": "evidence_index",
+    "artifacts/": "operator supplied source and normalized payload files; never fetched automatically"
+  },
+  "output_artifacts": {
+    "accepted": [
+      "validation.json",
+      "report.json",
+      "report.html",
+      "inputs.canonical.json",
+      "artifact-index.json"
+    ],
+    "rejected": [
+      "validation.json"
+    ]
+  },
+  "output_records": {
+    "validation.json": {
+      "status": "enum:validation",
+      "errors": "array of {code, safe relative pointer}; no raw offending values",
+      "input_digest": "sha256 or null"
+    },
+    "report.json": {
+      "schema_id": "literal reprodiff.audit/v0.1",
+      "case_id": "nonempty_string",
+      "profile_id": "fixed profile",
+      "policy_id": "fixed policy",
+      "input_digest": "sha256",
+      "validation": "accepted",
+      "comparison": "{fields:all semantic paths -> field result,context:all context paths -> field result,overall,blocking_paths,warnings}",
+      "imported_run": "{claimed_state,effective_state,provenance,reason}",
+      "metric": "{state,reason,raw_reported,raw_actual,canonical_reported,canonical_actual,conversion_methods,source_rounding,absolute_delta_rational_or_null,tolerance_fraction:0}",
+      "scientific_verdict": "not_assessed",
+      "limitations": "provenance and context limitations always visible"
+    },
+    "field_result": "{status, left_state, right_state, adopted_left, adopted_right, evidence_refs, reason}; reference claims vs usable values separated",
+    "artifact-index.json": "relative output name/size_bytes/SHA-256 for validation/report/html/inputs; excludes itself (no circular digest). Input source digests in canonical evidence index.",
+    "inputs.canonical.json": "canonical normalized {case,reported,actual,evidence}; no raw source/log copy; safe relative paths only",
+    "report.html": "same states/reasons/policy/digests as JSON; no hidden positive badge; no execution/authentication claim"
+  },
+  "cli_proposal": [
+    {
+      "command": "reprodiff init --out ./case-001",
+      "effect": "new templates only; all fields unknown; fixed policy; no defaults pretending reported facts"
+    },
+    {
+      "command": "reprodiff audit --case ./case-001 --out ./audit-001",
+      "effect": "strict normalized import and fresh local-only report; no native format detection or execution"
+    }
+  ],
+  "exit_codes": {
+    "0": "accepted audit bundle including blocked/mismatch",
+    "2": "input/safety validation rejected",
+    "3": "I/O failure; no successful audit bundle"
+  },
+  "safety_policy": {
+    "input_boundary": "explicit case root; referenced files under artifacts only; all symlinks/path escapes forbidden; reject percent-encoded path instead of decoding/repair",
+    "output_boundary": "explicit new out root; no existing path or symlink parent; stage/rename atomic; clean incomplete new staging only; no overwrite option",
+    "no_execution": [
+      "no subprocess",
+      "no model/tokenizer",
+      "no downloads/network",
+      "no pickle/YAML/Jinja/Python execution",
+      "no credentials/environment enumeration"
+    ],
+    "html": "escape text; no scripts/events/remote resources/clickable external links. CSP default-src none; style-src unsafe-inline for fixed styles only.",
+    "secrets": "allowlisted fields only; reject secret/credential key names, PEM private key patterns, REPRODIFF_SYNTHETIC_SECRET_DO_NOT_EXPORT, absolute home paths. No raw log copy/export or raw value echo in errors. Provider must pre-sanitize evidence; arbitrary free-text secret detection is not guaranteed.",
+    "integrity": "read bytes once; verify source and supplied payload digests; reopening revalidates required artifacts, never reuse cached success"
+  },
+  "invariants": [
+    "invalid input never gets a normal comparison overall/run/metric",
+    "unknown never becomes equal; not_reported remains honest even when all score comparison is blocked",
+    "field status refers to usable evidence level, not raw claim similarity",
+    "semantic/context policies cannot be changed per case",
+    "same sample count does not mean same content or order",
+    "imported completed does not mean this tool executed, comparable, or reproduced",
+    "blocked/failed/cancelled/no usable score means metric not_computed",
+    "fixed exact display policy is never loosened after seeing results",
+    "no independent source/runtime/customer proof from structural checks or synthetic expectations"
+  ],
+  "p1_deferred": [
+    "runtime runner/approvals/cancellation/resource caps/runtime attestation",
+    "native result format adapters after actual compatibility check",
+    "multiple tasks/metrics/relative tolerance/rounding intervals/statistical tests",
+    "MLflow export and automated literature extraction"
+  ],
+  "rejected_for_v01": [
+    "custom MC4 benchmark/adapter",
+    "88-field universal strict environment fingerprint",
+    "universal tolerance maximum 0.01"
+  ],
+  "scope_boundary": "spec_complete only; independent_review_not_done; product_tests_not_run"
+}

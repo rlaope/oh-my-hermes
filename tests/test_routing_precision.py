@@ -56,7 +56,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # count of PRs with no breadth word add four (+4); a noun with 마다, an
         # interval and PR 하나 add three (+3).
         # Three science vocabulary controls remain direct answers.
-        self.assertEqual(payload["summary"]["case_count"], 1070)
+        self.assertEqual(payload["summary"]["case_count"], 1071)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -163,7 +163,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # said now runs as a graph (+3). Every deploy and every push stay, and
         # each service with 마다 runs as a graph (+3).
         # Three unnamed science requests render dedicated computation cards.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1083)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1084)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

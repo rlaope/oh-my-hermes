@@ -231,6 +231,7 @@ VISIBLE_ACTIONS = (
     "route_to_downstream_workflow",
     "show_acquisition_status",
     "prepare_learning_brief",
+    "prepare_repro_audit",
     "prepare_paper_learning",
     "choose_explanation_level",
     "show_paper_source_requirements",
@@ -679,6 +680,7 @@ _CONTEXT_PRIMER_GROUPS = (
 )
 _RETAINED_DELEGATION_SKILLS = set(retained_delegation_skill_names())
 _DIRECT_WORKFLOW_SKILLS = {
+    "repro-audit",
     "geospatial-analysis",
     "biomedical-evidence",
     "molecular-docking",
@@ -1104,6 +1106,7 @@ _ACK_PRIMARY_ACTIONS_BY_NEXT_ACTION = {
     "prepare_market_research": ("prepare_market_research", "Scope market analysis"),
     "prepare_source_finder_plan": ("prepare_source_finder_plan", "Prepare sources"),
     "prepare_learning_brief": ("prepare_learning_brief", "Confirm learning target"),
+    "prepare_repro_audit": ("prepare_repro_audit", "Prepare result audit"),
     "prepare_paper_learning": ("prepare_paper_learning", "Prepare paper learning"),
     "prepare_workspace_audit": ("prepare_workspace_audit", "Prepare audit"),
     "prepare_production_audit": ("prepare_production_audit", "Audit production"),
@@ -2070,6 +2073,17 @@ _DELIVERY_RUNTIME_CHAT_CARDS: dict[str, dict[str, object]] = {
 }
 
 _WORKFLOW_OPERATIONS_CHAT_CARDS: dict[str, dict[str, object]] = {
+    "repro-audit": {
+        "kind": "repro_audit",
+        "headline": "Compare existing evaluation records with reported conditions.",
+        "body": "Select acc or acc_norm and supply a local log. I can import selected claims and audit the conditions; human confirmation remains pending and no model runs.",
+        "phase": "repro_audit_prepared",
+        "next_action": "prepare_repro_audit",
+        "artifact_schema": "reprodiff.audit/v0.1",
+        "actions": [{"id": "prepare_repro_audit", "label": "Prepare result audit", "style": "primary"}],
+        "recommended_flow": ["select_metric", "import_selected_claims", "review_source_mapping", "audit_conditions"],
+        "evidence_not_observed": ["source review", "human confirmation", "completed evaluation", "scientific reproduction"],
+    },
     "automation-blueprint": {
         "kind": "automation_blueprint",
         "headline": "I can turn this into a scheduled ops blueprint.",

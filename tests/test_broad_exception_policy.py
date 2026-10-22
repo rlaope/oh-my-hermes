@@ -68,6 +68,10 @@ class ClassifiedSite(NamedTuple):
 
 CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ClassifiedSite(
+        "src/workflows/repro_audit/operations.py", "_publish", INTENTIONAL,
+        "Exclusive publication rolls back only invocation-owned staged files and re-raises the original failure; it never relabels a failed audit as success.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/dashboard/plugin_api.py",
         "hud_payload",
         INTENTIONAL,
@@ -659,8 +663,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # dag-ulw handoff read inside a Docker or SSH terminal (a failure keeps the host
 # check at define, and at settle accepts with the handoff not checked, never
 # a refusal and never a file taken as there).
-EXPECTED_HANDLER_COUNT = 68
-EXPECTED_ANCHOR_COUNT = 60
+
+# One adopted exclusive publisher rolls back owned staging and re-raises.
+EXPECTED_HANDLER_COUNT = 69
+EXPECTED_ANCHOR_COUNT = 61
 
 
 class DerivedSite(NamedTuple):

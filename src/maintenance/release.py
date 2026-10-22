@@ -177,7 +177,8 @@ CONCEPTUAL_AWARENESS_SURFACES = ("request-to-handoff", "executor selection", "co
 # 12801 -> 12883: one index line for the new `show-reel` skill; its name
 # and visible description window. Re-derived from the producer.
 # 12883 -> 13157: the three optional science skill index lines, producer measured.
-SKILL_INDEX_CHAR_LIMIT = 13157
+# 13157 -> 13241: one repro-audit index line, measured from the producer.
+SKILL_INDEX_CHAR_LIMIT = 13241
 # The longest single skill line in that index. Every description is already cut
 # to 60 characters, so what moves this is a longer skill name.
 SKILL_INDEX_LINE_CHAR_LIMIT = 100
@@ -797,9 +798,8 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 67130
 # 513064 -> 522236: three science catalog rows and procedure contracts, measured
 # from the merged producer with main's DAG handoff and review-method contracts.
 # No eager toolkit bytes or headroom are included.
-# 522236 -> 522329: shared adaptation-quality read rules and complete saved DAG
-# goal guidance, measured by release skill-content-smoke; procedure stays on demand.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 522329
+# Combined adaptation-quality guidance and result-audit row; skill-content-smoke measured exactly.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 525389
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
@@ -899,7 +899,8 @@ FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 137896 -> 138847: one standalone capability row for `show-reel` (+951).
 # Re-derived from the producer; no standing headroom is added.
 # 138847 -> 141700: three science method summaries, producer measured.
-STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 141700
+# 141700 -> 142629: one result-audit method summary, producer measured.
+STANDALONE_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 142629
 STANDALONE_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 2200
 # ULW fold context ceiling (issue #954, PR D). The limit is the pre-D measured
 # value of the full profile's `skill_body` chars on `main` @ acb9a060, in the

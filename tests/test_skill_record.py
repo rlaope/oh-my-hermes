@@ -52,7 +52,8 @@ class SkillRecordTests(unittest.TestCase):
         # spend-gate adds a `_SKILL_POLICIES` entry (+1 skill). dag-ulw takes its role's policy (+1 role).
         # market-research adds a `_SKILL_POLICIES` entry (+1 skill). show-reel adds one (+1 skill).
         # Three optional science methods each declare a curated policy.
-        self.assertEqual(counts, Counter({"skill": 122, "category": 27, "role": 9}))
+        # Repro-audit adds its own curated policy; remeasured from skill_records.
+        self.assertEqual(counts, Counter({"skill": 123, "category": 27, "role": 9}))
         self.assertEqual(counts["default"], 0)
 
     def test_next_action_label_is_the_action_copy_label(self) -> None:
