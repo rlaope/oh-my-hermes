@@ -1296,7 +1296,7 @@ class ContractTests(unittest.TestCase):
                 self.assertNotEqual(contract.call_problem("subagent.tail", params), "")
 
     def test_the_only_calls_that_act_on_a_subagent_are_the_two_the_boundary_names(self) -> None:
-        # AGENTS.md: `x` (interrupt, confirmed) and `s` (steer with typed text), each on a keypress in the list.
+        # docs/OMH-TUI-BOUNDARY.md: `x` (interrupt, confirmed) and `s` (steer with typed text), each on a keypress in the list.
         self.assertEqual(
             sorted(method for method in contract.CLIENT_METHODS if method.startswith("subagent.")),
             ["subagent.interrupt", "subagent.steer", "subagent.tail"],

@@ -1,50 +1,45 @@
 # CLAUDE.md
 
-Practical Claude Code guidance for this repo. Product direction, delivery
-grain, PR report style, evidence boundaries, and commit trailers are defined in
-`AGENTS.md` and `docs/DIRECTION.md` — read those first; this file does not
-repeat them. `CONTEXT.md` is the glossary for the OMH ↔ Hermes Agent boundary
-(which product owns which surface, state root, and TUI); use its terms before
-reasoning about anything that touches Hermes Agent.
+The engineering manual for this repo: commands, gates, generated artifacts,
+and the pitfalls that have cost real time. It applies to every executor
+(Codex, Claude Code, Hermes handoffs, generic profiles), not only Claude Code.
+`AGENTS.md` is the operating contract (product boundaries, delivery grain, PR
+reports, commit trailers); read it first. `CONTEXT.md` is the glossary for the
+OMH ↔ Hermes Agent boundary; use its terms before reasoning about anything
+that touches Hermes. `docs/DIRECTION.md` is product direction.
 
 ## What This Repo Is
 
 oh-my-hermes (OMH) is a Hermes-native wrapper orchestration layer: a
 deterministic skill catalog, router, and prepared-handoff generator installed
-next to Hermes Agent. Core `omh` code makes no LLM, API, or network calls and
-never patches Hermes. Pure Python 3.11+, zero runtime dependencies. Four scoped
-exceptions. `omh coding fanout dispatch` (explicit opt-in) spawns local agent
-CLIs as subprocesses — those CLIs make their own network calls; omh itself
-makes none there, and nothing executes without that explicit command. The
-`omh_jev_ask` plugin tool is the one place core OMH itself opens a connection: it
-POSTs typed questions to Jev (TypeSafe, or OpenRouter only with the operator
-setting in `<omh_home>/jev/settings.json`) with the user's own key, only when
-the user named Jev in that turn and a key resolves. Stdlib only, HTTPS only, a
-fixed two-host route table, redirects refused;
-`src/plugin_bundle/omh/jev_ask_client.py` is the only in-process network
-client in `src/`, pinned by INVARIANT 2's `NETWORK_CLIENT_BRIDGES`. Third-party Jev
-plugins are still never called. The `show-reel` skill's opt-in toolkit scripts
-`toolkit/scripts/eleven.py`, `narrate.py` (ElevenLabs, by spawning `curl` with
-the key on stdin) and `codex_ref_image.sh` (the user's codex CLI) are package
-data the user runs themselves with their own `ELEVENLABS_API_KEY` or codex
-login; OMH never imports or executes them, they refuse with exit 2 without
-the credential, and `eleven.py` is pinned in INVARIANT 1's
-`PROCESS_SPAWN_ALLOWLIST`. The OMH TUI's gateway child,
-`src/tui/attach/gateway_attach.py`, is not core: it runs only on Hermes' own
-interpreter as the child the TUI spawns by path, and nothing in `src/` imports
-it. On a Hermes with the shared-gateway attach API it reaches the person's own
-gateway over loopback the way Hermes' Ink TUI does, through Hermes' functions
-and Hermes' `websockets` client; INVARIANT 2's `HERMES_INTERPRETER_SCRIPTS`
-holds it to a closed list of every import and name it may use, measured from
-the script (owner-approved as asyncio + websockets only, loopback), plus name
-flows: one `AttachApi`, built in `attach_api()` with its own nested `grant`;
-`connect` only in its `dial` slot; `dial` called only on the `attach_api()`
-result, with the url that object's `grant()` returned and the literal
-`proxy=None`; private attributes only on `self` in the script's own methods;
-and `os.environ` written only as the `TERMINAL_CWD` set-and-restore and the
-removal of `LAUNCH_POLICY_ENV`, pinned to its literal tuple and bound nowhere else. It is not a sandbox: an allowed
-Hermes function called with other arguments, and where the grant's url points,
-are beyond it.
+next to Hermes Agent. Pure Python 3.11+, zero runtime dependencies. Core `omh`
+makes no LLM, API, or network call and never patches Hermes. The scoped
+exceptions, stated in full under Implementation Boundaries in `AGENTS.md` and
+held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
+
+- `omh coding fanout dispatch` (and its `omh coding run` entry): explicit
+  opt-in; spawns local agent CLIs, which make their own network calls. Nothing
+  runs without that command.
+- `omh_jev_ask`: POSTs typed questions to Jev with the user's own key, only
+  when the user named Jev in that turn and a key resolves (TypeSafe, or
+  OpenRouter only with the operator setting in `<omh_home>/jev/settings.json`).
+  Stdlib, HTTPS only, a fixed two-host route table, redirects refused.
+  `src/plugin_bundle/omh/jev_ask_client.py` is the only in-process network
+  client in `src/`, pinned by INVARIANT 2's `NETWORK_CLIENT_BRIDGES`.
+  Third-party Jev plugins are never called.
+- The `show-reel` toolkit scripts `toolkit/scripts/eleven.py`, `narrate.py`
+  (ElevenLabs, by spawning `curl` with the key on stdin) and
+  `codex_ref_image.sh` (the user's codex CLI): package data the user runs with
+  their own `ELEVENLABS_API_KEY` or codex login. OMH never imports or runs
+  them; without the credential they exit 2. `eleven.py` is in INVARIANT 1's
+  `PROCESS_SPAWN_ALLOWLIST`.
+- The OMH TUI's gateway child, `src/tui/attach/gateway_attach.py`: not core.
+  It runs only on Hermes' interpreter, spawned by path, imported by nothing in
+  `src/`, and reaches the person's own gateway over loopback as Hermes' Ink TUI
+  does. INVARIANT 2's `HERMES_INTERPRETER_SCRIPTS` holds it to a closed allow
+  list of imports, names and name flows measured from the script. It is not a
+  sandbox: an allowed Hermes function called with other arguments, and where
+  the grant's url points, are beyond it.
 
 ## Build & Test
 
@@ -54,160 +49,130 @@ PYTHONPATH=tests uv run python -m unittest tests/test_cli.py -v   # one file
 uv run python -m compileall -q src tests                          # syntax gate
 uv run python -m omh.cli docs workflows --check                   # byte gate
 uv run python -m omh.cli docs roles --check                       # byte gate
-uv run python -m omh.cli docs claims --check --json               # selected claims
+uv run python -m omh.cli docs agent-skills --check                # byte gate
+uv run python -m omh.cli docs capability-families --check         # byte gate
+uv run python -m omh.cli docs skill-shortlist --check             # byte gate
+uv run python -m omh.cli docs ulw-inventory --check               # byte gate
+uv run python -m omh.cli docs ulw-site --check                    # byte gate
 uv run python -m omh.cli docs chain-table --check                 # byte gate
 uv run python -m omh.cli docs navigation --check                  # docs structure gate
-uv run python -m omh.cli docs skill-shortlist --check             # byte gate
 uv run python -m omh.cli docs skill-sources --check               # watch-closure gate
-uv run --group lint ruff check src tests                          # static-analysis gate
-git diff --check
+uv run python -m omh.cli docs claims --check --json               # selected claims (local only)
+uv run python tools/render_skill_pack.py --check                  # tap pack (unit tests in CI)
+uv run --group lint ruff check src tests tools packaging          # static analysis, as CI runs it
+git diff --check origin/main...HEAD                               # whitespace, as CI runs it
 ```
 
-- Always set `PYTHONPATH=tests` for unittest; test helpers live at tests root.
-- Run the smallest test that proves your claim, then broaden if the touched
-  surface is shared. Full suite before claiming done.
-- `uv run --group lint ruff check src tests` installs the pinned Ruff version
-  from the `lint` dependency group (declared in `pyproject.toml`) into the
-  project's `uv`-managed environment — no globally installed `ruff` needed.
-  CI runs the identical command as its own step. The initial rule set is
-  Pyflakes (`F`) only, scoped narrow to stay actionable on a ~135k LOC repo;
-  see the `[tool.ruff]` block in `pyproject.toml` for the per-file re-export
-  exclusions and the deliberately-not-yet-enforced broad-exception
-  (`BLE001`) policy, owned by issue #652.
-- That broad-exception policy is a gate, not a comment.
-  `tests/test_broad_exception_policy.py` re-derives every broad `except` site
-  in `src/` from source and fails when one is not classified as either
-  intentional (the failure is classified and surfaced) or needing the #637
-  treatment (the failure is relabeled as a normal result). Add the verdict in
-  that file when you add a broad `except`; do not record hit counts or line
-  numbers in prose, they drift.
+- Always set `PYTHONPATH=tests` for unittest; shared helpers (`_cli_harness`
+  and friends) live at the tests root and fail to import with confusing
+  errors without it.
+- Run the smallest test that proves the claim, broaden when the touched
+  surface is shared, and run the full suite before claiming done.
+- Ruff installs from the `lint` group in `pyproject.toml`; no global `ruff`.
+  The rule set is Pyflakes (`F`) only; `[tool.ruff]` holds the per-file
+  re-export exclusions.
+- The broad-exception (`BLE001`) policy is a gate, not a comment, owned by
+  issue #652. `tests/test_broad_exception_policy.py` re-derives every broad
+  `except` in `src/` and fails when one is not classified as intentional (the
+  failure is classified and surfaced) or as needing the #637 treatment (the
+  failure is relabeled as a normal result). Add the verdict there when you add
+  a broad `except`.
 
 ## Generated Artifacts Map
 
-Source of truth → generated file → regen command → drift gate:
+Never hand-edit a generated file or marked region. Edit the source,
+regenerate, and commit source and output together. Every gate is byte-exact:
+one character of drift fails CI. After any catalog or render change, rerun
+every gate above, and regenerate every family in this table that reads the
+changed source.
 
 | Source | Generated | Regenerate | Gate |
 | --- | --- | --- | --- |
-| `src/skills/skill_record.py` (`SkillRecord` over catalog/render producers) plus the closed `builtin_skill_support_templates()` inventory and canonical toolkit resources | `skills/*/SKILL.md`, `skills/*/references/*.md`, declared `skills/omh-*/toolkit/**` | `uv run python tools/render_skill_pack.py --write` (`--refresh-provenance` refreshes only audited show-reel resources; domains deliver validated provenance) | `uv run python tools/render_skill_pack.py --check`; tap-skills byte gate in `docs workflows --check` |
-| Canonical toolkit resources + `provenance_manifest()` | `src/skills/show_reel_toolkit/upstream-manifest.json` (self-hash excluded) | `uv run python tools/render_skill_pack.py --write --refresh-provenance` | closed producer digest validation and support/distribution tests; outer inventories hash the provenance file |
-| Same catalog data | `docs/WORKFLOWS.md` | `uv run python -m omh.cli docs workflows --output docs/WORKFLOWS.md` | `uv run python -m omh.cli docs workflows --check` |
-| Same catalog data | `docs/ROLES.md` | `uv run python -m omh.cli docs roles --output docs/ROLES.md` | `uv run python -m omh.cli docs roles --check` |
+| `src/skills/skill_record.py` (`SkillRecord` over the catalog/render producers) plus the closed `builtin_skill_support_templates()` inventory and canonical toolkit resources | `skills/*/SKILL.md`, `skills/*/references/*.md`, declared `skills/omh-*/toolkit/**` | `uv run python tools/render_skill_pack.py --write` | `tools/render_skill_pack.py --check`; tap-skills byte gate in `docs workflows --check` |
+| Canonical show-reel toolkit resources + `provenance_manifest()` | `src/skills/show_reel_toolkit/upstream-manifest.json` (self-hash excluded) | `uv run python tools/render_skill_pack.py --write --refresh-provenance` (show-reel only; the domain toolkits' provenance is producer-validated) | producer digest validation and the support/distribution tests |
+| Same catalog data | `docs/WORKFLOWS.md` | `uv run python -m omh.cli docs workflows --output docs/WORKFLOWS.md` | `docs workflows --check` |
+| `roles_reference_markdown()` in `src/catalogs/roles.py` | `docs/ROLES.md` | `uv run python -m omh.cli docs roles --output docs/ROLES.md` | `docs roles --check` |
+| `agent_skill_files()` / `agent_skills_manifest()` over the catalog, portable and reviewed support producers | `agent-skills/**`, `agent-skills/.omh-agent-skills-manifest.json`, the host adapters (`manifest.json` and installers under `.claude/`, `.codex/`, `.cursor/` and the other host directories) | `uv run python -m omh.cli docs agent-skills` | `docs agent-skills --check`; never copy digest maps into an adapter |
 | Demo case engine | `examples/use-cases/g1-g10-demo-cards.json` | `uv run python -m omh.cli cases demo --all --json` output | parse-equality in `tests/test_application_cases.py` |
-| `capability_family_projection()` in `src/capabilities/families.py` | `src/plugin_bundle/omh/tools/capability_families.json` | `uv run python -m omh.cli docs capability-families` | `uv run python -m omh.cli docs capability-families --check`; dict-parity in `tests/test_plugin_capabilities.py` |
-| `src/routing/lexical_shortlist.py` index via `standalone_skill_shortlist_json()` in `src/routing/skill_shortlist_sidecar.py` | `src/plugin_bundle/omh/tools/skill_shortlist.json` | `uv run python -m omh.cli docs skill-shortlist` | `uv run python -m omh.cli docs skill-shortlist --check`; ranking parity in `tests/test_skill_shortlist_sidecar.py` |
-| `ulw_inventory_payload()` in `src/skills/catalog.py` via `src/catalogs/ulw_surfaces.py` | marked ULW region of `README.md` | `uv run python -m omh.cli docs ulw-inventory` | `uv run python -m omh.cli docs ulw-inventory --check`; `tests/test_ulw_inventory.py` |
-| Same producer | marked ULW region of `site/index.html` | `uv run python -m omh.cli docs ulw-site` | `uv run python -m omh.cli docs ulw-site --check`; i18n parity in `tests/test_ulw_inventory.py` |
-| `SHIPPED_MODEL_RECOMMENDATIONS` in `src/coding/model_recommendations.py` via `src/catalogs/model_chain_table.py` | marked chain-table region of `docs/INSTALLATION.md` | `uv run python -m omh.cli docs chain-table` | `uv run python -m omh.cli docs chain-table --check`; round-trip equality in `tests/test_model_chain_table.py` |
-| `agent_skill_files()` and `agent_skills_manifest()` over the catalog/portable/references and reviewed support producers | `agent-skills/**`, one `agent-skills/.omh-agent-skills-manifest.json`, six host adapters | `uv run python -m omh.cli docs agent-skills` | `uv run python -m omh.cli docs agent-skills --check`; never per-host copied digest maps |
+| `capability_family_projection()` in `src/capabilities/families.py` | `src/plugin_bundle/omh/tools/capability_families.json` | `uv run python -m omh.cli docs capability-families` | `docs capability-families --check`; dict parity in `tests/test_plugin_capabilities.py` |
+| `src/routing/lexical_shortlist.py` via `standalone_skill_shortlist_json()` in `src/routing/skill_shortlist_sidecar.py` | `src/plugin_bundle/omh/tools/skill_shortlist.json` | `uv run python -m omh.cli docs skill-shortlist` | `docs skill-shortlist --check`; ranking parity in `tests/test_skill_shortlist_sidecar.py` |
+| `ulw_inventory_payload()` in `src/skills/catalog.py` via `src/catalogs/ulw_surfaces.py` | marked ULW region of `README.md` | `uv run python -m omh.cli docs ulw-inventory` | `docs ulw-inventory --check`; `tests/test_ulw_inventory.py` |
+| Same producer | marked ULW region of `site/index.html` | `uv run python -m omh.cli docs ulw-site` | `docs ulw-site --check`; i18n parity in `tests/test_ulw_inventory.py` |
+| `SHIPPED_MODEL_RECOMMENDATIONS` in `src/coding/model_recommendations.py` via `src/catalogs/model_chain_table.py` | marked chain-table region of `docs/INSTALLATION.md` (the public chain table; the READMEs link to it) | `uv run python -m omh.cli docs chain-table` | `docs chain-table --check`; round-trip equality in `tests/test_model_chain_table.py` |
 
-Rules:
-
-- Never hand-edit `agent-skills/*/SKILL.md` or its references; regenerate the portable target without changing the Hermes projection.
-- A skill's read path is `skill_record(name)`; new per-skill metadata is a field on the record, not a new module.
-- Never hand-edit `skills/*/SKILL.md`, `docs/WORKFLOWS.md`, `docs/ROLES.md`, the
-  demo-cards JSON, or a marked region (ULW in `README.md` / `site/index.html`,
-  the shipped chain table in `docs/INSTALLATION.md`). Edit the catalog/render
-  source, regenerate, commit both.
-- A model generation that leaves or joins a shipped chain needs
-  `docs chain-table` rerun; a NEW mixture category also needs a
-  `CHAIN_SURFACE_PURPOSES` entry in `src/catalogs/model_chain_table.py`, and a
-  new model alias a `MODEL_DISPLAY_LABELS` entry. Both raise with the key to
-  add — the public table cannot stay silent about a shipped chain.
-- After any catalog or render change, rerun every `--check` gate before commit.
-- The gates are byte-exact comparisons. A one-character drift fails CI.
+- A skill's read path is `skill_record(name)`; new per-skill metadata is a
+  field on the record, not a new module.
+- A model that joins or leaves a shipped chain needs `docs chain-table`
+  rerun. A new mixture category also needs a `CHAIN_SURFACE_PURPOSES` entry
+  in `src/catalogs/model_chain_table.py`, and a new alias a
+  `MODEL_DISPLAY_LABELS` entry; the renderer raises with the key to add. The
+  hand-maintained chain rows in `site/index.html` and
+  `site/docs/model-routing/index.html` move too (`docs/MODEL-ONBOARDING.md`,
+  `/model-onboarding`).
+- The drift gates do not notice a skill BODY change: a real edit moves the
+  producer and its output together, so every gate stays green. What fires is
+  the pinned sha256 per body in
+  `tests/fixtures/agent_skills_hermes_digests.json`, through
+  `test_hermes_projection_byte_stable`, which names the bodies that moved.
+  Re-derive that fixture in the same commit, sorted-key, and check the named
+  list is the set you meant to change.
 
 ## Code Conventions
 
 - Small explicit Python functions and data structures. No clever string
-  parsing. No new dependencies without explicit user approval.
+  parsing. No new dependency without the user's explicit approval.
 - Routing lives in `src/routing/` (`chat.py` is the main router). Match on
-  normalized phrases or token sets via the existing helpers
-  (`normalized_phrase`, `routing_tokens`, `contains_cue_phrase`) — do not add
-  raw substring checks. Phrase triggers for multi-word intents; token triggers
-  only when a single token is unambiguous.
+  normalized phrases or token sets through `normalized_phrase`,
+  `routing_tokens` and `contains_cue_phrase`, never raw substring checks.
+  Phrase triggers for multi-word intents; a token trigger only when the token
+  alone is unambiguous.
 - A multi-word trigger is also scored as its separate tokens, so a phrase
   built from everyday words widens the skill far beyond the phrase. Before
-  shipping one, route a sentence that contains the generic word in an
-  unrelated sense and compare the score against `origin/main`; if it moved a
-  clarify into a dispatch, hold the word back in
-  `_WHOLE_PHRASE_ONLY_TRIGGER_TOKENS` (`src/routing/recommend.py`) so only the
-  complete phrase scores, and pin it with a negative case.
-- Guard patterns: routing and policy changes ship with negative cases
-  alongside positive cases. Adding a trigger without a negative case is
-  incomplete. Both corpora live in `src/quality/routing_precision.py` and each
-  has a name worth searching for: `ROUTING_PRECISION_CASES` is the
-  negative-control corpus and its failure metric is `overroute_count`;
-  `ROUTING_INTERVENTION_CASES` is the positive-intervention corpus and its
-  failure metric is `missed_intervention_count`. Grepping for "underroute"
-  finds nothing — the guard exists under the intervention name.
+  shipping one, route a sentence that uses the generic word in an unrelated
+  sense and compare the score against `origin/main`. If it moved a clarify
+  into a dispatch, hold the word in `_WHOLE_PHRASE_ONLY_TRIGGER_TOKENS`
+  (`src/routing/recommend.py`) and pin it with a negative case.
+- Routing and policy changes ship negative cases beside positive ones; a
+  trigger without a negative case is incomplete. Both corpora live in
+  `src/quality/routing_precision.py`: `ROUTING_PRECISION_CASES` (negative
+  controls, failure metric `overroute_count`) and `ROUTING_INTERVENTION_CASES`
+  (positive interventions, failure metric `missed_intervention_count`).
+  Searching for "underroute" finds nothing.
 - Tests are contracts. The routing corpus totals have reviewed pins in two
-  places only: the two `expected=` values in `src/maintenance/drift.py` (each
-  with its reason history) and the `case_count` / `intervention_case_count`
-  literals at the top of `tests/test_routing_precision.py`. Update both in the
-  commit that adds a routing case — they are the point, not noise. Every other
-  test compares its payload, and its rendered `NNN/NNN` string, against
-  `build_routing_precision_demo()`, so it needs no edit. The counts that
-  `count_metrics()` in `src/maintenance/drift.py` registers are still literal,
-  and it lists every site that hardcodes each one. Never quote a count in
-  prose: it drifts and sends you looking for a string that no longer exists.
-- English for code, docs, commits, and PR text — and for all user-facing CLI
-  output by default. Localized output (ko/ja/zh) is explicit opt-in via
-  `--language` or `OMH_LANG` only; never auto-detect the OS locale. Korean-only
-  surfaces shrink the audience to Korean users.
+  places only, updated in the commit that adds a case: the two `expected=`
+  values in `src/maintenance/drift.py` (each with its reason history) and the
+  `case_count` / `intervention_case_count` literals at the top of
+  `tests/test_routing_precision.py`. `omh release drift` names the pins that
+  moved. Every other test compares against `build_routing_precision_demo()`
+  and needs no edit. The literal counts `count_metrics()` in
+  `src/maintenance/drift.py` registers list every site that hardcodes each
+  one; a new skill moves those. Never quote a count, line number or hit count
+  in prose: it drifts and sends the next reader after a string that no
+  longer exists.
 
 ## Workflow Rules
 
+Delivery grain, branch names, commit trailers, PR bodies and evidence
+language are in `AGENTS.md`. Two rules live here:
+
 - A report that something is broken is not yet repo work. Measure which fault
-  domain owns it first — see Fault domains in `CONTEXT.md` for the four domains
-  and the command that proves each. Only one of them produces a PR.
-- One user goal → one PR. Do not frame partial slices; see Delivery Grain in
-  `AGENTS.md` for the only valid split reasons.
-- Branch before the first edit, named by the kind of change, never by the
-  executor: `feature/<topic>` for a capability, `fix/<topic>` for a defect,
-  `omh/<topic>` for everything else (docs, release, maintenance). See Git And
-  Commits in `AGENTS.md`.
-- Every commit needs DCO `Signed-off-by:` plus the Lore-style trailers listed
-  in `AGENTS.md` (Constraint / Rejected / Confidence / Scope-risk / Directive /
-  Tested / Not-tested).
-- PR bodies follow the repo template: capability, motivation, boundary-level
-  implementation, observed verification, risks. Never a one-line changelog.
-- Report only observed evidence. `prepared_not_observed` is never execution,
-  review, CI, or merge evidence.
-- Never revert or clean up unrelated dirty files; report them instead.
-- Reflecting merged changes onto a live machine goes through `omh update`
-  (plus a TUI restart), never by hand-copying files into `~/.hermes/plugins/`
-  or `~/.hermes/tui-widgets/`. Hand-copied artifacts drift from the install
-  manifests and make later updates refuse or require `--force`.
+  domain owns it first (Fault domains in `CONTEXT.md` names the four and the
+  command that proves each); only the OMH product fault produces a PR.
+- Merged changes reach a live machine only through `omh update` (plus a TUI
+  restart), never by hand-copying into `~/.hermes/plugins/` or other host
+  roots. Hand-copied files drift from the install manifests and make later
+  updates refuse or need `--force`.
 
 ## Common Pitfalls
 
-- Adding a new installable skill involves more than `catalog.py` — awareness
-  lane + context card, ack/label/card coverage, and the generated
-  capability-family sidecar. Follow `docs/ADDING-A-SKILL.md`; the coverage
-  gates fail with paste-ready instructions when a surface is missed.
-- Hand-editing a generated `skills/*/SKILL.md` — the change is silently lost on
-  regeneration and fails the byte gates. Edit `src/skills/catalog.py` /
-  `render.py` instead.
-- Expecting a `docs ... --check` gate to notice a skill BODY change. Those are
-  drift gates: they compare a producer against its generated file, and a real
-  body edit moves both, so all ten stay green. The pinned sha256 per body in
-  `tests/fixtures/agent_skills_hermes_digests.json` is what fires, through
-  `test_hermes_projection_byte_stable`, and its failure names the bodies that
-  moved. Re-derive that fixture in the same commit as the edit, sorted-key,
-  and check the named list is the set you meant to change.
-- Adding a routing fixture without moving the reviewed pins — breaks
-  `tests/test_routing_precision.py` and `tests/test_drift_registry.py`. A new
-  case moves one `expected=` value in `src/maintenance/drift.py` (the
-  negative-control or the intervention one) and the matching literal in
-  `tests/test_routing_precision.py`;
-  `omh release drift` names the ones that moved. A new skill still moves the
-  literal counts the drift registry lists for it.
-- Resolving a routing-count rebase conflict by picking a side. Those two
-  files conflict whenever main added a case while your branch was open, and
-  neither side is right: upstream's baseline moved and your delta still has to
-  land on top of it. Keep whichever side carries your reason comments, then
-  re-derive every number from the producer rather than doing the arithmetic by
-  hand:
+- **A new skill is more than `catalog.py`**: awareness lane and context card,
+  ack/label/card coverage, and the capability-family sidecar. Follow
+  `docs/ADDING-A-SKILL.md`; the coverage gates fail with paste-ready
+  instructions when a surface is missed.
+- **A routing-count rebase conflict is never resolved by picking a side.**
+  Upstream's baseline moved and your delta lands on top of it. Keep the side
+  carrying your reason comments, then re-derive every number from the
+  producer:
 
   ```py
   from omh.quality.routing_precision import build_routing_precision_demo, routing_precision_errors
@@ -216,184 +181,113 @@ Rules:
   print(routing_precision_errors(payload))  # must be []
   ```
 
-  Confirm with `drift_report()["ok"]` before continuing the rebase. Adjacent
-  budgets can fire in the same change and are raised the same way, with the
-  reason written at the entry: the per-skill Hangul freeze in
-  `tests/test_routing_language_policy.py` and the zero-slack ratchets in
-  `src/maintenance/release.py` (the per-request index, schema, and
-  `pre_llm_call` limits). `FULL_PROFILE_SKILL_BODY_CHAR_LIMIT` and
+  Confirm `drift_report()["ok"]` before continuing. Adjacent budgets fire the
+  same way and are raised with the reason written at the entry: the per-skill
+  Hangul freeze in `tests/test_routing_language_policy.py` and the zero-slack
+  ratchets in `src/maintenance/release.py` (per-request index, schema,
+  `pre_llm_call`). `FULL_PROFILE_SKILL_BODY_CHAR_LIMIT` and
   `FULL_PROFILE_SKILL_BODY_REPEATED_CHAR_LIMIT` are ceilings with headroom,
-  not ratchets: re-derive them from the producer by the policy written beside
-  them, and only when a test says to.
-- Advancing `reviewed_ref` in `docs/SKILL-SOURCES.md` without appending the
-  closure receipt, or landing the skill change and leaving the row behind.
-  `docs skill-sources --check` fails either half by name
-  (`closure_receipt_missing`, `closure_checkpoint_missing`) because a row that
-  did not move makes the next tracker run re-evaluate a range already reviewed.
-  The receipt schema, the reason codes, and the baseline enrolment for rows
-  that predate the contract are in the Closure receipts section of
-  `docs/SKILL-SOURCES.md`.
-- Adding a page under `docs/` and stopping there. `docs navigation --check`
-  requires every top-level `docs/*.md` to be reachable from a declared root or
-  classified in `src/catalogs/documentation_navigation.py` with a reason and an
-  owner; a page that is neither fails, which is the whole point — an accidental
-  orphan must not pass as an intentional one. Link it from a page a reader
-  actually reaches before reaching for the classification list, and delete the
-  classification entry when a page later becomes reachable (a reachable page
-  still marked exempt is its own failure).
-- Adding a module-level `omh.*` import to a file under `src/plugin_bundle/omh/`.
-  Hermes loads that directory with its own interpreter, which has no reason to
-  have the `omh` package on its path; its memory-provider loader also execs
-  every top-level file eagerly and keeps the half-initialized module in
-  `sys.modules` when one raises. The next lazy import of that module then fails
-  on the NAME, with an `ImportError` carrying the bundle's own dotted path
-  rather than `omh`, so a guard written for `ModuleNotFoundError` with an
-  `omh`-prefixed name check re-raises it — on every tool call (#1623). Either
-  vendor what the module needs into the bundle, or guard the import and report
-  the absence at the feature's own entry point.
-  `tests/test_plugin_bundle_standalone.py` imports every module in that
-  directory with `omh` blocked and derives its subject from the directory, so a
-  new module joins the gate without anyone listing it.
-- Grepping the repo and matching stale strings under `build/lib/` — it is a
-  gitignored copy of old sources. Scope searches to `src/`, `tests/`, `docs/`,
-  `skills/`.
-- Letting an exit code report success over work that failed. On 2026-09-11
-  every unit of a dispatch failed on a provider session limit and
-  `omh coding fanout dispatch` exited `0`, so a wrapper reading only the status
-  was told the batch succeeded. The mapper had a case for a refusal, with a
-  docstring saying a shell that only checks the status must not read "nothing
-  was dispatched" as success — the sentence was right and had been applied to
-  only one of the ways work fails to happen.
-  `tests/test_exit_code_truthfulness_policy.py` now re-derives every
+  not ratchets: re-derive them by the policy written beside them, only when a
+  test says to.
+- **`reviewed_ref` in `docs/SKILL-SOURCES.md` moves with its closure
+  receipt.** `docs skill-sources --check` fails either half by name
+  (`closure_receipt_missing`, `closure_checkpoint_missing`), because a row
+  that did not move makes the next tracker run re-review the same range. The
+  schema and reason codes are in its Closure receipts section.
+- **A new `docs/*.md` page must be reachable.** `docs navigation --check`
+  requires every top-level page to be linked from a declared root or
+  classified in `src/catalogs/documentation_navigation.py` with a reason and
+  an owner. Link it from a page readers reach first; delete the
+  classification when a page becomes reachable (reachable and exempt is its
+  own failure).
+- **No module-level `omh.*` import under `src/plugin_bundle/omh/`.** Hermes
+  loads that directory on its own interpreter, where `omh` may be absent, and
+  its memory-provider loader execs every top-level file and keeps a
+  half-initialized module in `sys.modules`. The next import then fails on the
+  NAME, with an `ImportError` carrying the bundle's dotted path, which a
+  `ModuleNotFoundError` guard checking for an `omh` prefix re-raises on every
+  tool call (#1623). Vendor what the module needs, or guard the import and
+  report the absence at the feature's entry point.
+  `tests/test_plugin_bundle_standalone.py` imports every module there with
+  `omh` blocked.
+- **Spawn `python -m omh.cli` (or `-c "import omh.cli"`) with `-P`.** The repo
+  root ships an `omh/` shim, so a spawn from inside a checkout imports the
+  checkout instead of the installed generation.
+  `tests/test_interpreter_spawn_policy.py` fails on a spawn in `src/` without
+  it; route new spawns through `_omh_cli()` in `src/install/self_update.py`.
+- **An exit code may not call failure success.** A dispatch whose every unit
+  failed on a provider limit once exited `0`.
+  `tests/test_exit_code_truthfulness_policy.py` re-derives every
   `*_exit_code` mapper under `src/commands/` and fails when one maps a summary
-  carrying a failure signal to `0`. It says nothing about which code to return,
-  so a new command keeps its own vocabulary and its own recoverable lane; it
-  only may not call failure success.
-- Matching a provider's refusal by wording alone. The limit-shape patterns in
-  `src/coding/fanout_dispatch.py` are how a failure becomes recoverable rather
-  than terminal, and the same day the exit code lied, `You've hit your session
-  limit` matched none of the twelve patterns and classified as `crash` — a
-  condition that clears at a stated time, recorded as a permanent fault. When a
-  provider adds a phrasing, add the pattern and a verbatim regression case; when
-  you add a pattern, check it against ordinary narration in the same commit, the
-  way the existing anchors are deliberately multi-word.
-- Trusting a red run before clearing `build/`. A `ModuleNotFoundError` whose
-  traceback names a `build/__editable__…` path is the gitignored editable
-  install, not the tree you are editing: your venv's copy predates a module the
-  branch now has. It is not a real failure and it is not the other branch's
-  regression. Clear it before you diagnose anything:
+  carrying a failure signal to `0`. Which nonzero code is the command's own
+  choice.
+- **A provider refusal is matched by shape, checked against narration.** The
+  limit patterns in `src/coding/fanout_dispatch.py` decide whether a failure
+  is recoverable or a permanent `crash`; a new phrasing (`You've hit your
+  session limit`) once fell through to `crash`. Add the pattern with a
+  verbatim regression case, and check it against ordinary narration in the
+  same commit; the anchors are deliberately multi-word.
+- **Clear `build/` before trusting a red run.** A `ModuleNotFoundError` whose
+  traceback names `build/__editable__…` is the gitignored editable install,
+  not your tree, and not another branch's regression:
 
   ```sh
   rm -rf build && find src tests -name __pycache__ -prune -exec rm -rf {} + \
     && uv sync --reinstall-package oh-my-hermes
   ```
 
-  This is worth its own entry because of how it lies. Bisecting across the
-  commit that adds the module produces green-then-red — the exact shape of a
-  genuine regression — since before that commit the stale copy is adequate and
-  after it the import fails. It cost several agents hours in one afternoon and
-  produced one false attribution of a defect to another contributor's branch.
-  If a checkout ever aborts with "local changes would be overwritten", stop:
-  every run after that measured the same dirty tree. `git reset --hard &&
-  git clean -fdx` first, then re-measure.
-
-  Why it is always a *missing module* and never a stale edit: `pyproject.toml`
-  sets `[tool.uv] config-settings = { editable_mode = "strict" }`, so **uv**
-  builds the editable install as a tree of per-file symlinks under `build/`
-  (hard links where the filesystem has no symlinks). Every file that existed at
-  build time has a link and resolves live, so edits in place are seen; a file
-  ADDED afterward has no link and does not exist for the install at all. The
-  granularity that matters: a new module inside an existing package is
-  invisible, because `build/.../omh/<pkg>/` is a real directory of per-file
-  links. A new top-level directory under `src/` can still resolve, because
-  `build/.../omh/__init__.py` appends `src/` to `__path__`.
-
-  It does not heal on its own. uv does not revalidate on ordinary `uv run` or
-  `uv sync` — the missing-link state persists until
-  `uv sync --reinstall-package oh-my-hermes`, or until something invalidates
-  uv's build cache, such as a change to `pyproject.toml`'s mtime. So the
-  ordering that produces the false red is resyncing *before* writing the
-  branch's new source files rather than after: resync last, after the final new
-  file exists. Short of the two triggers above, nothing else heals it at all.
-
-  This is a property of the uv-managed dev environment, not of the project. The
-  three test-bearing jobs (`plan`, `test`, `test-windows`)
-  install with `python -m pip install -e .`, which ignores `[tool.uv]` and uses
-  setuptools' default path-hook editable mode — no `build/` tree. Where a job
-  does call `uv run` (the ruff gate in `test`, the packaging steps in
-  `distribution`) the strict tree is built, but each job checks out fresh and
-  installs after checking out (`aggregate` installs nothing at all), so no tree
-  in CI is ever older than its source. CI cannot reach the stale state and so
-  cannot warn you about it.
-
-  What makes it read as a real regression is who resolves what. A `-P` spawn —
-  or any run launched from outside the checkout, including the `omh` console
-  script — reads the installed generation, while `uv run python -m omh.cli docs
-  … --check` from inside the checkout resolves through the repo-root `omh/`
-  shim to your working tree and passes at the same moment. So every gate is
-  green and exactly one test is red. The canary is
-  `tests/test_agent_board_kanban` — case K7 in `tests/five_issue_cases/kanban.py`
-  spawns three docs gates through `-P -m omh.cli` with `UV_NO_SYNC=1` in the
-  child's environment, so it cannot self-heal and reads whatever sits in
-  `build/` at that moment. Run that one file before reporting any isolated
-  failure as pre-existing or as another branch's; if it is red, clear, resync,
-  and re-measure, because the earlier run is not evidence. It is a strong
-  heuristic and not a proof: importing `omh.cli` pulls in most of `src/` but
-  not all of it, so a new module nothing on the docs path imports will not fire
-  it.
-
-  Clear `__pycache__` in the same breath, as the command above does. A cached
-  entry is validated by source mtime at one-second granularity plus size, so an
-  edit that is length-identical AND lands in the same second as the last
-  compile is not detected; a later edit is. It costs nothing and removes the
-  question.
-- Concluding a platform fact settles a call site. Windows and POSIX differ in
-  ways this repo keeps rediscovering — `Path.write_text` without `newline=`
-  emits CRLF; a child process's stdout arrives CRLF-terminated; CR is a control
-  character to a text guard; and Windows will not unlink a file another thread
-  still holds open, so a leaked worker turns a test failure into a failure plus
-  a cleanup error. Each of those is true, and none of them is a conclusion on
-  its own. One prediction here reasoned correctly that `os.open` without
-  `O_BINARY` returns a text-mode descriptor, and missed that the next line's
-  `os.fdopen(fd, 'rb')` re-sets the descriptor to binary before a byte is read.
-  Trace the composition to the end, or say the claim is untested.
-- Letting a best-effort `except OSError` decide what a failure was. The swallow
-  in `append_sidecar_line` is deliberate — the sidecar is the record of last
-  resort and must not raise — but it covers every step under it, and
-  `FileLockTimeout` is a `TimeoutError`, hence an `OSError` too. So "the write
-  failed", "the lock timed out" and "Windows denied the chmod while another
-  waiter held the file open" all leave one trace: a line missing and nothing
-  raised. The barrier test above it then reports `13 != 16`, which is exactly
-  what a lock that failed to hold would report, and the Windows run that
-  produced it is over. Two rules follow. A swallow is only as good as what
-  still records the failure, so widen the *report*, not the `except`. And when
-  a guard can fail two ways, put the discriminator in the assertion message —
-  here, whether any surviving line failed to parse, since only an interleave
-  splices one. A count is not a diagnosis.
-- Regenerating docs but forgetting the demo cards (or vice versa) when catalog
-  data changes — the parse-equality test catches it late; regenerate all four
-  artifact families together.
-- Dropping `PYTHONPATH=tests` — imports of `_cli_harness` and friends fail with
-  confusing errors.
-- Spawning `python -m omh.cli` (or `-c "import omh.cli"`) without `-P` — the
-  repo root ships a top-level `omh/` shim, so a run launched from inside a
-  checkout imports the checkout instead of the installed generation.
-  `tests/test_interpreter_spawn_policy.py` re-derives every such spawn from
-  `src/` and fails on one that lacks `-P`; route new spawns through
-  `_omh_cli()` in `src/install/self_update.py` or add `-P` yourself.
-- Making Codex the implicit default owner in wording, schemas, or reports —
-  keep Codex, Claude Code, Hermes runtime, and generic executors
-  executor-neutral (`AGENTS.md`, Implementation Boundaries).
-- Reading Maestro/handoff surfaces (`src/coding/maestro/`, executor capability
-  snapshots, prompting contracts, throughput overlays) as the default coding
-  path — they activate only after an explicit coding-owner choice. The default
-  and normal path is the Hermes harness; `CONTEXT.md` (Coding delegation) and
-  `src/coding/orchestration_vocabulary.py` pin the two lanes.
+  Why it lies: `pyproject.toml` sets `[tool.uv] config-settings = {
+  editable_mode = "strict" }`, so uv builds the install as per-file links
+  under `build/`. Edits to existing files resolve live; a module ADDED after
+  the build has no link and does not exist for the install (a new top-level
+  directory under `src/` can still resolve through `__path__`). It never heals
+  on ordinary `uv run` / `uv sync`, so resync after the branch's last new file
+  exists, not before. Bisecting across the commit that adds a module then
+  shows green-then-red, the exact shape of a real regression. CI cannot reach
+  this state (its test jobs `pip install -e .` on a fresh checkout), so it
+  cannot warn you. A `-P` spawn or the `omh` console script reads the
+  installed generation while in-checkout `uv run … docs --check` reads your
+  tree, so every gate is green and one test is red. The canary is
+  `tests/test_agent_board_kanban` (case K7 spawns docs gates through `-P`
+  with `UV_NO_SYNC=1`): run it before calling any isolated failure
+  pre-existing or someone else's, and if it is red, clear, resync and
+  re-measure. It is a heuristic, not a proof: a module nothing on the docs
+  path imports will not fire it. Clear `__pycache__` too: a cached entry is
+  validated by mtime at one-second granularity plus size. If a checkout ever
+  aborts with "local changes would be overwritten", stop: `git reset --hard
+  && git clean -fdx`, then re-measure, because every run since measured the
+  same dirty tree.
+- **`build/lib/` is a gitignored copy of old sources.** Scope searches to
+  `src/`, `tests/`, `docs/`, `skills/`.
+- **A platform fact does not settle a call site.** Windows and POSIX differ in
+  ways this repo keeps rediscovering: `Path.write_text` without `newline=`
+  emits CRLF; a child's stdout arrives CRLF-terminated; CR is a control
+  character to a text guard; Windows will not unlink a file another thread
+  holds open, so a leaked worker turns one failure into a failure plus a
+  cleanup error; Windows reports `0o666` for a file chmod'ed `0o600`. Trace
+  the composition to the end (`os.open` without `O_BINARY` is text mode, and
+  the next line's `os.fdopen(fd, 'rb')` makes it binary again), or say the
+  claim is untested.
+- **A best-effort `except OSError` hides which failure it swallowed.**
+  `append_sidecar_line` must not raise, but its swallow covers every step,
+  and `FileLockTimeout` is a `TimeoutError`, hence an `OSError`: a failed
+  write, a lock timeout and a Windows chmod denial all leave one trace, a
+  missing line. Widen the report, not the `except`. When a guard can fail two
+  ways, put the discriminator in the assertion message (here, whether a
+  surviving line failed to parse, which only an interleave produces). A count
+  is not a diagnosis.
+- **Coding ownership stays executor-neutral.** Never make Codex the implicit
+  default owner in wording, schemas or reports (`AGENTS.md`, Implementation
+  Boundaries). Maestro and handoff surfaces (`src/coding/maestro/`, executor
+  capability snapshots, prompting contracts, throughput overlays) activate
+  only after an explicit coding-owner choice; the default coding path is the
+  Hermes harness (`CONTEXT.md`, Coding delegation;
+  `src/coding/orchestration_vocabulary.py`).
 
 ## Working Style
 
 - State assumptions before editing; if the contract is unclear, ask.
-- Minimum code that solves the goal. No speculative options, flags, or hooks.
-- Touch only what the goal requires; match surrounding style exactly.
-- Define the verifying command before coding; loop until it passes, then run
-  the byte gates and full suite as the final proof.
+- Minimum code that solves the goal; touch only what it requires and match
+  the surrounding style.
+- Define the verifying command before coding, loop until it passes, then run
+  the gates and the full suite as the final proof.

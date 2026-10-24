@@ -46,11 +46,13 @@ Nine things the loop gets wrong most often:
   labeled dossier under `.omc/research/`; the Hermes lane is the one that
   shows what the wire carries (id folding, effort overrides, passback).
 - Chains move as a set. The Hermes-lane table, its plugin mirror, the
-  Maestro-lane table, the `model-setup` skill text, seven public doc surfaces,
-  the release budget note, and the pinned-chain tests all name the old id;
-  grep `src/ tests/ docs/ README* site/` for it and move every site in the
-  same commit. Superseded generations leave the shipped chains (owner
-  decision, 2026-09-11) and join the recognition-only list; pins hide in
+  Maestro-lane table, the `model-setup` skill text, the public docs and site
+  pages, and the pinned-chain tests all name the old id (the "Files that move
+  together" table in the procedure lists them). `docs/INSTALLATION.md`'s chain
+  table is generated (`docs chain-table`); the two site pages are edited by
+  hand; the READMEs carry no table. `git grep` the old id across the whole
+  tree and move every site in the same commit. Superseded generations leave
+  the shipped chains and join the recognition-only list; pins hide in
   fixtures, so start the full suite in the background at the chain edit.
 - Machine config stays provider-neutral. Chains name aliases; the
   provider row is a separate concern in `model-providers.json`. Place the id

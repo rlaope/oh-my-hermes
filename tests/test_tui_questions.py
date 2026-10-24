@@ -829,7 +829,7 @@ class DocumentedQuestionViewTests(unittest.TestCase):
 
 
 class DocumentedBoundaryTests(unittest.TestCase):
-    """The AGENTS.md "OMH TUI" bullet and CONTEXT.md's entry name the always and tell rows the code draws."""
+    """The OMH TUI boundary page and CONTEXT.md's entry name the always and tell rows the code draws."""
 
     ROOT = Path(__file__).resolve().parents[1]
 
@@ -837,7 +837,7 @@ class DocumentedBoundaryTests(unittest.TestCase):
         return " ".join((self.ROOT / name).read_text(encoding="utf-8").split())
 
     def test_the_boundary_names_both_rows_and_the_third_steer_path(self) -> None:
-        agents = self.prose("AGENTS.md")
+        agents = self.prose("docs/OMH-TUI-BOUNDARY.md")
         tell = prompts.open_request("srq-1", "approval", {}).approval_label(prompts.APPROVAL_TELL)  # type: ignore[union-attr]
         self.assertIn(f'An approval\'s last row, "{tell}", sends the explicit deny at once, interrupts nothing,', agents)
         self.assertIn("an approval decline is an explicit deny and then interrupts the running turn (`session.interrupt`, "
@@ -862,7 +862,7 @@ class DocumentedBoundaryTests(unittest.TestCase):
                       "do instead)", self.prose("docs/DIRECTION.md"))
 
     def test_the_boundary_names_what_ctrl_z_does_to_the_gateway(self) -> None:
-        agents = self.prose("AGENTS.md")
+        agents = self.prose("docs/OMH-TUI-BOUNDARY.md")
         # The child is in the TUI's process group; a shared gateway it attached to is not, and goes on.
         self.assertIn("Ctrl+Z stops the process group, the gateway child with it, as Hermes' own CLI's Ctrl+Z does, "
                       "and fg continues both; a shared gateway, which is not in that group, goes on.", agents)

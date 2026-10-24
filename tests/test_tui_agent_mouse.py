@@ -1138,7 +1138,7 @@ class ExitDrainTests(unittest.TestCase):
 
 
 class DocumentedMouseTests(unittest.TestCase):
-    """What INSTALLATION and the AGENTS.md boundary say about the mouse, held to the code they describe."""
+    """What INSTALLATION and the OMH TUI boundary page say about the mouse, held to the code they describe."""
 
     ROOT = Path(__file__).resolve().parents[1]
 
@@ -1155,7 +1155,7 @@ class DocumentedMouseTests(unittest.TestCase):
         self.assertIn("the Esc is lost and a character still types", installation)
         self.assertIn(f"A report that starts later than {grace:g} s after they went off", installation)
         self.assertIn(f"so can any report that takes more than {whole:g} s to arrive whole", installation)
-        agents = self.prose("AGENTS.md")
+        agents = self.prose("docs/OMH-TUI-BOUNDARY.md")
         self.assertIn(f"within {grace:g} s after it goes off, types nothing if it arrives whole within {whole:g} s of its "
                       f"first byte. If {round(seconds * 1000)} ms pass after that byte without the next, the byte is read "
                       f"as Esc, and the rest is dropped only if it arrives within {grace:g} s after that.", agents)
@@ -1169,7 +1169,7 @@ class DocumentedMouseTests(unittest.TestCase):
                       self.prose("docs/INSTALLATION.md"))
 
     def test_no_doc_says_a_split_report_never_types_however_long_the_pause(self) -> None:
-        for name in ("src/tui/keys.py", "src/tui/app.py", "src/tui/agent_view.py", "docs/INSTALLATION.md", "AGENTS.md"):
+        for name in ("src/tui/keys.py", "src/tui/app.py", "src/tui/agent_view.py", "docs/INSTALLATION.md", "docs/OMH-TUI-BOUNDARY.md", "AGENTS.md"):
             with self.subTest(name=name):
                 text = self.prose(name)
                 self.assertNotIn("however a pause splits it", text)
@@ -1178,7 +1178,7 @@ class DocumentedMouseTests(unittest.TestCase):
 
     def test_the_wait_is_not_credited_to_tmux_or_vim(self) -> None:
         # tmux's escape-time default is 500 ms (10 ms since 3.5) and Vim's ttimeoutlen 100: neither is 300.
-        for name in ("src/tui/keys.py", "src/tui/app.py", "src/tui/agent_view.py", "docs/INSTALLATION.md", "AGENTS.md"):
+        for name in ("src/tui/keys.py", "src/tui/app.py", "src/tui/agent_view.py", "docs/INSTALLATION.md", "docs/OMH-TUI-BOUNDARY.md", "AGENTS.md"):
             with self.subTest(name=name):
                 text = self.prose(name)
                 self.assertNotIn("tmux and vim", text)
@@ -1194,12 +1194,14 @@ class DocumentedMouseTests(unittest.TestCase):
         self.assertNotIn("Option-drag in Terminal.app", text)
 
     def test_the_boundary_says_what_each_click_does_and_when_a_report_can_still_type(self) -> None:
-        text = self.prose("AGENTS.md")
+        text = self.prose("docs/OMH-TUI-BOUNDARY.md")
         self.assertIn("A plain left click on an agent opens its log, one on the list's `main` row leaves the list, and "
                       "every other report does nothing.", text)
         self.assertIn("One that starts later and is split right after its first or second byte is read as keys.", text)
-        self.assertNotIn("No report ever types", text)
-        self.assertNotIn("a report can open an agent's log and nothing else", text)
+        for name in ("docs/OMH-TUI-BOUNDARY.md", "AGENTS.md"):
+            with self.subTest(name=name):
+                self.assertNotIn("No report ever types", self.prose(name))
+                self.assertNotIn("a report can open an agent's log and nothing else", self.prose(name))
 
 
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")

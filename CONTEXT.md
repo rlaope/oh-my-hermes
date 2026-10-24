@@ -1,10 +1,10 @@
 # oh-my-hermes
 
-Shared language for oh-my-hermes, written for coding agents. Users mostly need
-`omh setup`, `omh update`, and `omh doctor`; agents work across every surface
-below and keep blurring which product or record owns which term — these
-definitions pin that down. Product direction lives in `docs/DIRECTION.md`; the
-operating contract lives in `AGENTS.md`. This file is a glossary only.
+The glossary for oh-my-hermes: which product, record or surface owns each
+term, so agents stop blurring OMH and Hermes Agent. Each entry is the term's
+single definition; `_Avoid_` lists the names it gets confused with. Product
+direction is `docs/DIRECTION.md`, the operating contract `AGENTS.md`, and
+commands and pitfalls `CLAUDE.md`.
 
 ## Language
 
@@ -13,13 +13,8 @@ operating contract lives in `AGENTS.md`. This file is a glossary only.
 **OMH (oh-my-hermes)**:
 This repo — a deterministic wrapper orchestration layer installed next to
 Hermes Agent: skill catalog, router, prepared-handoff generator, and
-metadata-only status surfaces. Makes no LLM, API, or network calls, with one
-scoped exception: the opt-in `omh_jev_ask` tool sends typed questions to Jev
-with the user's own key when the user names Jev in that turn. (The `show-reel`
-skill also ships opt-in provider scripts that the user, not OMH, runs with
-their own key. The OMH TUI's gateway child is not core OMH: it runs on Hermes'
-interpreter and reaches the person's own Hermes gateway over loopback, as
-Hermes' own TUI does.)
+metadata-only status surfaces. Makes no LLM, API, or network calls outside
+the scoped exceptions `CLAUDE.md` lists under What This Repo Is.
 _Avoid_: Hermes plugin (that is one distribution surface, not the product),
 coding executor, Hermes patch
 
@@ -253,7 +248,7 @@ never transcripts or raw output)
 Absent an explicit coding-owner choice, coding work runs inside the Hermes
 harness and no external coding CLI is selected. This is the default and the
 normal path — most coding work in chat is this lane, and none of the
-Maestro/handoff machinery below participates in it. The nine-term contract in
+Maestro/handoff machinery below participates in it. The vocabulary contract in
 `src/coding/orchestration_vocabulary.py` pins this wording.
 _Avoid_: coding handoff (that is the Maestro lane), assuming an external
 executor by default, reading handoff modules as the main coding path
@@ -279,12 +274,14 @@ current, just not default), "coding delegation" as a synonym for all coding
 work
 
 **Fanout dispatch**:
-OMH's one sanctioned execution surface — the explicit, operator-invoked
-`omh coding fanout dispatch` (multi-unit) or its `omh coding run` single-run
-entry (one unit, same engine, one call) that spawns local agent CLIs as
-subprocesses. Nothing else in OMH executes work: the OMH TUI below starts
-Hermes' own gateway for a terminal the person opened, and every model call,
-tool run and `!` shell command the person types there is Hermes' to run.
+The explicit, operator-invoked `omh coding fanout dispatch` (multi-unit) or
+its `omh coding run` single-run entry (one unit, same engine, one call) that
+spawns local agent CLIs as subprocesses. Its one sibling is the Hermes-native
+child boundary (`omh coding hermes-child dispatch`, which `paired-run` and
+`--final-review` reuse): one confirmed, isolated local Hermes process.
+Nothing else in OMH executes work: the OMH TUI below starts Hermes' own
+gateway for a terminal the person opened, and every model call, tool run and
+`!` shell command the person types there is Hermes' to run.
 _Avoid_: implicit execution, background dispatch, counting the OMH TUI as an
 execution surface
 
@@ -470,12 +467,7 @@ unanswered, a running turn is reported lost and never re-sent), and past that
 it exits as before; Ctrl+Z stops its process group, the gateway child with it, as
 Hermes' own CLI's Ctrl+Z does. Layout, input, rendering and
 the OMH panels are OMH's; every model call, tool run and approval decision is
-the gateway's. Its look is the rail and kind colours the owner picked on
-2026-10-22: each transcript block on a `┃` rail with no fill, a call's state
-in its mark's glyph and colour as the dag view draws it (running blue `○`,
-done green `●`, failed red `✗`), its name in its tool family's hue,
-consecutive skill loads folded into one row, and the composer between two
-full-width rules with no side edges. Shift+Tab may turn on Hermes' per-session yolo, so Hermes stops
+the gateway's. Shift+Tab may turn on Hermes' per-session yolo, so Hermes stops
 asking for approvals in that one session (a `config.set` naming the session,
 never `approvals.mode`), and the TUI sends that session an explicit off before
 it leaves it. Every deny the person gives an approval also interrupts the
@@ -622,9 +614,8 @@ creation, so a TUI nobody has prompted in is named by no entry.
 
 This is a read-only coupling to a Hermes-private file shape, and part of the
 plugin's compatibility surface alongside the hooks and tools:
-`requires_hermes` in `src/plugin_bundle/omh/plugin.yaml` currently reads
-`">=0.21.1"` (a floor only, so a new Hermes minor does not delist the
-plugin), and testing OMH against a new Hermes release includes checking that
+`requires_hermes` in `src/plugin_bundle/omh/plugin.yaml` is a floor only (so a
+new Hermes minor does not delist the plugin), and testing OMH against a new Hermes release includes checking that
 the file, both field names, and the `surface` value still hold. If the shape
 moves, the read must go quiet and the reference stay its own identity — never
 fall back to guessing which session is reading.
@@ -850,11 +841,9 @@ makes `hermes update` the answer. Two proofs are required together, never
 either one alone: `git -C "$HERMES_HOME/hermes-agent" rev-parse HEAD` behind
 that repo's `origin/main`, and the built Modern-TUI bundle older than its
 TypeScript sources. A visual symptom that reads as "an old TUI" is almost
-always an OMH product fault or a Hermes user-config fault instead — in one
-real session Hermes sat at its `origin/main` HEAD with a freshly built
-Modern-TUI bundle while the visual complaint was entirely valid, and the
-missing chrome turned out to be an OMH product gap. OMH never patches Hermes
-either way.
+always an OMH product fault or a Hermes user-config fault instead (a current,
+freshly built Hermes has shown exactly that symptom over an OMH product gap).
+OMH never patches Hermes either way.
 _Avoid_: prescribing `hermes update` from a visual symptom alone, treating one
 of the two proofs as sufficient
 

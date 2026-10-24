@@ -987,7 +987,7 @@ HERMES_INTERPRETER_SCRIPTS: dict[str, HermesScriptPolicy] = {
             "HERMES_TUI_CLIENT_ENV",
         )),
         reason=(
-            "the OMH TUI's gateway child (AGENTS.md, the OMH TUI bullet). On a Hermes that has the shared-gateway "
+            "the OMH TUI's gateway child (docs/OMH-TUI-BOUNDARY.md; AGENTS.md, the OMH TUI bullet). On a Hermes that has the shared-gateway "
             "attach API it does what Hermes' own Ink TUI does: Hermes' `ensure_gateway_runtime` finds the "
             "profile's gateway or starts one, Hermes' `connect_private` mints a session ticket over the home's "
             "private control socket, and `websockets.asyncio.client.connect` dials the WebSocket URL "

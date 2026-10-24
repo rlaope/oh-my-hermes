@@ -439,7 +439,7 @@ class SteerTests(unittest.TestCase):
 
 @unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
 class DocumentedSteerTests(unittest.TestCase):
-    """What INSTALLATION and the AGENTS.md boundary say a steer does, held to the code."""
+    """What INSTALLATION and the OMH TUI boundary page say a steer does, held to the code."""
 
     ROOT = Path(__file__).resolve().parents[1]
 
@@ -456,10 +456,10 @@ class DocumentedSteerTests(unittest.TestCase):
         unanswered = app_module.STEER_UNANSWERED_OUTCOME.format(seconds=app_module.CALL_ANSWER_SECONDS)
         self.assertIn(f"`⧗ {unanswered} · <text>`", installation)  # given back, never sent again
         self.assertIn("A steer Hermes does not take waits in the TUI's own queue for the running turn to end, whatever "
-                      "the busy mode, so it never interrupts that turn.", self.prose("AGENTS.md"))
+                      "the busy mode, so it never interrupts that turn.", self.prose("docs/OMH-TUI-BOUNDARY.md"))
         seconds = f"{app_module.CALL_ANSWER_SECONDS:g}"
         self.assertIn(f"A steer Hermes does not answer within {seconds} s goes back to the composer and is never re-sent.",
-                      self.prose("AGENTS.md"))
+                      self.prose("docs/OMH-TUI-BOUNDARY.md"))
 
 
 class DocumentedApprovalsToggleTests(unittest.TestCase):
@@ -477,7 +477,7 @@ class DocumentedApprovalsToggleTests(unittest.TestCase):
 
     def test_the_boundary_and_the_changelog_say_when_accept_shows_and_when_the_off_goes(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        agents = " ".join((root / "AGENTS.md").read_text(encoding="utf-8").split())
+        agents = " ".join((root / "docs/OMH-TUI-BOUNDARY.md").read_text(encoding="utf-8").split())
         changelog = " ".join((root / "CHANGELOG.md").read_text(encoding="utf-8").split())
         self.assertIn("Leaving a session it turned yolo on for, or whose yolo call is still unanswered", agents)
         self.assertIn(
