@@ -115,6 +115,31 @@ A batch is rehearsed as one fresh session in plan order, so a `repeat: "once"`
 rule refuses the first matching call and the rest proceed past it — what the
 hook would do to that batch.
 
+## Built-in shell-edit rule
+
+One rule ships with OMH instead of being written by you: it refuses a
+`terminal` command that edits an existing source file in place, and its
+message tells the model to use `patch` (or `write_file` for a whole file)
+instead. Your own rules run first.
+
+Refused: `sed -i`, `perl -i`, `ruby -i` and `gawk -i inplace` unless every
+target is shown to be a non-source or generated file; a `python -c` program,
+or a `python` reading a heredoc, that writes a file and names an existing
+source file; and `>`, `>>`, `>|`, `&>` or `tee` onto an existing source file.
+
+Never refused: reads and searches (`sed -n`, `grep`), tests, any `git`
+command, new files, files that are not source code (JSON, YAML, Markdown,
+logs, data), and anything under a generated directory such as `build/`,
+`dist/` or `node_modules/`. Commands are matched on shell segments parsed
+with `shlex`, not on raw text, and a command the parser cannot read runs.
+
+Switch it with the profile setting
+`plugins.entries.omh.settings.shell_edit_rules` (`true` / `false`), or with
+`OMH_SHELL_EDIT_RULES=1` / `0` in the environment of the process that runs
+the gateway, which wins over the setting. It is off unless one of them turns
+it on. The measurement behind that choice is the 2026-10-30 shell-edit
+section of `benchmarks/live-model-tools/v1/README.md`.
+
 ## Boundaries
 
 - Everything fails open: a missing, malformed, or oversized rules file and any

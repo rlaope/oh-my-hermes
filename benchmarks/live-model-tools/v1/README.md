@@ -567,7 +567,7 @@ tests, `git`, new files, non-source files or anything under a generated director
 
 The setup, fixed before the first live run:
 
-- Pinned `E-RENAME` and `E-BUGFIX` (3 seeds each, 6 per model per arm), **without**
+- Pinned `E-RENAME` and `E-BUGFIX` (3 seeds each), **without**
   `--edit-directive`, so the model is free to edit through the shell.
 - The negative template `S-GENERATED` in the separate split `shell-ab` (3 seeds, the pinned
   corpus and its digest are unchanged): every write it needs is a new file under `build/` made by
@@ -587,6 +587,15 @@ The setup, fixed before the first live run:
   passes every smoke run, the main split is too easy to show a gain, and harder rename templates
   where a text replace misleads (`L-RENAME-ALIAS`, `L-RENAME-SHADOW` from `lsp-ab`) are added to
   both arms; the choice is written here before the result run.
+- Ceiling smoke result (off arm, seed 104729, the three weak models): 9 / 9 passed, and 0
+  terminal calls edited source. Every edit went through `patch` / `write_file` without any
+  directive. So, as stated above, `L-RENAME-ALIAS` and `L-RENAME-SHADOW` (3 seeds each) join the
+  main split in both arms: 12 main instances per model per arm. The smoke runs are not counted.
+- Free data from earlier sessions (no directive, same panel, the 2026-10-30 read-outline split
+  on a 3,600-line file): only `claude-sonnet-5-5` and `claude-opus-5-5` edited source through
+  the shell (`sed -i ''` with line addresses, 3 of 6 sessions each, in both profiles); the weak
+  models and both GPT models made 0 such calls. That off arm passed 36 / 36, so those shell edits
+  did not fail. The weak-model clause may therefore have nothing to act on; it stays as written.
 
 The merge gate, written before the first live run. Counts are passes over the main split
 (everything except `S-GENERATED`) unless a clause says otherwise.
