@@ -222,6 +222,7 @@ def register(ctx: _PluginContext) -> None:
     from .tools.delegate_route_tool import OMH_DELEGATE_ROUTE_SCHEMA, omh_delegate_route_handler
     from .tools.decision_gate_tool import OMH_DECISION_GATE_SCHEMA, omh_decision_gate_handler
     from .tools.document_plan_tool import OMH_DOCUMENT_PLAN_SCHEMA, omh_document_plan_handler
+    from .tools.dap_tool import DAP_TOOLSET, OMH_DAP_DEBUG_PYTHON_SCHEMA, _dap_tools_enabled, debug_python_handler
     from .tools.evidence_tool import OMH_EVIDENCE_SCHEMA, omh_evidence_handler
     from .tools.hud_tool import OMH_HUD_SCHEMA, omh_hud_handler
     from .tools.jev_ask_tool import OMH_JEV_ASK_SCHEMA, jev_ask_available, omh_jev_ask_handler
@@ -339,6 +340,17 @@ def register(ctx: _PluginContext) -> None:
         lsp_rename_handler,
         check_fn=_lsp_tools_enabled,
         description=LSP_RENAME_SCHEMA["description"],
+    )
+    # Opt-in Python debugger over debugpy's DAP adapter, gated the same way:
+    # toolset `omh-dap` plus `check_fn` on OMH_DAP_TOOLS or the profile
+    # setting `dap_tools`, so its schema costs nothing unless enabled.
+    _ = ctx.register_tool(
+        "debug_python",
+        DAP_TOOLSET,
+        OMH_DAP_DEBUG_PYTHON_SCHEMA,
+        debug_python_handler,
+        check_fn=_dap_tools_enabled,
+        description=OMH_DAP_DEBUG_PYTHON_SCHEMA["description"],
     )
     # The one tool that sends data off the machine. `check_fn` keeps its
     # schema out of every turn unless a route resolves (a TypeSafe key, or an

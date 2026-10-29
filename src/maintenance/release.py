@@ -351,7 +351,13 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # `OMH_LSP_TOOLS` or the profile setting `lsp_tools`, so they cost schema
 # bytes only when explicitly enabled; measured by per_turn_context's
 # register() recorder against base 7a2de348a. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 71831
+# 71831 -> 73612: `debug_python` (1781), the opt-in debugpy (DAP) debugger
+# registered under the `omh-dap` toolset. Gated by a check_fn on env
+# `OMH_DAP_TOOLS` or the profile setting `dap_tools`, so it costs schema bytes
+# only when explicitly enabled; one tool with an action enum instead of nine
+# tools keeps it under one lsp tool's size per action. Measured by
+# per_turn_context's register() recorder against base 79c5308d2. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 73612
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

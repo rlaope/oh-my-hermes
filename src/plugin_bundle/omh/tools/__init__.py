@@ -7,6 +7,7 @@ from typing import Any
 # without importing the Hermes registration context; parity with the
 # `register()` body is a test, not a convention.
 BUILTIN_TOOL_NAMES: tuple[str, ...] = (
+    "debug_python",
     "lsp_definition",
     "lsp_references",
     "lsp_rename",
@@ -48,6 +49,7 @@ def builtin_tool_schemas() -> tuple[dict[str, Any], ...]:
     from .capability_tool import OMH_CAPABILITIES_SCHEMA
     from .chat_tool import OMH_INTERACT_SCHEMA
     from .context_tool import OMH_CONTEXT_SCHEMA
+    from .dap_tool import OMH_DAP_DEBUG_PYTHON_SCHEMA
     from .dag_tool import OMH_DAG_SCHEMA
     from .delegate_route_tool import OMH_DELEGATE_ROUTE_SCHEMA
     from .decision_gate_tool import OMH_DECISION_GATE_SCHEMA
@@ -75,6 +77,7 @@ def builtin_tool_schemas() -> tuple[dict[str, Any], ...]:
         OMH_CAPABILITIES_SCHEMA,
         OMH_CONTEXT_SCHEMA,
         OMH_DAG_SCHEMA,
+        OMH_DAP_DEBUG_PYTHON_SCHEMA,
         OMH_DELEGATE_ROUTE_SCHEMA,
         OMH_DECISION_GATE_SCHEMA,
         OMH_DOCUMENT_PLAN_SCHEMA,

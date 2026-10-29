@@ -1145,6 +1145,7 @@ print(json.dumps(observed, ensure_ascii=False))
             self.assertEqual(
                 plugin["registered_tools"],
                 [
+                    "debug_python",
                     "lsp_definition",
                     "lsp_references",
                     "lsp_rename",
