@@ -270,8 +270,17 @@ class SessionManager:
             if not isinstance(expression, str) or not expression.strip():
                 raise SessionError("invalid_argument", "expression must be a non-empty string")
             frame, _ = session.frame_at(_index(args))
-            body = session.client.request("evaluate", {"expression": expression, "frameId": frame.get("id"),
-                                                        "context": "watch"})
+            try:
+                body = session.client.request("evaluate", {"expression": expression, "frameId": frame.get("id"),
+                                                            "context": "watch"})
+            except DapError as exc:
+                if not exc.message.startswith("SyntaxError"):
+                    raise
+                # A statement (`import m; m.X`, `x = 1`) is not an expression; say how to get a value back
+                # instead of a bare SyntaxError the model retries with variations.
+                raise SessionError("not_an_expression", f"{exc.message}. evaluate takes one Python expression, "
+                                   "not statements: use __import__('pkg.mod', fromlist=['X']).X to read a "
+                                   "module value, or inspect for locals") from None
             return {"ok": True, "result": _cap(str(body.get("result", "")), RESULT_CAP),
                     **({"type": body["type"]} if body.get("type") else {})}
         if action == "terminate":

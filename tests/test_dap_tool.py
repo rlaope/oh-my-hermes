@@ -362,6 +362,14 @@ class StoppedActionTests(_Root):
         self.assertIn("NameError", reply["hint"])
         self.assertTrue(self.call(action="inspect")["ok"])
 
+    def test_statement_in_evaluate_says_how_to_read_a_module_value(self):
+        # Live smoke: qwen sent `import benchapp.pricing; benchapp.pricing.X` five times on a bare SyntaxError.
+        self.client.fail["evaluate"] = DapError("adapter_error", "SyntaxError: invalid syntax (<string>, line 1)")
+        reply = self.call(action="evaluate", expression="import pkg.mod; pkg.mod.X")
+        self.assertEqual(reply["error"], "not_an_expression")
+        self.assertIn("__import__('pkg.mod', fromlist=['X']).X", reply["hint"])
+        self.assertTrue(self.call(action="inspect")["ok"])
+
     def test_set_breakpoints_replaces_and_reports_verified(self):
         reply = self.call(action="set_breakpoints", path=os.path.join("src", "app", "cart.py"), lines=[1, 2],
                           condition="p > 1")
