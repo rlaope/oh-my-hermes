@@ -22,6 +22,9 @@ TEMPLATES = (
 # pinned corpus digest and manifest stay byte-identical.
 LSP_AB_SPLIT = "lsp-ab"
 LSP_AB_TEMPLATES = (("RENAME-ALIAS", "edit"), ("RENAME-SHADOW", "edit"))
+# Separate split for the omh-dap A/B (same isolation): bugs whose cause only shows at runtime.
+DAP_AB_SPLIT = "dap-ab"
+DAP_AB_TEMPLATES = (("MUTABLE-DEFAULT", "edit"), ("ALIASED-STATE", "edit"), ("ORDER-DEPENDENT", "edit"))
 
 @dataclass(frozen=True)
 class Instance:
@@ -37,6 +40,8 @@ class Instance:
 def all_specs(split: str) -> list[tuple[str, str, int]]:
     if split == LSP_AB_SPLIT:
         return [(f"L-{name}", task_class, seed) for name, task_class in LSP_AB_TEMPLATES for seed in EVALUATION_SEEDS]
+    if split == DAP_AB_SPLIT:
+        return [(f"D-{name}", task_class, seed) for name, task_class in DAP_AB_TEMPLATES for seed in EVALUATION_SEEDS]
     seeds = DEVELOPMENT_SEEDS if split == "development" else EVALUATION_SEEDS
     prefix = "D" if split == "development" else "E"
     return [(f"{prefix}-{name}", task_class, seed) for name, task_class in TEMPLATES for seed in seeds]
@@ -179,8 +184,184 @@ def _rename_shadow_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
 _LSP_AB_FIXTURES = {"RENAME-ALIAS": _rename_alias_fixture, "RENAME-SHADOW": _rename_shadow_fixture}
 
 
+# --- dap-ab: the failing assertion shows a wrong number, not the cause; the cause is state that
+# only exists at runtime (a shared default, a shallow alias, a stale cache), and the fix is small.
+# Goldens keep the hidden checks (run in a fresh interpreter) and the test file's assert count.
+
+def _dap_golden(files: dict[str, str], test_file: str, hidden: str) -> dict[str, Any]:
+    tree = ast.parse(files[test_file])
+    tests = [node.name for node in tree.body if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")]
+    return {
+        # A fix may touch or add any module or test; nothing else (no TASK.md, pyproject, tools).
+        "allowed_prefixes": ["src/benchapp/", "tests/"],
+        "test_file": test_file,
+        "test_names": tests,
+        "min_asserts": sum(isinstance(node, ast.Assert) for node in ast.walk(tree)),
+        "hidden_checks": hidden,
+    }
+
+
+def _mutable_default_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
+    """`open_order(customer, lines=[])`: every order built without lines shares one list."""
+    randomizer = random.Random(seed)
+    skus = randomizer.sample(("AX", "BK", "CR", "DM", "EV", "FN", "GT"), 3)
+    prices = {sku: randomizer.randint(3, 40) for sku in skus}
+    first, second = randomizer.sample(("ana", "bo", "cy", "dee", "eli", "fay"), 2)
+    q1, q2, q3 = (randomizer.randint(1, 4) for _ in range(3))
+    discount = randomizer.choice((5, 10, 15))
+    threshold = randomizer.randint(400, 900)
+
+    def total(lines: list[tuple[str, int]]) -> int:
+        gross = sum(prices[sku] * qty for sku, qty in lines)
+        return gross - gross * discount // 100 if gross >= threshold else gross
+
+    one = [(skus[0], q1)]
+    two = [(skus[1], q2), (skus[2], q3)]
+    files = {
+        "src/benchapp/orders.py": (
+            '"""Order records."""\n\n\nclass Order:\n'
+            "    def __init__(self, customer: str, lines: list) -> None:\n"
+            "        self.customer = customer\n        self.lines = lines\n\n"
+            "    def gross(self) -> int:\n        return sum(qty * price for _sku, qty, price in self.lines)\n\n\n"
+            "def open_order(customer: str, lines=[]) -> Order:\n    return Order(customer, lines)\n\n\n"
+            "def add_line(order: Order, sku: str, qty: int, price: int) -> Order:\n"
+            "    order.lines.append((sku, qty, price))\n    return order\n"
+        ),
+        "src/benchapp/pricing.py": (
+            f"PRICES = {prices!r}\nDISCOUNT_PERCENT = {discount}\nDISCOUNT_THRESHOLD = {threshold}\n\n\n"
+            "def unit_price(sku: str) -> int:\n    return PRICES[sku]\n\n\n"
+            "def with_discount(gross: int) -> int:\n    if gross >= DISCOUNT_THRESHOLD:\n"
+            "        return gross - gross * DISCOUNT_PERCENT // 100\n    return gross\n"
+        ),
+        "src/benchapp/checkout.py": (
+            "from benchapp.orders import add_line, open_order\nfrom benchapp.pricing import unit_price, with_discount\n\n\n"
+            "def build_order(customer, items):\n    order = open_order(customer)\n"
+            "    for sku, qty in items:\n        add_line(order, sku, qty, unit_price(sku))\n    return order\n\n\n"
+            "def order_total(customer, items) -> int:\n    return with_discount(build_order(customer, items).gross())\n"
+        ),
+        "tests/test_checkout.py": (
+            "from benchapp.checkout import order_total\n\n\n"
+            f"def test_single_line_order():\n    assert order_total({first!r}, {one!r}) == {total(one)}\n\n\n"
+            f"def test_two_line_order():\n    assert order_total({second!r}, {two!r}) == {total(two)}\n"
+        ),
+    }
+    hidden = (
+        "from benchapp.checkout import build_order, order_total\nfrom benchapp.orders import open_order\n"
+        f"assert order_total('h1', {two!r}) == {total(two)}\n"
+        f"assert order_total('h2', {one!r}) == {total(one)}\n"
+        f"assert order_total('h3', {two!r}) == {total(two)}\n"
+        "a, b = open_order('a'), open_order('b')\nassert a.lines == [] and b.lines == [] and a.lines is not b.lines\n"
+        "kept = [('ZZ', 1, 2)]\nassert open_order('c', kept).lines == kept\n"
+        f"assert len(build_order('h4', {one!r}).lines) == 1\n"
+    )
+    return files, _dap_golden(files, "tests/test_checkout.py", hidden)
+
+
+def _aliased_state_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
+    """`dataclasses.replace(BASE, name=...)` is shallow: every plan shares BASE's limits dict."""
+    randomizer = random.Random(seed)
+    daily, burst = randomizer.randint(20, 90), randomizer.randint(2, 9)
+    extra = randomizer.randint(10, 60)
+    feature, added = randomizer.sample(("export", "audit", "sso", "webhooks", "api"), 2)
+    upper = randomizer.choice(("pro", "team", "plus", "scale"))
+    lower = randomizer.choice(("basic", "free", "lite"))
+    files = {
+        "src/benchapp/plans.py": (
+            '"""Subscription plans."""\nfrom dataclasses import dataclass, field, replace\n\n\n'
+            "@dataclass\nclass Plan:\n    name: str\n    limits: dict = field(default_factory=dict)\n"
+            "    features: tuple = ()\n\n\n"
+            f"BASE = Plan('base', {{'daily': {daily}, 'burst': {burst}}}, ({feature!r},))\n\n\n"
+            "def plan_for(name: str) -> Plan:\n    return replace(BASE, name=name)\n"
+        ),
+        "src/benchapp/upgrades.py": (
+            "from benchapp.plans import Plan\n\n\n"
+            "def upgrade(plan: Plan, feature: str, extra_daily: int) -> Plan:\n"
+            "    plan.features = plan.features + (feature,)\n"
+            "    plan.limits['daily'] += extra_daily\n    plan.limits['burst'] *= 2\n    return plan\n\n\n"
+            "def describe(plan: Plan) -> str:\n"
+            "    return f\"{plan.name} daily={plan.limits['daily']} burst={plan.limits['burst']} features={','.join(plan.features)}\"\n"
+        ),
+        "tests/test_plans.py": (
+            "from benchapp.plans import plan_for\nfrom benchapp.upgrades import describe, upgrade\n\n\n"
+            f"def test_upgraded_plan():\n    plan = upgrade(plan_for({upper!r}), {added!r}, {extra})\n"
+            f"    assert describe(plan) == '{upper} daily={daily + extra} burst={burst * 2} features={feature},{added}'\n\n\n"
+            f"def test_plain_plan():\n    assert describe(plan_for({lower!r})) == '{lower} daily={daily} burst={burst} features={feature}'\n"
+        ),
+    }
+    hidden = (
+        "from benchapp.plans import BASE, plan_for\nfrom benchapp.upgrades import describe, upgrade\n"
+        f"for _ in range(2):\n    up = upgrade(plan_for('h-up'), {added!r}, {extra})\n"
+        f"    assert describe(up) == 'h-up daily={daily + extra} burst={burst * 2} features={feature},{added}'\n"
+        f"assert describe(plan_for('h-low')) == 'h-low daily={daily} burst={burst} features={feature}'\n"
+        f"assert BASE.limits == {{'daily': {daily}, 'burst': {burst}}}\n"
+        "a, b = plan_for('a'), plan_for('b')\nassert a.limits is not b.limits and a.limits is not BASE.limits\n"
+    )
+    return files, _dap_golden(files, "tests/test_plans.py", hidden)
+
+
+def _order_dependent_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
+    """A module-level cache keyed by (amount, currency) misses the rate: a later reconfigure is ignored."""
+    randomizer = random.Random(seed)
+    currency = randomizer.choice(("EUR", "GBP", "CHF", "SEK"))
+    rate, new_rate = randomizer.sample((80, 85, 90, 95, 105, 110, 120, 125), 2)
+    amount = randomizer.choice((200, 300, 400, 600))
+    other = amount + randomizer.randint(1, 9) * 10
+
+    def convert(value: int, percent: int) -> int:
+        return value * percent // 100
+
+    files = {
+        "src/benchapp/settings.py": (
+            f"SETTINGS = {{'currency': {currency!r}, 'rate_percent': {rate}}}\n\n\n"
+            "def configure(**changes) -> None:\n    SETTINGS.update(changes)\n"
+        ),
+        "src/benchapp/convert.py": (
+            "from benchapp.settings import SETTINGS\n\n_CACHE: dict = {}\n\n\n"
+            "def _compute(amount: int) -> int:\n    return amount * SETTINGS['rate_percent'] // 100\n\n\n"
+            "def convert(amount: int) -> int:\n    key = (amount, SETTINGS['currency'])\n"
+            "    if key not in _CACHE:\n        _CACHE[key] = _compute(amount)\n    return _CACHE[key]\n"
+        ),
+        "src/benchapp/invoice.py": (
+            "from benchapp.convert import convert\nfrom benchapp.settings import SETTINGS\n\n\n"
+            "def invoice_line(amount: int) -> str:\n    return f\"{convert(amount)} {SETTINGS['currency']}\"\n"
+        ),
+        "tests/test_invoice.py": (
+            "from benchapp.invoice import invoice_line\nfrom benchapp.settings import configure\n\n\n"
+            f"def test_default_rate():\n    assert invoice_line({amount}) == '{convert(amount, rate)} {currency}'\n\n\n"
+            f"def test_new_rate():\n    configure(rate_percent={new_rate})\n"
+            f"    assert invoice_line({amount}) == '{convert(amount, new_rate)} {currency}'\n"
+            f"    assert invoice_line({other}) == '{convert(other, new_rate)} {currency}'\n"
+        ),
+    }
+    hidden = (
+        "from benchapp.invoice import invoice_line\nfrom benchapp.settings import configure\n"
+        f"assert invoice_line({other}) == '{convert(other, rate)} {currency}'\n"
+        f"configure(rate_percent={new_rate})\nassert invoice_line({other}) == '{convert(other, new_rate)} {currency}'\n"
+        f"configure(rate_percent={rate})\nassert invoice_line({other}) == '{convert(other, rate)} {currency}'\n"
+        f"assert invoice_line({amount}) == '{convert(amount, rate)} {currency}'\n"
+        f"configure(rate_percent={new_rate})\nassert invoice_line({amount}) == '{convert(amount, new_rate)} {currency}'\n"
+    )
+    return files, _dap_golden(files, "tests/test_invoice.py", hidden)
+
+
+_DAP_AB_FIXTURES = {
+    "MUTABLE-DEFAULT": _mutable_default_fixture,
+    "ALIASED-STATE": _aliased_state_fixture,
+    "ORDER-DEPENDENT": _order_dependent_fixture,
+}
+_DAP_AB_TEST_FILES = {
+    "MUTABLE-DEFAULT": "tests/test_checkout.py",
+    "ALIASED-STATE": "tests/test_plans.py",
+    "ORDER-DEPENDENT": "tests/test_invoice.py",
+}
+
+
 def _prompt(template_id: str, task_class: str, seed: int, decision: str) -> str:
     name = template_id.split("-", 1)[1]
+    if name in _DAP_AB_TEST_FILES:
+        test_file = _DAP_AB_TEST_FILES[name]
+        return (f"The test command `python -m pytest -q {test_file}` fails. Find and fix the cause in the "
+                "package under src/benchapp/. Do not delete or weaken the tests. Return JSON with changed_paths.")
     prompts = {
         "RENAME": "Rename DEFAULT_RETRY_LIMIT to MAX_RETRY_ATTEMPTS in production and tests without changing behavior. Return JSON with changed_paths.",
         "BUGFIX": "Fix select_provider(region) to return the first enabled matching provider and return None for None/no match. Add regression tests. Return JSON with changed_paths.",
@@ -224,7 +405,8 @@ def materialize(split: str, template_id: str, task_class: str, seed: int, worksp
         shutil.rmtree(workspace)
     workspace.mkdir(parents=True)
     files = _project_files(seed)
-    lsp_fixture = _LSP_AB_FIXTURES.get(template_id.split("-", 1)[1])
+    name = template_id.split("-", 1)[1]
+    lsp_fixture = _LSP_AB_FIXTURES.get(name) or _DAP_AB_FIXTURES.get(name)
     lsp_golden: dict[str, Any] | None = None
     if lsp_fixture is not None:
         extra, lsp_golden = lsp_fixture(seed)

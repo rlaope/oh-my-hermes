@@ -162,8 +162,11 @@ def current_session_argv(
     elif edit_surface == "lsp":
         # LSP augments the builtin file toolset; `patch` stays available.
         toolsets = "file,terminal,omh-lsp"
+    elif edit_surface == "dap":
+        # The debugger augments the builtin file toolset; `patch` stays available.
+        toolsets = "file,terminal,omh-dap"
     else:
-        raise ValueError("edit_surface must be 'patch', 'hashline' or 'lsp'")
+        raise ValueError("edit_surface must be 'patch', 'hashline', 'lsp' or 'dap'")
     return [
         hermes_executable,
         "--oneshot",
@@ -216,15 +219,31 @@ def rename_directive(edit_surface: str) -> str:
             "use terminal only to search, run tests, and write the answer file.")
 
 
+# Debug A/B pair (`--edit-directive debug`): identical but for the inspection tool phrase.
+_DEBUG_TOOLS = {
+    "patch": "`terminal` (print statements, `python -c`)",
+    "dap": "`debug_python` (breakpoints, locals, evaluate)",
+}
+
+
+def debug_directive(edit_surface: str) -> str:
+    if edit_surface not in _DEBUG_TOOLS:
+        raise ValueError("debug directive needs edit_surface 'patch' or 'dap'")
+    return ("When a test fails and the cause is not obvious from reading, run the failing test "
+            f"and inspect state with {_DEBUG_TOOLS[edit_surface]} before editing.")
+
+
 def directive_text(edit_surface: str, directive: bool | str) -> str | None:
-    """Prompt prefix for a run: None (off), the edit rule (True), or the rename rule ("rename")."""
+    """Prompt prefix for a run: None (off), the edit rule (True), or the rename/debug rule."""
     if directive == "rename":
         return rename_directive(edit_surface)
+    if directive == "debug":
+        return debug_directive(edit_surface)
     if directive is True:
         return edit_directive(edit_surface)
     if directive is False or directive is None:
         return None
-    raise ValueError("directive must be a bool or 'rename'")
+    raise ValueError("directive must be a bool, 'rename' or 'debug'")
 
 
 def prompt_pair(task: str, route: Mapping[str, Any]) -> tuple[str, str]:
@@ -634,9 +653,12 @@ def _current_session_environment(workspace: Path, edit_surface: str = "patch") -
     # An opt-in flag inherited from the caller's shell must not reach the other arm.
     environment.pop("OMH_HASHLINE_TOOLS", None)
     environment.pop("OMH_LSP_TOOLS", None)
+    environment.pop("OMH_DAP_TOOLS", None)
     if edit_surface == "hashline":
         environment["OMH_HASHLINE_TOOLS"] = "1"
     elif edit_surface == "lsp":
         # Harmless for the gateway, which reads the profile setting; set for parity with hashline.
         environment["OMH_LSP_TOOLS"] = "1"
+    elif edit_surface == "dap":
+        environment["OMH_DAP_TOOLS"] = "1"
     return environment

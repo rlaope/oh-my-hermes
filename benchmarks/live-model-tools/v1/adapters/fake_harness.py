@@ -42,6 +42,19 @@ SEMANTIC_RENAMES = {
         "tests/test_limits.py": [("limits import parse_limit", "limits import read_limit"), ("assert parse_limit(", "assert read_limit(")],
     },
 }
+# Reference fixes for the dap-ab runtime-state templates.
+DAP_FIXES = {
+    "MUTABLE-DEFAULT": {
+        "src/benchapp/orders.py": [("def open_order(customer: str, lines=[]) -> Order:\n    return Order(customer, lines)",
+                                    "def open_order(customer: str, lines=None) -> Order:\n    return Order(customer, [] if lines is None else lines)")],
+    },
+    "ALIASED-STATE": {
+        "src/benchapp/plans.py": [("return replace(BASE, name=name)", "return replace(BASE, name=name, limits=dict(BASE.limits))")],
+    },
+    "ORDER-DEPENDENT": {
+        "src/benchapp/convert.py": [("key = (amount, SETTINGS['currency'])", "key = (amount, SETTINGS['currency'], SETTINGS['rate_percent'])")],
+    },
+}
 
 
 def main():
@@ -56,14 +69,14 @@ def main():
             path.write_text(path.read_text(encoding="utf-8").replace("DEFAULT_RETRY_LIMIT", "MAX_RETRY_ATTEMPTS"), encoding="utf-8")
         events.append({"sequence":1,"name":"edit","mutating":True,"arguments_digest":"0"*64,"started_ms":0,"ended_ms":1,"result":"success"})
         answer = {"changed_paths":["src/benchapp/retries.py","tests/test_retries.py"]}
-    elif name in SEMANTIC_RENAMES:
+    elif name in SEMANTIC_RENAMES or name in DAP_FIXES:
         changed = []
-        for relative, edits in SEMANTIC_RENAMES[name].items():
+        for relative, edits in {**SEMANTIC_RENAMES, **DAP_FIXES}[name].items():
             path = workspace / relative
             text = path.read_text(encoding="utf-8")
             for before, after in edits:
                 if before not in text:
-                    raise SystemExit(f"fake rename anchor missing in {relative}: {before}")
+                    raise SystemExit(f"fake edit anchor missing in {relative}: {before}")
                 text = text.replace(before, after)
             path.write_text(text, encoding="utf-8")
             changed.append(relative)

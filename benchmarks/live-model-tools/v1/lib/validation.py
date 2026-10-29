@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import runpy
 from pathlib import Path
 import subprocess
@@ -151,6 +152,57 @@ def _rename_shadow_ok(workspace: Path, golden: dict[str, Any]) -> bool:
 _LSP_AB_VALIDATORS = {"RENAME-ALIAS": _rename_alias_ok, "RENAME-SHADOW": _rename_shadow_ok}
 
 
+# dap-ab: the workspace's own tests run in file order (pytest's order, which the bug depends on)
+# and the private hidden checks run separately; each in a fresh interpreter with `<ws>/src` first
+# on sys.path, so nothing is served from this process's sys.modules.
+_DAP_TESTS_PROBE = """
+import ast, sys
+workspace, test_file = sys.argv[1], sys.argv[2]
+sys.path.insert(0, workspace + "/src")
+source = open(workspace + "/" + test_file, encoding="utf-8").read()
+namespace = {"__name__": "bench_workspace_tests"}
+exec(compile(source, test_file, "exec"), namespace)
+for node in ast.parse(source).body:
+    if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+        namespace[node.name]()
+"""
+_DAP_HIDDEN_PROBE = """
+import sys
+sys.path.insert(0, sys.argv[1] + "/src")
+exec(sys.argv[2], {"__name__": "bench_hidden_checks"})
+"""
+
+
+def _fresh_ok(workspace: Path, probe: str, *args: str) -> bool:
+    completed = subprocess.run(
+        [sys.executable, "-B", "-c", probe, str(workspace), *args],
+        cwd=workspace, capture_output=True, text=True, timeout=60, check=False,
+        env={**os.environ, "PYTHONPATH": str(workspace / "src")},
+    )
+    return completed.returncode == 0
+
+
+def _dap_tests_kept(workspace: Path, golden: dict[str, Any]) -> bool:
+    path = workspace / golden["test_file"]
+    if not path.is_file():
+        return False
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
+    asserts = sum(isinstance(node, ast.Assert) for node in ast.walk(tree))
+    return set(golden["test_names"]).issubset(names) and asserts >= golden["min_asserts"]
+
+
+def _dap_ok(workspace: Path, golden: dict[str, Any]) -> bool:
+    return (
+        _dap_tests_kept(workspace, golden)
+        and _fresh_ok(workspace, _DAP_TESTS_PROBE, golden["test_file"])
+        and _fresh_ok(workspace, _DAP_HIDDEN_PROBE, golden["hidden_checks"])
+    )
+
+
+_DAP_AB_VALIDATORS = {"MUTABLE-DEFAULT": _dap_ok, "ALIASED-STATE": _dap_ok, "ORDER-DEPENDENT": _dap_ok}
+
+
 def _ratio(found: set[tuple[Any, ...]], gold: set[tuple[Any, ...]]) -> tuple[float, float]:
     correct = found & gold
     recall = len(correct) / len(gold) if gold else float(not found)
@@ -190,8 +242,11 @@ def validate(template_id: str, task_class: str, workspace: Path, golden_path: Pa
         "lsp_adoption": None, "routing_field_accuracy": None, "failure_codes": failures,
     }
     if task_class == "edit":
-        allowed = set(golden["allowed_paths"])
-        if not set(paths).issubset(allowed) or not paths:
+        if "allowed_prefixes" in golden:
+            in_scope = all(path.startswith(tuple(golden["allowed_prefixes"])) for path in paths)
+        else:
+            in_scope = set(paths).issubset(set(golden["allowed_paths"]))
+        if not in_scope or not paths:
             failures.append("mutation_outside_scope")
         try:
             if name == "RENAME":
@@ -201,6 +256,8 @@ def validate(template_id: str, task_class: str, workspace: Path, golden_path: Pa
                 semantic = "DEFAULT_RETRY_LIMIT" not in production + tests and production.count("MAX_RETRY_ATTEMPTS") == 2 and "MAX_RETRY_ATTEMPTS" in tests
             elif name in _LSP_AB_VALIDATORS:
                 semantic = _LSP_AB_VALIDATORS[name](workspace, golden)
+            elif name in _DAP_AB_VALIDATORS:
+                semantic = _DAP_AB_VALIDATORS[name](workspace, golden)
             else:
                 module = runpy.run_path(str(workspace / "src/benchapp/provider_select.py"))
                 select_provider = module["select_provider"]

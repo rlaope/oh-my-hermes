@@ -11,8 +11,9 @@ from typing import Any
 import uuid
 
 from common import CONDITIONS, append_jsonl, artifact_is_safe, load_object, tree_digest
-from corpus import all_specs, materialize
+from corpus import DAP_AB_SPLIT, all_specs, materialize
 from omh_live import (
+    current_session_argv,
     head_omitted_blocks,
     prompt_digest,
     prompt_for_condition,
@@ -49,7 +50,8 @@ def _test_env(root: Path, workspace: Path) -> Path:
     The live session's `python` is Hermes' own venv: no pytest and no `benchapp` on its path.
     Weak models then spend dozens of turns on `pip install` and venv paths, which measures the
     host, not the edit surface. Both arms get this same interpreter: pytest installed and the
-    workspace's `src/` on `sys.path` through a `.pth` file. Returns the interpreter path.
+    workspace's `src/` on `sys.path` through a `.pth` file (plus debugpy, for the dap arm's tool).
+    Returns the interpreter path.
     """
     import shutil
 
@@ -59,7 +61,9 @@ def _test_env(root: Path, workspace: Path) -> Path:
     venv = root / "testenv"
     subprocess.run([uv, "venv", "-q", "--python", sys.executable, str(venv)], check=True, capture_output=True, timeout=120)
     python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    subprocess.run([uv, "pip", "install", "-q", "--python", str(python), "pytest"], check=True, capture_output=True, timeout=300)
+    # debugpy in both arms: the same environment, only the dap arm has a tool that drives it.
+    subprocess.run([uv, "pip", "install", "-q", "--python", str(python), "pytest", "debugpy"],
+                   check=True, capture_output=True, timeout=300)
     purelib = subprocess.run([str(python), "-c", "import sysconfig;print(sysconfig.get_paths()['purelib'])"],
                              check=True, capture_output=True, text=True, timeout=60).stdout.strip()
     Path(purelib, "bench_workspace_src.pth").write_text(str(workspace / "src") + "\n", encoding="utf-8")
@@ -78,6 +82,16 @@ def _live_task(instance_prompt: str, test_python: Path | None = None) -> str:
         "Write the final machine answer as JSON to `.omh-benchmark-answer.json` in the "
         "working directory. Do not include prose in that file."
     )
+
+
+def _arm_toolsets(surfaces: tuple[str, ...]) -> dict[str, str]:
+    route = {"selected_model": "offline", "selected_reasoning_effort": "none"}
+    toolsets = {}
+    for surface in surfaces:
+        argv = current_session_argv("hermes", route=route, provider="offline", usage_file=Path("usage.json"),
+                                    prompt="offline", workspace=Path("workspace"), edit_surface=surface)
+        toolsets[surface] = argv[argv.index("--toolsets") + 1]
+    return toolsets
 
 
 def doctor(base: Path, manifest_path: Path) -> dict[str, Any]:
@@ -202,6 +216,9 @@ def execute_one(
             for event in events:
                 if event.get("mutating"):
                     event["checkpoint_pass"] = True
+            if split == DAP_AB_SPLIT:
+                # Offline check of both A/B arms' launch argv (built, never executed).
+                observation["toolsets"] = _arm_toolsets(("patch", "dap"))
         elif harness in {"omh", "hermes_current_session"}:
             if model is None:
                 raise ValueError("live Hermes harness requires a model")

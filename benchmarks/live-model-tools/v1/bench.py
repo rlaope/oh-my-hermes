@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--manifest", type=Path, default=BASE / "manifest.json")
         command.add_argument("--model", action="append")
         command.add_argument("--condition", choices=CONDITIONS, default="baseline")
-        command.add_argument("--split", choices=("development", "evaluation", "lsp-ab"), default="development")
+        command.add_argument("--split", choices=("development", "evaluation", "lsp-ab", "dap-ab"), default="development")
         command.add_argument("--output", type=Path)
         command.add_argument("--omh-executable", default="omh")
         command.add_argument("--hermes-executable", default="hermes")
@@ -44,18 +44,19 @@ def main(argv: list[str] | None = None) -> int:
         )
         command.add_argument(
             "--edit-surface",
-            choices=("patch", "hashline", "lsp"),
+            choices=("patch", "hashline", "lsp", "dap"),
             default="patch",
-            help="Edit surface for hermes_current_session harness: 'patch' (default, builtin file toolset), 'hashline' (plugin toolset omh-hashline with OMH_HASHLINE_TOOLS=1) or 'lsp' (file,terminal plus plugin toolset omh-lsp).",
+            help="Edit surface for hermes_current_session harness: 'patch' (default, builtin file toolset), 'hashline' (plugin toolset omh-hashline with OMH_HASHLINE_TOOLS=1) or 'lsp' (file,terminal plus plugin toolset omh-lsp) or 'dap' (file,terminal plus plugin toolset omh-dap with OMH_DAP_TOOLS=1).",
         )
         command.add_argument(
             "--edit-directive",
             nargs="?",
             const=True,
             default=False,
-            choices=("rename",),
+            choices=("rename", "debug"),
             help="Prepend the same edit-tool rule to both surfaces (names the surface's read/edit tools). "
-            "'--edit-directive rename' prepends the rename rule pair (patch vs lsp) instead.",
+            "'--edit-directive rename' prepends the rename rule pair (patch vs lsp) instead; "
+            "'--edit-directive debug' prepends the debug rule pair (patch vs dap).",
         )
         command.add_argument(
             "--git-init-workspace",
@@ -93,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"--edit-surface {args.edit_surface} requires --harness hermes_current_session")
         if args.edit_directive == "rename" and args.edit_surface not in {"patch", "lsp"}:
             parser.error("--edit-directive rename requires --edit-surface patch or lsp")
+        if args.edit_directive == "debug" and args.edit_surface not in {"patch", "dap"}:
+            parser.error("--edit-directive debug requires --edit-surface patch or dap")
         if args.harness in {"omh", "hermes_current_session"} and not args.allow_paid_live:
             parser.error("live Hermes harness requires --allow-paid-live")
         if args.harness in {"omh", "hermes_current_session"} and args.max_paid_calls < 1:
