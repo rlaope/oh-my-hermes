@@ -366,4 +366,3 @@ def _remember(session: str, version: tuple[str, int, int]) -> None:
         _emitted[session] = files
         while len(_emitted) > MAX_TRACKED_OUTLINE_SESSIONS:
             _ = _emitted.popitem(last=False)
-
