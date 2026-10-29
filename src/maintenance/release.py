@@ -357,7 +357,9 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # only when explicitly enabled; one tool with an action enum instead of nine
 # tools keeps it under one lsp tool's size per action. Measured by
 # per_turn_context's register() recorder against base 79c5308d2. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 73612
+# 73612 -> 73645: the `debug_python` description states its per-stop evaluate
+# cap (+33), added after a live smoke spent 27.4M tokens on 558 evaluations.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 73645
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

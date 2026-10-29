@@ -370,6 +370,24 @@ class StoppedActionTests(_Root):
         self.assertIn("__import__('pkg.mod', fromlist=['X']).X", reply["hint"])
         self.assertTrue(self.call(action="inspect")["ok"])
 
+    def test_evaluate_budget_per_stop_resets_on_a_new_stop_and_caps_the_session(self):
+        # Live smoke: qwen evaluated `build_order(...).lines[i]` for i = 0..541 at one stop (27.4M tokens).
+        from omh.plugin_bundle.omh import dap_session
+
+        self.client.answers["evaluate"] = lambda a: {"result": "1", "type": "int"}
+        for i in range(dap_session.EVALS_PER_STOP):
+            self.assertTrue(self.call(action="evaluate", expression=f"xs[{i}]")["ok"])
+        over = self.call(action="evaluate", expression="xs[99]")
+        self.assertEqual(over["error"], "evaluate_budget")
+        self.assertIn("patch", over["hint"])
+        self.assertTrue(self.call(action="inspect")["ok"])
+        sent = len([c for c, _ in self.client.sent if c == "evaluate"])
+        self.assertEqual(sent, dap_session.EVALS_PER_STOP)
+        session = self.manager._sessions["t1"]
+        session.evals_at_stop = 0  # what a new `stopped` event does
+        session.evals_total = dap_session.EVALS_PER_SESSION
+        self.assertEqual(self.call(action="evaluate", expression="y")["error"], "evaluate_budget")
+
     def test_set_breakpoints_replaces_and_reports_verified(self):
         reply = self.call(action="set_breakpoints", path=os.path.join("src", "app", "cart.py"), lines=[1, 2],
                           condition="p > 1")

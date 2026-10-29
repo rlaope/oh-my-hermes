@@ -29,6 +29,8 @@ MAX_FRAMES = 8
 MAX_LOCALS = 40
 REPR_CAP = 200
 RESULT_CAP = 2000
+EVALS_PER_STOP = 15  # a stop's state is fixed; past this many reads the model should edit or move on
+EVALS_PER_SESSION = 40
 _EXIT_GRACE = 5.0
 _ENV_KEYS = ("PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "SYSTEMDRIVE", "TEMP", "TMP", "TMPDIR",
              "LANG", "LC_ALL", "LC_CTYPE", "PATHEXT", "COMSPEC", "WINDIR")
@@ -104,6 +106,8 @@ class Session:
         self.breakpoints: dict[str, tuple[list[int], str | None]] = {}
         self.launch_breakpoints: list[dict[str, Any]] = []
         self.output = ""
+        self.evals_at_stop = 0
+        self.evals_total = 0
         self.last_used = time.monotonic()
         self.lock = threading.Lock()
 
@@ -159,6 +163,7 @@ class Session:
         body = event.get("body") or {}
         if name == "stopped":
             self.stopped = True
+            self.evals_at_stop = 0
             self.thread_id = body.get("threadId", self.thread_id)
             frames = self.frames(1)
             stop = {"reason": body.get("reason")}
@@ -269,7 +274,14 @@ class SessionManager:
             expression = args.get("expression")
             if not isinstance(expression, str) or not expression.strip():
                 raise SessionError("invalid_argument", "expression must be a non-empty string")
-            frame, _ = session.frame_at(_index(args))
+            index = _index(args)
+            if session.evals_at_stop >= EVALS_PER_STOP or session.evals_total >= EVALS_PER_SESSION:
+                spent, scope = ((session.evals_at_stop, "at this stop") if session.evals_at_stop >= EVALS_PER_STOP
+                                else (session.evals_total, "in this session"))
+                raise SessionError("evaluate_budget", f"{spent} evaluations {scope} already. Use what they showed: "
+                                   "fix the code with patch and rerun the tests, or continue/step to a new stop "
+                                   "(the per-stop count resets there)")
+            frame, _ = session.frame_at(index)
             try:
                 body = session.client.request("evaluate", {"expression": expression, "frameId": frame.get("id"),
                                                             "context": "watch"})
@@ -281,8 +293,11 @@ class SessionManager:
                 raise SessionError("not_an_expression", f"{exc.message}. evaluate takes one Python expression, "
                                    "not statements: use __import__('pkg.mod', fromlist=['X']).X to read a "
                                    "module value, or inspect for locals") from None
-            return {"ok": True, "result": _cap(str(body.get("result", "")), RESULT_CAP),
-                    **({"type": body["type"]} if body.get("type") else {})}
+            reply = {"ok": True, "result": _cap(str(body.get("result", "")), RESULT_CAP),
+                     **({"type": body["type"]} if body.get("type") else {})}
+            session.evals_at_stop += 1
+            session.evals_total += 1
+            return reply
         if action == "terminate":
             return {"ok": True, "terminated": True, "output_tail": session.close()}
         raise SessionError("invalid_argument", f"unknown action {action!r}")
