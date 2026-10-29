@@ -587,8 +587,11 @@ The setup, fixed before the first live run:
   older-generation small tier, `gpt-5.6-luna`, is the weak model. Condition `baseline` (no
   family calibration), as in the sections below.
 - Hermes runs through `~/.hermes/hermes-agent/.venv/bin/python -m hermes_cli.main -p <profile>`,
-  never the `hermes` launcher. `--oneshot` runs the agent in that process, so the harness
-  timeout ends the turn; the run log checks for leftover processes after each timeout.
+  never the `hermes` launcher. `--oneshot` is a client of the host gateway, which runs the turn
+  and loads each profile's plugins (reloaded for both profiles after they were configured), so
+  the harness timeout only detaches the client. After every run that did not complete, the
+  driver sends the gateway `session.interrupt` (the RPC behind the chat client's `/stop`) for
+  that run's sessions; a smoke check stopped a detached turn this way.
 
 The merge gate, written before the first live run:
 
