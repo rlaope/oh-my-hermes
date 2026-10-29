@@ -194,6 +194,7 @@ class SessionManager:
         self.idle_timeout = idle_timeout
         self.clock = clock
         self._sessions: dict[str, Session] = {}
+        self._launching: set[str] = set()  # keys reserved by a launch still spawning/handshaking
         self._lock = threading.Lock()
 
     def _expire(self, key: str) -> bool:
@@ -294,8 +295,18 @@ class SessionManager:
     def launch(self, key: str, args: dict[str, Any], root: str) -> dict[str, Any]:
         with self._lock:
             self._expire(key)
-            if key in self._sessions:
+            if key in self._sessions or key in self._launching:
                 raise SessionError("session_active", "a debug session is already live; call action=terminate first")
+            # Reserve the key before spawning: two parallel launches on one task must not both start an
+            # adapter, or the first is orphaned when the second overwrites it.
+            self._launching.add(key)
+        try:
+            return self._launch_reserved(key, args, root)
+        finally:
+            with self._lock:
+                self._launching.discard(key)
+
+    def _launch_reserved(self, key: str, args: dict[str, Any], root: str) -> dict[str, Any]:
         python = args.get("python")
         if not isinstance(python, str) or not python.strip():
             raise SessionError("invalid_argument", "python (the interpreter path to debug with) is required")

@@ -27,6 +27,7 @@ from typing import Any, Sequence
 REQUEST_TIMEOUT = 30.0
 CLOSE_WAIT = 2.0
 _STDERR_RING = 8192
+_OUTPUT_RING = 64 * 1024  # program output kept between drains; a flood must not grow the host
 # Events a caller waits for; anything else (thread, module, process, ...) is dropped.
 _KEPT_EVENTS = frozenset({"initialized", "stopped", "continued", "exited", "terminated"})
 _EOF = object()
@@ -88,7 +89,8 @@ class DapClient:
         self._inbox: queue.Queue[Any] = queue.Queue()
         self._responses: dict[int, dict[str, Any]] = {}
         self._events: list[dict[str, Any]] = []
-        self._output: list[str] = []
+        self._output: deque[str] = deque()
+        self._output_size = 0
         self._stderr: deque[bytes] = deque()
         self._stderr_size = 0
         self._eof = False
@@ -167,7 +169,11 @@ class DapClient:
             if name == "output":
                 body = message.get("body") or {}
                 if body.get("category") != "telemetry":
-                    self._output.append(str(body.get("output", "")))
+                    text = str(body.get("output", ""))[-_OUTPUT_RING:]
+                    self._output.append(text)
+                    self._output_size += len(text)
+                    while self._output_size > _OUTPUT_RING and len(self._output) > 1:
+                        self._output_size -= len(self._output.popleft())
             elif name in _KEPT_EVENTS:
                 self._events.append(message)
 
@@ -222,7 +228,9 @@ class DapClient:
     def drain_output(self) -> str:
         """Program output received since the last drain."""
         self._drain_nowait()
-        text, self._output = "".join(self._output), []
+        text = "".join(self._output)[-_OUTPUT_RING:]
+        self._output.clear()
+        self._output_size = 0
         return text
 
     def alive(self) -> bool:

@@ -185,6 +185,38 @@ class LaunchTests(_Root):
         self.assertIn("terminate", reply["hint"])
         self.assertEqual(len(self.clients), 1)
 
+    def test_parallel_launches_on_one_task_start_one_adapter(self):
+        # Adversarial case j: two launches racing on one task_id must not orphan an adapter.
+        import threading
+
+        gate, entered = threading.Event(), threading.Event()
+        inner = self.manager.factory
+
+        def slow_factory(argv, cwd, env):
+            entered.set()
+            gate.wait(5)
+            return inner(argv, cwd, env)
+
+        self.manager.factory = slow_factory
+        replies = []
+        first = threading.Thread(target=lambda: replies.append(self.launch()))
+        first.start()
+        self.assertTrue(entered.wait(5))
+        second = self.launch()
+        gate.set()
+        first.join(5)
+        self.assertEqual(second["error"], "session_active")
+        self.assertTrue(replies[0]["ok"])
+        self.assertEqual(len(self.clients), 1)
+        self.assertEqual(self.manager._launching, set())
+
+    def test_failed_launch_releases_the_reservation(self):
+        self.next_client = self.make_client(events=[])
+        reply = self.launch(timeout=5)
+        self.assertFalse(reply["ok"])
+        self.assertEqual(self.manager._launching, set())
+        self.assertTrue(self.launch()["ok"])
+
     def test_sessions_are_keyed_by_task(self):
         self.assertTrue(self.launch(task="a")["ok"])
         self.assertTrue(self.launch(task="b")["ok"])
@@ -491,7 +523,8 @@ class ClientQueueTests(unittest.TestCase):
         client._inbox = dap_client.queue.Queue()
         for message in messages:
             client._inbox.put(message)
-        client._responses, client._events, client._output = {}, [], []
+        client._responses, client._events = {}, []
+        client._output, client._output_size = dap_client.deque(), 0
         client._eof = False
         return client
 
@@ -528,6 +561,16 @@ class ClientQueueTests(unittest.TestCase):
         self.assertEqual(written[0]["request_seq"], 7)
         self.assertFalse(written[0]["success"])
         self.assertEqual(written[0]["command"], "runInTerminal")
+
+    def test_output_flood_while_running_stays_bounded(self):
+        # Adversarial case j: a program printing forever must not grow the host between drains.
+        chunk = "F" * 65536 + "\n"
+        client = self._client([{"type": "event", "event": "output", "body": {"output": chunk}}] * 200)
+        client._drain_nowait()
+        held = sum(len(part) for part in client._output)
+        self.assertLessEqual(held, dap_client._OUTPUT_RING + len(chunk))
+        self.assertLessEqual(len(client.drain_output()), dap_client._OUTPUT_RING)
+        self.assertEqual((len(client._output), client._output_size), (0, 0))
 
     def test_real_process_close_is_idempotent(self):
         script = "import sys; sys.stdin.read()"
