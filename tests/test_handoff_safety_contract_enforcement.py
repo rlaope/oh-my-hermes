@@ -427,6 +427,13 @@ PROCESS_SPAWN_ALLOWLIST: dict[str, str] = {
     "src/plugin_bundle/omh/tools/evidence_tool.py": (
         "allowlisted local verification-command runner; its allowlist is itself gated below."
     ),
+    "src/plugin_bundle/omh/dap_client.py": (
+        "opt-in `debug_python` tool (toolset `omh-dap`, off unless OMH_DAP_TOOLS or the profile "
+        "setting `dap_tools`): reached only from an explicit model tool call; spawns only "
+        "`<interpreter> -m debugpy.adapter` with shell=False and stdio pipes, cwd the workspace "
+        "root, a minimal env; the debuggee is the workspace's own test command; every request is "
+        "bounded by a timeout and close() kills the adapter; no network in omh itself."
+    ),
     "src/surfaces/menubar_app.py": (
         "`swiftc` compile plus `launchctl` load for the opt-in macOS menubar helper install."
     ),

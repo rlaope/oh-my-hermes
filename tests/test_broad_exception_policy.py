@@ -653,6 +653,30 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "`oneshot_detection_unavailable` and actionable text; the raw exception is suppressed. These "
         "failures are never answered `False`, which would silently disable the one-shot child budget.",
     ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/tools/dap_tool.py",
+        "_dap_tools_enabled",
+        INTENTIONAL,
+        "The opt-in gate for `debug_python`: env `OMH_DAP_TOOLS` decides first; only reading the "
+        "profile's config.yaml text is guarded, and any failure there means the tool stays hidden "
+        "(the documented default-off state), never that it is enabled.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/tools/dap_tool.py",
+        "_workspace_root",
+        INTENTIONAL,
+        "Hermes' private `tools.file_tools_paths._resolve_base_dir` is optional host API; when it is "
+        "absent or raises, the root falls back to TERMINAL_CWD and then the process cwd, and every "
+        "path argument is still realpath-confined to that root, so a failure narrows, never widens.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/tools/dap_tool.py",
+        "debug_python_handler",
+        INTENTIONAL,
+        "Classified failures (SessionError, DapError) are answered with their own codes first; an "
+        "unexpected exception becomes `ok: false, error: unexpected_error` naming the exception "
+        "class, distinct from every success reply, so the host's tool loop never raises.",
+    ),
 )
 
 # Ruff reports one hit per handler; the inventory is keyed per enclosing
@@ -705,8 +729,13 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # thread, which draws an unexpected reader failure as a named warning row.
 # 71 -> 72 / 63 -> 64: `repro_audit.operations._publish`, which rolls back
 # only the staged files it owns and re-raises the original failure.
-EXPECTED_HANDLER_COUNT = 72
-EXPECTED_ANCHOR_COUNT = 64
+# 72 -> 75 / 64 -> 67: `dap_tool._dap_tools_enabled`, `_workspace_root` and
+# `debug_python_handler`, the opt-in omh-dap tool's gate, root lookup and
+# never-raise handler (a failure is hidden-tool, narrowed root, or a named
+# `unexpected_error`). The omh-lsp sites of the same shape are counted on the
+# lsp branch, not here.
+EXPECTED_HANDLER_COUNT = 75
+EXPECTED_ANCHOR_COUNT = 67
 
 
 class DerivedSite(NamedTuple):
