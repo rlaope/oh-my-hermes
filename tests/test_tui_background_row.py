@@ -625,9 +625,53 @@ class OwnershipTests(unittest.TestCase):
         self.assertFalse(self.poller._thread.is_alive())
         self.assertEqual(len(reads), 2)  # read again after the failure
         snapshot = self.poller.take()
-        self.assertEqual(snapshot.payload, {"error": "PermissionError"})
+        # Delta review 1: the class, where it raised and its repr, so a failure that repeats is diagnosable.
+        raised_at = failing.__code__.co_firstlineno + 3
+        self.assertEqual(snapshot.payload,
+                         {"error": f"PermissionError at failing:{raised_at}: PermissionError('state.db')"})
         self.assertEqual([found.proc_id for found in snapshot.processes], ["proc_live"])
-        self.assertEqual(snapshot.refreshes, 0)
+        self.assertEqual((snapshot.refreshes, snapshot.failed), (0, True))
+
+    def test_a_raising_wake_never_ends_the_thread(self) -> None:
+        """Delta review 4: the callback a read ends with ran outside the guard; the failed read calls none."""
+        self.path.write_text("[]", encoding="utf-8")
+        reads = []
+
+        def reader(*_args: object, **_kwargs: object) -> dict:
+            reads.append(1)
+            if len(reads) >= 3:
+                self.poller._stopping.set()
+            return {"hermes_home": self.home, "n": len(reads)}  # every read changes: every read wakes
+
+        def wake() -> None:
+            raise RuntimeError("the UI went away")
+
+        self.poller = HudPoller("/omh", None, reader=reader, clock=lambda: 5.0)
+        self.poller.set_session("us")
+        with patch("omh.tui.panels.HUD_POLL_MAX_SECONDS", 0.01), patch("omh.tui.panels.HUD_POLL_MIN_SECONDS", 0.01):
+            self.poller.start(wake)
+            self.poller._thread.join(5)
+        self.assertFalse(self.poller._thread.is_alive())
+        self.assertGreaterEqual(len(reads), 3)  # it read on after each raising wake
+        self.assertTrue(self.poller.take().failed)
+
+    def test_a_failed_read_changes_nothing_the_row_holds(self) -> None:
+        """Delta review 2 and 3: a failed snapshot stamped kept processes quiet (`bg_after` 0 before the first turn
+        ends) and, right after a switch to a rotated session, read as a session change that reset the row."""
+        app, _client = make_app(cols=120)
+        app.stored_id = "seg_a"
+        app._take_background(HudSnapshot("seg_a", {}, 0.0, {}, (process(proc_id="proc_a"),)))
+        held = (app.bg_session, app.bg_running, dict(app.bg_quiet), app.bg_done)
+        app.bg_quiet = {}
+        app._take_background(HudSnapshot("seg_a", {"error": "X"}, 0.0, {}, (process(proc_id="proc_a"),), 0,
+                                         failed=True))
+        self.assertEqual(app.bg_quiet, {})  # nothing stamped quiet
+        app.bg_quiet = held[2]
+        app.stored_id = "seg_b"  # rotated; the first read of seg_b fails
+        app._take_background(HudSnapshot("seg_b", {"error": "X"}, 0.0, {}, (), 0, failed=True))
+        self.assertEqual((app.bg_session, app.bg_running, app.bg_quiet, app.bg_done), held)
+        app._take_background(HudSnapshot("seg_b", {}, 0.0, {}, (process(proc_id="proc_a"),), 0, ("seg_a",)))
+        self.assertEqual((app.bg_session, [found.proc_id for found in app.bg_running]), ("seg_b", ["proc_a"]))
 
     def test_an_unverified_lineage_is_asked_again_and_the_carry_waits_for_it(self) -> None:
         """Review L1: an `unverified` answer (the continuation's row not there yet) was kept for the session."""

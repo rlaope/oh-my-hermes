@@ -51,6 +51,7 @@ from pathlib import Path
 import sqlite3
 import threading
 import time
+import traceback
 from typing import Any
 import unicodedata
 from urllib.parse import quote
@@ -74,6 +75,7 @@ ROUTE_READS = 5  # reads that may ask again while no row of the session is there
 PARENT_CACHE = 256  # spawning sessions decided per session; one past this is not asked and not this session's
 PARENT_READS = 5  # reads that may ask again about a spawning session state.db could not decide (`delegated_from`)
 DELEGATION_DEPTH = 8  # delegation links followed from a spawning session back to this one
+FAILURE_CHARS = 200  # a failed read's `error` in the snapshot: class, where it raised, and its repr, cut to this
 
 # The fields that drift on every poll without anything having happened: the
 # widget's VOLATILE_KEYS. A payload differing only here is still delivered (so
@@ -146,6 +148,7 @@ class HudSnapshot:
     processes: tuple[BackgroundProcess, ...] = ()
     refreshes: int = 0
     earlier: tuple[str, ...] = ()  # the conversation's earlier segments the read verified (`earlier_segments`)
+    failed: bool = False  # a read that raised (`HudPoller._read_failed`): its processes are the last ones read
 
 
 HudReader = Callable[..., Mapping[str, Any]]
@@ -412,24 +415,29 @@ class HudPoller:
             self._wake.wait(interval)
 
     def _read_failed(self, error: BaseException) -> float:
-        """A read that raised past the readers' own guards: the panel says so (`OMH HUD unavailable: <class>`, as a
-        reader failure in `_read` does), and the background row keeps the processes last read, so a failed read never
-        reads as their end. Its `refreshes` is 0, so it stamps nothing quiet. The next read comes after the longest
-        interval, and the one after it is delivered whatever it reads."""
+        """A read that raised past the readers' own guards (or the wake it ends with): the panel says so, naming the
+        class, where it raised and its repr (`failure_text`), so a failure that repeats is diagnosable from the screen;
+        the snapshot is `failed`, so the background row takes nothing from it (`App._take_background`: no end, no
+        quiet stamp, no session change). It calls no callback: the UI loop takes it at its next step, so nothing
+        here can raise out of the thread. The next read comes after the longest interval, and the one after it is
+        delivered whatever it reads."""
         with self._lock:
             session = self._session
             if session:
                 running = tuple(sorted(self._processes.values(), key=lambda process: (process.started_at,
                                                                                      process.proc_id)))
-                self._pending = HudSnapshot(session, {"error": type(error).__name__}, self._clock(), {}, running, 0,
-                                            self._earlier or ())
+                self._pending = HudSnapshot(session, {"error": failure_text(error)}, self._clock(), {}, running, 0,
+                                            self._earlier or (), failed=True)
                 self._last_full = self._last_structural = ""
             self._interval = HUD_POLL_MAX_SECONDS
-        wake = self.on_snapshot
-        if session and wake is not None:
-            wake()
         return HUD_POLL_MAX_SECONDS
 
+
+def failure_text(error: BaseException) -> str:
+    """`<class> at <function>:<line>: <repr>`, cut to `FAILURE_CHARS`: the innermost frame the exception passed."""
+    frames = traceback.extract_tb(error.__traceback__)
+    where = f" at {frames[-1].name}:{frames[-1].lineno}" if frames else ""
+    return truncate(f"{type(error).__name__}{where}: {error!r}", FAILURE_CHARS)
 
 def earlier_segments(hermes_home: object, session_id: str) -> tuple[tuple[str, ...], bool]:
     """The earlier segments of `session_id`'s conversation, nearest first, as far as Hermes' compaction links verify

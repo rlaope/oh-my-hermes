@@ -6002,9 +6002,11 @@ class App(ModesMixin, AgentViewMixin):
         The empty snapshot a switch delivers decides nothing: the row stays
         hidden until the first read of the session says whether it continues
         the one the row was for (`HudSnapshot.earlier`, a rotation), which
-        keeps the row, or not, which starts over.
+        keeps the row, or not, which starts over. A read that failed
+        (`HudSnapshot.failed`) decides nothing either: no end, no quiet stamp,
+        no change of session.
         """
-        if snapshot.payload is None:
+        if snapshot.payload is None or snapshot.failed:  # a failed read read nothing new (`HudPoller._read_failed`)
             return
         if snapshot.session_id != self.bg_session:
             if self.bg_session not in snapshot.earlier:
