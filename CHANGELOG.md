@@ -20,6 +20,49 @@ All notable changes will be documented here.
   session's id; after a `/new` on the same chat, neither conversation
   shows the other's.
 
+- **The second Ctrl+C of the OMH TUI exits, and the launch, a resize and the import cost less.** After a
+  Ctrl+C interrupts a turn, the queued prompt it puts back in the composer no longer eats the second press:
+  that press exits as the info line says, with Shift or Alt held too, and only while the line says so; after
+  an interrupt it says so over an open steer, rewind or tell as well. What the
+  composer holds is not kept on exit; prompts already sent or queued are in Hermes' history, where Up finds
+  them, and a submit still waiting on its pasted image keeps the press from exiting. The launch logo's contrast lift
+  parses each colour once and is cached (first paint about 12.6 -> 10.3 ms, same bytes); a full redraw
+  prints the rows it measured instead of rendering the kept blocks twice (a long session's settled resize
+  about 270 -> 205 ms); and the bot board's module loads when the board opens, not with the TUI.
+
+- **The OMH TUI has eight launch looks, and a look now tints the chrome.**
+  `/theme` adds `sakura` (pastel pink, sky blue and cream), `moonlit`
+  (moonlight yellow and silver over navy), `aurora` (emerald and teal into
+  violet) and `ember` (amber through orange to crimson) to `spectrum`,
+  `violet`, `gold` and `graphite`, each with a set for dark and one for
+  light backgrounds. Every look, the four earlier ones too, now also paints
+  the composer's rules and the frames drawn like them in its card-edge
+  colour, and a tool call's rail and the working row's spinner in its label
+  colour, each lifted to 3:1 against the background; a failed or denied
+  call's rail stays red. Body text, the grey details, the reply's rail and
+  the state colours keep the theme's, and `spectrum` stays the default with
+  its logo unchanged. The picker, `/theme <look>`, Tab completion and the
+  saved `launch` key take the new names; an unknown saved name still warns
+  and falls back to `spectrum`.
+
+- **The working glow no longer blanks the screen's top row.** While a turn
+  ran, the OMH TUI painted the whole top row as the light's track, so that
+  row's text (the logo's first line on the launch screen, or the oldest
+  row of a short session) was hidden for the whole turn. The row's own text
+  is now painted again under the light, and only the cells the light
+  reaches cover it.
+
+- **`/glow off` turns the OMH TUI's working glow off, and it now shows in a
+  short session too.** `/glow on|off` (alone, it switches) is saved beside
+  the theme under the OMH home, so it holds in every later session;
+  `omh theme glow on|off` saves the same choice from the shell, and
+  `omh theme glow` shows it. `OMH_TUI_GLOW=0` still holds it off in one
+  terminal. The light used to be
+  drawn only once the session filled the screen; it now goes round a
+  session of any length, over the blank rows under it. A prompt's band no
+  longer runs into the right margin the glow keeps: it ends one column in,
+  as it starts one column in on the left.
+
 - **A light goes round the OMH TUI's screen while a turn runs.** It runs
   along the terminal's whole edge, clockwise, once every four seconds, with
   a round head and a trail in the launch look's logo colours that fades
@@ -454,6 +497,36 @@ All notable changes will be documented here.
   three. A one-line text paste sent at once joins its prompt the same way.
   Esc, or Ctrl+C, gives the held prompt back. A paste Hermes never answers
   holds the prompt only until it expires.
+- **`omh doctor` and the probe read the skill pack you actually run, on a
+  migrated install too (#2358, reported by @yqm-307; #2378, reported by
+  @mazzy89).** A managed install serves its skills from a generation behind
+  the `current` pointer, and a host migrated from the 3.x layout keeps
+  `~/.omh/skills` as a frozen copy. Three read-only diagnostics looked at
+  that copy instead. The `workflow_engine_reach` advice measured it, so a
+  migrated host was told `dag-ulw` was not installed (it postdates the
+  copy) and a host without the copy was told no install existed; neither
+  report could change, since `omh update` never touches the copy. It now
+  measures the pack doctor resolved, and an unmeasurable install names the
+  file or directory that was missing. The plugin's standalone probe matched
+  only the copy's path in `config.yaml`, which registers the pointer, so it
+  reported the managed skills unregistered; it now accepts the pointer, a
+  generation's pack, the recorded pack and the copy, matched by real path,
+  and checks for `omh-routing` in the pack in use. The chat status card
+  carried the same mistake. Separately, `omh doctor` run from the 3.x
+  bootstrap venv stopped at once with `support refuses symlink component:
+  .../generations/bootstrap-legacy/skills`, because it read the support
+  files through that generation's link and the support reader refuses every
+  link. Doctor now reads through the link the way `omh update` does, so the
+  full report prints. A link the installer would also refuse is a blocking
+  `skills_dir_link` check that names it, and any other refused path fails
+  `local_modifications` and `guidance_projection` with the reason, while
+  every other check still runs. The advice still never moves doctor's
+  status or exit code.
+- **product-ab gives the OMH arm the same reach as the Hermes arm.** The OMH
+  arm's unit was scoped to `src/` and `tests/` while the Hermes arm's prompt
+  set no limit, so a task whose fix regenerates `docs/WORKFLOWS.md` or a
+  skill body was one only the Hermes arm was allowed to finish. The unit
+  scope is now the whole checkout.
 
 ## 4.0.3 - 2026-10-27
 

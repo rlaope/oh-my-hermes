@@ -103,7 +103,7 @@ import sys
 import time
 from types import FrameType
 import unicodedata
-from typing import Any, NamedTuple, Protocol, TextIO
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, TextIO
 
 from ..plugin_bundle.omh.hud_text import elapsed_text
 from ..commands.theme_picker import (
@@ -120,12 +120,14 @@ from ..skin_pack import (
     SkinTheme,
     default_theme,
     effective_theme,
+    read_glow_choice,
     read_launch_choice,
     skin_colors,
     theme_for_name,
     theme_for_skin_name,
     theme_names,
     theme_store_path,
+    write_glow_choice,
     write_launch_choice,
 )
 from . import gateway_contract as contract
@@ -200,7 +202,6 @@ from .panels import (
 )
 from .dag_pager import DagPager
 from .background import BackgroundProcess, askable, finished_line, report_prompt, running_line, tool_call
-from .bot_board import BoardReader, BotBoard
 from .clipboard import COPY_OSC52, COPY_PBCOPY, copy_route, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .edge_glow import EDGE_MARGIN, Edge, edge, edge_fits
@@ -268,7 +269,7 @@ from .theme import (
     Theme,
     aura_moves,
     build_theme,
-    with_catch_colours,
+    with_launch_look,
     with_prompt_band,
     is_light,
     launch_palette,
@@ -302,6 +303,9 @@ from .transcript import (
 )
 from .width import cell_width, clusters, line_width, truncate, truncate_left, truncate_line
 from ..version import __version__
+
+if TYPE_CHECKING:  # the bot board loads when it is opened (`_bots`), not with the TUI
+    from .bot_board import BoardReader
 
 # While the key decoder holds bytes (a lone ESC, half a sequence, an open paste), the loop reads with this
 # timeout, and an empty read settles what is held only once input has been quiet for `FLUSH_SILENCE_SECONDS`:
@@ -530,6 +534,12 @@ CARD_KEPT = "kept"
 LAUNCH_UNKNOWN_NOTICE = "The launch look {name!r} saved in {path} is not one OMH has; spectrum is used."
 LAUNCH_NO_NAME_NOTICE = "No theme or launch look named {name}. Themes: {themes}. Launch looks: {looks}."
 LAUNCH_KEPT_NOTICE = "Launch look {name}, kept in {path}."
+GLOW_KEPT_NOTICE = "Working glow {state}, kept in {path}."
+GLOW_SESSION_NOTICE = "Working glow {state} for this session; there is no OMH home to keep it in."
+GLOW_SAVE_FAILED_NOTICE = "Working glow {state} for this session; it could not be saved to {path}: {error}"
+GLOW_ENV_NOTICE = "Working glow kept {state}; OMH_TUI_GLOW=0 holds it off in this terminal."
+GLOW_UNAVAILABLE_NOTICE = "Working glow kept {state}; it shows only with motion on, at truecolor, on a screen 20×8 or larger."
+GLOW_USAGE_NOTICE = "Use /glow on or /glow off; /glow alone switches it."
 LAUNCH_SESSION_NOTICE = "Launch look {name} for this session; there is no OMH home to keep it in."
 LAUNCH_SAVE_FAILED_NOTICE = "Launch look {name} for this session; it could not be saved to {path}: {error}"
 LAUNCH_SWATCH_STEPS = 6  # the colours a look's swatch shows in the /theme picker
@@ -677,8 +687,8 @@ BELL = "\a"
 QUESTION_ALERT_CHARS = 80  # the most of what Hermes asks that a question's notification says
 BELL_ENV = "OMH_TUI_BELL"
 BELL_OFF = "0"
-# The working glow round the screen (`edge_glow`) is on wherever it can move; OMH_TUI_GLOW=0 turns it off, and with it
-# the margin and the blank last row it keeps.
+# The working glow round the screen (`edge_glow`) is on wherever it can move; `/glow off` (kept under the OMH home) or
+# OMH_TUI_GLOW=0 turns it off, and with it the margin and the blank last row it keeps.
 GLOW_ENV = "OMH_TUI_GLOW"
 GLOW_OFF = "0"
 # A turn that ran this long ends with the terminal's attention signal (`attention_sequence`).
@@ -1594,6 +1604,7 @@ class App(ModesMixin, AgentViewMixin):
         self.interrupt_armed: str | None = None  # the agent a first `x` in the list asked about
         self.agent_steer: str | None = None  # the agent `s` picked: the next line sent is its steer
         self.decoder = KeyDecoder(clock)
+        self.glow = self._saved_glow()  # the working glow is wanted (`/glow`); `_edged` says whether it can show
         self._take_size()
         self.region = self._new_region()
         self.sid = ""
@@ -1680,7 +1691,7 @@ class App(ModesMixin, AgentViewMixin):
         # What reads the bot board (Ctrl+S, `/bots`) off this thread: made when it first opens, kept for the session
         # and paused while the board is closed, so a read stuck on a stalled file system never adds a thread.
         self.board_reader: BoardReader | None = None
-        self.make_board_reader: Callable[..., BoardReader] = BoardReader
+        self.make_board_reader: Callable[..., BoardReader] | None = None  # `bot_board.BoardReader` when None
         self.redraw_after_pager = False  # a full redraw the main screen is owed once the pager is left
         self.hud: HudSnapshot | None = None
         self.goal: Mapping[str, Any] | None = None  # Hermes' standing /goal, as its last `session.control.update` said
@@ -1701,6 +1712,7 @@ class App(ModesMixin, AgentViewMixin):
         self.bg_after = 0
         self.notification: Notification | None = None  # Hermes' out-of-band notice, shown above the composer
         self.exit_armed_at: float | None = None
+        self.exit_armed_by_interrupt = False  # whether the press that armed it interrupted a turn (`_exit_said`)
         self.exit_code: int | None = None
         self.farewell = ""
         self.banner_facts: dict[str, str] | None = None  # the header, flushed above the next frame
@@ -2108,11 +2120,11 @@ class App(ModesMixin, AgentViewMixin):
         return without_colour(theme) if self.color_depth == NO_COLOR else theme
 
     def _themed(self) -> Theme:
-        """The skin's theme against the background, with the shown launch look's band behind a sent prompt and its
-        catch-row colours, painted."""
+        """The skin's theme against the background, with the shown launch look's band behind a sent prompt and the
+        roles it owns (`with_launch_look`), painted."""
         skin, surface, look = self._skin(), self._surface(), self._shown_look()
         banded = with_prompt_band(build_theme(skin, surface), skin, surface, look)
-        return self._painted(with_catch_colours(banded, skin, surface, look))
+        return self._painted(with_launch_look(banded, skin, surface, look))
 
     def _skin(self) -> SkinTheme:
         return theme_for_name(self.theme.name) or default_theme()
@@ -3190,6 +3202,16 @@ class App(ModesMixin, AgentViewMixin):
         ):
             self._send_queued_now()
             return
+        # The second Ctrl+C leaves even over text while the info line names it (`_exit_said`): the queue an interrupt
+        # gives back lands in the composer between the presses, and clearing it there would leave the TUI open. Any
+        # Ctrl+C the composer would take (Shift or Alt too) counts. What the composer holds is not kept on exit; what
+        # was sent or queued is in Hermes' history, where Up finds it. With a submit held for its paste the press
+        # does not exit (`_exit_said`): it clears the draft as ever, and the held submit still goes.
+        if isinstance(event, Key) and event.name == CHAR and event.ctrl and event.char == "c" and (
+            self.composer.text and self._exit_said()
+        ):
+            self.exit_code = 0
+            return
         before = self.composer.text
         action = self.composer.handle(event)
         if self.composer.text != before:
@@ -3422,6 +3444,21 @@ class App(ModesMixin, AgentViewMixin):
         else:
             self._rewind("")
         return True
+
+    def _exit_said(self) -> bool:
+        """Whether a Ctrl+C exits now, which is when the info line says `EXIT_HINT`: an exit armed inside its window,
+        no submit held for its paste (Ctrl+C gives that back, or clears the draft, first), and no question, picker,
+        agent list or tree open. A steer, rewind or tell names its own keys first, unless the press that armed
+        the exit interrupted a turn: then the second press leaves from there too."""
+        return (
+            self.exit_armed_at is not None and self.clock() - self.exit_armed_at <= EXIT_CONFIRM_SECONDS
+            and not self.held_submits and self.slot is None and not self._picker_keys()
+            and self.list_selected is None and self.tree_selected is None
+            and (self.exit_armed_by_interrupt or (
+                self.roster.agents.get(self.agent_steer or "") is None and self.rewind is None
+                and self.tell_draft is None
+            ))
+        )
 
     def _expire_exit(self) -> None:
         """Forget a first Ctrl+C once the second can no longer exit, so the info line stops naming it."""
@@ -3955,12 +3992,14 @@ class App(ModesMixin, AgentViewMixin):
         if not self._busy() and self._give_back_held():
             self.dirty = True  # a submit held for its paste comes back, as Esc gives it; this press arms no exit
             return
-        if self.exit_armed_at is not None and now - self.exit_armed_at <= EXIT_CONFIRM_SECONDS:
+        if self._exit_said():  # only while the info line says so
             self.exit_code = 0
             return
-        if self._busy():
+        busy = self._busy()
+        if busy:
             self._interrupt()
         self.exit_armed_at = now  # the info line says so until the second press can no longer come
+        self.exit_armed_by_interrupt = busy
         self.dirty = True
 
     def _menu_entries(self) -> list[Completion]:
@@ -5053,6 +5092,7 @@ class App(ModesMixin, AgentViewMixin):
             "bots": self._bots,
             "copy": self._copy,
             "theme": self._theme,
+            "glow": self._glow,
             "omh-model": self._omh_model,
             "reload-skills": self._reload_skills,
             "topup": self._topup,
@@ -5500,8 +5540,10 @@ class App(ModesMixin, AgentViewMixin):
         What it shows is read by a `BoardReader` thread for as long as the
         board is open; nothing it does is sent anywhere.
         """
+        from .bot_board import BoardReader, BotBoard  # on demand: a session that never opens the board never loads it
+
         if self.board_reader is None:
-            self.board_reader = self.make_board_reader(self.environ, clock=self.wall_clock)
+            self.board_reader = (self.make_board_reader or BoardReader)(self.environ, clock=self.wall_clock)
         reader = self.board_reader
         self._show_pager(BotBoard("bots", show=reader.show, refresh=reader.refresh, clock=self.wall_clock))
         reader.start(self._wake_loop)
@@ -5509,7 +5551,11 @@ class App(ModesMixin, AgentViewMixin):
     def _take_board(self) -> None:
         reader = self.board_reader
         snapshot = reader.take() if reader is not None else None
-        if snapshot is not None and isinstance(self.pager, BotBoard):
+        if snapshot is None:
+            return
+        from .bot_board import BotBoard  # loaded once `_bots` made the reader
+
+        if isinstance(self.pager, BotBoard):
             self.pager.take(snapshot)
             self.dirty = True
 
@@ -6091,12 +6137,54 @@ class App(ModesMixin, AgentViewMixin):
         self.size = (cols - 2 * EDGE_MARGIN, rows - 1) if self._edged() else self.screen
 
     def _edged(self) -> bool:
-        """Whether the screen keeps its edge for the working glow's frame (`edge_glow`): at the truecolor depth with
-        motion on, on a screen big enough (`edge_fits`). The rows are then drawn `EDGE_MARGIN` columns in from each
-        side, over a blank last row of the region's own, whether a turn runs or not, so nothing moves as the frame
-        comes and goes. OMH_TUI_GLOW=0 turns it off."""
-        return (self.motion and self.color_depth == TRUECOLOR and edge_fits(*self.screen)
-                and self.environ.get(GLOW_ENV) != GLOW_OFF)
+        """Whether the screen keeps its edge for the working glow's frame (`edge_glow`): where it shows
+        (`_glow_shown`), on a screen big enough (`edge_fits`). The rows are then drawn `EDGE_MARGIN` columns in from
+        each side, over a blank last row of the region's own, whether a turn runs or not, so nothing moves as the
+        frame comes and goes."""
+        return self._glow_shown() and edge_fits(*self.screen)
+
+    def _glow_shown(self) -> bool:
+        """Whether the working glow shows on a screen big enough: wanted (`/glow`), not held off by OMH_TUI_GLOW=0,
+        with motion on, at the truecolor depth."""
+        return (self.glow and self.environ.get(GLOW_ENV) != GLOW_OFF and self.motion
+                and self.color_depth == TRUECOLOR)
+
+    def _saved_glow(self) -> bool:
+        """Whether the working glow is wanted: as saved under the OMH home, else on."""
+        home = self._omh_home()
+        saved = read_glow_choice(home) if home is not None else None
+        return True if saved is None else saved
+
+    def _glow(self, arg: str) -> None:
+        """`/glow on|off` turns the working glow on or off and keeps that under the OMH home; alone, switches it.
+
+        The rows move in or out by the margin it takes, so the session is drawn again.
+        """
+        choice = arg.strip().lower()
+        if choice not in ("", "on", "off"):
+            self.transcript.add_notice(GLOW_USAGE_NOTICE, NOTICE_WARN)
+            return
+        self.glow = not self.glow if not choice else choice == "on"
+        state = "on" if self.glow else "off"
+        home = self._omh_home()
+        if home is None:
+            self.transcript.add_notice(GLOW_SESSION_NOTICE.format(state=state))
+        else:
+            try:
+                path = write_glow_choice(home, self.glow)
+            except OSError as error:
+                self.transcript.add_notice(
+                    GLOW_SAVE_FAILED_NOTICE.format(state=state, path=theme_store_path(home), error=error), NOTICE_WARN)
+            else:
+                self.transcript.add_notice(GLOW_KEPT_NOTICE.format(state=state, path=path))
+        if self.glow and self.environ.get(GLOW_ENV) == GLOW_OFF:
+            self.transcript.add_notice(GLOW_ENV_NOTICE.format(state=state))
+        elif self.glow and not self._glow_shown():
+            self.transcript.add_notice(GLOW_UNAVAILABLE_NOTICE.format(state=state))
+        if self._edged() != (self.size != self.screen):  # the margin comes or goes: lay the session out again
+            self._take_size()
+            self._full_redraw()
+        self.dirty = True
 
     def _margin(self) -> int:
         """Columns the rows are drawn in from the screen's left edge."""
@@ -6362,14 +6450,14 @@ class App(ModesMixin, AgentViewMixin):
             say, say_style = self._agent_list_say()
         elif self.tree_selected is not None:
             say, say_style = self._tree_say()
+        elif self._exit_said():  # over a steer, rewind or tell only after an interrupt (`_exit_said`)
+            say = EXIT_HINT
         elif steered is not None:
             say, say_style = tuple(form.format(name=steered.name) for form in STEER_SAY), self.theme.muted
         elif self.rewind is not None:
             say, say_style = tuple(form.format(ordinal=self.rewind.ordinal) for form in REWIND_SAY), self.theme.warn
         elif self.tell_draft is not None:
             say, say_style = TELL_SAY, self.theme.muted
-        elif self.exit_armed_at is not None and self.clock() - self.exit_armed_at <= EXIT_CONFIRM_SECONDS:
-            say = EXIT_HINT
         elif armed is not None and self.clock() - armed[1] <= DOUBLE_ESCAPE_SECONDS:
             say = ESCAPE_AGAIN.format(armed[0])
         elif self._newline_keys_due():
@@ -6523,7 +6611,7 @@ class App(ModesMixin, AgentViewMixin):
             if self.effort in contract.REASONING_LEVELS and self.effort != "none":  # `none` is thinking off
                 effort = THINKING_EFFORT.format(self.effort)
             interrupt = INTERRUPT_HINT if self._esc_interrupts() else ""  # else Esc means something else now
-            lead = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.running), Span(" "),
+            lead = (Span(WORKING_GLYPHS[frame % len(WORKING_GLYPHS)], self.theme.accent), Span(" "),
                     *working_spans(text, frame, self.theme))
             # A narrow row drops whole facts, the effort first (the info line says it where it has room), then the
             # tokens, the time, and the interrupt last; only a verb too long for the row alone is cut at the edge.

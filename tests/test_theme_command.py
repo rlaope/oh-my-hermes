@@ -112,6 +112,33 @@ class ThemeCommandTests(unittest.TestCase):
             self.assertFalse(self._store(tmp).exists())
             self.assertEqual(self._hermes_home_entries(tmp), [])
 
+    def test_glow_off_is_saved_beside_the_theme_and_bare_glow_reports_it(self) -> None:
+        with TemporaryDirectory() as tmp:
+            homes = self._homes(tmp)
+            payload = json.loads(run_cli([*homes, "theme", "glow"])[1])
+            self.assertEqual((payload["glow"], payload["source"], payload["changed"]), ("on", "default", False))
+            run_cli([*homes, "theme", "use", "amber"])
+            status, out, _ = run_cli([*homes, "theme", "glow", "off"])
+            self.assertEqual(status, 0)
+            payload = json.loads(out)
+            self.assertEqual(payload["schema_version"], "omh_theme_glow/v1")
+            self.assertEqual((payload["glow"], payload["previous"], payload["changed"]), ("off", "on", True))
+            self.assertEqual(
+                json.loads(self._store(tmp).read_text(encoding="utf-8")),
+                {"schema_version": THEME_STORE_SCHEMA, "theme": "amber", "glow": "off"},
+            )
+            self.assertFalse(json.loads(run_cli([*homes, "theme", "glow", "off"])[1])["changed"])
+            payload = json.loads(run_cli([*homes, "theme", "glow"])[1])
+            self.assertEqual((payload["glow"], payload["source"]), ("off", "saved"))
+            self.assertEqual(json.loads(run_cli([*homes, "theme", "glow", "on"])[1])["glow"], "on")
+            self.assertEqual(self._hermes_home_entries(tmp), [])
+
+    def test_glow_takes_only_on_or_off(self) -> None:
+        with TemporaryDirectory() as tmp:
+            status, _out, _err = run_cli([*self._homes(tmp), "theme", "glow", "maybe"])
+            self.assertNotEqual(status, 0)
+            self.assertFalse(self._store(tmp).exists())
+
     def test_repair_is_retired_and_still_exits_zero(self) -> None:
         with TemporaryDirectory() as tmp:
             homes = self._homes(tmp)

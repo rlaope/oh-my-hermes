@@ -350,7 +350,9 @@ class AgentViewMixin:
         elif action in ("x", "s"):
             if agent is not None:
                 self._agent_action(action, agent, armed)
-        elif name == ESCAPE or action in LEAVE_KEYS or event == Key(CHAR, "c", ctrl=True):
+        elif name == ESCAPE or action in LEAVE_KEYS or (
+            isinstance(event, Key) and name == CHAR and event.ctrl and event.char == "c"  # Shift or Alt too
+        ):
             self.tree_selected = None
         return True
 
@@ -533,7 +535,9 @@ class AgentViewMixin:
             self.list_selected = ids[min(max(row, 0), len(ids) - 1)]
         elif name == ENTER and self.list_selected != MAIN_ID:
             self._open_agent_log(self.list_selected)  # over the list: leaving the log comes back to it
-        elif name in (ENTER, ESCAPE, LEFT) or action in LEAVE_KEYS or event == Key(CHAR, "c", ctrl=True):
+        elif name in (ENTER, ESCAPE, LEFT) or action in LEAVE_KEYS or (
+            isinstance(event, Key) and name == CHAR and event.ctrl and event.char == "c"  # Shift or Alt too
+        ):
             self.list_selected = None
         return True
 

@@ -229,7 +229,7 @@ class QuestionOutcomeTests(unittest.TestCase):
         press(app, Key(ENTER))
         (row,) = [line for line in complete(app, "submitted") if "clarify" in line and "·" not in line]
         self.assertTrue(row.startswith("  ● clarify("), row)
-        self.assertEqual(mark(app), (rail_cell(app.theme.ok), Span("●", app.theme.ok)))
+        self.assertEqual(mark(app), (rail_cell(app.theme.accent), Span("●", app.theme.ok)))  # the look's rail
 
     def test_hermes_notice_says_why_under_the_cross_when_it_gives_one(self) -> None:
         app, _client = make_app(busy=True)

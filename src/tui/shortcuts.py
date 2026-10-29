@@ -87,7 +87,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
                                         "only leave), or go back; any other key does nothing there"),
     ("x, s", "In the agent list, on an agent: x twice interrupts it; s steers it with the next line you send "
              "(Esc cancels)"),
-    ("↑ / ↓ or a click, Enter, Esc", "In the /theme picker, preview a launch look (spectrum, violet, gold, graphite) on the logo and the card, keep it, or put the one in use back; /theme <look> keeps one at once"),
+    ("↑ / ↓ or a click, Enter, Esc", "In the /theme picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember) on the logo, the card and the chrome, keep it, or put the one in use back; /theme <look> keeps one at once"),
     ("Click", "On a row of the agent list, opens that agent's log (on main, only leaves the list)"),
     ("← / →, q or Esc", "In an agent's log, show the agent before or after, or go back; the pager's keys scroll it"),
     ("Tab / n, Shift+Tab / p, Space / Enter, d", "In /dag, highlight the next or the previous box, fold or unfold "

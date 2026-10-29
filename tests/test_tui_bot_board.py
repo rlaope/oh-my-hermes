@@ -25,6 +25,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import subprocess
 import sys
 import time
 import unittest
@@ -57,7 +58,10 @@ from omh.tui.bot_board import (
 from omh.tui.history import HistorySearch
 from omh.tui.keys import CHAR, DOWN, ENTER, ESCAPE, LEFT, UP, Key
 from omh.skin_pack import default_theme
-from omh.tui.theme import DEFAULT_THEME, EDGE_CONTRAST, TEXT_CONTRAST, build_theme, contrast_ratio, is_light
+from omh.tui.theme import (
+    DEFAULT_THEME, EDGE_CONTRAST, LAUNCH_PRESETS, TEXT_CONTRAST, build_theme, contrast_ratio, is_light,
+    with_launch_look,
+)
 from omh.tui.style import Span
 from omh.tui.width import cluster_width, clusters, line_width
 
@@ -1229,11 +1233,17 @@ class ThemeBandTests(unittest.TestCase):
                 self.assertGreaterEqual(contrast_ratio(status.fg, status.bg), TEXT_CONTRAST, status)
 
     def test_the_highlighted_box_edge_and_the_others_read_on_light_and_dark(self) -> None:
+        # The other boxes' edge is the launch look's rule colour (owner, 2026-10-29), so every look is measured; the
+        # highlighted edge (`_highlight`) is the brand moved 3:1 away from it.
         for background in ("#FCF9FD", "#0F1B2D"):
-            theme = build_theme(default_theme(), background)
-            self.assertGreaterEqual(contrast_ratio(theme.brand.fg, background), TEXT_CONTRAST)
-            self.assertGreaterEqual(contrast_ratio(theme.rule.fg, background), EDGE_CONTRAST)
-            self.assertGreaterEqual(contrast_ratio(theme.brand.fg, theme.rule.fg), 1.5, "the highlight stands apart")
+            for look in LAUNCH_PRESETS:
+                with self.subTest(background=background, look=look):
+                    skin = default_theme()
+                    theme = with_launch_look(build_theme(skin, background), skin, background, look)
+                    self.assertGreaterEqual(contrast_ratio(theme.brand.fg, background), TEXT_CONTRAST)
+                    self.assertGreaterEqual(contrast_ratio(theme.rule.fg, background), EDGE_CONTRAST)
+                    highlight = bot_board._highlight(theme).fg
+                    self.assertGreaterEqual(contrast_ratio(highlight, theme.rule.fg), EDGE_CONTRAST, "it stands apart")
 
 
 class TableTests(FixtureRoot):
@@ -1600,6 +1610,22 @@ class AppTests(FixtureRoot):
         self.assertEqual(len(FakeReader.instances), 1, "the board opened again reuses its one reader")
         self.assertFalse(FakeReader.instances[0].stopped)
         self.assertEqual(client.calls, [], "the board sends nothing to the gateway")
+
+    def test_the_tui_loads_the_board_only_when_it_opens(self) -> None:
+        # QA P2: importing the TUI loaded this module (and its readers' imports) for a board most sessions never open.
+        code = ("import sys\nfrom test_tui_modes import make_app\n"
+                "app, _client = make_app()\napp._take_board()\napp._render()\n"  # a loop tick with the board closed
+                "print('omh.tui.bot_board' in sys.modules)")
+        done = subprocess.run([sys.executable, "-P", "-c", code], capture_output=True, text=True, timeout=120,
+                              env={**os.environ, "PYTHONPATH": os.pathsep.join([str(Path(__file__).parent),
+                                                                               os.environ.get("PYTHONPATH", "")])})
+        self.assertEqual((done.returncode, done.stdout.strip()), (0, "False"), done.stderr)
+        FakeReader.instances = []
+        app, _client = make_app(environ=self.environ)
+        with patch.object(bot_board, "BoardReader", FakeReader):
+            app._on_input(CTRL_S)
+        self.assertIsInstance(app.pager, BotBoard)
+        self.assertEqual(len(FakeReader.instances), 1, "the board's own reader, made when it opened")
 
     def test_bots_opens_the_board_and_leaves_no_echo(self) -> None:
         app, client = self.app()

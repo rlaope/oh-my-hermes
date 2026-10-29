@@ -465,11 +465,13 @@ the corpus is filtered for leakage rather than assumed to average it out.
   is a sentinel and drops what follows the sentinel, so a rewording upstream
   stays filtered and a criterion the protocol adds *before* the unit's checks
   still reaches the model.
-* The unit's file scope is `src/`, `tests/`, and the completion file. The
-  completion contract requires that file at the workspace root, and with it
-  outside the scope criterion 1 forbade it; one model declined two of five
-  tasks over that conflict without making a tool call. `doctor` fails when the
-  scope stops covering the file.
+* The unit's file scope is the whole checkout (`./`), the same reach the
+  Hermes arm's prompt gives it. A narrower scope told only the OMH arm that
+  generated files outside `src/` and `tests/` (`docs/WORKFLOWS.md`, skill
+  bodies) were off limits, so a task whose fix regenerates them was one only
+  the other arm could finish. The scope must also cover the completion file
+  at the workspace root, or criterion 1 forbids it; `doctor` fails when it
+  stops doing so.
 * Each verification command reaches the model as the command the gate runs,
   rendered by the same function: `PYTHONPATH=tests python3 -m unittest …`. The
   gate puts the lane's interpreter in place of `python3` and changes nothing

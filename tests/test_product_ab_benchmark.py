@@ -1164,14 +1164,17 @@ class ArmTests(unittest.TestCase):
         Re-derived when the goal echo-back's conflict sentence changed (the
         brief now outranks repository workflow rules). Swapping only that
         sentence back reproduces the earlier digests exactly: 9cd6b796...,
-        5ddf4d61..., 742a3d95..., ce81f8ca....
+        5ddf4d61..., 742a3d95..., ce81f8ca.... Re-derived again when the unit
+        scope became the whole checkout; the earlier scope (`src/`, `tests/`,
+        the completion file) reproduces ad293b0f..., 94513d23...,
+        8c509a9f..., c8035549....
         """
 
         recorded = {
-            ("gpt-6-astra", "high", "gpt"): "ad293b0f91200065e49dfe25996b851b2e46b61fe60a07e8f63cb0137c44e191",
-            ("gpt-6.1-sol", "medium", "gpt"): "94513d235ca322407c06798da5af69ca7f188eea40f2eadaa7c22286faf9b456",
-            ("deepseek-v4.1-flash", "high", "deepseek"): "8c509a9f18d4743844490b294ad798f1806c99a41fb8fc00d7e92150e7f0c6cc",
-            ("claude-fable-5-1", "xhigh", "claude"): "c8035549041b11602fa38f607b0faf11cc47f9f6db42607a805129efb5117549",
+            ("gpt-6-astra", "high", "gpt"): "dc2410dcc9e7c243f7deaa19481444e4ee4ca15648f4905c53e58b1a6cea645c",
+            ("gpt-6.1-sol", "medium", "gpt"): "d46fdef21925fbea17832a4190d9e0d11118db80eb28b834a7377bdc5c47b0e8",
+            ("deepseek-v4.1-flash", "high", "deepseek"): "71bd7ad09207a2484bcbf887375b12cd13f7d0a238fae24eba46efbe57a85f6f",
+            ("claude-fable-5-1", "xhigh", "claude"): "b4ca61c10c8a4b9e98a77f2e3a407d98b7078f0c50821be496c747840167d7e0",
         }
         for (model, effort, family), digest in recorded.items():
             route = {
@@ -1313,9 +1316,23 @@ class ArmTests(unittest.TestCase):
         )
         delegated = arms.delegation_prompt("Do the thing.", unit)
         first = next(line for line in delegated.splitlines() if line.startswith("1. "))
-        self.assertIn(lane.COMPLETION_FILE, first)
+        self.assertIn(arms.WHOLE_CHECKOUT_SCOPE, first)
         self.assertTrue(runner.completion_file_in_scope(arms.unit_file_scope()))
+        self.assertTrue(runner.completion_file_in_scope([".omh-product-ab-completion.json"]))
         self.assertFalse(runner.completion_file_in_scope(["src/", "tests/"]))
+
+    def test_the_omh_arm_may_edit_what_the_hermes_arm_may(self) -> None:
+        """A scope narrower than the Hermes arm's measured a different task.
+
+        The Hermes arm's prompt never fences it in. Scoped to `src/` and
+        `tests/`, the OMH arm alone could not regenerate `docs/WORKFLOWS.md`
+        or a skill body, which a catalog change in this repository requires
+        and a regression module compares byte for byte.
+        """
+
+        self.assertEqual(arms.unit_file_scope(), ["./"])
+        self.assertNotIn("Stay strictly inside", arms.base_prompt("Do the thing."))
+        self.assertNotIn("Every edit stays inside", arms.base_prompt("Do the thing."))
 
     def test_the_criterion_names_the_command_the_gate_runs(self) -> None:
         """One function renders the criterion and builds the gate's argv.

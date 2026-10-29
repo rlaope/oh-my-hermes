@@ -34,7 +34,7 @@ from ..routing.owner_preference import owner_preference_path, validate_owner_pre
 from ..surfaces.hermes_model_settings import HERMES_AUX_ALIASES
 from ..system.local_store import read_json_object_result
 from ..system.metadata_safety import require_opaque_metadata_ref
-from ..system.paths import OmhPaths
+from ..system.paths import OmhPaths, managed_workflow_pack_dir
 
 CONTRACT = "hermes_config_advice/v1"
 
@@ -929,6 +929,7 @@ def check_workflow_engine_reach(
     hermes_home: str | Path | None = None,
     *,
     omh_home: str | Path | None = None,
+    skills_dir: str | Path | None = None,
 ) -> AdviceEntry:
     """Say when the recorded profile cannot reach the ULW workflow engines.
 
@@ -955,6 +956,14 @@ def check_workflow_engine_reach(
     The finding is derived from which engines are absent, never from the
     profile label, so an install that has them stays silent whatever it
     recorded.
+
+    It measures the pack in use. Doctor passes the directory it already
+    resolved as `skills_dir`; without one, the pack is found the way
+    `resolve_paths(scope="user")` finds it: the running generation's own
+    pack on a managed install, else `<omh_home>/skills`. Building the paths
+    from `omh_home` alone measured the frozen pre-pointer copy a migrated
+    install keeps, which lacks every engine released after the migration,
+    or found no install at all where that copy was never made (#2358).
     """
     from ..install.installer import installed_skill_names
     from ..manifest import read_manifest
@@ -964,6 +973,7 @@ def check_workflow_engine_reach(
     paths = OmhPaths(
         omh_home=Path(omh_home).expanduser() if omh_home is not None else home.parent / ".omh",
         hermes_home=home,
+        managed_skills_dir=Path(skills_dir).expanduser() if skills_dir is not None else managed_workflow_pack_dir(),
     )
     evidence_boundary = (
         "Local install manifest and on-disk skill directories only; whether Hermes would "
@@ -986,12 +996,19 @@ def check_workflow_engine_reach(
     command = "omh update" if profile == "full" else "omh update --full"
     remediation = _WORKFLOW_ENGINE_REACH_REMEDIATION.format(command=command)
     if manifest is None or not installed:
+        # Name the one thing that was missing, so the report can be checked
+        # against the disk rather than read as "OMH is not installed".
+        missing = (
+            f"no OMH install manifest at {paths.manifest_path}"
+            if manifest is None
+            else f"no OMH skills in {paths.skills_dir}"
+        )
         return AdviceEntry(
             "workflow_engine_reach",
             "unobserved",
             remediation,
             evidence_boundary,
-            "no OMH skill install found to measure reach against",
+            f"{missing} to measure reach against",
         )
     engines = ulw_inventory_payload()["canonical_engines"]
     absent = sorted(
@@ -1376,6 +1393,7 @@ def run_config_advisories(
     omh_home: str | Path | None = None,
     discovery_home: str | Path | None = None,
     personal_files: bool = True,
+    skills_dir: str | Path | None = None,
 ) -> AdvisoryReport:
     """Run every read-only inspector and return the separate advisory report.
 
@@ -1405,7 +1423,7 @@ def run_config_advisories(
             check_legacy_plan_artifacts(hermes_home),
             check_orphaned_project_scope_store(hermes_home),
             check_installed_skill_context_weight(hermes_home),
-            check_workflow_engine_reach(hermes_home, omh_home=omh_home),
+            check_workflow_engine_reach(hermes_home, omh_home=omh_home, skills_dir=skills_dir),
             check_turn_budget_loop_exposure(hermes_home),
             check_loop_hard_stop_disabled(hermes_home),
             check_dreaming_mode_setting(hermes_home),

@@ -4,6 +4,9 @@ and taken off before anything scrolls, so nothing of it reaches the scrollback."
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from _vt_screen import VTScreen
@@ -22,11 +25,20 @@ from omh.tui.edge_glow import (
     edge_fits,
 )
 from omh.tui.gateway import Event
+from omh.tui.keys import CHAR, ENTER, Key
 from omh.tui.screen import LiveRegion
 from omh.tui.style import Span
-from omh.skin_pack import default_theme
+from omh.skin_pack import (
+    THEME_STORE_SCHEMA,
+    default_theme,
+    read_glow_choice,
+    read_launch_choice,
+    theme_store_path,
+    write_glow_choice,
+    write_launch_choice,
+)
 from omh.tui.theme import theme_named, with_catch_colours
-from test_tui_modes import make_app
+from test_tui_modes import make_app, notices
 
 GLYPHS = set("▀▄▌▐▛▜▟▙")
 GLOW_ON = {"COLORTERM": "truecolor", "TERM": "xterm-256color", "OMH_TUI_GLOW": "1"}
@@ -232,6 +244,103 @@ class AppGlowTests(unittest.TestCase):
         self.assertIn("done", "\n".join(screen.lines()))
         self.assertNotEqual(app._tick_seconds(), TICK_SECONDS)
 
+    def once_round(self, app, clock) -> tuple[bool, bool, bool]:
+        """Whether the light reached the top row, the last row and the sides over one loop; nothing of it scrolls."""
+        screen = app.terminal.screen
+        on_top = on_bottom = on_sides = False
+        for _ in range(int(LOOP_SECONDS / TICK_SECONDS)):
+            clock.at += TICK_SECONDS
+            app._render()
+            self.assertFalse(any(set(line) & GLYPHS for line in screen.scrollback))
+            lines = screen.lines()
+            on_top = on_top or bool(set(lines[0]) & GLYPHS)
+            on_bottom = on_bottom or bool(set(lines[-1]) & GLYPHS)
+            on_sides = on_sides or any(screen.attrs_at(row, col) for row in range(1, 19) for col in (0, 59))
+        return on_top, on_bottom, on_sides
+
+    def test_a_short_session_glows_too_over_the_blank_rows_under_it(self) -> None:
+        app, clock = self.app()
+        self.busy(app, clock, flushes=1)
+        last = app.region.last_row(app.size[1])
+        self.assertIsNotNone(last)
+        self.assertLess(last, app.size[1] - 1, "the session is shorter than the screen")
+        self.assertEqual(self.once_round(app, clock), (True, True, True))
+        app.transcript.apply(Event(type="message.complete", session_id=app.sid, payload={"text": "done"}))
+        app.turn_pending = False
+        clock.at += 1
+        app._render()
+        screen = app.terminal.screen
+        for row in range(20):
+            self.assertEqual((screen.attrs_at(row, 0), screen.attrs_at(row, 59)), ((), ()), f"row {row}'s edge is blank")
+        self.assertEqual(screen.lines()[-1], "")
+
+    def test_the_top_rows_text_shows_wherever_the_light_is_not(self) -> None:
+        app, clock = self.app()
+        self.busy(app, clock, flushes=1)
+        screen = app.terminal.screen
+        top = app.region.top_row(app.size[1])
+        reference = app.region._under(top)  # the flushed row on the screen's top row
+        shown = set()
+        for _ in range(int(LOOP_SECONDS / TICK_SECONDS)):
+            clock.at += TICK_SECONDS
+            app._render()
+            row = screen.lines()[0]
+            lit = {col for col in range(60) if set(row[col:col + 1]) & GLYPHS}
+            shown.add(len(lit) > 0)
+            plain = VTScreen(20, 60)
+            plain.feed(" " * EDGE_MARGIN + reference)
+            expected = plain.lines()[0]
+            self.assertTrue(expected.strip(), "the top row has text")
+            for col in range(1, 59):
+                if col not in lit:
+                    self.assertEqual(row[col:col + 1] or " ", expected[col:col + 1] or " ", f"column {col}: {row!r}")
+        self.assertEqual(shown, {True, False}, "the light was on the top row for part of the loop and off it for part")
+
+    def test_a_bands_background_stops_short_of_the_right_margin_as_of_the_left(self) -> None:
+        app, _clock = self.app()
+        for prompt in ("first question", "second question"):  # prompts flushed above the region, each on a band
+            app.transcript.add_user(prompt)
+            app.transcript.apply(Event(type="message.start", session_id=app.sid, payload={}))
+            app.transcript.apply(Event(type="message.complete", session_id=app.sid, payload={"text": "an answer"}))
+            app._render()
+        screen = app.terminal.screen
+
+        def background(row, col) -> bool:
+            return 48 in screen.attrs_at(row, col)  # SGR 48: a background colour
+
+        banded = [row for row in range(20) if background(row, 2)]
+        self.assertEqual(len(banded), 2, screen.lines())
+        for row in banded:
+            self.assertEqual([col for col in range(60) if background(row, col)], list(range(1, 59)), f"row {row}")
+
+    def test_glow_off_and_on_keeps_the_choice_and_lays_the_session_out_again(self) -> None:
+        home = Path(tempfile.mkdtemp(prefix="omh-glow-test-")) / ".omh"
+        app, clock = self.app({**GLOW_ON, "OMH_HOME": str(home)})
+        for char in "/glow off":
+            app._on_input(Key(CHAR, char))
+        app._on_input(Key(ENTER))
+        self.assertFalse(app._edged())
+        self.assertEqual(app.size, app.screen)
+        self.assertIs(read_glow_choice(home), False)
+        self.assertIn(f"Working glow off, kept in {theme_store_path(home)}.", notices(app))
+        self.busy(app, clock)
+        self.assertIsNone(app._edge())
+        self.assertFalse(any(set(line) & GLYPHS for line in app.terminal.screen.history() + app.terminal.screen.lines()))
+        reopened, _clock = self.app({**GLOW_ON, "OMH_HOME": str(home)})
+        self.assertFalse(reopened._edged(), "the saved choice holds in the next session")
+        app._glow("")  # alone, it switches
+        self.assertTrue(app._edged())
+        self.assertEqual(app.size, (60 - 2 * EDGE_MARGIN, 20 - 1))
+        self.assertIs(read_glow_choice(home), True)
+
+    def test_glow_on_says_what_still_holds_it_off(self) -> None:
+        app, _clock = self.app({**GLOW_ON, "OMH_TUI_GLOW": "0"})
+        app._glow("on")
+        self.assertFalse(app._edged())
+        self.assertTrue(any("OMH_TUI_GLOW=0" in notice for notice in notices(app)))
+        app._glow("maybe")
+        self.assertTrue(any("/glow on" in notice for notice in notices(app)))
+
     def test_mouse_columns_count_from_the_margin(self) -> None:
         app, _clock = self.app()
         self.assertEqual(app._margin(), 1)
@@ -242,6 +351,19 @@ class AppGlowTests(unittest.TestCase):
         spectrum = glowing_theme()
         gold = with_catch_colours(theme_named("default", BACKGROUND), default_theme(), BACKGROUND, "gold")
         self.assertNotEqual(spectrum.glow_ring, gold.glow_ring)
+
+
+class GlowStoreTests(unittest.TestCase):
+    def test_the_glow_is_kept_beside_the_launch_look_and_neither_write_drops_the_other(self) -> None:
+        home = Path(tempfile.mkdtemp()) / ".omh"
+        self.assertIsNone(read_glow_choice(home))
+        write_launch_choice(home, "gold")
+        write_glow_choice(home, False)
+        self.assertEqual(read_launch_choice(home), "gold")
+        write_launch_choice(home, "violet")
+        self.assertIs(read_glow_choice(home), False)
+        record = json.loads(theme_store_path(home).read_text(encoding="utf-8"))
+        self.assertEqual(record, {"schema_version": THEME_STORE_SCHEMA, "launch": "violet", "glow": "off"})
 
 
 if __name__ == "__main__":

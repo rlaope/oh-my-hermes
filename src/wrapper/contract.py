@@ -8687,6 +8687,7 @@ def _omh_status_probe(paths: OmhPaths) -> dict[str, object]:
         _omh_status_probe_cached(
             str(paths.omh_home),
             str(paths.hermes_home),
+            str(paths.skills_dir),
             _omh_status_probe_fingerprint(paths),
         )
     )
@@ -8696,11 +8697,14 @@ def _omh_status_probe(paths: OmhPaths) -> dict[str, object]:
 def _omh_status_probe_cached(
     omh_home: str,
     hermes_home: str,
+    skills_dir: str,
     _fingerprint: tuple[tuple[str, int, int, int], ...],
 ) -> dict[str, object]:
-    return _omh_status_probe_projection(
-        probe_capabilities(OmhPaths(omh_home=Path(omh_home), hermes_home=Path(hermes_home)), include_roadmap=True)
-    )
+    # The resolved pack rides the cache key: rebuilding the paths from the
+    # two homes alone probed `<omh_home>/skills`, which on a managed install
+    # is the pre-pointer copy or nothing (#2358).
+    paths = OmhPaths(omh_home=Path(omh_home), hermes_home=Path(hermes_home), managed_skills_dir=Path(skills_dir))
+    return _omh_status_probe_projection(probe_capabilities(paths, include_roadmap=True))
 
 
 def _omh_status_probe_projection(probe: dict[str, object]) -> dict[str, object]:

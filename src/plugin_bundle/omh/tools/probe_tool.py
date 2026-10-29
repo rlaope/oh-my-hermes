@@ -191,14 +191,17 @@ def _standalone_capabilities(
     *,
     plugin_observation: dict[str, Any] | None,
 ) -> list[dict[str, str]]:
-    skills_dir = home / "skills"
+    hermes_config = hermes / "config.yaml"
+    config_text = _read_text(hermes_config)
+    # The pack in use, not `<omh_home>/skills`: on a managed install that is
+    # a frozen pre-pointer copy or nothing at all (#2358).
+    skills_dir = _standalone_skills_dir(home)
     # `oh-my-hermes` installs under its Hermes category directory and its
     # display label; see skills/catalog.hermes_skill_category and
     # skills/catalog_types.OMH_SKILL_DISPLAY_NAME_OVERRIDES. Literal because a
     # copied plugin bundle has no catalog import.
     managed_skill = skills_dir / "guide" / "omh-routing" / "SKILL.md"
-    hermes_config = hermes / "config.yaml"
-    config_text = _read_text(hermes_config)
+    skills_registered = _standalone_skills_registered(config_text, hermes, home, skills_dir)
     plugin_dir = hermes / "plugins" / "omh"
     buzz = probe_buzz(_StandaloneBuzzPaths(hermes))
     target_topology = hud.get("target_topology", {}) if isinstance(hud, dict) else {}
@@ -222,11 +225,11 @@ def _standalone_capabilities(
         ),
         _capability(
             "external_skill_dirs",
-            "available" if str(skills_dir) in config_text else ("missing" if hermes_config.exists() else "unknown"),
+            "available" if skills_registered else ("missing" if hermes_config.exists() else "unknown"),
             str(hermes_config),
             (
                 "Hermes config references the managed OMH skills directory"
-                if str(skills_dir) in config_text
+                if skills_registered
                 else "Managed OMH skills are not registered in this config from the standalone probe view"
             ),
         ),
@@ -377,6 +380,144 @@ class _StandaloneBuzzPaths:
     def __init__(self, hermes_home: Path) -> None:
         self.hermes_home = hermes_home
         self.hermes_config_path = hermes_home / "config.yaml"
+
+
+def _managed_command_root() -> Path | None:
+    """Where the installers keep the OMH venv, its generations and the `current` pointer.
+
+    Literal, because a copied bundle has no `omh` import: the same precedence
+    as `system.paths.managed_command_venv_dir` (`OMH_VENV_DIR`, then
+    `XDG_DATA_HOME`, then `%LOCALAPPDATA%` on Windows, then
+    `~/.local/share`), which `tests/test_managed_pack_diagnostics.py` holds against
+    the package's own reading.
+    """
+    explicit = os.environ.get("OMH_VENV_DIR")
+    if explicit:
+        return Path(explicit).expanduser().parent
+    xdg_data_home = os.environ.get("XDG_DATA_HOME")
+    if xdg_data_home:
+        return Path(xdg_data_home).expanduser() / "omh"
+    if os.name == "nt":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            return Path(local_app_data).expanduser() / "omh"
+    home = os.environ.get("USERPROFILE" if os.name == "nt" else "HOME")
+    return Path(home).expanduser() / ".local" / "share" / "omh" if home else None
+
+
+def _recorded_skills_dir(home: Path) -> Path | None:
+    """The pack the last install wrote, as `<omh_home>/manifest.json` records it."""
+    try:
+        payload = json.loads((home / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    recorded = payload.get("skills_dir") if isinstance(payload, dict) else None
+    return Path(recorded) if isinstance(recorded, str) and recorded else None
+
+
+def _managed_pack_candidates(home: Path) -> list[Path]:
+    """The directories this home's managed pack may be in, the pack in use first.
+
+    The pack the manifest records -- a generation's own pack on a managed
+    install -- then the pre-pointer `<omh_home>/skills`, the one directory a
+    home that predates generations or never had a managed command installs
+    into. The shared `current` pointer is not one: it is the machine's, and a
+    home with no install of its own does not hold skills because another
+    home does.
+    """
+    candidates: list[Path] = []
+    for candidate in (_recorded_skills_dir(home), home / "skills"):
+        if candidate is not None and candidate not in candidates:
+            candidates.append(candidate)
+    return candidates
+
+
+def _standalone_skills_dir(home: Path) -> Path:
+    """The managed pack this home uses: the first candidate that exists, else the pre-pointer path."""
+    for candidate in _managed_pack_candidates(home):
+        if candidate.is_dir():
+            return candidate
+    return home / "skills"
+
+
+def _standalone_skills_registered(config_text: str, hermes: Path, home: Path, skills_dir: Path) -> bool:
+    """Whether Hermes' `skills.external_dirs` names the managed pack under any spelling OMH writes.
+
+    The pointer (`<root>/current/skills`) is what setup and update register;
+    a generation's own pack (`<root>/generations/<id>/skills`), the
+    manifest's recorded pack and the pre-pointer `<omh_home>/skills` are each
+    a registration of the same managed pack. Matched by real path after
+    reading an entry the way Hermes does (`${VAR}` and `~` expanded, a
+    relative entry anchored at the Hermes home), so a link or a trailing
+    slash is the same entry. Only `<omh_home>/skills` was accepted before,
+    and only as a substring of the config text, so a home registered at the
+    pointer read as unregistered (#2358). That substring match is kept as a
+    floor for a shape the line reader below does not parse.
+    """
+    root = _managed_command_root()
+    pointer = root / "current" / "skills" if root is not None else None
+    candidates = [*_managed_pack_candidates(home), skills_dir, *([pointer] if pointer is not None else [])]
+    if any(str(candidate) in config_text for candidate in candidates):
+        return True
+    wanted = {_real_key(candidate) for candidate in candidates}
+    generations = _real_key(root / "generations") if root is not None else None
+    for entry in _external_dir_entries(config_text):
+        anchored = os.path.join(str(hermes), os.path.expanduser(os.path.expandvars(entry)))
+        if not os.path.isabs(anchored):
+            continue
+        if _real_key(anchored) in wanted:
+            return True
+        normalized = os.path.normpath(anchored)
+        if (
+            generations is not None
+            and os.path.normcase(os.path.basename(normalized)) == "skills"
+            and _real_key(os.path.dirname(os.path.dirname(normalized))) == generations
+        ):
+            return True
+    return False
+
+
+def _real_key(path: str | Path) -> str:
+    try:
+        return os.path.normcase(os.path.realpath(os.path.expanduser(str(path))))
+    except (OSError, ValueError):
+        return os.path.normcase(os.path.normpath(str(path)))
+
+
+def _external_dir_entries(config_text: str) -> list[str]:
+    """`skills.external_dirs` as written: the block list or one inline `[a, b]` list.
+
+    A line reader in the spirit of the bundle's other `config.yaml` scans;
+    any shape it does not follow yields no entries, never an error.
+    """
+    entries: list[str] = []
+    in_skills = in_external = False
+    external_indent = 0
+    for line in config_text.removeprefix("\ufeff").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0:
+            in_skills = stripped.split("#", 1)[0].strip() == "skills:"
+            in_external = False
+            continue
+        if not in_skills:
+            continue
+        if in_external and (indent > external_indent or (indent == external_indent and stripped.startswith("- "))):
+            if stripped.startswith("- "):
+                entries.append(stripped[2:].split(" #", 1)[0].strip().strip("'\""))
+            continue
+        in_external = False
+        key, separator, rest = stripped.partition(":")
+        if not separator or key.strip() != "external_dirs":
+            continue
+        value = rest.split(" #", 1)[0].strip()
+        if not value:
+            in_external, external_indent = True, indent
+        elif value.startswith("[") and value.endswith("]"):
+            entries.extend(item.strip().strip("'\"") for item in value[1:-1].split(",") if item.strip())
+    return [entry for entry in entries if entry]
 
 
 def _plugin_bundle_ready(plugin_dir: Path) -> bool:

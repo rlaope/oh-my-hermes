@@ -33,6 +33,10 @@ SUMMARIES = {
     "violet": "violet to magenta, the skill hue's family · one box",
     "gold": "caduceus gold · one box in two columns",
     "graphite": "grey and white, turquoise hyphens · rules, no side edges",
+    "sakura": "pastel pink, sky blue and cream · one box",
+    "moonlit": "moonlight yellow and silver over navy · rules, no side edges",
+    "aurora": "emerald and teal into violet · a box per section",
+    "ember": "amber through orange to crimson · one box in two columns",
 }
 SWATCH = "■"
 

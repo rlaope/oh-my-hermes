@@ -256,18 +256,28 @@ def criterion_for_command(command: str) -> str:
     return f"Run `{shlex.join([*prefix, *argv])}` and make it pass."
 
 
+#: The whole checkout, the reach the Hermes arm's prompt gives it.
+WHOLE_CHECKOUT_SCOPE = "./"
+
+
 def unit_file_scope() -> list[str]:
-    """The benchmark unit's file scope: the source tree plus the completion file.
+    """The benchmark unit's file scope: the whole checkout, as the Hermes arm has.
+
+    The lane compares the same task under two harnesses, so the OMH arm may
+    edit whatever the Hermes arm may. A scope of `src/` and `tests/` told the
+    OMH arm alone that `docs/` and `skills/` were off limits, and in this
+    repository a catalog change regenerates `docs/WORKFLOWS.md` and the skill
+    bodies, which a regression module compares byte for byte. Fenced out of
+    them, the OMH arm either declined or bent that test to pass, and the gate
+    then withdrew the claim; the Hermes arm, never told, regenerated them.
 
     The completion contract requires `lane.COMPLETION_FILE` at the workspace
-    root, and criterion 1 says every edit stays inside the file scope. With the
-    file outside the scope, `GOAL_ECHO_PROTOCOL` ("if they conflict with your
-    brief, stop and report the conflict") made one model decline two of five
-    tasks without a tool call. Naming the file here tells neither arm anything
-    about the hidden validator.
+    root, and criterion 1 says every edit stays inside the file scope, so the
+    scope must cover it; `doctor` fails when it stops doing so. Naming the
+    checkout tells neither arm anything about the hidden validator.
     """
 
-    return ["src/", "tests/", lane.COMPLETION_FILE]
+    return [WHOLE_CHECKOUT_SCOPE]
 
 
 #: The runner the task-linked postcondition appends its selected test paths

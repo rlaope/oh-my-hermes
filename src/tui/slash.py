@@ -107,6 +107,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand("paste", LOCAL, "Attach the clipboard image to the next message (also Ctrl+V)"),
     SlashCommand("theme", LOCAL, "Pick the launch look (a picker), or /theme <look|palette|auto|light|dark>",
                  echo_bare=False),
+    SlashCommand("glow", LOCAL, "Turn the light that goes round the screen during a turn on or off (/glow on|off)"),
     SlashCommand("omh-model", LOCAL, "Pick OMH model chains"),
     SlashCommand("topup", LOCAL, "Nous credit balance and the top-up link (Hermes' /topup)"),
     SlashCommand("reload-skills", LOCAL, "Re-scan Hermes' skills, so one installed since the start runs as /<name>",

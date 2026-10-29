@@ -62,9 +62,13 @@ lays its rows out for a screen that much smaller (`App._edged`), and every
 row count it passes in or gets back is of its own rows, the footer left out.
 Those keep the screen's first and last columns and its last row free, and a
 frame passed to `render` (`edge`) is painted there, and on the screen's top
-row, over what is drawn, while the region's last row is the screen's last
-row and every row above it is one this region flushed (so the top row can be
-painted back). Before a write that can scroll the screen (a flush, a frame
+row where it is lit, over the row's own text (the rest of that row is painted
+again from what is under it), wherever every row above the region is one it
+flushed (so the top row can be painted back): with the region's last row on
+the screen's last row, or above it, where the rows under the region are blank
+(the region erased them, and nothing else writes there). A band's background
+stops at the region's width, short of the right margin, as it starts after
+the left one. Before a write that can scroll the screen (a flush, a frame
 that grows) and when the frame goes, the frame is taken off again: the top
 row is painted back from what was flushed there and the edge cells are
 blanked, so nothing of the frame reaches the scrollback.
@@ -98,7 +102,7 @@ from collections.abc import Callable, Sequence
 
 from .edge_glow import Edge
 from .escapes import strip_escapes
-from .style import CSI, SGR_RESET, Line, Span, is_fill
+from .style import CSI, SGR_RESET, Line, Span, Style, is_fill
 from .width import is_unpainted, line_width, truncate_line
 
 CARRIAGE_RETURN = "\r"
@@ -333,7 +337,7 @@ class LiveRegion:
         last_rows, last_lines = self._rows, self._lines
         kept = 0 if repaint_all else min(len(last_rows), len(last_lines))
         rows = [
-            last_rows[index] if index < kept and line == last_lines[index] else paint_line(line, width)
+            last_rows[index] if index < kept and line == last_lines[index] else self._paint(line, width)
             for index, line in enumerate(lines)
         ]
         held = max(len(self._rows), 1)  # the row the cursor is on is the region's first row
@@ -420,11 +424,20 @@ class LiveRegion:
         ops = self._unframe() + self._flush(lines, width)
         self._send(*self._compose(frame, self._cursor, width, ops))
 
+    def _paint(self, line: Line, width: int) -> str:
+        """`paint_line`, and with a margin, a band's background (a fill erasing to the line's end) taken back off the
+        right margin, so it ends at `width` as it starts after the left margin."""
+        painted = paint_line(line, width)
+        if self._margin and line and is_fill(line[-1]):
+            painted += CARRIAGE_RETURN + cursor_forward(self._margin + width) + ERASE_TO_LINE_END
+        return painted
+
     def _frameable(self, rows: int) -> int | None:
-        """The region's top row where an edge frame may be painted on a screen `rows` tall: the region's last row is
-        the screen's last, and every row above its top is one it flushed. None elsewhere."""
+        """The region's top row where an edge frame may be painted on a screen `rows` tall: where the region is is
+        certain, and every row above its top is one it flushed. The rows under a region short of the screen's end
+        are blank, so the frame may paint there too. None elsewhere."""
         top, last = self._top(rows), self._last(rows)
-        if top is None or last != rows - 1 or top > len(self._above):
+        if top is None or last is None or top > len(self._above):
             return None
         return top
 
@@ -435,7 +448,7 @@ class LiveRegion:
         top = self._frameable(rows)
         if top is None or len(edge.left) != rows - 2:
             return self._unframe_now()
-        cells = {(0, 0): paint_line(edge.top, edge.cols), (rows - 1, 0): paint_line(edge.bottom, edge.cols)}
+        cells = {(0, 0): self._top_cells(edge, top), (rows - 1, 0): paint_line(edge.bottom, edge.cols)}
         for row, (left, right) in enumerate(zip(edge.left, edge.right, strict=True), start=1):
             cells[row, 0] = paint_line(left, 1)
             cells[row, edge.cols - 1] = paint_line(right, 1)
@@ -451,6 +464,24 @@ class LiveRegion:
         shown = "" if self._hidden else SHOW_CURSOR
         return "".join([HIDE_CURSOR, AUTOWRAP_OFF, *ops, AUTOWRAP_ON, back, shown])
 
+    def _top_cells(self, edge: Edge, top: int) -> str:
+        """The screen's top row with the frame on it, written from its first column: what is under it painted again,
+        then only the frame's lit cells over that, so the row's text shows wherever the light is not."""
+        ops = [ERASE_LINE, cursor_forward(self._margin), self._under(top)]
+        col = 0
+        for span in edge.top:
+            if span.style != Style():
+                ops += [cursor_at(0, col), paint_line((span,), line_width((span,)))]
+            col += line_width((span,))
+        return "".join(ops)
+
+    def _under(self, top: int) -> str:
+        """The painted bytes of what is on the screen's top row under the frame: the region's first row where the
+        region starts there, else the row it flushed there; "" where it is neither."""
+        if top == 0:
+            return self._rows[0] if self._rows else ""
+        return self._above[-top] if 0 < top <= len(self._above) else ""
+
     def _unframe(self) -> list[str]:
         """The bytes that take a painted edge frame off, queued before a write: the top row painted back from what is
         there under it, the side cells blanked, the footer erased; the cursor then back on the region's row."""
@@ -461,8 +492,7 @@ class LiveRegion:
         top = self._top(rows)
         if top is None:
             return []
-        under = self._rows[0] if top == 0 and self._rows else self._above[-top] if 0 < top <= len(self._above) else ""
-        ops = [cursor_at(0, 0), ERASE_LINE, cursor_forward(self._margin), under]
+        ops = [cursor_at(0, 0), ERASE_LINE, cursor_forward(self._margin), self._under(top)]
         for row in range(1, rows - 1):
             ops += [cursor_at(row, 0), " ", cursor_at(row, cols - 1), " "]
         ops += [cursor_at(rows - 1, 0), ERASE_LINE, cursor_at(top + self._row, self._margin)]
@@ -499,7 +529,7 @@ class LiveRegion:
         ops: list[str] = []
         self._move_to(0, ops)
         for index, line in enumerate(lines):
-            painted = paint_line(line, width)
+            painted = self._paint(line, width)
             ops.append(painted if index == 0 else cursor_forward(self._margin) + painted)
             ops.append(NEWLINE)
             self._above.append(painted)

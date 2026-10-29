@@ -61,6 +61,7 @@ from omh.tui.theme import (
     build_theme,
     launch_palette,
     launch_styles,
+    with_launch_look,
 )
 from omh.tui.width import line_width
 
@@ -166,7 +167,8 @@ class PaletteTests(unittest.TestCase):
 
     def test_spectrum_is_the_default_and_the_first_look(self) -> None:
         self.assertEqual(DEFAULT_LAUNCH, "spectrum")
-        self.assertEqual(LAUNCH_PRESETS, ("spectrum", "violet", "gold", "graphite"))
+        self.assertEqual(LAUNCH_PRESETS,
+                         ("spectrum", "violet", "gold", "graphite", "sakura", "moonlit", "aurora", "ember"))
         self.assertEqual(set(LAUNCH_PALETTES), set(LAUNCH_PRESETS))
 
 
@@ -551,6 +553,35 @@ class SwitchTests(unittest.TestCase):
         self.assertEqual(read_launch_choice(run.home), "graphite")
         self.assertIn("── gpt-6.1-sol", "\n".join(run.screen()))
 
+    def test_every_look_is_kept_by_name_saved_and_read_back_with_its_chrome(self) -> None:
+        # The eight looks (owner, 2026-10-29): `/theme <look>` keeps each, the saved `launch` key reads back as the same
+        # look on the next launch, and the theme the app paints carries that look's rule and rail colours.
+        for look in LAUNCH_PRESETS:
+            with self.subTest(look=look):
+                run = Launched()
+                run.app._theme(look)
+                self.assertEqual((run.app.launch_look, read_launch_choice(run.home)), (look, look))
+                again = Launched(env={"OMH_HOME": str(run.home)})
+                self.assertEqual((again.app.launch_look, again.app.theme.look), (look, look))
+                self.assertEqual(again.app.transcript.blocks, [])  # no unknown-look notice
+                skin = again.app._skin()
+                looked = with_launch_look(build_theme(skin, "#0E151E"), skin, "#0E151E", look)
+                self.assertEqual((again.app.theme.rule, again.app.theme.accent), (looked.rule, looked.accent))
+
+    def test_the_picker_lists_every_look_and_the_arrows_reach_the_last(self) -> None:
+        run = Launched()
+        run.info()
+        run.screen()
+        run.app._theme("")
+        screen = run.screen()
+        listed = [name for name in LAUNCH_PRESETS
+                  if any(line.lstrip("❯● ").startswith(f"{name} ") for line in screen)]
+        self.assertEqual(listed, list(LAUNCH_PRESETS), screen)
+        run.press(*[Key(DOWN)] * len(LAUNCH_PRESETS))  # one past the last: the highlight stays on it
+        self.assertEqual(run.app._shown_look(), LAUNCH_PRESETS[-1])
+        run.press(Key(ENTER))
+        self.assertEqual(read_launch_choice(run.home), "ember")
+
     def test_a_click_on_a_look_moves_the_highlight_and_reports_are_on_only_while_it_is_open(self) -> None:
         run = Launched()
         run.screen()
@@ -637,6 +668,11 @@ class SwitchTests(unittest.TestCase):
                          [f"theme {name}" for name in LAUNCH_PRESETS])
         run.app._set_composer("/theme graphite")
         self.assertEqual(run.app._menu_entries(), [])  # typed whole: Enter sends it
+        for typed, offered in (("/theme sa", ["theme sakura"]), ("/theme moo", ["theme moonlit"]),
+                               ("/theme au", ["theme aurora"]), ("/theme em", ["theme ember"])):
+            with self.subTest(typed=typed):
+                run.app._set_composer(typed)
+                self.assertEqual([entry.name for entry in run.app._menu_entries()], offered)
 
     def test_the_shortcuts_name_the_picker(self) -> None:
         self.assertTrue(any("/theme picker" in does for _keys, does in SHORTCUTS))

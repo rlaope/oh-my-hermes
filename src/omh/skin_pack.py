@@ -163,9 +163,21 @@ def write_launch_choice(omh_home: Path, name: str) -> Path:
     return _write_theme_store(omh_home, "launch", name)
 
 
+def read_glow_choice(omh_home: Path) -> bool | None:
+    """Whether the OMH TUI's working glow is on, as saved for this OMH home (`glow`, beside the theme); None when
+    nothing this module wrote says."""
+    value = _theme_store_record(omh_home).get("glow")
+    return {"on": True, "off": False}.get(value) if isinstance(value, str) else None
+
+
+def write_glow_choice(omh_home: Path, on: bool) -> Path:
+    """Save whether the OMH TUI's working glow is on; the path it was written to. The theme and look stay."""
+    return _write_theme_store(omh_home, "glow", "on" if on else "off")
+
+
 def _write_theme_store(omh_home: Path, key: str, value: str) -> Path:
     path = theme_store_path(omh_home)
-    kept = {name: _theme_store_record(omh_home).get(name) for name in ("theme", "launch") if name != key}
+    kept = {name: _theme_store_record(omh_home).get(name) for name in ("theme", "launch", "glow") if name != key}
     record = {"schema_version": THEME_STORE_SCHEMA, **{name: v for name, v in kept.items() if isinstance(v, str)}}
     atomic_write_json(path, {**record, key: value})
     return path

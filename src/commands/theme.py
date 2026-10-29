@@ -10,7 +10,9 @@ package, so no skin file has to exist anywhere. `display.skin` is read, for
 the report only, because the TUI falls back to an OMH palette it names
 (`skin_pack.effective_theme`).
 
-`omh theme use <name>` is the one writer, and running it is the consent.
+`omh theme use <name>` is the one writer of the theme, and running it is the
+consent; `omh theme glow on|off` writes the OMH TUI's working glow choice in
+the same record, as `/glow` inside the TUI does.
 The TUI reads the choice when it opens, so a change lands on the next
 `omh`; `/theme` inside the TUI switches the open session only.
 
@@ -30,10 +32,12 @@ from ..skin_pack import (
     SkinTheme,
     default_theme,
     effective_theme,
+    read_glow_choice,
     read_theme_choice,
     theme_for_name,
     theme_names,
     theme_store_path,
+    write_glow_choice,
     write_theme_choice,
 )
 from .common import _paths, _print_json, _wants_json
@@ -48,6 +52,7 @@ THEME_LIST_SCHEMA_VERSION = "omh_theme_list/v2"
 THEME_CHANGE_SCHEMA_VERSION = "omh_theme_change/v2"
 THEME_STATUS_SCHEMA_VERSION = "omh_theme_status/v2"
 THEME_REPAIR_SCHEMA_VERSION = "omh_theme_repair/v2"
+THEME_GLOW_SCHEMA_VERSION = "omh_theme_glow/v1"
 
 
 def _language(args: argparse.Namespace) -> str:
@@ -182,6 +187,55 @@ def _apply_theme(args: argparse.Namespace, theme: SkinTheme, *, dry_run: bool) -
     }
 
 
+def cmd_theme_glow(args: argparse.Namespace) -> int:
+    """`omh theme glow on|off` saves whether the OMH TUI's working glow is on; alone, reports it."""
+    requested = str(getattr(args, "state", "") or "").strip().lower()
+    if requested not in ("", "on", "off"):
+        print(f"omh: the working glow is on or off, not {requested!r}: `omh theme glow on` or `omh theme glow off`.")
+        return 2
+    paths = _paths(args)
+    saved = read_glow_choice(paths.omh_home)
+    on = True if saved is None else saved
+    payload: dict[str, object] = {
+        "schema_version": THEME_GLOW_SCHEMA_VERSION,
+        "glow": "on" if on else "off",
+        "source": "default" if saved is None else "saved",
+        "changed": False,
+        "store_path": str(theme_store_path(paths.omh_home)),
+    }
+    if requested:
+        wanted = requested == "on"
+        payload.update(previous="on" if on else "off", glow=requested, source="saved")
+        if saved is not wanted:
+            try:
+                write_glow_choice(paths.omh_home, wanted)
+            except OSError as exc:
+                raise OmhError(
+                    f"could not save the working glow to {theme_store_path(paths.omh_home)}: {exc}") from exc
+            payload["changed"] = True
+    if _wants_json(args):
+        _print_json(payload)
+    else:
+        _print_glow(payload, requested)
+    return 0
+
+
+def _print_glow(payload: dict[str, object], requested: str) -> None:
+    use_color = _use_color()
+    glow = str(payload.get("glow", ""))
+    print(_color(f"OMH TUI working glow: {glow}", "1;36", use_color))
+    if not requested:
+        print(f"  {'Saved' if payload.get('source') == 'saved' else 'Nothing saved; on by default'}"
+              f" in {payload.get('store_path', '')}.")
+    elif payload.get("changed"):
+        print(f"  Saved {glow} in {payload.get('store_path', '')}.")
+    else:
+        print(f"  No change: {glow} is already saved.")
+    print(_color("Next", "1;32", use_color))
+    print("  The OMH TUI reads it when it opens; `/glow on|off` switches it inside a session. "
+          "OMH_TUI_GLOW=0 holds it off in one terminal.")
+
+
 def cmd_theme_repair(args: argparse.Namespace) -> int:
     """Retired with the skin files it reinstalled; scripts that still call it exit 0, as retired flags do.
 
@@ -282,6 +336,14 @@ def _add_theme_commands(sub) -> None:
     )
     _add_shared_theme_arguments(theme_status, "Print the full machine-readable status payload.")
     theme_status.set_defaults(func=cmd_theme_status)
+
+    theme_glow = theme_sub.add_parser(
+        "glow",
+        help="Turn the OMH TUI's working glow (a light round the screen while a turn runs) on or off; alone, show it.",
+    )
+    theme_glow.add_argument("state", nargs="?", help="on or off; omit to show the saved choice.")
+    _add_shared_theme_arguments(theme_glow, "Print the machine-readable glow payload.")
+    theme_glow.set_defaults(func=cmd_theme_glow)
 
     theme_repair = theme_sub.add_parser("repair", help="Retired: OMH installs no skin files into Hermes. Does nothing.")
     theme_repair.add_argument("name", nargs="?", help="Accepted for compatibility and ignored.")

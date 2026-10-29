@@ -41,6 +41,7 @@ from ..install.installer import (
     profile_skill_names,
 )
 from ..install.plugin_bundle_import_scan import describe_findings, scan_bundle_core_imports
+from ..install.support_materialization import legacy_support_paths
 from ..install.plugin_load_deadline import (
     ABANDONED_LOADER_CAP,
     LOAD_TIMEOUT_RECORDED,
@@ -57,6 +58,7 @@ from ..install.skill_registration import (
     registration_home_label,
 )
 from ..manifest import local_modifications, read_manifest
+from ..core.errors import OmhError
 from ..paths import (
     OmhPaths,
     managed_command_generations_dir,
@@ -208,6 +210,15 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks then report ``observed=False``.
     """
     checks: list[Check] = []
+    # Read the pack where the installer reads it. On a host migrated from the
+    # pre-pointer layout, the running bootstrap generation's `skills` is a
+    # directory link to `<omh_home>/skills`, and the support reader refuses
+    # every link component, so reading through the alias aborted the whole
+    # report on exactly those hosts (#2378). A link the translation refuses
+    # is reported here rather than raised.
+    paths, skills_dir_link = _support_readable_paths(paths)
+    if skills_dir_link is not None:
+        checks.append(skills_dir_link)
     command_path = inspect_omh_command_path()
     checks.append(
         Check(
@@ -245,18 +256,25 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
         hermes_edited_paths = {str(item["path"]) for item in hermes_edits}
         missing = _missing_skills_on_next_install(paths, manifest)
         missing_paths = {str(item["path"]) for item in missing}
-        modified = [
-            rel
-            for rel in local_modifications(manifest, paths.skills_dir)
-            if rel not in hermes_edited_paths and rel not in missing_paths
-        ]
-        checks.append(
-            Check(
-                "local_modifications",
-                not modified,
-                "managed files match manifest" if not modified else f"changed managed files: {', '.join(modified)}",
+        try:
+            modified = [
+                rel
+                for rel in local_modifications(manifest, paths.skills_dir)
+                if rel not in hermes_edited_paths and rel not in missing_paths
+            ]
+        except OmhError as exc:
+            # A support path the reader refuses (a link inside the pack, or a
+            # bootstrap link it would not translate) is a finding about this
+            # pack, not a reason to withhold every other check.
+            checks.append(Check("local_modifications", False, f"managed files not compared: {exc}"))
+        else:
+            checks.append(
+                Check(
+                    "local_modifications",
+                    not modified,
+                    "managed files match manifest" if not modified else f"changed managed files: {', '.join(modified)}",
+                )
             )
-        )
         checks.append(_skill_freshness_check(paths, manifest, exclude=hermes_edited_paths))
         if missing:
             checks.append(_missing_managed_skills_check(manifest, missing))
@@ -2337,6 +2355,9 @@ def run_doctor_advisories(paths: OmhPaths, *, personal_files: bool = True) -> Ad
         omh_home=paths.omh_home,
         discovery_home=paths.hermes_home.parent,
         personal_files=personal_files,
+        # The pack this command resolved, not one rebuilt from `omh_home`,
+        # which on a managed install is the pre-pointer copy or nothing (#2358).
+        skills_dir=paths.skills_dir,
     )
 
 
@@ -2919,6 +2940,32 @@ def _route_hint_skills_check(paths: OmhPaths) -> Check:
     )
 
 
+def _support_readable_paths(paths: OmhPaths) -> tuple[OmhPaths, Check | None]:
+    """`paths` with the bootstrap generation's link read as the legacy pack, as the installer reads it.
+
+    `legacy_support_paths` is the installer's own translation, so doctor and
+    `omh update` judge the same directory: it accepts only the migration's
+    direct link from `generations/bootstrap-legacy/skills` to this home's
+    pre-pointer pack and refuses any other link. Every path that is not that
+    link comes back unchanged. A refused link is returned as a blocking check
+    naming it, with the untranslated paths, because the update the operator
+    would run next refuses the same link.
+    """
+    try:
+        return legacy_support_paths(paths), None
+    except OmhError as exc:
+        return paths, Check(
+            "skills_dir_link",
+            False,
+            f"{paths.skills_dir} is a link OMH does not read through: {exc}",
+            remediation=(
+                "Point the bootstrap-legacy generation's `skills` link directly at this home's "
+                "`<omh_home>/skills`, or remove the stray link, then run `omh update`."
+            ),
+            next_action="Repair the skills link named here, then run `omh doctor` again.",
+        )
+
+
 def _guidance_projection_check(paths: OmhPaths, manifest: dict | None, *, registered: bool) -> Check:
     """Report the Hermes-visible guidance projection as one answer with four axes.
 
@@ -2934,12 +2981,17 @@ def _guidance_projection_check(paths: OmhPaths, manifest: dict | None, *, regist
     use is never a failure -- OMH cannot see a running Hermes from here, so
     `not_observed` is the honest resting state, not a fault.
     """
-    status = build_guidance_projection_status(
-        paths.skills_dir,
-        manifest,
-        registered=registered,
-        host_observed=False,
-    )
+    try:
+        status = build_guidance_projection_status(
+            paths.skills_dir,
+            manifest,
+            registered=registered,
+            host_observed=False,
+        )
+    except OmhError as exc:
+        # The support reader refused a path in the pack; `local_modifications`
+        # names the same refusal, and the rest of the report still runs.
+        return Check("guidance_projection", False, f"projection not read: {exc}")
     projection = str(status["projection"])
     drift = str(status["drift"])
     current = projection in {"fresh", "not_comparable"} and drift in {"clean", "unknown"}

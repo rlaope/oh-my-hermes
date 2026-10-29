@@ -289,7 +289,7 @@ def completion_file_in_scope(file_scope: Sequence[str]) -> bool:
 
     for entry in file_scope:
         text = str(entry)
-        if text == lane.COMPLETION_FILE:
+        if text == lane.COMPLETION_FILE or text in {".", "./"}:
             return True
         if text.endswith("/") and lane.COMPLETION_FILE.startswith(text):
             return True

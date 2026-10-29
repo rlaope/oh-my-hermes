@@ -23,9 +23,11 @@ import unittest
 from unittest.mock import patch
 
 from _tui_lines import lines_text
-from test_tui_modes import SID, RecordingClient, make_app, notices, type_text
+from test_tui_app import info_row_of
+from test_tui_modes import SID, RecordingClient, drawn, make_app, notices, type_text
 from omh.tui import gateway_contract as contract
 from omh.tui.app import (
+    EXIT_HINT,
     IMAGE_NOT_SENT_NOTICE,
     IMAGE_WAIT_LINE,
     UNSENT_BACK_NOTICE,
@@ -474,6 +476,33 @@ class GateTests(ImageTestCase):
         self.hermes.pump()
         self.hermes.admit()
         self.assertEqual(self.hermes.turns, [("describe the second paragraph", [])])
+
+    def test_an_armed_ctrl_c_over_a_new_draft_does_not_exit_past_a_held_submit(self) -> None:
+        self.app._on_input(ctrl("c"))  # on the empty composer: arms the exit
+        self.assertIsNotNone(self.app.exit_armed_at)
+        type_text(self.app, "describe this")
+        self.app._on_input(CTRL_V)
+        self.app._on_input(Key(ENTER))  # held for its paste
+        type_text(self.app, "next")
+        self.app._on_input(ctrl("c"))
+        self.assertIsNone(self.app.exit_code)
+        self.assertEqual(self.shown(), "")  # the draft is cleared, as any Ctrl+C over a draft
+        self.hermes.pump()
+        self.hermes.admit()
+        self.assertEqual([text for text, _files in self.hermes.turns], ["describe this [Image #1]"])
+
+    def test_with_a_submit_held_the_info_line_does_not_name_an_exit_the_press_would_not_make(self) -> None:
+        for draft in ("next", ""):
+            with self.subTest(draft=draft):
+                self.setUp()
+                self.app._on_input(ctrl("c"))  # arms the exit
+                type_text(self.app, "describe this")
+                self.app._on_input(CTRL_V)
+                self.app._on_input(Key(ENTER))  # held for its paste
+                type_text(self.app, draft)
+                self.assertNotIn(EXIT_HINT, info_row_of(drawn(self.app)))
+                self.app._on_input(ctrl("c"))  # clears the draft, or gives the held submit back
+                self.assertIsNone(self.app.exit_code)
 
     def test_ctrl_c_with_no_turn_running_gives_a_held_submit_back_and_arms_no_exit(self) -> None:
         type_text(self.app, "describe this")

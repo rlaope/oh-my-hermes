@@ -17,7 +17,7 @@ import unittest
 
 from _tui_gateway_replay import Scenario, recorded_answer, spans
 from _tui_lines import INFO_INSET, lines_text, RULE_ROW, without_badge
-from test_tui_agent_view import STARTS, VIEW, agent_app, agent_event, relay, screen_info_index, view_rows
+from test_tui_agent_view import STARTS, VIEW, agent_app, agent_event, mode_row, relay, screen_info_index, view_rows
 from test_tui_app import LIVE_ID, NO_TERMIOS, AppTestCase, Step, startup_answers, info_index
 from test_tui_modes import SID, RecordingClient, answer, composer_index, drawn, make_app, notices, queue, steers, type_text
 from test_tui_subagents import FIRST, FRAMES, SECOND
@@ -28,7 +28,7 @@ from omh.tui.agent_view import (
     TAIL_MISSES_BEFORE_STOP,
     TAIL_POLL_SECONDS,
 )
-from omh.tui.app import SLOT_ARM_SECONDS, App
+from omh.tui.app import EXIT_HINT, SLOT_ARM_SECONDS, App
 from omh.tui.layout import AGENT_VIEW_ROWS, agent_view_cap
 from omh.tui.frame import BROWSING_HINT, INFO_INSET as INFO_INSET_CELLS, MODE_NORMAL
 from omh.tui.gateway import Event, Response, ServerRequest
@@ -304,6 +304,25 @@ class ListLeaveTests(unittest.TestCase):
                 app, client = focused(busy=busy)
                 app._on_input(CTRL_C)
                 self.assertEqual((app.list_selected, client.calls, notices(app), app.exit_code), (None, [], [], None))
+
+    def test_ctrl_c_with_shift_or_alt_held_leaves_too(self) -> None:
+        # As the composer takes them (kitty and modifyOtherKeys report the modifier; the legacy Alt chord is Esc).
+        for key in (Key(CHAR, "c", ctrl=True, shift=True), Key(CHAR, "c", ctrl=True, alt=True, protocol=True)):
+            with self.subTest(key=key):
+                app, client = focused()
+                app._on_input(key)
+                self.assertEqual((app.list_selected, client.calls, app.exit_code), (None, [], None))
+
+    def test_while_a_steer_is_open_the_interrupt_press_arms_the_exit_and_the_next_one_leaves(self) -> None:
+        # The owner's rule (#2302) holds over a steer: the info line names the exit, and the second press makes it.
+        app, client = focused()
+        app._on_input(Key(CHAR, "s"))
+        self.assertIsNotNone(app.agent_steer)
+        app._on_input(CTRL_C)
+        self.assertEqual(len(client.named("session.interrupt")), 1)
+        self.assertIn(EXIT_HINT, mode_row(app))  # the row over the agent view
+        app._on_input(CTRL_C)
+        self.assertEqual((app.exit_code, len(client.named("session.interrupt"))), (0, 1))
 
     def test_a_typed_character_does_nothing_and_the_list_keeps_the_keys(self) -> None:
         app, client = focused()
