@@ -42,7 +42,7 @@ and then that header, then the plan header.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import timezone
 import json
@@ -68,6 +68,11 @@ from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
 HUD_POLL_MIN_SECONDS = 2.0
 HUD_POLL_MAX_SECONDS = 8.0
 TOKEN_WATCH_CAP = 64  # the roster's own cap: one query never names more child sessions than the agent view holds
+# A session's background-process ownership facts read off state.db on the poller thread (`HudPoller.poll_once`):
+LINEAGE_READS = 5  # reads that may ask again while the earlier segments are `unverified`
+ROUTE_READS = 5  # reads that may ask again while no row of the session is there to name its route
+PARENT_CACHE = 256  # spawning sessions decided per session; one past this is not asked and not this session's
+DELEGATION_DEPTH = 8  # delegation links followed from a spawning session back to this one
 
 # The fields that drift on every poll without anything having happened: the
 # widget's VOLATILE_KEYS. A payload differing only here is still delivered (so
@@ -213,8 +218,11 @@ class HudPoller:
         self._pending: HudSnapshot | None = None
         self._watched: tuple[str, ...] = ()
         self._processes: dict[str, BackgroundProcess] = {}
-        self._earlier: tuple[str, ...] | None = None  # None: not read yet for this session
-        self._routes: tuple[str, ...] = ()  # the route keys Hermes recorded for those ids (`recorded_routes`)
+        self._earlier: tuple[str, ...] | None = None  # None: not settled yet for this session
+        self._earlier_reads = 0
+        self._routes: tuple[str, ...] | None = None  # the route keys Hermes recorded for those ids; None: ask
+        self._route_reads = 0
+        self._parents: dict[str, bool] = {}  # spawning session id -> whether this session delegated to it
         self._left: tuple[str, dict[str, BackgroundProcess]] = ("", {})  # the session switched from, its processes
         # `refresh` calls, and the most a read that started after them has accounted for: that read is kept as new.
         self._refreshes = 0
@@ -247,7 +255,8 @@ class HudPoller:
             self._session = stored_id
             self._generation += 1
             self._processes = {}
-            self._earlier, self._routes = None, ()
+            self._earlier, self._earlier_reads, self._routes, self._route_reads = None, 0, None, 0
+            self._parents = {}
             self._last_full = ""
             self._last_structural = ""
             self._interval = HUD_POLL_MIN_SECONDS
@@ -280,6 +289,9 @@ class HudPoller:
             self._interval = HUD_POLL_MIN_SECONDS
             self._refreshes += 1
             count = self._refreshes
+            # A turn may have recorded the route (`_record_gateway_session_peer`) or delegated: ask again.
+            self._routes, self._route_reads = None, 0
+            self._parents = {parent: True for parent, owned in self._parents.items() if owned}
         self._wake.set()
         return count
 
@@ -294,6 +306,7 @@ class HudPoller:
         with self._lock:
             session, generation, watched, tracked = self._session, self._generation, self._watched, self._processes
             refreshes, earlier, (left, carried), routes = self._refreshes, self._earlier, self._left, self._routes
+            earlier_reads, route_reads, parents = self._earlier_reads, self._route_reads, dict(self._parents)
         if not session:
             return HUD_POLL_MAX_SECONDS
         payload = self._read(session)
@@ -301,13 +314,30 @@ class HudPoller:
         home = payload.get("hermes_home")
         tokens = read_output_tokens(home, watched)
         process_home = home if isinstance(home, str) else self._hermes_home
-        if earlier is None:
-            earlier = earlier_segments(process_home, session)
+        settled_earlier: tuple[str, ...] | None = earlier
+        if earlier is None:  # until Hermes' links verify every earlier segment, or `LINEAGE_READS` reads asked
+            earlier, resolved = earlier_segments(process_home, session)
+            earlier_reads += 1
             if left in earlier:
-                tracked = {**carried, **tracked}
-        if not routes:  # until the session's row names one: a new session's row may come after its first read
-            routes = recorded_routes(process_home, (session, *earlier))
-        processes = still_running(tracked, read_processes(process_home, session, earlier, routes))
+                tracked, left, carried = {**carried, **tracked}, "", {}
+            if resolved or earlier_reads >= LINEAGE_READS:
+                settled_earlier, left, carried = earlier, "", {}
+        settled_routes: tuple[str, ...] | None = routes
+        if routes is None:  # until a row of the session is there, or `ROUTE_READS` reads asked; again after a turn
+            routes, found = recorded_routes(process_home, (session, *earlier))
+            route_reads += 1
+            if found or route_reads >= ROUTE_READS:
+                settled_routes = routes
+        owners = (session, *earlier)
+
+        def parent_owned(parent: str) -> bool:
+            if parent not in parents:
+                if len(parents) >= PARENT_CACHE:
+                    return False
+                parents[parent] = delegated_from(process_home, parent, owners)
+            return parents[parent]
+
+        processes = still_running(tracked, read_processes(process_home, session, earlier, routes, parent_owned))
         running = sorted(processes.values(), key=lambda process: (process.started_at, process.proc_id))
         shown = [[process.proc_id, process.notify, process.watched] for process in running]
         full = _fingerprint([payload, tokens, shown])
@@ -315,7 +345,12 @@ class HudPoller:
         with self._lock:
             if generation != self._generation:
                 return HUD_POLL_MIN_SECONDS
-            self._processes, self._earlier, self._left, self._routes = processes, earlier, ("", {}), routes
+            self._processes, self._earlier, self._left = processes, settled_earlier, (left, carried)
+            self._earlier_reads = earlier_reads
+            if refreshes == self._refreshes:
+                self._routes, self._route_reads, self._parents = settled_routes, route_reads, parents
+            else:  # a refresh since this read began: the route and the sessions found not delegated are asked again
+                self._parents = {parent: True for parent, owned in parents.items() if owned}
             fresh = full != self._last_full or refreshes != self._refreshed
             self._refreshed = refreshes
             if fresh:
@@ -357,46 +392,95 @@ class HudPoller:
             self._wake.wait(interval)
 
 
-def earlier_segments(hermes_home: object, session_id: str) -> tuple[str, ...]:
+def earlier_segments(hermes_home: object, session_id: str) -> tuple[tuple[str, ...], bool]:
     """The earlier segments of `session_id`'s conversation, nearest first, as far as Hermes' compaction links verify
-    them (`live_session.compaction_ancestors`, read-only); none for no home. A rotation is the only way one session
-    continues another, so a session switched to that does not name the one left is another conversation."""
+    them (`live_session.compaction_ancestors`, read-only), and whether the walk resolved: an `unverified` answer
+    (a state.db that could not be read, a row not there yet) lists only the segments it verified, and may list more
+    when asked again. None, resolved, for no home. A rotation is the only way one session continues another, so a
+    session switched to that does not name the one left is another conversation."""
     from ..plugin_bundle.omh.live_session import compaction_ancestors
 
     if not isinstance(hermes_home, str) or not hermes_home or not session_id:
-        return ()
+        return (), True
     try:
-        found = compaction_ancestors(hermes_home, session_id).get("ancestors")
+        answer = compaction_ancestors(hermes_home, session_id)
     except (OSError, ValueError):
-        return ()
-    return tuple(item for item in found if isinstance(item, str)) if isinstance(found, list) else ()
+        return (), False
+    found = answer.get("ancestors")
+    segments = tuple(item for item in found if isinstance(item, str)) if isinstance(found, list) else ()
+    return segments, answer.get("status") == "resolved"
 
 
-def recorded_routes(hermes_home: object, session_ids: Sequence[str]) -> tuple[str, ...]:
-    """The route keys Hermes recorded on `session_ids`' rows of the state.db under `hermes_home`
-    (`sessions.session_key`: a messaging chat's `agent:<namespace>:<platform>:…`, a local session's route), read-only
-    and opened as `read_output_tokens` opens it. No ids, no home, no file, and any SQLite failure read as none."""
-    if not session_ids or not isinstance(hermes_home, str) or not hermes_home:
-        return ()
+def _state_db(hermes_home: object) -> sqlite3.Connection | None:
+    """`<hermes_home>/state.db` opened as the HUD reader opens it (`mode=ro`, a quarter-second busy wait, the path
+    quoted); None for no home, no file, or one that cannot be opened."""
+    if not isinstance(hermes_home, str) or not hermes_home:
+        return None
     try:
         state_db = Path(hermes_home) / "state.db"
         if not state_db.is_file():
-            return ()
+            return None
     except (OSError, ValueError):
-        return ()
+        return None
     try:
-        connection = sqlite3.connect(f"file:{quote(str(state_db))}?mode=ro", uri=True, timeout=0.25)
+        return sqlite3.connect(f"file:{quote(str(state_db))}?mode=ro", uri=True, timeout=0.25)
     except sqlite3.Error:
-        return ()
+        return None
+
+
+def delegated_from(hermes_home: object, session_id: str, owners: Collection[str]) -> bool:
+    """Whether `session_id` is a subagent session one of `owners` delegated to, directly or through other subagents
+    (at most `DELEGATION_DEPTH` links), read-only off state.db. A link is a row whose `_delegate_from` names its
+    own `parent_session_id` (`tools/delegate_tool.py`, which stamps it once on the child): taken from the first
+    segment of the row's conversation when the child was itself rotated (`compaction_ancestors`). A branch or a
+    reset is another conversation and is no link. Anything unreadable is no."""
+    from ..plugin_bundle.omh.live_session import compaction_ancestors
+
+    connection = _state_db(hermes_home)
+    if connection is None:
+        return False
+    try:
+        current = session_id
+        for _ in range(DELEGATION_DEPTH):
+            if current in owners:
+                return True
+            found = compaction_ancestors(str(hermes_home), current).get("ancestors")
+            first = found[-1] if isinstance(found, list) and found and isinstance(found[-1], str) else current
+            if first in owners:
+                return True
+            row = connection.execute(
+                "SELECT parent_session_id, model_config FROM sessions WHERE id = ?", (first,)
+            ).fetchone()
+            if row is None or not isinstance(row[0], str) or not row[0] or not isinstance(row[1], str):
+                return False
+            config = json.loads(row[1])
+            if not isinstance(config, dict) or config.get("_delegate_from") != row[0]:
+                return False
+            current = row[0]
+        return False
+    except (sqlite3.Error, ValueError, RecursionError):
+        return False
+    finally:
+        connection.close()
+
+
+def recorded_routes(hermes_home: object, session_ids: Sequence[str]) -> tuple[tuple[str, ...], bool]:
+    """The route keys Hermes recorded on `session_ids`' rows of the state.db under `hermes_home`
+    (`sessions.session_key`: a messaging chat's `agent:<namespace>:<platform>:…`, a local session's route), read-only,
+    and whether any of those rows is there (one with no key settles the question until a turn ends). No ids, no
+    home, no file, and any SQLite failure read as none, with no row seen."""
+    connection = _state_db(hermes_home) if session_ids else None
+    if connection is None:
+        return (), False
     try:
         rows = connection.execute(
             f"SELECT session_key FROM sessions WHERE id IN ({','.join('?' for _ in session_ids)})", tuple(session_ids)
         ).fetchall()
     except sqlite3.Error:
-        return ()
+        return (), False
     finally:
         connection.close()
-    return tuple(sorted({row[0] for row in rows if isinstance(row[0], str) and row[0]}))
+    return tuple(sorted({row[0] for row in rows if isinstance(row[0], str) and row[0]})), bool(rows)
 
 
 def read_output_tokens(hermes_home: object, session_ids: Sequence[str]) -> dict[str, int]:

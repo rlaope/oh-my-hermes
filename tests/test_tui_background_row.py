@@ -17,6 +17,7 @@ import json
 import math
 import os
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -35,7 +36,7 @@ from omh.tui.background import (
 from omh.tui.bot_board import ON_POSIX, process_facts
 from omh.tui.keys import ENTER, Key
 from omh.skin_pack import theme_for_name
-from omh.tui.panels import HudPoller, HudSnapshot, recorded_routes
+from omh.tui.panels import LINEAGE_READS, ROUTE_READS, HudPoller, HudSnapshot, recorded_routes
 from omh.tui.style import NO_COLOR, Span
 from omh.tui.theme import (
     DEFAULT_THEME, TEXT_CONTRAST, build_theme, contrast_ratio, kind_style, surface_for, with_catch_colours,
@@ -68,14 +69,14 @@ def row(**fields: object) -> dict:
 
 # A Telegram DM a bot profile serves, resumed in the TUI: its state.db id, and the route Hermes records on that row
 # (`sessions.session_key`, gateway/session_recovery.py:440,457 at origin/main 0431192d69; 425,442 at bf0203a794).
+# The running row's glyph steps with its clock (`1h 07m 13s` = 4033 s with the fixture's `started_at`).
+GLYPH = WORKING_GLYPHS[4033 % len(WORKING_GLYPHS)]
 CHAT = "20261029_090000_aa11bb"
 CHAT_ROUTE = "agent:kami:telegram:dm:12345"
 
 
 def record_routes(hermes_home: str, keys: dict[str, str]) -> None:
     """Hermes' `sessions.session_key` column (hermes_state_common.py:468) on rows `write_sessions` wrote."""
-    import sqlite3
-
     connection = sqlite3.connect(Path(hermes_home) / "state.db")
     try:
         connection.execute("ALTER TABLE sessions ADD COLUMN session_key TEXT")
@@ -150,8 +151,10 @@ class ReadProcessesTests(unittest.TestCase):
             f"session:{ROUTE}",  # the task id, not a session key
             STORED[:-4], "", None, 7,
         )
-        self.write([row(session_id=f"proc_{index}", session_key=key) for index, key in enumerate(owned + others)]
-                   + [row(session_id="proc_tui", session_key=tui)])
+        # No spawning session named: the key alone decides.
+        self.write([row(session_id=f"proc_{index}", session_key=key, parent_session_id="")
+                    for index, key in enumerate(owned + others)]
+                   + [row(session_id="proc_tui", session_key=tui, parent_session_id="")])
         self.assertEqual([found.proc_id for found in read_processes(self.home, STORED)],
                          [f"proc_{index}" for index in range(len(owned))])
         self.assertEqual([found.proc_id for found in read_processes(self.home, tui)], ["proc_tui"])
@@ -179,21 +182,25 @@ class ReadProcessesTests(unittest.TestCase):
         self.assertEqual(read_processes(self.home, "20261029_100000_cc22dd"), ())
 
     def test_recorded_routes_are_read_off_the_session_rows_and_nothing_else(self) -> None:
-        self.assertEqual(recorded_routes(self.home, (CHAT,)), ())  # no state.db
+        self.assertEqual(recorded_routes(self.home, (CHAT,)), ((), False))  # no state.db
         write_sessions(Path(self.home), session_row(CHAT), session_row("other"), session_row("bare"))
         record_routes(self.home, {CHAT: CHAT_ROUTE, "other": "agent:main:discord:dm:9", "bare": ""})
-        self.assertEqual(recorded_routes(self.home, (CHAT,)), (CHAT_ROUTE,))
-        self.assertEqual(recorded_routes(self.home, (CHAT, "bare", "missing")), (CHAT_ROUTE,))
-        self.assertEqual(recorded_routes(self.home, ()), ())
-        self.assertEqual(recorded_routes(None, (CHAT,)), ())
+        self.assertEqual(recorded_routes(self.home, (CHAT,)), ((CHAT_ROUTE,), True))
+        self.assertEqual(recorded_routes(self.home, (CHAT, "bare", "missing")), ((CHAT_ROUTE,), True))
+        self.assertEqual(recorded_routes(self.home, ("bare",)), ((), True))  # a row with no key: settled
+        self.assertEqual(recorded_routes(self.home, ("missing",)), ((), False))
+        self.assertEqual(recorded_routes(self.home, ()), ((), False))
+        self.assertEqual(recorded_routes(None, (CHAT,)), ((), False))
         (Path(self.home) / "state.db").write_bytes(b"not a database\n" * 64)
-        self.assertEqual(recorded_routes(self.home, (CHAT,)), ())
+        self.assertEqual(recorded_routes(self.home, (CHAT,)), ((), False))
 
     def test_the_earlier_segments_of_the_conversation_are_owned_too(self) -> None:
         """Rotating compaction re-anchors the stored id (tui_gateway/session_compression.py:331); a process started
         before keeps its key."""
-        self.write([row(session_id="proc_before", session_key="20261028_101500_ab12cd"),
-                    row(session_id="proc_after", session_key="20261028_111500_cd34ef")])
+        self.write([row(session_id="proc_before", session_key="20261028_101500_ab12cd",
+                        parent_session_id="20261028_101500_ab12cd"),
+                    row(session_id="proc_after", session_key="20261028_111500_cd34ef",
+                        parent_session_id="20261028_111500_cd34ef")])
         self.assertEqual([found.proc_id for found in read_processes(self.home, "20261028_111500_cd34ef")],
                          ["proc_after"])
         self.assertEqual(
@@ -367,8 +374,8 @@ class PollerTests(unittest.TestCase):
         a process started before keeps its key. The first read of the new id verifies the link and keeps them."""
         write_sessions(Path(self.home), compacted("seg_a", at=1050.0), session_row("seg_b", parent="seg_a"),
                        session_row("other"))
-        host = row(session_id="proc_host", session_key="seg_a", pid=os.getpid())
-        sandbox = row(session_id="proc_sandbox", session_key="seg_a", pid_scope="sandbox")
+        host = row(session_id="proc_host", session_key="seg_a", parent_session_id="seg_a", pid=os.getpid())
+        sandbox = row(session_id="proc_sandbox", session_key="seg_a", parent_session_id="seg_a", pid_scope="sandbox")
         self.path.write_text(json.dumps([host, sandbox]), encoding="utf-8")
         self.poller.set_session("seg_a")
         self.poller.poll_once()
@@ -449,6 +456,135 @@ class PollerTests(unittest.TestCase):
         self.assertIsNotNone(poller.take())
 
 
+class OwnershipTests(unittest.TestCase):
+    """One rule for every key (review of #2388): a row that names its spawning session (`parent_session_id`,
+    tools/process_registry.py:581-583,1092; terminal_tool_background.py:70-73) is this session's only when that is
+    one of its ids or a subagent it delegated to (delegate_tool.py:343 stamps `_delegate_from`;
+    delegate_tool_dispatch.py:76-79: the child's id replaces HERMES_SESSION_ID). State.db is read on the poller
+    thread only, a bounded number of times."""
+
+    LOCAL = "local-0d1c2b3a49586776a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f00f1e"
+
+    def setUp(self) -> None:
+        self.home = tempfile.mkdtemp()
+        self.path = Path(self.home) / PROCESSES_FILE
+        self.poller = HudPoller("/omh", None, reader=lambda *_a, **_k: {"hermes_home": self.home}, clock=lambda: 5.0)
+
+    def processes(self, rows: list[dict], session: str) -> list[str]:
+        self.path.write_text(json.dumps(rows), encoding="utf-8")
+        self.poller.set_session(session)
+        self.poller.poll_once()
+        snapshot = self.poller.take()
+        return sorted(found.proc_id for found in snapshot.processes) if snapshot is not None else []
+
+    def sessions(self) -> None:
+        local_route = f"agent:main:local:dm:{self.LOCAL}"
+        write_sessions(
+            Path(self.home),
+            session_row(self.LOCAL, source="local"),
+            session_row("child", parent=self.LOCAL, source="subagent", delegate_from=self.LOCAL),
+            session_row("grandchild", parent="child", source="subagent", delegate_from="child"),
+            compacted("rotated_child", at=1050.0, parent=self.LOCAL, source="subagent", delegate_from=self.LOCAL),
+            session_row("rotated_child_2", parent="rotated_child", source="subagent", delegate_from=self.LOCAL),
+            session_row("branch", parent=self.LOCAL, config={"_branched_from": self.LOCAL}),
+            session_row("reset", parent=self.LOCAL, source="local", config={"_reset_from": self.LOCAL}),
+            session_row("unrelated", source="local"),
+            session_row(CHAT, source="telegram"),
+            session_row("chat_child", parent=CHAT, source="subagent", delegate_from=CHAT),
+        )
+        record_routes(self.home, {self.LOCAL: local_route, "reset": local_route, CHAT: CHAT_ROUTE})
+
+    def test_a_delegated_child_s_process_is_this_session_s_on_a_local_and_a_messaging_route(self) -> None:
+        self.sessions()
+        local_route = f"agent:main:local:dm:{self.LOCAL}"
+        rows = [row(session_id=f"proc_{parent[:12]}", pid=os.getpid(), session_key=local_route,
+                    parent_session_id=parent)
+                for parent in (self.LOCAL, "child", "grandchild", "rotated_child_2", "branch", "reset", "unrelated",
+                               "nowhere")]
+        self.assertEqual(self.processes(rows, self.LOCAL),
+                         sorted(f"proc_{parent[:12]}"
+                                for parent in (self.LOCAL, "child", "grandchild", "rotated_child_2")))
+        rows = [row(session_id=f"proc_{parent}", pid=os.getpid(), session_key=CHAT_ROUTE, parent_session_id=parent)
+                for parent in (CHAT, "chat_child", "child", "unrelated")]
+        self.assertEqual(self.processes(rows, CHAT), [f"proc_{CHAT}", "proc_chat_child"])
+
+    def test_after_a_reset_neither_conversation_shows_or_offers_the_other_s_process(self) -> None:
+        """A gateway-side `/new` keeps the local route (`reset_local_session`, gateway/session_local_recovery.py
+        :379-392) and Hermes drops the old conversation's completion; OMH must not offer it to the new one."""
+        self.sessions()
+        local_route = f"agent:main:local:dm:{self.LOCAL}"
+        old = row(session_id="proc_old", pid=os.getpid(), session_key=local_route, parent_session_id=self.LOCAL)
+        new = row(session_id="proc_new", pid=os.getpid(), session_key=local_route, parent_session_id="reset")
+        self.assertEqual(self.processes([old, new], "reset"), ["proc_new"])
+        self.assertEqual(self.processes([old, new], self.LOCAL), ["proc_old"])
+        app, client = make_app(cols=120)
+        app.stored_id, app.poller = "reset", self.poller
+        self.processes([old], "reset")
+        self.poller.poll_once()
+        app._take_hud()
+        self.assertIsNone(app._background_line(120))
+        app._on_input(Key(ENTER))
+        self.assertEqual(client.named("prompt.submit"), [])
+
+    def test_an_unverified_lineage_is_asked_again_and_the_carry_waits_for_it(self) -> None:
+        """Review L1: an `unverified` answer (the continuation's row not there yet) was kept for the session."""
+        self.path.write_text(json.dumps([row(session_id="proc_seg", session_key="seg_a", parent_session_id="seg_a",
+                                             pid_scope="sandbox")]), encoding="utf-8")
+        write_sessions(Path(self.home), session_row("seg_a"))
+        self.poller.set_session("seg_a")
+        self.poller.poll_once()
+        self.poller.set_session("seg_b")  # Hermes said the new id before its row is readable here
+        self.poller.poll_once()
+        self.assertEqual(self.poller.take().processes, ())
+        connection = sqlite3.connect(Path(self.home) / "state.db")
+        connection.execute("UPDATE sessions SET ended_at = 1050.0, end_reason = 'compression' WHERE id = 'seg_a'")
+        connection.execute("INSERT INTO sessions (id, source, started_at, parent_session_id) "
+                           "VALUES ('seg_b', 'tui', 1050.0, 'seg_a')")
+        connection.commit()
+        connection.close()
+        self.poller.poll_once()
+        snapshot = self.poller.take()
+        self.assertEqual(([found.proc_id for found in snapshot.processes], snapshot.earlier),
+                         (["proc_seg"], ("seg_a",)))
+        with patch("omh.tui.panels.earlier_segments") as asked:
+            self.poller.poll_once()
+        asked.assert_not_called()  # resolved: kept
+        self.poller.set_session("seg_never")  # never resolves: asked a bounded number of times
+        with patch("omh.tui.panels.earlier_segments", return_value=((), False)) as asked:
+            for _ in range(LINEAGE_READS + 5):
+                self.poller.poll_once()
+        self.assertEqual(asked.call_count, LINEAGE_READS)
+
+    def test_the_route_is_asked_until_the_row_is_there_and_again_after_a_turn(self) -> None:
+        """Review L2: a session whose row records no key (the stdio lane) was asked every poll."""
+        self.path.write_text("[]", encoding="utf-8")
+        write_sessions(Path(self.home), session_row("tui_sess"))
+        record_routes(self.home, {})
+        real = recorded_routes
+        with patch("omh.tui.panels.recorded_routes", side_effect=real) as asked:
+            self.poller.set_session("tui_sess")
+            for _ in range(20):
+                self.poller.poll_once()
+            self.assertEqual(asked.call_count, 1)  # the row is there with no key: settled
+            self.poller.refresh()  # a turn ended: it may have recorded one
+            self.poller.poll_once()
+            self.poller.poll_once()
+            self.assertEqual(asked.call_count, 2)
+            self.poller.set_session("missing")
+            for _ in range(ROUTE_READS + 5):
+                self.poller.poll_once()
+            self.assertEqual(asked.call_count, 2 + ROUTE_READS)
+        connection = sqlite3.connect(Path(self.home) / "state.db")
+        connection.execute("UPDATE sessions SET session_key = ? WHERE id = 'tui_sess'", (CHAT_ROUTE,))
+        connection.commit()
+        connection.close()
+        self.path.write_text(json.dumps([row(session_id="proc_routed", pid_scope="sandbox", session_key=CHAT_ROUTE,
+                                             parent_session_id="tui_sess")]), encoding="utf-8")
+        self.poller.set_session("tui_sess")
+        self.poller.poll_once()
+        self.assertEqual([found.proc_id for found in self.poller.take().processes], ["proc_routed"])
+
+
 @unittest.skipUnless(ON_POSIX, "signal 0 is a probe only on POSIX")
 class TurnEndTests(unittest.TestCase):
     """The poller and the app together, a real process in a checkpoint row, nothing else in the read changing."""
@@ -474,7 +610,7 @@ class TurnEndTests(unittest.TestCase):
         self.app.turn_pending = True
         self.app.busy_since = self.clock.at
         self.read()
-        self.assertTrue(text(self.app._background_line(120)).startswith("✻ background"))
+        self.assertTrue(text(self.app._background_line(120)).startswith(f"{GLYPH} background"))
         self.clock.at += 1
 
     def end_turn(self) -> None:
@@ -570,7 +706,8 @@ class RowTests(unittest.TestCase):
     def test_a_turn_in_progress_shows_no_right_side(self) -> None:
         self.app.turn_pending = True
         self.deliver(process())
-        self.assertEqual(self.shown().split("  "), ["✻ background", "terminal(uv run python -m unittest tests…)",
+        self.assertEqual(self.shown().split("  "), [f"{GLYPH} background",
+                                                     "terminal(uv run python -m unittest tests…)",
                                                      "1h 07m 13s"])
 
     def test_after_the_turn_it_says_hermes_will_ping_when_notify_is_on(self) -> None:
@@ -584,7 +721,8 @@ class RowTests(unittest.TestCase):
     def test_with_nothing_to_wake_the_session_it_says_omh_is_watching(self) -> None:
         self.deliver(process())
         shown = self.shown()
-        self.assertTrue(shown.startswith("✻ background  terminal(uv run python -m unittest tests…)  1h 07m 13s"))
+        self.assertTrue(
+            shown.startswith(f"{GLYPH} background  terminal(uv run python -m unittest tests…)  1h 07m 13s"))
         self.assertTrue(shown.endswith("  🔕 Hermes won't be pinged · OMH is watching it"), shown)
         self.assertEqual(line_width(self.app._background_line(120)), 120)
         self.assertIn(shown.rstrip(), [line.rstrip() for line in drawn(self.app)])
@@ -593,7 +731,7 @@ class RowTests(unittest.TestCase):
         self.deliver(process())
         screen = drawn(self.app)
         rule = next(index for index, line in enumerate(screen) if line.startswith("─") and index > 0)
-        self.assertTrue(screen[rule - 1].startswith("✻ background"), screen[rule - 1])
+        self.assertTrue(screen[rule - 1].startswith(f"{GLYPH} background"), screen[rule - 1])
 
     def test_the_elapsed_clock_ticks_in_seconds(self) -> None:
         self.deliver(process())
@@ -753,7 +891,7 @@ class RowTests(unittest.TestCase):
         self.assertTrue(line_text(only).startswith("⧗"), line_text(only))
         with patch("omh.tui.app.slot_cap", return_value=2):
             shown = [line_text(line) for line in self.app._slot_lines(120, 30)]
-        self.assertTrue(shown[0].startswith("⧗") and shown[1].startswith("✻ background"), shown)
+        self.assertTrue(shown[0].startswith("⧗") and shown[1].startswith(f"{GLYPH} background"), shown)
 
     def test_a_process_that_ends_during_a_turn_or_after_one_started_just_goes(self) -> None:
         self.deliver(process())
@@ -787,12 +925,16 @@ class RowTests(unittest.TestCase):
         self.deliver(process())
         glyphs = set()
         for step in range(len(WORKING_GLYPHS)):
-            self.clock.at = 100.0 + step * 0.1
+            self.clock.at, self.wall.at = 100.0 + step * 0.1, NOW + step * 0.09
             glyphs.add(self.shown()[0])
         self.assertEqual(len(glyphs), 1)  # once a second, as the clock beside it: not at the 0.1 s frame rate
         for step in range(len(WORKING_GLYPHS)):
-            self.clock.at = 100.0 + step
-            glyphs.add(self.shown()[0])
+            # On the row's own second, the one its clock and its frames go by: never one ahead of the other.
+            self.clock.at, self.wall.at = 100.37 + step, NOW + 0.6 + step
+            shown = self.shown()
+            self.assertEqual(shown[0], WORKING_GLYPHS[(4033 + step) % len(WORKING_GLYPHS)])
+            self.assertIn(f"1h 07m {13 + step:02d}s", shown)
+            glyphs.add(shown[0])
         self.assertGreater(len(glyphs), 1)
         still, _client = make_app(cols=120, clock=self.clock, wall_clock=self.wall,
                                   environ={"OMH_TUI_REDUCED_MOTION": "1"})
@@ -801,7 +943,7 @@ class RowTests(unittest.TestCase):
         still.poller.take = lambda: snapshot
         still._take_hud()
         for step in range(len(WORKING_GLYPHS)):
-            self.clock.at = 100.0 + step * 0.37
+            self.clock.at, self.wall.at = 100.0 + step * 0.37, NOW + step * 0.37
             self.assertEqual(text(still._background_line(120))[0], WORKING_GLYPHS[0])
 
     def test_the_row_keeps_the_loop_ticking(self) -> None:
@@ -842,6 +984,13 @@ class RowTests(unittest.TestCase):
         self.assertEqual(self.idle_frames(5.0), 0)
         self.assertEqual(self.app._read_timeout(), IDLE_READ_SECONDS)
         self.app._leave_pager()
+        for surface in ("slot", "launch_picker", "picker", "search", "rewind_picker", "model_picker"):
+            with self.subTest(surface=surface):  # review L5: whatever takes the slot hides the row too
+                setattr(self.app, surface, object())
+                self.assertIsNone(self.app._background_second())
+                self.assertEqual(self.idle_frames(3.0), 0)
+                setattr(self.app, surface, None)
+        self.assertEqual(self.idle_frames(2.0), 2)
         self.app.turn_pending = True  # a turn's spinner still ticks at its own rate
         self.assertGreater(self.idle_frames(1.0), 2)
 

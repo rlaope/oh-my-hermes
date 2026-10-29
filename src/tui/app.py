@@ -6000,8 +6000,9 @@ class App(ModesMixin, AgentViewMixin):
             done, at = self.bg_done
             return finished_line(done[0], ago=self.wall_clock() - at, theme=self.theme, width=cols, more=len(done) - 1)
         shown = self._background_shown()
-        # The glyph steps once a second, as the clock beside it does, so the row alone never needs a faster frame.
-        glyph = WORKING_GLYPHS[(int(self.clock()) if self.motion else 0) % len(WORKING_GLYPHS)]
+        # The glyph steps with the clock beside it, on the same second, so the row alone never needs a faster frame.
+        step = max(0, int(self.wall_clock() - shown.started_at)) if self.motion else 0
+        glyph = WORKING_GLYPHS[step % len(WORKING_GLYPHS)]
         return running_line(
             shown, more=len(self.bg_running) - 1, now=self.wall_clock(), glyph=glyph, turn_runs=self._busy(),
             theme=self.theme, width=cols,
@@ -6017,10 +6018,18 @@ class App(ModesMixin, AgentViewMixin):
         until a read of the session switched to has decided whether the row is its (`_take_background`)."""
         return self.bg_session == self.stored_id and (bool(self.bg_running) or self.bg_done is not None)
 
+    def _background_covered(self) -> bool:
+        """Whether something the slot shows instead hides the row (`_slot_lines`), or the pager covers the screen."""
+        return self.pager is not None or any(
+            surface is not None
+            for surface in (self.slot, self.launch_picker, self.picker, self.search, self.rewind_picker,
+                            self.model_picker)
+        )
+
     def _background_second(self) -> int | None:
         """The whole seconds the row's clock shows (how long the process has run, or since it finished), or None
-        when no row is visible: the pager covers it. A frame is due for the row only when this changes."""
-        if self.pager is not None or not self._background_live():
+        when no row is visible (`_background_covered`). A frame is due for the row only when this changes."""
+        if self._background_covered() or not self._background_live():
             return None
         since = self.bg_done[1] if self.bg_done is not None else self._background_shown().started_at
         return max(0, int(self.wall_clock() - since))

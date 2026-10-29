@@ -37,10 +37,16 @@ resumed here) runs on its chat's route key, which no id of the session
 spells. Hermes records that key on the session's own `state.db` row
 (`sessions.session_key`, written with the row and refreshed with each turn's
 routing peer, `gateway/session_recovery.py`), and the poller reads it
-(`routes`). A route outlives one conversation on its chat, so a row under a
-recorded route is this session's only when its `parent_session_id`, the
-session-db id of the conversation that spawned it (`tools/process_registry.py`),
-is one of this session's ids. No route is guessed from a key's shape.
+(`routes`). No route is guessed from a key's shape.
+
+One more rule holds for every key: a route outlives one conversation on its
+chat (a gateway-side `/new` keeps a local session's route too), so a row is
+this session's only when its `parent_session_id`, the session-db id of the
+conversation that spawned it (`tools/process_registry.py`), is one of this
+session's ids or names a session this one delegated to (`parent_owned`: a
+subagent spawns under its own id, `tools/delegate_tool_dispatch.py`). A row
+that names no spawning session is decided by its key alone, except under a
+recorded route, which every conversation on the chat shares.
 
 Running or ended: every interpreter of a profile rewrites the file from its
 own table, so a row can drop out while its process still runs. A host
@@ -140,13 +146,20 @@ def owns_key(key: Any, stored_ids: Collection[str]) -> bool:
     )
 
 
-def _process(row: Any, stored_ids: Collection[str], routes: Collection[str]) -> BackgroundProcess | None:
+def _process(
+    row: Any, stored_ids: Collection[str], routes: Collection[str], parent_owned: Callable[[str], bool]
+) -> BackgroundProcess | None:
     if not isinstance(row, dict):
         return None
-    key = row.get("session_key")
-    recorded = isinstance(key, str) and key in routes and row.get("parent_session_id") in stored_ids
+    key, parent = row.get("session_key"), row.get("parent_session_id")
+    recorded = isinstance(key, str) and key in routes
     if not (recorded or owns_key(key, stored_ids)):
         return None
+    if isinstance(parent, str) and parent:
+        if parent not in stored_ids and not parent_owned(parent):
+            return None
+    elif recorded and not owns_key(key, stored_ids):
+        return None  # a chat's route with no spawning session named: any conversation on the chat may own it
     proc_id, command, started_at = row.get("session_id"), row.get("command"), _seconds(row.get("started_at"))
     if not isinstance(proc_id, str) or not proc_id or len(proc_id) > PROC_ID_CHARS or not isinstance(command, str):
         return None
@@ -167,11 +180,16 @@ def _process(row: Any, stored_ids: Collection[str], routes: Collection[str]) -> 
 
 
 def read_processes(
-    hermes_home: object, session_key: str, earlier: Sequence[str] = (), routes: Sequence[str] = ()
+    hermes_home: object,
+    session_key: str,
+    earlier: Sequence[str] = (),
+    routes: Sequence[str] = (),
+    parent_owned: Callable[[str], bool] = lambda _parent: False,
 ) -> tuple[BackgroundProcess, ...]:
-    """The rows of `<hermes_home>/processes.json` this session owns (`owns_key`), under its stored id or one of the
-    `earlier` segments of its conversation, or under one of the `routes` Hermes recorded for those ids with one of
-    them as the spawning session; none for no home, no key, or a file that is missing, unreadable, past
+    """The rows of `<hermes_home>/processes.json` this session owns: under its stored id or one of the `earlier`
+    segments of its conversation (`owns_key`), or one of the `routes` Hermes recorded for those ids, and spawned by
+    one of those ids or by a session `parent_owned` says this one delegated to (see the module's docstring); none
+    for no home, no key, or a file that is missing, unreadable, past
     `PROCESSES_MAX_BYTES`, or not a list, or whose rows cannot be read. Never raises (the HUD poller's thread calls
     it, and an exception there would end that thread), never writes."""
     if not isinstance(hermes_home, str) or not hermes_home or not session_key:
@@ -191,7 +209,7 @@ def read_processes(
     if not isinstance(rows, list):
         return ()
     try:
-        found = tuple(_process(row, stored_ids, set(routes)) for row in rows)
+        found = tuple(_process(row, stored_ids, set(routes), parent_owned) for row in rows)
     except (ArithmeticError, ValueError, TypeError, RecursionError):
         return ()  # a value the checks above did not foresee: nothing is read rather than the poller lost
     return tuple(process for process in found if process is not None)

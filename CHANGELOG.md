@@ -15,8 +15,10 @@ All notable changes will be documented here.
   The row's spinner steps once a second, like its clock, so an idle session
   with a process draws 1 frame a second, not 6, and none under the pager.
   A messaging session resumed in the TUI (a bot profile's Telegram chat)
-  shows the processes its own turns started, matched on the route Hermes
-  records on the session's row and on the spawning session's id.
+  shows the processes its own turns and its subagents started, matched on
+  the route Hermes records on the session's row and on the spawning
+  session's id; after a `/new` on the same chat, neither conversation
+  shows the other's.
 
 - **A light goes round the OMH TUI's screen while a turn runs.** It runs
   along the terminal's whole edge, clockwise, once every four seconds, with
