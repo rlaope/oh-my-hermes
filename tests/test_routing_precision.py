@@ -81,7 +81,10 @@ class RoutingPrecisionTests(unittest.TestCase):
         # channel backfill, add two. Fourteen backfills one word or one shape
         # from inert, and two more characters the fold drops whole, add sixteen.
         # A digit or capital sender name and a first line with no sender add three.
-        self.assertEqual(payload["summary"]["case_count"], 1263)
+        # show-reel's idea-video lane adds thirteen video words in other senses,
+        # and its second review eighteen more (UI, loop, fault, recording), and
+        # its third two Japanese logo animations on an app surface.
+        self.assertEqual(payload["summary"]["case_count"], 1296)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -154,7 +157,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # repro-audit's score explainer is answered directly (+1).
         # The three sprite-forge vocabulary controls answer directly (+3).
         # The rendered-scene lane's crime-scene control is a direct answer (+1).
-        self.assertEqual(payload["summary"]["direct_answer_count"], 354)
+        # show-reel's quoted idea-video ask is translation input, answered directly (+1).
+        self.assertEqual(payload["summary"]["direct_answer_count"], 355)
         # show-reel's README-link control is answered as a file lookup (+1).
         self.assertEqual(payload["summary"]["file_lookup_count"], 11)
         self.assertEqual(payload["summary"]["overroute_count"], 0)
@@ -216,7 +220,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # sprite-forge adds one game character sprite sheet request.
         # The rendered-scene lane adds five frontend interventions.
         # Two show-reel closed forms after an acknowledgement-only channel backfill.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1176)
+        # show-reel's idea-video lane adds fourteen videos from an idea; its
+        # second review drops one and adds eight owners of a named video.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1197)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

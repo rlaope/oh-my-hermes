@@ -552,11 +552,11 @@ class TreeActionTests(unittest.TestCase):
         app, client = self.focused()
         app._on_input(Key(CHAR, "x"))
         self.assertEqual(client.calls, [])
-        self.assertIn("x again interrupts PR group 1:", mode_row(app))
+        self.assertIn("x again interrupts PR group 1 ·", mode_row(app))  # the name leaves the goal's colon off
         app._on_input(Key(CHAR, "x"))
         self.assertEqual(client.calls, [("subagent.interrupt", {"session_id": SID, "subagent_id": subagent_id("group-1")})])
         answer(app, client, {"found": True, "subagent_id": subagent_id("group-1")})
-        self.assertEqual(notices(app)[-1], "Interrupted PR group 1:.")
+        self.assertEqual(notices(app)[-1], "Interrupted PR group 1.")
         self.assertEqual(app.tree_selected, node_id("group-1"))
 
     def test_any_other_key_ends_the_question(self) -> None:

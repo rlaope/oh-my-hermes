@@ -905,6 +905,7 @@ HERMES_BUNDLED_SKILL_NAMES = frozenset(
     {
         "architecture-diagram",
         "arxiv",
+        "ascii-video",
         "claude-code",
         "codex",
         "competitor-news-monitor",
@@ -915,6 +916,7 @@ HERMES_BUNDLED_SKILL_NAMES = frozenset(
         "hermes-agent-skill-authoring",
         "humanizer",
         "llm-wiki",
+        "manim-video",
         "meeting-action-items",
         "opencode",
         "pdf",

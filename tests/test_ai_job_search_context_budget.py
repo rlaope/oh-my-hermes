@@ -54,7 +54,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # the previous pin 08c0a6fc44b47bde948aee6ff427eb2e7312bffb627deeb31b32304747d754df / 13157.
         # Merged with main: 13241 + 85 = 13326 and the digest re-derived; dropping
         # the sprite-forge line reproduces main's cea493d3...aa33 / 13241.
-        self.assertEqual(_digest(legacy), '7086c90b94342f28010e1faefa3b1f56bc4fa536d9fb02e685f35647a1f06cd3')
+        # Digest re-derived for show-reel's idea-video scope: its index line
+        # now opens "Video to make from an idea..." at the same 57-character
+        # cut, so the length stays 13326; restoring that one line reproduces
+        # 7086c90b...06cd3.
+        self.assertEqual(_digest(legacy), '4c6beb2acd99dc18299bdede1b94152ab846757057e8307bbe1c7bbb787e076e')
         self.assertEqual(len('\n'.join(legacy)), 13326)
         delta = len('\n'.join(lines)) - 13326
         self.assertGreater(delta, 0)
@@ -90,8 +94,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # deliverable-package states) = 529429 and 142629 + 960 = 143589,
             # both digests re-derived from the producers on the merged tree.
             # The rendered-scene lane moves only the frontend row (same length).
-            (skill_capabilities, 529429, FULL_ROW_DELTA_CAP,
-             'fe15e7c1bbd7901f9cbde1c206c4865c5a20df486565f89c1b7ceef8af9a063d',
+            # 529429 -> 529669 and the digest re-derived: show-reel's idea-video
+            # scope widens its row (+240, itemized at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved.
+            (skill_capabilities, 529669, FULL_ROW_DELTA_CAP,
+             'd946e521363bf140d24edb97f2a769f4e0a2bc46f3921f45c67a386afc972173',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -192,7 +199,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then model-setup names Gemini 4 Argon where it named Gemini 3.1 Pro
         # and lists 3.1 Pro as superseded (2026-10-28); reverting only that
         # edit reproduces the previous pin 48d98811b4a4c7ceea14d1b5995065c37420b6c46b1e16bb4b3081906cbc07d3.
-        self.assertEqual(_digest(legacy_hashes), 'c68f1cca2df78a15c4822345f421b1aab01c43d8f4ae0944accb41065bef384c')
+        # Then show-reel's idea-video lane (its Idea Videos section and the
+        # bundled `manim-video`/`ascii-video` boundary); only show-reel moves,
+        # and reverting it reproduces c68f1cca2df78a15c4822345f421b1aab01c43d8f4ae0944accb41065bef384c.
+        self.assertEqual(_digest(legacy_hashes), 'd95a932bee5465e280ea09653a5f741813f0dcadf0fa17f6e76dddfc45789a72')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

@@ -302,6 +302,7 @@ from .transcript import (
     OUTPUT_FAILED,
     OUTPUT_INDENT,
     OUTPUT_MARK,
+    OUTPUT_MARKED,
     STEER_QUEUED,
     STEER_REFUSED,
     AssistantBlock,
@@ -607,6 +608,11 @@ QUEUE_HINT_GAP = 2
 # While a turn runs, the row under the queued prompts says the key that sends the oldest into the turn now, as a
 # steer, the way Claude Code says it: Ctrl+Enter where the terminal tells it from Enter, else Ctrl+J.
 SEND_NOW_HINT = "{key} to send now · ↑ to edit"
+# The Hermes commands whose reply may be a template that marks its values (`OUTPUT_MARKED`): /title answers from
+# `gateway/slash_commands_session.py::_handle_title_command` (Hermes bf0203a794, :976-996), whose lines
+# `transcript.TITLE_MARKS` names; only a line of such a shape is drawn marked. Every other reply (a quick command's
+# stdout, /history, /status, /tools, /usage) is data, shown as it is.
+MARKED_REPLIES = frozenset({"title"})
 SEND_NOW_KEYS = ("ctrl+j", "ctrl+enter")  # by `App.keyboard_protocol`
 # After the person interrupts a turn the queue does not go on by itself: what Up would take back goes back into the
 # composer, and what it would not (a queued `!` line and what follows it) stays queued, held, until the next prompt
@@ -1394,6 +1400,12 @@ def read_image(path: str) -> bytes | None:
 def with_label(text: str, label: str) -> str:
     """`text` with an image's `label` after it, a space between them unless it ends in one."""
     return f"{text}{'' if not text or text[-1].isspace() else ' '}{label}"
+
+
+def _reply_level(invocation: SlashInvocation) -> str:
+    """How Hermes' reply to `invocation` is shown: with its template's marks for a command in MARKED_REPLIES, as it
+    is for every other."""
+    return OUTPUT_MARKED if invocation.name.lower() in MARKED_REPLIES else NOTICE_INFO
 
 
 def _tokens(images: Iterable[Attachment]) -> list[tuple[str, Attachment]]:
@@ -5045,7 +5057,8 @@ class App(ModesMixin, AgentViewMixin):
             return
         body = as_text(result.get("output")) or f"/{invocation.name}: no output"
         warning = as_text(result.get("warning"))
-        self._show_output(f"/{invocation.text}", f"warning: {warning}\n{body}" if warning else body)
+        self._show_output(f"/{invocation.text}", f"warning: {warning}\n{body}" if warning else body,
+                          level=_reply_level(invocation))
         self._keep_images(invocation.images, f"/{invocation.name}")  # it printed: no prompt took them
 
     def _on_dispatch(self, invocation: SlashInvocation, result: dict[str, Any], depth: int) -> None:
@@ -5053,7 +5066,8 @@ class App(ModesMixin, AgentViewMixin):
         images; any other outcome gives their tokens back (`_keep_images`)."""
         kind = as_text(result.get("type"))
         if kind in ("exec", "plugin"):
-            self._show_output(f"/{invocation.text}", as_text(result.get("output")) or "(no output)")
+            self._show_output(f"/{invocation.text}", as_text(result.get("output")) or "(no output)",
+                              level=_reply_level(invocation))
             self._keep_images(invocation.images, f"/{invocation.name}")
             task = as_text(result.get(contract.SIDE_ANSWER_TASK))
             if task and self.sid:
@@ -5113,10 +5127,10 @@ class App(ModesMixin, AgentViewMixin):
         else:
             other = as_text(result.get("output")) or as_text(result.get("display"))
             if other:
-                self._show_output(f"/{invocation.text}", other)
+                self._show_output(f"/{invocation.text}", other, level=_reply_level(invocation))
         self._keep_images(invocation.images, f"/{invocation.name}")  # after a prefill, so it keeps them
 
-    def _show_output(self, command: str, text: str, whole: bool = False) -> None:
+    def _show_output(self, command: str, text: str, whole: bool = False, level: str = NOTICE_INFO) -> None:
         """A command's output, in the transcript under its echo (`command` repeats the echo once it has closed).
 
         However long it is: a long one shows its first rows and a count of the
@@ -5124,7 +5138,7 @@ class App(ModesMixin, AgentViewMixin):
         the person asks for one, so output answered while a view has the
         alternate screen waits in the transcript until they leave it.
         """
-        self.transcript.add_output(text, command=command, whole=whole)
+        self.transcript.add_output(text, level, command=command, whole=whole)
 
     def _local_handlers(self) -> dict[str, Callable[[str], None]]:
         return {

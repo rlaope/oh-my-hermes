@@ -8,7 +8,9 @@ holds the workflow-specific detail without copying those shared rails.
 ## Do Not Use When
 
 - Only a static infographic or summary card is needed; use `omh-image-cards`.
-- The request is a website, landing page or interactive UI build; use `omh-frontend`.
+- The request is a website, landing page or interactive UI build, or an animation inside an app's own UI (a button, modal, page transition or loading state); use `omh-frontend`.
+- Summarizing, transcribing, captioning or trimming a recording that already exists; use `omh-media-input`.
+- A math proof, equation or algorithm animation in the 3Blue1Brown style belongs to Hermes' bundled `manim-video` skill; converting existing footage to ASCII art belongs to `ascii-video`.
 - The output is a deck, PDF, spreadsheet or office document; use `omh-materials-package`.
 - Only a premium layout quality assessment is wanted; use `omh-design-quality-gate`.
 - The user already has rendered frames and needs a visual verdict, not new production; use `omh-visual-qa`.
@@ -52,7 +54,7 @@ Reasoning demand: `standard`
 
 Quality bar:
 
-- Require at least 3 distinct concept candidates, per-segment art direction and source-grounded motion; never force a fixed palette, visual style, duration or audio track.
+- A product, brand or work film requires at least 3 distinct concept candidates, per-segment art direction and source-grounded motion; an idea video selects one concept with recorded assumptions. Never force a fixed palette or visual style, and let an explicit duration, format or audio request override every idea-lane default.
 - Use keep/fix/rebuild critique and a weakest-scene revision budget; reject repeated headline/card/rail grammar, require delivery-size moving evidence and both rebuilt cut boundaries. Technical metrics never fill independent artistic, playback or listening verdicts.
 - Read `references/assets-and-rights.md`, `references/render-qa-delivery.md` and `references/source-package.md` before export and delivery; missing required evidence keeps HOLD, never fabricated success.
 

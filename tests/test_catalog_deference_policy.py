@@ -317,8 +317,11 @@ NON_SKILL_BACKTICKS = frozenset(
 # `sprite-forge` defers motion production to `show-reel`, rendered-screen
 # verdicts to `visual-qa` and image cards to `img-summary`; no sibling gains a
 # statement pointing back. Three cases, three pairs, one owner.
-EXPECTED_DEFERENCE_CASES = 406
-EXPECTED_DEFERENCE_PAIRS = 422
+# `show-reel`'s idea-video lane defers a recording that already exists
+# (summary, transcript, captions, trim) to `media-input-operator`; one case,
+# one pair, no new owner.
+EXPECTED_DEFERENCE_CASES = 407
+EXPECTED_DEFERENCE_PAIRS = 423
 EXPECTED_DEFERRING_OWNERS = 120
 
 # The ratchet. Recording a new inversion must be a visible edit to this number,

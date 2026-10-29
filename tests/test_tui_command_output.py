@@ -14,13 +14,17 @@ from __future__ import annotations
 import unittest
 
 from _tui_gateway_replay import Scenario, spans
+from _tui_lines import line_text, lines_text
 from test_tui_app import NO_TERMIOS, AppTestCase, Step, startup_answers
 from test_tui_modes import PLAN_PROMPT, SID, answer, drawn, make_app, notices, type_text
 from omh.tui import gateway_contract as contract
 from omh.tui.app import App
 from omh.tui.gateway import Event, Response
 from omh.tui.keys import DOWN, ENTER, TAB, UP, Key
-from omh.tui.transcript import NOTICE_INFO, NOTICE_WARN, OUTPUT_PREVIEW_ROWS, CommandBlock, NoticeBlock, UserBlock
+from omh.tui.theme import DEFAULT_THEME as THEME
+from omh.tui.transcript import (
+    NOTICE_INFO, NOTICE_WARN, OUTPUT_MARKED, OUTPUT_PREVIEW_ROWS, CommandBlock, NoticeBlock, UserBlock, block_rows,
+)
 
 
 def send(app: App, text: str) -> None:
@@ -76,6 +80,69 @@ class CommandEchoTests(unittest.TestCase):
         screen = drawn(app)
         self.assertIn("  ❯ /usage", screen)
         self.assertIn("    ⎿  Session cost: $0.01", screen)
+
+    def test_the_title_reply_draws_its_templates_bold_and_keeps_the_title_as_written(self) -> None:
+        # Found live: `/title Alpha Work` printed `Session title set: **Alpha Work**`: Hermes' `gateway.title.set_to`
+        # template marks the title for a chat.
+        for title in ("Alpha Work", "fix __init__ import of *.py"):
+            app, client = make_app()
+            send(app, f"/title {title}")
+            answer(app, client, {"output": f"✏️ Session title set: **{title}**"})
+            self.assertIn(f"    ⎿  ✏️ Session title set: {title}", drawn(app))
+            (row,) = [row for row in block_rows(last(app), 80, THEME) if "title set" in line_text(row)]
+            self.assertEqual([span.text for span in row if span.style.bold], [title])
+        app, client = make_app()
+        send(app, "/title")
+        answer(app, client, {"output": "📌 Session: `abc_1`\nTitle: **beta notes**"})
+        self.assertEqual(drawn(app)[1:3], ["    ⎿  📌 Session: abc_1", "       Title: beta notes"])
+
+    def test_a_title_reply_of_no_marked_shape_stays_as_written(self) -> None:
+        # Review 2 of #2389: the slash worker's `cli.title.set` (en.yaml:2533) has no marks, and a title refused as in
+        # use (hermes_state_titles.py:163) quotes it, so neither may lose a `**` or a backtick.
+        # Review 3: the worker's `cli.title.current` (en.yaml:2528) is "Title: {title}", and a title may be `**draft**`.
+        for output in ("Session title set: **x** and `y`", "Title 'use `uv` sync' is already in use by session abc",
+                       "Session ID: abc\nTitle: **draft**"):
+            app, client = make_app()
+            send(app, "/title x")
+            answer(app, client, {"output": output})
+            self.assertIn(f"    ⎿  {output.splitlines()[0]}", drawn(app))
+            self.assertIn(output.splitlines()[-1], lines_text(block_rows(last(app), 100, THEME))[-1])
+            self.assertFalse(any(span.style.bold for row in block_rows(last(app), 100, THEME) for span in row))
+        app, client = make_app()
+        send(app, "/title")
+        answer(app, client, {"output": "📌 Session: `abc`\nNo title set. Usage: `/title My Session Name`"})
+        rows = block_rows(last(app), 100, THEME)
+        self.assertEqual(lines_text(rows)[1:], ["    ⎿  📌 Session: abc", "       No title set. Usage: /title My Session Name"])
+        self.assertEqual([span.text for row in rows for span in row if span.style == THEME.code],
+                         ["abc", "/title My Session Name"])
+
+    def test_any_other_hermes_reply_is_data_and_stays_as_written(self) -> None:
+        # Review of #2389: drawing every reply as Markdown ate `__init__`, `*.py`, `2*3*4` and a Windows path's `\\`.
+        replies = (
+            ("/gitst", " M src/__init__.py\n M tests/__init__.py\n?? docs/*.md"),  # a quick command's `git status`
+            ("/context", "[You #1] rename my_var to __my_var__ in src/*.py and tests/*.py\n[Hermes #2] Done: 2*3*4 files"),
+            ("/status", "Path: C:\\Users\\me\\.hermes\\sessions\\abc.jsonl"),
+            ("/tools", 'ignore: ["*.pyc", "*.log"] and [You #1](draft)'),
+        )
+        for command, output in replies:
+            app, client = make_app()
+            send(app, command)
+            if command == "/gitst":
+                app._on_response(Response(1, None, {"code": 4018, "message": "not a slash.exec command"}))
+                answer(app, client, {"type": "exec", "output": output})
+            else:
+                answer(app, client, {"output": output})
+            self.assertEqual(last(app).parts, [(output, NOTICE_INFO)])
+            rows = lines_text(block_rows(last(app), 120, THEME))[1:]
+            self.assertEqual([row[7:] for row in rows], output.split("\n"), command)
+            self.assertFalse(any(span.style.bold for row in block_rows(last(app), 120, THEME) for span in row))
+
+    def test_only_the_title_reply_is_read_for_marks_not_omhs_own_words_under_its_echo(self) -> None:
+        mine, reply = "✏️ Session title set: **as** written", "✏️ Session title set: **Alpha**"
+        block = CommandBlock("/title Alpha", [(mine, NOTICE_INFO), (reply, OUTPUT_MARKED)])
+        rows = block_rows(block, 80, THEME)
+        self.assertEqual(lines_text(rows)[1:], [f"    ⎿  {mine}", "       ✏️ Session title set: Alpha"])
+        self.assertEqual([span.text for row in rows for span in row if span.style.bold], ["Alpha"])
 
     def test_long_output_stays_in_the_transcript_and_no_pager_opens(self) -> None:
         app, client = make_app(rows=24, cols=80)

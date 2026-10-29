@@ -105,7 +105,7 @@ from .diff_view import DIFF_FILE, FILE_ARROW, DiffLine, diff_rows, parse_inline_
 from .gateway import Event
 from . import gateway_contract as contract
 from .gateway_contract import TOOL_CALL_BRIDGE
-from .markdown import MarkdownState, clean_text, render_lines, wrap_prefixed
+from .markdown import GrowingLine, MarkdownState, clean_text, render_growing, render_lines, wrap_prefixed
 from .style import NO_COLOR, Line, Span, Style, fill
 from .slash import slash_spans, slash_token_ranges
 from .theme import TOOL_FAMILIES, Theme, kind_style, on_band
@@ -126,6 +126,26 @@ NOTICE_ERROR = "error"
 # What a command that failed printed: on the red band in the error colour, as a failed tool's output lines are,
 # with no mark of its own (the command's `✗` line under it has the one mark).
 OUTPUT_FAILED = "failed"
+# A Hermes reply on `App`'s allow list, whose template marks one value per line: a line of a shape in TITLE_MARKS
+# draws that value bold or in the code colour, as written (`_marked_spans`); any other line is drawn as written.
+OUTPUT_MARKED = "marked"
+# The lines Hermes bf0203a794 builds its /title reply from (`locales/en.yaml` gateway.title): (what opens the line, up
+# to its mark; the mark that closes it; whether the value is code, not bold). `set_to` (:469) "✏️ Session title set:
+# **{title}**"; `current_with_title` (:471) "📌 Session: `{session_id}`" then "Title: **{title}**"; `current_no_title`
+# (:472) the same id line, then "No title set. Usage: `/title My Session Name`"; the last: the line a line of that
+# shape must follow. A reply of no such shape (the slash
+# worker's `cli.title.set` "Session title set: {title}", en.yaml:2533; a title refused as in use,
+# hermes_state_titles.py:163) is drawn as written.
+TITLE_MARKS = (
+    ("✏️ Session title set: **", "**", False, ""),
+    ("Title: **", "**", False, "📌 Session: `"),  # not the slash worker's `cli.title.current` "Title: {title}" (:2528)
+    ("📌 Session: `", "`", True, ""),
+    ("No title set. Usage: `", "`", True, "📌 Session: `"),
+)
+
+# How much of a final's first word `_settle_reply` looks for in a steered reply's streamed text: a bound, so the
+# search stays linear in the reply's length.
+FIRST_WORD_CHARS = 200
 
 INTERRUPTED_NOTICE = "Interrupted."
 FAILED_NOTICE = "The turn ended with an error."
@@ -357,6 +377,8 @@ def _last_line(text: str) -> str:
 
 
 def _is_blank(line: str) -> bool:
+    if line.isprintable():  # nothing in it `clean_text` drops or expands: a streaming line is not cleaned each frame
+        return not line.strip()
     return not clean_text(line).strip()
 
 
@@ -382,6 +404,21 @@ def _display_lines(text: str) -> list[str]:
 def _stable_lines(text: str) -> list[str]:
     """The source lines that can no longer change: complete ones, minus trailing blanks."""
     return _without_trailing_blanks(_source_lines(text)[:-1])
+
+
+def _extension(streamed: str, text: str) -> str | None:
+    """What `text` adds past `streamed` when it opens with all of `streamed`, spaces and line breaks aside; None
+    when it does not. One pass over each, so linear in their lengths."""
+    at, end = 0, len(text)
+    for ch in streamed:
+        if ch.isspace():
+            continue
+        while at < end and text[at].isspace():
+            at += 1
+        if at == end or text[at] != ch:
+            return None
+        at += 1
+    return text[at:].rstrip()
 
 
 def _is_bare_error(text: str, error: str) -> bool:
@@ -731,9 +768,11 @@ def _drafted_row(group: ToolGroup, name: str) -> ToolRow | None:
 
 
 def _text_rows(
-    text: str, style: Style, first: Line, rest: Line, width: int, max_rows: int | None = None
+    text: str, style: Style, first: Line, rest: Line, width: int, max_rows: int | None = None,
+    marked: Theme | None = None,
 ) -> list[Line]:
-    """Plain text (no markdown), each source line wrapped, `first` before the very first row.
+    """Plain text (no markdown), each source line wrapped, `first` before the very first row; with `marked`, the
+    theme a Hermes template's marks are drawn in (`_marked_spans`).
 
     Each source line wraps on its own, so with `max_rows` only the last lines
     that cover that many rows are wrapped; the rows end as all of them would.
@@ -748,10 +787,28 @@ def _text_rows(
         if _is_blank(source):
             rows: list[Line] = [()]  # never the first row: leading blank lines were dropped
         else:
-            rows = wrap_prefixed((Span(clean_text(source), style),), first if index == 0 else rest, rest, width)
+            above = clean_text(lines[index - 1]) if index else ""
+            spans = _marked_spans(clean_text(source), style, marked, above) if marked else (Span(clean_text(source),
+                                                                                                  style),)
+            rows = wrap_prefixed(spans, first if index == 0 else rest, rest, width)
         wrapped.append(rows)
         count += len(rows)
     return [row for rows in reversed(wrapped) for row in rows]
+
+
+def _marked_spans(text: str, style: Style, theme: Theme, above: str = "") -> list[Span]:
+    """A line of a Hermes reply on `App`'s allow list, under the line `above`: when it has the shape of one of
+    TITLE_MARKS, the value its template marks is drawn bold or in the code colour, as written; any other line
+    is drawn as written."""
+    for opening, closing, code, under in TITLE_MARKS:
+        if text.startswith(opening) and text.endswith(closing) and len(text) >= len(opening) + len(closing) and (
+            above.startswith(under)
+        ):
+            value = text[len(opening) : len(text) - len(closing)]
+            marked = theme.code if code else replace(style, bold=True)
+            words = opening.rstrip("*`")
+            return [span for span in (Span(words, style), Span(value, marked)) if span.text]
+    return [Span(text, style)] if text else []
 
 
 def _user_rows(block: UserBlock, width: int, theme: Theme) -> list[Line]:
@@ -932,7 +989,8 @@ def _command_rows(block: CommandBlock, width: int, theme: Theme, expanded: bool)
         roles = on_band(theme, band) if band is not None else theme
         style = {NOTICE_WARN: roles.warn, NOTICE_ERROR: roles.error, OUTPUT_FAILED: roles.error}.get(level, roles.text)
         lead = rest if output else _output_leads(roles)[0]
-        part = _text_rows(_OUTPUT_GLYPHS.get(level, "") + text, style, lead, rest, width)
+        part = _text_rows(_OUTPUT_GLYPHS.get(level, "") + text, style, lead, rest, width,
+                          marked=roles if level == OUTPUT_MARKED else None)
         output.extend(_banded(part, band) if band is not None else part)
     if not expanded and not block.whole and len(output) > OUTPUT_PREVIEW_ROWS:
         hidden = len(output) - OUTPUT_PREVIEW_ROWS
@@ -1293,6 +1351,7 @@ class Transcript:
         # Blocks about a live one (a steer, an answer to Hermes, a command's echo), waiting for a block boundary
         # (`add_steer`, `add_command`).
         self._held: list[Block] = []
+        self._steered = False  # the person sent a steer of their own since `message.start` (`_settle_reply`)
         # The command whose output is being written: a notice or an output lands under its echo while it is open.
         # `add_command` sets it; the app points it at the command whose handler or call answer is running.
         self.command: CommandBlock | None = None
@@ -1300,6 +1359,7 @@ class Transcript:
         # row limit and theme it was for, so a frame that changed nothing (a spinner tick) renders nothing.
         self._version = 0
         self._live_held: tuple[tuple[int, int, int | None, tuple[bool, ...]], Theme, list[Line]] | None = None
+        self._growing = GrowingLine()  # the streaming line's rows above a cut, kept from frame to frame
         self._handlers: dict[str, Callable[[dict[str, Any]], None]] = {
             "message.start": self._on_message_start,
             "message.delta": self._on_message_delta,
@@ -1360,6 +1420,7 @@ class Transcript:
         list is for.
         """
         block = SteerBlock(text, agent=agent)
+        self._steered = self._steered or not agent
         self._held.append(block)
         self._write_held()
         self._version += 1
@@ -1633,6 +1694,30 @@ class Transcript:
         if new_lines[:taken] == old_lines[:taken]:
             block.text = text
 
+    def _settle_reply(self, block: AssistantBlock, text: str) -> None:
+        """Settle the live reply on `text`, the gateway's last model call's; once the person steered this turn,
+        without removing or rewriting any of what streamed.
+
+        Hermes reads a steer before its next model call, and a reply that
+        made no tool call is not sealed between the calls (no
+        `message.interim`), while `message.complete` carries the last call's
+        text only: adopting it would drop the earlier call the person read.
+        So after a steer the streamed text stays as it is, the steer row goes
+        under the reply where Hermes' answer put it, and of `text` only what
+        it adds past the streamed text, spaces aside, is added (a footer
+        Hermes appended, `_extension`). A `text` whose first word is nowhere
+        in what streamed (a warning in place of a reply) shows under it as a
+        block of its own. Without a steer, `text` is adopted (`_settle_text`).
+        """
+        if not self._steered:
+            self._settle_text(block, text)
+            return
+        added = _extension(block.text, text)
+        if added is not None:
+            block.text += added
+        elif text.split() and text.split(maxsplit=1)[0][:FIRST_WORD_CHARS] not in block.text:
+            self._append(AssistantBlock(text))
+
     def _repeats_turn_answer(self, text: str) -> bool:
         lines = _display_lines(text)
         return any(
@@ -1645,6 +1730,7 @@ class Transcript:
     def _on_message_start(self, payload: dict[str, Any]) -> None:
         self._close_live()
         self._turn_start = len(self.blocks)
+        self._steered = False
         self.running = True
 
     def _on_message_delta(self, payload: dict[str, Any]) -> None:
@@ -1676,7 +1762,7 @@ class Transcript:
         bare_error = status == "error" and _is_bare_error(text, error)
         block = self._live(AssistantBlock)
         if block is not None and not bare_error:
-            self._settle_text(block, text)
+            self._settle_reply(block, text)
         elif block is None and not bare_error and text.strip() and not self._repeats_turn_answer(text):
             self._append(AssistantBlock(text))
         self._close_live()
@@ -1961,8 +2047,10 @@ class Transcript:
             if index == self._cursor and isinstance(block, AssistantBlock):
                 rest = _display_lines(block.text)[self._cursor_lines :]
                 opens_block = self._cursor_lines == 0
-                block_lines = _marked(render_lines(rest, self._cursor_state, _reply_width(width), theme)[0], opens_block,
-                                      theme, width, block.model)
+                reply_rows = self._growing_rows(rest, _reply_width(width), theme)
+                if max_rows is not None and len(reply_rows) > max_rows:  # its top rows are above the rows asked for
+                    reply_rows, opens_block = reply_rows[-max_rows:], False
+                block_lines = _marked(reply_rows, opens_block, theme, width, block.model)
             else:  # only the last block can be live thinking, the one kind the limit shortens, so it gets all of it
                 block_lines = block_rows(block, width, theme, self.details_expanded and not block.done, max_rows, now,
                                          glint)
@@ -1976,6 +2064,14 @@ class Transcript:
                 rows.append(())
             rows.extend(block_lines)
             seen = True
+        return rows
+
+    def _growing_rows(self, sources: list[str], width: int, theme: Theme) -> list[Line]:
+        """The rows of a reply's untaken `sources`, the last of them the line still streaming: drawn through
+        `_growing`, so a frame wraps only that line's last rows (`render_growing`)."""
+        rows, state = render_lines(sources[:-1], self._cursor_state, width, theme)
+        if sources:
+            rows += render_growing(sources[-1], state, width, theme, self._growing)[0]
         return rows
 
     def dropped_rows(self, width: int, theme: Theme, dropped: int | None = None) -> list[Line]:

@@ -887,7 +887,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 71831
 # "and attached", +21). Measured by release drift; no headroom.
 # Merged with main: 529306 (main) + 3174 + 21 = 532501, re-derived from the
 # producer on the merged tree; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 532501
+# 532501 -> 532741: the `show-reel` row only. Its description widens from a
+# product film to every authored video (explainer, motion graphics, kinetic
+# type, logo intro, 3D scene, data-viz, music visual, short), and its four
+# genre triggers move "+N more triggers". Measured by release drift; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 532741
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

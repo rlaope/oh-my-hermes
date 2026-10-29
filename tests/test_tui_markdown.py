@@ -14,7 +14,12 @@ import unicodedata
 import unittest
 
 from _tui_lines import lines_text
-from omh.tui.markdown import MarkdownState, clean_text, render_line, render_lines, render_markdown, strip_escapes
+from unittest.mock import patch
+
+from omh.tui import markdown
+from omh.tui.markdown import (
+    GrowingLine, MarkdownState, clean_text, render_growing, render_line, render_lines, render_markdown, strip_escapes,
+)
 from omh.tui.style import Line, Span
 from omh.tui.theme import DEFAULT_THEME as THEME
 from omh.tui.width import is_control, line_width
@@ -434,6 +439,104 @@ class HighlightTests(unittest.TestCase):
                 for row in streamed:
                     for span in row:
                         self.assertFalse(any(is_control(ch) for ch in span.text), span.text)
+
+
+# What a streamed line grows by: words and spaces, every inline mark (closed later, or never), escapes, joining marks
+# and jamo a cut must not fall before, wide and emoji clusters, hard-broken words and paths, a tab and controls.
+GROWTH = (
+    "word ", "token ", "a", "b ", "  ", " ", "**", "*", "_", "__", "`", "``", "[", "]", "(", ")", "\\", "x_y ",
+    "한국어 ", "가", "\u1161", "e\u0301 ", "\u0301", "👍🏽 ", FAMILY + " ", "🇰🇷", "/", "https://x.example/a/b ",
+    "verylongwordwithoutanyspacesatall" * 2, "-", "1.", "#", ">", "|", "\t", "\x1b[31m", "\x07", "\u202e", ". ",
+    "x\u200d ", "\u200d",
+)
+PROSE = ("word ", "to", "ken ", "and ", "**b** ", "`c` ", "[l](u) ", "_i_ ")
+
+
+class GrowingLineTests(unittest.TestCase):
+    """`render_growing` is `render_line` for a line that grows at its end, wrapping only the rows past its cut."""
+
+    def test_every_step_of_a_growing_line_renders_as_the_whole_line_does(self) -> None:
+        starts = ("", "- ", "1. ", "  ", "    ", "* ", "-", "--", "# ", "> ", "```", "|")
+        cuts = 0
+        for seed in range(160):
+            rnd = random.Random(seed)
+            line, memo = rnd.choice(starts), GrowingLine()
+            state = rnd.choice((MarkdownState(), MarkdownState(list_indent=2)))
+            width = rnd.choice((1, 2, 5, 8, 13, 20, 40, 77))
+            for step in range(40):
+                pieces = GROWTH if rnd.random() < 0.3 else PROSE
+                line += "".join(rnd.choice(pieces) for _ in range(rnd.randint(1, 4)))
+                drawn_at = width if rnd.random() < 0.9 else rnd.choice((5, 13, 40))  # a resize now and then
+                self.assertEqual(render_growing(line, state, drawn_at, THEME, memo), render_line(line, state, drawn_at,
+                                 THEME), (seed, step, drawn_at, line))
+                cuts += memo.cut > 0
+        self.assertGreater(cuts, 1000)  # the cut is what the equality is about: most steps draw past one
+
+    def test_a_space_a_zwj_joins_is_no_place_to_cut(self) -> None:
+        # Review of #2389: the space after `x‍` is one cluster with it, so the word after it opens no row of its own.
+        memo, line = GrowingLine(), "one two x\u200d __s "
+        for grown in (line, line + "t_"):
+            self.assertEqual(render_growing(grown, MarkdownState(), 12, THEME, memo), render_line(grown, MarkdownState(),
+                             12, THEME))
+
+    def test_a_line_that_cannot_be_cut_does_no_more_work_than_render_line(self) -> None:
+        # Review of #2389: an early open mark kept the cut still and the bookkeeping made each frame dearer.
+        for opening in ("use the ` key ", "an **open one ", "a [link without end ", "*.py "):
+            line, memo = opening + "token " * 200, GrowingLine()
+            for grown in (line, line + "more ", line + "more and more "):
+                calls: dict[str, list[int]] = {}
+                for name in ("_code_span", "_emphasis", "_link", "wrap_line"):
+                    real = getattr(markdown, name)
+                    calls[name] = [0, 0]
+
+                    def counting(*args: object, _real: object = real, _name: str = name) -> object:
+                        calls[_name][which] += 1
+                        return _real(*args)  # type: ignore[operator]
+
+                    patch(f"omh.tui.markdown.{name}", counting).start()
+                try:
+                    which = 0
+                    render_line(grown, MarkdownState(), 60, THEME)
+                    which = 1
+                    render_growing(grown, MarkdownState(), 60, THEME, memo)
+                finally:
+                    patch.stopall()
+                self.assertEqual(memo.cut, 0, opening)
+                for name, (by_line, by_growing) in calls.items():
+                    self.assertLessEqual(by_growing, by_line, (opening, name))
+
+    def test_a_line_on_one_row_notes_no_place_to_cut(self) -> None:
+        # Review 2 of #2389: noting cut places on a line that has not wrapped made it dearer than `render_line`.
+        noted: list[str] = []
+        real = markdown._cluster_each
+
+        def counting(text: str, index: int) -> bool:
+            noted.append(text)
+            return real(text, index)
+
+        line, memo = "", GrowingLine()
+        with patch("omh.tui.markdown._cluster_each", counting):
+            while len(line) < 90:
+                line += "a\u200d "
+                render_growing(line, MarkdownState(), 100, THEME, memo)
+        self.assertEqual(noted, [])
+
+    def test_a_long_streamed_paragraph_wraps_only_its_last_rows(self) -> None:
+        wrapped: list[int] = []
+        real = markdown.wrap_line
+
+        def counting(line: Line, cells: int) -> list[Line]:
+            wrapped.append(sum(len(span.text) for span in line))
+            return real(line, cells)
+
+        line, memo = "", GrowingLine()
+        with patch("omh.tui.markdown.wrap_line", counting):
+            for index in range(3000):
+                line += ("**bold** ", "`code` ", "한국어 ", "token ")[index % 4]
+                wrapped.clear()
+                render_growing(line, MarkdownState(), 60, THEME, memo)
+        self.assertGreater(len(line), 19_000)
+        self.assertLess(sum(wrapped), 600, wrapped)  # the last frame wrapped a few rows' text, not the paragraph
 
 
 if __name__ == "__main__":

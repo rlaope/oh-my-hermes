@@ -307,6 +307,28 @@ class SteerPlacementTests(unittest.TestCase):
         kinds = [type(block).__name__ for block in app.transcript.blocks]
         self.assertEqual(kinds[:2], ["AssistantBlock", "SteerBlock"])
 
+    def test_a_steer_hermes_answers_with_another_call_keeps_all_the_reply_showed(self) -> None:
+        # Found live: Hermes read the steer before a second model call with no `message.interim` between, so the
+        # second call's text streamed onto the first's, and `message.complete` (the last call's text only) replaced
+        # the whole block: the first reply left the screen and scrollback. Now nothing that streamed is rewritten;
+        # the steer row goes under the reply, as Hermes' answer put it.
+        app, client = make_app(busy=True, rows=16)
+        app._on_event(ev("message.start"))
+        app._on_event(ev("message.delta", text="SLOW-START the first "))
+        self.steer(app, "steer me")
+        answer(app, client, {"status": "queued", "text": "steer me"})
+        app._on_event(ev("message.delta", text="reply SLOW-END "))
+        app._on_event(ev("message.delta", text="Reply #2 to: steer me. REPLY-END-2"))
+        app._on_event(ev("message.complete", text="Reply #2 to: steer me. REPLY-END-2", status="complete"))
+        replies = [block.text for block in app.transcript.blocks if isinstance(block, AssistantBlock)]
+        self.assertEqual(replies, ["SLOW-START the first reply SLOW-END Reply #2 to: steer me. REPLY-END-2"])
+        drawn(app)
+        screen = "\n".join(app.terminal.screen.history())  # type: ignore[attr-defined]  # scrollback and the screen
+        for words in ("SLOW-START the first reply SLOW-END", "Reply #2 to: steer me. REPLY-END-2",
+                      "↪ steer queued by Hermes · steer me"):
+            self.assertEqual(screen.count(words), 1, screen)
+        self.assertLess(screen.index("REPLY-END-2"), screen.index("↪ steer queued by Hermes"), screen)
+
     def test_the_screen_shows_the_steer_waiting_then_once_in_scrollback(self) -> None:
         app, client = make_app(busy=True, rows=16)
         app._on_event(ev("message.start"))

@@ -470,6 +470,48 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     RoutingPrecisionCase("show-reel-combining-mark-tail", "A bare combining mark folding drops is unread text", "Make a demo video for the beta \u0301", "answer_clarification", "", "show-reel"),
     RoutingPrecisionCase("show-reel-with-customers", "A promo video with customers is a meeting, not a track", "Create a promo video with our customers.", "answer_clarification", "", "show-reel"),
     RoutingPrecisionCase("show-reel-with-marketing-team", "A launch video with a team is a meeting, not a track", "Make a launch video with the marketing team.", "answer_clarification", "", "show-reel"),
+    # A video authored from an idea is show-reel's too (`show_reel_cues`):
+    # these keep a video word in another sense, a fault recording, an edit, a
+    # chained request or a quoted ask, and stay unrouted.
+    RoutingPrecisionCase("show-reel-idea-fault-recording", "A video of a timeout is a fault recording", "Make a video of the login timeout.", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-outage-topic", "An outage is not an idea-video topic", "Make a video explaining the outage.", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ticket", "A video for a support ticket is a recording", "Make a video for the support ticket.", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-chained-post", "A video chained to a Slack post is not this skill's", "Make a video about DNS and post it to Slack.", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ui-jank", "A janky UI animation is a frontend report", "The hover animation is janky.", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-causative", "A definite intro animation made faster is an edit", "Make the intro animation faster.", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-recommend", "Recommending videos is not making one", "Recommend some videos about Rust.", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-postmortem", "An animation of a failed deploy is a fault recording", "Make an animation of the failed deploy for the postmortem.", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-quoted", "A quoted video request is translation input", 'Translate "make a video about DNS" into Korean.', "answer_directly", "direct_answer", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ko-call", "A Korean video call is not a film", "영상 통화가 자꾸 끊겨", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ko-playback", "A Korean playback fault is not production", "동영상 재생이 안 돼", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ja-bug-video", "A Japanese bug reproduction video is a fault recording", "バグを再現する動画を作って", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ja-summarize", "Summarizing a Japanese video is media input, not production", "この動画を要約して", "answer_clarification", "", "show-reel"),
+    # The second review's families: a UI effect, loop phrasing, a fault named as
+    # an event, and a recording. Each stays unrouted.
+    # Four of them carry no forbidden candidate: the lexical shortlist names
+    # show-reel by its genre words ("3D animation", "title animation") among
+    # the clarify's candidates, which is a mention, not a dispatch.
+    RoutingPrecisionCase("show-reel-idea-ui-confetti", "A confetti animation for an app state is a UI effect", "make a confetti animation for the checkout success state", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ui-hero-3d", "A 3D animation for a page hero is a UI effect", "create a 3D animation for the product page hero", "answer_clarification", ""),
+    RoutingPrecisionCase("show-reel-idea-ui-title-header", "A title animation for a website header is a UI effect", "create a title animation for the website header", "answer_clarification", ""),
+    RoutingPrecisionCase("show-reel-idea-ui-launch-screen", "An intro animation for an app launch screen is a UI effect", "make an intro animation for the app launch screen", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ui-lottie", "A Lottie animation for an empty state is a UI effect", "make a lottie animation for the empty state", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-loop-seamless", "A seamless looping video belongs to loop phrasing", "make a seamless looping background video", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-loop-forever", "A 3D animation that loops forever belongs to loop phrasing", "make a 3D animation that loops forever", "answer_clarification", ""),
+    RoutingPrecisionCase("show-reel-idea-loop-looped", "A looped kinetic typography video belongs to loop phrasing", "make a looped kinetic typography video", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-loop-ja", "A Japanese looping animation belongs to loop phrasing", "ループするアニメーションを作って", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-loop-ja-repeat", "A Japanese repeating background video belongs to loop phrasing", "繰り返し再生される背景動画を作って", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-fault-sev1", "A video about last week's sev1 is a fault report", "make a video about the sev1 last week", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-fault-breach", "A video about one data breach names an event, not a subject", "make a motion graphics video about the data breach", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-fault-server-crash", "A 3D animation of the server crash is a fault report", "make a 3D animation of the server crash", "answer_clarification", ""),
+    RoutingPrecisionCase("show-reel-idea-fault-race", "A video about one race condition is a fault report", "make a video about the race condition in the scheduler", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-fault-ja-cause", "A Japanese video on a failure's cause is a fault report", "サーバー障害の原因を説明する動画を作って", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-recording-loom", "A video on Loom is a screen recording", "make a video on loom", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-recording-laptop", "A video on a laptop of a flow is a screen recording", "make a video on my laptop of the signup flow", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-recording-standup", "A video of a standup is a recording", "make a video of the standup meeting", "answer_clarification", "", "show-reel"),
+    # A logo animation on an app surface (launch, splash) is UI work.
+    RoutingPrecisionCase("show-reel-idea-ja-app-launch-logo", "A Japanese logo animation at app launch is UI work", "アプリ起動時のロゴアニメーションを作って", "answer_clarification", "", "show-reel"),
+    RoutingPrecisionCase("show-reel-idea-ja-splash-logo", "A Japanese splash-screen logo animation is UI work", "スプラッシュ画面のロゴアニメーションを作って", "answer_clarification", "", "show-reel"),
     # Engine-entry approvals (#1638). Accepting something is the most common
     # thing a person says in the seconds after a planning workflow finishes,
     # and the corpus had no sentence of this shape at all -- 235 negative
@@ -9318,6 +9360,35 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     RoutingInterventionCase("show-reel-with-subtitles", "A production adjunct closes a promo video brief", "Make a promo video for the beta with subtitles.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
     RoutingInterventionCase("show-reel-launch-trailer", "A launch trailer is a film", "Make a launch trailer for the game.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
     RoutingInterventionCase("show-reel-promo-video-of-board", "A promo video about a named surface is still the film", "Make a HyperFrames promo video of the agent board.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    # A video authored from a text idea: an explainer, motion graphics, a
+    # logo intro, a 3D scene, a data-viz animation or a music visual, in
+    # English, Korean (verb-final) and Japanese. Before the idea lane each one
+    # asked, fell back, or dispatched deep-interview, img-summary or
+    # connector-operator.
+    RoutingInterventionCase("show-reel-idea-explainer", "An explainer of how something works is an authored video", "Make an explainer video about how DNS works.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-motion-graphics", "A motion graphics video about a history is an authored video", "Create a 20 second motion graphics video about the history of jazz.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-logo-intro", "A logo intro animation is an authored video", "Make a 10 second logo intro animation for our podcast.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-3d-scene", "A 3D scene with a renderer library is an authored video", "Make a 3D scene video of a city at night with three.js.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-recipe-motion-graphic", "A recipe motion graphic is a video, not an image card", "Render a recipe motion graphic animation showing a cocktail from empty glass to finished, 30s explainer style", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-vertical-tiktok", "A vertical video for TikTok is a video, not an image card", "Make a short vertical video for TikTok about our new feature.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-saas-launch", "A SaaS launch video with motion graphics is a film, not a connector action", "Create a highly professional SaaS product launch video with motion graphics.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-music-visualizer", "A music visualizer for an occasion is an authored video", "Make a music visualizer for the meetup.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-data-viz", "An animated data visualization is an authored video", "Create an animated data visualization of rainfall since 1950.", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-ko-explainer", "A Korean explainer video request, verb-final", "DNS 설명하는 30초 영상 만들어줘", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-ko-logo-intro", "A Korean logo intro animation request", "로고 인트로 애니메이션 만들어줘", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-ja-explainer", "A Japanese explainer video request", "DNSを説明する動画を作って", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    RoutingInterventionCase("show-reel-idea-direct-display-name", "The display name with an idea brief invokes the skill", "/omh-show-reel a 30 second explainer about DNS", "dispatch", "show-reel", "prepare_show_reel", "show_reel"),
+    # A video named as a source or a target stays with that request's owner: the
+    # img-summary and connector-operator exemptions apply only to a video
+    # show-reel admits as the requested output.
+    RoutingInterventionCase("show-reel-idea-owner-graphic-summary", "A graphic summarizing a video is an image card", "make a graphic summarizing the video", "dispatch", "img-summary", "prepare_visual_prompt_card", "img_summary"),
+    RoutingInterventionCase("show-reel-idea-owner-vertical-graphic-summary", "A vertical graphic summarizing a video is an image card", "make a vertical graphic summarizing the video", "dispatch", "img-summary", "prepare_visual_prompt_card", "img_summary"),
+    RoutingInterventionCase("show-reel-idea-owner-vertical-graphics-from-video", "Vertical graphics from a video are image cards", "make vertical graphics from this video", "dispatch", "img-summary", "prepare_visual_prompt_card", "img_summary"),
+    RoutingInterventionCase("show-reel-idea-owner-vertical-cut", "A vertical cut of an existing video stays with img-summary as on main", "make a vertical cut of this video", "dispatch", "img-summary", "prepare_visual_prompt_card", "img_summary"),
+    RoutingInterventionCase("show-reel-idea-owner-saas-post", "Posting a video to a SaaS workspace is a connector action", "post the video to our saas workspace", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("show-reel-idea-owner-saas-launch-post", "Posting a launch video to a SaaS tool is a connector action", "post the launch video to our saas tool", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("show-reel-idea-owner-saas-send", "Sending a demo video to a SaaS channel is a connector action", "send the demo video to the saas workspace channel", "dispatch", "connector-operator", "prepare_connector_operator_card", "connector_operator"),
+    RoutingInterventionCase("show-reel-idea-owner-pitch-deck", "An animation for a pitch deck is a material", "create an animation for the pitch deck", "dispatch", "materials-package", "prepare_material_package", "materials_package"),
     # Acknowledgement-only chatter in the adapter's own backfill shape leaves a
     # closed form whole (`show_reel_cues.backfill_is_inert`); the request
     # carries the sender prefix Hermes writes in a shared channel.

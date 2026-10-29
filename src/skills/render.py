@@ -3102,13 +3102,31 @@ Quality tier: `{definition.quality_tier}`
 def _progressive_workflow_body(definition: SkillDefinition, name: str) -> str:
     """Keep the routing and action boundary in the always-loaded workflow body."""
     if name == "show-reel":
+        # The idea lane shares its job with Hermes' bundled video skills, so the
+        # line saying which request is theirs is read here (`HermesSkillLine`).
+        bundled_boundary = "".join(
+            f"**Do Not Use When:** {loadable_skill_mentions(line)}\n\n"
+            for line in definition.do_not_use_when
+            if isinstance(line, HermesSkillLine)
+        )
         return f"""# Show Reel
 
 ## Why This Exists
 
 {definition.why_this_exists}
 {_opening_steps_block(definition)}
-## Production Method
+## Idea Videos
+
+An explainer, motion graphics, kinetic type, a logo or title intro, a 3D scene, a data-viz animation, a music visual or a short, with no product claim, real UI or brand asset on screen, takes this lane. It skips the source register, the rights register and the 3-concept comparison; it never skips a render.
+
+- Defaults, each labeled as an assumption and overridden by anything the user said: 16:9 1920x1080, 30 fps, 20-30 s when no duration is given (about 2.5 s per beat), muted unless music is asked for, on-screen text in the user's language. Ask only for a fact that cannot be recovered.
+- Pick one concept from its genre recipe in `references/genres.md` and record its assumptions. Then author one HTML composition with a deterministic time seek (a paused GSAP timeline or a `__seek(t)` function; no `Math.random()` or wall clock).
+- Probe the renderer read-only, in the order `references/genres.md` gives: the `hyperframes` CLI only when `command -v hyperframes` finds it (`npx` would download it), then `toolkit/scripts/render.mjs` with a local Chrome, `puppeteer-core` and FFmpeg, then a frame renderer already installed (such as Python with Pillow) piped to FFmpeg. If none runs, HOLD with the exact install command and ask for consent once; never install, download fonts or call a paid API on your own.
+- Render 3 style frames and view them, render a draft, view its contact sheet, and rebuild the weakest beat once. Export, then measure codec, dimensions, fps, duration, size and sha256 with `ffprobe`; deliver the path with those facts. A storyboard or an HTML file alone is HOLD, not delivery.
+- Fill the frame, use one hue family plus at most one accent, add no meta text (window titles, dimension labels, invented paths), draw no rounded "document" cards as a metaphor, and move the camera on one continuous path rather than stopping at every beat.
+- A product claim, a real UI or a brand asset on screen moves the video to the full method below.
+
+{bundled_boundary}## Production Method
 
 Read `references/procedure.md` for the ordered brief → source verification → concept selection → segment direction → measured timing → authored motion → critique/revision → export → QA → delivery method. `references/full-contract.md` owns boundaries, quality and completion criteria; read it before production, not after export.
 

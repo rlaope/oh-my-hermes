@@ -2865,10 +2865,12 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # Only complete domain phrases may score; their ordinary component words
     # must not turn unrelated market, customer or profile mentions into work.
     "market-research": frozenset({"market", "research", "sizing", "tam", "sam", "som", "bottom", "up", "size", "sensitivity", "customer", "evidence", "analysis", "jtbd", "matrix", "competitor", "pricing", "profiles", "competitive"}),
-    # Product/video/reel words alone must not acquire a motion-production owner.
+    # Product/video/reel words alone must not acquire a motion-production owner,
+    # and neither may the idea-video genre words (a logo, an intro, music).
     "show-reel": frozenset({
         "show", "reel", "product", "showcase", "video", "animated", "film", "motion", "portfolio", "launch", "teaser",
         "promo", "promotional", "sizzle", "hyperframes",
+        "graphics", "kinetic", "typography", "logo", "intro", "animation", "music", "visualizer",
     }),
     # Sheet/pixel/game/character words alone must not reach sprite processing.
     "sprite-forge": frozenset({"sprite", "sheet", "pixel", "art", "character", "game", "frames", "2d", "animation"}),

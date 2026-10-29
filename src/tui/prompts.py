@@ -38,7 +38,9 @@ ones that destroy something in full after a `▲`. Every command is listed when
 they all fit. Only when they do not, and only when Hermes' description names a
 risk `command_risk` found (so what Hermes flagged is one of the `▲` rows), do
 the commands that change nothing (`Segment.foldable`, a closed allowlist) fold
-into one `+ N other commands` row; every other one stays. `command_risk` knows
+into one `+ N other commands` row; every other one stays while rows allow, the
+directory changes and assignments that aim a risky one first among them, and
+no `▲` row is cut while another command's row shows. `command_risk` knows
 far fewer patterns than Hermes, so when Hermes flagged something it does not
 know, every command is listed and `_fit` cuts from the end with its marker.
 Risks Hermes did not name get a `✦ OMH also sees:` row under its header.
@@ -51,6 +53,7 @@ body from its end.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 import json
 import os
@@ -93,6 +96,8 @@ RISK_MARK = "▲ "
 ALSO_SEES = " also sees: "
 OTHER_COMMANDS = "    + {count} other command{s} "
 OTHER_HINT = " · ctrl+o shows all"
+# How many steps an approval's `+ N other commands` row folds by, each more when rows run short (`_command_bodies`).
+FOLD_STEPS = 4
 RULE_CELLS = 60  # the faint rule between the command and the choices, at most
 # A letter can only deny. Allowing takes the arrows and Enter, so a key typed
 # for the composer as the slot opens can never run a command.
@@ -208,6 +213,10 @@ class PromptSlot:
     answers: dict[str, str | None] = field(default_factory=dict)
     typing: bool = False  # a clarify question's text field is open: the composer is the field
     ticked: list[str] = field(default_factory=list)  # a multi-select question's ticked choices, in the order ticked
+    # An approval's command and its `command_risk.segments`, read once instead of on every frame.
+    _segments: tuple[str, list[command_risk.Segment]] | None = field(
+        default=None, init=False, repr=False, compare=False,
+    )
 
     @property
     def masked(self) -> bool:
@@ -600,7 +609,14 @@ class PromptSlot:
     def _fit(
         self, head: list[Line], body: list[Line], choices: list[list[Line]], max_rows: int, width: int, theme: Theme,
     ) -> list[Line]:
-        """`head`, `body` and the `choices` (each one's rows), in that order, within `max_rows`.
+        """`head`, `body` and the `choices` within `max_rows` (`_fitted`)."""
+        return self._fitted(head, body, choices, max_rows, width, theme)[0]
+
+    def _fitted(
+        self, head: list[Line], body: list[Line], choices: list[list[Line]], max_rows: int, width: int, theme: Theme,
+    ) -> tuple[list[Line], int]:
+        """`head`, `body` and the `choices` (each one's rows), in that order, within `max_rows`, and how many of the
+        body's rows show, from its first.
 
         Rows are counted, not choices. Everything is drawn when it fits.
         Otherwise the highlighted choice always shows, whole when it can, and
@@ -618,9 +634,9 @@ class PromptSlot:
         """
         listed = sum(len(choice) for choice in choices)
         if len(head) + len(body) + listed <= max_rows:
-            return [*head, *body, *(row for choice in choices for row in choice)]
+            return [*head, *body, *(row for choice in choices for row in choice)], len(body)
         if max_rows == 1:
-            return [_ends_with_more(choices[self.selected][0], width, theme)]
+            return [_ends_with_more(choices[self.selected][0], width, theme)], 0
         left = max_rows - 1 - min(len(choices[self.selected]), max_rows - 1)  # beside the head's first row and it
         reserved = min(1, left) if body else 0  # the command's first row says what it does
         rest = head[1 : 1 + left - reserved]
@@ -639,21 +655,33 @@ class PromptSlot:
             above.append((Span(next((form for form in forms if cell_width(form) <= width), forms[-1]), theme.muted),))
         else:
             above[-1] = _ends_with_more(above[-1], width, theme)
-        return [*above, *shown]
+        return [*above, *shown], len(kept)
 
     def _approval_lines(self, width: int, theme: Theme, max_rows: int, queued: Line, whole: bool) -> list[Line]:
         """The header, the risks Hermes did not name, the command by command, then the choices (`_fit`).
 
         Every command is listed, its risky ones marked, when that fits; else,
         when Hermes' description names a risk found, its risky ones in full and
-        one row for the rest (`_command_rows`). `whole` draws the command as
-        Hermes sent it instead (`whole_lines`). The spacing around the command
-        goes first when rows run short, then the listing folds, then `_fit`
-        cuts the body from its end, so the folded row goes before a risky one.
+        one row for the rest (`_command_bodies`). `whole` draws the command as
+        Hermes sent it instead (`whole_lines`). Each fold step's body is drawn
+        spaced, then with its rule alone, then bare, and cut from its end by
+        `_fit`; a cut that leaves out a `▲` row while another command's row
+        shows is not drawn, nor a step that saves no row over the one before
+        unless cut. Of the rest, the one that shows the most `▲` rows, then the
+        most commands that may change something, is drawn. On a tie a layout
+        that fits beats a cut, the less folded and then the better spaced
+        first; of two cuts, the one that shows fewer commands that change
+        nothing wins, so a row more never trades a listed command for a fold.
+
+        When Hermes' description names no risk found, nothing folds: the slot
+        lists every command and, short of rows, cuts from the end, risky rows
+        too, as it did before the fold steps.
         """
         description = str(self.params.get("description") or "dangerous command")
         command = str(self.params.get("command") or "")
-        found = command_risk.segments(command)
+        if self._segments is None or self._segments[0] != command:
+            self._segments = (command, command_risk.segments(command))
+        found = self._segments[1]
         count: Line = (Span(f" · {len(found)} commands", theme.muted),) if len(found) > 1 else ()
         head = wrap_prefixed(
             (Span(f"Hermes asks to run {description}", theme.warn), *count, *queued), (Span("⚠ ", theme.warn),),
@@ -668,51 +696,109 @@ class PromptSlot:
             head.extend(wrap_prefixed(words, (Span("  "),), (Span("  "),), width))
         indent: Line = (Span("  ", theme.code),)
         if whole:
-            bodies = [wrap_prefixed((Span(command, theme.code),), indent, indent, width) if command else []]
+            rows = wrap_prefixed((Span(command, theme.code),), indent, indent, width) if command else []
+            bodies = [(rows, [("!", 0)] * len(rows))]
         else:
-            bodies = [self._command_rows(found, width, theme, fold=False)]
             # Folding hides commands, so only when what Hermes flagged is one of the risky rows that stay.
-            if command_risk.names_a_found_risk(found, description):
-                bodies.append(self._command_rows(found, width, theme, fold=True))
+            folds = FOLD_STEPS if command_risk.names_a_found_risk(found, description) else 0
+            bodies = self._command_bodies(found, width, theme, folds)
         rule: Line = (Span("  " + "─" * max(min(width - 4, RULE_CELLS), 1), theme.faint),)
         blank: Line = ()
         choices = self._approval_choice_rows(width, theme)
         listed = [row for choice in choices for row in choice]
-        for body in bodies:
-            for spaced in ([*head, blank, *body, blank, rule, blank], [*head, *body, rule]):
-                if len(spaced) + len(listed) <= max_rows:
-                    return [*spaced, *listed]
-        return self._fit(head, bodies[-1], choices, max_rows, width, theme)
+        def scored(kinds: list[tuple[str, int]], kept: int, fits: bool) -> tuple[int, int, bool, int] | None:
+            shown: dict[str, set[int]] = {kind: set() for kind in (RISK_MARK, "…", "!", "", "+")}
+            for kind, index in kinds[:kept]:
+                shown[kind].add(index)
+            if (shown["!"] or shown[""] or shown["+"]) and any(kind in (RISK_MARK, "…") for kind, _ in kinds[kept:]):
+                return None  # a `▲` row would go while another command's row shows
+            return len(shown[RISK_MARK]), len(shown["!"]), fits, 0 if fits else -len(shown[""])
 
-    def _command_rows(self, found: list[command_risk.Segment], width: int, theme: Theme, fold: bool) -> list[Line]:
-        """Each command in order: a risky one after a `▲` (on one line, wrapped, never cut), any other as written (its
-        own line breaks kept), wrapped. With `fold`, the other commands that may fold (`Segment.foldable`) give way to
-        one `+ N other commands` row naming their programs. With none risky, every command is listed as written."""
-        home = os.path.expanduser("~")
+        best: tuple[tuple[int, int, bool, int], list[Line]] | None = None
+        built: list[tuple[list[Line], list[tuple[str, int]]]] = []  # the steps' bodies, built only as far as needed
+        for body, kinds in bodies:
+            built.append((body, kinds))
+            if len(built) == 1:
+                everything = (sum(1 for kind, _ in kinds if kind == RISK_MARK),
+                              len({index for kind, index in kinds if kind == "!"}), True, 0)
+            elif len(body) >= min(len(earlier) for earlier, _ in built[:-1]):
+                continue  # a fold that saves no row hides a command for nothing
+            for framed in ([*head, blank, *body, blank, rule, blank], [*head, *body, rule], [*head, *body]):
+                score = scored(kinds, len(body), True) if len(framed) + len(listed) <= max_rows else None
+                if score is not None and (best is None or score > best[0]):
+                    best = (score, [*framed, *listed])
+            if best is not None and best[0] == everything:
+                return best[1]  # nothing a cut could show more of
+        tried: set[tuple[tuple[str, int], ...]] = set()
+        for body, kinds in built:
+            if tuple(kinds) in tried:
+                continue  # a step that folds nothing more draws the same cut
+            tried.add(tuple(kinds))
+            drawn, kept = self._fitted(head, body, choices, max_rows, width, theme)
+            score = scored(kinds, kept, False)
+            if score is not None and (best is None or score > best[0]):
+                best = (score, drawn)
+        return best[1] if best else self._fit(head, built[-1][0], choices, max_rows, width, theme)
+
+    def _command_bodies(self, found: list[command_risk.Segment], width: int, theme: Theme,
+                        folds: int) -> Iterator[tuple[list[Line], list[tuple[str, int]]]]:
+        """The command's rows at each fold step from 0 to `folds`, built as asked for, each with what every row is
+        and the index of its command: `RISK_MARK` for a risky command's first row and `…` for the rest of it, `!` for
+        a command that may change something, `""` for one that changes nothing (`Segment.foldable`), and `+` for the
+        folded row (-1).
+        Each command in order: a risky one after a `▲` (on one line, wrapped, never cut), any other as written
+        (its own line breaks kept), wrapped; each command is wrapped once. From step 1, other commands give way to one
+        `+ N other commands` row naming their programs: at 1 those that change nothing (`Segment.foldable`); at 2 also
+        a directory change or an assignment (`Segment.sets_state`) other than the last one before each risky command;
+        at 3 every one of those; at 4 every command not risky. With none risky, every command is listed as written."""
         if not any(segment.risks for segment in found):
             indent: Line = (Span("  ", theme.code),)
-            return [row for segment in found
-                    for row in wrap_prefixed((Span(segment.text, theme.code),), indent, indent, width)]
+            rows, kinds = [], []
+            for index, segment in enumerate(found):
+                wrapped_rows = wrap_prefixed((Span(segment.text, theme.code),), indent, indent, width)
+                rows.extend(wrapped_rows)
+                kinds.extend([("!", index)] * len(wrapped_rows))
+            yield rows, kinds
+            return
+        home = os.path.expanduser("~")
         # A risky command is never cut at the width: on a narrow slot it wraps under its mark.
         mark: Line = (Span("  "), Span(RISK_MARK, replace(theme.error, bold=True)))
         under: Line = (Span(" " * (2 + cell_width(RISK_MARK))),)
         plain: Line = (Span(" " * (2 + cell_width(RISK_MARK)), theme.code),)
-        rows: list[Line] = []
-        others: list[command_risk.Segment] = []
-        for segment in found:
-            if segment.risks:
-                text = Span(_home_short(_joined(segment.text), home), replace(theme.warn, bold=True))
-                rows.extend(wrap_prefixed((text,), mark, under, width))
-            elif fold and segment.foldable:
-                others.append(segment)
-            else:
-                rows.extend(wrap_prefixed((Span(segment.text, theme.code),), plain, plain, width))
-        if others:
-            lead = Span(OTHER_COMMANDS.format(count=len(others), s="s" if len(others) != 1 else ""), theme.muted)
-            names = truncate("(" + ", ".join(dict.fromkeys(segment.head for segment in others)) + ")",
-                             max(width - cell_width(lead.text) - cell_width(OTHER_HINT), 0))
-            rows.append(truncate_line((lead, Span(names, theme.faint), Span(OTHER_HINT, theme.hint)), width))
-        return rows
+        wrapped = [
+            wrap_prefixed((Span(_home_short(_joined(segment.text), home), replace(theme.warn, bold=True)),), mark,
+                          under, width)
+            if segment.risks else wrap_prefixed((Span(segment.text, theme.code),), plain, plain, width)
+            for segment in found
+        ]
+        aiming: set[int] = set()  # the last directory change or assignment before each risky command
+        last = -1
+        for index, segment in enumerate(found):
+            last = index if segment.sets_state else last
+            if segment.risks and last >= 0:
+                aiming.add(last)
+                last = -1
+        for fold in range(folds + 1):
+            rows = []
+            kinds = []
+            others: list[command_risk.Segment] = []
+            for index, segment in enumerate(found):
+                if not segment.risks and (
+                        (fold >= 1 and segment.foldable) or (fold == 2 and segment.sets_state and index not in aiming)
+                        or (fold >= 3 and segment.sets_state) or fold >= 4):
+                    others.append(segment)
+                else:
+                    rows.extend(wrapped[index])
+                    kind = "" if segment.foldable else "!"
+                    kinds.extend([(RISK_MARK, index), *[("…", index)] * (len(wrapped[index]) - 1)] if segment.risks
+                                 else [(kind, index)] * len(wrapped[index]))
+            if others:
+                lead = Span(OTHER_COMMANDS.format(count=len(others), s="s" if len(others) != 1 else ""), theme.muted)
+                names = truncate("(" + ", ".join(dict.fromkeys(segment.head for segment in others)) + ")",
+                                 max(width - cell_width(lead.text) - cell_width(OTHER_HINT), 0))
+                rows.append(truncate_line((lead, Span(names, theme.faint), Span(OTHER_HINT, theme.hint)), width))
+                kinds.append(("+", -1))
+            yield rows, kinds
 
     def _approval_choice_rows(self, width: int, theme: Theme) -> list[list[Line]]:
         """Each choice as its rows: its icon and label in its tone (`APPROVAL_TONES`), wrapped under the icon; the

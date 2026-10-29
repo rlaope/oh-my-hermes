@@ -12,11 +12,13 @@ none goes missing, and nothing already in scrollback would need a repaint.
 from __future__ import annotations
 
 from dataclasses import replace
+import time
 import unicodedata
 import unittest
 from unittest.mock import patch
 
 from _tui_lines import lines_text
+from omh.tui import markdown
 from omh.tui.gateway import Event
 from omh.tui.style import Line, Span
 from omh.tui import transcript as transcript_module
@@ -24,10 +26,12 @@ from omh.skin_pack import default_theme
 from omh.tui.theme import DEFAULT_THEME as THEME
 from omh.tui.theme import with_launch_look
 from omh.tui.transcript import (
+    STEER_QUEUED,
     GUTTER,
     OUTPUT_PREVIEW_ROWS,
     AssistantBlock,
     CommandBlock,
+    SteerBlock,
     ThinkingBlock,
     ToolGroup,
     ToolRow,
@@ -518,6 +522,27 @@ class PlainTurnTests(LoopTestCase):
         # Who said it: `⚚ Hermes` bold in the rail's hue on a header row of its own, apart from a call's state colours.
         self.assertEqual(self.taken[0][:3], (rail_cell(THEME.brand), Span(" ", GUTTER), Span("⚚ Hermes", replace(THEME.brand, bold=True))))
 
+    def test_a_long_paragraph_streaming_wraps_only_its_last_rows_each_frame(self) -> None:
+        # Found by the QA perf lane: every frame wrapped the whole paragraph, so one long paragraph cost O(n^2).
+        wrapped: list[int] = []
+        real = markdown.wrap_line
+
+        def counting(line: Line, cells: int) -> list[Line]:
+            wrapped.append(sum(len(span.text) for span in line))
+            return real(line, cells)
+
+        self.step(ev("message.start"))
+        for index in range(1200):
+            self.transcript.apply(ev("message.delta", text=("**bold** ", "`code` ", "한국어 ", "token ")[index % 4]))
+            if index % 40 == 0:
+                self.step()  # a frame: the step holds its rows to the whole paragraph's render
+        wrapped.clear()
+        with patch("omh.tui.markdown.wrap_line", counting):
+            self.transcript.apply(ev("message.delta", text="tail "))
+            self.transcript.live_lines(WIDTH, THEME, max_rows=10)
+        self.assertLess(sum(wrapped), 400, wrapped)  # the paragraph is ~8,000 characters
+        self.step(ev("message.complete", text="", status="complete"))
+
     def test_a_trailing_blank_line_waits_for_the_text_after_it(self) -> None:
         self.step(ev("message.start"))
         self.assertEqual(self.step(ev("message.delta", text="1\n\n")), ["  ⚚ Hermes", "    1"])
@@ -915,6 +940,78 @@ class ToolDraftTests(LoopTestCase):
         taken = self.end_turn(3.0, "interrupted")
         self.assertEqual(taken[0], "  ▪ terminal(sleep 60)")
         self.assertEqual(taken[-1], "  ✻ 3s · 1 tool")
+
+
+class SteeredReplyTests(unittest.TestCase):
+    """Once the person steered, `message.complete` never removes or rewrites what streamed: Hermes reads a steer
+    before its next model call, a reply that made no tool call is not sealed between the calls, and the final
+    carries the last call's text only."""
+
+    def setUp(self) -> None:
+        self.transcript = Transcript(clock=FakeClock())
+
+    def replies(self) -> list[object]:
+        return [(type(block).__name__[0], getattr(block, "text", "")) for block in self.transcript.blocks
+                if isinstance(block, (AssistantBlock, SteerBlock))]
+
+    def stream(self, first: str, last: str, final: str, agent: str = "") -> list[object]:
+        """A reply streamed as `first`, a steer Hermes took, then `last`, ending on `final`, and the turn's end."""
+        self.transcript.apply(ev("message.start"))
+        self.transcript.apply(ev("message.delta", text=first))
+        steer = self.transcript.add_steer("s1", agent=agent)
+        self.transcript.steer_answered(steer, STEER_QUEUED)
+        self.transcript.apply(ev("message.delta", text=last))
+        self.transcript.apply(ev("message.complete", text=final, status="complete"))
+        self.transcript.add_turn_summary(1.0, None)
+        return self.replies()
+
+    def test_two_calls_keep_all_that_streamed_and_the_steer_row_goes_under_them(self) -> None:
+        self.assertEqual(self.stream("First answer.\n", "Second answer.", "Second answer."),
+                         [("A", "First answer.\nSecond answer."), ("S", "s1")])
+
+    def test_what_the_final_adds_past_the_stream_is_added_spaces_aside(self) -> None:
+        footer = "\n\nWarning: 1 edit failed"
+        self.assertEqual(self.stream("One call ", "that  ends.", "One call that ends." + footer),
+                         [("A", "One call that  ends." + footer), ("S", "s1")])
+
+    def test_a_final_that_differs_inside_adds_nothing_and_rewrites_nothing(self) -> None:
+        for final in ("Second answer!", "Second", "Second  answer.\n\nFirst."):
+            with self.subTest(final=final):
+                self.setUp()
+                self.assertEqual(self.stream("First.\n", "Second answer.", final),
+                                 [("A", "First.\nSecond answer."), ("S", "s1")])
+
+    def test_a_final_whose_first_word_never_streamed_shows_under_the_reply(self) -> None:
+        # Review 3 (W3): Hermes wrote a warning in place of the last call's reply.
+        warning = "⚠️ The model produced only internal reasoning and no final answer, despite retries."
+        self.assertEqual(self.stream("Let me check.", "", warning), [("A", "Let me check."), ("S", "s1"), ("A", warning)])
+
+    def test_without_a_steer_of_the_persons_own_the_final_is_adopted_as_before(self) -> None:
+        self.assertEqual(self.stream("Hello wrld", "", "Hello world", agent="child alpha")[0], ("A", "Hello world"))
+        self.setUp()
+        self.transcript.apply(ev("message.start"))
+        self.transcript.apply(ev("message.delta", text="Hello wrld"))
+        self.transcript.apply(ev("message.complete", text="Hello world", status="complete"))
+        self.assertEqual(self.replies(), [("A", "Hello world")])
+
+    def test_a_steer_counts_for_its_own_turn_only(self) -> None:
+        self.stream("First.", "", "First.")
+        self.transcript.apply(ev("message.start"))
+        self.transcript.apply(ev("message.delta", text="Hello wrld"))
+        self.transcript.apply(ev("message.complete", text="Hello world", status="complete"))
+        self.assertEqual(self.replies()[-1], ("A", "Hello world"))
+
+    def test_settling_a_megabyte_reply_is_linear(self) -> None:
+        # The owner's bound: settling never scans the stream more than a fixed number of times.
+        body = "word and more " * 75_000  # about 1 MB
+        start = time.perf_counter()
+        replies = self.stream(body, "", body + "\n\nfooter")
+        self.assertLess(time.perf_counter() - start, 3.0)
+        self.assertEqual(" ".join(replies[0][1].split()), " ".join((body + "footer").split()))
+        self.setUp()
+        start = time.perf_counter()
+        self.stream(body, "", "z" * 1_000_000)  # no opening in common: a bounded search, then its own block
+        self.assertLess(time.perf_counter() - start, 3.0)
 
 
 class TurnEndTests(LoopTestCase):

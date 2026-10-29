@@ -46,6 +46,7 @@ EXPECTED_BUNDLED_DEFERRALS = {
     "materials-package": ("pdf", "docx", "powerpoint", "xlsx"),
     "meeting-brief": ("meeting-action-items",),
     "research-department": ("competitor-news-monitor", "arxiv"),
+    "show-reel": ("manim-video", "ascii-video"),
     "skill": ("hermes-agent-skill-authoring",),
     "ultraqa": ("dogfood",),
     "visual-qa": ("dogfood",),
