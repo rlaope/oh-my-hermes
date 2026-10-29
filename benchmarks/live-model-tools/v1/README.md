@@ -554,7 +554,7 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
-### 2026-10-30 big files: read outline off vs on (`bigfile-ab`)
+### 2026-10-30 big files: read outline off vs on (`bigfile-ab`), gate failed
 
 One question, from oh-my-pi's read summary: when a `read_file` result is truncated, does
 appending an outline of the whole file (classes, functions and methods with their line ranges)
@@ -608,7 +608,53 @@ A run with no record, or one that timed out, is scored as a fail; its tokens com
 session database when the session can be found, and are reported as unobserved otherwise, never
 imputed. If the gate fails, the outline does not merge and the result is recorded here.
 
-Results: pending.
+The result: on this corpus the outline changes nothing measurable, and the weak-model clause
+fails, so the outline does **not** merge.
+
+| Model | off | on | off tokens (median) | on tokens (median) |
+| --- | ---: | ---: | ---: | ---: |
+| `claude-haiku-4-5-20251001` | 6 / 6 | 5 / 6 | 579,517 | 591,108 |
+| `claude-haiku-5-5` | 6 / 6 | 6 / 6 | 291,562 | 293,271 |
+| `gpt-5.6-luna` | 6 / 6 | 6 / 6 | 226,699 | 208,058 |
+| `claude-sonnet-5-5` | 6 / 6 | 6 / 6 | 136,573 | 139,692 |
+| `claude-opus-5-5` | 6 / 6 | 6 / 6 | 189,040 | 190,275 |
+| `gpt-6.1-sol` | 6 / 6 | 6 / 6 | 265,919 | 269,421 |
+| **Total** | **36 / 36** | **35 / 36** | 239,844 | 228,715 |
+
+Token medians are per model over its 6 runs per arm; the total row is the median over all 36
+runs per arm. Session-database sums: 11.85M off, 10.91M on.
+
+The gate, clause by clause:
+
+- Weak models, on at least off + 3: **fail**, 17 vs 18. The off arm passed every weak run, so
+  no arm could have cleared + 3; the one on-arm fail is a `claude-haiku-4-5` rename that left a
+  reference behind (1.09M tokens).
+- Strong models, on at least off - 1: pass, 18 vs 18.
+- On-arm median tokens at most the off arm's: pass, 228,715 vs 239,844.
+- No on-arm run above 3x its model's off-arm median on the same template: pass, none.
+- Outline fired in at least half of the on-arm sessions: pass, 29 of 37 on-profile sessions
+  (every session that had a truncated `read_file` result; the other 8 never had one), and in 0
+  of 38 off-profile sessions.
+- Small and untruncated reads byte-identical: pass (`tests/test_read_outline.py`).
+
+What it shows, and what it does not:
+
+- Every model, weak ones included, finds the deep helper by searching for names from the test
+  and the call site, then reads a window around the hit. `read_file` calls per session have the
+  same median in both arms (4). The outline arrives, and the models do not need it: the corpus
+  does not reproduce the paging loop of #1723, where the model never searched.
+- A fair test of the outline needs a task where search does not lead to the location (a symptom
+  with no searchable name) or a model that pages instead of searching. Neither is in this split.
+- Infrastructure: at 01:59:51 KST the shared host gateway received SIGTERM from its supervisor
+  (another session's action, not this run) and interrupted 15 turns. The 17 runs that ended in
+  that window (exit 130, then exit 1 within 3 s) were moved out of the records and run again on
+  the same routes; no completed record was removed. An earlier smoke, before the bench
+  profiles' plugins were reloaded in the gateway, had no outline and is not counted.
+- After the outage the bench profiles also set `agent.run_budget_seconds: 600`. No run in the
+  table timed out or needed a stop.
+- omh `feature/read-outline` `237321b92` on origin/main `5cc1ed311`; Hermes Agent checkout `bf0203a794` (with uncommitted gateway changes from another session).
+  n = 6 per model per arm, Python only.
+
 
 ### 2026-10-29 debugging: builtin `patch` vs a debugpy tool (`omh-dap`), gate failed
 
