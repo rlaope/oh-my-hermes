@@ -729,6 +729,14 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "fallback is visible and cannot widen what a call may read or write.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/read_outline.py",
+        "_resolve",
+        INTENTIONAL,
+        "Hermes' private `_resolve_path_for_task` raising skips the optional read outline and is counted by "
+        "exception type in `read_outline_failures`; the host's read result passes through byte-identical, so "
+        "a failure can only withhold the outline, never attach one for a file the read did not return.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/tools/lsp_nav_tool.py",
         "_navigate",
         INTENTIONAL,
@@ -802,8 +810,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 82 -> 83 / 74 -> 75: `tui/panels.HudPoller._run`, the HUD poll loop (a read
 # that raises is a visible notice with the last processes kept, never a dead
 # thread and never the processes' end; #2388 review).
-EXPECTED_HANDLER_COUNT = 83
-EXPECTED_ANCHOR_COUNT = 75
+# 83 -> 84 / 75 -> 76: `read_outline._resolve`, Hermes' private path resolver
+# for the read outline (a failure withholds the outline, counted by type).
+EXPECTED_HANDLER_COUNT = 84
+EXPECTED_ANCHOR_COUNT = 76
 
 
 class DerivedSite(NamedTuple):

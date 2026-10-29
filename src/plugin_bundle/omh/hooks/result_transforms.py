@@ -1,7 +1,7 @@
 """Composed ``transform_tool_result`` seam, and the ``transform_llm_output``
 half of unarmed remote waits.
 
-This is the single registered entry for the hook; it chains the six OMH
+This is the single registered entry for the hook; it chains the seven OMH
 result transforms in a fixed order:
 
 1. Code-mode discipline annotation — the first ``execute_code`` result of a
@@ -15,16 +15,21 @@ result transforms in a fixed order:
    lines that WERE returned and the offset that continues past them, because
    the host's refusal asserts the model already has content no read ever
    returned (``truncated_read_recovery.py``).
-4. Kanban readback bounding — a ``kanban_show`` / ``kanban_list`` /
+4. Read outline — a truncated ``read_file`` result of a large Python file gains
+   one key holding the whole file's classes, functions and methods with their
+   line ranges, so the model can jump to an offset instead of paging
+   (``read_outline.py``). Spliced in, never cut; once per file version per
+   session.
+5. Kanban readback bounding — a ``kanban_show`` / ``kanban_list`` /
    ``kanban_attachments`` result is cut to a field and payload ceiling and
    prefixed with one evidence-vocabulary label line, so a worker's unbounded
    completion summary cannot flood the main session and a self-reported
    ``completed`` never reads as verified (``kanban_readback.py``).
-5. Unarmed remote waits — a ``terminal`` call that starts work on a remote
+6. Unarmed remote waits — a ``terminal`` call that starts work on a remote
    with no background process armed to wake the session, or one blocked at
    the human approval gate, gets a per-turn directive naming the two honest
    exits (``remote_wait_nudge.py``).
-6. Full-width diff band padding — tool-result diffs get their painted lines
+7. Full-width diff band padding — tool-result diffs get their painted lines
    padded to a uniform band (``diff_presentation.py``), except Kanban readback
    tools: their serialized records must retain the bound and valid JSON even
    when a string contains Unicode line separators and diff-looking text.
@@ -47,14 +52,19 @@ writes (``omh_guidance``, ``omh_engagement``, ``omh_truncated_read``,
 parses the already-nudged object and adds its key beside the nudge; neither
 reads the other's key, so swapping the two would produce the same two keys in
 the other insertion order. The composed case is pinned in
-``tests/test_truncated_read_recovery.py``. Code-mode guidance still cannot
+``tests/test_truncated_read_recovery.py``. The read outline also watches
+``read_file`` and writes ``omh_read_outline``, but only on a successful
+truncated read, which is never one of the refusal shapes recovery annotates;
+it can follow a nudge on the same result, and it splices its key in before
+the closing brace rather than re-serialising, so the nudged bytes stay as they
+were (pinned in ``tests/test_read_outline.py``). Code-mode guidance still cannot
 meet either of them: it watches ``execute_code`` and nothing else, and
 neither can unarmed remote waits, which watches ``terminal`` and nothing
-else and writes ``omh_remote_wait``. ``read_file`` is the only tool two
+else and writes ``omh_remote_wait``. ``read_file`` is the only tool
 annotating passes share; the full picture is ``execute_code`` for code-mode
 guidance, ``{write_file, patch}`` plus ``{read_file, search_files,
 web_search, web_extract}`` plus the delegation tools for engagement nudges,
-``read_file`` for truncated-read recovery, the ``kanban_*`` readback tools
+``read_file`` for truncated-read recovery and the read outline, the ``kanban_*`` readback tools
 for kanban bounding, and ``terminal`` for unarmed remote waits. Engagement
 nudges deliberately do NOT watch ``terminal``, so no result reaches both of
 those. ``tests/test_remote_wait_nudge.py`` derives those sets from the
@@ -80,6 +90,7 @@ from ..code_mode_guidance import annotate_execute_code_result
 from ..delegation_snapshot import appended, messenger_snapshot
 from ..engagement_nudges import annotate_engagement_nudge
 from ..kanban_readback import KANBAN_READBACK_TOOLS, transform_kanban_readback
+from ..read_outline import annotate_read_outline
 from ..remote_wait_nudge import annotate_remote_wait, honest_stop_output
 from ..truncated_read_recovery import annotate_truncated_read_recovery
 from .diff_presentation import transform_tool_result as _pad_diff_result
@@ -138,6 +149,18 @@ def transform_tool_result(**kwargs: Any) -> str | None:
     if recovered is not None:
         annotated = recovered
         kwargs = {**kwargs, "result": recovered}
+    outlined = annotate_read_outline(
+        tool_name=kwargs.get("tool_name"),
+        args=kwargs.get("args"),
+        result=kwargs.get("result"),
+        session_id=session_id,
+        # The host's task identity (`model_tools._CallIds`): the path resolves
+        # against that task's workspace, the way `read_file` resolved it.
+        task_id=str(kwargs.get("task_id", "") or ""),
+    )
+    if outlined is not None:
+        annotated = outlined
+        kwargs = {**kwargs, "result": outlined}
     bounded = transform_kanban_readback(kwargs.get("tool_name"), kwargs.get("result"))
     if bounded is not None:
         annotated = bounded

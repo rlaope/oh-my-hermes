@@ -554,6 +554,59 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-10-30 big files: read outline off vs on (`bigfile-ab`)
+
+One question, from oh-my-pi's read summary: when a `read_file` result is truncated, does
+appending an outline of the whole file (classes, functions and methods with their line ranges)
+let the model jump to the right offset instead of paging? OMH's version appends and never cuts:
+`src/plugin_bundle/omh/read_outline.py`, Python only (stdlib `ast`), once per file version per
+session, at most 60 lines, for files of at least 400 lines.
+
+The setup, fixed before the first live run:
+
+- Split `bigfile-ab` (`--split bigfile-ab`, `lib/bigfile.py`; the evaluation corpus and its
+  digest are unchanged). One generated module, `src/benchapp/tariffs.py`, of 4,750-5,030 lines
+  (past both of Hermes' read limits: 2,000 lines and 100,000 characters). Two templates, 3 seeds
+  each, 6 instances per model per arm:
+  - `B-DEEP-BUG`: a pricing helper defined past line 3,000 has an off-by-one threshold. The
+    task names the failing test and the symptom ("a shipment of exactly N pieces is quoted as if
+    it got no crate discount"), never the helper, the module path or the line. Graded on hidden
+    quotes from the correct module, so editing the test does not pass.
+  - `B-DEEP-RENAME`: rename a public function defined past line 3,000, used near the top of the
+    module, deep in it, in a second module and in the tests, next to a same-named method, a log
+    string and a comment that must stay. Graded by AST plus behaviour.
+- Both arms: no edit directive, `--git-init-workspace`, `--test-env`, effort `medium`, toolsets
+  `file,terminal`. Two profiles that differ only in `plugins.entries.omh.settings.read_outline`
+  (`true` / `false`) and the OMH home; `agent.max_turns: 120`; `tools.tool_search` off.
+  `OMH_READ_OUTLINE` is unset in the run environment.
+- Subscription routes only. Weak: `claude-haiku-4-5-20251001`, `claude-haiku-5-5` (Hermes
+  provider `claude-proxy`, the local CPA at `http://127.0.0.1:8317/v1`) and `gpt-5.6-luna`
+  (Hermes provider `openai-codex`). Strong: `claude-sonnet-5-5`, `claude-opus-5-5`
+  (`claude-proxy`) and `gpt-6.1-sol` (`openai-codex`). Both Codex ids answered a one-word probe
+  through the off profile on 2026-10-30; the subscription also serves `gpt-6-luna`, and the
+  older-generation small tier, `gpt-5.6-luna`, is the weak model. Condition `baseline` (no
+  family calibration), as in the sections below.
+- Hermes runs through `~/.hermes/hermes-agent/.venv/bin/python -m hermes_cli.main -p <profile>`,
+  never the `hermes` launcher. `--oneshot` runs the agent in that process, so the harness
+  timeout ends the turn; the run log checks for leftover processes after each timeout.
+
+The merge gate, written before the first live run:
+
+- Weak models, on at least off + 3 passes (of 18 per arm).
+- Strong models, on at least off - 1 passes (of 18 per arm).
+- The on arm's median tokens per run, over all its runs, at most the off arm's.
+- No on-arm run above 3x the median tokens of its model's off-arm runs on the same template.
+- The outline fired (a `read_file` result carried `omh_read_outline`) in at least half of the
+  on-arm sessions, counted from the on profile's session database; and in no off-arm session.
+- Small and untruncated reads byte-identical: `tests/test_read_outline.py`
+  (`test_small_and_untruncated_reads_are_byte_identical`).
+
+A run with no record, or one that timed out, is scored as a fail; its tokens come from the
+session database when the session can be found, and are reported as unobserved otherwise, never
+imputed. If the gate fails, the outline does not merge and the result is recorded here.
+
+Results: pending.
+
 ### 2026-10-29 debugging: builtin `patch` vs a debugpy tool (`omh-dap`), gate failed
 
 One question, from oh-my-pi's `debug` tool: does giving the model a debugger (breakpoints,

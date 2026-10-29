@@ -9,6 +9,9 @@ from pathlib import Path
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from bigfile import BIGFILE_AB_TEMPLATES, reference_edit  # noqa: E402
+
 
 def write(value):
     path = Path(os.environ["LMT_OUTPUT"])
@@ -69,6 +72,10 @@ def main():
             changed.append(relative)
         events.append({"sequence":1,"name":"edit","mutating":True,"arguments_digest":"0"*64,"started_ms":0,"ended_ms":1,"result":"success"})
         answer = {"changed_paths":sorted(changed)}
+    elif name in {bigfile_name for bigfile_name, _task_class in BIGFILE_AB_TEMPLATES}:
+        changed = reference_edit(name, workspace)
+        events.append({"sequence":1,"name":"edit","mutating":True,"arguments_digest":"0"*64,"started_ms":0,"ended_ms":1,"result":"success"})
+        answer = {"changed_paths":changed}
     elif name == "BUGFIX":
         path = workspace / "src/benchapp/provider_select.py"
         text = path.read_text(encoding="utf-8")

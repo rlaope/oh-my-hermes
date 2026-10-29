@@ -7,6 +7,7 @@ import random
 import shutil
 from typing import Any
 
+from bigfile import BIGFILE_AB_SPLIT, BIGFILE_AB_TEMPLATES, bigfile_fixture, prompt as bigfile_prompt
 from common import digest, tree_digest, write_json
 
 DEVELOPMENT_SEEDS = (7919,)
@@ -22,6 +23,8 @@ TEMPLATES = (
 # pinned corpus digest and manifest stay byte-identical.
 LSP_AB_SPLIT = "lsp-ab"
 LSP_AB_TEMPLATES = (("RENAME-ALIAS", "edit"), ("RENAME-SHADOW", "edit"))
+# The read-outline A/B (`lib/bigfile.py`), kept out of the pinned corpus the same way.
+_BIGFILE_NAMES = {name for name, _task_class in BIGFILE_AB_TEMPLATES}
 
 @dataclass(frozen=True)
 class Instance:
@@ -37,6 +40,8 @@ class Instance:
 def all_specs(split: str) -> list[tuple[str, str, int]]:
     if split == LSP_AB_SPLIT:
         return [(f"L-{name}", task_class, seed) for name, task_class in LSP_AB_TEMPLATES for seed in EVALUATION_SEEDS]
+    if split == BIGFILE_AB_SPLIT:
+        return [(f"B-{name}", task_class, seed) for name, task_class in BIGFILE_AB_TEMPLATES for seed in EVALUATION_SEEDS]
     seeds = DEVELOPMENT_SEEDS if split == "development" else EVALUATION_SEEDS
     prefix = "D" if split == "development" else "E"
     return [(f"{prefix}-{name}", task_class, seed) for name, task_class in TEMPLATES for seed in seeds]
@@ -224,17 +229,21 @@ def materialize(split: str, template_id: str, task_class: str, seed: int, worksp
         shutil.rmtree(workspace)
     workspace.mkdir(parents=True)
     files = _project_files(seed)
-    lsp_fixture = _LSP_AB_FIXTURES.get(template_id.split("-", 1)[1])
+    name = template_id.split("-", 1)[1]
+    lsp_fixture = _LSP_AB_FIXTURES.get(name)
     lsp_golden: dict[str, Any] | None = None
     if lsp_fixture is not None:
         extra, lsp_golden = lsp_fixture(seed)
+        files = {**files, **extra}
+    elif name in _BIGFILE_NAMES:
+        extra, lsp_golden = bigfile_fixture(name, seed)
         files = {**files, **extra}
     decision = next(line.split()[1].rstrip(":") for line in files["src/benchapp/routes.py"].splitlines() if line.startswith("class "))
     for relative, content in files.items():
         path = workspace / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    prompt = _prompt(template_id, task_class, seed, decision)
+    prompt = bigfile_prompt(name, seed) if name in _BIGFILE_NAMES else _prompt(template_id, task_class, seed, decision)
     (workspace / "TASK.md").write_text(prompt + "\n", encoding="utf-8")
     golden_path = private_root / f"{template_id}-{seed}.json"
     write_json(golden_path, lsp_golden if lsp_golden is not None else _golden(template_id, files, decision))

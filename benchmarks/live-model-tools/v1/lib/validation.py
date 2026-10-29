@@ -8,6 +8,7 @@ import subprocess
 import sys
 from typing import Any
 
+from bigfile import BIGFILE_AB_TEMPLATES, bigfile_ok
 from common import load_object
 
 
@@ -201,6 +202,8 @@ def validate(template_id: str, task_class: str, workspace: Path, golden_path: Pa
                 semantic = "DEFAULT_RETRY_LIMIT" not in production + tests and production.count("MAX_RETRY_ATTEMPTS") == 2 and "MAX_RETRY_ATTEMPTS" in tests
             elif name in _LSP_AB_VALIDATORS:
                 semantic = _LSP_AB_VALIDATORS[name](workspace, golden)
+            elif name in {bigfile_name for bigfile_name, _task_class in BIGFILE_AB_TEMPLATES}:
+                semantic = bigfile_ok(name, workspace, golden, _behaviour_ok)
             else:
                 module = runpy.run_path(str(workspace / "src/benchapp/provider_select.py"))
                 select_provider = module["select_provider"]
