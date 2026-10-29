@@ -1708,6 +1708,8 @@ class App(ModesMixin, AgentViewMixin):
         self.bg_quiet: dict[str, float] = {}
         self.bg_done: tuple[tuple[BackgroundProcess, ...], float] | None = None
         self.bg_drawn: int | None = None  # the row's clock second the last frame showed (`_background_second`)
+        self.bg_slot_row: int | None = None  # the row's index in the slot `_slot_lines` last made, if it made it
+        self.bg_row_shown = False  # whether the last frame drew it (the slot can be cut to fewer rows: `build_frame`)
         # The poller's refresh count at the last turn's end: an older read may predate that end (`_take_background`).
         self.bg_after = 0
         self.notification: Notification | None = None  # Hermes' out-of-band notice, shown above the composer
@@ -6065,8 +6067,10 @@ class App(ModesMixin, AgentViewMixin):
         return self.bg_session == self.stored_id and (bool(self.bg_running) or self.bg_done is not None)
 
     def _background_covered(self) -> bool:
-        """Whether something the slot shows instead hides the row (`_slot_lines`), or the pager covers the screen."""
-        return self.pager is not None or any(
+        """Whether the row is not on screen: the last frame did not draw it (a slot too short for it, a queue that
+        keeps the one row, a slot the frame cut: `bg_row_shown`), or something the slot shows instead hides it now
+        (`_slot_lines`), or the pager covers the screen."""
+        return not self.bg_row_shown or self.pager is not None or any(
             surface is not None
             for surface in (self.slot, self.launch_picker, self.picker, self.search, self.rewind_picker,
                             self.model_picker)
@@ -6227,14 +6231,15 @@ class App(ModesMixin, AgentViewMixin):
             return
         self.dirty = False
         self.last_render = now
-        self.bg_drawn = self._background_second()
         self._render()
+        self.bg_drawn = self._background_second()  # after the frame, which says whether the row is on screen
 
     def _render(self) -> None:
         cols, rows = self.size
         self._settle_list()
         self._write_title()
         if self.pager is not None:
+            self.bg_row_shown = False
             self.clickable = {}
             self._set_mouse(True, drag=True)  # the alternate screen has no scrollback to take: the pager scrolls itself
             self._refresh_agent_log()
@@ -6361,6 +6366,8 @@ class App(ModesMixin, AgentViewMixin):
         # the frame is drawn under them. Flush and frame are one write, so no screen between them shows.
         self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, edge=self._edge())
         self.frame_budget = frame.budget
+        # The frame keeps the slot's first rows (`build_frame`), and the row is the slot's last.
+        self.bg_row_shown = self.bg_slot_row is not None and self.bg_slot_row < frame.budget.slot
         self.frame_busy = busy
         if busy:
             self.view_hold = (wanted, frame.budget.agents, self._working_rows())
@@ -6663,6 +6670,7 @@ class App(ModesMixin, AgentViewMixin):
         cap = choice_cap(rows, cols) if self._composer_hidden() else slot_cap(rows, cols)
         self.menu_under = []
         self.panel_shown = False  # the plan panel is in the slot (`_menu_or_panel_lines`): it gets its blank rows
+        self.bg_slot_row = None
         if self.slot is not None:
             cap = max(cap, 1)  # on a tiny terminal a question answered with text keeps a row for its label (`allocate`)
         if cap <= 0:
@@ -6704,7 +6712,9 @@ class App(ModesMixin, AgentViewMixin):
         if self.menu_below:  # the menu goes under the composer, and the panel stays away as it does for the menu
             self.menu_under, menu = menu, []
             self.panel_shown = False
-        return menu + goal + notice + queue + waiting + background
+        lines = menu + goal + notice + queue + waiting + background
+        self.bg_slot_row = len(lines) - 1 if background else None
+        return lines
 
     def _menu_or_panel_lines(self, cols: int, cap: int) -> list[Line]:
         if cap <= 0:

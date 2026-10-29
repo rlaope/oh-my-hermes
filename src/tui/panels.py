@@ -72,6 +72,7 @@ TOKEN_WATCH_CAP = 64  # the roster's own cap: one query never names more child s
 LINEAGE_READS = 5  # reads that may ask again while the earlier segments are `unverified`
 ROUTE_READS = 5  # reads that may ask again while no row of the session is there to name its route
 PARENT_CACHE = 256  # spawning sessions decided per session; one past this is not asked and not this session's
+PARENT_READS = 5  # reads that may ask again about a spawning session state.db could not decide (`delegated_from`)
 DELEGATION_DEPTH = 8  # delegation links followed from a spawning session back to this one
 
 # The fields that drift on every poll without anything having happened: the
@@ -222,7 +223,9 @@ class HudPoller:
         self._earlier_reads = 0
         self._routes: tuple[str, ...] | None = None  # the route keys Hermes recorded for those ids; None: ask
         self._route_reads = 0
-        self._parents: dict[str, bool] = {}  # spawning session id -> whether this session delegated to it
+        self._parents: dict[str, bool] = {}  # spawning session id -> whether this session delegated to it (decided)
+        self._parent_asks: dict[str, int] = {}  # spawning session id -> reads that could not decide it yet
+        self._parents_for: tuple[str, ...] = ()  # the session's ids the "not delegated" answers were decided against
         self._left: tuple[str, dict[str, BackgroundProcess]] = ("", {})  # the session switched from, its processes
         # `refresh` calls, and the most a read that started after them has accounted for: that read is kept as new.
         self._refreshes = 0
@@ -256,7 +259,7 @@ class HudPoller:
             self._generation += 1
             self._processes = {}
             self._earlier, self._earlier_reads, self._routes, self._route_reads = None, 0, None, 0
-            self._parents = {}
+            self._parents, self._parent_asks, self._parents_for = {}, {}, ()
             self._last_full = ""
             self._last_structural = ""
             self._interval = HUD_POLL_MIN_SECONDS
@@ -292,6 +295,7 @@ class HudPoller:
             # A turn may have recorded the route (`_record_gateway_session_peer`) or delegated: ask again.
             self._routes, self._route_reads = None, 0
             self._parents = {parent: True for parent, owned in self._parents.items() if owned}
+            self._parent_asks = {}
         self._wake.set()
         return count
 
@@ -307,6 +311,7 @@ class HudPoller:
             session, generation, watched, tracked = self._session, self._generation, self._watched, self._processes
             refreshes, earlier, (left, carried), routes = self._refreshes, self._earlier, self._left, self._routes
             earlier_reads, route_reads, parents = self._earlier_reads, self._route_reads, dict(self._parents)
+            asks, parents_for = dict(self._parent_asks), self._parents_for
         if not session:
             return HUD_POLL_MAX_SECONDS
         payload = self._read(session)
@@ -329,13 +334,23 @@ class HudPoller:
             if found or route_reads >= ROUTE_READS:
                 settled_routes = routes
         owners = (session, *earlier)
+        if owners != parents_for:  # "not delegated" was decided against other ids (an unverified lineage, a rotation)
+            parents, asks, parents_for = {parent: True for parent, owned in parents.items() if owned}, {}, owners
 
         def parent_owned(parent: str) -> bool:
-            if parent not in parents:
-                if len(parents) >= PARENT_CACHE:
+            if parent in parents:
+                return parents[parent]
+            if len(parents) + len(asks) >= PARENT_CACHE:
+                return False
+            answer = delegated_from(process_home, parent, owners)
+            if answer is None:  # state.db could not say (a row not there yet, a read that failed): ask again
+                asks[parent] = asks.get(parent, 0) + 1
+                if asks[parent] < PARENT_READS:
                     return False
-                parents[parent] = delegated_from(process_home, parent, owners)
-            return parents[parent]
+                answer = False
+            asks.pop(parent, None)
+            parents[parent] = answer
+            return answer
 
         processes = still_running(tracked, read_processes(process_home, session, earlier, routes, parent_owned))
         running = sorted(processes.values(), key=lambda process: (process.started_at, process.proc_id))
@@ -347,10 +362,12 @@ class HudPoller:
                 return HUD_POLL_MIN_SECONDS
             self._processes, self._earlier, self._left = processes, settled_earlier, (left, carried)
             self._earlier_reads = earlier_reads
+            self._parents_for = parents_for
             if refreshes == self._refreshes:
-                self._routes, self._route_reads, self._parents = settled_routes, route_reads, parents
+                self._routes, self._route_reads = settled_routes, route_reads
+                self._parents, self._parent_asks = parents, asks
             else:  # a refresh since this read began: the route and the sessions found not delegated are asked again
-                self._parents = {parent: True for parent, owned in parents.items() if owned}
+                self._parents, self._parent_asks = {parent: True for parent, owned in parents.items() if owned}, {}
             fresh = full != self._last_full or refreshes != self._refreshed
             self._refreshed = refreshes
             if fresh:
@@ -388,8 +405,30 @@ class HudPoller:
             # Cleared before the read, so a `set_session` landing during it
             # cuts the following wait short instead of being lost.
             self._wake.clear()
-            interval = self.poll_once()
+            try:
+                interval = self.poll_once()
+            except Exception as error:  # noqa: BLE001 - classified in tests/test_broad_exception_policy.py
+                interval = self._read_failed(error)
             self._wake.wait(interval)
+
+    def _read_failed(self, error: BaseException) -> float:
+        """A read that raised past the readers' own guards: the panel says so (`OMH HUD unavailable: <class>`, as a
+        reader failure in `_read` does), and the background row keeps the processes last read, so a failed read never
+        reads as their end. Its `refreshes` is 0, so it stamps nothing quiet. The next read comes after the longest
+        interval, and the one after it is delivered whatever it reads."""
+        with self._lock:
+            session = self._session
+            if session:
+                running = tuple(sorted(self._processes.values(), key=lambda process: (process.started_at,
+                                                                                     process.proc_id)))
+                self._pending = HudSnapshot(session, {"error": type(error).__name__}, self._clock(), {}, running, 0,
+                                            self._earlier or ())
+                self._last_full = self._last_structural = ""
+            self._interval = HUD_POLL_MAX_SECONDS
+        wake = self.on_snapshot
+        if session and wake is not None:
+            wake()
+        return HUD_POLL_MAX_SECONDS
 
 
 def earlier_segments(hermes_home: object, session_id: str) -> tuple[tuple[str, ...], bool]:
@@ -428,22 +467,24 @@ def _state_db(hermes_home: object) -> sqlite3.Connection | None:
         return None
 
 
-def delegated_from(hermes_home: object, session_id: str, owners: Collection[str]) -> bool:
+def delegated_from(hermes_home: object, session_id: str, owners: Collection[str]) -> bool | None:
     """Whether `session_id` is a subagent session one of `owners` delegated to, directly or through other subagents
-    (at most `DELEGATION_DEPTH` links), read-only off state.db. A link is a row whose `_delegate_from` names its
+    (at most `DELEGATION_DEPTH` links), read-only off state.db; None when state.db cannot say yet (no file, a row not
+    there yet, a read that failed), which the caller asks again. A link is a row whose `_delegate_from` names its
     own `parent_session_id` (`tools/delegate_tool.py`, which stamps it once on the child): taken from the first
-    segment of the row's conversation when the child was itself rotated (`compaction_ancestors`). A branch or a
-    reset is another conversation and is no link. Anything unreadable is no."""
+    segment of the row's conversation when the child was itself rotated (`compaction_ancestors`), so a parallel
+    continuation of one of `owners` counts as theirs, as `conversation_segments` counts it. A branch or a reset is
+    another conversation and is no link."""
     from ..plugin_bundle.omh.live_session import compaction_ancestors
 
+    if session_id in owners:
+        return True
     connection = _state_db(hermes_home)
     if connection is None:
-        return False
+        return None
     try:
         current = session_id
         for _ in range(DELEGATION_DEPTH):
-            if current in owners:
-                return True
             found = compaction_ancestors(str(hermes_home), current).get("ancestors")
             first = found[-1] if isinstance(found, list) and found and isinstance(found[-1], str) else current
             if first in owners:
@@ -451,15 +492,19 @@ def delegated_from(hermes_home: object, session_id: str, owners: Collection[str]
             row = connection.execute(
                 "SELECT parent_session_id, model_config FROM sessions WHERE id = ?", (first,)
             ).fetchone()
-            if row is None or not isinstance(row[0], str) or not row[0] or not isinstance(row[1], str):
+            if row is None:
+                return None
+            if not isinstance(row[0], str) or not row[0] or not isinstance(row[1], str):
                 return False
             config = json.loads(row[1])
             if not isinstance(config, dict) or config.get("_delegate_from") != row[0]:
                 return False
             current = row[0]
+            if current in owners:  # the last link read is tested too
+                return True
         return False
-    except (sqlite3.Error, ValueError, RecursionError):
-        return False
+    except (sqlite3.Error, OSError, ValueError, RecursionError):
+        return None
     finally:
         connection.close()
 

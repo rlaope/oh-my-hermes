@@ -36,7 +36,11 @@ from omh.tui.background import (
 from omh.tui.bot_board import ON_POSIX, process_facts
 from omh.tui.keys import ENTER, Key
 from omh.skin_pack import theme_for_name
-from omh.tui.panels import LINEAGE_READS, ROUTE_READS, HudPoller, HudSnapshot, recorded_routes
+from omh.tui.layout import MIN_COLS
+from omh.tui.panels import (
+    DELEGATION_DEPTH, LINEAGE_READS, PARENT_READS, ROUTE_READS, HudPoller, HudSnapshot, delegated_from,
+    recorded_routes,
+)
 from omh.tui.style import NO_COLOR, Span
 from omh.tui.theme import (
     DEFAULT_THEME, TEXT_CONTRAST, build_theme, contrast_ratio, kind_style, surface_for, with_catch_colours,
@@ -526,6 +530,105 @@ class OwnershipTests(unittest.TestCase):
         app._on_input(Key(ENTER))
         self.assertEqual(client.named("prompt.submit"), [])
 
+    def test_delegation_is_followed_to_its_depth_and_no_further(self) -> None:
+        """Second review 1: the last link read was never tested, so a chain of `DELEGATION_DEPTH` links read as no."""
+        chain, parent = [session_row("us")], "us"
+        for depth in range(1, DELEGATION_DEPTH + 2):
+            chain.append(session_row(f"d{depth}", parent=parent, source="subagent", delegate_from=parent))
+            parent = f"d{depth}"
+        chain += [session_row("cA", parent="cB", source="subagent", delegate_from="cB"),
+                  session_row("cB", parent="cA", source="subagent", delegate_from="cA")]
+        write_sessions(Path(self.home), *chain)
+        for depth in (1, DELEGATION_DEPTH - 1, DELEGATION_DEPTH):
+            self.assertIs(delegated_from(self.home, f"d{depth}", ("us",)), True, depth)
+        self.assertIs(delegated_from(self.home, f"d{DELEGATION_DEPTH + 1}", ("us",)), False)
+        self.assertIs(delegated_from(self.home, "cA", ("us",)), False)  # a cycle ends at the bound
+        self.assertIsNone(delegated_from(self.home, "not_yet", ("us",)))  # no row: undecided, not "no"
+        self.assertIsNone(delegated_from(str(Path(self.home) / "missing"), "d1", ("us",)))
+        with patch("omh.plugin_bundle.omh.live_session.compaction_ancestors", side_effect=PermissionError):
+            self.assertIsNone(delegated_from(self.home, "d1", ("us",)))  # second review 5: never raises
+
+    def test_an_undecided_child_is_asked_again_without_a_turn_ending(self) -> None:
+        """Second review 2: a child whose row was not there at first sight stayed "not ours" until a refresh, which
+        an idle TUI watching a resumed session never makes. Undecided answers are asked again, `PARENT_READS` times."""
+        write_sessions(Path(self.home), session_row("us"))
+        self.path.write_text(json.dumps([
+            row(session_id="proc_kid", session_key="us", parent_session_id="kid", pid_scope="sandbox"),
+            row(session_id="proc_ghost", session_key="us", parent_session_id="ghost", pid_scope="sandbox"),
+        ]), encoding="utf-8")
+        self.poller.set_session("us")
+        self.poller.poll_once()
+        self.assertEqual(self.poller.take().processes, ())
+        connection = sqlite3.connect(Path(self.home) / "state.db")
+        connection.execute("INSERT INTO sessions (id, source, model_config, parent_session_id, started_at) "
+                           "VALUES ('kid', 'subagent', ?, 'us', 1000.0)", (json.dumps({"_delegate_from": "us"}),))
+        connection.commit()
+        connection.close()
+        self.poller.poll_once()
+        self.assertEqual([found.proc_id for found in self.poller.take().processes], ["proc_kid"])
+        with patch("omh.tui.panels.delegated_from", side_effect=delegated_from) as asked:
+            for _ in range(PARENT_READS + 5):
+                self.poller.poll_once()
+        self.assertEqual(asked.call_count, PARENT_READS - 2)  # `ghost` was asked twice before: bounded
+
+    def test_a_no_decided_against_an_unverified_lineage_is_asked_again_once_it_settles(self) -> None:
+        """Second review 3: a child of the earlier segment, judged before the lineage verified it, stayed not ours."""
+        write_sessions(Path(self.home), compacted("E", at=1050.0),
+                       session_row("kid", parent="E", source="subagent", delegate_from="E"))
+        # Under the local route of S, so the first read asks about `kid` while the lineage cannot name E yet.
+        self.path.write_text(json.dumps([row(session_id="proc_k", session_key="agent:main:local:dm:S",
+                                             parent_session_id="kid", pid_scope="sandbox")]), encoding="utf-8")
+        self.poller.set_session("S")  # its row not readable yet: the lineage is unverified
+        self.poller.poll_once()
+        self.assertEqual(self.poller.take().processes, ())
+        connection = sqlite3.connect(Path(self.home) / "state.db")
+        connection.execute("INSERT INTO sessions (id, source, parent_session_id, started_at) "
+                           "VALUES ('S', 'tui', 'E', 1050.0)")
+        connection.commit()
+        connection.close()
+        self.poller.poll_once()
+        snapshot = self.poller.take()
+        self.assertEqual(([found.proc_id for found in snapshot.processes], snapshot.earlier), (["proc_k"], ("E",)))
+
+    def test_a_parallel_continuation_of_an_earlier_segment_counts_as_this_conversation(self) -> None:
+        """Decided with the review: a second continuation X beside S under the earlier segment E (a raced compaction
+        or a reconnect's stale sibling) is in the conversation by OMH's one lineage rule (`conversation_segments`
+        includes it; Hermes' own chain walk meets it), so its processes are this session's too."""
+        write_sessions(Path(self.home), compacted("E", at=1050.0), session_row("S", parent="E"),
+                       session_row("X", parent="E"))
+        rows = [row(session_id="proc_x", session_key="E", parent_session_id="X", pid_scope="sandbox")]
+        self.path.write_text(json.dumps(rows), encoding="utf-8")
+        self.poller.set_session("S")
+        self.poller.poll_once()
+        self.assertEqual([found.proc_id for found in self.poller.take().processes], ["proc_x"])
+
+    def test_a_read_that_raises_never_ends_the_thread_nor_reads_as_an_end(self) -> None:
+        """Second review 5: an exception past the readers' guards ended the poller thread for the session."""
+        self.path.write_text(json.dumps([row(session_id="proc_live", session_key="us", parent_session_id="us",
+                                             pid_scope="sandbox")]), encoding="utf-8")
+        self.poller.set_session("us")
+        self.poller.poll_once()
+        self.poller.take()
+        reads = []
+
+        def failing() -> float:
+            reads.append(1)
+            if len(reads) == 1:
+                raise PermissionError("state.db")
+            self.poller._stopping.set()
+            return 0.0
+
+        with patch.object(self.poller, "poll_once", side_effect=failing), \
+                patch("omh.tui.panels.HUD_POLL_MAX_SECONDS", 0.01):
+            self.poller.start()
+            self.poller._thread.join(5)
+        self.assertFalse(self.poller._thread.is_alive())
+        self.assertEqual(len(reads), 2)  # read again after the failure
+        snapshot = self.poller.take()
+        self.assertEqual(snapshot.payload, {"error": "PermissionError"})
+        self.assertEqual([found.proc_id for found in snapshot.processes], ["proc_live"])
+        self.assertEqual(snapshot.refreshes, 0)
+
     def test_an_unverified_lineage_is_asked_again_and_the_carry_waits_for_it(self) -> None:
         """Review L1: an `unverified` answer (the continuation's row not there yet) was kept for the session."""
         self.path.write_text(json.dumps([row(session_id="proc_seg", session_key="seg_a", parent_session_id="seg_a",
@@ -990,6 +1093,16 @@ class RowTests(unittest.TestCase):
                 self.assertIsNone(self.app._background_second())
                 self.assertEqual(self.idle_frames(3.0), 0)
         self.assertEqual(self.idle_frames(2.0), 2)
+        # Second review 4: a slot the frame has no room for (here a terminal under `MIN_COLS`) draws no row either.
+        self.app.size = (MIN_COLS - 1, 24)
+        self.app.dirty = True
+        self.app._render_when_due()
+        self.assertFalse(self.app.bg_row_shown)
+        self.assertEqual(self.idle_frames(3.0), 0)
+        self.app.size = (120, 40)
+        self.app.dirty = True
+        self.app._render_when_due()
+        self.assertTrue(self.app.bg_row_shown)
         self.app.turn_pending = True  # a turn's spinner still ticks at its own rate
         self.assertGreater(self.idle_frames(1.0), 2)
 

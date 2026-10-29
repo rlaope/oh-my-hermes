@@ -591,6 +591,16 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "alive and keeps a traceback from being printed over the TUI's own screen.",
     ),
     ClassifiedSite(
+        "src/tui/panels.py",
+        "_run",
+        INTENTIONAL,
+        "The HUD poll thread's loop: a read that raises past every reader's own guard (a "
+        "PermissionError from a state.db probe, say) becomes `_read_failed`, a snapshot whose payload "
+        "is only `error` (drawn as `OMH HUD unavailable: <class>`) and whose background processes are "
+        "the ones last read with `refreshes` 0, so the failure is shown, never read as the processes' "
+        "end, and the thread reads again instead of dying for the rest of the session.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/host_process.py",
         "this_process",
         INTENTIONAL,
@@ -705,8 +715,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # thread, which draws an unexpected reader failure as a named warning row.
 # 71 -> 72 / 63 -> 64: `repro_audit.operations._publish`, which rolls back
 # only the staged files it owns and re-raises the original failure.
-EXPECTED_HANDLER_COUNT = 72
-EXPECTED_ANCHOR_COUNT = 64
+# 72 -> 73 / 64 -> 65: `tui/panels.HudPoller._run`, the HUD poll loop (a read
+# that raises is a visible notice with the last processes kept, never a dead
+# thread and never the processes' end; #2388 review).
+EXPECTED_HANDLER_COUNT = 73
+EXPECTED_ANCHOR_COUNT = 65
 
 
 class DerivedSite(NamedTuple):
