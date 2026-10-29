@@ -6,6 +6,15 @@ All notable changes will be documented here.
 
 ![Sprite Forge patch notes](https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/assets/omh-sprite-forge-patch-notes.png)
 
+- **The OMH TUI's background-process row shows for a local session.** A
+  local session's process is recorded under its route,
+  `agent:<namespace>:local:dm:<stored id>`, which the row never matched,
+  so it never appeared. It now matches that key or the bare stored id, and
+  no prefix or suffix of either. With `compression.in_place: false` the
+  row and an unreported end now survive the rotation to a new stored id.
+  The row's spinner steps once a second, like its clock, so an idle session
+  with a process draws 1 frame a second, not 6, and none under the pager.
+
 - **A light goes round the OMH TUI's screen while a turn runs.** It runs
   along the terminal's whole edge, clockwise, once every four seconds, with
   a round head and a trail in the launch look's logo colours that fades

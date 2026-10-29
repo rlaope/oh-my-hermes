@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -22,10 +23,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from _hermes_session_rows import compacted, row as session_row, write_sessions
 from _tui_lines import line_text
 from test_tui_modes import SID, drawn, make_app, type_text
 
-from omh.tui.app import WORKING_GLYPHS
+from omh.tui.app import IDLE_READ_SECONDS, WORKING_GLYPHS
 from omh.tui.background import (
     LABEL_CELLS, PROCESSES_FILE, PROCESSES_MAX_BYTES, BackgroundProcess, finished_line, process_label,
     read_processes, report_prompt, running_line, still_running,
@@ -34,14 +36,19 @@ from omh.tui.bot_board import ON_POSIX, process_facts
 from omh.tui.keys import ENTER, Key
 from omh.skin_pack import theme_for_name
 from omh.tui.panels import HudPoller, HudSnapshot
-from omh.tui.style import NO_COLOR
+from omh.tui.style import NO_COLOR, Span
 from omh.tui.theme import (
     DEFAULT_THEME, TEXT_CONTRAST, build_theme, contrast_ratio, kind_style, surface_for, with_catch_colours,
     without_colour,
 )
 from omh.tui.width import cell_width, line_width
 
-STORED = "20261028_101500_ab12cd"
+# A local session's stored id, as `session.create` names it, and the key Hermes records on a process its turn
+# starts: the route `local_source` (gateway/session_local_recovery.py:41-45) and `build_session_key`
+# (gateway/session.py:670-678, 691-729) make, at Hermes origin/main 0431192d69. The live checkpoint of
+# 2026-10-28 had exactly this pair.
+STORED = "local-099c6f1e2a7b4d3c8e5f60718293a4b5c6d7e8f90123456789abcdef0123abcd"
+ROUTE = f"agent:main:local:dm:{STORED}"
 DARK = "#1E2030"
 NOW = 1_793_160_000.0
 COMMAND = 'cd "/Users/me/work tree" && PYTHONPATH=tests uv run python -m unittest tests.test_payment'
@@ -51,8 +58,8 @@ def row(**fields: object) -> dict:
     """One checkpoint entry in the shape `ProcessCheckpointMixin._write_checkpoint` writes."""
     entry = {
         "session_id": "proc_36b5cd4d7445", "command": COMMAND, "pid": 88629, "pid_scope": "host",
-        "host_start_time": None, "cwd": "/Users/me/work", "started_at": NOW - 4033, "task_id": "",
-        "owner_task_id": "", "session_key": STORED, "parent_session_id": STORED, "notify_on_complete": False,
+        "host_start_time": None, "cwd": "/Users/me/work", "started_at": NOW - 4033, "task_id": f"session:{ROUTE}",
+        "owner_task_id": STORED, "session_key": ROUTE, "parent_session_id": STORED, "notify_on_complete": False,
         "watch_patterns": [], "completion_output_chars": 0, "heartbeat_seconds": 0, "output_log": "",
     }
     entry.update(fields)
@@ -103,6 +110,47 @@ class ReadProcessesTests(unittest.TestCase):
                          ("proc_36b5cd4d7445", 88629, True, False, False))
         self.assertEqual(read_processes(self.home, "20261028_000000_ffffff"), ())
         self.assertEqual(read_processes(self.home, ""), ())
+
+    def test_a_process_is_matched_on_the_key_shapes_hermes_records_and_nothing_looser(self) -> None:
+        """A session the TUI gateway runs itself records its stored id as the key (tui_gateway/prompt_turn.py:670,
+        tools/terminal_tool.py:1496); a gateway-owned local one its route, `agent:<namespace>:local:dm:<id>`, the
+        namespace `agent:main`, `agent:main~` or `agent:<profile>` (gateway/session.py:670-678)."""
+        tui = "20261028_101500_ab12cd"
+        owned = (ROUTE, f"agent:kami:local:dm:{STORED}", f"agent:main~:local:dm:{STORED}", STORED)
+        others = (
+            f"agent:main:local:dm:{STORED[:-4]}",  # an id ours begins with
+            f"agent:main:local:dm:{STORED}0",  # one that begins with ours
+            f"agent:main:local:dm:x{STORED}",  # one that ends with ours
+            f"agent:main:local:dm:{STORED}:thread",  # a thread after the chat id: not a local route
+            f"agent:main:local:group:{STORED}",
+            f"agent:main:telegram:dm:{STORED}",
+            f"agent::local:dm:{STORED}",  # no namespace word
+            f"agent:a:b:local:dm:{STORED}",  # a namespace of two words
+            f"x:agent:main:local:dm:{STORED}",
+            f"session:{ROUTE}",  # the task id, not a session key
+            STORED[:-4], "", None, 7,
+        )
+        self.write([row(session_id=f"proc_{index}", session_key=key) for index, key in enumerate(owned + others)]
+                   + [row(session_id="proc_tui", session_key=tui)])
+        self.assertEqual([found.proc_id for found in read_processes(self.home, STORED)],
+                         [f"proc_{index}" for index in range(len(owned))])
+        self.assertEqual([found.proc_id for found in read_processes(self.home, tui)], ["proc_tui"])
+        # The session whose id ours begins with owns its own two, and none of ours.
+        shorter = {f"proc_{index}" for index, key in enumerate(owned + others) if key in (STORED[:-4], others[0])}
+        self.assertEqual({found.proc_id for found in read_processes(self.home, STORED[:-4])}, shorter)
+        self.assertEqual(len(shorter), 2)
+
+    def test_the_earlier_segments_of_the_conversation_are_owned_too(self) -> None:
+        """Rotating compaction re-anchors the stored id (tui_gateway/session_compression.py:331); a process started
+        before keeps its key."""
+        self.write([row(session_id="proc_before", session_key="20261028_101500_ab12cd"),
+                    row(session_id="proc_after", session_key="20261028_111500_cd34ef")])
+        self.assertEqual([found.proc_id for found in read_processes(self.home, "20261028_111500_cd34ef")],
+                         ["proc_after"])
+        self.assertEqual(
+            [found.proc_id for found in read_processes(self.home, "20261028_111500_cd34ef", ("20261028_101500_ab12cd",))],
+            ["proc_before", "proc_after"],
+        )
 
     def test_notify_and_watch_patterns_are_read_as_hermes_writes_them(self) -> None:
         self.write([
@@ -264,6 +312,32 @@ class PollerTests(unittest.TestCase):
         self.assertEqual(self.poller.take().processes, ())
 
 
+    def test_a_rotation_keeps_the_conversation_s_processes(self) -> None:
+        """QA R-E: with `compression.in_place: false` Hermes moves the session to a new stored id
+        (tui_gateway/session_compression.py:331) and writes the rotation into state.db (`publish_compression_child`);
+        a process started before keeps its key. The first read of the new id verifies the link and keeps them."""
+        write_sessions(Path(self.home), compacted("seg_a", at=1050.0), session_row("seg_b", parent="seg_a"),
+                       session_row("other"))
+        host = row(session_id="proc_host", session_key="seg_a", pid=os.getpid())
+        sandbox = row(session_id="proc_sandbox", session_key="seg_a", pid_scope="sandbox")
+        self.path.write_text(json.dumps([host, sandbox]), encoding="utf-8")
+        self.poller.set_session("seg_a")
+        self.poller.poll_once()
+        self.assertEqual(len(self.poller.take().processes), 2)
+        if ON_POSIX:  # a host process another rewrite dropped is kept while it runs, across the rotation too
+            self.path.write_text(json.dumps([sandbox]), encoding="utf-8")
+        self.poller.set_session("seg_b")
+        self.assertEqual(self.poller.take().processes, ())  # the switch's own snapshot reads nothing
+        self.poller.poll_once()
+        snapshot = self.poller.take()
+        self.assertEqual({found.proc_id for found in snapshot.processes}, {"proc_host", "proc_sandbox"})
+        self.assertEqual((snapshot.session_id, snapshot.earlier), ("seg_b", ("seg_a",)))
+        # Another conversation is not a rotation: nothing of seg_b's is carried into it.
+        self.poller.set_session("other")
+        self.poller.poll_once()
+        snapshot = self.poller.take()
+        self.assertEqual((snapshot.processes, snapshot.earlier), ((), ()))
+
     def test_a_refresh_keeps_the_next_read_even_when_nothing_changed(self) -> None:
         self.path.write_text("[]", encoding="utf-8")
         self.poller.set_session(STORED)
@@ -401,8 +475,10 @@ class RowTests(unittest.TestCase):
         self.app, self.client = make_app(cols=120, clock=self.clock, wall_clock=self.wall)
         self.app.stored_id = STORED
 
-    def deliver(self, *processes: BackgroundProcess, session: str = STORED) -> None:
+    def deliver(self, *processes: BackgroundProcess, session: str = STORED, earlier: tuple[str, ...] = ()) -> None:
         snapshot = HudSnapshot(session, {}, 0.0, {}, tuple(processes))
+        if earlier:
+            snapshot = replace(snapshot, earlier=earlier)
         self.app.poller.take = lambda: snapshot
         self.app._take_hud()
 
@@ -485,6 +561,44 @@ class RowTests(unittest.TestCase):
         self.app.turn_pending = False
         self.app._on_input(Key(ENTER))
         self.assertEqual(len(self.client.named("prompt.submit")), 1)  # the offer was taken; nothing more is sent
+
+    def rotate(self, to: str) -> None:
+        """Hermes says the session goes on under another stored id, and the poller hands over a switch's snapshot."""
+        self.app._on_session_info({"stored_session_id": to})
+        self.assertEqual(self.app.stored_id, to)
+        switched = HudSnapshot(to, None, 0.0)
+        self.app.poller.take = lambda: switched
+        self.app._take_hud()
+
+    def test_a_rotation_keeps_the_row_and_its_unreported_end(self) -> None:
+        """QA R-E: rotating compaction gave the session a new stored id and the row, and an end it had not reported
+        yet, were gone. A read that finds the old id among the conversation's earlier segments keeps both."""
+        self.deliver(process(proc_id="proc_a"), process(proc_id="proc_b", command="make lint"))
+        self.clock.at += 8
+        self.deliver(process(proc_id="proc_b", command="make lint"))  # proc_a ended unreported
+        self.assertIn("finished", self.shown())
+        self.rotate("20261028_111500_cd34ef")
+        self.assertIsNone(self.app._background_line(120))  # nothing decided yet: hidden, not reported
+        self.assertFalse(self.app._background_live())
+        self.deliver(process(proc_id="proc_b", command="make lint"), session="20261028_111500_cd34ef",
+                     earlier=(STORED,))
+        self.assertIn("finished", self.shown())
+        self.app._on_input(Key(ENTER))
+        self.assertEqual(self.client.named("prompt.submit"),
+                         [{"session_id": SID, "text": report_prompt((process(proc_id="proc_a"),))}])
+
+    def test_a_switch_to_another_conversation_starts_the_row_over(self) -> None:
+        self.deliver(process())
+        self.clock.at += 8
+        self.deliver()
+        self.assertIn("finished", self.shown())
+        self.rotate("20261028_111500_cd34ef")
+        self.app._on_input(Key(ENTER))  # hidden while undecided: Enter is not the row's
+        self.deliver(session="20261028_111500_cd34ef", earlier=("20261028_000000_ffffff",))
+        self.assertIsNone(self.app._background_line(120))
+        self.app.turn_pending = False
+        self.app._on_input(Key(ENTER))
+        self.assertEqual(self.client.named("prompt.submit"), [])
 
     def test_enter_with_text_sends_the_text_and_keeps_nothing_automatic(self) -> None:
         self.deliver(process())
@@ -598,6 +712,10 @@ class RowTests(unittest.TestCase):
         for step in range(len(WORKING_GLYPHS)):
             self.clock.at = 100.0 + step * 0.1
             glyphs.add(self.shown()[0])
+        self.assertEqual(len(glyphs), 1)  # once a second, as the clock beside it: not at the 0.1 s frame rate
+        for step in range(len(WORKING_GLYPHS)):
+            self.clock.at = 100.0 + step
+            glyphs.add(self.shown()[0])
         self.assertGreater(len(glyphs), 1)
         still, _client = make_app(cols=120, clock=self.clock, wall_clock=self.wall,
                                   environ={"OMH_TUI_REDUCED_MOTION": "1"})
@@ -616,8 +734,39 @@ class RowTests(unittest.TestCase):
         self.app._render_when_due()
         rendered = self.app.last_render
         self.clock.at += 1.0
+        self.wall.at += 1.0
         self.app._render_when_due()
         self.assertGreater(self.app.last_render, rendered)
+
+    def idle_frames(self, seconds: float, step: float = 0.1) -> int:
+        """Frames the idle loop draws over `seconds`, both clocks moving `step` at a time, nothing else to do."""
+        self.app.dirty = False
+        frames = 0
+        for _ in range(round(seconds / step)):
+            self.clock.at += step
+            self.wall.at += step
+            before = self.app.last_render
+            self.app._render_when_due()
+            frames += self.app.last_render != before
+        return frames
+
+    def test_the_row_alone_draws_one_frame_a_second_and_none_under_the_pager(self) -> None:
+        """QA P4 (2026-10-28): the row kept the loop at the spinners' 10 Hz for the process's whole life (64 frames
+        in 10 s idle); its clock and glyph change once a second, so that is all it asks for."""
+        self.deliver(process())
+        self.app._render_when_due()
+        self.wall.at = math.floor(self.wall.at) + 0.05  # just past a second of the row's clock
+        self.assertEqual(self.idle_frames(10.0), 10)
+        # The loop sleeps until that next second rather than waking at the spinner tick.
+        self.assertAlmostEqual(self.app._read_timeout(), 1.0 - (self.wall.at - process().started_at) % 1.0, places=6)
+        self.app.bg_done = ((process(),), self.wall.at)
+        self.assertEqual(self.idle_frames(5.0), 5)  # `finished 0:12 ago` ticks the same way
+        self.app._open_pager("transcript", [(Span("a line"),)])  # the pager covers the row
+        self.assertEqual(self.idle_frames(5.0), 0)
+        self.assertEqual(self.app._read_timeout(), IDLE_READ_SECONDS)
+        self.app._leave_pager()
+        self.app.turn_pending = True  # a turn's spinner still ticks at its own rate
+        self.assertGreater(self.idle_frames(1.0), 2)
 
 
 class StyleTests(unittest.TestCase):

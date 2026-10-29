@@ -139,6 +139,7 @@ class HudSnapshot:
     output_tokens: Mapping[str, int] = field(default_factory=dict)
     processes: tuple[BackgroundProcess, ...] = ()
     refreshes: int = 0
+    earlier: tuple[str, ...] = ()  # the conversation's earlier segments the read verified (`earlier_segments`)
 
 
 HudReader = Callable[..., Mapping[str, Any]]
@@ -181,6 +182,10 @@ class HudPoller:
     `processes.json` (`background.read_processes`) and keeps every one it has
     seen while it still runs, so a row another interpreter's rewrite dropped
     stays until its process ends. A process starting or ending is a change.
+    The first read of a session also reads which earlier segments of its
+    conversation rotating compaction left (`earlier_segments`): their
+    processes are this session's too, and when the session switched from is
+    one of them, what was kept for it is kept on.
     """
 
     def __init__(
@@ -206,6 +211,8 @@ class HudPoller:
         self._pending: HudSnapshot | None = None
         self._watched: tuple[str, ...] = ()
         self._processes: dict[str, BackgroundProcess] = {}
+        self._earlier: tuple[str, ...] | None = None  # None: not read yet for this session
+        self._left: tuple[str, dict[str, BackgroundProcess]] = ("", {})  # the session switched from, its processes
         # `refresh` calls, and the most a read that started after them has accounted for: that read is kept as new.
         self._refreshes = 0
         self._refreshed = 0
@@ -233,9 +240,11 @@ class HudPoller:
         with self._lock:
             if stored_id == self._session:
                 return
+            self._left = (self._session, self._processes)  # kept on if the first read finds it an earlier segment
             self._session = stored_id
             self._generation += 1
             self._processes = {}
+            self._earlier = None
             self._last_full = ""
             self._last_structural = ""
             self._interval = HUD_POLL_MIN_SECONDS
@@ -281,14 +290,19 @@ class HudPoller:
         """Read once for the current session and return the seconds to wait before the next read."""
         with self._lock:
             session, generation, watched, tracked = self._session, self._generation, self._watched, self._processes
-            refreshes = self._refreshes
+            refreshes, earlier, (left, carried) = self._refreshes, self._earlier, self._left
         if not session:
             return HUD_POLL_MAX_SECONDS
         payload = self._read(session)
         # The home this read resolved, so the tokens come from the state.db the payload describes.
         home = payload.get("hermes_home")
         tokens = read_output_tokens(home, watched)
-        processes = still_running(tracked, read_processes(home if isinstance(home, str) else self._hermes_home, session))
+        process_home = home if isinstance(home, str) else self._hermes_home
+        if earlier is None:
+            earlier = earlier_segments(process_home, session)
+            if left in earlier:
+                tracked = {**carried, **tracked}
+        processes = still_running(tracked, read_processes(process_home, session, earlier))
         running = sorted(processes.values(), key=lambda process: (process.started_at, process.proc_id))
         shown = [[process.proc_id, process.notify, process.watched] for process in running]
         full = _fingerprint([payload, tokens, shown])
@@ -296,12 +310,12 @@ class HudPoller:
         with self._lock:
             if generation != self._generation:
                 return HUD_POLL_MIN_SECONDS
-            self._processes = processes
+            self._processes, self._earlier, self._left = processes, earlier, ("", {})
             fresh = full != self._last_full or refreshes != self._refreshed
             self._refreshed = refreshes
             if fresh:
                 self._last_full = full
-                self._pending = HudSnapshot(session, payload, self._clock(), tokens, tuple(running), refreshes)
+                self._pending = HudSnapshot(session, payload, self._clock(), tokens, tuple(running), refreshes, earlier)
             if structural != self._last_structural:
                 self._last_structural = structural
                 self._interval = HUD_POLL_MIN_SECONDS
@@ -336,6 +350,21 @@ class HudPoller:
             self._wake.clear()
             interval = self.poll_once()
             self._wake.wait(interval)
+
+
+def earlier_segments(hermes_home: object, session_id: str) -> tuple[str, ...]:
+    """The earlier segments of `session_id`'s conversation, nearest first, as far as Hermes' compaction links verify
+    them (`live_session.compaction_ancestors`, read-only); none for no home. A rotation is the only way one session
+    continues another, so a session switched to that does not name the one left is another conversation."""
+    from ..plugin_bundle.omh.live_session import compaction_ancestors
+
+    if not isinstance(hermes_home, str) or not hermes_home or not session_id:
+        return ()
+    try:
+        found = compaction_ancestors(hermes_home, session_id).get("ancestors")
+    except (OSError, ValueError):
+        return ()
+    return tuple(item for item in found if isinstance(item, str)) if isinstance(found, list) else ()
 
 
 def read_output_tokens(hermes_home: object, session_ids: Sequence[str]) -> dict[str, int]:
