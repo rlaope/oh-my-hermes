@@ -301,6 +301,7 @@ _AWARENESS_TAGS: tuple[str, ...] = (
     "[OMH Route Hint]",
     "[OMH Rule]",
     "[OMH Search]",
+    "[OMH shell-edit rule]",
     "[OMH truncated read]",
     "[OMH unarmed wait]",
 )
