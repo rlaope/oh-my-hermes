@@ -554,7 +554,7 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
-### 2026-10-30 shell edits: the built-in shell-edit rule, off vs on
+### 2026-10-30 shell edits: the built-in shell-edit rule, off vs on, gate failed
 
 One question, from oh-my-pi's bash interceptor (shipped off there): when a model may use the
 terminal however it likes, does refusing in-place shell edits of source files (`sed -i`,
@@ -615,6 +615,64 @@ The merge gate, written before the first live run. Counts are passes over the ma
    answer key (`changed_paths` for `E-*`, `generated_lines` for `S-GENERATED`) at least the
    off arm's count minus 2, counted from the session DBs.
 7. Negative template: `S-GENERATED` passes, all models pooled, on at least off - 1.
+
+The result. On this panel the rule does not make any model pass more tasks, so it stays **off by
+default** and the branch (`feature/shell-edit-rules`) does not merge.
+
+| Model | off | on | off tokens (median) | on tokens (median) |
+| --- | ---: | ---: | ---: | ---: |
+| `claude-haiku-4-5-20251001` | 12 / 12 | 11 / 12 | 268,489 | 259,064 |
+| `claude-haiku-5-5` | 12 / 12 | 12 / 12 | 223,649 | 223,204 |
+| `gpt-6-luna` | 11 / 12 | 12 / 12 | 229,689 | 240,554 |
+| `claude-sonnet-5-5` | 12 / 12 | 12 / 12 | 134,980 | 207,348 |
+| `claude-opus-5-5` | 12 / 12 | 12 / 12 | 169,812 | 210,912 |
+| `gpt-6.1-sol` | 9 / 12 | 9 / 12 | 152,544 | 155,859 |
+| **Total** | **68 / 72** | **68 / 72** | 18.3M total | 19.3M total |
+
+Pass counts are the main split (`E-RENAME`, `E-BUGFIX`, `L-RENAME-ALIAS`, `L-RENAME-SHADOW`);
+token medians and totals are over every run of the model, `S-GENERATED` included. Per template,
+off vs on: `E-RENAME` 18 vs 18, `E-BUGFIX` 18 vs 17, `L-RENAME-ALIAS` 14 vs 15, `L-RENAME-SHADOW`
+18 vs 18, `S-GENERATED` 18 vs 17. 180 of 180 records, all `completed`, no retries, no timeouts.
+
+The gate, clause by clause:
+
+1. Weak, on at least off + 2: 35 vs 35, **fail**.
+2. Strong, on at least off - 1: 33 vs 33, pass.
+3. Shell edits that ran in the on arm, at most 1: 0, pass. The broad text match flagged 21
+   calls; by hand every one wrote a new file under `build/` or the answer JSON.
+4. At most 5 consecutive refusals: the longest streak was 1, pass. 21 refusals in 21 of 90
+   on-arm sessions.
+5. No on run above 3x its pair median: none, pass.
+6. Final answer preserved, on at least off - 2: 69 vs 61 sessions, pass.
+7. `S-GENERATED`, on at least off - 1: 17 vs 18, pass. The on-arm fail is a `claude-haiku-4-5`
+   run that copied the generator's output by hand without the last newline and reported 4 lines
+   for 5; no refusal in that session.
+
+What it shows:
+
+- Weak models and both GPT models do not edit source through the shell here. They use `patch` /
+  `write_file` without being told to, so the rule has nothing to refuse for them, and the
+  weak-model clause cannot move. The smoke and the earlier session DBs said the same before the
+  run.
+- `claude-sonnet-5-5` and `claude-opus-5-5` reach for `sed -i ''` on renames: in the on arm every
+  one of their `E-RENAME` and `L-RENAME-*` sessions was refused once (18 of 18) and then finished
+  with `patch`. Their shell edits in the off arm passed anyway, so the refusal bought nothing and
+  cost tokens: sonnet's renames went from about 133k-135k to 207k-249k median tokens, opus's
+  from 136k-206k to 207k-288k (+40% to +84%). Below the 3x clause, but a real cost for no gain.
+- Three of the 21 refusals were wrong: `gpt-6-luna` and `gpt-6.1-sol` ran `python` programs on
+  `S-GENERATED` that hashed every existing file and wrote only `build/` output and the answer.
+  The detector fell back to "the program writes something and names an existing source file" when
+  a write path was `root / 'build/...'` or `outputs[0]`. Fixed after the run: joins and indexed
+  lists are now read as paths, and the fallback only counts source literals the program hands to
+  its own helper functions (`def sub(p): open(p, 'w')`, which opus used and which is still
+  refused). Replaying all 482 terminal calls of this run against the measured detector
+  (`ebaf7c6ac`) and the fixed one changes 7 verdicts, all on `S-GENERATED` (3 on-arm refusals and
+  4 off-arm calls that would have been refused), and none on the main split; the fixed detector
+  refuses no call on `S-GENERATED`. The pass counts above are from the measured detector and are
+  not re-run.
+- Plugin snapshot `ebaf7c6ac` (the rule as measured); the bench ran from `a9d7f848c`, which adds
+  only this README's smoke record and docs. Hermes Agent v0.22.5. n = 12 main instances plus 3
+  negative instances per model per arm.
 
 ### 2026-10-29 debugging: builtin `patch` vs a debugpy tool (`omh-dap`), gate failed
 

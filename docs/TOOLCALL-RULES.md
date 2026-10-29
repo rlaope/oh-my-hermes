@@ -138,7 +138,11 @@ Switch it with the profile setting
 `OMH_SHELL_EDIT_RULES=1` / `0` in the environment of the process that runs
 the gateway, which wins over the setting. It is off unless one of them turns
 it on. The measurement behind that choice is the 2026-10-30 shell-edit
-section of `benchmarks/live-model-tools/v1/README.md`.
+section of `benchmarks/live-model-tools/v1/README.md`: with the rule on, no
+model passed more tasks, weak models never edited through the shell in the
+first place, and the strong models it refused spent more tokens for the same
+result. Turn it on when you want every source edit to go through the edit
+tools, not to raise pass rates.
 
 ## Boundaries
 

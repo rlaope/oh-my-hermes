@@ -28,6 +28,12 @@ Setting: env `OMH_SHELL_EDIT_RULES` (on/off) wins over the profile setting
 `plugins.entries.omh.settings.shell_edit_rules`; with neither, the rule is
 off. The gateway runs this hook in its own process, so the profile setting is
 the switch that reaches it; the env value is for a gateway started by hand.
+
+Off by default because of the 2026-10-30 A/B in
+`benchmarks/live-model-tools/v1/README.md`: no model passed more tasks with it
+on (68 vs 68 of 72), the weak models never edited through the shell, and the
+strong Claude models whose `sed -i` edits it refused spent 40-84% more tokens
+reaching the same result.
 """
 
 from __future__ import annotations
@@ -328,9 +334,12 @@ def _python_code(args: list[str], heredoc: str | None) -> str | None:
 def _python_write_target(code: str, cwd: Path | None) -> str | None:
     """An existing source file a python program writes, or None.
 
-    The written paths are read from the program when they are literals, or names bound to
-    literals (`p = 'x.py'`, `for p in ['a.py', 'b.py']`). A write whose path cannot be read that
-    way falls back to the source files the program names at all.
+    The written paths are read from the program when they are literals, joins onto a literal
+    (`root / 'x.py'`), or names bound to them (`p = 'x.py'`, `for p in ['a.py', 'b.py']`). A
+    write whose path cannot be read that way (a helper's parameter, `def sub(p): open(p, 'w')`)
+    falls back to the source literals the program hands to its own functions. Literals it only
+    reads, runs or hashes are not targets: a program that checks no existing file changed while
+    it writes build output is not an edit.
     """
     try:
         tree = ast.parse(code)
@@ -345,8 +354,15 @@ def _python_write_target(code: str, cwd: Path | None) -> str | None:
     found = _first_existing_source(targets, cwd)
     if found is not None or not unknown:
         return found
-    literals = [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
-    return _first_existing_source(literals, cwd)
+    helpers = {node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    handed = [
+        argument.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in helpers
+        for argument in node.args
+        if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+    ]
+    return _first_existing_source(handed, cwd)
 
 
 def _first_existing_source(paths: list[str], cwd: Path | None) -> str | None:
@@ -361,6 +377,10 @@ def _literal_paths(node: ast.AST | None, bound: dict[str, list[str]]) -> list[st
         return bound.get(node.id)
     if isinstance(node, ast.Call) and node.args and _call_name(node) in ("Path", "PurePath", "PosixPath"):
         return _literal_paths(node.args[0], bound)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        return _literal_paths(node.right, bound)  # `root / 'x.py'`, read relative to the working directory
+    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+        return bound.get(node.value.id)  # `outputs[0]`: any path the list holds
     if isinstance(node, (ast.List, ast.Tuple)):
         paths: list[str] = []
         for element in node.elts:

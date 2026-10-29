@@ -28,6 +28,7 @@ FILES = (
     "data.json",
     "build/gen.py",
     "patches/retry.diff",
+    "tools/gen_constants.py",
 )
 
 REFUSED = {
@@ -56,6 +57,12 @@ REFUSED = {
     "bash -c": "bash -c \"sed -i 's/a/b/' src/benchapp/retries.py\"",
     "uv run python -c": "uv run python -c \"open('src/benchapp/retries.py','w').write('')\"",
     "env and timeout wrappers": "FOO=1 timeout 30 sed -i 's/a/b/' src/benchapp/retries.py",
+    # claude-opus-5-5, 2026-10-30 A/B: the write path is a helper's parameter.
+    "python helper writes the source it is handed": (
+        "python3 - <<'EOF'\nimport re\ndef sub(p, pairs):\n    s=open(p).read()\n    for a,b in pairs:\n"
+        "        assert a in s,(p,a); s=s.replace(a,b)\n    open(p,'w').write(s)\n"
+        "sub('src/benchapp/retries.py',[('a','b')])\nEOF"
+    ),
 }
 
 ALLOWED = {
@@ -80,6 +87,30 @@ ALLOWED = {
     "pytest": "pytest -q tests/test_retries.py",
     "unparseable fails open": "python3 -c 'unbalanced",
     "python script file": "python3 tools/rewrite.py src/benchapp/retries.py",
+    # Three refusals on the negative template in the 2026-10-30 A/B: programs that run the
+    # generator, hash every existing file, and write only build/ output and the answer file.
+    "python writes build output through root joins": (
+        "python - <<'PY'\nfrom pathlib import Path\nimport subprocess, sys\nroot = Path.cwd()\n"
+        "(root / 'build/generated').mkdir(parents=True, exist_ok=True)\n"
+        "generated = subprocess.run([sys.executable, 'tools/gen_constants.py'], stdout=subprocess.PIPE, check=True)\n"
+        "(root / 'build/generated/constants.py').write_bytes(generated.stdout)\n"
+        "with (root / 'build/test-report.txt').open('wb') as report:\n    pass\n"
+        "retry_line = (root / 'src/benchapp/retries.py').read_text().splitlines()[0]\n"
+        "(root / '.omh-benchmark-answer.json').write_text('{}')\nPY"
+    ),
+    "python writes listed outputs by index": (
+        "python - <<'PY'\nimport hashlib\nfrom pathlib import Path\nimport subprocess\nroot = Path.cwd()\n"
+        "existing = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file()}\n"
+        "outputs = [Path('build/generated/constants.py'), Path('build/test-report.txt'), Path('.omh-benchmark-answer.json')]\n"
+        "generated = subprocess.run(['python', 'tools/gen_constants.py'], stdout=subprocess.PIPE, check=True).stdout\n"
+        "with outputs[0].open('xb') as f:\n    f.write(generated)\n"
+        "line = Path('src/benchapp/retries.py').read_text().splitlines()[0]\nPY"
+    ),
+    "python -c binds joined outputs to names": (
+        "python -c 'import pathlib, subprocess; root=pathlib.Path.cwd(); generated=root/\"build/generated/constants.py\"; "
+        "result=subprocess.run([\"python\",\"tools/gen_constants.py\"],stdout=subprocess.PIPE,check=True); "
+        "generated.write_bytes(result.stdout); print((root/\"src/benchapp/retries.py\").read_text())'"
+    ),
 }
 
 
