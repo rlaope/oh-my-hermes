@@ -109,7 +109,7 @@ from .markdown import MarkdownState, clean_text, render_lines, wrap_prefixed
 from .style import NO_COLOR, Line, Span, Style, fill
 from .slash import slash_spans, slash_token_ranges
 from .theme import TOOL_FAMILIES, Theme, kind_style, on_band
-from .width import cell_width, line_width, truncate, truncate_left, truncate_line
+from .width import cell_width, cluster_width, clusters, line_width, truncate, truncate_left, truncate_line
 
 TOOL_GENERATING = "generating"
 TOOL_RUNNING = "running"
@@ -1016,16 +1016,16 @@ def _glinted(text: str, style: Style, band: int, theme: Theme) -> list[Span]:
     the band, not bold: the words stay the words."""
     spans: list[Span] = []
     at = 0
-    for char in text:
+    for cluster in clusters(text):  # a glyph is one style: an SGR inside a ZWJ family or after its base breaks it
         offset = at - band
         painted = style
         if 0 <= offset < RECALL_GLINT_CELLS and theme.aura:
             painted = replace(theme.aura[offset * (len(theme.aura) - 1) // (RECALL_GLINT_CELLS - 1)], bold=False)
         if spans and spans[-1].style == painted:
-            spans[-1] = Span(spans[-1].text + char, painted)
+            spans[-1] = Span(spans[-1].text + cluster, painted)
         else:
-            spans.append(Span(char, painted))
-        at += cell_width(char)
+            spans.append(Span(cluster, painted))
+        at += cluster_width(cluster)
     return spans
 
 

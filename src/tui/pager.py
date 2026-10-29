@@ -23,7 +23,7 @@ lines a notch (never a highlight: the bot board's list keeps its row). A drag
 selects the cells it passes over, shown reversed, and its release hands back
 their text to copy: the cells of `gutter` spans (a block's rail, a reply's
 margin) left out of both, each row's trailing spaces and the empty rows at
-either end dropped; a wide character is in when either of its cells is. A
+either end dropped; a wide glyph is in when either of its cells is. A
 double click picks the word under it and a triple click the row, and hands
 back that; a click counts toward them only after a plain click on the same
 cell (released where it was pressed, with no motion) ended less than
@@ -38,15 +38,17 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
-from typing import ClassVar
+from functools import lru_cache
+from typing import ClassVar, NamedTuple
+import unicodedata
 
 from .keys import (
     BUTTON_LEFT, CHAR, DOWN, END, ESCAPE, HOME, PAGE_DOWN, PAGE_UP, UP, WHEEL_DOWN, WHEEL_UP, Key, Mouse, Paste,
 )
-from .screen import HIDE_CURSOR, SYNC_BEGIN, SYNC_END, paint_line
+from .screen import HIDE_CURSOR, SYNC_BEGIN, SYNC_END, paint_line, without_controls
 from .style import CSI, Line, Span
 from .theme import Theme
-from .width import cell_width
+from .width import cluster_width, clusters, clusters_as_written
 
 ALT_SCREEN_ON = f"{CSI}?1049h"
 ALT_SCREEN_OFF = f"{CSI}?1049l"
@@ -57,6 +59,8 @@ CLICK_SECONDS = 0.5
 WORD_PUNCTUATION = "_-./~"  # what a double click keeps in a word besides letters and digits, as paths and names have
 ROW_END = 1 << 30  # the last column of a selection that runs to the end of its row
 Cell = tuple[int, int]  # a body cell of the screen: its row and its column, from 0
+CELLS_KEPT = 128  # rows whose cells (`_cells`) are kept: more than a screen holds
+CELLS_KEPT_CHARS = 256  # the longest row kept, in code points: as wide as a wide screen, so what is kept stays small
 # The most blocks a `HistoryPager` keeps rendered; one scrolled back to after it left is rendered again.
 HISTORY_BLOCKS_KEPT = 256
 
@@ -190,7 +194,7 @@ class Pager:
         for row in range(first[0], last[0] + 1):
             low, high = self._span_on(row) or (0, -1)
             line = self._shown[row] if row < len(self._shown) else ()
-            kept = (char for start, end, char, gutter in _cells(line) if start <= high and end >= low and not gutter)
+            kept = (cell.text for cell in _cells(line) if cell.start <= high and cell.end >= low and not cell.gutter)
             texts.append("".join(kept).rstrip())
         while texts and not texts[-1]:
             texts.pop()  # a drag past the content: no empty rows after it
@@ -250,20 +254,63 @@ class Pager:
         parts.append(_move_to(row) + painted)
 
 
-def _cells(line: Line) -> list[tuple[int, int, str, bool]]:
-    """Each character of `line` with the first and last column it covers (a wide one two, a zero-width one its base's)
-    and whether it is a gutter's."""
-    cells: list[tuple[int, int, str, bool]] = []
+def _source_clusters(text: str) -> list[tuple[str, str]]:
+    """Each cluster `text` is painted as (`width.clusters`, which is NFC), with the code points of `text` it was made
+    from (`width.clusters_as_written`): a copy hands back the text as it was written, so a decomposed (NFD) macOS path
+    still matches its file. Where the two do not pair one for one, the painted form stands for both."""
+    painted = clusters(text)
+    if text.isascii() or unicodedata.is_normalized("NFC", text):
+        return [(cluster, cluster) for cluster in painted]
+    written = clusters_as_written(text)
+    if len(written) == len(painted) and all(
+        unicodedata.normalize("NFC", unit) == cluster for unit, cluster in zip(written, painted)
+    ):
+        return list(zip(painted, written))
+    return [(cluster, cluster) for cluster in painted]
+
+
+class _Cell(NamedTuple):
+    """One cluster of a row as painted: its first and last column (a wide one two, a zero-width one its base's), its
+    text in the row's own code points, whether it is a gutter's, its width, and which span of the row it is in."""
+
+    start: int
+    end: int
+    text: str
+    gutter: bool
+    width: int
+    span: int
+
+
+def _cells(line: Line) -> tuple[_Cell, ...]:
+    """Each grapheme cluster of `line` as `screen.paint_line` measures it: on the text with no escape sequence or
+    control (`screen.without_controls`), cluster by cluster within each span (`width.clusters`), so a column here is
+    the column on the screen. A row of at most `CELLS_KEPT_CHARS` is kept until `forget_cells`, as a drag asks again
+    for the same rows every frame; a longer one is measured each time, so what is kept stays small."""
+    if sum(len(span.text) for span in line) <= CELLS_KEPT_CHARS:
+        return _kept_cells(line)
+    return _measured(line)
+
+
+def forget_cells() -> None:
+    """Let go of every row `_cells` kept: the pager that showed them has closed."""
+    _kept_cells.cache_clear()
+
+
+def _measured(line: Line) -> tuple[_Cell, ...]:
+    cells: list[_Cell] = []
     at = 0
-    for span in line:
-        for char in span.text:
-            width = cell_width(char)
+    for index, span in enumerate(without_controls(line)):
+        for painted, cluster in _source_clusters(span.text):
+            width = cluster_width(painted)
             if width == 0 and cells:
-                cells.append((cells[-1][0], cells[-1][1], char, span.style.gutter))
+                cells.append(_Cell(cells[-1].start, cells[-1].end, cluster, span.style.gutter, 0, index))
                 continue
-            cells.append((at, at + max(width, 1) - 1, char, span.style.gutter))
+            cells.append(_Cell(at, at + max(width, 1) - 1, cluster, span.style.gutter, width, index))
             at += width
-    return cells
+    return tuple(cells)
+
+
+_kept_cells = lru_cache(maxsize=CELLS_KEPT)(_measured)
 
 
 def _word_at(line: Line, column: int) -> tuple[int, int] | None:
@@ -272,10 +319,12 @@ def _word_at(line: Line, column: int) -> tuple[int, int] | None:
     cells = _cells(line)
 
     def in_word(index: int) -> bool:
-        _start, _end, char, gutter = cells[index]
-        return not gutter and (char.isalnum() or char in WORD_PUNCTUATION)
+        base = cells[index].text[0]  # a cluster: its base decides
+        return not cells[index].gutter and (base.isalnum() or base in WORD_PUNCTUATION)
 
-    index = next((index for index, (start, end, _char, _gutter) in enumerate(cells) if start <= column <= end), None)
+    on = [index for index, cell in enumerate(cells) if cell.start <= column <= cell.end]
+    # A zero-width cluster that leads the row (a BOM, a lone mark) shares column 0 with the glyph after it: that one.
+    index = next((index for index in on if cells[index].width), on[0] if on else None)
     if index is None or not in_word(index):
         return None
     low = high = index
@@ -283,25 +332,33 @@ def _word_at(line: Line, column: int) -> tuple[int, int] | None:
         low -= 1
     while high + 1 < len(cells) and in_word(high + 1):
         high += 1
-    return cells[low][0], cells[high][1]
+    return cells[low].start, cells[high].end
 
 
 def _reversed(line: Line, low: int, high: int) -> Line:
-    """`line` with the characters on columns `low` to `high` (a wide one when either of its cells is) drawn reversed, a
-    selection's highlight; gutter cells keep their look, as the copy leaves them out."""
+    """`line` with the clusters on columns `low` to `high` (a wide one when either of its cells is) drawn reversed, a
+    selection's highlight; gutter cells keep their look, as the copy leaves them out. The text is the one painted
+    (`screen.without_controls`), and a style changes only between two clusters of one span: spans are never merged,
+    so each is measured and clustered as it was. A span that held only escapes is left out: kept empty, it would read
+    as a fill (`style.is_fill`) that the row without the highlight does not have."""
+    shown = without_controls(line)
     spans: list[Span] = []
-    cells = iter(_cells(line))
-    for span in line:
-        if not span.text:
+    cells = _cells(shown)
+    at = 0
+    last = -1  # the span of `shown` the last piece came from
+    for index, (given, span) in enumerate(zip(line, shown)):
+        if not given.text:
             spans.append(span)  # a fill: the row's background to its edge
-        for char in span.text:
-            start, end, _char, _gutter = next(cells)
-            lit = start <= high and end >= low and not span.style.gutter
+            last = -1
+        while at < len(cells) and cells[at].span == index:
+            cell, at = cells[at], at + 1
+            lit = cell.start <= high and cell.end >= low and not span.style.gutter
             style = replace(span.style, reverse=not span.style.reverse) if lit else span.style
-            if spans and spans[-1].text and spans[-1].style == style:
-                spans[-1] = Span(spans[-1].text + char, style)
+            if last == index and spans[-1].style == style:
+                spans[-1] = Span(spans[-1].text + cell.text, style)
             else:
-                spans.append(Span(char, style))
+                spans.append(Span(cell.text, style))
+            last = index
     return tuple(spans)
 
 

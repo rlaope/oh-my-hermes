@@ -103,7 +103,19 @@ def _extends(cluster: str, ch: str) -> bool:
         return True
     if _is_emoji_modifier(ch):
         return True
+    if _composes(cluster[-1], ch):
+        return True
     return len(cluster) == 1 and _is_regional_indicator(cluster) and _is_regional_indicator(ch)
+
+
+def _composes(before: str, ch: str) -> bool:
+    """True when NFC writes `before` and the letter `ch` as one code point (Kirat Rai: U+16D63 U+16D67 is U+16D69).
+
+    Every other character NFC joins to the one before it is a mark, which `_extends` joins already. A narrow letter
+    is asked here, so text NFC has not composed yet (`clusters_as_written`) splits where NFC text does."""
+    if unicodedata.category(ch) != "Lo" or unicodedata.east_asian_width(ch) in _WIDE:
+        return False
+    return len(unicodedata.normalize("NFC", before + ch)) == 1
 
 
 def _segment(text: str) -> list[str]:
@@ -128,6 +140,12 @@ def clusters(text: str) -> list[str]:
     if len(text) <= _KEPT_TEXT_CHARS:
         return list(_kept_clusters(text))
     return _segment(unicodedata.normalize("NFC", text))
+
+
+def clusters_as_written(text: str) -> list[str]:
+    """`clusters` without its NFC step: the same units in `text`'s own code points, for a copy or a cut that must hand
+    back what was written (a decomposed macOS path still matches its file). `cell_width` measures one as painted."""
+    return list(text) if text.isascii() else _segment(text)
 
 
 def _ascii_width(text: str) -> int:

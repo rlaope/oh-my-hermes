@@ -663,6 +663,86 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "`oneshot_detection_unavailable` and actionable text; the raw exception is suppressed. These "
         "failures are never answered `False`, which would silently disable the one-shot child budget.",
     ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/lsp_bridge.py",
+        "available",
+        INTENTIONAL,
+        "Hermes' LSP service failing to import or construct is answered `(None, \"lsp_unavailable: cannot load "
+        "Hermes LSP (<exception class>)\")`; every lsp_* handler returns that as error `lsp_unavailable` with the "
+        "class in the hint, never a location list or an applied rename.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/lsp_bridge.py",
+        "in_git_worktree",
+        INTENTIONAL,
+        "Hermes' workspace resolver raising is answered not gated, so the handler refuses with error "
+        "`no_workspace` before any request or write; a resolver failure can only refuse a call, never run one "
+        "outside the worktree Hermes would gate in.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/lsp_bridge.py",
+        "_language_id",
+        INTENTIONAL,
+        "Only the didOpen languageId label falls back (python for .py/.pyi, else plaintext, the same answer "
+        "Hermes' `language_id_for` gives a .py file); the server was already chosen by path through "
+        "`enabled_for`/`_get_or_spawn`, and a server that cannot use the label fails the request, which "
+        "`request` reports as `server_unavailable`.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/lsp_bridge.py",
+        "request",
+        INTENTIONAL,
+        "Any failure driving Hermes' private LSP loop or client becomes BridgeError `server_unavailable` naming "
+        "the exception class; the handler answers it as `ok: false` with that code, separate from `timeout`, "
+        "`lsp_unavailable` and a real (possibly empty, `no_result`) server answer.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/lsp_bridge.py",
+        "notify_changed",
+        INTENTIONAL,
+        "Runs after the rename is already on disk: the result truthfully says applied with the files written. "
+        "A failed re-sync only leaves the server's copy stale until the next lsp_* call re-opens the files it "
+        "uses (from disk, or from the snapshot a rename later proves against the disk bytes), so it never "
+        "turns a failed write into success or lets a stale copy reach disk (`stale_file`).",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/lsp_nav.py",
+        "_write_atomic",
+        INTENTIONAL,
+        "Cleanup only: removes its own temp file and re-raises the original exception, which the rename "
+        "handler reports as an error; it never relabels a failed write as written.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/tools/lsp_nav_tool.py",
+        "_lsp_tools_enabled",
+        INTENTIONAL,
+        "The check_fn reading the profile's lsp_tools setting fails closed: a config read error hides the "
+        "opt-in omh-lsp tools, so a host reader failure can only remove them, never enable them.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/tools/lsp_nav_tool.py",
+        "_workspace_root",
+        INTENTIONAL,
+        "Hermes' private `_resolve_base_dir` absent or raising falls back to TERMINAL_CWD and then the process "
+        "cwd, the same roots Hermes' file tools fall back to. Every path stays confined to that root "
+        "(`scope_mismatch` otherwise), results are root-relative, and a miss names the root it used, so the "
+        "fallback is visible and cannot widen what a call may read or write.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/tools/lsp_nav_tool.py",
+        "_navigate",
+        INTENTIONAL,
+        "Handlers must not raise into the host: an unexpected failure is `ok: false`, error "
+        "`unexpected_error` with the exception class, never a location list or `no_result`.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/tools/lsp_nav_tool.py",
+        "lsp_rename_handler",
+        INTENTIONAL,
+        "Handlers must not raise into the host: an unexpected failure is `ok: false`, error "
+        "`unexpected_error` with the exception class, never `applied: true`; every new text is planned and "
+        "checked against the synced bytes before the first write.",
+    ),
 )
 
 # Ruff reports one hit per handler; the inventory is keyed per enclosing
@@ -715,11 +795,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # thread, which draws an unexpected reader failure as a named warning row.
 # 71 -> 72 / 63 -> 64: `repro_audit.operations._publish`, which rolls back
 # only the staged files it owns and re-raises the original failure.
-# 72 -> 73 / 64 -> 65: `tui/panels.HudPoller._run`, the HUD poll loop (a read
+# 72 -> 82 / 64 -> 74: the opt-in omh-lsp tools (`lsp_bridge`, `lsp_nav`,
+# `tools/lsp_nav_tool`), one handler per function: host-reader probes that fail
+# closed, Hermes' LSP loop failures named `server_unavailable`, a temp-file
+# cleanup that re-raises, and handlers that answer `unexpected_error`.
+# 82 -> 83 / 74 -> 75: `tui/panels.HudPoller._run`, the HUD poll loop (a read
 # that raises is a visible notice with the last processes kept, never a dead
 # thread and never the processes' end; #2388 review).
-EXPECTED_HANDLER_COUNT = 73
-EXPECTED_ANCHOR_COUNT = 65
+EXPECTED_HANDLER_COUNT = 83
+EXPECTED_ANCHOR_COUNT = 75
 
 
 class DerivedSite(NamedTuple):

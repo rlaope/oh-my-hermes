@@ -1145,6 +1145,9 @@ print(json.dumps(observed, ensure_ascii=False))
             self.assertEqual(
                 plugin["registered_tools"],
                 [
+                    "lsp_definition",
+                    "lsp_references",
+                    "lsp_rename",
                     "omh_agent_board",
                     "omh_capabilities",
                     "omh_context",

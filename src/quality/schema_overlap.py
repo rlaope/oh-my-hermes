@@ -126,6 +126,19 @@ class OverlapFinding:
 # is not listed here fails the gate: the point is that somebody classified it,
 # not that the count stayed the same. Each entry is `<finding id>: <reason>`.
 REVIEWED_OVERLAP_DECISIONS: dict[str, str] = {
+    "lsp_definition.line:OVERLAP_BOUND_RESTATED": (
+        "keep — the numeral says the line is 1-based, which `minimum: 1` does not: the language "
+        "server protocol the tool drives is 0-based, so a caller that read only the bound could "
+        "pass an LSP line and land one line off, on symbol_not_found or the wrong symbol."
+    ),
+    "lsp_references.line:OVERLAP_BOUND_RESTATED": (
+        "keep — the same shared `line` field as lsp_definition: 1-based is what the bound cannot "
+        "say, and the LSP positions behind the tool are 0-based."
+    ),
+    "lsp_rename.line:OVERLAP_BOUND_RESTATED": (
+        "keep — the same shared `line` field as lsp_definition; for a rename an off-by-one line "
+        "picks a different symbol to rewrite across the workspace, so the 1-based statement matters most here."
+    ),
     "omh_delegate_route.action:OVERLAP_ENUM_RESTATED": (
         "keep — the description says what each of set/clear/status/fallback does to the route, "
         "including that fallback advances the category chain and clears to parent inheritance "

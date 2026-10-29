@@ -345,7 +345,13 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # 5015 -> 5153 (+138, the enum plus the description's category list, which
 # names every routable category). An enum value cannot be shortened without
 # renaming the category; measured per tool against base 49f8c35f6.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 69644
+# 69644 -> 71831: `lsp_definition` (621), `lsp_references` (710) and
+# `lsp_rename` (856), the opt-in semantic navigation tools registered under
+# the `omh-lsp` toolset (+2187). All three are gated by a check_fn on env
+# `OMH_LSP_TOOLS` or the profile setting `lsp_tools`, so they cost schema
+# bytes only when explicitly enabled; measured by per_turn_context's
+# register() recorder against base 7a2de348a. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 71831
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

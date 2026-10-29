@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--manifest", type=Path, default=BASE / "manifest.json")
         command.add_argument("--model", action="append")
         command.add_argument("--condition", choices=CONDITIONS, default="baseline")
-        command.add_argument("--split", choices=("development", "evaluation"), default="development")
+        command.add_argument("--split", choices=("development", "evaluation", "lsp-ab"), default="development")
         command.add_argument("--output", type=Path)
         command.add_argument("--omh-executable", default="omh")
         command.add_argument("--hermes-executable", default="hermes")
@@ -44,14 +44,29 @@ def main(argv: list[str] | None = None) -> int:
         )
         command.add_argument(
             "--edit-surface",
-            choices=("patch", "hashline"),
+            choices=("patch", "hashline", "lsp"),
             default="patch",
-            help="Edit surface for hermes_current_session harness: 'patch' (default, builtin file toolset) or 'hashline' (plugin toolset omh-hashline with OMH_HASHLINE_TOOLS=1).",
+            help="Edit surface for hermes_current_session harness: 'patch' (default, builtin file toolset), 'hashline' (plugin toolset omh-hashline with OMH_HASHLINE_TOOLS=1) or 'lsp' (file,terminal plus plugin toolset omh-lsp).",
         )
         command.add_argument(
             "--edit-directive",
+            nargs="?",
+            const=True,
+            default=False,
+            choices=("rename",),
+            help="Prepend the same edit-tool rule to both surfaces (names the surface's read/edit tools). "
+            "'--edit-directive rename' prepends the rename rule pair (patch vs lsp) instead.",
+        )
+        command.add_argument(
+            "--git-init-workspace",
             action="store_true",
-            help="Prepend the same edit-tool rule to both surfaces (names the surface's read/edit tools).",
+            help="Run `git init -q` in the materialized workspace before the trial (Hermes LSP needs a git worktree).",
+        )
+        command.add_argument(
+            "--test-env",
+            action="store_true",
+            help="Give the live session a ready test interpreter (pytest + workspace src/ on sys.path) and name it "
+            "in the task, so neither arm spends turns installing packages.",
         )
         command.add_argument(
             "--extra-model",
@@ -75,7 +90,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.current_session_provider and args.harness != "hermes_current_session":
             parser.error("--current-session-provider requires --harness hermes_current_session")
         if args.edit_surface and args.edit_surface != "patch" and args.harness != "hermes_current_session":
-            parser.error("--edit-surface hashline requires --harness hermes_current_session")
+            parser.error(f"--edit-surface {args.edit_surface} requires --harness hermes_current_session")
+        if args.edit_directive == "rename" and args.edit_surface not in {"patch", "lsp"}:
+            parser.error("--edit-directive rename requires --edit-surface patch or lsp")
         if args.harness in {"omh", "hermes_current_session"} and not args.allow_paid_live:
             parser.error("live Hermes harness requires --allow-paid-live")
         if args.harness in {"omh", "hermes_current_session"} and args.max_paid_calls < 1:
@@ -127,6 +144,8 @@ def main(argv: list[str] | None = None) -> int:
                 current_session_provider=args.current_session_provider,
                 edit_surface=args.edit_surface,
                 edit_directive=args.edit_directive,
+                git_init_workspace=args.git_init_workspace,
+                test_env=args.test_env,
             )
         else:
             result = run_matrix(
@@ -142,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
                 current_session_provider=args.current_session_provider,
                 edit_surface=args.edit_surface,
                 edit_directive=args.edit_directive,
+                git_init_workspace=args.git_init_workspace,
+                test_env=args.test_env,
                 max_paid_calls=args.max_paid_calls,
                 templates=args.templates.split(",") if args.templates else None,
             )

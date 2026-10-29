@@ -6,6 +6,9 @@ description: "Oh My Hermes native bridge for metadata-only runtime status, HUD, 
 author: oh-my-hermes maintainers
 provides_memory_provider: omh
 provides_tools:
+  - lsp_definition
+  - lsp_references
+  - lsp_rename
   - omh_agent_board
   - omh_capabilities
   - omh_context

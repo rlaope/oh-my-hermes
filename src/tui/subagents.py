@@ -96,7 +96,7 @@ from .panels import SPINNER_FRAMES
 from .prompts import CHOICE_MARK
 from .style import Line, Span
 from .theme import Theme, kind_style
-from .width import cell_width, truncate, truncate_line, wrap_line
+from .width import cell_width, clusters_as_written, truncate, truncate_line, wrap_line
 
 QUEUED = "queued"
 RUNNING = "running"
@@ -236,7 +236,14 @@ def _text(value: object) -> str:
 
 
 def _cut(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[:limit] + CUT_MARK
+    return text if len(text) <= limit else _whole_clusters(text, limit) + CUT_MARK
+
+
+def _whole_clusters(text: str, limit: int) -> str:
+    """`text` from its start to at most `limit` of its own characters, in whole clusters (`width.clusters_as_written`):
+    the one `limit` falls in is left out, so a cut never splits a ZWJ family, a skin tone, a flag or a base from its
+    marks, and never normalizes what it keeps."""
+    return text if len(text) <= limit else "".join(clusters_as_written(text[: limit + 1])[:-1])
 
 
 def _lines(text: str) -> list[str]:
@@ -251,7 +258,7 @@ def _one_line(value: object, limit: int) -> str:
     At most `limit` characters are read, so a huge field costs what a small one does.
     """
     raw = _text(value)
-    line = " ".join(" ".join(_lines(raw[:limit])).split())
+    line = " ".join(" ".join(_lines(_whole_clusters(raw, limit))).split())
     return line + CUT_MARK if len(raw) > limit else line
 
 

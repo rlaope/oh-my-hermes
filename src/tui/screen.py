@@ -166,7 +166,7 @@ def cursor_at(row: int, col: int) -> str:
     return f"{CSI}{row + 1};{col + 1}H"
 
 
-def _without_controls(line: Line) -> Line:
+def without_controls(line: Line) -> Line:
     """The last guard before bytes reach the terminal: no escape sequence, control or bidi control in span text.
 
     Styles are painted from `Span.style`, never from the text, so any sequence
@@ -190,7 +190,7 @@ def paint_line(line: Line, width: int) -> str:
     erase), so a band reaches the edge without trailing spaces to copy.
     """
     fill = line[-1].style if line and is_fill(line[-1]) else None
-    clipped = truncate_line(_without_controls(line), width, ellipsis="")
+    clipped = truncate_line(without_controls(line), width, ellipsis="")
     parts: list[str] = []
     for span in clipped:
         sgr = span.style.sgr()

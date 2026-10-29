@@ -20,6 +20,19 @@ All notable changes will be documented here.
   session's id; after a `/new` on the same chat, neither conversation
   shows the other's.
 
+- **Copying from the pager after an emoji copies the right text.** The
+  pager's drag, double click and highlight counted columns by code point
+  while the row is painted by glyph, so after a ZWJ family, a skin-tone or
+  VS16 emoji the cells under the pointer were the wrong ones (a double click
+  on the next word copied nothing) and the highlight could change style
+  inside one emoji, breaking it. They now count by glyph, as do the recall
+  glint and the running box's aura in `/dag`. A copy hands back the text's
+  own code points, so a decomposed macOS path from `/logs` still matches its
+  file, and a subagent's log row and a bot's message are cut between glyphs,
+  never inside an emoji, a flag or a letter with its accent. `/logs` shows a
+  tab as spaces and no longer lets a colour code in stderr shift the columns a
+  click or a drag lands on.
+
 - **The second Ctrl+C of the OMH TUI exits, and the launch, a resize and the import cost less.** After a
   Ctrl+C interrupts a turn, the queued prompt it puts back in the composer no longer eats the second press:
   that press exits as the info line says, with Shift or Alt held too, and only while the line says so; after

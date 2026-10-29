@@ -122,7 +122,9 @@ from .prompts import CHOICE_MARK
 from .session_picker import age_text, pointer
 from .style import Line, Span, Style
 from .theme import BLACK, EDGE_CONTRAST, WHITE, Theme, contrast_ratio
-from .width import cell_width, cluster_width, clusters, line_width, truncate, truncate_line, wrap_line
+from .width import (
+    cell_width, cluster_width, clusters, clusters_as_written, line_width, truncate, truncate_line, wrap_line,
+)
 
 BOARD_TITLE = "Hermes bots"
 BOARD_KEYS = "↑↓ move  Enter open  ← back  r refresh  q close"
@@ -1750,7 +1752,9 @@ def message_lines(
     roles = {"user": theme.user, "assistant": theme.label, "tool": theme.tool}
     rows: list[list[Line]] = []
     for message in snapshot.messages:
-        text = message.text[:MESSAGE_SHOWN_CHARS] + ("…" if len(message.text) > MESSAGE_SHOWN_CHARS else "")
+        text = message.text
+        if len(text) > MESSAGE_SHOWN_CHARS:  # cut in whole clusters as written: the one the limit falls in is left out
+            text = "".join(clusters_as_written(text[: MESSAGE_SHOWN_CHARS + 1])[:-1]) + "…"
         style = theme.tool if message.role == "tool" else theme.text
         wrapped = wrap_line((Span(text or "(empty)", style if text else theme.muted),), room)
         kept = 1 if message.role == "tool" else MESSAGE_SHOWN_ROWS  # a tool result is the call's, not the talk's

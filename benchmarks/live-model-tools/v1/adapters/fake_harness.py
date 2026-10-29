@@ -26,6 +26,24 @@ def locations(routes: Path):
     return rows
 
 
+# Reference-only edits for the lsp-ab rename templates (what a semantic rename produces).
+SEMANTIC_RENAMES = {
+    "RENAME-ALIAS": {
+        "src/benchapp/quota.py": [("def compute_quota(units", "def allocate_quota(units")],
+        "src/benchapp/api.py": [("import compute_quota", "import allocate_quota"), ('["compute_quota"]', '["allocate_quota"]')],
+        "src/benchapp/service.py": [("import compute_quota as", "import allocate_quota as")],
+        "src/benchapp/report.py": [("quota.compute_quota(units)", "quota.allocate_quota(units)")],
+        "tests/test_quota.py": [("api import compute_quota", "api import allocate_quota"), ("assert compute_quota(", "assert allocate_quota(")],
+    },
+    "RENAME-SHADOW": {
+        "src/benchapp/limits.py": [("def parse_limit(", "def read_limit(")],
+        "src/benchapp/cli.py": [("import parse_limit", "import read_limit"), ("return parse_limit(", "return read_limit(")],
+        "src/benchapp/batch.py": [("limits.parse_limit)", "limits.read_limit)")],
+        "tests/test_limits.py": [("limits import parse_limit", "limits import read_limit"), ("assert parse_limit(", "assert read_limit(")],
+    },
+}
+
+
 def main():
     request = json.loads(Path(os.environ["LMT_REQUEST"]).read_text(encoding="utf-8"))
     workspace = Path(os.environ["LMT_WORKSPACE"])
@@ -38,6 +56,19 @@ def main():
             path.write_text(path.read_text(encoding="utf-8").replace("DEFAULT_RETRY_LIMIT", "MAX_RETRY_ATTEMPTS"), encoding="utf-8")
         events.append({"sequence":1,"name":"edit","mutating":True,"arguments_digest":"0"*64,"started_ms":0,"ended_ms":1,"result":"success"})
         answer = {"changed_paths":["src/benchapp/retries.py","tests/test_retries.py"]}
+    elif name in SEMANTIC_RENAMES:
+        changed = []
+        for relative, edits in SEMANTIC_RENAMES[name].items():
+            path = workspace / relative
+            text = path.read_text(encoding="utf-8")
+            for before, after in edits:
+                if before not in text:
+                    raise SystemExit(f"fake rename anchor missing in {relative}: {before}")
+                text = text.replace(before, after)
+            path.write_text(text, encoding="utf-8")
+            changed.append(relative)
+        events.append({"sequence":1,"name":"edit","mutating":True,"arguments_digest":"0"*64,"started_ms":0,"ended_ms":1,"result":"success"})
+        answer = {"changed_paths":sorted(changed)}
     elif name == "BUGFIX":
         path = workspace / "src/benchapp/provider_select.py"
         text = path.read_text(encoding="utf-8")

@@ -62,7 +62,7 @@ from .escapes import strip_escapes
 from .style import NO_COLOR, TRUECOLOR, Line, Span, Style
 from .theme import CATCH_MARK as CATCH_MARK  # re-exported: app and tests read the mark from here
 from .theme import Theme
-from .width import cell_width, clusters, line_width, truncate, truncate_line
+from .width import cell_width, cluster_width, clusters, line_width, truncate, truncate_line
 from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
 
 HUD_POLL_MIN_SECONDS = 2.0
@@ -1560,15 +1560,15 @@ def _aura_box(
     at = 0
     for segment in row:
         style = dag_style(segment.role, theme, segment.level, levels, depth)
-        for char in segment.text:
+        for cluster in clusters(segment.text):  # one style a glyph, never one inside it
             offset = at - left
             inside = 0 <= offset < size and (rule or offset in (0, size - 1) or segment.role.startswith("node-title"))
             painted = aura_style(theme.aura, theme.aura_glint, offset, size, phase) if inside else style
             if spans and spans[-1].style == painted:
-                spans[-1] = Span(spans[-1].text + char, painted)
+                spans[-1] = Span(spans[-1].text + cluster, painted)
             else:
-                spans.append(Span(char, painted))
-            at += cell_width(char)
+                spans.append(Span(cluster, painted))
+            at += cluster_width(cluster)
     return _line(*spans)
 
 

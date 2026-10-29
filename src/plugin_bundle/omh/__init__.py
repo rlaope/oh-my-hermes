@@ -225,6 +225,16 @@ def register(ctx: _PluginContext) -> None:
     from .tools.evidence_tool import OMH_EVIDENCE_SCHEMA, omh_evidence_handler
     from .tools.hud_tool import OMH_HUD_SCHEMA, omh_hud_handler
     from .tools.jev_ask_tool import OMH_JEV_ASK_SCHEMA, jev_ask_available, omh_jev_ask_handler
+    from .tools.lsp_nav_tool import (
+        OMH_LSP_DEFINITION_SCHEMA,
+        OMH_LSP_REFERENCES_SCHEMA,
+        OMH_LSP_RENAME_SCHEMA,
+        LSP_TOOLSET,
+        _lsp_tools_enabled,
+        lsp_definition_handler,
+        lsp_references_handler,
+        lsp_rename_handler,
+    )
     from .tools.loop_tool import OMH_LOOP_SCHEMA, omh_loop_handler
     from .tools.memory_tool import OMH_MEMORY_SCHEMA, omh_memory_handler
     from .tools.probe_tool import OMH_PROBE_SCHEMA, omh_probe_handler
@@ -301,6 +311,34 @@ def register(ctx: _PluginContext) -> None:
         OMH_HUD_SCHEMA,
         omh_hud_handler,
         description=OMH_HUD_SCHEMA["description"],
+    )
+    # Opt-in semantic navigation tools over Hermes' own LSP service. A
+    # dedicated toolset (`omh-lsp`, NOT the shared `omh` toolset) plus
+    # `check_fn` keep their schema out of every turn unless the operator sets
+    # OMH_LSP_TOOLS=1/true or the profile setting `lsp_tools`.
+    _ = ctx.register_tool(
+        "lsp_definition",
+        LSP_TOOLSET,
+        OMH_LSP_DEFINITION_SCHEMA,
+        lsp_definition_handler,
+        check_fn=_lsp_tools_enabled,
+        description=OMH_LSP_DEFINITION_SCHEMA["description"],
+    )
+    _ = ctx.register_tool(
+        "lsp_references",
+        LSP_TOOLSET,
+        OMH_LSP_REFERENCES_SCHEMA,
+        lsp_references_handler,
+        check_fn=_lsp_tools_enabled,
+        description=OMH_LSP_REFERENCES_SCHEMA["description"],
+    )
+    _ = ctx.register_tool(
+        "lsp_rename",
+        LSP_TOOLSET,
+        OMH_LSP_RENAME_SCHEMA,
+        lsp_rename_handler,
+        check_fn=_lsp_tools_enabled,
+        description=OMH_LSP_RENAME_SCHEMA["description"],
     )
     # The one tool that sends data off the machine. `check_fn` keeps its
     # schema out of every turn unless a route resolves (a TypeSafe key, or an

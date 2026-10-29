@@ -159,8 +159,11 @@ def current_session_argv(
         toolsets = "file,terminal"
     elif edit_surface == "hashline":
         toolsets = "omh-hashline,terminal"
+    elif edit_surface == "lsp":
+        # LSP augments the builtin file toolset; `patch` stays available.
+        toolsets = "file,terminal,omh-lsp"
     else:
-        raise ValueError("edit_surface must be 'patch' or 'hashline'")
+        raise ValueError("edit_surface must be 'patch', 'hashline' or 'lsp'")
     return [
         hermes_executable,
         "--oneshot",
@@ -193,6 +196,35 @@ def edit_directive(edit_surface: str) -> str:
     return (f"EDIT TOOL RULE: read source files with `{read}` and change existing files only with `{edit}`. "
             "Do not modify files through terminal commands (sed, perl, python, shell redirection); "
             "use terminal only to search, run tests, and write the answer file.")
+
+
+# Rename A/B pair (`--edit-directive rename`), used by BOTH arms so the two texts differ only in
+# tool names; the patch/hashline rules above stay byte-identical.
+_RENAME_TOOLS = {
+    "patch": ("search_files", "search_files", "patch"),
+    "lsp": ("lsp_definition", "lsp_references", "lsp_rename"),
+}
+
+
+def rename_directive(edit_surface: str) -> str:
+    if edit_surface not in _RENAME_TOOLS:
+        raise ValueError("rename directive needs edit_surface 'patch' or 'lsp'")
+    definition, references, rename = _RENAME_TOOLS[edit_surface]
+    return (f"EDIT TOOL RULE: find symbol definitions with `{definition}` and symbol uses with `{references}`, "
+            f"rename symbols with `{rename}`, and change other code with `patch`. "
+            "Do not modify files through terminal commands (sed, perl, python, shell redirection); "
+            "use terminal only to search, run tests, and write the answer file.")
+
+
+def directive_text(edit_surface: str, directive: bool | str) -> str | None:
+    """Prompt prefix for a run: None (off), the edit rule (True), or the rename rule ("rename")."""
+    if directive == "rename":
+        return rename_directive(edit_surface)
+    if directive is True:
+        return edit_directive(edit_surface)
+    if directive is False or directive is None:
+        return None
+    raise ValueError("directive must be a bool or 'rename'")
 
 
 def prompt_pair(task: str, route: Mapping[str, Any]) -> tuple[str, str]:
@@ -410,7 +442,7 @@ def run_current_session_trial(
     timeout: int,
     confirmed: bool = False,
     edit_surface: str = "patch",
-    directive: bool = False,
+    directive: bool | str = False,
 ) -> dict[str, object]:
     """Execute via the active Hermes profile and retain only observed metrics."""
     if not confirmed:
@@ -470,8 +502,9 @@ def run_current_session_trial(
             classification="adapter_protocol_error",
         )
     prompt = prompt_for_condition(task, route, condition)
-    if directive:
-        prompt = f"{edit_directive(edit_surface)}\n\n{prompt}"
+    rule = directive_text(edit_surface, directive)
+    if rule is not None:
+        prompt = f"{rule}\n\n{prompt}"
     with TemporaryDirectory(prefix="omh-current-session-usage-") as usage_root:
         usage_file = Path(usage_root) / "usage.json"
         try:
@@ -598,6 +631,12 @@ def _current_session_environment(workspace: Path, edit_surface: str = "patch") -
     """
     environment = dict(os.environ)
     environment["TERMINAL_CWD"] = str(workspace)
+    # An opt-in flag inherited from the caller's shell must not reach the other arm.
+    environment.pop("OMH_HASHLINE_TOOLS", None)
+    environment.pop("OMH_LSP_TOOLS", None)
     if edit_surface == "hashline":
         environment["OMH_HASHLINE_TOOLS"] = "1"
+    elif edit_surface == "lsp":
+        # Harmless for the gateway, which reads the profile setting; set for parity with hashline.
+        environment["OMH_LSP_TOOLS"] = "1"
     return environment

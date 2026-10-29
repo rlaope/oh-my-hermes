@@ -29,15 +29,52 @@ def _snapshot(root: Path) -> dict[str, bytes]:
         relative = path.relative_to(root)
         if path.is_symlink():
             continue
-        if path.is_file() and "__pycache__" not in path.parts and ".venv" not in path.parts and ".pytest_cache" not in path.parts:
+        if path.is_file() and ".git" not in relative.parts and "__pycache__" not in path.parts and ".venv" not in path.parts and ".pytest_cache" not in path.parts:
             snapshot[path.relative_to(root).as_posix()] = path.read_bytes()
     return snapshot
 
 
-def _live_task(instance_prompt: str) -> str:
+def _git_init(workspace: Path) -> None:
+    """Make the workspace a git worktree so Hermes LSP engages.
+
+    `agent/lsp/workspace.py: find_git_worktree` only checks that `.git` exists,
+    so a bare `git init` (no commit) suffices.
+    """
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True, capture_output=True, timeout=60)
+
+
+def _test_env(root: Path, workspace: Path) -> Path:
+    """A ready interpreter for the workspace's tests, outside the workspace (so it is never a mutation).
+
+    The live session's `python` is Hermes' own venv: no pytest and no `benchapp` on its path.
+    Weak models then spend dozens of turns on `pip install` and venv paths, which measures the
+    host, not the edit surface. Both arms get this same interpreter: pytest installed and the
+    workspace's `src/` on `sys.path` through a `.pth` file. Returns the interpreter path.
+    """
+    import shutil
+
+    uv = shutil.which("uv")
+    if uv is None:
+        raise RuntimeError("--test-env needs `uv` on PATH")
+    venv = root / "testenv"
+    subprocess.run([uv, "venv", "-q", "--python", sys.executable, str(venv)], check=True, capture_output=True, timeout=120)
+    python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    subprocess.run([uv, "pip", "install", "-q", "--python", str(python), "pytest"], check=True, capture_output=True, timeout=300)
+    purelib = subprocess.run([str(python), "-c", "import sysconfig;print(sysconfig.get_paths()['purelib'])"],
+                             check=True, capture_output=True, text=True, timeout=60).stdout.strip()
+    Path(purelib, "bench_workspace_src.pth").write_text(str(workspace / "src") + "\n", encoding="utf-8")
+    return python
+
+
+def _live_task(instance_prompt: str, test_python: Path | None = None) -> str:
     """The task text every harness wraps in a condition prompt."""
+    tests = ""
+    if test_python is not None:
+        tests = (f"Run tests with `{test_python} -m pytest -q`; pytest and this package are already "
+                 "installed for that interpreter, so do not install anything.\n\n")
     return (
         f"{instance_prompt}\n\n"
+        f"{tests}"
         "Write the final machine answer as JSON to `.omh-benchmark-answer.json` in the "
         "working directory. Do not include prose in that file."
     )
@@ -86,7 +123,9 @@ def execute_one(
     hermes_executable: str = "hermes",
     current_session_provider: str | None = None,
     edit_surface: str = "patch",
-    edit_directive: bool = False,
+    edit_directive: bool | str = False,
+    git_init_workspace: bool = False,
+    test_env: bool = False,
 ) -> dict[str, Any]:
     if condition not in CONDITIONS:
         raise ValueError(f"condition must be one of: {', '.join(CONDITIONS)}")
@@ -97,6 +136,9 @@ def execute_one(
         workspace.mkdir()
         private.mkdir()
         instance, golden_path = materialize(split, template_id, task_class, seed, workspace, private)
+        if git_init_workspace:
+            _git_init(workspace)
+        test_python = _test_env(root, workspace) if test_env and harness == "hermes_current_session" else None
         initial = _snapshot(workspace)
         answer_path = workspace / ".omh-benchmark-answer.json"
         events: list[dict[str, Any]] = []
@@ -163,7 +205,7 @@ def execute_one(
         elif harness in {"omh", "hermes_current_session"}:
             if model is None:
                 raise ValueError("live Hermes harness requires a model")
-            prompt = _live_task(instance.prompt)
+            prompt = _live_task(instance.prompt, test_python)
             if harness == "hermes_current_session":
                 trial = run_current_session_trial(
                     omh_executable=omh_executable,
@@ -225,6 +267,8 @@ def execute_one(
             "harness": harness,
             "edit_surface": edit_surface if harness == "hermes_current_session" else None,
             "edit_directive": edit_directive if harness == "hermes_current_session" else None,
+            "git_init_workspace": git_init_workspace if harness == "hermes_current_session" else None,
+            "test_env": test_env if harness == "hermes_current_session" else None,
             "execution_path": harness,
             "model": model,
             "task_digest": trial_task_digest,
@@ -256,7 +300,9 @@ def run_matrix(
     hermes_executable: str = "hermes",
     current_session_provider: str | None = None,
     edit_surface: str = "patch",
-    edit_directive: bool = False,
+    edit_directive: bool | str = False,
+    git_init_workspace: bool = False,
+    test_env: bool = False,
     max_paid_calls: int = 0,
     templates: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -290,6 +336,8 @@ def run_matrix(
                     current_session_provider=current_session_provider,
                     edit_surface=edit_surface,
                     edit_directive=edit_directive,
+                    git_init_workspace=git_init_workspace,
+                    test_env=test_env,
                 )
             )
     return {

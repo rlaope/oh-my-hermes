@@ -18,6 +18,10 @@ TEMPLATES = (
     ("DEFINITION", "lsp"), ("DIAGNOSTICS", "lsp"),
     ("SCALE", "routing"), ("EXPLICIT", "routing"),
 )
+# Separate split for the omh-lsp A/B: kept out of development/evaluation so the
+# pinned corpus digest and manifest stay byte-identical.
+LSP_AB_SPLIT = "lsp-ab"
+LSP_AB_TEMPLATES = (("RENAME-ALIAS", "edit"), ("RENAME-SHADOW", "edit"))
 
 @dataclass(frozen=True)
 class Instance:
@@ -31,6 +35,8 @@ class Instance:
 
 
 def all_specs(split: str) -> list[tuple[str, str, int]]:
+    if split == LSP_AB_SPLIT:
+        return [(f"L-{name}", task_class, seed) for name, task_class in LSP_AB_TEMPLATES for seed in EVALUATION_SEEDS]
     seeds = DEVELOPMENT_SEEDS if split == "development" else EVALUATION_SEEDS
     prefix = "D" if split == "development" else "E"
     return [(f"{prefix}-{name}", task_class, seed) for name, task_class in TEMPLATES for seed in seeds]
@@ -90,6 +96,89 @@ def _project_files(seed: int) -> dict[str, str]:
     }
 
 
+def _rename_alias_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
+    """A module function re-exported, aliased, and module-accessed, next to a same-named method,
+    a log string, and a comment: a text replace breaks the method/string/comment, a semantic
+    rename does not."""
+    randomizer = random.Random(seed)
+    factor = randomizer.randint(2, 9)
+    legacy = 100 + randomizer.randint(0, 50)
+    alias = randomizer.choice(("cq", "cq_fn", "quota_of"))
+    padding = "\n" * randomizer.randint(0, 2)
+    comment = "    # compute_quota is the single source of quota numbers."
+    log_line = '        LOG.warning("compute_quota failed")'
+    files = {
+        "src/benchapp/quota.py": (
+            f'"""Quota helpers."""\n{padding}\n\ndef compute_quota(units: int) -> int:\n'
+            f"    if units < 0:\n        raise ValueError('negative units')\n    return units * {factor}\n\n\n"
+            f"class LegacyPlanner:\n    def compute_quota(self) -> int:\n        return {legacy}\n"
+        ),
+        "src/benchapp/api.py": 'from .quota import compute_quota\n\n__all__ = ["compute_quota"]\n',
+        "src/benchapp/service.py": (
+            f"from benchapp.quota import compute_quota as {alias}\n\n\n"
+            f"def plan_units(units: int) -> int:\n    return {alias}(units) + 1\n"
+        ),
+        "src/benchapp/report.py": (
+            "import logging\n\nfrom benchapp import quota\n\nLOG = logging.getLogger(__name__)\n\n\n"
+            f"def report(units: int) -> str:\n{comment}\n    try:\n"
+            f'        return f"quota={{quota.compute_quota(units)}}"\n    except ValueError:\n{log_line}\n        raise\n'
+        ),
+        "tests/test_quota.py": (
+            "from benchapp.api import compute_quota\nfrom benchapp.quota import LegacyPlanner\n"
+            "from benchapp.report import report\nfrom benchapp.service import plan_units\n\n\n"
+            f"def test_compute_quota():\n    assert compute_quota(3) == {3 * factor}\n\n\n"
+            f"def test_paths_agree():\n    assert plan_units(2) == {2 * factor + 1}\n"
+            f"    assert report(4) == 'quota={4 * factor}'\n\n\n"
+            f"def test_legacy_planner_untouched():\n    assert LegacyPlanner().compute_quota() == {legacy}\n"
+        ),
+    }
+    golden = {
+        "allowed_paths": sorted(files),
+        "factor": factor,
+        "legacy": legacy,
+        "min_tests": 3,
+        "preserved_lines": {"src/benchapp/report.py": [comment, log_line]},
+    }
+    return files, golden
+
+
+def _rename_shadow_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
+    """A function whose name is shadowed by a callable parameter (and its keyword at a call site):
+    a text replace renames the parameter, a semantic rename does not."""
+    randomizer = random.Random(seed)
+    cap = randomizer.randint(50, 500)
+    padding = "\n" * randomizer.randint(0, 2)
+    files = {
+        "src/benchapp/limits.py": (
+            f'"""Limit parsing."""\n{padding}\n\ndef parse_limit(text: str) -> int:\n'
+            "    value = int(text.strip())\n    if value < 0:\n        raise ValueError('negative limit')\n"
+            f"    return min(value, {cap})\n"
+        ),
+        "src/benchapp/cli.py": (
+            "from benchapp.limits import parse_limit\n\n\n"
+            "def main(argv: list[str]) -> int:\n    return parse_limit(argv[0])\n"
+        ),
+        "src/benchapp/batch.py": (
+            "from benchapp import limits\n\n\n"
+            "def apply_all(values: list[str], parse_limit) -> list[int]:\n"
+            "    return [parse_limit(value) for value in values]\n\n\n"
+            "def default_batch(values: list[str]) -> list[int]:\n    return apply_all(values, limits.parse_limit)\n"
+        ),
+        "tests/test_limits.py": (
+            "from benchapp.batch import apply_all, default_batch\nfrom benchapp.cli import main\n"
+            "from benchapp.limits import parse_limit\n\n\n"
+            f"def test_parse_limit():\n    assert parse_limit(' 7 ') == 7\n    assert parse_limit('{cap + 1}') == {cap}\n\n\n"
+            "def test_callers():\n    assert main(['3']) == 3\n    assert default_batch(['1', '2']) == [1, 2]\n"
+            "    assert apply_all(['4'], parse_limit=lambda text: int(text) * 10) == [40]\n"
+        ),
+    }
+    golden = {"allowed_paths": sorted(files), "cap": cap, "min_tests": 2}
+    return files, golden
+
+
+_LSP_AB_FIXTURES = {"RENAME-ALIAS": _rename_alias_fixture, "RENAME-SHADOW": _rename_shadow_fixture}
+
+
 def _prompt(template_id: str, task_class: str, seed: int, decision: str) -> str:
     name = template_id.split("-", 1)[1]
     prompts = {
@@ -103,6 +192,8 @@ def _prompt(template_id: str, task_class: str, seed: int, decision: str) -> str:
         "DIAGNOSTICS": "Use LSP diagnostics, minimally fix all name/type errors in diagnostic.py, then use diagnostics again. Return JSON diagnostics and tools_used.",
         "SCALE": "For a large coding task invoke tools/route_probe.py with the correct arguments and return its exact route JSON.",
         "EXPLICIT": "Request explicit model unavailable-model from tools/route_probe.py. Preserve it: never substitute. Return its exact route JSON.",
+        "RENAME-ALIAS": "Rename the module-level function compute_quota in src/benchapp/quota.py to allocate_quota everywhere it is referenced, without changing behavior. Keep the unrelated LegacyPlanner.compute_quota method, string literals and comments unchanged. Return JSON with changed_paths.",
+        "RENAME-SHADOW": "Rename the function parse_limit defined in src/benchapp/limits.py to read_limit at its definition and every reference to that function, without changing behavior. Parameters or local variables that merely share the name are not references and must stay. Return JSON with changed_paths.",
     }
     return prompts[name]
 
@@ -133,6 +224,11 @@ def materialize(split: str, template_id: str, task_class: str, seed: int, worksp
         shutil.rmtree(workspace)
     workspace.mkdir(parents=True)
     files = _project_files(seed)
+    lsp_fixture = _LSP_AB_FIXTURES.get(template_id.split("-", 1)[1])
+    lsp_golden: dict[str, Any] | None = None
+    if lsp_fixture is not None:
+        extra, lsp_golden = lsp_fixture(seed)
+        files = {**files, **extra}
     decision = next(line.split()[1].rstrip(":") for line in files["src/benchapp/routes.py"].splitlines() if line.startswith("class "))
     for relative, content in files.items():
         path = workspace / relative
@@ -141,7 +237,7 @@ def materialize(split: str, template_id: str, task_class: str, seed: int, worksp
     prompt = _prompt(template_id, task_class, seed, decision)
     (workspace / "TASK.md").write_text(prompt + "\n", encoding="utf-8")
     golden_path = private_root / f"{template_id}-{seed}.json"
-    write_json(golden_path, _golden(template_id, files, decision))
+    write_json(golden_path, lsp_golden if lsp_golden is not None else _golden(template_id, files, decision))
     instance = Instance(split, template_id, f"{template_id}-{seed}", task_class, seed, prompt, tree_digest(workspace))
     return instance, golden_path
 
