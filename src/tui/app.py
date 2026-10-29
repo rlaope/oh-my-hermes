@@ -120,8 +120,10 @@ from ..skin_pack import (
     SkinTheme,
     default_theme,
     effective_theme,
+    hex_to_rgb,
     read_glow_choice,
     read_launch_choice,
+    read_wallpaper_choice,
     skin_colors,
     theme_for_name,
     theme_for_skin_name,
@@ -129,6 +131,7 @@ from ..skin_pack import (
     theme_store_path,
     write_glow_choice,
     write_launch_choice,
+    write_wallpaper_choice,
 )
 from . import gateway_contract as contract
 from .composer import COMPLETE, EXIT, IMAGE_LABEL, INTERRUPT, SUBMIT, Composer, ComposerAction
@@ -254,7 +257,15 @@ from .slash import (
 )
 from .style import CSI, NO_COLOR, TRUECOLOR, Line, Span, Style, color_depth
 from .subagents import Hit, Roster
-from .terminal import Terminal, background_from_colorfgbg, colorfgbg_names_dark, terminal_name, terminal_supported
+from .terminal import (
+    Terminal,
+    background_from_colorfgbg,
+    background_restore,
+    background_set,
+    colorfgbg_names_dark,
+    terminal_name,
+    terminal_supported,
+)
 from .theme import (
     BLACK,
     DEFAULT_LAUNCH,
@@ -277,6 +288,8 @@ from .theme import (
     launch_wordmark,
     lifted_colour,
     logo_lines,
+    look_ground,
+    readable_on,
     surface_for,
     theme_named,
     without_colour,
@@ -301,6 +314,8 @@ from .transcript import (
     compact_count,
     review_line,
 )
+from .wallpaper import TICK_SECONDS as WALLPAPER_TICK_SECONDS
+from .wallpaper import Cell, scene
 from .width import cell_width, clusters, line_width, truncate, truncate_left, truncate_line
 from ..version import __version__
 
@@ -540,6 +555,15 @@ GLOW_SAVE_FAILED_NOTICE = "Working glow {state} for this session; it could not b
 GLOW_ENV_NOTICE = "Working glow kept {state}; OMH_TUI_GLOW=0 holds it off in this terminal."
 GLOW_UNAVAILABLE_NOTICE = "Working glow kept {state}; it shows only with motion on, at truecolor, on a screen 20×8 or larger."
 GLOW_USAGE_NOTICE = "Use /glow on or /glow off; /glow alone switches it."
+WALLPAPER_KEPT_NOTICE = "Living wallpaper {state}, kept in {path}."
+WALLPAPER_SESSION_NOTICE = "Living wallpaper {state} for this session; there is no OMH home to keep it in."
+WALLPAPER_SAVE_FAILED_NOTICE = "Living wallpaper {state} for this session; it could not be saved to {path}: {error}"
+WALLPAPER_ENV_NOTICE = "Living wallpaper kept {state}; OMH_TUI_WALLPAPER=0 holds it off in this terminal."
+WALLPAPER_UNAVAILABLE_NOTICE = ("Living wallpaper kept {state}; it shows only at truecolor, on a terminal that reported "
+                                "its background colour.")
+WALLPAPER_USAGE_NOTICE = "Use /wallpaper on or /wallpaper off; /wallpaper alone switches it."
+WALLPAPER_SIDE_NOTICE = ("Living wallpaper held off: /theme {mode} names a {mode} background on a {side} "
+                         "terminal, whose text colour would not read on a {mode} ground; /theme auto shows it again.")
 LAUNCH_SESSION_NOTICE = "Launch look {name} for this session; there is no OMH home to keep it in."
 LAUNCH_SAVE_FAILED_NOTICE = "Launch look {name} for this session; it could not be saved to {path}: {error}"
 LAUNCH_SWATCH_STEPS = 6  # the colours a look's swatch shows in the /theme picker
@@ -691,6 +715,11 @@ BELL_OFF = "0"
 # OMH_TUI_GLOW=0 turns it off, and with it the margin and the blank last row it keeps.
 GLOW_ENV = "OMH_TUI_GLOW"
 GLOW_OFF = "0"
+# The living wallpaper (`wallpaper`): the launch look's ground as the terminal's background (OSC 11) and its scene
+# moving in the blank cells, wherever the terminal reported its background at truecolor; `/wallpaper off` (kept under
+# the OMH home) or OMH_TUI_WALLPAPER=0 turns it off, and the terminal's own background comes back at once.
+WALLPAPER_ENV = "OMH_TUI_WALLPAPER"
+WALLPAPER_OFF = "0"
 # A turn that ran this long ends with the terminal's attention signal (`attention_sequence`).
 TURN_ALERT_SECONDS = 10.0
 TURN_ALERT_TEXT = "Hermes finished a turn ({elapsed})"
@@ -1605,6 +1634,14 @@ class App(ModesMixin, AgentViewMixin):
         self.agent_steer: str | None = None  # the agent `s` picked: the next line sent is its steer
         self.decoder = KeyDecoder(clock)
         self.glow = self._saved_glow()  # the working glow is wanted (`/glow`); `_edged` says whether it can show
+        # The living wallpaper is wanted (`/wallpaper`); `_wallpaper_shown` says whether it can show. It needs the
+        # background the terminal answered the startup query with (`background_answered`), which it puts back on the
+        # way out; `ground_set` is the colour it set the terminal's background to, None while the terminal has its own.
+        self.wallpaper = self._saved_wallpaper()
+        self.background_answered: str | None = None
+        self.ground_set: str | None = None
+        self.rows_ground: str | None = None  # the ground the session's rows were printed on (set by a full redraw)
+        self.ambient_at = 0.0  # when the wallpaper's cells were last painted, on `clock`
         self._take_size()
         self.region = self._new_region()
         self.sid = ""
@@ -2070,9 +2107,11 @@ class App(ModesMixin, AgentViewMixin):
         """The background the terminal answered, else what `COLORFGBG` in `environ` names: the theme is measured
         against it from now on (`_surface`). None of either is no background reported."""
         named = environ or {}
+        self.background_answered = answered if answered and hex_to_rgb(answered) else None
         self.background = answered or background_from_colorfgbg(named)
         self.background_named_dark = self.background is None and colorfgbg_names_dark(named)
         self.theme = self._themed()
+        self.rows_ground = self._ground()
 
     def clear_launch_screen(self, row: int | None) -> None:
         """Push the rows above the cursor off the screen, erase the scrollback, and start the region on the top row.
@@ -2126,14 +2165,22 @@ class App(ModesMixin, AgentViewMixin):
         roles it owns (`with_launch_look`), painted."""
         skin, surface, look = self._skin(), self._surface(), self._shown_look()
         banded = with_prompt_band(build_theme(skin, surface), skin, surface, look)
-        return self._painted(with_launch_look(banded, skin, surface, look))
+        looked = with_launch_look(banded, skin, surface, look)
+        if self._ground() is not None and self.background_answered is not None:
+            # On the wallpaper's ground: the rows printed now outlive it (they show on the terminal's own background
+            # after exit), so every word and mark also keeps its floor against that.
+            looked = readable_on(looked, skin, surface, self.background_answered)
+        return self._painted(looked)
 
     def _skin(self) -> SkinTheme:
         return theme_for_name(self.theme.name) or default_theme()
 
     def _surface(self) -> str | None:
         """What the theme is measured against: the reported background, a dark one `COLORFGBG` named, or a light or
-        dark one `/theme` forced."""
+        dark one `/theme` forced; while the living wallpaper shows, the look's ground the terminal was set to."""
+        ground = self._ground()
+        if ground is not None:
+            return ground
         reported = self.background
         if self.background_mode == BACKGROUND_LIGHT:
             return reported if reported and is_light(reported) else LIGHT_STAND_IN
@@ -2241,6 +2288,8 @@ class App(ModesMixin, AgentViewMixin):
             due.append(self.last_render + self._tick_seconds())
         if self.redraw_at is None and (background := self._background_due_at()) is not None:
             due.append(background)  # the background row's clock: once a second, on the second
+        if self.redraw_at is None and self._wallpaper_moves():
+            due.append(self.ambient_at + WALLPAPER_TICK_SECONDS)
         if self.path_due is not None and self.sid:
             due.append(self.path_due)
         tail = self._tail_due_at()
@@ -2281,6 +2330,7 @@ class App(ModesMixin, AgentViewMixin):
         """
         reports_may_arrive = self._reports_may_arrive()  # read before the off below starts a new grace period
         try:
+            self._restore_ground()  # first: whatever fails after it, the terminal has its own background back
             self._set_mouse(False)
             if self.pager is not None:
                 self.pager = None
@@ -3360,7 +3410,9 @@ class App(ModesMixin, AgentViewMixin):
         the region is drawn anew under whatever the shell printed meanwhile. Nothing happens without SIGTSTP.
 
         Scrollback is left as it is (no full redraw), so what the person did in
-        the shell stays readable above the session's rows. The shell's window
+        the shell stays readable above the session's rows. The terminal's own
+        background is back while the job is stopped (`_restore_ground`), and the
+        first frame after sets the wallpaper's again. The shell's window
         title is back while the job is stopped (popped, and pushed again by the
         next frame). Continued, the TUI asks the terminal for the cursor row
         (`adopt_cursor_row`), so the region knows its place from its first
@@ -3371,6 +3423,7 @@ class App(ModesMixin, AgentViewMixin):
             return
         self._set_mouse(False)
         self.region.clear()
+        self._restore_ground()  # the shell's own background while stopped; the first frame after sets it again
         if self.title_pushed:
             self.terminal.write(TITLE_POP)
             self.title_pushed, self.shown_title, self.title_words = False, None, ""
@@ -5095,6 +5148,7 @@ class App(ModesMixin, AgentViewMixin):
             "copy": self._copy,
             "theme": self._theme,
             "glow": self._glow,
+            "wallpaper": self._wallpaper_command,
             "omh-model": self._omh_model,
             "reload-skills": self._reload_skills,
             "topup": self._topup,
@@ -5630,6 +5684,8 @@ class App(ModesMixin, AgentViewMixin):
         self.theme = self._themed()
         if choice in BACKGROUND_MODES:
             self.transcript.add_notice(f"Theme {self.theme.name} {self._background_text()}.")
+            if self._wallpaper_side_held():
+                self._say_wallpaper_side_held()
         else:
             self.transcript.add_notice(f"Theme {self.theme.name} applies to this session; `omh theme` keeps it.")
         self._full_redraw()
@@ -5681,16 +5737,19 @@ class App(ModesMixin, AgentViewMixin):
         return launch_card(self._shown_look(), facts, self._launch_paint(), cols, room, self.session_skills)
 
     def _launch_swatches(self) -> dict[str, tuple[Style, ...]]:
-        """Each launch look's colours for its row in the /theme picker, each lifted to a glyph's 3:1."""
+        """Each launch look's colours for its row in the /theme picker, each lifted to a glyph's 3:1; while the living
+        wallpaper shows, on the look's own ground, so each row is a tile of the background that look gives."""
         surface = surface_for(self._skin(), self._surface())
-        ink = BLACK if is_light(surface) else WHITE
         swatches = {}
         for name in LAUNCH_PRESETS:
             palette = launch_palette(name, surface)
+            ground = look_ground(name, self._ground_light()) if self._wallpaper_shown() else None
+            behind = ground or surface
+            ink = BLACK if is_light(behind) else WHITE
             colours = palette.faces or palette.sweep or (*palette.greys[:1], *palette.whites[:2], palette.spark)
             step = max(len(colours) // LAUNCH_SWATCH_STEPS, 1)
             swatches[name] = tuple(
-                Style(fg=lifted_colour(colour, surface, EDGE_CONTRAST, ink), depth=self.color_depth)
+                Style(fg=lifted_colour(colour, behind, EDGE_CONTRAST, ink), bg=ground, depth=self.color_depth)
                 for colour in colours[::step][:LAUNCH_SWATCH_STEPS]
             )
         return swatches
@@ -5714,16 +5773,28 @@ class App(ModesMixin, AgentViewMixin):
 
     def _preview_launch(self) -> None:
         """Draw the shown look where it shows: on the launch screen, the logo by a full redraw and the live card in
-        the region; past it, the compact preview above the picker (`_launch_preview`) needs only the next frame."""
+        the region; past it, the compact preview above the picker (`_launch_preview`) needs only the next frame. Where
+        the wallpaper shows, the next frame sets the highlighted look's ground (OSC 11) and nothing more: the session
+        is printed again on a new ground once, as the picker closes (`_redraw_launch`, `_close_launch_preview`)."""
         self.theme = self._themed()  # a sent prompt's band in the shown look
         if self.card_state == CARD_LIVE:
             self._full_redraw()
         self.dirty = True
 
+    def _close_launch_preview(self) -> None:
+        """The /theme picker closed on Esc after a move: the look in use is drawn again, and the session printed
+        again only where that is needed (the launch card shows, or the ground differs from the one its rows are on)."""
+        self.theme = self._themed()
+        if self.card_state == CARD_LIVE or self._ground() != self.rows_ground:
+            self._full_redraw()
+        self.dirty = True
+
     def _redraw_launch(self) -> None:
         """Draw a look kept: as the preview does, and once the launch is past it, the logo and the kept card in
-        scrollback again by a full redraw while the whole session still fits one, as `/theme <name>` repaints."""
-        if self.card_state == CARD_LIVE or (self.in_launch_session and not self.transcript.left_out):
+        scrollback again by a full redraw while the whole session still fits one, as `/theme <name>` repaints; and
+        wherever the wallpaper's ground is no longer the one the session's rows were printed on."""
+        if self.card_state == CARD_LIVE or (self.in_launch_session and not self.transcript.left_out) \
+                or self._ground() != self.rows_ground:
             self._full_redraw()
         self.dirty = True
 
@@ -5752,7 +5823,7 @@ class App(ModesMixin, AgentViewMixin):
         elif action == LAUNCH_CLOSE:
             self.launch_picker = None
             if picker.highlighted != picker.current:
-                self._preview_launch()
+                self._close_launch_preview()
         self.dirty = True
 
     def _take_launch_clickable(self, budget: Budget, cols: int, rows: int) -> None:
@@ -5936,6 +6007,7 @@ class App(ModesMixin, AgentViewMixin):
         # The clear homes the cursor, so the next first frame starts on the screen's top row; it goes out in that
         # frame's synchronized update, so the blank screen never shows.
         self.region = self._new_region(at_top=True, lead=CLEAR_SCREEN_AND_SCROLLBACK)
+        self.rows_ground = self._ground()
         self.transcript.retake_tail(self.size[0], self.theme, REDRAW_TAIL_ROWS)
         if self.banner_record is not None:
             self.banner_facts = dict(self.banner_record)
@@ -6194,6 +6266,109 @@ class App(ModesMixin, AgentViewMixin):
             self._full_redraw()
         self.dirty = True
 
+    def _wallpaper_shown(self) -> bool:
+        """Whether the living wallpaper shows: wanted (`/wallpaper`), not held off by OMH_TUI_WALLPAPER=0, at the
+        truecolor depth (so not under NO_COLOR), on a terminal that answered the startup background query, whose
+        colour is what it puts back, and not where `/theme light` or `dark` names the other side from the terminal's
+        own background: the terminal's foreground (body text) is picked for its own background, and a ground of
+        the other lightness would leave it unreadable."""
+        answered = self.background_answered
+        return (self.wallpaper and self.environ.get(WALLPAPER_ENV) != WALLPAPER_OFF
+                and answered is not None and self.color_depth == TRUECOLOR
+                and (self.background_mode == BACKGROUND_AUTO
+                     or (self.background_mode == BACKGROUND_LIGHT) == is_light(answered)))
+
+    def _wallpaper_side_held(self) -> bool:
+        """Whether the wallpaper would show but for `/theme light` or `dark` naming the other side from the terminal's
+        own background."""
+        answered = self.background_answered
+        return (self.wallpaper and self.environ.get(WALLPAPER_ENV) != WALLPAPER_OFF and answered is not None
+                and self.color_depth == TRUECOLOR and self.background_mode != BACKGROUND_AUTO
+                and (self.background_mode == BACKGROUND_LIGHT) != is_light(answered))
+
+    def _say_wallpaper_side_held(self) -> None:
+        side = "light" if self.background_answered is not None and is_light(self.background_answered) else "dark"
+        self.transcript.add_notice(WALLPAPER_SIDE_NOTICE.format(mode=self.background_mode, side=side))
+
+    def _ground_light(self) -> bool:
+        """Whether the wallpaper takes the look's light ground: the terminal's own background is light, so its
+        foreground, picked for that background, stays readable on the ground."""
+        return self.background_answered is not None and is_light(self.background_answered)
+
+    def _ground(self) -> str | None:
+        """The background the living wallpaper gives the terminal now, the shown look's ground (the /theme picker's
+        highlight while it is open), or None where it does not show."""
+        return look_ground(self._shown_look(), self._ground_light()) if self._wallpaper_shown() else None
+
+    def _sync_ground(self) -> None:
+        """Set the terminal's background to the wallpaper's ground where that changed (OSC 11), or put the terminal's
+        own back where the wallpaper went (`_restore_ground`)."""
+        ground = self._ground()
+        if ground is None:
+            self._restore_ground()
+        elif ground != self.ground_set:
+            self.terminal.write(background_set(ground))
+            self.ground_set = ground
+
+    def _restore_ground(self) -> None:
+        """Put the terminal's own background back if the wallpaper set another: on every way out (`_shutdown`), at a
+        stop (`_suspend`, set again by the first frame after), and when the wallpaper goes."""
+        if self.ground_set is not None and self.background_answered is not None:
+            self.ground_set = None
+            self.terminal.write(background_restore(self.background_answered))
+
+    def _ambient(self) -> tuple[Cell, ...] | None:
+        """The wallpaper's lit cells on the whole screen at the clock's time, still at one moment with reduced
+        motion; None where the wallpaper does not show."""
+        if self._ground() is None:
+            return None
+        seconds = self.clock() if self.motion else 0.0
+        return scene(self._shown_look(), *self.screen, seconds, self._ground_light())
+
+    def _wallpaper_moves(self) -> bool:
+        """Whether the wallpaper's own tick paints now: it shows, with motion on, no pager or settling resize holds the
+        screen, and the composer is empty. While someone types (an IME's pre-edit sits at the caret), no tick moves
+        or hides the cursor; the frames their keys draw still bring the scene along."""
+        return (self.motion and self.pager is None and self.redraw_at is None and not self.composer.text
+                and self._ground() is not None)
+
+    def _saved_wallpaper(self) -> bool:
+        """Whether the living wallpaper is wanted: as saved under the OMH home, else on."""
+        home = self._omh_home()
+        saved = read_wallpaper_choice(home) if home is not None else None
+        return True if saved is None else saved
+
+    def _wallpaper_command(self, arg: str) -> None:
+        """`/wallpaper on|off` turns the living wallpaper on or off and keeps that under the OMH home; alone, switches
+        it. The theme is measured against another background, so the session is drawn again in it."""
+        choice = arg.strip().lower()
+        if choice not in ("", "on", "off"):
+            self.transcript.add_notice(WALLPAPER_USAGE_NOTICE, NOTICE_WARN)
+            return
+        self.wallpaper = not self.wallpaper if not choice else choice == "on"
+        state = "on" if self.wallpaper else "off"
+        home = self._omh_home()
+        if home is None:
+            self.transcript.add_notice(WALLPAPER_SESSION_NOTICE.format(state=state))
+        else:
+            try:
+                path = write_wallpaper_choice(home, self.wallpaper)
+            except OSError as error:
+                self.transcript.add_notice(WALLPAPER_SAVE_FAILED_NOTICE.format(
+                    state=state, path=theme_store_path(home), error=error), NOTICE_WARN)
+            else:
+                self.transcript.add_notice(WALLPAPER_KEPT_NOTICE.format(state=state, path=path))
+        if self.wallpaper and self.environ.get(WALLPAPER_ENV) == WALLPAPER_OFF:
+            self.transcript.add_notice(WALLPAPER_ENV_NOTICE.format(state=state))
+        elif self.wallpaper and self._wallpaper_side_held():
+            self._say_wallpaper_side_held()
+        elif self.wallpaper and not self._wallpaper_shown():
+            self.transcript.add_notice(WALLPAPER_UNAVAILABLE_NOTICE.format(state=state))
+        self.theme = self._themed()
+        self._sync_ground()  # off: the terminal's own background is back before anything else is drawn
+        self._full_redraw()
+        self.dirty = True
+
     def _margin(self) -> int:
         """Columns the rows are drawn in from the screen's left edge."""
         return EDGE_MARGIN if self._edged() else 0
@@ -6232,6 +6407,9 @@ class App(ModesMixin, AgentViewMixin):
         due = (self._busy() or self._panel_live() or self._aura_live() or bool(self.held_submits)) \
             and now - self.last_render >= self._tick_seconds()
         if not (self.dirty or due or self._background_due()):
+            if self._wallpaper_moves() and now - self.ambient_at >= WALLPAPER_TICK_SECONDS:
+                self.ambient_at = now  # only the wallpaper's cells that moved: no frame is built
+                self.region.paint_ambient(self._ambient() or (), self.size[1])
             return
         self.dirty = False
         self.last_render = now
@@ -6242,6 +6420,7 @@ class App(ModesMixin, AgentViewMixin):
         cols, rows = self.size
         self._settle_list()
         self._write_title()
+        self._sync_ground()
         if self.pager is not None:
             self.bg_row_shown = False
             self.clickable = {}
@@ -6368,7 +6547,11 @@ class App(ModesMixin, AgentViewMixin):
         # Flushed before the frame, the lines cover the region's top rows, where the lines leaving
         # the tail were drawn (a settled tool group is those same rows, moved above the region), and
         # the frame is drawn under them. Flush and frame are one write, so no screen between them shows.
-        self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, edge=self._edge())
+        # The wallpaper paints the blank tails of the rows above the region too, the transcript's included, so it stays
+        # in view over a full session (owner's choice of 2026-10-29; `screen` names what that costs a selection).
+        self.region.render(frame.lines, frame.cursor, cols, flush=stable, screen_rows=rows, edge=self._edge(),
+                           ambient=self._ambient(), ambient_above=True)
+        self.ambient_at = self.clock()
         self.frame_budget = frame.budget
         # The frame keeps the slot's first rows (`build_frame`), and the row is the slot's last.
         self.bg_row_shown = self.bg_slot_row is not None and self.bg_slot_row < frame.budget.slot

@@ -358,6 +358,7 @@ class AppTestCase(unittest.TestCase):
             "TERM": "xterm-256color",
             FALLBACK_SENTINEL_ENV: str(root / "fallback"),
             "OMH_TUI_GLOW": "0",  # the working glow's margin moves every row; its own tests turn it on
+            "OMH_TUI_WALLPAPER": "0",  # the living wallpaper paints the blank cells; its own tests turn it on
             **(env or {}),
         }
         environ.pop("OMH_NO_TUI", None)

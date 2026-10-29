@@ -175,9 +175,25 @@ def write_glow_choice(omh_home: Path, on: bool) -> Path:
     return _write_theme_store(omh_home, "glow", "on" if on else "off")
 
 
+def read_wallpaper_choice(omh_home: Path) -> bool | None:
+    """Whether the OMH TUI's living wallpaper (a look's background colour and its moving scene) is on, as saved for
+    this OMH home (`wallpaper`, beside the theme); None when nothing this module wrote says."""
+    value = _theme_store_record(omh_home).get("wallpaper")
+    return {"on": True, "off": False}.get(value) if isinstance(value, str) else None
+
+
+def write_wallpaper_choice(omh_home: Path, on: bool) -> Path:
+    """Save whether the OMH TUI's living wallpaper is on; the path it was written to. The theme, look and glow stay."""
+    return _write_theme_store(omh_home, "wallpaper", "on" if on else "off")
+
+
+# The keys the one writer (`_write_theme_store`) keeps: every write carries the others over.
+THEME_STORE_KEYS = ("theme", "launch", "glow", "wallpaper")
+
+
 def _write_theme_store(omh_home: Path, key: str, value: str) -> Path:
     path = theme_store_path(omh_home)
-    kept = {name: _theme_store_record(omh_home).get(name) for name in ("theme", "launch", "glow") if name != key}
+    kept = {name: _theme_store_record(omh_home).get(name) for name in THEME_STORE_KEYS if name != key}
     record = {"schema_version": THEME_STORE_SCHEMA, **{name: v for name, v in kept.items() if isinstance(v, str)}}
     atomic_write_json(path, {**record, key: value})
     return path

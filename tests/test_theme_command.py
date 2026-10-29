@@ -139,6 +139,43 @@ class ThemeCommandTests(unittest.TestCase):
             self.assertNotEqual(status, 0)
             self.assertFalse(self._store(tmp).exists())
 
+    def test_wallpaper_off_is_saved_beside_the_theme_and_glow_and_bare_wallpaper_reports_it(self) -> None:
+        with TemporaryDirectory() as tmp:
+            homes = self._homes(tmp)
+            payload = json.loads(run_cli([*homes, "theme", "wallpaper"])[1])
+            self.assertEqual((payload["wallpaper"], payload["source"], payload["changed"]), ("on", "default", False))
+            run_cli([*homes, "theme", "use", "amber"])
+            run_cli([*homes, "theme", "glow", "off"])
+            status, out, _ = run_cli([*homes, "theme", "wallpaper", "off"])
+            self.assertEqual(status, 0)
+            payload = json.loads(out)
+            self.assertEqual(payload["schema_version"], "omh_theme_wallpaper/v1")
+            self.assertEqual((payload["wallpaper"], payload["previous"], payload["changed"]), ("off", "on", True))
+            self.assertEqual(
+                json.loads(self._store(tmp).read_text(encoding="utf-8")),
+                {"schema_version": THEME_STORE_SCHEMA, "theme": "amber", "glow": "off", "wallpaper": "off"},
+            )
+            self.assertFalse(json.loads(run_cli([*homes, "theme", "wallpaper", "off"])[1])["changed"])
+            run_cli([*homes, "theme", "glow", "on"])  # a write of another key keeps this one
+            payload = json.loads(run_cli([*homes, "theme", "wallpaper"])[1])
+            self.assertEqual((payload["wallpaper"], payload["source"]), ("off", "saved"))
+            self.assertEqual(json.loads(run_cli([*homes, "theme", "wallpaper", "on"])[1])["wallpaper"], "on")
+            self.assertEqual(self._hermes_home_entries(tmp), [])
+
+    def test_bare_wallpaper_in_plain_text_says_it_changes_the_terminals_background(self) -> None:
+        with TemporaryDirectory() as tmp:
+            status, out, _ = run_cli([*self._homes(tmp), "theme", "wallpaper"], output_json=False)
+            self.assertEqual(status, 0)
+            self.assertIn("OMH TUI living wallpaper: on", out)
+            self.assertIn("Nothing saved; on by default", out)
+            self.assertIn("puts the terminal's own back when it exits", out)
+
+    def test_wallpaper_takes_only_on_or_off(self) -> None:
+        with TemporaryDirectory() as tmp:
+            status, _out, _err = run_cli([*self._homes(tmp), "theme", "wallpaper", "maybe"])
+            self.assertNotEqual(status, 0)
+            self.assertFalse(self._store(tmp).exists())
+
     def test_repair_is_retired_and_still_exits_zero(self) -> None:
         with TemporaryDirectory() as tmp:
             homes = self._homes(tmp)

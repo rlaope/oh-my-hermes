@@ -115,8 +115,9 @@ class RecordingClient:
 
 def make_app(*, busy: bool = False, rows: int = 24, cols: int = 80, **options: object) -> tuple[App, RecordingClient]:
     client = RecordingClient()
-    # The working glow's margin moves every row; its own tests turn it on.
-    environ = {"OMH_TUI_GLOW": "0", **options.pop("environ", {})}  # type: ignore[dict-item]
+    # The working glow's margin moves every row and the living wallpaper paints the blank cells; their own tests
+    # turn them on.
+    environ = {"OMH_TUI_GLOW": "0", "OMH_TUI_WALLPAPER": "0", **options.pop("environ", {})}  # type: ignore[dict-item]
     app = App(ScriptedTerminal(rows, cols), client, environ, poller=FakePoller(), **options)  # type: ignore[arg-type]
     app.sid = SID
     app.turn_pending = busy

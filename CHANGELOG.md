@@ -20,6 +20,38 @@ All notable changes will be documented here.
   session's id; after a `/new` on the same chat, neither conversation
   shows the other's.
 
+- **Each OMH TUI launch look now has a living wallpaper: its own background
+  colour and a scene that keeps moving.** While the TUI runs it sets the
+  terminal's background to the look's colour with OSC 11 and puts the
+  terminal's own back on every way out: on exit, after a crash or a signal,
+  while the job is stopped with Ctrl+Z, and as soon as the wallpaper is
+  turned off. Each scene has one or two motifs drawn big in dense
+  characters, with light particles round them: moonlit is deep navy with a
+  large crescent moon whose glow pulses, drifting clouds and twinkling
+  stars; sakura dusky plum with a blossoming branch and falling petals;
+  aurora deep teal with tall waving curtains of light; ember dark brown-red
+  with a flickering campfire and rising sparks; gold a large sun with
+  turning rays; violet large drifting bokeh; graphite rain over a rippling
+  puddle; spectrum a prism fanning a beam into five hues. A light terminal
+  gets each look's pale ground. The theme is measured against the ground,
+  and every word and mark also keeps its floor against the terminal's own
+  background, where the session's rows stay after exit; a look changed
+  mid-session prints the session again on its ground. At most a sixth of the
+  screen is lit and no cell passes 3:1 against the ground; the scene is
+  drawn on blank cells only, never over text, a band or into the scrollback:
+  blank rows whole and the tail of a row with text two cells past it, the
+  transcript's rows too, so the motifs on the screen's right side stay in
+  view over a full session (a selection across rows then copies those
+  glyphs; `/wallpaper off` keeps it clean), repaints only the cells that
+  changed every 0.25 s, pauses while the composer holds text, and stands
+  still with reduced motion. It shows at truecolor on a terminal that
+  answered the background query, not under `NO_COLOR`, and not where `/theme
+  light|dark` names the other side from the terminal's own. It is on by
+  default; `/wallpaper on|off` (alone, it switches) and `omh theme wallpaper
+  on|off` save the choice as `wallpaper` in the theme record, and
+  `OMH_TUI_WALLPAPER=0` holds it off in one terminal. The `/theme` picker
+  shows each look's colours on its ground.
+
 - **Copying from the pager after an emoji copies the right text.** The
   pager's drag, double click and highlight counted columns by code point
   while the row is painted by glyph, so after a ZWJ family, a skin-tone or

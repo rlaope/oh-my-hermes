@@ -1151,6 +1151,53 @@ class RowTests(unittest.TestCase):
         self.assertGreater(self.idle_frames(1.0), 2)
 
 
+class WallpaperTickTests(unittest.TestCase):
+    """The row's once-a-second frames and the living wallpaper's own tick (#2395) share the idle loop: each keeps its
+    deadline, neither starves the other, and the row's frames still stop while it is off screen."""
+
+    def test_the_row_s_frames_and_the_wallpaper_s_ticks_both_keep_their_rate(self) -> None:
+        from omh.tui import app as app_module
+        from omh.tui.wallpaper import Cell
+        from test_tui_wallpaper import ANSWERED, WALLPAPER_ON
+
+        def moving(look, cols, rows, seconds, light):
+            return (Cell(rows - 6, int(seconds * 4) % cols, "░", "#445566"),)
+
+        ask_on_any_platform(self)
+        clock, wall = Clock(1000.0), Clock(NOW + 0.05)
+        with patch.object(app_module, "scene", moving):
+            app, _client = make_app(rows=42, cols=150, clock=clock, wall_clock=wall, environ=WALLPAPER_ON)
+            app.adopt_background(ANSWERED)
+            app.region = app._new_region(at_top=True)
+            app.stored_id = STORED
+            snapshot = HudSnapshot(STORED, {}, 0.0, {}, (process(),))
+            app.poller.take = lambda: snapshot
+            app._take_hud()
+            app._render_when_due()
+            self.assertTrue(app._wallpaper_moves() and app.bg_row_shown)
+            tick = app_module.WALLPAPER_TICK_SECONDS
+            steps = round(10.0 / tick)
+            with patch.object(app, "_render", wraps=app._render) as render, \
+                    patch.object(app.region, "paint_ambient", wraps=app.region.paint_ambient) as painted:
+                for _ in range(steps):
+                    clock.at += tick
+                    wall.at += tick
+                    self.assertLessEqual(app._read_timeout(), max(tick, 1.0) + 1e-9)
+                    app._render_when_due()
+            self.assertEqual(render.call_count, 10)  # the row: one frame a second
+            self.assertGreaterEqual(painted.call_count, steps - 10 - 1)  # the wallpaper: every other tick
+            app.size = (MIN_COLS - 1, 42)  # the row off screen: its frames stop, the wallpaper's ticks go on
+            app.dirty = True
+            app._render_when_due()
+            self.assertFalse(app.bg_row_shown)
+            with patch.object(app, "_render", wraps=app._render) as render:
+                for _ in range(steps):
+                    clock.at += tick
+                    wall.at += tick
+                    app._render_when_due()
+            self.assertEqual(render.call_count, 0)
+
+
 class StyleTests(unittest.TestCase):
     def setUp(self) -> None:
         ask_on_any_platform(self)

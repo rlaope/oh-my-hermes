@@ -14,6 +14,8 @@ are the terminal's default foreground, which is readable on whatever
 background the person chose. Every other role is measured against that background
 (`build_theme(skin, background)`: the colour the terminal reported, or the
 palette's status-bar background, the dark stand-in, when it reported none).
+While the living wallpaper shows (`wallpaper`), the background is the launch look's own
+(`LogoPalette.ground`, `look_ground`), set on the terminal with OSC 11, and the roles are measured against that.
 A role a person reads as text reaches WCAG's 4.5:1 (`TEXT_ROLES`); a role
 drawn only as a glyph or an edge (`dim`, the composer rule and prompt mark)
 reaches the 3:1 a graphical mark needs. Each starts from the palette's own
@@ -190,59 +192,68 @@ class LogoPalette:
     greys: tuple[str, ...] = ()  # graphite: OH-MY-, per row
     whites: tuple[str, ...] = ()  # graphite: HERMES, per row
     spark: str = ""  # graphite: the two hyphens
+    ground: str = ""  # the terminal's background while the living wallpaper shows (`wallpaper`, set with OSC 11)
 
 
 LAUNCH_PALETTES: dict[str, tuple[LogoPalette, LogoPalette]] = {
     "spectrum": (
         LogoPalette("#F778BA", "#F8A87E", "#4A4F66",
-                    sweep=tuple(KIND_HUES[kind][0] for kind in ("skill", "dag", "file", "shell", "web"))),
+                    sweep=tuple(KIND_HUES[kind][0] for kind in ("skill", "dag", "file", "shell", "web")),
+                    ground="#18162B"),
         # The kind hues' light column ends in an olive lime (#687C00); the sweep's own light stops keep each hue's
         # chroma instead, the lime at OKLCH 132 degrees.
-        LogoPalette("#B53C80", "#BF4306", "#8C93A8", sweep=("#974BB2", "#B53C80", "#BF4306", "#986600", "#4E8302")),
+        LogoPalette("#B53C80", "#BF4306", "#8C93A8", sweep=("#974BB2", "#B53C80", "#BF4306", "#986600", "#4E8302"),
+                    ground="#F4F1FB"),
     ),
     "violet": (
         LogoPalette("#D9A8FF", "#D58CF0", "#6E5A85",
-                    faces=("#EAE3FF", "#E2C8FF", "#DAAEFA", "#DE93E8", "#E278CF", "#E35AAE")),
+                    faces=("#EAE3FF", "#E2C8FF", "#DAAEFA", "#DE93E8", "#E278CF", "#E35AAE"), ground="#211538"),
         LogoPalette("#7447C8", "#8A3FD1", "#9A8AB4",
-                    faces=("#7447C8", "#8843C0", "#9940B6", "#A93CA8", "#B73A98", "#C33887")),
+                    faces=("#7447C8", "#8843C0", "#9940B6", "#A93CA8", "#B73A98", "#C33887"), ground="#F2ECFC"),
     ),
     "gold": (
         LogoPalette("#F2C14E", "#E5B655", "#7B6540",
-                    faces=("#FFEEBB", "#F9DB8E", "#EFC972", "#E5B655", "#DBA334", "#C98A10")),
+                    faces=("#FFEEBB", "#F9DB8E", "#EFC972", "#E5B655", "#DBA334", "#C98A10"), ground="#221A08"),
         LogoPalette("#9A6700", "#925D00", "#A08A5C",
-                    faces=("#A77601", "#A06E05", "#996502", "#925D00", "#8B5505", "#844E04")),
+                    faces=("#A77601", "#A06E05", "#996502", "#925D00", "#8B5505", "#844E04"), ground="#FBF4DF"),
     ),
     "graphite": (
         LogoPalette("#F0F6FC", "#C2C8CE", "#3D444D",
                     greys=("#9198A1", "#878E97", "#7D8590", "#737B86", "#6A717C", "#636A74"),
-                    whites=("#F0F6FC", "#E3E9EF", "#D3D9DF", "#C2C8CE", "#B1B8BF", "#A2A9B0"), spark="#00CED1"),
+                    whites=("#F0F6FC", "#E3E9EF", "#D3D9DF", "#C2C8CE", "#B1B8BF", "#A2A9B0"), spark="#00CED1",
+                    ground="#1A1D22"),
         LogoPalette("#1F2328", "#464B50", "#8C959F",
                     greys=("#7C8186", "#767B80", "#70757A", "#6A6F74", "#65696F", "#5F6469"),
-                    whites=("#202429", "#2D3135", "#393E42", "#464B50", "#54595E", "#62676C"), spark="#008A8D"),
+                    whites=("#202429", "#2D3135", "#393E42", "#464B50", "#54595E", "#62676C"), spark="#008A8D",
+                    ground="#F0F2F4"),
     ),
     # Anime pastel: soft pink into sky blue and cream, at a high OKLCH lightness; the rails sky blue.
     "sakura": (
-        LogoPalette("#FC9CBD", "#7AC8F5", "#734A5A", sweep=("#FF99BD", "#E5AEE8", "#86C5FA", "#91DBF2", "#F9E6BB")),
-        LogoPalette("#C1587D", "#087AAF", "#C69EAC", sweep=("#C85E83", "#9F69A7", "#297AB6", "#2286A7", "#A38951")),
+        LogoPalette("#FC9CBD", "#7AC8F5", "#734A5A", sweep=("#FF99BD", "#E5AEE8", "#86C5FA", "#91DBF2", "#F9E6BB"),
+                    ground="#35192D"),
+        LogoPalette("#C1587D", "#087AAF", "#C69EAC", sweep=("#C85E83", "#9F69A7", "#297AB6", "#2286A7", "#A38951"),
+                    ground="#FBE9F0"),
     ),
     # A moonlit night: pale moonlight yellow over silver into deep navy, the card's edge (and so the prompt band) navy.
     "moonlit": (
         LogoPalette("#D5DFEB", "#F2E6A8", "#2D3B62",
-                    faces=("#FFF3B5", "#D6E7F8", "#C0CBDF", "#9CAED5", "#7D93CD", "#677CC2")),
+                    faces=("#FFF3B5", "#D6E7F8", "#C0CBDF", "#9CAED5", "#7D93CD", "#677CC2"), ground="#0E1A40"),
         LogoPalette("#535E6F", "#334889", "#8B98B8",
-                    faces=("#91772A", "#576574", "#4B5B77", "#3E517F", "#2E4282", "#26357B")),
+                    faces=("#91772A", "#576574", "#4B5B77", "#3E517F", "#2E4282", "#26357B"), ground="#EAF0FB"),
     ),
     # Aurora: emerald and teal into violet across the columns; the rails teal, so no chrome reads as the done green.
     "aurora": (
-        LogoPalette("#B696F7", "#50D7C3", "#0C5952", sweep=("#5EE38B", "#4FD9B4", "#53D1D0", "#77A4F6", "#AE84F2")),
-        LogoPalette("#7145B5", "#0E7A6D", "#73ABA3", sweep=("#108846", "#0C7E65", "#00787D", "#3860AC", "#7541B8")),
+        LogoPalette("#B696F7", "#50D7C3", "#0C5952", sweep=("#5EE38B", "#4FD9B4", "#53D1D0", "#77A4F6", "#AE84F2"),
+                    ground="#072E2C"),
+        LogoPalette("#7145B5", "#0E7A6D", "#73ABA3", sweep=("#108846", "#0C7E65", "#00787D", "#3860AC", "#7541B8"),
+                    ground="#E5F5F0"),
     ),
     # Ember: amber at the top through orange to crimson; the rails orange, between the warning amber and failure red.
     "ember": (
         LogoPalette("#FCC270", "#FF8F49", "#70322B",
-                    faces=("#FFCF82", "#FFA54B", "#FF7C34", "#F3562E", "#E23532", "#CC2538")),
+                    faces=("#FFCF82", "#FFA54B", "#FF7C34", "#F3562E", "#E23532", "#CC2538"), ground="#2B120C"),
         LogoPalette("#B3260E", "#B54900", "#CB8D7D",
-                    faces=("#A96000", "#B44A00", "#B83300", "#B31609", "#A9001A", "#9A0027")),
+                    faces=("#A96000", "#B44A00", "#B83300", "#B31609", "#A9001A", "#9A0027"), ground="#FCEDE5"),
     ),
 }
 # A sent prompt's band: the launch look's card-edge colour moved this far toward the background (on a dark one, on a
@@ -562,6 +573,13 @@ def launch_palette(name: str, surface: str) -> LogoPalette:
     return light if is_light(surface) else dark
 
 
+def look_ground(name: str, light: bool) -> str:
+    """The background launch look `name` paints the terminal while its wallpaper shows: its light ground on a light
+    terminal, else its dark one; the default look's for an unknown name. The theme is then measured against it."""
+    dark, pale = LAUNCH_PALETTES.get(name, LAUNCH_PALETTES[DEFAULT_LAUNCH])
+    return pale.ground if light else dark.ground
+
+
 # The mark a catch row opens with, drawn through the launch look's logo colours by the transcript (`Theme.catch_mark`).
 # It lives here, not in `panels`, so the approval slot (`prompts`) can draw it without importing `panels`.
 CATCH_MARK = "✦ OMH"
@@ -610,6 +628,45 @@ def with_launch_look(theme: Theme, skin: SkinTheme, background: str | None, look
                      rule=Style(fg=_lifted(palette.edge, ink, surface, EDGE_CONTRAST)),
                      accent=Style(fg=_lifted(palette.label, ink, surface, EDGE_CONTRAST)))
     return with_catch_colours(looked, skin, background, look)
+
+
+# What `readable_on` lifts beyond `TEXT_ROLES` and `GLYPH_ROLES`: the other roles drawn as words (bold hues, a
+# catch row's words) and as marks, single and stepped. Styles with a background of their own (bands, the pager's bar,
+# an approval's choices) are measured against that band and keep their colours.
+WORD_ROLES = ("slash", "menu_current", "catch_words", "background_word")
+WORD_STEPS = ("kinds", "dag_words", "aura", "aura_glint")
+MARK_STEPS = ("dag_edges", "catch_mark")
+
+
+def readable_on(theme: Theme, skin: SkinTheme, *backgrounds: str) -> Theme:
+    """`theme` with every word and mark drawn on the terminal's own background reaching its floor against each of
+    `backgrounds` in turn, lifted toward the ink only as far as that takes; where they are all on one side, a lift
+    for a later one keeps the floors an earlier one reached (a light ink only gains against a darker background).
+
+    For the living wallpaper (`wallpaper`): the roles are measured against the look's ground, a catch row's mark
+    and the other stepped colours included (`build_theme` takes those from the logo as they are), and the rows
+    printed with them stay in the terminal after the wallpaper's background is put back, on the background the
+    terminal reported."""
+    for background in backgrounds:
+        ink = BLACK if is_light(background) else _palette(skin)["banner_text"]
+        changes: dict[str, object] = {}
+        for name in (*TEXT_ROLES, *WORD_ROLES):
+            changes[name] = _lift_ink(getattr(theme, name), ink, background, TEXT_CONTRAST)
+        for name in GLYPH_ROLES:
+            changes[name] = _lift_ink(getattr(theme, name), ink, background, EDGE_CONTRAST)
+        for name in WORD_STEPS:
+            changes[name] = tuple(_lift_ink(style, ink, background, TEXT_CONTRAST) for style in getattr(theme, name))
+        for name in MARK_STEPS:
+            changes[name] = tuple(_lift_ink(style, ink, background, EDGE_CONTRAST) for style in getattr(theme, name))
+        theme = replace(theme, **changes)
+    return theme
+
+
+def _lift_ink(style: Style, ink: str, background: str, minimum: float) -> Style:
+    """`style`'s foreground lifted to `minimum` against `background`; a style on a band of its own stays as it is."""
+    if style.fg is None or style.bg is not None:
+        return style
+    return replace(style, fg=_lifted(style.fg, ink, background, minimum))
 
 
 def blend(start: str, end: str, share: float) -> str:
