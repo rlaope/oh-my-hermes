@@ -185,7 +185,9 @@ class HudPoller:
     The first read of a session also reads which earlier segments of its
     conversation rotating compaction left (`earlier_segments`): their
     processes are this session's too, and when the session switched from is
-    one of them, what was kept for it is kept on.
+    one of them, what was kept for it is kept on. Reads go on asking which
+    route keys Hermes recorded for those ids (`recorded_routes`) until one
+    is found, for a messaging session's processes.
     """
 
     def __init__(
@@ -212,6 +214,7 @@ class HudPoller:
         self._watched: tuple[str, ...] = ()
         self._processes: dict[str, BackgroundProcess] = {}
         self._earlier: tuple[str, ...] | None = None  # None: not read yet for this session
+        self._routes: tuple[str, ...] = ()  # the route keys Hermes recorded for those ids (`recorded_routes`)
         self._left: tuple[str, dict[str, BackgroundProcess]] = ("", {})  # the session switched from, its processes
         # `refresh` calls, and the most a read that started after them has accounted for: that read is kept as new.
         self._refreshes = 0
@@ -244,7 +247,7 @@ class HudPoller:
             self._session = stored_id
             self._generation += 1
             self._processes = {}
-            self._earlier = None
+            self._earlier, self._routes = None, ()
             self._last_full = ""
             self._last_structural = ""
             self._interval = HUD_POLL_MIN_SECONDS
@@ -290,7 +293,7 @@ class HudPoller:
         """Read once for the current session and return the seconds to wait before the next read."""
         with self._lock:
             session, generation, watched, tracked = self._session, self._generation, self._watched, self._processes
-            refreshes, earlier, (left, carried) = self._refreshes, self._earlier, self._left
+            refreshes, earlier, (left, carried), routes = self._refreshes, self._earlier, self._left, self._routes
         if not session:
             return HUD_POLL_MAX_SECONDS
         payload = self._read(session)
@@ -302,7 +305,9 @@ class HudPoller:
             earlier = earlier_segments(process_home, session)
             if left in earlier:
                 tracked = {**carried, **tracked}
-        processes = still_running(tracked, read_processes(process_home, session, earlier))
+        if not routes:  # until the session's row names one: a new session's row may come after its first read
+            routes = recorded_routes(process_home, (session, *earlier))
+        processes = still_running(tracked, read_processes(process_home, session, earlier, routes))
         running = sorted(processes.values(), key=lambda process: (process.started_at, process.proc_id))
         shown = [[process.proc_id, process.notify, process.watched] for process in running]
         full = _fingerprint([payload, tokens, shown])
@@ -310,7 +315,7 @@ class HudPoller:
         with self._lock:
             if generation != self._generation:
                 return HUD_POLL_MIN_SECONDS
-            self._processes, self._earlier, self._left = processes, earlier, ("", {})
+            self._processes, self._earlier, self._left, self._routes = processes, earlier, ("", {}), routes
             fresh = full != self._last_full or refreshes != self._refreshed
             self._refreshed = refreshes
             if fresh:
@@ -365,6 +370,33 @@ def earlier_segments(hermes_home: object, session_id: str) -> tuple[str, ...]:
     except (OSError, ValueError):
         return ()
     return tuple(item for item in found if isinstance(item, str)) if isinstance(found, list) else ()
+
+
+def recorded_routes(hermes_home: object, session_ids: Sequence[str]) -> tuple[str, ...]:
+    """The route keys Hermes recorded on `session_ids`' rows of the state.db under `hermes_home`
+    (`sessions.session_key`: a messaging chat's `agent:<namespace>:<platform>:…`, a local session's route), read-only
+    and opened as `read_output_tokens` opens it. No ids, no home, no file, and any SQLite failure read as none."""
+    if not session_ids or not isinstance(hermes_home, str) or not hermes_home:
+        return ()
+    try:
+        state_db = Path(hermes_home) / "state.db"
+        if not state_db.is_file():
+            return ()
+    except (OSError, ValueError):
+        return ()
+    try:
+        connection = sqlite3.connect(f"file:{quote(str(state_db))}?mode=ro", uri=True, timeout=0.25)
+    except sqlite3.Error:
+        return ()
+    try:
+        rows = connection.execute(
+            f"SELECT session_key FROM sessions WHERE id IN ({','.join('?' for _ in session_ids)})", tuple(session_ids)
+        ).fetchall()
+    except sqlite3.Error:
+        return ()
+    finally:
+        connection.close()
+    return tuple(sorted({row[0] for row in rows if isinstance(row[0], str) and row[0]}))
 
 
 def read_output_tokens(hermes_home: object, session_ids: Sequence[str]) -> dict[str, int]:

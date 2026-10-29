@@ -35,7 +35,7 @@ from omh.tui.background import (
 from omh.tui.bot_board import ON_POSIX, process_facts
 from omh.tui.keys import ENTER, Key
 from omh.skin_pack import theme_for_name
-from omh.tui.panels import HudPoller, HudSnapshot
+from omh.tui.panels import HudPoller, HudSnapshot, recorded_routes
 from omh.tui.style import NO_COLOR, Span
 from omh.tui.theme import (
     DEFAULT_THEME, TEXT_CONTRAST, build_theme, contrast_ratio, kind_style, surface_for, with_catch_colours,
@@ -64,6 +64,26 @@ def row(**fields: object) -> dict:
     }
     entry.update(fields)
     return entry
+
+
+# A Telegram DM a bot profile serves, resumed in the TUI: its state.db id, and the route Hermes records on that row
+# (`sessions.session_key`, gateway/session_recovery.py:440,457 at origin/main 0431192d69; 425,442 at bf0203a794).
+CHAT = "20261029_090000_aa11bb"
+CHAT_ROUTE = "agent:kami:telegram:dm:12345"
+
+
+def record_routes(hermes_home: str, keys: dict[str, str]) -> None:
+    """Hermes' `sessions.session_key` column (hermes_state_common.py:468) on rows `write_sessions` wrote."""
+    import sqlite3
+
+    connection = sqlite3.connect(Path(hermes_home) / "state.db")
+    try:
+        connection.execute("ALTER TABLE sessions ADD COLUMN session_key TEXT")
+        connection.executemany("UPDATE sessions SET session_key = ? WHERE id = ?",
+                               [(key, session) for session, key in keys.items()])
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def process(**fields: object) -> BackgroundProcess:
@@ -139,6 +159,35 @@ class ReadProcessesTests(unittest.TestCase):
         shorter = {f"proc_{index}" for index, key in enumerate(owned + others) if key in (STORED[:-4], others[0])}
         self.assertEqual({found.proc_id for found in read_processes(self.home, STORED[:-4])}, shorter)
         self.assertEqual(len(shorter), 2)
+
+    def test_a_recorded_route_owns_only_the_rows_this_conversation_spawned(self) -> None:
+        """A messaging chat's route is per chat and outlives a conversation on it, so a row under it is this
+        session's only when its `parent_session_id` (the spawning session-db id, tools/process_registry.py:581-583,
+        1092) is this session's. Without the recorded route nothing is guessed from the key."""
+        self.write([
+            row(session_id="proc_ours", session_key=CHAT_ROUTE, parent_session_id=CHAT),
+            row(session_id="proc_later", session_key=CHAT_ROUTE, parent_session_id="20261029_100000_cc22dd"),
+            row(session_id="proc_unparented", session_key=CHAT_ROUTE, parent_session_id=""),
+            row(session_id="proc_longer", session_key=f"{CHAT_ROUTE}6", parent_session_id=CHAT),
+            row(session_id="proc_shorter", session_key=CHAT_ROUTE[:-1], parent_session_id=CHAT),
+            row(session_id="proc_default", session_key="agent:main:telegram:dm:12345", parent_session_id=CHAT),
+            row(session_id="proc_thread", session_key=f"{CHAT_ROUTE}:77", parent_session_id=CHAT),
+        ])
+        self.assertEqual([found.proc_id for found in read_processes(self.home, CHAT, routes=(CHAT_ROUTE,))],
+                         ["proc_ours"])
+        self.assertEqual(read_processes(self.home, CHAT), ())
+        self.assertEqual(read_processes(self.home, "20261029_100000_cc22dd"), ())
+
+    def test_recorded_routes_are_read_off_the_session_rows_and_nothing_else(self) -> None:
+        self.assertEqual(recorded_routes(self.home, (CHAT,)), ())  # no state.db
+        write_sessions(Path(self.home), session_row(CHAT), session_row("other"), session_row("bare"))
+        record_routes(self.home, {CHAT: CHAT_ROUTE, "other": "agent:main:discord:dm:9", "bare": ""})
+        self.assertEqual(recorded_routes(self.home, (CHAT,)), (CHAT_ROUTE,))
+        self.assertEqual(recorded_routes(self.home, (CHAT, "bare", "missing")), (CHAT_ROUTE,))
+        self.assertEqual(recorded_routes(self.home, ()), ())
+        self.assertEqual(recorded_routes(None, (CHAT,)), ())
+        (Path(self.home) / "state.db").write_bytes(b"not a database\n" * 64)
+        self.assertEqual(recorded_routes(self.home, (CHAT,)), ())
 
     def test_the_earlier_segments_of_the_conversation_are_owned_too(self) -> None:
         """Rotating compaction re-anchors the stored id (tui_gateway/session_compression.py:331); a process started
@@ -337,6 +386,34 @@ class PollerTests(unittest.TestCase):
         self.poller.poll_once()
         snapshot = self.poller.take()
         self.assertEqual((snapshot.processes, snapshot.earlier), ((), ()))
+
+    def test_a_resumed_messaging_session_shows_the_processes_its_turns_started(self) -> None:
+        """A bot profile's Telegram session resumed here: matched on the route Hermes recorded on its row, including
+        after a rotation (a continuation inherits the route, hermes_state_sessions.py:392-395 at origin/main).
+        Also a named profile's local session, `agent:<profile>:local:dm:<id>`, recorded the same way."""
+        local = "local-5f0e9d8c7b6a5f4e3d2c1b0a99887766554433221100ffeeddccbbaa99887766"
+        local_route = f"agent:kami:local:dm:{local}"
+        self.path.write_text(json.dumps([
+            row(session_id="proc_chat", pid=os.getpid(), session_key=CHAT_ROUTE, parent_session_id=CHAT),
+            row(session_id="proc_later", pid=os.getpid(), session_key=CHAT_ROUTE,
+                parent_session_id="20261029_100000_cc22dd"),
+            row(session_id="proc_local", pid=os.getpid(), session_key=local_route, parent_session_id=local),
+        ]), encoding="utf-8")
+        self.poller.set_session(CHAT)
+        self.poller.poll_once()
+        self.assertEqual(self.poller.take().processes, ())  # no row records a route yet: nothing is guessed
+        write_sessions(Path(self.home), compacted(CHAT, at=1050.0), session_row("20261029_110000_ee33ff", parent=CHAT),
+                       session_row("20261029_100000_cc22dd"), session_row(local))
+        record_routes(self.home, {CHAT: CHAT_ROUTE, "20261029_110000_ee33ff": CHAT_ROUTE,
+                                  "20261029_100000_cc22dd": CHAT_ROUTE, local: local_route})
+        self.poller.poll_once()  # the row came after the first read: asked again
+        self.assertEqual([found.proc_id for found in self.poller.take().processes], ["proc_chat"])
+        self.poller.set_session("20261029_110000_ee33ff")
+        self.poller.poll_once()
+        self.assertEqual([found.proc_id for found in self.poller.take().processes], ["proc_chat"])
+        self.poller.set_session(local)
+        self.poller.poll_once()
+        self.assertEqual([found.proc_id for found in self.poller.take().processes], ["proc_local"])
 
     def test_a_refresh_keeps_the_next_read_even_when_nothing_changed(self) -> None:
         self.path.write_text("[]", encoding="utf-8")
