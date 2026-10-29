@@ -985,11 +985,10 @@ class RowTests(unittest.TestCase):
         self.assertEqual(self.app._read_timeout(), IDLE_READ_SECONDS)
         self.app._leave_pager()
         for surface in ("slot", "launch_picker", "picker", "search", "rewind_picker", "model_picker"):
-            with self.subTest(surface=surface):  # review L5: whatever takes the slot hides the row too
-                setattr(self.app, surface, object())
+            # Review L5: whatever takes the slot hides the row too.
+            with self.subTest(surface=surface), patch.object(self.app, surface, object()):
                 self.assertIsNone(self.app._background_second())
                 self.assertEqual(self.idle_frames(3.0), 0)
-                setattr(self.app, surface, None)
         self.assertEqual(self.idle_frames(2.0), 2)
         self.app.turn_pending = True  # a turn's spinner still ticks at its own rate
         self.assertGreater(self.idle_frames(1.0), 2)
