@@ -359,7 +359,9 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # per_turn_context's register() recorder against base 79c5308d2. No headroom.
 # 73612 -> 73645: the `debug_python` description states its per-stop evaluate
 # cap (+33), added after a live smoke spent 27.4M tokens on 558 evaluations.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 73645
+# 73645 -> 73672: "(launch again restarts it)" (+27): a relaunch now replaces
+# the live session instead of answering session_active.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 73672
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

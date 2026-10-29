@@ -23,6 +23,7 @@ from .lsp_nav import LspNavError, inside, resolve_path
 DEFAULT_TIMEOUT = 60
 MAX_TIMEOUT = 180
 IDLE_TIMEOUT = 600.0
+REAP_INTERVAL = 30.0  # a background sweep closes idle sessions: a finished chat never calls the tool again
 OUTPUT_RING = 64 * 1024
 OUTPUT_TAIL = 2000
 MAX_FRAMES = 8
@@ -170,6 +171,9 @@ class Session:
             stop.update(self.frame_view(frames[0]) if frames else {"function": None, "path": None, "line": None})
             if body.get("text"):
                 stop["text"] = _cap(str(body["text"]), REPR_CAP)
+            if stop.get("function") == "<module>":
+                stop["hint"] = ("stopped while the module is being imported, before any test code runs; "
+                                "continue to reach the breakpoint inside the function under test")
             self.collect_output()
             return {"ok": True, "stopped": stop}
         exit_code = body.get("exitCode") if name == "exited" else None
@@ -201,6 +205,28 @@ class SessionManager:
         self._sessions: dict[str, Session] = {}
         self._launching: set[str] = set()  # keys reserved by a launch still spawning/handshaking
         self._lock = threading.Lock()
+        self._reaper: threading.Thread | None = None
+
+    def _ensure_reaper(self) -> None:
+        """Start the idle sweep once a session exists (called under ``self._lock``)."""
+        if self._reaper is None or not self._reaper.is_alive():
+            self._reaper = threading.Thread(target=self._reap_forever, name="omh-dap-reaper", daemon=True)
+            self._reaper.start()
+
+    def _reap_forever(self) -> None:
+        while True:
+            time.sleep(REAP_INTERVAL)
+            self.reap()
+
+    def reap(self) -> int:
+        """Close every session idle past the timeout; returns how many were closed."""
+        with self._lock:
+            idle = [k for k, sess in self._sessions.items() if self.clock() - sess.last_used > self.idle_timeout]
+            closing = [self._sessions.pop(k) for k in idle]
+        for session in closing:
+            with session.lock:
+                session.close()
+        return len(closing)
 
     def _expire(self, key: str) -> bool:
         session = self._sessions.get(key)
@@ -319,11 +345,16 @@ class SessionManager:
     def launch(self, key: str, args: dict[str, Any], root: str) -> dict[str, Any]:
         with self._lock:
             self._expire(key)
-            if key in self._sessions or key in self._launching:
-                raise SessionError("session_active", "a debug session is already live; call action=terminate first")
+            if key in self._launching:
+                raise SessionError("session_active", "another launch for this task is still starting")
             # Reserve the key before spawning: two parallel launches on one task must not both start an
             # adapter, or the first is orphaned when the second overwrites it.
             self._launching.add(key)
+            previous = self._sessions.pop(key, None)
+        if previous is not None:
+            # Relaunching after an edit is the normal loop; refusing it cost a terminate round trip each time.
+            with previous.lock:
+                previous.close()
         try:
             return self._launch_reserved(key, args, root)
         finally:
@@ -386,6 +417,7 @@ class SessionManager:
                 session.close()  # never leave an adapter behind a failed launch (close is idempotent)
         with self._lock:
             self._sessions[key] = session
+            self._ensure_reaper()
         session.last_used = self.clock()
         extra = {"breakpoints": session.launch_breakpoints} if planned else {}
         with session.lock:

@@ -230,7 +230,9 @@ def debug_directive(edit_surface: str) -> str:
     if edit_surface not in _DEBUG_TOOLS:
         raise ValueError("debug directive needs edit_surface 'patch' or 'dap'")
     return ("When a test fails and the cause is not obvious from reading, run the failing test "
-            f"and inspect state with {_DEBUG_TOOLS[edit_surface]} before editing.")
+            f"and inspect state with {_DEBUG_TOOLS[edit_surface]} before editing. "
+            "If the same test still fails after three edits, stop editing and inspect state again "
+            "to find the cause.")
 
 
 def directive_text(edit_surface: str, directive: bool | str) -> str | None:

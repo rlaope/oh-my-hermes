@@ -178,12 +178,36 @@ class LaunchTests(_Root):
         self.assertEqual(self.clients[0].closed, 1)
         self.assertEqual(self.call(action="inspect")["error"], "no_session")
 
-    def test_second_launch_is_refused_while_a_session_is_live(self):
+    def test_second_launch_replaces_the_live_session(self):
+        # Live smoke: every edit-then-relaunch cost launch -> session_active -> terminate -> launch.
         self.assertTrue(self.launch()["ok"])
+        first = self.clients[0]
         reply = self.launch()
-        self.assertEqual(reply["error"], "session_active")
-        self.assertIn("terminate", reply["hint"])
-        self.assertEqual(len(self.clients), 1)
+        self.assertTrue(reply["ok"])
+        self.assertEqual(len(self.clients), 2)
+        self.assertTrue(first.closed)
+        self.assertIs(self.manager._sessions["t1"].client, self.clients[1])
+
+    def test_reap_closes_idle_sessions_without_a_call(self):
+        # Smoke runs left adapters and paused pytest alive: a finished chat never calls the tool again.
+        self.assertTrue(self.launch(task="a")["ok"])
+        self.assertTrue(self.launch(task="b")["ok"])
+        self.now[0] += 30
+        self.call(task="b", action="inspect")
+        self.now[0] += 600
+        self.assertEqual(self.manager.reap(), 1)
+        self.assertTrue(self.clients[0].closed)
+        self.assertFalse(self.clients[1].closed)
+        self.assertEqual(list(self.manager._sessions), ["b"])
+        self.assertTrue(self.manager._reaper.daemon)
+
+    def test_stop_at_module_import_says_to_continue(self):
+        self.next_client = self.make_client(stackTrace={"stackFrames": [
+            {"id": 100, "name": "<module>", "line": 1,
+             "source": {"path": os.path.join(self.root, "src", "app", "cart.py")}}]})
+        reply = self.launch()
+        self.assertIn("continue", reply["stopped"]["hint"])
+        self.assertNotIn("hint", self.launch()["stopped"])
 
     def test_parallel_launches_on_one_task_start_one_adapter(self):
         # Adversarial case j: two launches racing on one task_id must not orphan an adapter.

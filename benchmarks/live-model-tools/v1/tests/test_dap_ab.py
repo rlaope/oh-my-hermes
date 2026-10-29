@@ -169,7 +169,9 @@ class DapSurfaceTests(unittest.TestCase):
     def test_debug_directive_pair_differs_only_in_tool_phrase(self) -> None:
         control, treatment = debug_directive("patch"), debug_directive("dap")
         self.assertEqual(control, "When a test fails and the cause is not obvious from reading, run the failing test "
-                                  "and inspect state with `terminal` (print statements, `python -c`) before editing.")
+                                  "and inspect state with `terminal` (print statements, `python -c`) before editing. "
+                                  "If the same test still fails after three edits, stop editing and inspect state again "
+                                  "to find the cause.")
         swapped = treatment.replace("`debug_python` (breakpoints, locals, evaluate)",
                                     "`terminal` (print statements, `python -c`)")
         self.assertEqual(swapped, control)

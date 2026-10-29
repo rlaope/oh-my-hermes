@@ -24,7 +24,7 @@ OMH_DAP_DEBUG_PYTHON_SCHEMA = {
     "name": "debug_python",
     "description": (
         "Debug a Python run (default: pytest) with debugpy: launch with breakpoints, then at each stop "
-        "inspect frames/locals or evaluate expressions, step or continue, terminate. One session per task; "
+        "inspect frames/locals or evaluate expressions, step or continue, terminate. One session per task (launch again restarts it); "
         "evaluate runs code inside the workspace's own program; at most 15 evaluations per stop."
     ),
     "parameters": {
