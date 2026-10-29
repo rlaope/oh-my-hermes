@@ -6,6 +6,38 @@ All notable changes will be documented here.
 
 ![Sprite Forge patch notes](https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/assets/omh-sprite-forge-patch-notes.png)
 
+- **The second Ctrl+C of the OMH TUI exits, and the launch, a resize and the import cost less.** After a
+  Ctrl+C interrupts a turn, the queued prompt it puts back in the composer no longer eats the second press:
+  that press exits as the info line says, with Shift or Alt held too, and only while the line says so; after
+  an interrupt it says so over an open steer, rewind or tell as well. What the
+  composer holds is not kept on exit; prompts already sent or queued are in Hermes' history, where Up finds
+  them, and a submit still waiting on its pasted image keeps the press from exiting. The launch logo's contrast lift
+  parses each colour once and is cached (first paint about 12.6 -> 10.3 ms, same bytes); a full redraw
+  prints the rows it measured instead of rendering the kept blocks twice (a long session's settled resize
+  about 270 -> 205 ms); and the bot board's module loads when the board opens, not with the TUI.
+
+- **The OMH TUI has eight launch looks, and a look now tints the chrome.**
+  `/theme` adds `sakura` (pastel pink, sky blue and cream), `moonlit`
+  (moonlight yellow and silver over navy), `aurora` (emerald and teal into
+  violet) and `ember` (amber through orange to crimson) to `spectrum`,
+  `violet`, `gold` and `graphite`, each with a set for dark and one for
+  light backgrounds. Every look, the four earlier ones too, now also paints
+  the composer's rules and the frames drawn like them in its card-edge
+  colour, and a tool call's rail and the working row's spinner in its label
+  colour, each lifted to 3:1 against the background; a failed or denied
+  call's rail stays red. Body text, the grey details, the reply's rail and
+  the state colours keep the theme's, and `spectrum` stays the default with
+  its logo unchanged. The picker, `/theme <look>`, Tab completion and the
+  saved `launch` key take the new names; an unknown saved name still warns
+  and falls back to `spectrum`.
+
+- **The working glow no longer blanks the screen's top row.** While a turn
+  ran, the OMH TUI painted the whole top row as the light's track, so that
+  row's text (the logo's first line on the launch screen, or the oldest
+  row of a short session) was hidden for the whole turn. The row's own text
+  is now painted again under the light, and only the cells the light
+  reaches cover it.
+
 - **`/glow off` turns the OMH TUI's working glow off, and it now shows in a
   short session too.** `/glow on|off` (alone, it switches) is saved beside
   the theme under the OMH home, so it holds in every later session;

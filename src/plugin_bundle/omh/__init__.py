@@ -227,9 +227,9 @@ def register(ctx: _PluginContext) -> None:
     from .tools.hud_tool import OMH_HUD_SCHEMA, omh_hud_handler
     from .tools.jev_ask_tool import OMH_JEV_ASK_SCHEMA, jev_ask_available, omh_jev_ask_handler
     from .tools.lsp_nav_tool import (
-        LSP_DEFINITION_SCHEMA,
-        LSP_REFERENCES_SCHEMA,
-        LSP_RENAME_SCHEMA,
+        OMH_LSP_DEFINITION_SCHEMA,
+        OMH_LSP_REFERENCES_SCHEMA,
+        OMH_LSP_RENAME_SCHEMA,
         LSP_TOOLSET,
         _lsp_tools_enabled,
         lsp_definition_handler,
@@ -320,26 +320,26 @@ def register(ctx: _PluginContext) -> None:
     _ = ctx.register_tool(
         "lsp_definition",
         LSP_TOOLSET,
-        LSP_DEFINITION_SCHEMA,
+        OMH_LSP_DEFINITION_SCHEMA,
         lsp_definition_handler,
         check_fn=_lsp_tools_enabled,
-        description=LSP_DEFINITION_SCHEMA["description"],
+        description=OMH_LSP_DEFINITION_SCHEMA["description"],
     )
     _ = ctx.register_tool(
         "lsp_references",
         LSP_TOOLSET,
-        LSP_REFERENCES_SCHEMA,
+        OMH_LSP_REFERENCES_SCHEMA,
         lsp_references_handler,
         check_fn=_lsp_tools_enabled,
-        description=LSP_REFERENCES_SCHEMA["description"],
+        description=OMH_LSP_REFERENCES_SCHEMA["description"],
     )
     _ = ctx.register_tool(
         "lsp_rename",
         LSP_TOOLSET,
-        LSP_RENAME_SCHEMA,
+        OMH_LSP_RENAME_SCHEMA,
         lsp_rename_handler,
         check_fn=_lsp_tools_enabled,
-        description=LSP_RENAME_SCHEMA["description"],
+        description=OMH_LSP_RENAME_SCHEMA["description"],
     )
     # Opt-in Python debugger over debugpy's DAP adapter, gated the same way:
     # toolset `omh-dap` plus `check_fn` on OMH_DAP_TOOLS or the profile

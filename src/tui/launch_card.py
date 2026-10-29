@@ -18,9 +18,10 @@ names as drawn, so the first frame imports no skill catalog, and it names the
 Hermes home and profile it was drawn for. A first launch, another Hermes home
 or profile, or a snapshot this module did not write says loading… instead.
 
-Each launch look (`theme.LAUNCH_PRESETS`) has its own layout: a box per section
-(spectrum), one box of stacked sections (violet), one box in two columns (gold)
-or a rule above and below with no side edges (graphite). Every layout is fitted
+Each launch look (`theme.LAUNCH_PRESETS`) has one of four layouts: a box per
+section (spectrum, aurora), one box of stacked sections (violet, sakura), one box
+in two columns (gold, ember) or a rule above and below with no side edges
+(graphite, moonlit). Every layout is fitted
 to the rows it is given (`launch_card`): two rows of names per family, then one,
 then rows dropped from the last family up, then the last session, then the
 keys; the last form is the last session's one row, so a short terminal still
@@ -56,7 +57,8 @@ FAMILIES = (
     ("create_materials_and_visuals", "create"),
     ("retain_knowledge", "retain"),
 )
-LAYOUTS = {"spectrum": "tiles", "violet": "stack", "gold": "split", "graphite": "rules"}
+LAYOUTS = {"spectrum": "tiles", "violet": "stack", "gold": "split", "graphite": "rules", "sakura": "stack",
+           "moonlit": "rules", "aurora": "tiles", "ember": "split"}
 GUTTER = 9  # a family's label column
 COLUMN = 26  # the narrowest column a name gets; a longer name spans two
 # What the card offers to type, in this order; the first is OMH's own lane.

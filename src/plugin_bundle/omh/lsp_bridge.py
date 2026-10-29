@@ -8,8 +8,6 @@ attribute is looked up with ``getattr``; an absent one means ``lsp_unavailable``
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 import os
 from typing import Any, Callable
 
@@ -103,7 +101,7 @@ def request(
         return svc._loop.run(run(), timeout=timeout + 5)
     except BridgeError:
         raise
-    except (asyncio.TimeoutError, concurrent.futures.TimeoutError, TimeoutError):
+    except TimeoutError:  # asyncio's and concurrent.futures' TimeoutError are this builtin on 3.11+
         raise BridgeError("timeout", f"the language server did not answer within {int(timeout)} s") from None
     except Exception as exc:  # noqa: BLE001
         raise BridgeError("server_unavailable", f"language server request failed ({type(exc).__name__})") from None

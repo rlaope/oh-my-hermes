@@ -1,7 +1,8 @@
 """Round 4, the Claude Code look in the transcript: per-call rows, results under `⎿`, the working row; since the
 rail and kind colours (2026-10-22) each block hangs on a rail: one painted cell and a space.
 
-Each tool call is one row on a rail in its state's colour: its state's mark
+Each tool call is one row on a rail in the launch look's accent (red when it
+failed or was denied, as its band is; owner's pick of 2026-10-29): its state's mark
 (`○` running blue, `●` done green, `✗` failed or denied red), the tool's name
 bold in its family's hue and what it ran on in parentheses, its duration at
 the end. What it printed goes under `  ⎿  `; a read or a load says in one
@@ -102,24 +103,29 @@ class ToolRowTests(unittest.TestCase):
     def test_a_call_is_its_mark_then_its_name_and_what_it_ran_on_in_parentheses(self) -> None:
         (row,) = rows_of(ToolRow("t", "terminal", "rm -rf ./tmp-cache", TOOL_OK, duration_s=1.9))
         self.assertEqual(line_text(row), "  ● terminal(rm -rf ./tmp-cache)  1.9s")
-        self.assertEqual(row[:3], (rail_cell(THEME.ok), Span(" ", GUTTER), Span("●", THEME.ok)))  # the rail, then the mark
+        # The rail in the launch look's accent, then the mark in its state's colour.
+        self.assertEqual(row[:3], (rail_cell(THEME.accent), Span(" ", GUTTER), Span("●", THEME.ok)))
         self.assertEqual([span.style for span in row if span.text == "terminal"], [kind_style("terminal", THEME)])
         self.assertEqual(row[-1].style, THEME.faint)  # the duration, under the args' grey
 
-    def test_the_mark_and_the_rail_are_green_done_red_failed_or_denied_and_blue_while_it_runs(self) -> None:
-        # The DAG border rule: running blue, failed red, done green, and each state its own glyph, so the colour
-        # is never the only thing that says it.
-        for status, glyph, style in ((TOOL_OK, "●", THEME.ok), (TOOL_ERROR, "✗", THEME.error),
-                                     (TOOL_DENIED, "✗", THEME.error), (TOOL_RUNNING, "○", THEME.running)):
+    def test_the_mark_is_green_done_red_failed_or_denied_and_blue_while_it_runs_on_the_looks_rail(self) -> None:
+        # The DAG border rule on the mark: running blue, failed red, done green, and each state its own glyph, so the
+        # colour is never the only thing that says it. The rail is the launch look's accent (owner, 2026-10-29), but
+        # a failure's, which stays red as its band does.
+        for status, glyph, style, rail in ((TOOL_OK, "●", THEME.ok, THEME.accent),
+                                           (TOOL_ERROR, "✗", THEME.error, THEME.error),
+                                           (TOOL_DENIED, "✗", THEME.error, THEME.error),
+                                           (TOOL_RUNNING, "○", THEME.running, THEME.accent)):
             with self.subTest(status=status):
                 rows = rows_of(ToolRow("t", "terminal", "ls", status, started_at=0.0, duration_s=0.1, output=("x",)))
                 self.assertEqual(rows[0][2], Span(glyph, style))
-                self.assertEqual({row[0] for row in rows}, {rail_cell(style)})  # one rail down the whole call
+                self.assertEqual({row[0] for row in rows}, {rail_cell(rail)})  # one rail down the whole call
         self.assertEqual(THEME.running.fg, "#58A6FF")  # the owner's approved shade, apart from the graph's edge stops
+        self.assertNotIn(THEME.accent.fg, {THEME.ok.fg, THEME.error.fg, THEME.running.fg})
         running = ToolRow("t", "terminal", "ls", TOOL_RUNNING, started_at=0.0)
         pulsed = rows_of(running, now=PULSE_SECONDS * 1.5)[0]
         self.assertEqual(pulsed[2], Span("○", THEME.dim))  # its dim half; the rail holds still
-        self.assertEqual(pulsed[0], rail_cell(THEME.running))
+        self.assertEqual(pulsed[0], rail_cell(THEME.accent))
         self.assertFalse([row for row in rows_of(ToolRow("t", "terminal", "ls", TOOL_OK)) if "✓" in line_text(row)])
 
     def test_on_a_light_terminal_each_mark_reads_against_what_it_sits_on(self) -> None:
@@ -355,7 +361,7 @@ class WorkingRowTests(unittest.TestCase):
             clock.now += TICK_SECONDS
             seen.append(app._tail(100)[-2][0])
         self.assertEqual({span.text for span in seen}, set("·✢✳✶✻✽"))
-        self.assertEqual({span.style for span in seen}, {THEME.running})
+        self.assertEqual({span.style for span in seen}, {THEME.accent})  # the launch look's, not a state's
         still, clock = self.busy(environ={"OMH_TUI_REDUCED_MOTION": "1"})
         held = set()
         for _ in range(len(WORKING_GLYPHS)):
@@ -580,8 +586,8 @@ class ResumedHistoryTests(unittest.TestCase):
         self.assertEqual(texts[after + 4], "  ⚚ Hermes", texts)  # the reply's header, then its words
         self.assertTrue(texts[after + 5].startswith("    Done — div added to calc.py"), texts)
         calls = [lines[index] for index in (first, first + 2, first + 4, after, after + 2)]
-        # The record says what ran, not how it ended: neither green nor red, its rail and its mark grey.
-        self.assertEqual({row[0] for row in calls}, {rail_cell(THEME.dim)})
+        # The record says what ran, not how it ended: neither green nor red, its mark grey on the look's rail.
+        self.assertEqual({row[0] for row in calls}, {rail_cell(THEME.accent)})
         self.assertEqual({row[2] for row in calls}, {Span("●", THEME.dim)})
         self.assertNotIn("·", "".join(texts[first : after + 3]))  # no old-style `· name  args` row
 

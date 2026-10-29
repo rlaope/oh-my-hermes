@@ -26,8 +26,9 @@ it. Three kinds of block hang on a rail in the left gutter (`RAIL`: one cell
 painted in the block's colour and a space; a painted cell meets the ones above
 and below it, so a block's rail is one line, and each cell holds a space, so a
 terminal's selection copies no bar with the text): your prompt's in dim grey,
-each tool call's in its state's colour, and a reply's in the skin's accent, the
-banner's colour (`Theme.brand`). Nothing has a band behind it.
+each tool call's in the launch look's `Theme.accent` (a failed or denied one's
+red, as its band is; its mark says every other state), and a reply's in the
+skin's accent, the banner's colour (`Theme.brand`). Nothing has a band behind it.
 
 A slash command the person runs is a block of its own: `❯ /name arg` on the prompt's dim
 rail, in the hint colour, then what it printed under `⎿`, each part in its level's colour
@@ -1048,7 +1049,7 @@ def _within(row: Line, width: int) -> Line:
 
 
 def _state_style(status: str, theme: Theme, dim: bool = False) -> Style:
-    """A call's state as a colour: its mark's and its rail's."""
+    """A call's state as a colour: its mark's (its rail is `_rail_style`'s)."""
     if status == TOOL_OK:
         return theme.ok
     if status in (TOOL_ERROR, TOOL_DENIED):
@@ -1056,6 +1057,11 @@ def _state_style(status: str, theme: Theme, dim: bool = False) -> Style:
     if status == TOOL_RUNNING:
         return theme.dim if dim else theme.running
     return theme.dim
+
+
+def _rail_style(status: str, theme: Theme) -> Style:
+    """A call's rail: red when it failed or was denied, as its band is, else the launch look's accent."""
+    return theme.error if status in (TOOL_ERROR, TOOL_DENIED) else theme.accent
 
 
 def _tool_mark(status: str, theme: Theme, dim: bool = False) -> Span:
@@ -1191,7 +1197,7 @@ def _folded_row(unit: list[ToolRow], width: int, theme: Theme, now: float | None
 def _tool_rows(
     group: ToolGroup, width: int, theme: Theme, expanded: bool, now: float | None = None, glint: bool = False,
 ) -> list[Line]:
-    """Each call on a rail in its state's colour: its own row (what ran, on what), what the person answered it right
+    """Each call on a rail (`_rail_style`): its own row (what ran, on what), what the person answered it right
     under that, and what it printed under them, a blank row between two calls; a run of plumbing calls is one row,
     unfolded again by `expanded`. A group with no call shows nothing. With `glint` (the aura moves) and `now`, a
     recall's output rows carry the band that sweeps them once."""
@@ -1215,7 +1221,7 @@ def _tool_rows(
                 own.extend(diff_rows(lines, inner, theme, full=expanded, lead=_output_leads(theme)[0]))
             else:
                 own.extend(_output_rows(tool, inner, theme, expanded, now if glint else None))
-        rail = _rail(_state_style(status, theme))
+        rail = _rail(_rail_style(status, theme))
         rows.extend([*([()] if rows else []), *(_within((*rail, *row), width) for row in own)])
     return rows
 
@@ -1277,6 +1283,9 @@ class Transcript:
         self._cursor_state = MarkdownState()  # markdown state after those lines
         self._taken_any = under_output  # whether any line has been taken (a spacer goes above the next block)
         self._left_out = 0  # blocks `retake_tail` left out: the next take opens with LEFT_OUT_NOTICE
+        # The rows `retake_tail` measured for the blocks it keeps, from `_cursor` on, so the take after it does not
+        # render them again: (version, width, theme, rows per block), good only while nothing has changed since.
+        self._measured: tuple[int, int, Theme, list[list[Line]]] | None = None
         self.dropped = 0  # blocks BLOCK_CAP dropped from the front
         # Where the last take's lines hold the first row of the newest prompt in them (not the blank row above it);
         # None when that take held no prompt.
@@ -1777,6 +1786,9 @@ class Transcript:
         taken: list[Line] = []
         start = (self._cursor, self._cursor_lines)
         self.prompt_row = None
+        measured, self._measured = self._measured, None
+        held = measured[3] if measured and measured[:2] == (self._version, width) and measured[2] is theme else []
+        first = self._cursor  # the block `held` starts at
         if self._left_out:
             earlier, self._left_out = _earlier(self._left_out), 0
             notice = (
@@ -1789,10 +1801,12 @@ class Transcript:
             self._version += 1
         while self._cursor < len(self.blocks):
             block = self.blocks[self._cursor]
-            if isinstance(block, AssistantBlock):
+            index = self._cursor - first
+            if isinstance(block, AssistantBlock) and not (block.done and index < len(held)):
                 taken.extend(self._take_assistant(block, width, theme))
             elif block.done:
-                rows = block_rows(block, width, theme)
+                # A done reply taken from its first line is the rows `block_rows` gives it, as measured.
+                rows = held[index] if index < len(held) else block_rows(block, width, theme)
                 if isinstance(block, UserBlock) and rows:
                     self.prompt_row = len(taken) + (1 if self._taken_any else 0)  # after the spacer `_spaced` adds
                 taken.extend(self._spaced(rows, opens_block=True))
@@ -1859,22 +1873,30 @@ class Transcript:
         opens with one row counting them, blocks `BLOCK_CAP` dropped included.
         """
         self.retake()
-        cut = self._tail_start(width, theme, max_rows)
+        cut, kept = self._measure_tail(width, theme, max_rows)
         self._cursor = cut
         self._left_out = cut + self.dropped
         self._drop_past_cap()  # before the take, so the row names how many /history still holds
+        self._measured = (self._version, width, theme, kept)  # what was dropped lay above the cut
 
     def _tail_start(self, width: int, theme: Theme, max_rows: int) -> int:
         """The first block `retake_tail(width, theme, max_rows)` keeps."""
+        return self._measure_tail(width, theme, max_rows)[0]
+
+    def _measure_tail(self, width: int, theme: Theme, max_rows: int) -> tuple[int, list[list[Line]]]:
+        """`_tail_start`, and the rows of each block from there to the live one, in order, as measuring rendered them."""
         end = len(self.blocks) - (1 if self.blocks and not self.blocks[-1].done else 0)
-        cut, rows = end, 0
+        cut, rows, kept = end, 0, []
         while cut > 0:
-            height = len(block_rows(self.blocks[cut - 1], width, theme)) + 1
+            block_lines = block_rows(self.blocks[cut - 1], width, theme)
+            height = len(block_lines) + 1
             if rows + height > max_rows and cut < end:
                 break
             rows += height
             cut -= 1
-        return cut
+            kept.append(block_lines)
+        kept.reverse()
+        return cut, kept
 
     def live_lines(
         self, width: int, theme: Theme, max_rows: int | None = None, now: float | None = None, glint: bool = False,

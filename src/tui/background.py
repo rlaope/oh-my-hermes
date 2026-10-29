@@ -38,14 +38,18 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 import json
+import os
 from pathlib import Path
 from typing import Any
 
-from .bot_board import ON_POSIX, process_is_record
 from .markdown import clean_text
 from .style import Line, Span
 from .theme import Theme, kind_style
 from .width import cell_width, line_width, truncate, truncate_line
+
+# As `bot_board.ON_POSIX`: signal 0 is a probe only on POSIX. Not imported from there, so a session without a
+# background process or the bot board never loads that module.
+ON_POSIX = os.name == "posix"
 
 PROCESSES_FILE = "processes.json"
 # One running process is about 1.5 KB of checkpoint; a file past this is not read at all.
@@ -159,6 +163,8 @@ def process_running(process: BackgroundProcess) -> bool | None:
     """Whether a host process still runs and is the one Hermes started; None where that cannot be asked here."""
     if not askable(process):
         return None
+    from .bot_board import process_is_record  # on demand, as `ON_POSIX` says
+
     return process_is_record(process.pid, process.start_time)
 
 

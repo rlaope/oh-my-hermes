@@ -19,7 +19,10 @@ from unittest.mock import patch
 from _tui_lines import lines_text
 from omh.tui.gateway import Event
 from omh.tui.style import Line, Span
+from omh.tui import transcript as transcript_module
+from omh.skin_pack import default_theme
 from omh.tui.theme import DEFAULT_THEME as THEME
+from omh.tui.theme import with_launch_look
 from omh.tui.transcript import (
     GUTTER,
     OUTPUT_PREVIEW_ROWS,
@@ -283,6 +286,41 @@ class RetakeTailTests(LoopTestCase):
         again = lines_text(self.transcript.take_stable_lines(WIDTH, THEME))
         self.assertEqual(again, ["⋯ 6 earlier messages · /history shows all", "", "  ❯ again"])
         self.assertEqual(self.live(), ["", "  ⚚ Hermes", "    still streaming"])
+
+    def test_the_take_after_it_renders_no_kept_block_again(self) -> None:
+        # QA P3: measuring rendered every kept block, then the take rendered each again; a long session's settled
+        # resize blocked the loop for both.
+        self.session(20)
+        self.transcript.retake_tail(WIDTH, THEME, max_rows=10)
+        with patch("omh.tui.transcript.block_rows", wraps=block_rows) as rows, \
+                patch("omh.tui.transcript.render_lines", wraps=transcript_module.render_lines) as replies:
+            again = lines_text(self.transcript.take_stable_lines(WIDTH, THEME))
+        self.assertEqual((rows.call_count, replies.call_count), (0, 0))
+        self.assertEqual(again[1:], self.history(details=False)[-10:])
+
+    def test_a_look_switched_since_the_measure_is_rendered_in_the_new_look(self) -> None:
+        # A launch look is another theme (a call's rail is the look's accent): rows measured in the old one are not
+        # reused.
+        self.session(2)
+        self.step(ev("tool.start", tool_id="t1", name="terminal", context="ls"))
+        self.step(ev("tool.complete", tool_id="t1", name="terminal", result={"exit_code": 0}, duration_s=0.5))
+        self.step(ev("message.complete", text="done", status="complete"))
+        looked = with_launch_look(THEME, default_theme(), None, "ember")
+        self.assertNotEqual(self.transcript.history_lines(WIDTH, looked, details=False),
+                            self.transcript.history_lines(WIDTH, THEME, details=False))
+        self.transcript.retake_tail(WIDTH, THEME, max_rows=100)
+        taken = self.transcript.take_stable_lines(WIDTH, looked)
+        self.assertEqual(taken + self.transcript.live_lines(WIDTH, looked),
+                         self.transcript.history_lines(WIDTH, looked, details=False))
+
+    def test_what_changed_since_the_measure_or_another_width_is_rendered_as_it_is_now(self) -> None:
+        self.session(3)
+        self.transcript.retake_tail(WIDTH, THEME, max_rows=100)
+        self.transcript.add_notice("came after the measure")
+        self.assertEqual(lines_text(self.transcript.take_stable_lines(WIDTH, THEME)), self.history(details=False))
+        self.transcript.retake_tail(WIDTH, THEME, max_rows=100)
+        self.assertEqual(lines_text(self.transcript.take_stable_lines(30, THEME)),
+                         lines_text(self.transcript.history_lines(30, THEME, details=False)))
 
 
 class BlockCapTests(LoopTestCase):
@@ -687,7 +725,7 @@ class ReasoningAndToolTests(LoopTestCase):
                 "    ⎿  1 failed",
             ],
         )
-        self.assertEqual(self.taken[0][0], rail_cell(THEME.ok))
+        self.assertEqual(self.taken[0][0], rail_cell(THEME.accent))  # the launch look's rail; the mark says done
         # A failure's first line is grey like any result; its rail and its `✗` say it failed.
         self.assertEqual(self.taken[4][-1].style, THEME.faint)
         self.assertEqual([self.taken[row][0] for row in (3, 4)], [rail_cell(THEME.error)] * 2)  # search_files' rail
@@ -1312,7 +1350,7 @@ class ToolOutputTests(LoopTestCase):
         # Recorded from Hermes 6c61c3e27d (session fixture, the interrupted turn's `seq 1 300`).
         flushed = self.run_tool({"output": "1\n2\n3\n4\n5\n[trimmed: 295 more lines]", "exit_code": 0, "error": None})
         self.assertEqual(flushed[0], "  ● terminal(seq 1 300)  0.1s")
-        self.assertEqual(self.taken[-5][:3], (rail_cell(THEME.ok), Span(" ", GUTTER), Span("●", THEME.ok)))
+        self.assertEqual(self.taken[-5][:3], (rail_cell(THEME.accent), Span(" ", GUTTER), Span("●", THEME.ok)))
         self.assertEqual(flushed[1:], ["    ⎿  1", "       2", "       3", "       … +3 lines · ctrl+o shows all"])  # under the call
         self.assertEqual(self.taken[-1][-1].style, THEME.faint)
 

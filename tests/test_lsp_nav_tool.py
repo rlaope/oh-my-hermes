@@ -31,9 +31,9 @@ from omh.plugin_bundle.omh.lsp_nav import (  # noqa: E402
 )
 from omh.plugin_bundle.omh.tools import lsp_nav_tool  # noqa: E402
 from omh.plugin_bundle.omh.tools.lsp_nav_tool import (  # noqa: E402
-    LSP_DEFINITION_SCHEMA,
-    LSP_REFERENCES_SCHEMA,
-    LSP_RENAME_SCHEMA,
+    OMH_LSP_DEFINITION_SCHEMA,
+    OMH_LSP_REFERENCES_SCHEMA,
+    OMH_LSP_RENAME_SCHEMA,
     _lsp_tools_enabled,
     lsp_definition_handler,
     lsp_references_handler,
@@ -143,7 +143,7 @@ class _Root(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root, True)
 
     def write(self, rel, text):
-        path = os.path.join(self.root, rel)
+        path = os.path.join(self.root, *rel.split("/"))  # native separators: the code compares realpaths
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8", newline="") as handle:
             handle.write(text)
@@ -262,8 +262,8 @@ class CheckFnGatingTests(unittest.TestCase):
                 pass
 
         register(Ctx())
-        for name, schema in (("lsp_definition", LSP_DEFINITION_SCHEMA), ("lsp_references", LSP_REFERENCES_SCHEMA),
-                             ("lsp_rename", LSP_RENAME_SCHEMA)):
+        for name, schema in (("lsp_definition", OMH_LSP_DEFINITION_SCHEMA), ("lsp_references", OMH_LSP_REFERENCES_SCHEMA),
+                             ("lsp_rename", OMH_LSP_RENAME_SCHEMA)):
             self.assertEqual(recorded[name][0], "omh-lsp")
             self.assertEqual(recorded[name][1], schema)
             self.assertIs(recorded[name][3].get("check_fn"), _lsp_tools_enabled)
@@ -423,7 +423,7 @@ class HandlerTests(_Root):
 
         def edit_then_race(_params):
             # Another writer changes use.py while the server computes the edit.
-            with open(self.use, "a", encoding="utf-8") as handle:
+            with open(self.use, "a", encoding="utf-8", newline="") as handle:
                 handle.write("# raced\n")
             return self.rename_edit()
 

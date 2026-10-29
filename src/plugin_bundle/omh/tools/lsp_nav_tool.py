@@ -13,7 +13,7 @@ import json
 import os
 from typing import Any
 
-from .. import lsp_bridge, lsp_nav
+from .. import lsp_bridge, lsp_nav, runtime_paths
 from ..lsp_bridge import BridgeError
 from ..lsp_nav import LspNavError
 
@@ -27,7 +27,7 @@ _COMMON = {
     "occurrence": {"type": "integer", "minimum": 1, "default": 1, "description": "Nth match of symbol on the line"},
 }
 
-LSP_DEFINITION_SCHEMA = {
+OMH_LSP_DEFINITION_SCHEMA = {
     "name": "lsp_definition",
     "description": "Go to the definition of the symbol at path:line via the language server.",
     "parameters": {
@@ -36,7 +36,7 @@ LSP_DEFINITION_SCHEMA = {
     },
 }
 
-LSP_REFERENCES_SCHEMA = {
+OMH_LSP_REFERENCES_SCHEMA = {
     "name": "lsp_references",
     "description": (
         "Every semantic use of the symbol at path:line across the workspace, including its "
@@ -48,7 +48,7 @@ LSP_REFERENCES_SCHEMA = {
     },
 }
 
-LSP_RENAME_SCHEMA = {
+OMH_LSP_RENAME_SCHEMA = {
     "name": "lsp_rename",
     "description": (
         "Rename the symbol at path:line everywhere it is used (imports, re-exports, all files) "
@@ -78,8 +78,6 @@ def _lsp_tools_enabled() -> bool:
     if os.environ.get("OMH_LSP_TOOLS", "").strip().lower() in _ON:
         return True
     try:
-        from .. import runtime_paths
-
         text = (runtime_paths.default_hermes_home() / "config.yaml").read_text(encoding="utf-8")
         value = runtime_paths.plugin_setting_text(text, "lsp_tools")
     except Exception:
@@ -391,9 +389,9 @@ def lsp_rename_handler(args: dict[str, Any], **kwargs: object) -> str:
 
 
 __all__ = [
-    "LSP_DEFINITION_SCHEMA",
-    "LSP_REFERENCES_SCHEMA",
-    "LSP_RENAME_SCHEMA",
+    "OMH_LSP_DEFINITION_SCHEMA",
+    "OMH_LSP_REFERENCES_SCHEMA",
+    "OMH_LSP_RENAME_SCHEMA",
     "LSP_TOOLSET",
     "_lsp_tools_enabled",
     "_workspace_root",

@@ -295,6 +295,15 @@ class FoldKeyTests(unittest.TestCase):
         self.assertIsNone(app.tree_selected)
         self.assertNotIn(TREE_HINT, mode_row(app))
 
+    def test_ctrl_c_with_shift_or_alt_held_leaves_as_ctrl_c_does(self) -> None:
+        for key in (Key(CHAR, "c", ctrl=True, shift=True), Key(CHAR, "c", ctrl=True, alt=True, protocol=True)):
+            with self.subTest(key=key):
+                app, client = tree_app()
+                app._on_input(Key(DOWN))
+                self.assertIsNotNone(app.tree_selected)
+                app._on_input(key)
+                self.assertEqual((app.tree_selected, client.named("session.interrupt"), app.exit_code), (None, [], None))
+
     def test_left_shuts_the_highlighted_node_right_opens_it_and_space_flips_it(self) -> None:
         app, _client = tree_app()
         app._on_input(Key(DOWN))

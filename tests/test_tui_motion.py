@@ -208,7 +208,7 @@ class SweepTests(unittest.TestCase):
             rows.append(app._tail(80)[-2])  # the working row, its tip under it
         self.assertEqual(line_text(rows[0])[2:], line_text(rows[1])[2:])  # past the spinner, the same words
         self.assertNotEqual(rows[0][2:], rows[1][2:])  # in a different light
-        self.assertEqual(rows[0][0].style, THEME.running)
+        self.assertEqual(rows[0][0].style, THEME.accent)  # the spinner in the launch look's accent
 
 
 class ReducedMotionTests(unittest.TestCase):

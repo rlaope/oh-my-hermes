@@ -1162,7 +1162,7 @@ Esc closes it):
 | ↑ / ↓, PageUp / PageDown, Enter, Esc | In the `/sessions`, `/rewind` or `/model` list, move, take the highlighted row (switch to that session, put that prompt in the composer to send again, or switch this session to that model), or close it; typing filters the list |
 | ↑ / ↓, Enter, Esc, ←, q, Ctrl+C | In the agent list, move, open the highlighted agent's log (on main, only leave), or go back; any other key does nothing there |
 | x, s | In the agent list, on an agent: x twice interrupts it; s steers it with the next line you send (Esc cancels) |
-| ↑ / ↓ or a click, Enter, Esc | In the `/theme` picker, preview a launch look (spectrum, violet, gold, graphite) on the logo and the card, keep it, or put the one in use back; `/theme <look>` keeps one at once |
+| ↑ / ↓ or a click, Enter, Esc | In the `/theme` picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember) on the logo, the card and the chrome, keep it, or put the one in use back; `/theme <look>` keeps one at once |
 | Click | On a row of the agent list, opens that agent's log (on main, only leaves the list) |
 | ← / →, q or Esc | In an agent's log, show the agent before or after, or go back; the pager's keys scroll it |
 | Tab / n, Shift+Tab / p, Space / Enter, d | In `/dag`, highlight the next or the previous box, fold or unfold the highlighted one, or show or hide Node details; ↑ / ↓, PageUp / PageDown and g / G scroll, q or Esc leaves |
@@ -1448,10 +1448,20 @@ The OMH TUI opens with the theme `omh theme use` saved under the OMH home
 (see [TUI Themes](#tui-themes)); `/theme <name>` switches the open session only.
 
 A fresh session's launch draws the block logo, the banner's title and a
-launch card in one launch look: `spectrum` (the logo swept through the tool
-kind hues, a box per section, the default), `violet` (one box), `gold` (one
-box in two columns) or `graphite` (grey and white with turquoise hyphens, a
-rule above and below). The card sits under the banner until your first
+launch card in one of eight launch looks: `spectrum` (the logo swept through
+the tool kind hues, a box per section, the default), `violet` (one box),
+`gold` (one box in two columns), `graphite` (grey and white with turquoise
+hyphens, a rule above and below), `sakura` (pastel pink, sky blue and cream,
+one box), `moonlit` (moonlight yellow and silver over navy, a rule above and
+below), `aurora` (emerald and teal into violet, a box per section) or `ember`
+(amber through orange to crimson, one box in two columns). The look also
+tints the chrome: the composer's rules and the frames drawn like them take
+its card-edge colour, and a tool call's rail and the working row's spinner
+its label colour (a failed or denied call's rail stays red), as do a sent
+prompt's band, the catch rows, the `[⚚ OMH Native]` badge and the working
+glow. Body text, the grey details, the reply's rail and the state colours
+(running blue, done green, warning amber, failure red) keep the theme's
+colours, so a look never changes what a colour says. The card sits under the banner until your first
 prompt, then stays in scrollback above it. It names the model and effort,
 the new session, the last stored session with its `/resume` id, the first
 keys, and the skills Hermes has: OMH's grouped by capability family with
@@ -1465,7 +1475,7 @@ OMH home keeps one such snapshot, so alternating between Hermes profiles that
 share it says `loading…` on each switch. On a
 short terminal it drops rows, the last ones
 first, never reaching the composer. `/theme` alone opens a picker that
-previews each look on the logo and the card as you move (arrow keys, `j`/`k`
+previews each look on the logo, the card and the chrome as you move (arrow keys, `j`/`k`
 or a click; once the launch has scrolled away, a compact preview above the
 list shows it); Enter keeps the highlighted look, Esc puts the one in use
 back, and `/theme <look>` (Tab completes the name) keeps one at once. The look is saved beside the theme, as

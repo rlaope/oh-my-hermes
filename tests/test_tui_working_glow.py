@@ -274,6 +274,28 @@ class AppGlowTests(unittest.TestCase):
             self.assertEqual((screen.attrs_at(row, 0), screen.attrs_at(row, 59)), ((), ()), f"row {row}'s edge is blank")
         self.assertEqual(screen.lines()[-1], "")
 
+    def test_the_top_rows_text_shows_wherever_the_light_is_not(self) -> None:
+        app, clock = self.app()
+        self.busy(app, clock, flushes=1)
+        screen = app.terminal.screen
+        top = app.region.top_row(app.size[1])
+        reference = app.region._under(top)  # the flushed row on the screen's top row
+        shown = set()
+        for _ in range(int(LOOP_SECONDS / TICK_SECONDS)):
+            clock.at += TICK_SECONDS
+            app._render()
+            row = screen.lines()[0]
+            lit = {col for col in range(60) if set(row[col:col + 1]) & GLYPHS}
+            shown.add(len(lit) > 0)
+            plain = VTScreen(20, 60)
+            plain.feed(" " * EDGE_MARGIN + reference)
+            expected = plain.lines()[0]
+            self.assertTrue(expected.strip(), "the top row has text")
+            for col in range(1, 59):
+                if col not in lit:
+                    self.assertEqual(row[col:col + 1] or " ", expected[col:col + 1] or " ", f"column {col}: {row!r}")
+        self.assertEqual(shown, {True, False}, "the light was on the top row for part of the loop and off it for part")
+
     def test_a_bands_background_stops_short_of_the_right_margin_as_of_the_left(self) -> None:
         app, _clock = self.app()
         for prompt in ("first question", "second question"):  # prompts flushed above the region, each on a band
