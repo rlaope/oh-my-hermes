@@ -729,6 +729,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "fallback is visible and cannot widen what a call may read or write.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/shell_edit_rules.py",
+        "_workspace_root",
+        INTENTIONAL,
+        "Hermes' private `_resolve_base_dir` absent or raising falls back to TERMINAL_CWD, then to no "
+        "directory. Without one a relative redirect target cannot be shown to exist, so the shell-edit "
+        "rule lets that call run (the rule's stated fail-open contract); the fallback can only remove a "
+        "refusal, never refuse a call or write anything.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/tools/lsp_nav_tool.py",
         "_navigate",
         INTENTIONAL,
@@ -802,8 +811,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 82 -> 83 / 74 -> 75: `tui/panels.HudPoller._run`, the HUD poll loop (a read
 # that raises is a visible notice with the last processes kept, never a dead
 # thread and never the processes' end; #2388 review).
-EXPECTED_HANDLER_COUNT = 83
-EXPECTED_ANCHOR_COUNT = 75
+# 83 -> 84 / 75 -> 76: `shell_edit_rules._workspace_root`, Hermes' private base-dir
+# reader; a failure falls back to TERMINAL_CWD and can only remove a refusal.
+EXPECTED_HANDLER_COUNT = 84
+EXPECTED_ANCHOR_COUNT = 76
 
 
 class DerivedSite(NamedTuple):

@@ -554,6 +554,59 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-10-30 shell edits: the built-in shell-edit rule, off vs on
+
+One question, from oh-my-pi's bash interceptor (shipped off there): when a model may use the
+terminal however it likes, does refusing in-place shell edits of source files (`sed -i`,
+`perl -i`, a `python -c` that rewrites a file, `>`/`>>`/`tee` onto an existing source file) and
+naming `patch`/`write_file` instead make it pass more tasks? The rule is
+`src/plugin_bundle/omh/shell_edit_rules.py`, run at `pre_tool_call` after the person's own
+`toolcall_rules`; it matches on `shlex`-parsed shell segments, never refuses reads, searches,
+tests, `git`, new files, non-source files or anything under a generated directory such as
+`build/`, and lets through any command it cannot parse.
+
+The setup, fixed before the first live run:
+
+- Pinned `E-RENAME` and `E-BUGFIX` (3 seeds each, 6 per model per arm), **without**
+  `--edit-directive`, so the model is free to edit through the shell.
+- The negative template `S-GENERATED` in the separate split `shell-ab` (3 seeds, the pinned
+  corpus and its digest are unchanged): every write it needs is a new file under `build/` made by
+  shell redirection (a generated `.py` module and a test log), plus `git apply --check` on a patch
+  that must not be applied, and a line read from a source file. It fails if any existing file
+  changes.
+- Both arms: `--git-init-workspace`, `--test-env`, effort `medium`, toolsets `file,terminal`.
+  Two profiles that differ only in `plugins.entries.omh.settings.shell_edit_rules` (true/false)
+  and OMH home, both loading the same plugin snapshot; `agent.max_turns: 120`,
+  `agent.run_budget_seconds: 600`. Arm order alternates per instance.
+- Subscription routes only. Weak: `claude-haiku-4-5-20251001`, `claude-haiku-5-5`
+  (`claude-proxy`), `gpt-6-luna` (`openai-codex`). Strong: `claude-sonnet-5-5`,
+  `claude-opus-5-5` (`claude-proxy`), `gpt-6.1-sol` (`openai-codex`).
+- A run classified `rate_limited` / `provider_error` is retried on the same route; every other
+  outcome, a timeout included, is final and scored as recorded.
+- Ceiling check before the result run: a smoke of the off arm on the weak models. If the off arm
+  passes every smoke run, the main split is too easy to show a gain, and harder rename templates
+  where a text replace misleads (`L-RENAME-ALIAS`, `L-RENAME-SHADOW` from `lsp-ab`) are added to
+  both arms; the choice is written here before the result run.
+
+The merge gate, written before the first live run. Counts are passes over the main split
+(everything except `S-GENERATED`) unless a clause says otherwise.
+
+1. Weak models: on at least off + 2.
+2. Strong models: on at least off - 1.
+3. Shell edits that ran in the on arm: at most 1 in total. Counted over every terminal call in
+   the on arm's session DBs that was not refused, by a broad text match independent of the
+   rule's parser (`sed`/`perl`/`ruby` with an in-place flag; `python` code that opens a file for
+   writing or calls `write_text`/`write_bytes`; `>`, `>>` or `tee` onto a path with a source
+   suffix), each hit checked by hand against the workspace's existing files.
+4. No on-arm session with more than 5 consecutive refusals (refusal tool results with no other
+   tool result between them).
+5. No on-arm run above 3x the median tokens of the same model's off-arm runs on the same
+   template.
+6. Final answer preserved: on-arm sessions whose last assistant message carries the task's
+   answer key (`changed_paths` for `E-*`, `generated_lines` for `S-GENERATED`) at least the
+   off arm's count minus 2, counted from the session DBs.
+7. Negative template: `S-GENERATED` passes, all models pooled, on at least off - 1.
+
 ### 2026-10-29 debugging: builtin `patch` vs a debugpy tool (`omh-dap`), gate failed
 
 One question, from oh-my-pi's `debug` tool: does giving the model a debugger (breakpoints,

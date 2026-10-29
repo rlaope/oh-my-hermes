@@ -18,6 +18,7 @@ from ..jev_consent import arm_tool_call as arm_jev_tool_call
 from ..jev_consent import disarm_tool_call as disarm_jev_tool_call
 from ..native_todo import project_native_todo
 from ..plan_stage_gate import plan_stage_edit_directive
+from ..shell_edit_rules import shell_edit_directive
 from ..skill_ownership import managed_skill_edit_directive
 from ..team_gate import team_start_directive
 from ..tool_bursts import (
@@ -236,6 +237,19 @@ def pre_tool_call(**kwargs: object) -> dict[str, object] | None:
         # parallel-shot burst ledger (its claim boundary is "the host
         # dispatched the calls as one batch").
         return _route_gated(rule_directive, **route_gate)
+    # The built-in shell-edit rule (`shell_edit_rules`, off unless the
+    # profile setting or env turns it on) refuses a terminal command that
+    # edits an existing source file in place and names the edit tool to use.
+    # After the person's own rules, which win, and before anything that
+    # records a dispatch: a refused call did not run.
+    shell_edit = shell_edit_directive(
+        tool_name=kwargs.get("tool_name"),
+        tool_input=tool_input,
+        task_id=kwargs.get("task_id"),
+        hermes_home=hermes_home,
+    )
+    if shell_edit is not None:
+        return _route_gated(shell_edit, **route_gate)
     # An edit to a skill OMH installed is refused with a pointer to where the
     # lesson goes (`skill_ownership`). After the person's own rules, before
     # anything that records a dispatch, for the same reason as the guards

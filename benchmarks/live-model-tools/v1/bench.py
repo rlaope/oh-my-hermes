@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--manifest", type=Path, default=BASE / "manifest.json")
         command.add_argument("--model", action="append")
         command.add_argument("--condition", choices=CONDITIONS, default="baseline")
-        command.add_argument("--split", choices=("development", "evaluation", "lsp-ab"), default="development")
+        command.add_argument("--split", choices=("development", "evaluation", "lsp-ab", "shell-ab"), default="development")
         command.add_argument("--output", type=Path)
         command.add_argument("--omh-executable", default="omh")
         command.add_argument("--hermes-executable", default="hermes")

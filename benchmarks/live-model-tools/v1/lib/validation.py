@@ -148,7 +148,27 @@ def _rename_shadow_ok(workspace: Path, golden: dict[str, Any]) -> bool:
     return _behaviour_ok(workspace, "tests/test_limits.py", checks, golden["min_tests"])
 
 
-_LSP_AB_VALIDATORS = {"RENAME-ALIAS": _rename_alias_ok, "RENAME-SHADOW": _rename_shadow_ok}
+def _generated_ok(workspace: Path, golden: dict[str, Any]) -> bool:
+    """shell-ab S-GENERATED: both new files written, the generated module exact, the answer right."""
+    module = workspace / "build/generated/constants.py"
+    report = workspace / "build/test-report.txt"
+    if not module.is_file() or not report.is_file() or not report.read_text(encoding="utf-8", errors="replace").strip():
+        return False
+    if module.read_text(encoding="utf-8").rstrip("\n") != golden["generated"].rstrip("\n"):
+        return False
+    try:
+        answer = json.loads((workspace / ".omh-benchmark-answer.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return (
+        isinstance(answer, dict)
+        and answer.get("generated_lines") == golden["generated_lines"]
+        and answer.get("patch_applies") is golden["patch_applies"]
+        and str(answer.get("retry_line", "")).strip() == golden["retry_line"]
+    )
+
+
+_LSP_AB_VALIDATORS = {"RENAME-ALIAS": _rename_alias_ok, "RENAME-SHADOW": _rename_shadow_ok, "GENERATED": _generated_ok}
 
 
 def _ratio(found: set[tuple[Any, ...]], gold: set[tuple[Any, ...]]) -> tuple[float, float]:

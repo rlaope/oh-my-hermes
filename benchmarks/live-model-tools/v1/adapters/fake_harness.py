@@ -79,6 +79,19 @@ def main():
         test.write_text("from benchapp.provider_select import select_provider\n\ndef test_select():\n    assert select_provider(None) is None\n    assert select_provider('us').name == 'primary'\n", encoding="utf-8")
         events.append({"sequence":1,"name":"edit","mutating":True,"arguments_digest":"0"*64,"started_ms":0,"ended_ms":1,"result":"success"})
         answer = {"changed_paths":["src/benchapp/provider_select.py","tests/test_provider_select.py"]}
+    elif name == "GENERATED":
+        # What a shell-first session does: redirect the generator and the tests into build/, then check the patch.
+        target = workspace / "build/generated/constants.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(subprocess.check_output([sys.executable, "tools/gen_constants.py"], cwd=workspace, text=True), encoding="utf-8")
+        (workspace / "build/test-report.txt").write_text("fake harness: tests not run\n", encoding="utf-8")
+        check = subprocess.run(["git", "apply", "--check", "patches/retry_doc.diff"], cwd=workspace, capture_output=True, check=False)
+        events.append({"sequence":1,"name":"bash","arguments_digest":"0"*64,"started_ms":0,"ended_ms":1,"result":"success"})
+        answer = {
+            "generated_lines": len(target.read_text(encoding="utf-8").splitlines()),
+            "patch_applies": check.returncode == 0,
+            "retry_line": (workspace / "src/benchapp/retries.py").read_text(encoding="utf-8").splitlines()[0],
+        }
     elif name == "PRECEDENCE":
         events.append({"sequence":1,"name":"read","arguments_digest":"0"*64,"started_ms":0,"ended_ms":1,"result":"success"})
         answer={"facts":{"precedence":["cli","environment","file","default"],"default_timeout_seconds":15,"default_retries":2,"failure_states":["missing configuration","negative configuration"]},"citations":[{"path":"src/benchapp/config.py","line":1}]}
