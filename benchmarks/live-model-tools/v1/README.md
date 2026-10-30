@@ -554,6 +554,88 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-10-30 per-call overhead: OMH's static tokens on every model call, base vs branch
+
+The 2026-10-30 head-to-head with oh-my-pi measured OMH at 11.6k input tokens per model call under
+Hermes's default `tools.tool_search` (`auto`) against 9.0k for plain Hermes, and 33.0k with
+`tool_search` off. Attribution, measured from that run's `state.db` snapshots: every call's
+system prompt, tool list and replayed history rebuilt, each source tokenized offline (Claude 3
+tokenizer for Haiku 4.5, Claude 5 for Sonnet 5.5). Tokens per model call, OMH minus plain Hermes
+(plain Hermes ran with `tool_search` off in both columns):
+
+| Source | Haiku `auto` | Sonnet `auto` | Haiku `off` | Sonnet `off` |
+| --- | ---: | ---: | ---: | ---: |
+| `omh_*` / `lsp_*` schemas sent eagerly | 0 | 0 | 18,237 | 24,396 |
+| `tool_search` listing lines for OMH tools | 588 | 782 | 0 | 0 |
+| Hermes's own bridge, net of the `process_manage` schema it defers | 176 | 246 | 0 | 0 |
+| OMH awareness section in the system prompt | 432 | 602 | 432 | 602 |
+| `pre_llm_call` context on the first user message (replayed every call) | 641 | 888 | 642 | 887 |
+| Engagement nudges in tool results | 182 | 43 | 207 | 73 |
+| Longer sessions (more calls, larger history) | 614 | 411 | 944 | 712 |
+| Unreconstructed (framing, synthetic verify rows) | 23 | -64 | 48 | 451 |
+| **Total** (measured) | **2,661** | **2,910** | **20,511** | **27,123** |
+
+Of the `pre_llm_call` context, about 2,000 of its 2,600 characters are a route hint
+(`meta_discussion` -> `workflow-learning`) that the bench's wrapper text triggers; the bare task
+gets only the skill candidate line (mean 362 characters). The same hint fires on a product
+request such as "Use OMH to fix the failing test in billing.py". This change does not touch
+routing.
+
+The branch (base = origin/main `531f7034f`) changes three things and nothing else:
+
+1. The tool schemas stop advertising `observation` (host-supplied metadata, in 20 schemas) and
+   `omh_home` / `hermes_home` (refused by every native Hermes call). Handlers still accept them
+   from a host or a standalone caller. `PLUGIN_TOOL_SCHEMA_CHAR_LIMIT` 72227 -> 53244.
+2. Every OMH tool description except `omh_dag` opens with one short complete sentence, so the
+   `tool_search` listing (first sentence, 60 characters) shows it whole: OMH listing lines
+   1986 -> 1515 characters.
+3. A route hint renders a `first_response_shape=`, `not_evidence_yet=` or `plan_todo=` line once
+   when two hints in the same lane carry the same text (bench prompts: 2612 -> 2241 characters).
+
+Expected static reduction per call (tokenized offline; Claude 3 / Claude 5 / o200k): `auto`
+about 230 / 310 / 190 tokens, `off` about 4,800 / 6,400 / 4,500 tokens (`omh_jev_ask` is not
+registered in these profiles, so its share is left out). The run-to-run standard
+error of a 33-instance per-call mean was about 200 to 250 tokens in the head-to-head, so the
+`auto` reduction is close to the noise of the primary metric; the first-call measure below has
+almost none.
+
+The setup, fixed here before the first live run:
+
+- Templates: the head-to-head's 11 (`I-SIGNATURE`, `I-RETURN-SHAPE`, `I-KWARG`, `I-CONTROL`,
+  `C-DUPLICATE`, `C-SCOPE-TRAP`, `C-DECOY`, `E-RENAME`, `E-BUGFIX`, `L-RENAME-ALIAS`,
+  `L-RENAME-SHADOW`), seeds 104729, 130363, 155921: 33 instances per config per arm.
+  `I-CONTROL` is the negative control (no caller breaks).
+- Panel (subscription routes only): `claude-haiku-4-5-20251001` and `claude-sonnet-5-5` through
+  CPA (`claude-proxy`), `gpt-6-luna` through Hermes `openai-codex`. Effort `medium`.
+- Configs: each model with `tools.tool_search` at the Hermes default (`auto`) and `off`: six
+  configs. Arms per config: `base` (OMH bundle at origin/main) and `br` (bundle at the branch
+  head). The two profiles of a config differ only in the bundle and the OMH home.
+- Both arms: the head-to-head's `omh` arm otherwise (`--edit-surface impact`, toolsets
+  `file,terminal,omh-lsp`, `impact_check` and `lsp_tools` on, no edit directive,
+  `--git-init-workspace`, `--test-env`), `agent.max_turns: 120`,
+  `agent.run_budget_seconds: 600`, pyright pinned by absolute command. A bench-only observer
+  plugin (`optc_meter`, no tools, no prompt text, identical in both arms) records each call's
+  usage and request size.
+- Per instance both arms run back to back on identical fresh workspaces, order alternating.
+  Retries only for `rate_limited` / `provider_error` / `model_unavailable` /
+  `authentication_failed` (or a client the gateway refused within seconds), on the same route.
+
+The gate, per config:
+
+- Must hold: `br` passes at least `base` - 1 runs.
+- Must improve: mean input tokens per model call (input + cache read + cache write, summed over
+  the config's sessions, divided by their API calls, from each profile's `state.db`) falls by at
+  least 100 tokens under `auto` and at least 3,000 under `off`.
+- Reported with it, not gating: first-call input tokens (the observer's first `post_api_request`
+  of each session), whose base-to-branch change is the static change alone.
+- Tool choice: under both settings, a small live probe (5 prompts per model and arm, one run each)
+  where an OMH tool should be called (`omh_memory` capture, `omh_todo`, `omh_status`,
+  `omh_run_summary`, `omh_document_plan`); the branch must call the expected tool in at least as
+  many prompts as base, minus one, per model.
+
+Results are recomputed from the raw records and `state.db` snapshots, not the driver log.
+A failed clause is recorded here and the change does not merge on it.
+
 ### 2026-10-30 round-end consistency check in `pre_verify`: off vs on, five measurements
 
 Measurements 1 to 4 failed their gates. The owner then relaxed the token clause to 1.4x
