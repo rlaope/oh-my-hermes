@@ -576,7 +576,7 @@ superiority.
 
 ### 2026-10-30 search hit context: lines around each `search_files` hit, base vs on (`search-ab`)
 
-Status: pre-registered; no counted run yet.
+Status: the gate failed (clauses 3, 5, 6 and 7); the change does not merge on this evidence. Pre-registered below before the first counted run, then the result.
 
 One question, from oh-my-pi's `grep` (one line before and three after every hit, by default): when
 a small `search_files` result already shows the lines around each hit, does the model go from the
@@ -664,6 +664,58 @@ Control (`W-WIDE-RENAME`, 12 pairs):
 Ceiling note: in the h2h the `omt` arm passed 65 of 66 Claude runs, so passes are near the ceiling
 on this set; they are a must-hold clause, not an improvement claim. Per-model medians are reported
 beside the pooled ones but do not enter the gate.
+
+#### Result: gate failed (4 of 9 clauses)
+
+All 288 counted runs completed on the first attempt (no retry, no timeout), 21:19-22:38 KST, four
+lanes in parallel. The numbers below were recomputed by `shapes.py` from the raw records and the
+profiles' `state.db` snapshots, and cross-checked from the records alone (pass, tokens, wall).
+
+| Clause | base | on | Verdict |
+| --- | --- | --- | --- |
+| 1. pass >= base - 1 | 127/132 | 129/132 | holds |
+| 2. weak pass >= base - 1 | 64/66 | 66/66 | holds |
+| 3. no run above 3x its pair's tokens | | worst 3.18x (Sonnet `L-RENAME-SHADOW-155921`, 31.7k vs 100.8k) | **fails** |
+| 4. total tokens <= 1.05x | 14,996,203 | 15,286,500 (1.019x) | holds |
+| 5. median calls before first edit <= base - 0.5 | 2 | 2 | **fails** |
+| 6. median wall <= 0.95x | 54.01 s | 52.79 s (0.977x) | **fails** |
+| 7. median tokens <= 0.97x | 100,918 | 105,346 (1.044x) | **fails** |
+| 8. control: pass >= base - 1, median tokens <= 1.10x | 12/12, 114,132 | 11/12, 107,100 (0.94x) | holds |
+| 9. bound: nothing over 20 hits / 8 files enriched, no result adds > 6,000 characters | | 212 of 428 `on` searches enriched, 0 over the bound, largest addition 1,534 characters; no `base` result enriched | holds |
+
+Per model (positive set; pass, median calls before the first edit, median model calls, median wall,
+median tokens):
+
+| Model | base | on |
+| --- | --- | --- |
+| Haiku 4.5 | 31, 4, 14, 57.6 s, 161.6k | 33, 4, 13, 53.8 s, 151.1k |
+| Sonnet 5.5 | 33, 2, 6, 33.1 s, 67.3k | 33, 1, 5, 33.9 s, 63.7k |
+| gpt-6-luna | 33, 2, 12, 54.1 s, 102.4k | 33, 2, 12, 57.1 s, 105.5k |
+| gpt-6.1-sol | 30, 2, 11, 58.2 s, 105.9k | 30, 2, 11, 56.2 s, 107.5k |
+
+What it shows:
+
+- On Sonnet the change did what the h2h suggested: the median run went from search to first edit
+  in one call instead of two, and from 6 model calls to 5, at 5% fewer tokens. Wall time did not
+  move (33.1 s against 33.9 s).
+- On Haiku it saved one model call in the median run and 7% of tokens and wall time, and the
+  base arm's two `I-KWARG` fails did not recur. Haiku still read the hit files before editing:
+  calls before the first edit stayed at 4.
+- The GPT models already ask for context themselves (in the `base` arm, 19 of 110 Luna searches and
+  60 of 143 Sol searches passed `context`, against 1 of 162 on Claude). For them the pass adds
+  rows to the searches that did not, and the runs were flat to slightly costlier. Pooled, those
+  two lanes cancel the Claude gain, so no improvement clause is met.
+- The 3x run is a mechanism, not a size blowup. With the hit context, Sonnet edited with seven
+  `patch` calls where the base run used one `sed`. `patch` then triggered `impact_check` and the
+  round-end check, which continued the turn. The search result itself grew by 480 characters.
+- Control: the broad search (46 hits in 16 files) passed through unchanged in every run. Three
+  narrow follow-up searches in Haiku control runs were enriched, as designed. The one control fail
+  (Haiku, seed 104729, `on`) came after a 1-hit verification search that showed the leftover
+  reference; the model ran the tests in the same call and stopped.
+
+The gate is failed and recorded; the change is not proposed for merge on this evidence. Routes:
+CPA Claude subscription 17.36M tokens, `openai-codex` subscription 16.02M tokens in counted runs
+(plus 0.26M in two uncounted smokes); $0.
 
 ### 2026-10-30 round-end consistency check in `pre_verify`: off vs on, five measurements
 
