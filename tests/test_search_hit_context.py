@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import types
 import unittest
 from pathlib import Path
@@ -17,6 +16,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from _local_package import load_local_package
+from _module_patch import patch_modules
 
 load_local_package()
 from omh.plugin_bundle.omh.hooks.result_transforms import transform_tool_result
@@ -95,7 +95,7 @@ class SearchHitContextTest(unittest.TestCase):
         (self.root / "src").mkdir()
         (self.root / "src" / "pricing.py").write_text(PRICING, encoding="utf-8")
         (self.root / "src" / "billing.py").write_text(BILLING, encoding="utf-8")
-        modules = mock.patch.dict(sys.modules, {"agent.redact": _host_redact_module()})
+        modules = patch_modules({"agent.redact": _host_redact_module()})
         modules.start()
         self.addCleanup(modules.stop)
         cwd = mock.patch.dict(os.environ, {"TERMINAL_CWD": str(self.root)})
@@ -173,7 +173,7 @@ class SearchHitContextTest(unittest.TestCase):
             self.assertIsNone(self.enrich(self.small()))
 
     def test_no_host_redactor_means_no_enrichment(self) -> None:
-        with mock.patch.dict(sys.modules, {"agent.redact": None}):
+        with patch_modules({"agent.redact": None}):
             self.assertIsNone(self.enrich(self.small()))
 
     def test_added_lines_are_redacted_by_the_host(self) -> None:
