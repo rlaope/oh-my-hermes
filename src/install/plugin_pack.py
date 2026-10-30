@@ -242,7 +242,16 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
                 "move these entries outside the plugin directory, or use --force to replace them"
             )
 
-    changed = force or unmanaged or existing_manifest is None or _manifest_file_map(existing_manifest) != _record_file_map(source_records)
+    # A package that moved (an upgrade's new generation, a reinstall through
+    # another channel) changes no bundle file, but the recorded `package_site`
+    # the bundle imports from has to follow it, so it is a change too (#2166).
+    changed = (
+        force
+        or unmanaged
+        or existing_manifest is None
+        or _manifest_file_map(existing_manifest) != _record_file_map(source_records)
+        or existing_manifest.get(PACKAGE_SITE_KEY) != package_site_record()
+    )
     result = _plugin_distribution_payload(
         paths,
         dry_run=dry_run,
@@ -286,7 +295,11 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
     if target.exists() and not manifest and host_install is None:
         errors.append(f"{target / PLUGIN_MANAGED_MANIFEST} is missing or unreadable")
     manifest_valid = _manifest_valid(manifest, target)
-    manifest_current = manifest_valid and manifest_file_map == bundled_file_map
+    # The package the bundle imports from (#2166) is part of being current:
+    # a manifest recording another directory, or none, leaves a PM-managed
+    # Hermes without the package-backed tools until `omh setup` rewrites it.
+    package_site_current = manifest is not None and manifest.get(PACKAGE_SITE_KEY) == package_site_record()
+    manifest_current = manifest_valid and manifest_file_map == bundled_file_map and package_site_current
     if target.exists() and not manifest_valid and host_install is None:
         errors.append("plugin manifest is invalid or managed files changed")
     if target.exists() and manifest_valid and not manifest_current:
@@ -335,6 +348,8 @@ def inspect_plugin_bundle(paths: OmhPaths) -> dict[str, Any]:
         "plugin_manifest_valid": manifest_valid,
         "plugin_manifest_current": manifest_current,
         "plugin_bundle_stale": target.exists() and manifest_valid and not manifest_current,
+        "plugin_package_site": (manifest or {}).get(PACKAGE_SITE_KEY) or {},
+        "plugin_package_site_current": package_site_current,
         "plugin_host_managed": host_install is not None,
         "plugin_host_install": host_install or {},
         # `plugin_distribution_ready` below cannot hold a Hermes-pinned tree
@@ -654,7 +669,7 @@ def _copy_resource_tree(root: Any, dest: Path) -> None:
 
 
 def _new_plugin_manifest(target: Path, file_records: list[dict[str, str]]) -> dict[str, Any]:
-    return {
+    manifest: dict[str, Any] = {
         "schema_version": PLUGIN_SCHEMA_VERSION,
         "package": "oh-my-hermes",
         "version": __version__,
@@ -666,6 +681,38 @@ def _new_plugin_manifest(target: Path, file_records: list[dict[str, str]]) -> di
         "requires_hermes_plugin_enable": True,
         "enable_hint": PLUGIN_ENABLE_HINT,
     }
+    site = package_site_record()
+    if site is not None:
+        manifest[PACKAGE_SITE_KEY] = site
+    return manifest
+
+
+PACKAGE_SITE_KEY = "package_site"
+
+
+def package_site_record() -> dict[str, str] | None:
+    """Where this running `omh` package is installed, for the bundle to import it from (#2166).
+
+    The directory that holds the `omh` package directory and the
+    `oh_my_hermes-*.dist-info` beside it -- `site-packages` of a pip, uv, or
+    installer venv, the Homebrew libexec venv, or the npm/Bun launcher's
+    extracted cache. None when the running package is not an installed
+    distribution of this version (a source checkout, an editable install
+    whose metadata lives elsewhere): recording a directory that holds no
+    matching metadata would only make the bundle refuse it later.
+    """
+    import omh
+
+    from ..plugin_bundle.omh.package_site import installed_distribution_version
+
+    site = Path(omh.__file__).resolve().parent.parent
+    try:
+        version = installed_distribution_version(str(site))
+    except OSError:
+        return None
+    if version != __version__:
+        return None
+    return {"path": str(site), "version": __version__}
 
 
 def _plugin_distribution_payload(

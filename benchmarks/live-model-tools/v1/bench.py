@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     corpus_parser.add_argument("--verify", action="store_true")
     for name in ("smoke", "run"):
         command = sub.add_parser(name)
-        command.add_argument("--harness", choices=("fake", "omh", "hermes_current_session"), default="fake")
+        command.add_argument("--harness", choices=("fake", "omh", "hermes_current_session", "omp"), default="fake")
         command.add_argument("--manifest", type=Path, default=BASE / "manifest.json")
         command.add_argument("--model", action="append")
         command.add_argument("--condition", choices=CONDITIONS, default="baseline")
@@ -38,6 +38,11 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--output", type=Path)
         command.add_argument("--omh-executable", default="omh")
         command.add_argument("--hermes-executable", default="hermes")
+        command.add_argument(
+            "--omp-executable",
+            default="omp",
+            help="oh-my-pi launcher for --harness omp (print mode, JSON events). Sends the baseline condition only.",
+        )
         command.add_argument(
             "--current-session-provider",
             help="Registered provider ID to use only with --harness hermes_current_session.",
@@ -98,10 +103,14 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"--edit-surface {args.edit_surface} requires --harness hermes_current_session")
         if args.edit_directive == "rename" and args.edit_surface not in {"patch", "lsp"}:
             parser.error("--edit-directive rename requires --edit-surface patch or lsp")
-        if args.harness in {"omh", "hermes_current_session"} and not args.allow_paid_live:
-            parser.error("live Hermes harness requires --allow-paid-live")
-        if args.harness in {"omh", "hermes_current_session"} and args.max_paid_calls < 1:
-            parser.error("live Hermes harness requires --max-paid-calls")
+        if args.harness == "omp" and args.condition != "baseline":
+            parser.error("--harness omp sends only --condition baseline (no OMH calibration)")
+        if args.harness == "omp" and args.edit_directive:
+            parser.error("--edit-directive names Hermes tools; --harness omp takes none")
+        if args.harness in {"omh", "hermes_current_session", "omp"} and not args.allow_paid_live:
+            parser.error("live harness requires --allow-paid-live")
+        if args.harness in {"omh", "hermes_current_session", "omp"} and args.max_paid_calls < 1:
+            parser.error("live harness requires --max-paid-calls")
         manifest = load_object(args.manifest)
         live_models = [item for item in manifest["models"] if item.get("live")]
         if args.extra_model:
@@ -132,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         output = args.output or BASE / "artifacts" / args.condition / f"{args.split}-runs.jsonl"
         if args.command == "smoke":
             template_id, task_class, seed = ("D-RENAME", "edit", 7919)
-            model = live_models[0] if args.harness in {"omh", "hermes_current_session"} else None
+            model = live_models[0] if args.harness in {"omh", "hermes_current_session", "omp"} else None
             result = execute_one(
                 BASE,
                 manifest,
@@ -151,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
                 edit_directive=args.edit_directive,
                 git_init_workspace=args.git_init_workspace,
                 test_env=args.test_env,
+                omp_executable=args.omp_executable,
             )
         else:
             result = run_matrix(
@@ -160,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.condition,
                 output,
                 args.harness,
-                models=live_models if args.harness in {"omh", "hermes_current_session"} else None,
+                models=live_models if args.harness in {"omh", "hermes_current_session", "omp"} else None,
                 omh_executable=args.omh_executable,
                 hermes_executable=args.hermes_executable,
                 current_session_provider=args.current_session_provider,
@@ -171,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_paid_calls=args.max_paid_calls,
                 templates=args.templates.split(",") if args.templates else None,
                 seeds=[int(seed) for seed in args.seeds.split(",")] if args.seeds else None,
+                omp_executable=args.omp_executable,
             )
     emit(result)
     return 0 if result.get("ok", True) else 1

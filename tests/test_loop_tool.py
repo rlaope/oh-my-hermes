@@ -1300,10 +1300,12 @@ class PackageBackendClassificationTests(_LoopHome):
                 self.assertEqual(backend["package_version"], "")
                 detail = observed[name]["error_detail"]
                 self.assertIn("The OMH plugin is registered", detail)
-                self.assertIn("no supported way to add the package yet", detail)
-                self.assertIn("on a Hermes environment you manage yourself", detail)
+                # The one repair: the `omh` command records its own package
+                # beside the bundle, which the bundle then imports (#2166).
+                self.assertIn("Run `omh update` (or `omh setup`)", detail)
+                self.assertIn("then restart Hermes", detail)
                 # The remedy a package-manager-owned environment forbids.
-                for forbidden in ("pip", "uv "):
+                for forbidden in ("pip", "uv ", "manage yourself"):
                     self.assertNotIn(forbidden, detail)
         probe = observed["probe"]
         self.assertEqual(probe["source"], "standalone_plugin_bundle_fallback")
@@ -1744,7 +1746,7 @@ class InterpreterSiteOffPathTests(unittest.TestCase):
         detail = loop["error_detail"]
         self.assertIn("own site directory, which is not on its import path", detail)
         self.assertIn("Hermes' package manager takes it off when Hermes starts", detail)
-        self.assertIn("there is no supported way to add the package to it yet", detail)
+        self.assertIn("Run `omh update` (or `omh setup`)", detail)
         self.assertIn("omh --omh-home <that home> loop status", detail)
         # The remedy the reporter already took, and those a PM environment forbids.
         for forbidden in ("install oh-my-hermes", "manage yourself", "pip", "uv "):
@@ -1778,7 +1780,7 @@ class InterpreterSiteOffPathTests(unittest.TestCase):
         backend = observed["loop"]["package_backend"]
         self.assertEqual(backend["status"], "absent")
         self.assertEqual(backend.get("off_path_install", ""), "")
-        self.assertIn("on a Hermes environment you manage yourself", observed["loop"]["error_detail"])
+        self.assertIn("Run `omh update` (or `omh setup`)", observed["loop"]["error_detail"])
         self.assertNotIn("own site directory", observed["loop"]["error_detail"])
         self.assertEqual(observed["interact"].get("package_backend", {}).get("off_path_install"), "")
         self.assertNotIn("own site directory", observed["interact"].get("package_backend_detail", ""))

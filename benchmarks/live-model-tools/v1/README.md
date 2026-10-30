@@ -14,9 +14,11 @@ The live path measures the product under test:
 5. read tool, token, and cost metrics from authenticated
    `routing_observation/v1` evidence.
 
-There is no pi-family runtime execution path. OMH remains Hermes-native: core OMH makes no
-provider call, and the explicit benchmark command launches the local Hermes CLI
-under the existing isolated child-process contract.
+OMH remains Hermes-native: core OMH makes no provider call, and the explicit
+benchmark command launches the local Hermes CLI under the existing isolated
+child-process contract. The one non-Hermes path is the comparison harness
+`omp` (below), which runs oh-my-pi on the same instances so the two harnesses
+can be graded side by side; it is not an OMH runtime path.
 
 There are two explicit live execution paths:
 
@@ -73,6 +75,24 @@ python benchmarks/live-model-tools/v1/bench.py smoke \
   --condition optimized \
   --allow-paid-live \
   --max-paid-calls 1
+```
+
+`--harness omp` runs oh-my-pi (`omp -p --mode json`) in the workspace with the
+`baseline` condition prompt, byte for byte what the Hermes arms send, and the
+same validators. It accepts no other condition and no `--edit-directive` (both
+name OMH or Hermes specifics). `--omp-executable` should be a launcher that
+rebuilds omp's environment itself (an isolated `HOME`, no inherited provider
+keys), so omp can reach only the routes configured for it. The record keeps
+scalar metrics only (`harness_metrics`: tokens by direction, tool calls by name,
+stop reason, whether the last assistant text carries `changed_paths`); omp keeps
+its own transcript in its own home. Every live record now has `wall_seconds`.
+
+```bash
+python benchmarks/live-model-tools/v1/bench.py run --harness omp \
+  --omp-executable <isolated omp launcher> \
+  --extra-model "id=claude-haiku-4-5-20251001,provider=cpa,effort=medium,family=claude" \
+  --model claude-haiku-4-5-20251001 --split impact-ab \
+  --git-init-workspace --test-env --allow-paid-live --max-paid-calls 12
 ```
 
 Before a paid `hermes_current_session` run, set a turn cap in every profile the run uses

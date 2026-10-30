@@ -827,6 +827,23 @@ All notable changes will be documented here.
   which failure it met. `docs/INSTALLATION.md` explains the case and how to
   check what the plugin sees (#2415, reported by @trend0522).
 
+- **Native Loop, the decision gate, chat recording and the other
+  package-backed tools now work on a Hermes install its package manager
+  prepares.** Hermes loads the OMH plugin with its own interpreter, and on
+  those installs nothing could put the `oh-my-hermes` package where that
+  interpreter imports from, so `omh_loop`, `omh_decision_gate`, `omh_team`,
+  `omh_agent_board`, `omh_source_trust` and `omh_interact`'s session
+  recording were off. `omh setup` and `omh update` now record where their own
+  `omh` package is installed (the installer venv, Homebrew, `uv tool`, `pip`,
+  or the npm/Bun cache) in the plugin bundle's manifest, and the bundle
+  imports `omh` from there when Hermes' interpreter has none of its own. Only
+  `omh` itself is imported from that directory, only from a wheel install at
+  the bundle's exact version, without writing bytecode into it, and an `omh`
+  the interpreter already has always wins. Run `omh update`, then restart
+  Hermes. When the recorded package is missing or another version, the
+  refusal says which and names that same repair, and `omh doctor` reports
+  the bundle as stale (#2166, #2415).
+
 ## 4.0.3 - 2026-10-27
 
 - **`plan` and `ralplan` name the goal beyond the request, the raw material,

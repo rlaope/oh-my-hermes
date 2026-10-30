@@ -160,7 +160,7 @@ class DecisionGatePackageBackendTests(unittest.TestCase):
         self.assertEqual(backend["failed_import"], "omh")
         detail = observed["result"]["detail"]
         self.assertIn("so the decision gate has no backend here", detail)
-        self.assertIn("on a Hermes environment you manage yourself", detail)
+        self.assertIn("Run `omh update` (or `omh setup`)", detail)
         for forbidden in ("pip", "uv ", "omh --omh-home"):
             self.assertNotIn(forbidden, detail)
 

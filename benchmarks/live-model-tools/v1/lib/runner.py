@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import time
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,7 @@ from omh_live import (
     run_current_session_trial,
     run_trial,
 )
+from omp_live import run_omp_trial
 from validation import validate
 
 
@@ -126,6 +128,7 @@ def execute_one(
     edit_directive: bool | str = False,
     git_init_workspace: bool = False,
     test_env: bool = False,
+    omp_executable: str = "omp",
 ) -> dict[str, Any]:
     if condition not in CONDITIONS:
         raise ValueError(f"condition must be one of: {', '.join(CONDITIONS)}")
@@ -138,7 +141,7 @@ def execute_one(
         instance, golden_path = materialize(split, template_id, task_class, seed, workspace, private)
         if git_init_workspace:
             _git_init(workspace)
-        test_python = _test_env(root, workspace) if test_env and harness == "hermes_current_session" else None
+        test_python = _test_env(root, workspace) if test_env and harness in {"hermes_current_session", "omp"} else None
         initial = _snapshot(workspace)
         answer_path = workspace / ".omh-benchmark-answer.json"
         events: list[dict[str, Any]] = []
@@ -147,6 +150,8 @@ def execute_one(
         trial_task_digest = instance.fixture_digest
         trial_prompt_digest: str | None = None
         session_id: str | None = None
+        wall_seconds: float | None = None
+        harness_metrics: dict[str, Any] | None = None
         observation: dict[str, object] = {
             "status": "offline_fake",
             "tools": None,
@@ -207,6 +212,7 @@ def execute_one(
             if model is None:
                 raise ValueError("live Hermes harness requires a model")
             prompt = _live_task(instance.prompt, test_python)
+            started = time.time()
             if harness == "hermes_current_session":
                 trial = run_current_session_trial(
                     omh_executable=omh_executable,
@@ -240,6 +246,7 @@ def execute_one(
                     timeout=int(manifest["timeouts_seconds"].get(task_class, 300)),
                     confirmed=True,
                 )
+            wall_seconds = round(time.time() - started, 3)
             route = dict(trial["route"])
             raw_failure_receipt = trial.get("failure_receipt")
             failure_receipt = dict(raw_failure_receipt) if isinstance(raw_failure_receipt, dict) else None
@@ -249,8 +256,33 @@ def execute_one(
             observation = dict(trial["observation"])
             raw_session_id = trial.get("session_id")
             session_id = raw_session_id if isinstance(raw_session_id, str) else None
+        elif harness == "omp":
+            if model is None:
+                raise ValueError("the omp harness requires a model")
+            if edit_directive:
+                raise ValueError("the edit directives name Hermes tools; the omp harness takes none")
+            started = time.time()
+            trial = run_omp_trial(
+                omp_executable=omp_executable,
+                workspace=workspace,
+                task=_live_task(instance.prompt, test_python),
+                model=str(model["id"]),
+                provider=str(model["provider"]),
+                effort=str(model["effort"]),
+                condition=condition,
+                timeout=int(manifest["timeouts_seconds"].get(task_class, 300)),
+                confirmed=True,
+            )
+            wall_seconds = round(time.time() - started, 3)
+            route = dict(trial["route"])
+            failure_receipt = trial["failure_receipt"]
+            trial_task_digest = str(trial["task_digest"])
+            trial_prompt_digest = str(trial["prompt_digest"])
+            observation = dict(trial["observation"])
+            session_id = trial["session_id"]
+            harness_metrics = trial["harness_metrics"]
         else:
-            raise ValueError("harness must be fake, omh, or hermes_current_session")
+            raise ValueError("harness must be fake, omh, hermes_current_session, or omp")
 
         grade = validate(
             template_id,
@@ -271,7 +303,7 @@ def execute_one(
             "edit_surface": edit_surface if harness == "hermes_current_session" else None,
             "edit_directive": edit_directive if harness == "hermes_current_session" else None,
             "git_init_workspace": git_init_workspace if harness == "hermes_current_session" else None,
-            "test_env": test_env if harness == "hermes_current_session" else None,
+            "test_env": test_env if harness in {"hermes_current_session", "omp"} else None,
             "execution_path": harness,
             "model": model,
             "task_digest": trial_task_digest,
@@ -280,6 +312,8 @@ def execute_one(
             "route": route,
             "observation": observation,
             "session_id": session_id,
+            "wall_seconds": wall_seconds,
+            "harness_metrics": harness_metrics,
             "failure_receipt": failure_receipt,
             "grade": grade,
             "final_tree_digest": tree_digest(workspace),
@@ -310,6 +344,7 @@ def run_matrix(
     max_paid_calls: int = 0,
     templates: list[str] | None = None,
     seeds: list[int] | None = None,
+    omp_executable: str = "omp",
 ) -> dict[str, Any]:
     selected = models or [None]
     specs = all_specs(split)
@@ -319,7 +354,7 @@ def run_matrix(
     if seeds:
         specs = [spec for spec in specs if spec[2] in set(seeds)]
     scheduled = len(selected) * len(specs)
-    if harness in {"omh", "hermes_current_session"} and (max_paid_calls < 1 or scheduled > max_paid_calls):
+    if harness in {"omh", "hermes_current_session", "omp"} and (max_paid_calls < 1 or scheduled > max_paid_calls):
         raise ValueError(
             f"scheduled paid calls ({scheduled}) exceed explicit budget ({max_paid_calls})"
         )
@@ -345,6 +380,7 @@ def run_matrix(
                     edit_directive=edit_directive,
                     git_init_workspace=git_init_workspace,
                     test_env=test_env,
+                    omp_executable=omp_executable,
                 )
             )
     return {
@@ -357,5 +393,5 @@ def run_matrix(
         "graded": len(records),
         "passed": sum(bool(item["grade"]["pass"]) for item in records),
         "output": str(output),
-        "paid_calls_launched": len(records) if harness in {"omh", "hermes_current_session"} else 0,
+        "paid_calls_launched": len(records) if harness in {"omh", "hermes_current_session", "omp"} else 0,
     }

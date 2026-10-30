@@ -166,6 +166,13 @@ def register(ctx: _PluginContext) -> None:
     # Metadata/parser imports serve the maintenance CLI, even on unsupported hosts.
     # Admit only at the loader entry, before any registration side effects.
     _admit_host()
+    # Before any module that imports `omh` loads: on a Hermes install its
+    # package manager prepares, the package OMH's installer recorded beside
+    # this bundle is the only `omh` this interpreter can reach (#2166). A
+    # metadata read, no package import, so the plugin-load deadline barely moves.
+    from . import package_site
+
+    package_site.ensure_recorded_package_site()
     from . import runtime_paths
     runtime_paths.note_host_registration(ctx)
     from .memory_provider import OmhMemoryProvider
