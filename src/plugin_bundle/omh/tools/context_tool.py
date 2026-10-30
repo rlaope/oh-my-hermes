@@ -10,7 +10,7 @@ from ..host_observation import attach_public_observation, observe_plugin_tool_ca
 OMH_CONTEXT_SCHEMA = {
     "name": "omh_context",
     "description": (
-        "Return compact OMH operating context. Read it before generic chat, image, file, search, or coding tools. "
+        "Return compact OMH operating context for Hermes before generic chat, image, file, search, or coding tools. "
         "The payload is metadata-only and does not store or echo the raw user request."
     ),
     "parameters": {

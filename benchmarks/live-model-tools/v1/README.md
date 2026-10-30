@@ -636,6 +636,33 @@ The gate, per config:
 Results are recomputed from the raw records and `state.db` snapshots, not the driver log.
 A failed clause is recorded here and the change does not merge on it.
 
+Run 1 (branch `af55afc3a`, 396 runs, 21:32-22:45 KST): **gate failed** on one
+config. Recomputed from the records and `state.db` (`recompute.py`); per-call tokens are
+input + cache read + cache write over API calls; CI is a paired bootstrap over instances.
+
+| Config | Pass base | Pass br | Tokens/call base | Tokens/call br | Drop (95% CI) | First call base -> br | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- | --- |
+| Haiku 4.5 `auto` | 32 | 32 | 11,622 | 11,418 | +204 (-160, +549) | 7,757 -> 7,461 | pass |
+| Haiku 4.5 `off` | 31 | 33 | 29,345 | 24,364 | +4,980 (+4,639, +5,359) | 25,255 -> 20,389 | pass |
+| Sonnet 5.5 `auto` | 33 | 33 | 11,720 | 11,405 | +315 (-85, +707) | 9,756 -> 9,468 | pass |
+| Sonnet 5.5 `off` | 33 | 33 | 36,061 | 29,418 | +6,642 (+6,250, +7,049) | 33,624 -> 26,920 | pass |
+| GPT-6 Luna `auto` | 32 | 33 | 9,019 | 8,765 | +254 (+90, +433) | 6,523 -> 6,327 | pass |
+| GPT-6 Luna `off` | 32 | 33 | 26,080 | 26,192 | -112 (-1,613, +1,328) | 17,935 -> 15,108 | **fail** |
+
+Why Luna `off` failed: its first call fell by 2,827 tokens, as expected, but `omh_context` was
+called in 33 of 33 branch sessions against 21 of 33 base sessions, and each result is about
+39,000 characters that then ride every later call. The branch had rewritten that tool's opener
+from "Return compact OMH operating context for Hermes before generic chat, image, file, search,
+or coding tools." to "Return compact OMH operating context. Read it before generic chat, image,
+file, search, or coding tools.", which reads as an instruction. No Claude session called
+`omh_context` in either arm.
+
+Amendment 1, written after run 1 and before run 2: `omh_context` gets its original description
+back, byte for byte (no other change; `PLUGIN_TOOL_SCHEMA_CHAR_LIMIT` 53222 -> 53224, listing
+1503 -> 1521 characters). Run 2 repeats the whole design above on all six configs, both arms,
+fresh, with the same gate. Run 1 stays recorded as a failure. Probe results are taken on the
+run 2 branch.
+
 ### 2026-10-30 round-end consistency check in `pre_verify`: off vs on, five measurements
 
 Measurements 1 to 4 failed their gates. The owner then relaxed the token clause to 1.4x
