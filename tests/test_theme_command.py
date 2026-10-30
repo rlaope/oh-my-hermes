@@ -39,7 +39,7 @@ class ThemeCommandTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             status, out, _ = run_cli([*self._homes(tmp), "theme"], output_json=False)
             self.assertEqual(status, 0)
-            for name in ("sky", "amber", "crimson", "mono"):
+            for name in ("sky", "amber", "crimson", "mono", "kanagawa-wave"):
                 self.assertIn(name, out)
             self.assertIn("(default)", out)
 
@@ -53,7 +53,7 @@ class ThemeCommandTests(unittest.TestCase):
             self.assertEqual(payload["active_theme"], "sky")
             self.assertEqual(payload["active_source"], "default")
             self.assertEqual(payload["store_path"], str(self._store(tmp)))
-            self.assertEqual([theme["name"] for theme in payload["themes"]], ["sky", "amber", "crimson", "mono"])
+            self.assertEqual([theme["name"] for theme in payload["themes"]], ["sky", "amber", "crimson", "mono", "kanagawa-wave"])
             run_cli([*homes, "theme", "use", "amber"])
             payload = json.loads(run_cli([*homes, "theme", "list"])[1])
             active = [theme for theme in payload["themes"] if theme["active"]]
@@ -197,7 +197,7 @@ class ThemeCommandTests(unittest.TestCase):
             status, out, _ = run_cli([*self._homes(tmp), "theme", "use", "ultraviolet"], output_json=False)
             self.assertEqual(status, 2)
             self.assertIn("ultraviolet", out)
-            for name in ("sky", "amber", "crimson", "mono"):
+            for name in ("sky", "amber", "crimson", "mono", "kanagawa-wave"):
                 self.assertIn(name, out)
             self.assertFalse(self._store(tmp).exists())
 

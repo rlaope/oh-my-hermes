@@ -3025,6 +3025,7 @@ switching is instant and offline, and nothing is installed into Hermes.
 | `amber` | `omh-amber` | Amber gold on deep bronze. |
 | `crimson` | `omh-crimson` | Ember red-orange on deep crimson. |
 | `mono` | `omh-mono` | Neutral grayscale with white accents. |
+| `kanagawa-wave` | `omh-kanagawa-wave` | Kanagawa Wave: indigo, warm ivory, muted blue and violet. |
 
 ```sh
 omh theme                    # arrow-key picker with a live colour preview

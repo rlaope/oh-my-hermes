@@ -74,7 +74,7 @@ class PickerNavigationTests(unittest.TestCase):
         self.assertEqual(chosen.short_name, "sky")
 
     def test_the_cursor_wraps_at_both_ends(self) -> None:
-        self.assertEqual(_drive([KEY_UP, KEY_ENTER])[0].short_name, "mono")
+        self.assertEqual(_drive([KEY_UP, KEY_ENTER])[0].short_name, SKIN_THEMES[-1].short_name)
         self.assertEqual(_drive([KEY_DOWN] * len(SKIN_THEMES) + [KEY_ENTER])[0].short_name, "sky")
 
     def test_quit_and_an_exhausted_reader_both_cancel(self) -> None:

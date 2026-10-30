@@ -1,0 +1,84 @@
+# Kanagawa Wave palette, adapted from rebelot/kanagawa.nvim (MIT).
+# Original palette: Tommaso Laurenzi, 2021.
+# Inherit terminal background and foreground; OMH renders against its reported surface.
+name: omh-kanagawa-wave
+description: Kanagawa Wave — indigo, warm ivory, muted blue and violet
+
+colors:
+  banner_border: "#54546D"
+  banner_title: "#7E9CD8"
+  banner_accent: "#957FB8"
+  banner_dim: "#727169"
+  banner_text: "#DCD7BA"
+  ui_accent: "#7E9CD8"
+  ui_label: "#7FB4CA"
+  ui_ok: "#98BB6C"
+  ui_error: "#E46876"
+  ui_warn: "#DCA561"
+  ui_tool: "#7AA89F"
+  ui_thinking: "#727169"
+  prompt: "#DCD7BA"
+  input_rule: "#54546D"
+  response_border: "#957FB8"
+  status_bar_bg: "#1F1F28"
+  status_bar_text: "#DCD7BA"
+  status_bar_strong: "#7E9CD8"
+  status_bar_dim: "#727169"
+  status_bar_good: "#98BB6C"
+  status_bar_warn: "#DCA561"
+  status_bar_bad: "#FFA066"
+  status_bar_critical: "#E46876"
+  session_label: "#7FB4CA"
+  session_border: "#54546D"
+  completion_menu_bg: "#16161D"
+  completion_menu_current_bg: "#223249"
+  selection_bg: "#2D4F67"
+  voice_status_bg: "#16161D"
+  syntax_string: "#98BB6C"
+  syntax_number: "#D27E99"
+  syntax_keyword: "#957FB8"
+  syntax_comment: "#727169"
+  diff_removed: "#43242B"
+  diff_removed_word: "#E46876"
+  diff_added: "#26332D"
+  diff_added_word: "#98BB6C"
+
+spinner:
+  waiting_faces:
+    - "(◆)"
+    - "(≋)"
+    - "(∿)"
+    - "(◇)"
+  thinking_faces:
+    - "(◆)"
+    - "(◇)"
+    - "(≋)"
+    - "(⌁)"
+  thinking_verbs:
+    - "orchestrating"
+    - "routing skills"
+    - "weighing evidence"
+    - "preparing handoffs"
+    - "sequencing agents"
+    - "charting workflows"
+  wings:
+    - ["⟪◆", "◆⟫"]
+    - ["⟪≋", "≋⟫"]
+
+branding:
+  agent_name: "OH-MY-HERMES"
+  welcome: "Welcome to OH-MY-HERMES! Type your message or /help for commands."
+  goodbye: "Goodbye! ◆"
+  response_label: " ◆ OMH "
+  prompt_symbol: "❯"
+  help_header: "(◆) Commands"
+
+tool_prefix: "│"
+
+banner_logo: |-
+  [bold #DCD7BA] ██████╗ ██╗  ██╗      ███╗   ███╗██╗   ██╗      ██╗  ██╗███████╗██████╗ ███╗   ███╗███████╗███████╗[/]
+  [bold #7FB4CA]██╔═══██╗██║  ██║      ████╗ ████║╚██╗ ██╔╝      ██║  ██║██╔════╝██╔══██╗████╗ ████║██╔════╝██╔════╝[/]
+  [#7E9CD8]██║   ██║███████║█████╗██╔████╔██║ ╚████╔╝ █████╗███████║█████╗  ██████╔╝██╔████╔██║█████╗  ███████╗[/]
+  [#957FB8]██║   ██║██╔══██║╚════╝██║╚██╔╝██║  ╚██╔╝  ╚════╝██╔══██║██╔══╝  ██╔══██╗██║╚██╔╝██║██╔══╝  ╚════██║[/]
+  [#7AA89F]╚██████╔╝██║  ██║      ██║ ╚═╝ ██║   ██║         ██║  ██║███████╗██║  ██║██║ ╚═╝ ██║███████╗███████║[/]
+  [#727169] ╚═════╝ ╚═╝  ╚═╝      ╚═╝     ╚═╝   ╚═╝         ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚══════╝[/]

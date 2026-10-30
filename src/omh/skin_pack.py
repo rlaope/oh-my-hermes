@@ -56,6 +56,8 @@ SKIN_THEMES: tuple[SkinTheme, ...] = (
     SkinTheme("amber", "omh-amber", "omh-amber.yaml", "Amber gold on deep bronze."),
     SkinTheme("crimson", "omh-crimson", "omh-crimson.yaml", "Ember red-orange on deep crimson."),
     SkinTheme("mono", "omh-mono", "omh-mono.yaml", "Neutral grayscale with white accents."),
+    SkinTheme("kanagawa-wave", "omh-kanagawa-wave", "omh-kanagawa-wave.yaml",
+              "Kanagawa Wave: indigo, warm ivory, muted blue and violet."),
 )
 
 _SKIN_FILENAMES: tuple[str, ...] = tuple(theme.filename for theme in SKIN_THEMES)
