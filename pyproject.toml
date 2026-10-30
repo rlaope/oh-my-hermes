@@ -28,7 +28,7 @@ classifiers = [
 omh = "omh.cli:main"
 
 [project.urls]
-Homepage = "https://rlaope.github.io/oh-my-hermes/"
+Homepage = "https://omher.app/"
 Issues = "https://github.com/rlaope/oh-my-hermes/issues"
 Repository = "https://github.com/rlaope/oh-my-hermes"
 

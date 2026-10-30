@@ -14,7 +14,7 @@
 
 **Hermes Agent 的一站式套件。安装一次，然后只需输入 `dag-ulw`。**
 
-[![GitHub Release](https://img.shields.io/github/v/release/rlaope/oh-my-hermes?color=58a6ff&labelColor=black&logo=github&style=flat-square)](https://github.com/rlaope/oh-my-hermes/releases) [![npm downloads](https://img.shields.io/npm/dt/oh-my-hermes?color=3fb950&labelColor=black&logo=npm&label=downloads&style=flat-square)](https://www.npmjs.com/package/oh-my-hermes) [![GitHub Contributors](https://img.shields.io/github/contributors/rlaope/oh-my-hermes?color=bc8cff&labelColor=black&style=flat-square)](https://github.com/rlaope/oh-my-hermes/graphs/contributors) [![GitHub Stars](https://img.shields.io/github/stars/rlaope/oh-my-hermes?color=e3b341&labelColor=black&style=flat-square)](https://github.com/rlaope/oh-my-hermes/stargazers) [![License](https://img.shields.io/github/license/rlaope/oh-my-hermes?color=white&labelColor=black&style=flat-square)](LICENSE) [![Docs](https://img.shields.io/badge/docs-rlaope.github.io-58a6ff?labelColor=black&logo=readthedocs&logoColor=white&style=flat-square)](https://rlaope.github.io/oh-my-hermes/)
+[![GitHub Release](https://img.shields.io/github/v/release/rlaope/oh-my-hermes?color=58a6ff&labelColor=black&logo=github&style=flat-square)](https://github.com/rlaope/oh-my-hermes/releases) [![npm downloads](https://img.shields.io/npm/dt/oh-my-hermes?color=3fb950&labelColor=black&logo=npm&label=downloads&style=flat-square)](https://www.npmjs.com/package/oh-my-hermes) [![GitHub Contributors](https://img.shields.io/github/contributors/rlaope/oh-my-hermes?color=bc8cff&labelColor=black&style=flat-square)](https://github.com/rlaope/oh-my-hermes/graphs/contributors) [![GitHub Stars](https://img.shields.io/github/stars/rlaope/oh-my-hermes?color=e3b341&labelColor=black&style=flat-square)](https://github.com/rlaope/oh-my-hermes/stargazers) [![License](https://img.shields.io/github/license/rlaope/oh-my-hermes?color=white&labelColor=black&style=flat-square)](LICENSE) [![Docs](https://img.shields.io/badge/docs-omher.app-58a6ff?labelColor=black&logo=readthedocs&logoColor=white&style=flat-square)](https://omher.app/)
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Русский](README.ru.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md) | [Italiano](README.it.md)
 
@@ -119,7 +119,7 @@ omh setup
 
 ## 其他
 
-[文档](docs/README.md) · [安装](docs/INSTALLATION.md) · [Capabilities](docs/CAPABILITIES.md) · [Workflows](docs/WORKFLOWS.md) · [网站](https://rlaope.github.io/oh-my-hermes/)
+[文档](docs/README.md) · [安装](docs/INSTALLATION.md) · [Capabilities](docs/CAPABILITIES.md) · [Workflows](docs/WORKFLOWS.md) · [网站](https://omher.app/)
 
 <details>
 <summary><b>安装选项</b></summary>
@@ -324,7 +324,7 @@ executor 说自己完成了，与结果被检查过是两回事，而大多数�
 - [用 Hermes 处理超大 PDF](docs/LONG-DOCUMENT-READING.md)
 - [实时模型基准与实测结果](benchmarks/live-model-tools/v1/README.md)
 - [发布与开发](docs/RELEASE.md)
-- [网站](https://rlaope.github.io/oh-my-hermes/)（[源码](site/index.html)）
+- [网站](https://omher.app/)（[源码](site/index.html)）
 
 ### 贡献者
 

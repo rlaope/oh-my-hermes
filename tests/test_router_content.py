@@ -4049,7 +4049,7 @@ class RouterContentTests(unittest.TestCase):
         self.assertIn("hermes skills tap add rlaope/oh-my-hermes", installation)
         self.assertIn("hermes skills install rlaope/oh-my-hermes/skills/omh-routing --yes", installation)
         self.assertIn("curl -fsSL https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/install.sh | sh", readme)
-        self.assertIn("https://rlaope.github.io/oh-my-hermes/", readme)
+        self.assertIn("https://omher.app/", readme)
         self.assertIn("[Documentation](docs/README.md)", readme)
         self.assertIn("[Installation](docs/INSTALLATION.md)", readme)
         self.assertIn("[Agent Install](INSTALL_FOR_AGENTS.md)", readme)

@@ -19,7 +19,7 @@
 [![GitHub Contributors](https://img.shields.io/github/contributors/rlaope/oh-my-hermes?color=bc8cff&labelColor=black&style=flat-square)](https://github.com/rlaope/oh-my-hermes/graphs/contributors)
 [![GitHub Stars](https://img.shields.io/github/stars/rlaope/oh-my-hermes?color=e3b341&labelColor=black&style=flat-square)](https://github.com/rlaope/oh-my-hermes/stargazers)
 [![License](https://img.shields.io/github/license/rlaope/oh-my-hermes?color=white&labelColor=black&style=flat-square)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-rlaope.github.io-58a6ff?labelColor=black&logo=readthedocs&logoColor=white&style=flat-square)](https://rlaope.github.io/oh-my-hermes/)
+[![Docs](https://img.shields.io/badge/docs-omher.app-58a6ff?labelColor=black&logo=readthedocs&logoColor=white&style=flat-square)](https://omher.app/)
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Русский](README.ru.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md) | [Italiano](README.it.md)
 
@@ -124,7 +124,7 @@ omh setup
 
 ## 기타
 
-[문서](docs/README.md) · [설치](docs/INSTALLATION.md) · [Capabilities](docs/CAPABILITIES.md) · [Workflows](docs/WORKFLOWS.md) · [웹사이트](https://rlaope.github.io/oh-my-hermes/)
+[문서](docs/README.md) · [설치](docs/INSTALLATION.md) · [Capabilities](docs/CAPABILITIES.md) · [Workflows](docs/WORKFLOWS.md) · [웹사이트](https://omher.app/)
 
 <details>
 <summary><b>설치 옵션</b></summary>
@@ -349,7 +349,7 @@ executor가 끝났다고 말한 것과 결과가 확인된 것은 다른데, 대
 - [Hermes로 초대용량 PDF 처리하기](docs/LONG-DOCUMENT-READING.md)
 - [라이브 모델 벤치마크와 측정 결과](benchmarks/live-model-tools/v1/README.md)
 - [릴리스와 개발](docs/RELEASE.md)
-- [웹사이트](https://rlaope.github.io/oh-my-hermes/) ([소스](site/index.html))
+- [웹사이트](https://omher.app/) ([소스](site/index.html))
 
 ### 기여자
 

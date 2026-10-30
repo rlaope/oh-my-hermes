@@ -4076,7 +4076,7 @@ planning, and specialist review flows, see
 [Application Cases](APPLICATION_CASES.md).
 
 The public project site at
-`https://rlaope.github.io/oh-my-hermes/` is a short entry point. Treat
+`https://omher.app/` is a short entry point. Treat
 this `docs/` directory and the root README as the source of truth for operating
 details.
 

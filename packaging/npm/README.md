@@ -54,4 +54,4 @@ Package-manager removal preserves this cache. After every `omh` process has
 stopped, delete the platform path above as the final step when no cached wheel
 should remain.
 
-Project documentation: <https://rlaope.github.io/oh-my-hermes/>
+Project documentation: <https://omher.app/>

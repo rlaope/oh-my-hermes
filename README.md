@@ -19,7 +19,7 @@
 [![GitHub Contributors](https://img.shields.io/github/contributors/rlaope/oh-my-hermes?color=bc8cff&labelColor=black&style=flat-square)](https://github.com/rlaope/oh-my-hermes/graphs/contributors)
 [![GitHub Stars](https://img.shields.io/github/stars/rlaope/oh-my-hermes?color=e3b341&labelColor=black&style=flat-square)](https://github.com/rlaope/oh-my-hermes/stargazers)
 [![License](https://img.shields.io/github/license/rlaope/oh-my-hermes?color=white&labelColor=black&style=flat-square)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-rlaope.github.io-58a6ff?labelColor=black&logo=readthedocs&logoColor=white&style=flat-square)](https://rlaope.github.io/oh-my-hermes/)
+[![Docs](https://img.shields.io/badge/docs-omher.app-58a6ff?labelColor=black&logo=readthedocs&logoColor=white&style=flat-square)](https://omher.app/)
 
 [English](README.md) | [简体中文](README.zh.md) | [日本語](README.ja.md) | [Русский](README.ru.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Português (Brasil)](README.pt-BR.md) | [Italiano](README.it.md)
 
@@ -134,7 +134,7 @@ A separate node verifies the goal before you get the report.
 
 ## Others
 
-[Docs](docs/README.md) · [Installation](docs/INSTALLATION.md) · [Capabilities](docs/CAPABILITIES.md) · [Workflows](docs/WORKFLOWS.md) · [Website](https://rlaope.github.io/oh-my-hermes/)
+[Docs](docs/README.md) · [Installation](docs/INSTALLATION.md) · [Capabilities](docs/CAPABILITIES.md) · [Workflows](docs/WORKFLOWS.md) · [Website](https://omher.app/)
 
 <details>
 <summary><b>Install options</b></summary>
@@ -362,7 +362,7 @@ in place, and no measured run is published yet:
 - [Processing a very large PDF with Hermes](docs/LONG-DOCUMENT-READING.md)
 - [Live model benchmark and measured results](benchmarks/live-model-tools/v1/README.md)
 - [Release and development](docs/RELEASE.md)
-- [Website](https://rlaope.github.io/oh-my-hermes/) · [GitHub Pages site](site/index.html)
+- [Website](https://omher.app/) · [GitHub Pages site](site/index.html)
 
 ### Contributors
 
