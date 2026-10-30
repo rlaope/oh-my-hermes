@@ -554,7 +554,7 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
-### 2026-10-30 per-call overhead: OMH's static tokens on every model call, base vs branch
+### 2026-10-30 per-call overhead: OMH's static tokens on every model call, base vs branch, gate failed
 
 The 2026-10-30 head-to-head with oh-my-pi measured OMH at 11.6k input tokens per model call under
 Hermes's default `tools.tool_search` (`auto`) against 9.0k for plain Hermes, and 33.0k with
@@ -662,6 +662,43 @@ back, byte for byte (no other change; `PLUGIN_TOOL_SCHEMA_CHAR_LIMIT` 53222 -> 5
 1503 -> 1521 characters). Run 2 repeats the whole design above on all six configs, both arms,
 fresh, with the same gate. Run 1 stays recorded as a failure. Probe results are taken on the
 run 2 branch.
+
+Run 2 (branch `1d542cfa5`, 396 runs, 22:44-23:42 KST; run 1 above ended at 22:42, not 22:45):
+**gate failed** on one config, the same one. Recomputed from the records and the `state.db`
+snapshots taken after the run.
+
+| Config | Pass base | Pass br | Tokens/call base | Tokens/call br | Drop (95% CI) | First call base -> br | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- | --- |
+| Haiku 4.5 `auto` | 33 | 33 | 11,740 | 11,325 | +415 (+60, +756) | 7,757 -> 7,471 | pass |
+| Haiku 4.5 `off` | 30 | 33 | 29,275 | 24,187 | +5,089 (+4,772, +5,438) | 25,254 -> 20,389 | pass |
+| Sonnet 5.5 `auto` | 33 | 33 | 11,737 | 11,208 | +529 (+272, +844) | 9,756 -> 9,474 | pass |
+| Sonnet 5.5 `off` | 33 | 33 | 36,087 | 29,492 | +6,595 (+6,088, +7,156) | 33,625 -> 26,921 | pass |
+| GPT-6 Luna `auto` | 32 | 33 | 9,040 | 8,882 | +158 (-41, +361) | 6,524 -> 6,331 | pass |
+| GPT-6 Luna `off` | 33 | 31 | 25,492 | 25,332 | +160 (-1,649, +2,038) | 17,934 -> 15,106 | **fail** (passes and tokens) |
+
+The static change landed as measured offline on every config: the first call fell by 282-296
+tokens under `auto` and 2,828-6,703 under `off`. The Codex route counts the schemas at about
+2,800 tokens, not the o200k estimate of 4,500 the `off` threshold was set from, so Luna `off`
+could not have reached 3,000 even with no other change.
+
+What sank Luna `off` both times is `omh_context`. With the original description restored, Luna
+still called it in 31 of 33 branch sessions against 19 of 33 base sessions; each result is about
+39,000 characters that ride every later call. Within each group the branch is cheaper (25,946 vs
+28,934 tokens per call in sessions that called it, 18,185 vs 20,360 in sessions that did not).
+A diagnostic profile (not part of the gate, 22 instances, seeds 104729 and 130363) with
+`observation` put back on `omh_context` alone called it in 17 of 22, against 12 of 22 for base
+and 20 of 22 for the branch on the same instances: part of the shift may come from that tool's
+schema getting shorter, and 22 runs cannot separate it from noise. The two branch failures
+(`C-DUPLICATE`, `L-RENAME-ALIAS`) are 2 of 33 against 0; the rule asked for at most 1.
+
+Tool choice (5 prompts per model, setting and arm, one run each; the expected OMH tool called
+directly or through `tool_call`): base and branch both 5/5 on every `off` config and on Sonnet
+`auto`; Haiku `auto` 4/5 in both arms (both missed `omh_document_plan`: they described it and
+stopped); Luna `auto` 4/5 base, 5/5 branch. The clause holds everywhere.
+
+Verdict: the pre-registered gate failed on GPT-6 Luna with `tool_search` off. The change does
+not merge on this result. Five of six configs passed, including every product-default (`auto`)
+config.
 
 ### 2026-10-30 round-end consistency check in `pre_verify`: off vs on, five measurements
 
