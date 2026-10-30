@@ -58,7 +58,7 @@ FAMILIES = (
     ("retain_knowledge", "retain"),
 )
 LAYOUTS = {"spectrum": "tiles", "violet": "stack", "gold": "split", "graphite": "rules", "sakura": "stack",
-           "moonlit": "rules", "aurora": "tiles", "ember": "split"}
+           "moonlit": "rules", "aurora": "tiles", "ember": "split", "kanagawa-wave": "rules"}
 GUTTER = 9  # a family's label column
 COLUMN = 26  # the narrowest column a name gets; a longer name spans two
 # What the card offers to type, in this order; the first is OMH's own lane.

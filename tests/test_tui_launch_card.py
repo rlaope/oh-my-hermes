@@ -168,7 +168,7 @@ class PaletteTests(unittest.TestCase):
     def test_spectrum_is_the_default_and_the_first_look(self) -> None:
         self.assertEqual(DEFAULT_LAUNCH, "spectrum")
         self.assertEqual(LAUNCH_PRESETS,
-                         ("spectrum", "violet", "gold", "graphite", "sakura", "moonlit", "aurora", "ember"))
+                         ("spectrum", "violet", "gold", "graphite", "sakura", "moonlit", "aurora", "ember", "kanagawa-wave"))
         self.assertEqual(set(LAUNCH_PALETTES), set(LAUNCH_PRESETS))
 
 
@@ -580,7 +580,7 @@ class SwitchTests(unittest.TestCase):
         run.press(*[Key(DOWN)] * len(LAUNCH_PRESETS))  # one past the last: the highlight stays on it
         self.assertEqual(run.app._shown_look(), LAUNCH_PRESETS[-1])
         run.press(Key(ENTER))
-        self.assertEqual(read_launch_choice(run.home), "ember")
+        self.assertEqual(read_launch_choice(run.home), LAUNCH_PRESETS[-1])
 
     def test_a_click_on_a_look_moves_the_highlight_and_reports_are_on_only_while_it_is_open(self) -> None:
         run = Launched()

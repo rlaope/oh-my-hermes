@@ -169,7 +169,7 @@ TOOL_FAMILIES = {
 # block logo's colouring and the card's three colours, on a dark background and on a light one (the same hues at a
 # lower OKLCH lightness, rather than the dark set mixed toward black, which greys a tint out). They are OMH's own:
 # the skin's `banner_*` keys, which Hermes' own banner reads, stay as the skin file has them.
-LAUNCH_PRESETS = ("spectrum", "violet", "gold", "graphite", "sakura", "moonlit", "aurora", "ember")
+LAUNCH_PRESETS = ("spectrum", "violet", "gold", "graphite", "sakura", "moonlit", "aurora", "ember", "kanagawa-wave")
 DEFAULT_LAUNCH = LAUNCH_PRESETS[0]
 # The roles a launch look owns beyond the logo and the card (`with_launch_look`): the composer's rules and every frame
 # in `rule` (its card-edge colour), a tool call's rail and the working row's spinner (`accent`, its label colour), a
@@ -254,6 +254,13 @@ LAUNCH_PALETTES: dict[str, tuple[LogoPalette, LogoPalette]] = {
                     faces=("#FFCF82", "#FFA54B", "#FF7C34", "#F3562E", "#E23532", "#CC2538"), ground="#2B120C"),
         LogoPalette("#B3260E", "#B54900", "#CB8D7D",
                     faces=("#A96000", "#B44A00", "#B83300", "#B31609", "#A9001A", "#9A0027"), ground="#FCEDE5"),
+    ),
+    # Kanagawa Wave: indigo and spring teal sweeping into violet and wave red; rules chrome on sumi-ink and lotus white.
+    "kanagawa-wave": (
+        LogoPalette("#7E9CD8", "#957FB8", "#54546D",
+                    sweep=("#7AA89F", "#7E9CD8", "#957FB8", "#E46876"), ground="#1F1F28"),
+        LogoPalette("#4D699B", "#624C83", "#716E61",
+                    sweep=("#4E736B", "#4D699B", "#624C83", "#C84053"), ground="#F2ECBC"),
     ),
 }
 # A sent prompt's band: the launch look's card-edge colour moved this far toward the background (on a dark one, on a

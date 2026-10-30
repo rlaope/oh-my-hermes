@@ -897,7 +897,8 @@ run and approval decision stays Hermes'; the screen is OMH's.
   pixel halo, soft tile clouds and sparkle stars; sakura a dusky plum with
   blossom clusters and falling petals; aurora deep teal with ribbons of
   scattered tiles; ember a dark warm brown with a flame flickering in a
-  warm glow and rising embers; gold a sun in a breathing glow; violet
+  warm glow and rising embers; kanagawa-wave deep sumi-ink with rolling ocean
+  swell ribbons and sea spray sparkles; gold a sun in a breathing glow; violet
   pastel jellyfish with pulsing bells; graphite a cloud raining into a
   rippling puddle. A terminal with a
   light background gets each look's pale ground instead.
@@ -1226,7 +1227,7 @@ Esc closes it):
 | ↑ / ↓, PageUp / PageDown, Enter, Esc | In the `/sessions`, `/rewind` or `/model` list, move, take the highlighted row (switch to that session, put that prompt in the composer to send again, or switch this session to that model), or close it; typing filters the list |
 | ↑ / ↓, Enter, Esc, ←, q, Ctrl+C | In the agent list, move, open the highlighted agent's log (on main, only leave), or go back; any other key does nothing there |
 | x, s | In the agent list, on an agent: x twice interrupts it; s steers it with the next line you send (Esc cancels) |
-| ↑ / ↓ or a click, Enter, Esc | In the `/theme` picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember) on the logo, the card and the chrome, keep it, or put the one in use back; `/theme <look>` keeps one at once |
+| ↑ / ↓ or a click, Enter, Esc | In the `/theme` picker, preview a launch look (spectrum, violet, gold, graphite, sakura, moonlit, aurora, ember, kanagawa-wave) on the logo, the card and the chrome, keep it, or put the one in use back; `/theme <look>` keeps one at once |
 | Click | On a row of the agent list, opens that agent's log (on main, only leaves the list) |
 | ← / →, q or Esc | In an agent's log, show the agent before or after, or go back; the pager's keys scroll it |
 | Tab / n, Shift+Tab / p, Space / Enter, d | In `/dag`, highlight the next or the previous box, fold or unfold the highlighted one, or show or hide Node details; ↑ / ↓, PageUp / PageDown and g / G scroll, q or Esc leaves |
@@ -1520,8 +1521,9 @@ the tool kind hues, a box per section, the default), `violet` (one box),
 `gold` (one box in two columns), `graphite` (grey and white with turquoise
 hyphens, a rule above and below), `sakura` (pastel pink, sky blue and cream,
 one box), `moonlit` (moonlight yellow and silver over navy, a rule above and
-below), `aurora` (emerald and teal into violet, a box per section) or `ember`
-(amber through orange to crimson, one box in two columns). The look also
+below), `aurora` (emerald and teal into violet, a box per section), `ember`
+(amber through orange to crimson, one box in two columns) or `kanagawa-wave`
+(indigo, spring teal and violet over sumi-ink, rules without side edges). The look also
 tints the chrome: the composer's rules and the frames drawn like them take
 its card-edge colour, and a tool call's rail and the working row's spinner
 its label colour (a failed or denied call's rail stays red), as do a sent

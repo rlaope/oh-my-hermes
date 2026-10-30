@@ -4,10 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **A Kanagawa Wave theme.** `omh theme use kanagawa-wave` selects an indigo
+- **A Kanagawa Wave theme and launch look.** `omh theme use kanagawa-wave` selects an indigo
   palette with warm ivory text and muted blue and violet accents, adapted from
   rebelot/kanagawa.nvim (MIT). Like the other four, it sets no background, so the
-  terminal's own shows through.
+  terminal's own shows through. `/theme kanagawa-wave` selects the matching launch
+  look with an ocean swell living wallpaper, dark sumi-ink ground, and quiet rules layout.
 
 ![Sprite Forge patch notes](https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/assets/omh-sprite-forge-patch-notes.png)
 
