@@ -31,7 +31,12 @@ CONSISTENCY_AB_TEMPLATES = (("DUPLICATE", "edit"), ("SCOPE-TRAP", "edit"), ("DEC
 # only the definition's own module has a test in the workspace; CONTROL breaks nothing.
 IMPACT_AB_SPLIT = "impact-ab"
 IMPACT_AB_TEMPLATES = (("SIGNATURE", "edit"), ("RETURN-SHAPE", "edit"), ("KWARG", "edit"), ("CONTROL", "edit"))
-SPLITS = ("development", "evaluation", LSP_AB_SPLIT, IMPACT_AB_SPLIT, CONSISTENCY_AB_SPLIT)
+# Separate split for the search-hit-context A/B, kept out of the pinned corpus the same way. Its one
+# template is the broad-search control: the natural first search returns more hits, in more files,
+# than the context pass enriches, so on this template the two arms must behave alike.
+SEARCH_AB_SPLIT = "search-ab"
+SEARCH_AB_TEMPLATES = (("WIDE-RENAME", "edit"),)
+SPLITS = ("development", "evaluation", LSP_AB_SPLIT, IMPACT_AB_SPLIT, CONSISTENCY_AB_SPLIT, SEARCH_AB_SPLIT)
 
 @dataclass(frozen=True)
 class Instance:
@@ -51,6 +56,8 @@ def all_specs(split: str) -> list[tuple[str, str, int]]:
         return [(f"C-{name}", task_class, seed) for name, task_class in CONSISTENCY_AB_TEMPLATES for seed in EVALUATION_SEEDS]
     if split == IMPACT_AB_SPLIT:
         return [(f"I-{name}", task_class, seed) for name, task_class in IMPACT_AB_TEMPLATES for seed in EVALUATION_SEEDS]
+    if split == SEARCH_AB_SPLIT:
+        return [(f"W-{name}", task_class, seed) for name, task_class in SEARCH_AB_TEMPLATES for seed in EVALUATION_SEEDS]
     seeds = DEVELOPMENT_SEEDS if split == "development" else EVALUATION_SEEDS
     prefix = "D" if split == "development" else "E"
     return [(f"{prefix}-{name}", task_class, seed) for name, task_class in TEMPLATES for seed in seeds]
@@ -338,6 +345,33 @@ def _decoy_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
 
 
 _CONSISTENCY_AB_FIXTURES = {"DUPLICATE": _duplicate_fixture, "SCOPE-TRAP": _scope_trap_fixture, "DECOY": _decoy_fixture}
+
+_WIDE_MODULES = ("invoices", "receipts", "refunds", "quotes", "orders", "payouts", "credits", "rebates",
+                 "statements", "ledgers", "tariffs", "duties", "levies", "charges")
+
+
+def _wide_rename_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
+    """A constant used three times in each of 12-14 modules and in a test: a search for it returns
+    40-odd hits in 14-16 files, past the context pass's bound (20 hits, 8 files)."""
+    randomizer = random.Random(seed)
+    rate = randomizer.choice((125, 175, 225))
+    modules = list(_WIDE_MODULES[: randomizer.randint(12, 14)])
+    files = {"src/benchapp/rates.py": f'"""Shared fee rate in basis points."""\n\nBASE_RATE_BP = {rate}\n'}
+    for name in modules:
+        files[f"src/benchapp/{name}.py"] = (
+            "from benchapp.rates import BASE_RATE_BP\n\n\n"
+            f"def {name}_fee(amount_cents: int) -> int:\n    return amount_cents * BASE_RATE_BP // 10000\n\n\n"
+            f"def {name}_rate() -> int:\n    return BASE_RATE_BP\n"
+        )
+    files["tests/test_rates.py"] = (
+        f"from benchapp.invoices import invoices_fee\nfrom benchapp.rates import BASE_RATE_BP\n\n\n"
+        f"def test_rate():\n    assert BASE_RATE_BP == {rate}\n    assert invoices_fee(10000) == {rate}\n"
+    )
+    golden = {"allowed_paths": sorted(files), "rate": rate, "modules": modules, "min_tests": 1}
+    return files, golden
+
+
+_SEARCH_AB_FIXTURES = {"WIDE-RENAME": _wide_rename_fixture}
 def _signature_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
     """A required parameter added to a function called from four modules: directly, through an
     alias, through the module, and through a package re-export under another name."""
@@ -502,6 +536,7 @@ def _prompt(template_id: str, task_class: str, seed: int, decision: str) -> str:
         "RETURN-SHAPE": "Change build_quote in src/benchapp/quotes.py to return a frozen dataclass Quote, defined in quotes.py with fields units: int and total_cents: int, instead of a dict, and update the code that uses its result so behaviour stays the same. Return JSON with changed_paths.",
         "KWARG": "Rename the keyword-only parameter timeout of fetch in src/benchapp/http_client.py to timeout_s (do not keep timeout as an alias). What fetch returns stays the same, and every caller must keep its behaviour. Return JSON with changed_paths.",
         "CONTROL": "Make to_cents in src/benchapp/units.py raise ValueError('negative amount') for a negative amount, without changing its signature or its result for any other amount. Return JSON with changed_paths.",
+        "WIDE-RENAME": "Rename the constant BASE_RATE_BP in src/benchapp/rates.py to DEFAULT_RATE_BP everywhere it is used, in production code and tests, without changing behavior. Return JSON with changed_paths.",
         "RENAME-SHADOW": "Rename the function parse_limit defined in src/benchapp/limits.py to read_limit at its definition and every reference to that function, without changing behavior. Parameters or local variables that merely share the name are not references and must stay. Return JSON with changed_paths.",
     }
     if name == "DUPLICATE":
@@ -547,7 +582,7 @@ def materialize(split: str, template_id: str, task_class: str, seed: int, worksp
     workspace.mkdir(parents=True)
     files = _project_files(seed)
     name = template_id.split("-", 1)[1]
-    lsp_fixture = (_LSP_AB_FIXTURES.get(name) or _CONSISTENCY_AB_FIXTURES.get(name)
+    lsp_fixture = (_LSP_AB_FIXTURES.get(name) or _CONSISTENCY_AB_FIXTURES.get(name) or _SEARCH_AB_FIXTURES.get(name)
                    or (_IMPACT_AB_FIXTURES.get(name) if split == IMPACT_AB_SPLIT else None))
     lsp_golden: dict[str, Any] | None = None
     if lsp_fixture is not None:

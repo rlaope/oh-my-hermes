@@ -574,6 +574,97 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-10-30 search hit context: lines around each `search_files` hit, base vs on (`search-ab`)
+
+Status: pre-registered; no counted run yet.
+
+One question, from oh-my-pi's `grep` (one line before and three after every hit, by default): when
+a small `search_files` result already shows the lines around each hit, does the model go from the
+search to its first edit in fewer calls, and finish sooner and cheaper, without losing passes?
+
+Why: in the 2026-10-30 head-to-head (`.omc/research/omp-borrow-2026-10-30/H2H/`), Sonnet 5.5's
+median run was 4 model calls for omp and 6 for OMH, and 1 call before the first edit for omp
+against 2 for every Hermes arm. Hermes's `search_files` has a `context` argument (default 0); in
+the h2h Hermes transcripts the models passed it in 3 of about 245 searches made before a first
+edit, all on Haiku. The usual next call was a `read_file` of the files the search named: on Haiku
+in 30 of 33 product-default (`omt`) runs, on Sonnet in 11 of 33 (the other Sonnet runs edited from
+the search rows directly, mostly with `sed`). On Haiku omp's own pattern inverted: it read files
+one range at a time and made more calls than plain Hermes, so this is not expected to help every
+model.
+
+The change (`src/plugin_bundle/omh/search_hit_context.py`, first pass of the composed
+`transform_tool_result` seam): a `search_files` content search whose call asked for no context,
+returned at most 20 hits in at most 8 files and was not truncated, gets the line before and the
+three lines after each hit, re-read from disk and redacted by Hermes's own redactor. Every hit row
+is checked against the line on disk first; one mismatch leaves the result alone. The added rows are
+capped at 6,000 characters, and a result over the cap is left unchanged, never partly enriched. A
+broader result passes through byte for byte. It does not inject `context` into the call: Hermes
+counts context lines against `limit`, so a search for every caller would show fewer callers. No
+read is recorded in Hermes's read tracker, so dedup stubs, staleness and the whole-file baseline
+`write_file` needs are unchanged. The 2026-10-28 anchor half of omp's design (hash-tagged lines in
+search output, edits by anchor) was measured negative and is not part of this.
+
+The setup, fixed before the first counted run:
+
+- Arms (one Hermes profile each per model, otherwise identical): `base` = the OMH plugin bundle
+  at origin/main `531f7034f`; `on` = this branch's bundle. Both in the product-default shape the
+  h2h called `omt`: Hermes's default `tools.tool_search` (key absent), `impact_check: true`,
+  `lsp_tools: true`, `--edit-surface impact` (toolsets `file,terminal,omh-lsp`), round-end check on
+  through the coding posture, pinned pyright command, `agent.max_turns: 120`,
+  `agent.run_budget_seconds: 600`. Condition `baseline`, no edit directive, `--git-init-workspace`,
+  `--test-env`, effort `medium`.
+- Panel, subscription routes only: `claude-haiku-4-5-20251001` (weak) and `claude-sonnet-5-5`
+  (strong) through CPA (`claude-proxy`); `gpt-6-luna` (weak) and `gpt-6.1-sol` (strong) through
+  Hermes `openai-codex`.
+- Positive set: the h2h's 11 templates (`I-SIGNATURE`, `I-RETURN-SHAPE`, `I-KWARG`,
+  `I-CONTROL`, `C-DUPLICATE`, `C-SCOPE-TRAP`, `C-DECOY`, `E-RENAME`, `E-BUGFIX`,
+  `L-RENAME-ALIAS`, `L-RENAME-SHADOW`) x seeds 104729, 130363, 155921: 33 instances per model per
+  arm, 132 per arm.
+- Control: new split `search-ab` (`--split search-ab`; the evaluation corpus and its digest are
+  unchanged), template `W-WIDE-RENAME`, 3 seeds, 12 instances per arm: rename a constant used
+  three times in each of 12-14 modules and in a test. Its natural search returns 40-odd hits in
+  14-16 files, past the pass's bound, so the two arms must behave alike there.
+- Per instance both arms run back to back on identical fresh workspaces; the order alternates per
+  instance. Retry rule as in the h2h: `rate_limited` / `provider_error` / `model_unavailable` /
+  `authentication_failed`, or a client the gateway refused within seconds, is retried on the same
+  route after 60/180/420/900 s; every other outcome is final.
+
+Metrics, recomputed from the raw run records and the profiles' `state.db` snapshots, not from the
+driver log:
+
+- pass: controller `grade.pass`. tokens: the record's `observation.tokens` (Hermes usage
+  `total_tokens`, cache reads included). wall: the record's `wall_seconds`.
+- calls before the first edit: the number of assistant messages before the first one that edits:
+  a `patch` or `write_file` call on a path other than `.omh-benchmark-answer.json`, or a
+  `terminal` call whose command matches the mutation pattern in
+  `.omc/research/omp-borrow-2026-10-30/OPT/search-hit-context/shapes.py` (`sed -i`, `perl -i`, `git apply`, `patch -p`, a `>` or `>>`
+  redirect into a file other than `/dev/*` and the answer file, `tee`, `write_text(`, `open(...,
+  'w')`). Runs with no edit are left out of this median and counted.
+- enriched results: `search_files` tool rows in `state.db` whose `matches_format` is the pass's
+  format string, with the characters the pass added.
+
+The gate, over the 132 positive pairs pooled unless stated. A clause that fails fails the gate:
+
+Must hold:
+1. pass: `on` >= `base` - 1.
+2. weak pass (Haiku 4.5 + Luna, 66 pairs): `on` >= `base` - 1.
+3. no `on` run above 3x the tokens of its `base` pair (same instance).
+4. total tokens: `on` <= 1.05x `base`.
+
+Must improve:
+5. median calls before the first edit: `on` <= `base` - 0.5.
+6. median wall seconds: `on` <= 0.95x `base`.
+7. median tokens: `on` <= 0.97x `base`.
+
+Control (`W-WIDE-RENAME`, 12 pairs):
+8. pass `on` >= `base` - 1, and median tokens `on` <= 1.10x `base`.
+9. the bound: no `search_files` result with more than 20 hits or more than 8 files is enriched in
+   any `on` run (control or positive), and no enriched result adds more than 6,000 characters.
+
+Ceiling note: in the h2h the `omt` arm passed 65 of 66 Claude runs, so passes are near the ceiling
+on this set; they are a must-hold clause, not an improvement claim. Per-model medians are reported
+beside the pooled ones but do not enter the gate.
+
 ### 2026-10-30 round-end consistency check in `pre_verify`: off vs on, five measurements
 
 Measurements 1 to 4 failed their gates. The owner then relaxed the token clause to 1.4x

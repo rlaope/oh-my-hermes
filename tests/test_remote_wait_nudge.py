@@ -52,6 +52,7 @@ from omh.plugin_bundle.omh.hooks.result_transforms import (
 )
 from omh.plugin_bundle.omh.hooks.session_hooks import subagent_start
 from omh.plugin_bundle.omh.kanban_readback import KANBAN_READBACK_TOOLS
+from omh.plugin_bundle.omh.search_hit_context import SEARCH_HIT_CONTEXT_TOOL
 from omh.plugin_bundle.omh import remote_wait_nudge
 from omh.plugin_bundle.omh.remote_wait_nudge import (
     APPROVAL_GATE_CAUSE,
@@ -1101,7 +1102,7 @@ class PassDisjointnessTests(unittest.TestCase):
 
     def other_watched_tools(self) -> frozenset[str]:
         return frozenset(
-            {CODE_MODE_GUIDANCE_TOOL, TRUNCATED_READ_TOOL}
+            {CODE_MODE_GUIDANCE_TOOL, TRUNCATED_READ_TOOL, SEARCH_HIT_CONTEXT_TOOL}
             | set(KANBAN_READBACK_TOOLS)
             | set(FILE_MUTATING_TOOLS)
             | set(DIRECT_READ_TOOLS)

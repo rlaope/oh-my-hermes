@@ -1,9 +1,14 @@
 """Composed ``transform_tool_result`` seam, and the ``transform_llm_output``
 half of unarmed remote waits.
 
-This is the single registered entry for the hook; it chains the six OMH
+This is the single registered entry for the hook; it chains the seven OMH
 result transforms in a fixed order:
 
+0. Search hit context — a small, complete ``search_files`` content result
+   gets the line before and the three lines after each hit, re-read from disk
+   and redacted by the host's redactor, so the model can edit from the search
+   result instead of reading each file first; a broad result passes through
+   unchanged (``search_hit_context.py``).
 1. Code-mode discipline annotation — the first ``execute_code`` result of a
    session gains a bounded guidance block under its own JSON key
    (``code_mode_guidance.py``).
@@ -61,6 +66,13 @@ those. ``tests/test_remote_wait_nudge.py`` derives those sets from the
 modules and pins the disjointness, so a pass that later widens into
 ``terminal`` fails there rather than silently sharing a result.
 
+**Search hit context and engagement nudges** share ``search_files``. The
+context pass runs first because it rewrites host fields (``matches_text``,
+``matches_format``) rather than adding a key, and every annotating pass after
+it should see the final rows. The nudge then parses the enriched object and
+adds ``omh_engagement`` beside them; it reads the call's arguments, never the
+rows, so the enrichment cannot change what it counts.
+
 **Why unarmed remote waits runs last of the annotating passes.** It is the
 pass which reads terminal-specific outcome fields: ``exit_code`` to know the
 command succeeded, ``status`` /
@@ -81,6 +93,7 @@ from ..delegation_snapshot import appended, messenger_snapshot
 from ..engagement_nudges import annotate_engagement_nudge
 from ..kanban_readback import KANBAN_READBACK_TOOLS, transform_kanban_readback
 from ..remote_wait_nudge import annotate_remote_wait, honest_stop_output
+from ..search_hit_context import enrich_search_hits
 from ..truncated_read_recovery import annotate_truncated_read_recovery
 from .diff_presentation import transform_tool_result as _pad_diff_result
 from .verify_hooks import restore_round_end_answer
@@ -92,13 +105,24 @@ snapshot_failures: Counter[str] = Counter()
 def transform_tool_result(**kwargs: Any) -> str | None:
     """Return the transformed result string, or ``None`` to leave it alone."""
     session_id = str(kwargs.get("session_id", "") or "")
-    annotated = annotate_execute_code_result(
+    annotated = enrich_search_hits(
+        tool_name=kwargs.get("tool_name"),
+        args=kwargs.get("args"),
+        result=kwargs.get("result"),
+        # The host's task id (`model_tools._CallIds.hook_kwargs`): the key
+        # Hermes's file tools resolve a relative hit path against.
+        task_id=kwargs.get("task_id") or "",
+    )
+    if annotated is not None:
+        kwargs = {**kwargs, "result": annotated}
+    guided = annotate_execute_code_result(
         tool_name=kwargs.get("tool_name"),
         result=kwargs.get("result"),
         session_id=session_id,
     )
-    if annotated is not None:
-        kwargs = {**kwargs, "result": annotated}
+    if guided is not None:
+        annotated = guided
+        kwargs = {**kwargs, "result": guided}
     nudged = annotate_engagement_nudge(
         tool_name=kwargs.get("tool_name"),
         result=kwargs.get("result"),

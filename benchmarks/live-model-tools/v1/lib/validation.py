@@ -149,7 +149,28 @@ def _rename_shadow_ok(workspace: Path, golden: dict[str, Any]) -> bool:
     return _behaviour_ok(workspace, "tests/test_limits.py", checks, golden["min_tests"])
 
 
+def _wide_rename_ok(workspace: Path, golden: dict[str, Any]) -> bool:
+    """No reference to the old name is left in any module or test; every module keeps its numbers."""
+    old, new, rate = "BASE_RATE_BP", "DEFAULT_RATE_BP", golden["rate"]
+    trees = {relative: ast.parse((workspace / relative).read_text(encoding="utf-8")) for relative in golden["allowed_paths"]}
+    for tree in trees.values():
+        if old in _imported_names(tree):
+            return False
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Name) and node.id == old) or (isinstance(node, ast.Attribute) and node.attr == old):
+                return False
+    defined = [node for node in trees["src/benchapp/rates.py"].body if isinstance(node, ast.Assign)
+               and any(isinstance(target, ast.Name) and target.id == new for target in node.targets)]
+    if len(defined) != 1:
+        return False
+    checks = f"from benchapp.rates import {new}\nassert {new} == {rate}\n" + "".join(
+        f"from benchapp.{name} import {name}_fee, {name}_rate\n"
+        f"assert {name}_fee(10000) == {rate} and {name}_rate() == {rate}\n" for name in golden["modules"])
+    return _behaviour_ok(workspace, "tests/test_rates.py", checks, golden["min_tests"])
+
+
 _LSP_AB_VALIDATORS = {"RENAME-ALIAS": _rename_alias_ok, "RENAME-SHADOW": _rename_shadow_ok}
+_SEARCH_AB_VALIDATORS = {"WIDE-RENAME": _wide_rename_ok}
 
 
 def _duplicate_failures(workspace: Path, golden: dict[str, Any]) -> list[str]:
@@ -352,6 +373,8 @@ def validate(template_id: str, task_class: str, workspace: Path, golden_path: Pa
                 semantic = "DEFAULT_RETRY_LIMIT" not in production + tests and production.count("MAX_RETRY_ATTEMPTS") == 2 and "MAX_RETRY_ATTEMPTS" in tests
             elif name in _LSP_AB_VALIDATORS:
                 semantic = _LSP_AB_VALIDATORS[name](workspace, golden)
+            elif name in _SEARCH_AB_VALIDATORS:
+                semantic = _SEARCH_AB_VALIDATORS[name](workspace, golden)
             elif name in _CONSISTENCY_AB_VALIDATORS:
                 consistency_failures = _CONSISTENCY_AB_VALIDATORS[name](workspace, golden)
                 failures.extend(code for code in consistency_failures if code != "semantic_validator_failed")
