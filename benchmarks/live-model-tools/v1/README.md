@@ -574,7 +574,7 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
-### 2026-10-30 per-call overhead: OMH's static tokens on every model call, base vs branch, gate failed
+### 2026-10-30 per-call overhead: OMH's static tokens on every model call, base vs branch, rejected
 
 The 2026-10-30 head-to-head with oh-my-pi measured OMH at 11.6k input tokens per model call under
 Hermes's default `tools.tool_search` (`auto`) against 9.0k for plain Hermes, and 33.0k with
@@ -738,6 +738,32 @@ re-measure, after which the result stands.
 - The tool-choice probe runs again on the run 3 profiles.
 - If every config passes, the change is put up for merge. If any fails, it is recorded here as
   rejected and the work stops.
+
+Run 3 (branch `ef5dd1b6e`, base origin/main `b906cb425`, seeds 181081 / 204983 / 224737,
+396 runs, 2026-10-31 02:09-03:10 KST): **gate failed; the change is rejected.** Recomputed from
+the records and the `state.db` snapshots.
+
+| Config | Pass base | Pass br | Tokens/call base | Tokens/call br | Drop (95% CI) | Threshold | First call base -> br | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | --- | --- |
+| Haiku 4.5 `auto` | 31 | 31 | 12,120 | 11,605 | +515 (+147, +855) | 100 | 7,756 -> 7,471 | pass |
+| Haiku 4.5 `off` | 31 | 32 | 29,492 | 24,675 | +4,817 (+4,272, +5,349) | 3,000 | 25,256 -> 20,619 | pass |
+| Sonnet 5.5 `auto` | 33 | 33 | 11,722 | 11,312 | +410 (+59, +769) | 100 | 9,757 -> 9,474 | pass |
+| Sonnet 5.5 `off` | 33 | 33 | 35,982 | 29,411 | +6,572 (+6,224, +6,926) | 3,000 | 33,626 -> 27,241 | pass |
+| GPT-6 Luna `auto` | 33 | 33 | 9,062 | 8,911 | +152 (-39, +350) | 100 | 6,524 -> 6,331 | pass |
+| GPT-6 Luna `off` | 33 | 32 | 25,415 | 23,977 | +1,438 (-679, +3,635) | 1,867 | 17,934 -> 15,240 | **fail** |
+
+With `omh_context` byte-identical to base, GPT-6 Luna `off` still called it in more branch
+sessions (24 of 33 against 20 of 33). Within each group the branch was cheaper (26,181 vs
+28,646 tokens per call in sessions that called it, 18,081 vs 20,680 in sessions that did not),
+but the mean drop of 1,438 is under the restated 1,867. Passes held everywhere. Tool-choice
+probe: 5/5 in both arms on every config except Luna `auto` base (4/5, missed
+`omh_document_plan`); the clause holds.
+
+Verdict, per amendment 2: **rejected**. The per-call cut does not merge. Five of six configs
+passed in all three runs, every product-default (`auto`) config among them, and the first call
+fell by 283-286 tokens under `auto` and 2,695-6,385 under `off` each time; what the gate could
+not clear is GPT-6 Luna with `tool_search` off, where `omh_context`'s roughly 39k-character
+result dominates the per-call mean.
 
 ### 2026-10-30 round-end consistency check in `pre_verify`: off vs on, five measurements
 
