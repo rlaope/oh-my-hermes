@@ -8,7 +8,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 from ..package_backend import load_backend, package_backend_detail
 from ..runtime_reader import default_omh_home
 
@@ -21,7 +21,8 @@ _REQUIRED_DECISION_GATE_FIELDS = (
 OMH_DECISION_GATE_SCHEMA = {
     "name": "omh_decision_gate",
     "description": (
-        "Apply one authenticated structured connector decision to one open OMH gate and its bound wrapper session. "
+        "Apply a connector decision to an OMH gate. One authenticated structured decision, to one open gate "
+        "and its bound wrapper session. "
         "This does not accept free-form chat text or credentials. The connector host must authenticate the actor."
     ),
     "parameters": {
@@ -40,7 +41,6 @@ OMH_DECISION_GATE_SCHEMA = {
             "event_id": {"type": "string"},
             "wrapper_session_ref": {"type": "string"},
             "wrapper_expected_revision": {"type": "integer", "minimum": 0},
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": list(_REQUIRED_DECISION_GATE_FIELDS),
         "additionalProperties": False,

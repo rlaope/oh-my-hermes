@@ -40,7 +40,7 @@ _OBSERVED_CHECKS: set[str] = set()
 OMH_TEAM_SCHEMA = {
     "name": "omh_team",
     "description": (
-        "Run an accepted plan as parallel helper parts that each count as done only when OMH runs "
+        "Run an accepted plan as parallel helper parts. Each part counts as done only when OMH runs "
         "that part's check command itself and it exits 0. team_start needs the accepted plan's "
         "plan_ref and each check command written in that plan as check: `<command>`; the person approves the "
         "command list. Dispatch the returned delegate_task entries unchanged, call team_reconcile "

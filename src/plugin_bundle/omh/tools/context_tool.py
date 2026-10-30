@@ -5,12 +5,12 @@ import json
 
 from ..context_brief import bounded_context_hint_limit, build_context_brief as build_plugin_context_brief
 from ..degradation import safe_error_type as _safe_error_type
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 
 OMH_CONTEXT_SCHEMA = {
     "name": "omh_context",
     "description": (
-        "Return compact OMH operating context for Hermes before generic chat, image, file, search, or coding tools. "
+        "Return compact OMH operating context. Read it before generic chat, image, file, search, or coding tools. "
         "The payload is metadata-only and does not store or echo the raw user request."
     ),
     "parameters": {
@@ -37,7 +37,6 @@ OMH_CONTEXT_SCHEMA = {
                 "default": False,
                 "description": "Include compact prompt-context text for hook-style injection.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

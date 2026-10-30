@@ -10,7 +10,7 @@ from typing import Any
 
 from ..buzz_diagnostics import probe_buzz
 from ..host_observation import PLUGIN_HOST_ACTIVE_OBSERVATION_EVENTS
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 from ..loop_bridge import loop_backend_detail, loop_backend_status
 from ..package_backend import load_backend, package_backend_detail
 from ..runtime_reader import read_omh_hud, read_omh_status
@@ -18,20 +18,12 @@ from ..runtime_reader import read_omh_hud, read_omh_status
 OMH_PROBE_SCHEMA = {
     "name": "omh_probe",
     "description": (
-        "Read OMH local capability probe and roadmap metadata. Capability presence is not "
+        "Read OMH capability probe metadata. It covers local capability probes and the roadmap. Capability presence is not "
         "Hermes runtime load, workflow execution, coding dispatch, review, CI, or merge evidence."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "omh_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "hermes_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
             "include_parity": {
                 "type": "boolean",
                 "description": "Include the parity matrix when the package backend is available.",
@@ -40,7 +32,6 @@ OMH_PROBE_SCHEMA = {
                 "type": "boolean",
                 "description": "Include the capability gap roadmap.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

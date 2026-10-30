@@ -357,7 +357,23 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # three above, so it costs schema bytes only when `lsp_tools` is on;
 # measured by per_turn_context's register() recorder against base 5cc1ed311.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72227
+# 72227 -> 53222 (2026-10-30): the schemas stop advertising three parameters
+# the model never fills legitimately. `observation` (-871 in each of 20
+# schemas) is host-supplied metadata by its own claim boundary, so a model
+# filling it would write the evidence it is checked against; a host or wrapper
+# still passes it to the handler as before (`host_observation`). `omh_home` and
+# `hermes_home` (-2021 over 7 schemas) are refused by every native Hermes call
+# (`runtime_paths.tool_home_error`); standalone callers keep the arguments.
+# Every tool description also opens with one short complete sentence (+436 in
+# all), because Hermes' tool_search listing shows only that first sentence
+# clipped to 60 characters, on every request under the default `auto`; the
+# listing's OMH lines fall from 1986 to 1503 characters. The opener's old words
+# move into the next sentence, so no rule is dropped. `omh_dag` keeps its
+# approved opener (its intact schema is pinned in test_per_turn_budgets).
+# Measured in the head-to-head on 2026-10-30, these schemas were 70,460 of the
+# characters on every model call with tool_search off, and no `omh_*` tool was
+# called in 773 coding tool calls. Re-derived from the producer. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 53222
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

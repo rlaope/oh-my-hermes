@@ -12,12 +12,12 @@ import subprocess
 import tempfile
 from typing import Any, NamedTuple
 
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 
 OMH_EVIDENCE_SCHEMA = {
     "name": "omh_gather_evidence",
     "description": (
-        "Run bounded allowlisted local verification probes and return structured evidence. "
+        "Run allowlisted local verification probes. They are bounded and return structured evidence. "
         "This is explicit verification evidence only, not executor dispatch or coding execution."
     ),
     "parameters": {
@@ -44,7 +44,6 @@ OMH_EVIDENCE_SCHEMA = {
                 "type": "integer",
                 "description": "Maximum output characters per command. Keeps the tail. Default 4000, capped at 20000.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["commands"],
     },

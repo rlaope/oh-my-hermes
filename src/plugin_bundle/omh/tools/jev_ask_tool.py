@@ -37,7 +37,6 @@ from typing import Any
 
 from .._governance_safety import contains_credential_like_material
 from ..host_observation import (
-    OBSERVATION_SCHEMA,
     attach_public_observation,
     host_session_id,
     observe_plugin_tool_call,
@@ -125,8 +124,8 @@ _NEXT_ACTIONS = {
 OMH_JEV_ASK_SCHEMA = {
     "name": "omh_jev_ask",
     "description": (
-        "Ask Jev (TypeSafe, non-generative) typed questions -- noul (yes/no), choice, score -- about a "
-        "`state`, with the user's own key. Call only after the user asked for Jev in this turn; "
+        "Ask Jev typed questions about a state. Jev is TypeSafe and non-generative: noul (yes/no), choice and "
+        "score questions about a `state`, with the user's own key. Call only after the user asked for Jev in this turn; "
         "otherwise it returns consent_not_observed and sends nothing. "
         + EGRESS_DISCLOSURE
         + " Returns probabilities and confidence, or a non-answer status that is never an answer."
@@ -193,7 +192,6 @@ OMH_JEV_ASK_SCHEMA = {
                 "type": "string",
                 "description": "Short local label stored in the ledger; never sent.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["state"],
     },

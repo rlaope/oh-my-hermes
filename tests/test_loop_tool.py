@@ -1161,7 +1161,11 @@ class BundleCoreParityTests(unittest.TestCase):
         routed = set(loop_bridge.ENVELOPE_ARGS)
         for names in loop_bridge.TOOL_ACTION_FIELDS.values():
             routed.update(names)
-        self.assertEqual(set(OMH_LOOP_SCHEMA["parameters"]["properties"]), routed)
+        advertised = set(OMH_LOOP_SCHEMA["parameters"]["properties"])
+        self.assertLessEqual(advertised, routed)
+        # `observation` is routed for a host or wrapper that passes it, and is
+        # deliberately not advertised to the model: it is host-supplied metadata.
+        self.assertEqual(routed - advertised, {"observation"})
 
     def test_envelope_args_are_disjoint_from_no_action(self) -> None:
         # `loop_id` is deliberately both: the envelope names the loop to act

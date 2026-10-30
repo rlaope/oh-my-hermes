@@ -10,15 +10,15 @@ from typing import Any
 from ..awareness import awareness_route_hint
 from ..degradation import safe_error_type as _safe_error_type
 from ..host_context import active_main_agent_model
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, host_session_id, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, host_session_id, observe_plugin_tool_call
 from ..package_backend import classify_backend_failure, package_backend_detail
 from ..route_answerers import answerer_ladder
 
 OMH_INTERACT_SCHEMA = {
     "name": "omh_interact",
     "description": (
-        "Build the OMH chat_interaction/v1 envelope for a natural-language Hermes request and, "
-        "by default, record a metadata-only wrapper session. This is chat orchestration evidence, "
+        "Build an OMH chat envelope. It is chat_interaction/v1 for a natural-language Hermes request and, "
+        "by default, records a metadata-only wrapper session. This is chat orchestration evidence, "
         "not executor dispatch, implementation, review, CI, or merge evidence."
     ),
     "parameters": {
@@ -76,15 +76,6 @@ OMH_INTERACT_SCHEMA = {
                 "type": "object",
                 "description": "Optional bounded wrapper metadata such as source_event_id, channel_ref, user_ref, target_ref, or runtime_ref.",
             },
-            "omh_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "hermes_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["message"],
     },

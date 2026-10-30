@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from ..host_observation import (
-    OBSERVATION_SCHEMA,
     attach_public_observation,
     host_session_id,
     observe_plugin_tool_call,
@@ -84,8 +83,8 @@ _COMPLETION_FIELDS = {
 OMH_TODO_SCHEMA = {
     "name": "omh_todo",
     "description": (
-        "Declare, advance, clear, or read this session's metadata-only plan todo list, which the OMH HUD "
-        "renders above the prompt; other sessions neither see nor overwrite it. "
+        "Keep this session's plan todo list. Declare, advance, clear, or read the metadata-only list, which "
+        "the OMH HUD renders above the prompt; other sessions neither see nor overwrite it. "
         f"Keep steps in ONE tool, never both: {OMH_TODO_HELD_PLANS} keeps them here "
         "(to leave one for unrelated work, clear it first; a deferred_reason only pauses it); "
         f"otherwise, when {native_tool_presence_clause(NATIVE_TODO_TOOL)}, keep them in {NATIVE_TODO_TOOL} "
@@ -222,11 +221,6 @@ OMH_TODO_SCHEMA = {
                     "required": ["text"],
                 },
             },
-            "omh_home": {
-                "type": "string",
-                "description": "Standalone operator override for action=show only; writes reject it. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["action"],
     },

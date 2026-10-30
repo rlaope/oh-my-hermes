@@ -11,7 +11,7 @@ from ..search_state import HostSearchContextError, anchored_search
 OMH_SEARCH_SCHEMA = {
     "name": "omh_search",
     "description": (
-        "Plan, merge or assess bounded search data; never searches, reads, invokes a provider or grants access. "
+        "Plan, merge or assess search data. The data is bounded; this tool never searches, reads, invokes a provider or grants access. "
         "Use existing Hermes tools for retrieval and current authorization. All scope, provenance and semantic "
         "judgments remain assertions, not verified truth. Requires host session and request context. "
         "Strict nested contracts are checked at runtime; load the research skill for their field definitions."

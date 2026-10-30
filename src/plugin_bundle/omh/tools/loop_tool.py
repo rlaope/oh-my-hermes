@@ -5,7 +5,6 @@ from typing import Any
 
 from .. import runtime_paths
 from ..host_observation import (
-    OBSERVATION_SCHEMA,
     attach_public_observation,
     host_session_id,
     observe_plugin_tool_call,
@@ -46,7 +45,7 @@ def _strings(description: str, *, enum: tuple[str, ...] = ()) -> dict[str, Any]:
 OMH_LOOP_SCHEMA = {
     "name": "omh_loop",
     "description": (
-        "Manage one durable, permission-scoped OMH Loop (loop_cycle/v2) for this session without "
+        "Manage one durable OMH Loop. It is permission-scoped (loop_cycle/v2), for this session, without "
         "shell commands. Every mutation binds to the configured OMH home and this host session; no "
         "argument selects a store. A successful call records an OMH transition only: never executor "
         "dispatch, implementation, review, CI, merge readiness, or merge, and a queue item OMH "
@@ -198,7 +197,6 @@ OMH_LOOP_SCHEMA = {
                 "type": "string",
                 "description": "queue_observe: short metadata-only summary of what was observed.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["action"],
     },

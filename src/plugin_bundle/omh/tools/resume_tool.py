@@ -6,7 +6,6 @@ import json
 from typing import Any
 
 from ..host_observation import (
-    OBSERVATION_SCHEMA,
     attach_public_observation,
     host_session_id,
     observe_plugin_tool_call,
@@ -16,7 +15,7 @@ from ..work_resume import DEFAULT_LIMIT, MAX_LIMIT, WORK_RESUME_CLAIM_BOUNDARY, 
 OMH_RESUME_SCHEMA = {
     "name": "omh_resume",
     "description": (
-        "Read what this person was doing in their other Hermes sessions of this profile "
+        "Read this person's work in other sessions. These are their other Hermes sessions of this profile "
         "(TUI, Desktop, CLI, or the same chat-platform user): recent OMH plans with item states "
         "and completion checkpoints. Call it when they ask to continue or pick up earlier work, "
         "and relay `text`. Done items are that session's declarations, not observed results."
@@ -30,7 +29,6 @@ OMH_RESUME_SCHEMA = {
                 "maximum": MAX_LIMIT,
                 "description": f"Most recent sessions to include (default {DEFAULT_LIMIT}).",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

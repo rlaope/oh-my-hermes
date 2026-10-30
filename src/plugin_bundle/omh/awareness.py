@@ -7003,6 +7003,16 @@ def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str
         lines.append(f"adjacent_workflows={adjacent_summary}.")
     if not_executed_summary:
         lines.append(f"not_executed={not_executed_summary}.")
+    # Hints in one lane share a context card, so their shape, plan and evidence
+    # lines are the same text; a copy already in the block is not rendered
+    # again. Hermes replays this block on every later call of the session.
+    rendered_meaning_lines: set[str] = set()
+
+    def add_meaning_line(line: str) -> None:
+        if line not in rendered_meaning_lines:
+            rendered_meaning_lines.add(line)
+            lines.append(line)
+
     for hint in payload.get("hints", []):
         if not isinstance(hint, dict):
             continue
@@ -7030,12 +7040,12 @@ def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str
                 else:
                     first_response_shape = _DAG_ULW_CONTROL_RESPONSE
             if first_response_shape:
-                lines.append(f"  first_response_shape={first_response_shape}")
+                add_meaning_line(f"  first_response_shape={first_response_shape}")
         if workflow_declares_plan_todo(str(hint.get("workflow", ""))) and hint.get("id") not in {
             _DAG_ULW_CONTROL_HINT_ID,
             _DAG_ULW_OFFER_HINT_ID,
         }:
-            lines.append(f"  plan_todo={PLAN_TODO_DECLARATION_RULE}")
+            add_meaning_line(f"  plan_todo={PLAN_TODO_DECLARATION_RULE}")
         fallback_action = str(hint.get("fallback_action") or "").strip()
         if fallback_action:
             fallback_action_label = str(hint.get("fallback_action_label") or _next_action_label(fallback_action)).strip()
@@ -7048,7 +7058,7 @@ def awareness_route_hint_context_from_payload(payload: dict[str, object]) -> str
             lines.append(f"  adjacent_workflows={adjacent}.")
         not_evidence = ", ".join(str(item) for item in hint.get("not_evidence_yet", []))
         if not_evidence:
-            lines.append(f"  not_evidence_yet={not_evidence}.")
+            add_meaning_line(f"  not_evidence_yet={not_evidence}.")
     lines.append("Boundary: " + str(payload.get("claim_boundary", "")))
     return "\n".join(lines)
 

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 from ..omh_roles import role_aliases, role_context_payload, role_names
 
 OMH_ROLE_SCHEMA = {
     "name": "omh_role",
     "description": (
-        "Read OMH role context for Hermes subagent or wrapper prompts. "
+        "Read OMH role context. It is for Hermes subagent or wrapper prompts. "
         "Role context is prompt guidance only, not runtime delegation evidence."
     ),
     "parameters": {
@@ -23,7 +23,6 @@ OMH_ROLE_SCHEMA = {
                 "type": "string",
                 "description": "Role name for action=read, such as planner, researcher, handoff-guide, or a legacy alias.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["action"],
     },

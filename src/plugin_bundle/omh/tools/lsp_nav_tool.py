@@ -32,7 +32,7 @@ _COMMON = {
 
 OMH_LSP_DEFINITION_SCHEMA = {
     "name": "lsp_definition",
-    "description": "Go to the definition of the symbol at path:line via the language server.",
+    "description": "Find a symbol's definition. The symbol is the one at path:line; the language server resolves it.",
     "parameters": {
         "type": "object", "additionalProperties": False, "required": ["path", "line", "symbol"],
         "properties": dict(_COMMON),
@@ -42,8 +42,8 @@ OMH_LSP_DEFINITION_SCHEMA = {
 OMH_LSP_REFERENCES_SCHEMA = {
     "name": "lsp_references",
     "description": (
-        "Every semantic use of the symbol at path:line across the workspace, including its "
-        "declaration and imports/aliases; skips strings and unrelated same-name symbols."
+        "Find every use of a symbol. Semantic uses of the symbol at path:line across the workspace, "
+        "including its declaration and imports/aliases; skips strings and unrelated same-name symbols."
     ),
     "parameters": {
         "type": "object", "additionalProperties": False, "required": ["path", "line", "symbol"],
@@ -54,8 +54,8 @@ OMH_LSP_REFERENCES_SCHEMA = {
 OMH_LSP_RENAME_SCHEMA = {
     "name": "lsp_rename",
     "description": (
-        "Rename the symbol at path:line everywhere it is used (imports, re-exports, all files) "
-        "via the language server. All-or-nothing; apply=false previews."
+        "Rename a symbol everywhere it is used. The symbol at path:line, across imports, re-exports "
+        "and all files, via the language server. All-or-nothing; apply=false previews."
     ),
     "parameters": {
         "type": "object", "additionalProperties": False, "required": ["path", "line", "symbol", "new_name"],
@@ -70,7 +70,7 @@ OMH_LSP_RENAME_SCHEMA = {
 OMH_LSP_DIAGNOSTICS_SCHEMA = {
     "name": "lsp_diagnostics",
     "description": (
-        "Language-server errors and warnings for a file or a glob (e.g. src/**/*.py), re-read from "
+        "Language-server errors and warnings. For a file or a glob (e.g. src/**/*.py), re-read from "
         "disk now. Use it to re-check the callers of code you changed."
     ),
     "parameters": {

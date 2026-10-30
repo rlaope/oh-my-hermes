@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Protocol, TypedDict
 
 from ..awareness import awareness_lane_examples, awareness_primer_payload
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 from ..metadata import PROVIDED_HOOKS, PROVIDED_TOOLS
 from .capability_impact import standalone_capability_impact_report
 
@@ -120,7 +120,7 @@ def standalone_playbook_capability_items() -> list[dict[str, object]]:
 OMH_CAPABILITIES_SCHEMA = {
     "name": "omh_capabilities",
     "description": (
-        "Read OMH agent, skill, hook, keyword, orchestration, tool, and evidence capability manifests. "
+        "Read OMH capability manifests. They cover agents, skills, hooks, keywords, orchestration, tools, and evidence. "
         "Capability presence is metadata only, not observed execution evidence."
     ),
     "parameters": {
@@ -142,7 +142,6 @@ OMH_CAPABILITIES_SCHEMA = {
                 "type": "string",
                 "description": "Capability id for action=inspect.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

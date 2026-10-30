@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 from ..cost_receipt import build_cost_receipt
 from ..sqlite_readonly import connect_readonly
 
@@ -57,7 +57,7 @@ _ELAPSED_UNKNOWN: str = "unknown"
 OMH_RUN_SUMMARY_SCHEMA = {
     "name": "omh_run_summary",
     "description": (
-        "Run summary and cost receipt from Hermes' own accounting. Render "
+        "Run summary and cost receipt. Both come from Hermes' own accounting. Render "
         "the localized end-of-run summary (elapsed seconds and token usage) — "
         "the calling session plus its delegate_task children. Call it once "
         "when a workflow run (e.g. ulw-work) completes, pass the language the "
@@ -84,11 +84,6 @@ OMH_RUN_SUMMARY_SCHEMA = {
                     "session the host reports."
                 ),
             },
-            "hermes_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

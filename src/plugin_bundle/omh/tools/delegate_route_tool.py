@@ -52,7 +52,7 @@ from ..delegation_backend_mode import (
 )
 from ..route_endpoint_guard import managed_config_layer, route_endpoint_refusal
 from ..provider_detection import config_provider_base_url_hosts, config_provider_declared_models, configured_provider_ids
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, host_session_id, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, host_session_id, observe_plugin_tool_call
 from ..kanban_board_reader import conversation_session_ids
 from ..orchestration_say import route_say, with_say
 
@@ -506,7 +506,7 @@ def _fallback_position(
 OMH_DELEGATE_ROUTE_SCHEMA = {
     "name": "omh_delegate_route",
     "description": (
-        "Route the NEXT Hermes-native delegate_task dispatch onto a mixture model "
+        "Pick the model for the next delegate_task. It routes the NEXT Hermes-native dispatch onto a mixture model "
         "category (ultrabrain, deep, deep-work, architect, capable, unspecified-high, "
         "unspecified-low, quick, simple-work, writing, visual-engineering, artistry, "
         "google-search, x-search, review, swarm, forensics, synthesize) by "
@@ -587,15 +587,6 @@ OMH_DELEGATE_ROUTE_SCHEMA = {
                 "type": "string",
                 "description": "fallback under model_map: the failed child's route.label.",
             },
-            "hermes_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "omh_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

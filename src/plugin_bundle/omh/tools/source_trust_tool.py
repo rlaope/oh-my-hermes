@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 
 # Bounded so one call cannot hand over an unbounded transcript. Matches the
 # spirit of the eight-row rejection cap inside the summary itself.
@@ -34,7 +34,7 @@ _UNAVAILABLE_REASON = (
 OMH_SOURCE_TRUST_SCHEMA = {
     "name": "omh_source_trust",
     "description": (
-        "Apply the OMH source-trust ceiling to gathered claims: report what class of source stands "
+        "Apply the OMH source-trust ceiling. For gathered claims, report what class of source stands "
         "behind each claim and what those claims collectively support. A practitioner heuristic may "
         "inform approach and never becomes an established finding, and no source class settles "
         "completion. This reports source class, never whether a claim is true; it is not observation, "
@@ -75,7 +75,6 @@ OMH_SOURCE_TRUST_SCHEMA = {
                     },
                 },
             },
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

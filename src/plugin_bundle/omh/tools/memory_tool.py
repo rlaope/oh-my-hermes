@@ -157,7 +157,7 @@ from ..memory_store_io import (
     write_project_memory_candidate_unlocked,
     write_project_memory_record,
 )
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, host_session_id, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, host_session_id, observe_plugin_tool_call
 from ..memory_blocks import read_memory_block, read_memory_blocks, select_memory_blocks
 from ..memory_dreaming import read_dreaming_state, read_latest_consolidation
 from ..project_identity import resolve_project_identity
@@ -253,7 +253,6 @@ OMH_MEMORY_SCHEMA = {
             "limit": {"type": "integer", "description": "recall: 1-6."},
             "record_id": {"type": "string"},
             "reason": {"type": "string", "enum": list(RETIRE_REASONS)},
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

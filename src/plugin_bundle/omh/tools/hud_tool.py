@@ -6,7 +6,6 @@ import json
 from typing import Any
 
 from ..host_observation import (
-    OBSERVATION_SCHEMA,
     attach_public_observation,
     host_session_id,
     observe_plugin_tool_call,
@@ -16,20 +15,12 @@ from ..runtime_reader import read_omh_hud
 OMH_HUD_SCHEMA = {
     "name": "omh_hud",
     "description": (
-        "Read the compact OMH metadata-only HUD payload for OMH TUI/status surfaces. "
+        "Read the compact OMH HUD payload. It is metadata-only, for OMH TUI/status surfaces. "
         "Token fields are shown only when supplied by the host metadata."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "omh_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "hermes_home": {
-                "type": "string",
-                "description": "Standalone operator override only. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
             "preset": {
                 "type": "string",
                 "enum": ["minimal", "focused", "full"],
@@ -59,7 +50,6 @@ OMH_HUD_SCHEMA = {
                 "type": "number",
                 "description": "Optional host-provided context remaining percentage.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
     },
 }

@@ -28,13 +28,13 @@ from ..document_chunk_plan import (
     result_view,
     write_document_plan,
 )
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 
 OMH_DOCUMENT_PLAN_SCHEMA = {
     "name": "omh_document_plan",
     "description": (
-        "Split a long document (PDF, paper, book, report) into numbered read ranges BEFORE reading it, "
-        "so a document larger than one read_file window is walked range by range, resumed after "
+        "Split a long document into read ranges. Call it BEFORE reading a PDF, paper, book or report: "
+        "numbered ranges let a document larger than one read_file window be walked range by range, resumed after "
         "compression, or fanned out one delegate_task child per range. read_file extracts a document "
         "to line-numbered text, returns about 100k characters / 2,000 lines per call, re-extracts the "
         "whole file on every paginated read, and drops page numbers; a 300-page PDF is roughly five "
@@ -165,11 +165,6 @@ OMH_DOCUMENT_PLAN_SCHEMA = {
                 "type": "string",
                 "description": "For action=mark: a short metadata note, such as where the range's report lives. No content excerpts.",
             },
-            "omh_home": {
-                "type": "string",
-                "description": "Standalone operator override for action=show only; plan and mark write to the configured OMH home. Native Hermes calls reject this field; omit it to use the active profile.",
-            },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["action"],
     },

@@ -7,7 +7,6 @@ import json
 from typing import Any
 
 from ..host_observation import (
-    OBSERVATION_SCHEMA,
     attach_public_observation,
     host_session_id,
     observe_plugin_tool_call,
@@ -32,7 +31,7 @@ from .jev_ask_tool import route_question_questions_sha256
 OMH_ROUTE_ANSWER_SCHEMA = {
     "name": "omh_route_answer",
     "description": (
-        "Record an answer to the route_question OMH attached to an undecidable route "
+        "Record an answer to an OMH route question. The route_question is the one OMH attached to an undecidable route "
         "(omh_interact route.route_question, or omh chat route-hint). Recording an answer "
         "changes no route and dispatches nothing: the deterministic route stays in force "
         "either way, and the record exists so the answer can be scored against OMH's own "
@@ -133,7 +132,6 @@ OMH_ROUTE_ANSWER_SCHEMA = {
                     "human reading it later."
                 ),
             },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["question_digest", "answered_by", "route_choice"],
     },

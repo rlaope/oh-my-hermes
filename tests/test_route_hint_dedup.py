@@ -1,11 +1,12 @@
 """The rendered route hint drops text that repeats other text in the same block.
 
-Three exact duplicates go: a hint's `adjacent_workflows=` line equal to the
+Four exact duplicates go: a hint's `adjacent_workflows=` line equal to the
 block's top-level one, a `fallback_action_label=` that only respells the
-action's underscores, and the same for `next_action_label=`. Each test pins
-both ways (the duplicate removed, a differing value kept), and the lines that
-carry meaning (`first_response_shape=`, `not_evidence_yet=`, `plan_todo=`)
-render as before.
+action's underscores, the same for `next_action_label=`, and a meaning line
+(`first_response_shape=`, `not_evidence_yet=`, `plan_todo=`) that an earlier
+hint in the same block already rendered word for word -- two hints in one lane
+share a context card. Each test pins both ways (the duplicate removed, a
+differing value kept), and a meaning line seen once renders as before.
 """
 
 from __future__ import annotations
@@ -120,6 +121,53 @@ class MeaningLinesUnchangedTest(unittest.TestCase):
         self.assertIn("\nadjacent_workflows=", text)
         self.assertNotIn("\n  adjacent_workflows=", text)
 
+
+
+class SameLaneMeaningLineDedupTest(unittest.TestCase):
+    def _two_hints(self, **second_fields: object) -> dict[str, object]:
+        payload = _payload()
+        first = dict(payload["hints"][0])
+        second = {**first, "id": "second_hint", "workflow": "agent-ops-review", "next_action": "read_the_gates"}
+        second.update(second_fields)
+        payload["hints"] = [first, second]
+        return payload
+
+    def test_a_second_hint_with_the_same_card_renders_its_meaning_lines_once(self) -> None:
+        lines = _lines(self._two_hints())
+        self.assertEqual(lines.count("  first_response_shape=Name the diff, then the findings."), 1)
+        self.assertEqual(lines.count("  not_evidence_yet=review, CI."), 1)
+        # The hint itself still renders, so its workflow and action stay visible.
+        self.assertTrue(any(line.startswith("- selected=agent-ops-review;") for line in lines))
+
+    def test_a_second_hint_with_a_different_card_keeps_its_own_lines(self) -> None:
+        payload = self._two_hints(
+            workflow_context_card={"first_response_shape": "Name the gate, then its state."},
+            not_evidence_yet=["merge"],
+        )
+        lines = _lines(payload)
+        self.assertIn("  first_response_shape=Name the diff, then the findings.", lines)
+        self.assertIn("  first_response_shape=Name the gate, then its state.", lines)
+        self.assertIn("  not_evidence_yet=review, CI.", lines)
+        self.assertIn("  not_evidence_yet=merge.", lines)
+
+    def test_the_plan_todo_rule_renders_once_for_two_checklist_hints(self) -> None:
+        payload = _payload(workflow="ulw-work")
+        first = dict(payload["hints"][0])
+        payload["hints"] = [first, {**first, "id": "second_hint", "workflow": "ulw-plan"}]
+        lines = _lines(payload)
+        self.assertEqual(lines.count(f"  plan_todo={PLAN_TODO_DECLARATION_RULE}"), 1)
+
+    def test_a_live_two_hint_route_drops_only_the_repeated_lines(self) -> None:
+        payload = awareness_route_hint(
+            "Use OMH to fix the failing test in billing.py, then run the tests with python -m pytest -q."
+        )
+        hints = [hint for hint in payload.get("hints", []) if isinstance(hint, dict)]
+        self.assertGreaterEqual(len(hints), 2, payload)
+        text = awareness_route_hint_context_from_payload(payload)
+        for line in text.splitlines():
+            if line.startswith(("  first_response_shape=", "  not_evidence_yet=", "  plan_todo=")):
+                self.assertEqual(text.splitlines().count(line), 1, line)
+        self.assertEqual(text.count("- selected="), len(hints))
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,12 +7,12 @@ from typing import Any
 from ..awareness import awareness_primer_payload, awareness_route_hint
 from ..degradation import safe_error_type as _safe_error_type
 from ..hermes_session_commands import person_request_text
-from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
+from ..host_observation import attach_public_observation, observe_plugin_tool_call
 
 OMH_RECOMMEND_SCHEMA = {
     "name": "omh_recommend",
     "description": (
-        "Recommend OMH workflows for a natural-language Hermes request without shell catalog approval. "
+        "Recommend OMH workflows for a request. The request is natural-language Hermes text; no shell catalog approval is needed. "
         "The returned payload redacts the raw request and remains routing guidance, not execution evidence."
     ),
     "parameters": {
@@ -29,7 +29,6 @@ OMH_RECOMMEND_SCHEMA = {
                 "default": 5,
                 "description": "Maximum recommendations to return.",
             },
-            "observation": OBSERVATION_SCHEMA,
         },
         "required": ["message"],
     },
