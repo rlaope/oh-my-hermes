@@ -376,7 +376,13 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # Measured in the head-to-head on 2026-10-30, these schemas were 70,460 of the
 # characters on every model call with tool_search off, and no `omh_*` tool was
 # called in 773 coding tool calls. Re-derived from the producer. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 53224
+# 53224 -> 54095 (2026-10-31): `omh_context` gets its whole schema back,
+# `observation` included (+871), so it is byte-identical to before this change.
+# In two gate runs GPT-6 Luna with tool_search off called it in 31-33 of 33
+# branch sessions against 19-21 of 33 on base, and each result is about 39k
+# characters that ride every later call; the tool is held unchanged while that
+# is measured. Re-derived from the producer. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 54095
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

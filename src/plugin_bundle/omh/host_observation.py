@@ -62,12 +62,33 @@ _LOCK_BUSY_ERRNOS = frozenset(
     {errno.EACCES, errno.EAGAIN, errno.EDEADLK, getattr(errno, "EDEADLOCK", errno.EDEADLK)}
 )
 
-# The `observation` argument a host or wrapper passes is still read below, from a
-# direct handler call's args or the host's keywords. No tool schema advertises it
-# to the model: an observation is host-supplied by definition (the claim boundary
-# above), so a model that filled it in would be writing the evidence it is meant
-# to be checked against. As a schema property it rode every OMH tool schema, on
-# every request with Hermes' tool_search off (`PLUGIN_TOOL_SCHEMA_CHAR_LIMIT`).
+# The `observation` argument a host or wrapper passes is read below, from a
+# direct handler call's args or the host's keywords. Only `omh_context` still
+# advertises it to the model, deliberately unchanged: on GPT-6 Luna with
+# tool_search off, a shorter `omh_context` schema went with that tool being
+# called in more sessions, and each result is large (bench README, 2026-10-30
+# per-call overhead). Every other schema leaves it out, because an observation
+# is host-supplied by definition (the claim boundary above), so a model that
+# filled it in would be writing the evidence it is meant to be checked against.
+OBSERVATION_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "description": (
+        "Optional host-supplied metadata for recording that Hermes actually invoked this OMH plugin "
+        "tool or hook. This records plugin load/use only; it is not workflow execution evidence."
+    ),
+    "properties": {
+        "host": {"type": "string", "description": "Host or wrapper name, such as hermes-agent."},
+        "session_id": {"type": "string", "description": "Stable host session/thread id."},
+        "evidence_ref": {"type": "string", "description": "Host log, tool-call, or wrapper event reference."},
+        "evidence_refs": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Optional host log, tool-call, or wrapper event references.",
+        },
+        "source": {"type": "string", "description": "Observation source, such as plugin, host, or wrapper."},
+        "message": {"type": "string", "description": "Short metadata-only summary. Do not pass raw prompts."},
+    },
+}
 
 
 def observe_plugin_tool_call(tool_name: str, args: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any] | None:

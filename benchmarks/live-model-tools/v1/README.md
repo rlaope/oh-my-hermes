@@ -720,6 +720,25 @@ Verdict: the pre-registered gate failed on GPT-6 Luna with `tool_search` off. Th
 not merge on this result. Five of six configs passed, including every product-default (`auto`)
 config.
 
+Amendment 2 (owner decision, 2026-10-31), written and pushed before run 3: one amended
+re-measure, after which the result stands.
+
+- The branch leaves `omh_context`'s schema entirely untouched, `observation` included: it is
+  byte-identical to origin/main, so the change cannot move that tool's call rate.
+  `PLUGIN_TOOL_SCHEMA_CHAR_LIMIT` 53224 -> 54095. Everything else is as in run 2.
+- Base is origin/main `b906cb425`, merged into the branch by a new commit first.
+- New seeds 181081, 204983, 224737 (the corpus generates any seed; for each of the 11 templates
+  each new seed yields its own fixture digest and an untouched workspace fails the controller's
+  check). Same 11 templates, same three models, both `tool_search` settings, both arms.
+- The gate clauses are unchanged except one. The `off` threshold of 3,000 was set from an o200k
+  estimate of the static cut (about 4,500 tokens). On the `openai-codex` route the measured
+  first-call cut was 2,827 and 2,828 tokens in runs 1 and 2, about 2,800. Restated in the units
+  Codex counts, for GPT-6 Luna `off` only: 3,000 x 2,800 / 4,500 = 1,867 tokens per call.
+  No Claude threshold changes; GPT-6 Luna `auto` stays at 100.
+- The tool-choice probe runs again on the run 3 profiles.
+- If every config passes, the change is put up for merge. If any fails, it is recorded here as
+  rejected and the work stops.
+
 ### 2026-10-30 round-end consistency check in `pre_verify`: off vs on, five measurements
 
 Measurements 1 to 4 failed their gates. The owner then relaxed the token clause to 1.4x
