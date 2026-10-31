@@ -9443,6 +9443,17 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "workflow-learning",
     ),
+    # #2440 follow-up: a bare "out" after the verb read every "find out ..." as
+    # an inquiry, so finding out which keys are unused got workflow-learning.
+    # "find out why", "find out what happened" and "find out the reason" still ask.
+    RoutingPrecisionCase(
+        "omh-picked-config-then-find-out-which-keys-is-a-request",
+        "OMH picked the config, find out which keys are unused, is a request, not a report",
+        "OMH picked the config. Find out which keys are unused",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
 )
 
 
@@ -12243,6 +12254,29 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "omh-chose-ultrawork-list-the-reasons-reaches-workflow-learning",
         "OMH choosing ultrawork for a typo, list the reasons, is a complaint about OMH's routing",
         "OMH chose ultrawork for a typo, list the reasons it did that",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    # #2454 review: an earlier draft read "find out" as a command before any
+    # word but a cause it listed, and these two left workflow-learning: the
+    # first dispatched ultrawork, the second the oh-my-hermes router.
+    RoutingInterventionCase(
+        "omh-picked-ultrawork-find-out-whats-wrong-reaches-workflow-learning",
+        "OMH picked ultrawork for a one-line fix, find out what's wrong with the router, is a report on OMH's routing",
+        "OMH picked ultrawork for a one-line fix. Find out what's wrong with the router",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    RoutingInterventionCase(
+        "omh-routed-typo-find-out-what-went-wrong-reaches-workflow-learning",
+        "OMH routed a typo to ultrawork, find out what went wrong, is a report on OMH's routing",
+        "OMH routed my typo to ultrawork, find out what went wrong",
         "dispatch",
         "workflow-learning",
         "audit_learning_readiness",

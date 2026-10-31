@@ -82,10 +82,16 @@ _DEADLINE_EVERY: Final = 64
 # fire the check without paying for a walk that will not finish.
 OVER_BUDGET_SECONDS: Final = 300.0
 # Pruned like `lsp_nav` (VCS, virtualenvs, caches, hidden directories). Build outputs hold copies of
-# the source that are not the source, but a package may be named `build` or `dist` too, so those two are
-# pruned only when they hold no `__init__.py` (`_build_output`).
+# the source that are not the source, but `build` and `dist` are also ordinary names for a scripts
+# directory or a namespace subpackage, so each is pruned only on the shape a build tool leaves
+# (`_build_output`): a `build` holding a setuptools/distutils work directory or no Python file in
+# its first two levels (a CMake or JS build tree), a `dist` holding no top-level Python file.
 _SKIP_DIRS: Final = lsp_nav._SKIP_DIRS
-_BUILD_OUTPUT_DIRS: Final = frozenset({"build", "dist"})
+_BUILD_WORK_EXACT: Final = frozenset({"lib"})
+_BUILD_WORK_PREFIXES: Final = ("lib.", "bdist.", "temp.", "__editable__")
+# Subdirectories of a `build` listed when looking for Python one level down; past this many it is
+# scanned as source rather than spend the index's time deciding.
+_BUILD_PEEK_DIRS: Final = 64
 # A replaced line shorter than this (after collapsing whitespace) is too common to call a copy.
 MIN_COPY_LINE_CHARS: Final = 30
 _MAX_SESSIONS: Final = 64
@@ -435,8 +441,44 @@ def _walk(root: str, suffixes: tuple[str, ...], deadline: float):
 
 
 def _build_output(dirpath: str, name: str) -> bool:
-    """A `build` or `dist` directory that is not a package: a build tool's output, not source."""
-    return name in _BUILD_OUTPUT_DIRS and not os.path.isfile(os.path.join(dirpath, name, "__init__.py"))
+    """A `build` or `dist` directory a build tool wrote, not source. A `build` is output when it holds
+    a `lib`, `lib.*`, `bdist.*`, `temp.*` or `__editable__*` directory (setuptools and distutils work
+    directories), or no Python file in its first two levels (a CMake or JS build tree); a `dist` when
+    it holds no top-level `.py` file (wheels, sdists, bundles). Anything else under those names (a
+    scripts directory, a namespace subpackage) is scanned."""
+    if name not in ("build", "dist"):
+        return False
+    directory = os.path.join(dirpath, name)
+    children = _children(directory)
+    if children is None:
+        return False
+    if name == "dist":
+        return not any(child.endswith(PYTHON_SUFFIXES) and not is_dir for child, is_dir in children)
+    if any(child == "__init__.py" for child, _ in children):
+        return False
+    if any(is_dir and (child in _BUILD_WORK_EXACT or child.startswith(_BUILD_WORK_PREFIXES))
+           for child, is_dir in children):
+        return True
+    if any(child.endswith(PYTHON_SUFFIXES) and not is_dir for child, is_dir in children):
+        return False
+    subdirectories = [child for child, is_dir in children if is_dir]
+    if len(subdirectories) > _BUILD_PEEK_DIRS:
+        return False
+    for child in subdirectories:
+        grandchildren = _children(os.path.join(directory, child))
+        if grandchildren is None or any(item.endswith(PYTHON_SUFFIXES) and not is_dir
+                                        for item, is_dir in grandchildren):
+            return False
+    return True
+
+
+def _children(directory: str) -> list[tuple[str, bool]] | None:
+    """``(name, is_dir)`` per entry of ``directory``, or None when it cannot be listed."""
+    try:
+        with os.scandir(directory) as entries:
+            return [(entry.name, entry.is_dir()) for entry in entries]
+    except OSError:
+        return None
 
 
 def _index(root: str, deadline: float) -> dict[str, tuple[int, int]]:

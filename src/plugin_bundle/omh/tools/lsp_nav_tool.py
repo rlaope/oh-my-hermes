@@ -414,8 +414,14 @@ _GLOB_SKIP = frozenset({"venv", "node_modules", "__pycache__"})  # plus every do
 
 def workspace_relative(path: str, root: str) -> str:
     """``path`` relative to ``root`` with `/` separators on every platform, for text a model reads
-    and for glob matching; file I/O keeps the OS path."""
-    return PurePath(os.path.relpath(path, root)).as_posix()
+    and for glob matching; file I/O keeps the OS path. A path with no relative form (Windows
+    ``relpath`` raises ``ValueError`` across drives) is shown whole, with `/` separators."""
+    try:
+        return PurePath(os.path.relpath(path, root)).as_posix()
+    except ValueError:
+        if os.path.splitdrive(path)[0].lower() == os.path.splitdrive(root)[0].lower():
+            raise
+        return PurePath(path).as_posix()
 
 
 def _glob_regex(pattern: str) -> "re.Pattern[str]":

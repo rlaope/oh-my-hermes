@@ -1789,8 +1789,10 @@ How the check works (always on, `src/plugin_bundle/omh/export_check.py`): at the
 `path:line` rows, an `__all__` entry the module neither defines nor imports (nor ships as a
 submodule of the package), and a top-level `from module import name` whose module is a workspace
 file that no longer binds the name. Only top-level `from` statements are checked. It also reads the
-workspace modules those imports resolve to, runs no language server, and says nothing otherwise. A module whose names it cannot know is skipped (a star import, a module-level
-`__getattr__`, `globals()` / `exec` / `setattr` / `enum.global_enum`, a package editing its own
+workspace modules those imports resolve to, runs no language server, and says nothing otherwise. A
+module whose names it cannot know is skipped (a star import, a module-level `__getattr__`,
+`globals()` / `exec`, `setattr` on a module it imports, `sys.modules[__name__]`, module-level
+`vars()` / `locals()`, `enum.global_enum` / `Enum._convert_`, a package editing its own
 `__path__`, an `__all__` that is not a literal list), as is a file that does not parse. Its note
 joins the same `pre_verify` message as the others, in the order served-surface gate, impact note,
 export note, consistency check, plan directive, one closing, so it never adds a round when another
@@ -1877,8 +1879,8 @@ What it shows, and what it does not:
   KST. 120 of 120 records completed; none failed, timed out or was retried. A one-instance smoke
   (`gpt-6.1-sol`, `L-RENAME-ALIAS` seed 104729, on `fd0b1895f`) ran before the counted run and is
   not counted.
-- n = 3 per model per template. Only `__all__` and top-level `from ... import` names are checked; a stale
-  name in a docstring, a string-dispatch table or a non-Python file is not.
+- n = 3 per model per template. Only `__all__` and top-level `from ... import` names are checked;
+  a stale name in a docstring, a string-dispatch table or a non-Python file is not.
 
 Owner decision (2026-10-31): merge despite the failed clause. Under the pre-registered rule, a
 failed clause meant reject; the owner overrode it. The reasons:
@@ -1902,14 +1904,17 @@ run did not measure:
 In the measured run the consistency check fired at every first stop, so the three note sessions
 behave the same either way.
 
-Review fixes, after the merge (2026-10-31). An independent review swept the whole Hermes tree,
-including `plugins/` and `tui_gateway/` and its virtualenv: 9,597 files, 6 rows. Three of those
-rows, in 2 files, were false: they named correct code.
+Review fixes, after the merge (2026-10-31). An independent review swept the Hermes tree,
+including `plugins/`, `tui_gateway/` and its `venv/` virtualenv: 9,597 files, 6 rows. That count is
+every `.py` file a recursive `**/*.py` glob finds (the glob skips hidden directories, so `.venv/`
+was not in it), less paths containing `/test` or `site-packages/_`. Three of those rows, in 2
+files, were false: they named correct code.
 
 - `plugins/platforms/telegram/update_admission.py:19` `from telegram import Update` was resolved to
   the plugin's own folder.
-- `tui_gateway/entry.py:23` `dispatch` and `resolve_skin` were flagged because `tui_gateway/server.py`
-  ends with `register(sys.modules[__name__])`, which adds those names at runtime.
+- `tui_gateway/entry.py:23` `dispatch` and `resolve_skin` were flagged because
+  `tui_gateway/server.py` ends with `register(sys.modules[__name__])`, which adds those names at
+  runtime.
 
 The fixes:
 
@@ -1938,6 +1943,37 @@ Re-run after the fixes, no false rows remain in the three sweeps:
   run. The old `setattr` rule had hidden it.
 - One row in the review's probe set is now named: `from mylib import y` where `mylib` has no `y`.
   That import is genuinely broken.
+
+Second review follow-up (2026-10-31, `omh/omp-round-review-followups`):
+
+- `from conftest import x` in `tests/test_a.py` was resolved to the root's `conftest.py`. When the
+  root rule finds a module and the importer's own directory is not a package, a module of the same
+  name beside the importer is a second candidate: a script's `sys.path[0]` and pytest's `prepend`
+  mode read it, a PEP 420 namespace-package module reads the root's (`src/ns/mod.py`'s
+  `from config import KEY` reads `src/config.py`). A name is reported only when both lack it. On
+  its own, a sibling is still not read: the review's probe pins `scripts/setuptools.py` beside
+  `scripts/build.py` as silent.
+- A root module named like an installed package (`requests.py`) is still resolved. The hook runs
+  in Hermes's interpreter, not the project's, so a skip keyed on site-packages would hide a row on
+  one machine and not another. Where the root is on `sys.path` (a root `conftest.py` under pytest,
+  `python -m` from the root), the root module is what the import reads. The sweeps below found 0
+  such resolutions outside a site-packages directory.
+- The log line now says `deadline=1` when the rows are a partial result, and a path on another
+  Windows drive is shown whole instead of dropping the note.
+
+The sweeps were re-run with every `.py` file kept and the deadline lifted, on origin/main and on
+the branch:
+
+| Sweep | Files | Rows on main | Rows on branch | False rows |
+| --- | ---: | ---: | ---: | ---: |
+| Hermes tree, every non-hidden `.py` (`venv/` included, tests included) | 17,015 | 6 | 6 | 0 |
+| Hermes `.venv/` and other hidden directories | 4,582 | 3 | 3 | 0 |
+| CPython 3.14.7 standard library | 1,059 | 1 | 1 | 0 |
+| This repo's `src/`, `tests/` and `benchmarks/` | 2,370 | 0 | 0 | 0 |
+
+The 6 Hermes rows are the ones above. The 3 `.venv/` rows are `pydantic_core` `UNSET`,
+`snowballstemmer` `language`, and protobuf's `message_benchmark.py`, which imports a
+`unittest_pb2` the installed package does not ship.
 
 ### 2026-10-30 big files: read outline off vs on (`bigfile-ab`), gate failed
 

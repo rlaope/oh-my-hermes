@@ -19,7 +19,8 @@ from _local_package import load_local_package
 
 load_local_package()
 
-from omh.plugin_bundle.omh import export_check
+from omh.plugin_bundle.omh import export_check, impact_check
+from omh.plugin_bundle.omh.tools import lsp_nav_tool
 from omh.plugin_bundle.omh.consistency_trigger import Verdict
 from omh.plugin_bundle.omh.hooks import nudge_budget, verify_hooks
 from omh.plugin_bundle.omh.impact_check import format_note as impact_format_note
@@ -67,7 +68,7 @@ class StaleAllTest(_Workspace):
         self.write("src/benchapp/api.py", STALE_API)
         with self.assertLogs("omh.export_check", "INFO") as logs:
             self.note("src/benchapp/api.py")
-        self.assertRegex(logs.output[0], r"export_check round_end session=s files=1 rows=1 ms=\d+$")
+        self.assertRegex(logs.output[0], r"export_check round_end session=s files=1 rows=1 deadline=0 ms=\d+$")
 
     def test_a_stale_entry_added_with_plus_equals_is_named(self):
         self.write("pkg/mod.py", "__all__ = ['kept']\n__all__ += ['gone']\nkept = 1\n")
@@ -158,10 +159,13 @@ class StaleAllTest(_Workspace):
         for index in range(3):
             self.write(f"pkg/m{index}.py", "__all__ = ['gone']\n")
         ticks = iter([0.0, 0.0, 0.0, 0.0] + [100.0] * 50)
-        with patch.object(export_check.time, "monotonic", lambda: next(ticks)):
+        with patch.object(export_check.time, "monotonic", lambda: next(ticks)), \
+                self.assertLogs("omh.export_check", "INFO") as logs:
             note = self.note("pkg/m0.py", "pkg/m1.py", "pkg/m2.py")
         self.assertIn("pkg/m0.py:1:", note)
         self.assertNotIn("pkg/m2.py:1:", note)
+        # The log line says the row count is partial (#2439 review).
+        self.assertRegex(logs.output[0], r"files=3 rows=\d deadline=1 ")
 
     def test_parse_errors_unknown_paths_and_other_files_are_silent(self):
         self.write("pkg/broken.py", "__all__ = ['gone'\n")
@@ -223,6 +227,63 @@ class StaleImportTest(_Workspace):
         self.write("venv/lib/python3.11/site-packages/tool/models/__init__.py", "")
         self.write("venv/lib/python3.11/site-packages/tool/models/export.py", "from utils import onnx_inference\n")
         self.assertEqual(self.note("venv/lib/python3.11/site-packages/tool/models/export.py"), "")
+
+    def test_a_bare_name_in_a_non_package_directory_reads_the_sibling_module_first(self):
+        # #2439 review: `from conftest import x` in tests/test_a.py was resolved to the root's
+        # conftest.py. pytest's `prepend` mode (and a script's own `sys.path[0]`) reads tests/'s.
+        self.write("conftest.py", "def root_fixture():\n    pass\n")
+        self.write("tests/conftest.py", "def make_user():\n    pass\n")
+        self.write("tests/test_a.py", "from conftest import make_user\n")
+        self.assertEqual(self.note("tests/test_a.py"), "")
+        self.write("tests/test_b.py", "from conftest import make_account\n")
+        self.assertIn("tests/test_b.py:1: `from conftest import make_account`: tests/conftest.py no longer defines",
+                      self.note("tests/test_b.py"))
+        # A package's own folder is not on the path: tests/ with an `__init__.py` still reads the root's.
+        self.write("pkgtests/__init__.py", "")
+        self.write("pkgtests/conftest.py", "def make_user():\n    pass\n")
+        self.write("pkgtests/test_c.py", "from conftest import root_fixture\n")
+        self.assertEqual(self.note("pkgtests/test_c.py"), "")
+
+    def test_a_namespace_package_module_reads_the_root_module_too(self):
+        # #2454 review: a directory without `__init__.py` is also a PEP 420 namespace package, whose
+        # `from config import KEY` reads src/config.py. With two candidates, a name is stale only
+        # when both lack it.
+        self.write("pyproject.toml", "")
+        self.write("src/config.py", "KEY = 1\n")
+        self.write("src/ns/config.py", "OTHER = 1\n")
+        self.write("src/ns/mod.py", "from config import KEY\n")
+        self.assertEqual(self.note("src/ns/mod.py"), "")
+        self.write("utils.py", "def helper():\n    pass\n")
+        self.write("app/utils.py", "def other():\n    pass\n")
+        self.write("app/main.py", "from utils import helper\n")
+        self.write("scripts/utils.py", "from utils import helper\n")  # the sibling is the importer itself
+        self.assertEqual(self.note("app/main.py", "scripts/utils.py"), "")
+        self.write("src/ns/stale.py", "from config import GONE\n")
+        self.assertIn("src/ns/stale.py:1: `from config import GONE`: src/ns/config.py no longer defines `GONE`",
+                      self.note("src/ns/stale.py"))
+
+    def test_a_path_on_another_windows_drive_is_shown_whole(self):
+        # #2439 review: `os.path.relpath` raises ValueError across Windows drives, and the broad
+        # except dropped the whole note. The impact note's `workspace_relative` had the same exposure.
+        self.write("pkg/mod.py", "__all__ = ['gone']\n")
+        path = str(self.root / "pkg/mod.py")
+
+        def other_drive(target, start=None):
+            raise ValueError("path is on mount 'D:', start on mount 'C:'")
+
+        def drive(value):
+            return ("D:" if value == path else "C:", value)
+
+        with patch.object(export_check.os.path, "relpath", other_drive), \
+                patch.object(export_check.os.path, "splitdrive", drive):
+            note = self.note("pkg/mod.py")
+            self.assertEqual(lsp_nav_tool.workspace_relative(path, str(self.root)), Path(path).as_posix())
+        self.assertIn(f"{Path(path).as_posix()}:1: `__all__` lists `gone`", note)
+        self.assertIs(impact_check.workspace_relative, lsp_nav_tool.workspace_relative)
+        # Any other ValueError is not this fallback's: it still raises.
+        with patch.object(export_check.os.path, "relpath", other_drive):
+            with self.assertRaises(ValueError):
+                lsp_nav_tool.workspace_relative(path, str(self.root))
 
     def test_a_package_directory_wins_over_a_same_named_module(self):
         self.write("src/x.py", "")

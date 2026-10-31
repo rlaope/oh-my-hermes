@@ -126,8 +126,11 @@ All notable changes will be documented here.
   a function body that changes behaviour without changing its signature,
   and a reference that exists only in prose such as docs. The search skips
   hidden, version-control, virtualenv, cache and `node_modules` directories,
-  and `build` or `dist` directories with no `__init__.py` (build output; a
-  package of that name is searched).
+  and build output: a `build` directory holding a `lib`, `lib.*`, `bdist.*`,
+  `temp.*` or `__editable__*` directory or no `.py` file in its first two
+  levels, or a `dist` directory with no top-level `.py` file. Any other
+  `build` or `dist`, such as a scripts directory or a namespace subpackage, is
+  searched.
 
   On the bench corpus the always-on check fixed a second copy of the changed
   logic far more often: 76 vs 38 of 90 runs, pooled over five measurements. It

@@ -41,9 +41,24 @@ REQUEST_COMMAND_VERBS = DIRECT_CODING_EDIT_VERBS | frozenset(
 # Two-word commands whose first word alone is not one: "kick off a run".
 _REQUEST_COMMAND_PHRASES = frozenset({("kick", "off")})
 # A command verb followed by these asks about what happened rather than for
-# work: "check why", "find out why", "explain what happened", "show me why",
-# "list the reasons". The object pronoun ("me", "us") and "the" are skipped.
-_INQUIRY_AFTER_VERB = (("why",), ("out",), ("what", "happened"), ("reason",), ("reasons",))
+# work: "check why", "explain what happened", "show me why", "list the
+# reasons". The object pronoun ("me", "us") and a leading "the" are skipped.
+_INQUIRY_AFTER_VERB = (("why",), ("what", "happened"), ("reason",), ("reasons",))
+# "find out" asks about what happened unless it opens an object question: "find
+# out which keys are unused", "where it is imported", "whether it retries", "if
+# it uses X", "how many endpoints", "what calls it". A cause stays a question:
+# "find out why / how that happened / the reasons / the cause / what went
+# wrong / what caused it / what's wrong / where that came from" (#2454 review).
+_OUT_OBJECT_QUESTIONS = frozenset({"which", "whether", "if", "where"})
+_OUT_HOW_OBJECTS = frozenset({"many", "much"})
+# After "what", these ask for a cause or point back at what OMH did ("what the
+# router did"), so the clause stays a question. "what's" folds to "what s".
+_OUT_WHAT_ASKS = frozenset({
+    "happened", "happens", "went", "goes", "caused", "causes", "triggered", "triggers", "made", "makes",
+    "led", "leads", "broke", "breaks", "prompted", "is", "s", "was", "were", "are", "wrong", "behind",
+    "the", "this", "that", "it", "its", "they", "omh", "hermes", "you", "i", "we",
+})
+_ORIGIN_VERBS = frozenset({"came", "comes", "come"})
 _INQUIRY_VERBS = frozenset({"check", "find", "explain", "show", "list", "tell"})
 _INQUIRY_SKIPPED = frozenset({"me", "us", "the"})
 
@@ -82,7 +97,8 @@ def gives_command(clause: str) -> bool:
     """`clause` (folded) opens with the user's own command: a code-edit lead, or a `REQUEST_COMMAND_VERBS` verb.
 
     Not an inquiry verb that asks why: "show me why", "find out why",
-    "explain what happened", "list the reasons".
+    "explain what happened", "list the reasons", and "find out" before
+    anything but an object question (`_out_names_an_object`).
     """
     words = command_words(clause)
     if words and tuple(words[:2]) in _REQUEST_COMMAND_PHRASES:
@@ -91,9 +107,30 @@ def gives_command(clause: str) -> bool:
         rest = words[1:]
         while rest[:1] and rest[0] in _INQUIRY_SKIPPED:
             rest = rest[1:]
-        if any(tuple(rest[: len(inquiry)]) == inquiry for inquiry in _INQUIRY_AFTER_VERB):
+        if rest[:1] == ["out"]:
+            if not _out_names_an_object(rest[1:]):
+                return False
+        elif any(tuple(rest[: len(inquiry)]) == inquiry for inquiry in _INQUIRY_AFTER_VERB):
             return False
     return bool(words) and words[0] in REQUEST_COMMAND_VERBS or leads_with_code_edit(clause)
+
+
+def _out_names_an_object(words: list[str]) -> bool:
+    """The words after "find out" open an object question, the user's own task, rather than a cause."""
+    if not words:
+        return False
+    head, rest = words[0], words[1:]
+    if head == "where":
+        # "where that decision came from" asks for a cause; "where it is imported" for a place.
+        return not any(word in _ORIGIN_VERBS and rest[index + 1 : index + 2] == ["from"]
+                       for index, word in enumerate(rest))
+    if head in _OUT_OBJECT_QUESTIONS:
+        return True
+    if head == "how":
+        return rest[:1] != [] and rest[0] in _OUT_HOW_OBJECTS
+    if head == "what":
+        return rest[:1] != [] and rest[0] not in _OUT_WHAT_ASKS
+    return False
 
 
 def leads_with_code_edit(normalized_query: str) -> bool:

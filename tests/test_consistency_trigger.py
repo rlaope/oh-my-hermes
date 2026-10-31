@@ -8,6 +8,7 @@ edited files. No signal skips the check; anything undecidable fires it, as it fi
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -543,6 +544,59 @@ class ScanBoundsTest(_Workspace):
         self.write("app/build/steps.py", "def newer_step():\n    return 1\n")
         changed = self.edit("app/m.py", "return 1", "return 2")
         self.assertEqual(self.verdict(changed), ct.Verdict(True, "opaque_edit", "app/build/steps.py"))
+
+    def test_a_namespace_build_or_dist_subpackage_is_scanned(self):
+        # #2435 review: a `build`/`dist` with no `__init__.py` was pruned at any depth, so a caller in a
+        # namespace subpackage of that name was never seen.
+        for package in ("build", "dist"):
+            with self.subTest(package):
+                ct.reset()
+                top, name = f"ns_{package}", f"make_{package}"
+                self.write(f"{top}/m.py", f"def {name}(a):\n    return a\n")
+                self.write(f"{top}/{package}/steps.py", f"from {top}.m import {name}\n{name}(1)\n")
+                changed = self.edit(f"{top}/m.py", f"def {name}(a):", f"def renamed_{package}(a):")
+                self.assertEqual(self.verdict(changed),
+                                 ct.Verdict(True, "renamed", f"{name} in {top}/{package}/steps.py"))
+
+    def test_a_root_build_scripts_directory_is_scanned(self):
+        self.write("app/m.py", "def make_wheel(a):\n    return a\n")
+        self.write("build/gen_docs.py", "from app.m import make_wheel\nmake_wheel(1)\n")
+        changed = self.edit("app/m.py", "def make_wheel(a):", "def build_wheel(a):")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "renamed", "make_wheel in build/gen_docs.py"))
+
+    def test_a_sed_inside_a_namespace_build_directory_is_seen(self):
+        self.write("app/m.py", "def other():\n    return 1\n")
+        self.write("app/build/steps.py", "def old_step():\n    return 1\n")
+        self.write("app/use.py", "from app.build.steps import old_step\n")
+        ct.snapshot_before_edit({"tool_name": "terminal", "session_id": SESSION, "turn_id": self.turn}, {"command": "sed"})
+        self.write("app/build/steps.py", "def new_step():\n    return 1\n")
+        changed = self.edit("app/m.py", "return 1", "return 2")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "opaque_edit", "app/build/steps.py"))
+
+    def test_each_build_tool_work_directory_marks_build_output(self):
+        for work in ("lib", "lib.macosx-15.0-arm64-cpython-311", "bdist.macosx-15.0-arm64",
+                     "temp.macosx-15.0-arm64-cpython-311", "__editable__.oh_my_hermes-4.0.2"):
+            with self.subTest(work):
+                ct.reset()
+                top = "app"
+                shutil.rmtree(self.root / top, ignore_errors=True)
+                self.write(f"{top}/invoice.py", INVOICE)
+                self.write(f"{top}/build/{work}/receipt.py", RECEIPT)
+                self.write(f"{top}/build/gen_docs.py", RECEIPT)  # a stray script beside it is still output
+                changed = self.edit(f"{top}/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n")
+                self.assertEqual(self.verdict(changed)[:2], (False, "no_copy_or_reference"))
+
+    def test_a_build_tree_with_no_python_in_its_first_two_levels_is_not_walked(self):
+        # #2454 review: a CMake or JS `build/` was walked once the `__init__.py` rule went, and its
+        # entries could run the index out of budget, a fire origin/main never paid.
+        self.write("src/app/units.py", TO_CENTS)
+        self.write("build/CMakeCache.txt", "x")
+        for index in range(20):
+            self.write(f"build/CMakeFiles/obj{index}.o", "x")
+        self.write("build/src/generated/receipt.py", RECEIPT)  # three levels down: still output
+        changed = self.edit("src/app/units.py", "100", "1000")
+        with mock.patch.object(ct, "MAX_SCAN_ENTRIES", 15):
+            self.assertEqual(self.verdict(changed)[:2], (False, "no_copy_or_reference"))
 
     def test_an_oversized_unedited_python_file_fires_and_an_oversized_config_does_not(self):
         self.write("src/app/units.py", TO_CENTS)
