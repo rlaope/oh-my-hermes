@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from contextvars import ContextVar
+import os
 from pathlib import Path
 import tempfile
 import types
@@ -17,6 +18,78 @@ from _module_patch import patch_modules
 
 
 class RuntimePathsTests(unittest.TestCase):
+    def test_standalone_default_hermes_home_follows_the_host_platform(self):
+        # Hermes' own default is %LOCALAPPDATA%\hermes on Windows, not
+        # ~/.hermes (hermes_constants._platform_default_hermes_home). A
+        # POSIX-only fallback here named a second, unowned home on Windows,
+        # and `omh` exports it to the terminal it launches as HERMES_HOME, so
+        # that gateway refused every session as `storage_unavailable`.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            bare = {key: value for key, value in os.environ.items()
+                    if key not in ("HERMES_HOME", "HERMES_DATA_DIR_SUFFIX", "LOCALAPPDATA")}
+            with patch.object(runtime_paths, "_host", return_value=None), \
+                    patch.dict("os.environ", bare, clear=True):
+                with patch.object(runtime_paths.sys, "platform", "win32"), \
+                        patch.dict("os.environ", {"LOCALAPPDATA": str(root)}):
+                    self.assertEqual(runtime_paths.default_hermes_home(), (root / "hermes").resolve())
+                # The installers' relocation suffix keeps working.
+                with patch.object(runtime_paths.sys, "platform", "win32"), \
+                        patch.dict("os.environ", {"LOCALAPPDATA": str(root),
+                                                  "HERMES_DATA_DIR_SUFFIX": "-dev"}):
+                    self.assertEqual(runtime_paths.default_hermes_home(), (root / "hermes-dev").resolve())
+                # POSIX keeps ~/.hermes.
+                with patch.object(runtime_paths.sys, "platform", "linux"), \
+                        patch.object(Path, "home", classmethod(lambda cls: root)):
+                    self.assertEqual(runtime_paths.default_hermes_home(), (root / ".hermes").resolve())
+                # An explicit HERMES_HOME still wins over the platform default.
+                with patch.object(runtime_paths.sys, "platform", "win32"), \
+                        patch.dict("os.environ", {"LOCALAPPDATA": str(root / "ignored"),
+                                                  "HERMES_HOME": str(root / "explicit")}):
+                    self.assertEqual(runtime_paths.default_hermes_home(), (root / "explicit").resolve())
+
+    def test_an_unrouted_profile_stays_unrouted_on_windows(self):
+        # profile_is_routed() compares the resolved home against the launch
+        # home. If only one side learned the platform default, every Windows
+        # profile read as routed and inherited the routed store pinning.
+        host_home = ContextVar("test_host_home")
+        constants = types.ModuleType("hermes_constants")
+        constants.get_hermes_home = host_home.get
+        constants.get_hermes_home_override = lambda: None
+        secrets = types.ModuleType("agent.secret_scope")
+        secrets.is_multiplex_active = lambda: False
+        secrets.current_secret_scope = lambda: None
+        secrets.get_secret = lambda key, default=None: default
+        secrets.build_profile_secret_scope = lambda owner: {}
+        config = types.ModuleType("hermes_cli.config")
+        config.load_config_readonly = lambda: {}
+        config.require_readable_config_before_write = lambda *args: {}
+        managed = types.ModuleType("hermes_cli.managed_scope")
+        managed.load_managed_config = lambda: {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            host_home.set(root / "hermes")
+            modules = {
+                "hermes_constants": constants,
+                "agent.secret_scope": secrets,
+                "hermes_cli.config": config,
+                "hermes_cli.managed_scope": managed,
+                "agent.runtime_cwd": types.SimpleNamespace(
+                    resolve_context_cwd=lambda: None, resolve_agent_cwd=Path.cwd),
+            }
+            bare = {key: value for key, value in os.environ.items()
+                    if key not in ("HERMES_HOME", "HERMES_DATA_DIR_SUFFIX", "LOCALAPPDATA")}
+            with patch_modules(modules), \
+                    patch.object(runtime_paths, "_NATIVE_REGISTERED", True), \
+                    patch.dict("os.environ", bare, clear=True):
+                with patch.object(runtime_paths.sys, "platform", "win32"), \
+                        patch.dict("os.environ", {"LOCALAPPDATA": str(root)}):
+                    self.assertFalse(runtime_paths.profile_is_routed())
+                # A genuinely foreign home is still routed.
+                with patch.object(runtime_paths.sys, "platform", "win32"), \
+                        patch.dict("os.environ", {"LOCALAPPDATA": str(root / "other")}):
+                    self.assertTrue(runtime_paths.profile_is_routed())
+
     def test_a_symlink_loop_is_a_binding_error_on_every_interpreter(self):
         # CPython 3.11 and 3.12 raise from `Path.resolve()` on a loop; 3.13
         # resolves it without raising and returns the link itself. The

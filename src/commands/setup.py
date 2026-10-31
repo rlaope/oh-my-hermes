@@ -124,6 +124,7 @@ from ..plugin_bundle.omh.provider_detection import (
     env_key_names,
     env_row_is_covered,
 )
+from ..plugin_bundle.omh.runtime_paths import default_hermes_home
 from ..plugin_pack import PLUGIN_NAME, PluginPackError, install_plugin_bundle
 from ..install.plugin_pack import HERMES_PLUGIN_UPDATE_COMMAND, PluginContentProtectedError
 from ..probe import probe_capabilities
@@ -1387,7 +1388,8 @@ def _configured_omh_home_link_refusal(args: argparse.Namespace, paths: OmhPaths)
         except (OSError, UnicodeError):
             return "OMH home ownership is unproven: the persisted omh_home binding is unreadable"
         if binding:
-            raw_hermes = Path(str(getattr(args, "hermes_home", None) or os.environ.get("HERMES_HOME") or "~/.hermes")).expanduser()
+            raw_hermes = Path(str(getattr(args, "hermes_home", None) or os.environ.get("HERMES_HOME")
+                                  or default_hermes_home())).expanduser()
             binding = re.sub(r"\$\{(?:env:)?HERMES_HOME\}|\$HERMES_HOME\b|%HERMES_HOME%", lambda _: str(raw_hermes), binding)
             bound = Path(os.path.expandvars(binding)).expanduser()
             source, value = "the persisted omh_home binding", str(bound if bound.is_absolute() else raw_hermes / bound)
