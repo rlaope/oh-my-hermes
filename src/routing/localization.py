@@ -2,37 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-import re
-import unicodedata
 
+# The fold and tokenizers live in the bundle, so the plugin's route hint runs
+# the same ones on a host without the `omh` package; re-exported here for the
+# router's callers.
+from ..plugin_bundle.omh.text_fold import fold_for_match as _fold_for_match
+from ..plugin_bundle.omh.text_fold import normalized_phrase as normalized_phrase
+from ..plugin_bundle.omh.text_fold import routing_terms as routing_terms
+from ..plugin_bundle.omh.text_fold import routing_tokens as routing_tokens
 from .visual_qa_cues import contains_cue_phrase
 
 
-_TOKEN_RE = re.compile(r"[^\W_][^\W_'-]*(?:-[^\W_][^\W_'-]*)?", re.UNICODE)
-_STOPWORDS = {
-    "the",
-    "and",
-    "are",
-    "as",
-    "for",
-    "in",
-    "is",
-    "of",
-    "or",
-    "to",
-    "with",
-    "that",
-    "this",
-    "when",
-    "use",
-    "user",
-    "task",
-    "request",
-    "workflow",
-    "skill",
-    "agent",
-    "hermes",
-}
 _CANONICAL_PAYMENT_FAILURE = (
     "payment failure payment failure issue payment failure feedback "
     "customer feedback feedback triage bug reports reproduce"
@@ -700,41 +680,6 @@ def _folded_alias_phrases() -> tuple[tuple[LocaleAlias, tuple[str, ...]], ...]:
     return tuple(folded_aliases)
 
 
-def routing_tokens(value: str, *, stopwords: set[str] | None = None) -> set[str]:
-    stopword_key = frozenset(_STOPWORDS if stopwords is None else stopwords)
-    return set(_routing_tokens_cached(value, stopword_key))
-
-
-@lru_cache(maxsize=8192)
-def _routing_tokens_cached(value: str, stopwords: frozenset[str]) -> frozenset[str]:
-    tokens: set[str] = set()
-    for raw_token in routing_terms(value):
-        for token in (raw_token, *raw_token.split("-")):
-            if len(token) >= 3 and token not in stopwords:
-                tokens.add(token)
-    return frozenset(tokens)
-
-
-def routing_terms(value: str) -> set[str]:
-    return set(_routing_terms_cached(value))
-
-
-@lru_cache(maxsize=8192)
-def _routing_terms_cached(value: str) -> frozenset[str]:
-    folded = _fold_for_match(value)
-    terms: set[str] = set()
-    for raw_token in _TOKEN_RE.findall(folded):
-        token = raw_token.strip("-")
-        if token:
-            terms.add(token)
-            terms.update(part for part in token.split("-") if part)
-    return frozenset(terms)
-
-
-def normalized_phrase(value: str) -> str:
-    return _fold_for_match(value)
-
-
 def phrase_is_spoken(message: str, phrase: str) -> bool:
     """True when `phrase` occurs in `message` as its own run of words.
 
@@ -806,10 +751,3 @@ def _spaced_word_script(character: str) -> str:
     if "\u0370" <= character <= "\u03ff" or "\u1f00" <= character <= "\u1fff":
         return "greek"
     return ""
-
-
-@lru_cache(maxsize=8192)
-def _fold_for_match(value: str) -> str:
-    normalized = unicodedata.normalize("NFKC", value).casefold()
-    decomposed = unicodedata.normalize("NFKD", normalized)
-    return "".join(char for char in decomposed if not unicodedata.combining(char))

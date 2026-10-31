@@ -335,11 +335,13 @@ class JitLearnRoutingAndCardContractTests(unittest.TestCase):
         # The router helpers resolve per call, so this host must still answer
         # with its own copies now that `omh` is importable again in this
         # process: a host that had no router at load does not grow one.
-        self.assertIsNone(standalone_awareness._router_intent_module())
         self.assertIsNone(standalone_awareness._router_policy_module())
+        # The workflow-intent classifier is not one of those copies: it lives
+        # in the bundle, so this host runs the router's own implementation.
+        bundle_package = standalone_awareness.__name__.rpartition(".")[0]
         self.assertEqual(
             type(standalone_awareness.classify_workflow_intent("plan the billing refactor")).__module__,
-            standalone_awareness.__name__,
+            f"{bundle_package}.workflow_intent",
         )
 
         positive = standalone_awareness.awareness_route_hint(
@@ -509,8 +511,9 @@ class RouterGuardImportOrderTests(unittest.TestCase):
 
             # Each field is a value only the router's helper produces: the
             # bundle's jit-learn copy rejects a message that names the
-            # workflow, its long-document copy knows page counts only, and its
-            # classifiers rank `/loop …` under workflow-learning.
+            # workflow and its long-document copy knows page counts only. The
+            # classifier is the one implementation the router re-exports from
+            # the bundle, and with it `/loop …` ranks ulw-loop first.
             jit_message = "Current-blocker learning requests route to just-in-time learning"
             print(json.dumps({
                 "jit_learn": awareness._jit_learn_route_hint_applies(jit_message, normalized_phrase(jit_message)),
@@ -529,7 +532,7 @@ class RouterGuardImportOrderTests(unittest.TestCase):
             {
                 "jit_learn": True,
                 "long_document": True,
-                "classifier": "omh.routing.intent",
+                "classifier": "omh.plugin_bundle.omh.workflow_intent",
                 "loop": "ulw-loop",
             },
         )

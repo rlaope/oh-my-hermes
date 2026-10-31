@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from functools import lru_cache
-import unicodedata
+from ..plugin_bundle.omh.text_fold import contains_cue_phrase as contains_cue_phrase
 
 
 BROWSER_VISUAL_QA_PHRASES = (
@@ -50,26 +49,3 @@ CUSTOMER_SYMPTOM_REPORT_PHRASES = (
     "사용자가 제보",
     "사용자 제보",
 )
-
-
-def contains_cue_phrase(message: str, phrases: tuple[str, ...]) -> bool:
-    text = _cue_text(message)
-    compact = _compact_cue_text(text)
-    return any(
-        _cue_text(phrase) in text or _compact_cue_text(_cue_text(phrase)) in compact
-        for phrase in phrases
-    )
-
-
-@lru_cache(maxsize=4096)
-def _cue_text(message: str) -> str:
-    lowered = message.strip().lower()
-    folded = "".join(
-        character for character in unicodedata.normalize("NFKD", lowered) if not unicodedata.combining(character)
-    )
-    return folded
-
-
-@lru_cache(maxsize=4096)
-def _compact_cue_text(text: str) -> str:
-    return "".join(character for character in text if character.isalnum())

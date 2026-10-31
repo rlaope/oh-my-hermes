@@ -1,9 +1,10 @@
 """The `omh.skills` package exports its render side lazily, and the router never pulls it in.
 
-`routing.intent` imports `skills.catalog_types`; importing any submodule runs
-`skills/__init__`. An eager `from .render import` there pulled the renderer
-and, through it, the plugin bundle's `awareness` into every router import, and
-`awareness` imports `routing.intent` back (#2013). The cycle is gone (#2015);
+`routing.intent` imported `skills.catalog_types` (before the classifier moved
+into the bundle); importing any submodule runs `skills/__init__`. An eager
+`from .render import` there pulled the renderer and, through it, the plugin
+bundle's `awareness` into every router import, and `awareness` imported
+`routing.intent` back (#2013). The cycle is gone (#2015);
 these tests keep it gone. Import state is process state, so each case runs in
 a fresh interpreter.
 """
@@ -50,16 +51,21 @@ class SkillsPackageExportTests(unittest.TestCase):
         )
 
     def test_awareness_first_keeps_the_router_classifiers(self) -> None:
-        # Awareness is the other end of the former cycle: imported first, its
-        # module-level router import succeeded only once the cycle was gone.
+        # Awareness is the other end of the former cycle. Imported first, it
+        # holds the very classifier objects the router exports: one
+        # implementation, in the bundle, re-exported by `routing.intent`.
         probe = _fresh(
             """
             import json
             from omh.plugin_bundle.omh import awareness
-            print(json.dumps({"standalone_branch_ran": hasattr(awareness, "_fallback_classify_workflow_intent")}))
+            from omh.routing import intent
+            print(json.dumps({
+                "workflow": awareness.classify_workflow_intent is intent.classify_workflow_intent,
+                "quality": awareness.classify_omh_quality_intent is intent.classify_omh_quality_intent,
+            }))
             """
         )
-        self.assertEqual(probe, {"standalone_branch_ran": False})
+        self.assertEqual(probe, {"workflow": True, "quality": True})
 
     def test_the_lazy_names_resolve_and_list_like_eager_ones(self) -> None:
         probe = _fresh(

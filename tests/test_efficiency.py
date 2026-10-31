@@ -15,6 +15,7 @@ from omh.routing import chat as chat_module
 from omh.routing import catalog_questions as catalog_questions_module
 from omh.routing import intent as intent_module
 from omh.routing import localization as localization_module
+from omh.plugin_bundle.omh import text_fold as text_fold_module
 from omh.routing import missed_route as missed_route_module
 from omh.routing import recommend as recommend_module
 from omh.routing import policy as policy_module
@@ -1405,8 +1406,10 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertGreaterEqual(cache_info.hits, 1)
 
     def test_routing_token_cache_reuses_terms_without_payload_poisoning(self) -> None:
-        localization_module._routing_terms_cached.cache_clear()
-        localization_module._routing_tokens_cached.cache_clear()
+        # The caches live with the tokenizer in the bundle's `text_fold`;
+        # `localization` re-exports the functions that fill them.
+        text_fold_module._routing_terms_cached.cache_clear()
+        text_fold_module._routing_tokens_cached.cache_clear()
 
         first_terms = localization_module.routing_terms("Risky refactor with code-review")
         first_terms.add("mutated")
@@ -1415,14 +1418,14 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("risky", second_terms)
         self.assertIn("code-review", second_terms)
         self.assertNotIn("mutated", second_terms)
-        terms_cache = localization_module._routing_terms_cached.cache_info()
+        terms_cache = text_fold_module._routing_terms_cached.cache_info()
         self.assertEqual(terms_cache.misses, 1)
         self.assertGreaterEqual(terms_cache.hits, 1)
 
         first_tokens = localization_module.routing_tokens("Risky refactor with code-review", stopwords=set())
         first_tokens.add("mutated")
         second_tokens = localization_module.routing_tokens("Risky refactor with code-review", stopwords=set())
-        tokens_cache = localization_module._routing_tokens_cached.cache_info()
+        tokens_cache = text_fold_module._routing_tokens_cached.cache_info()
 
         self.assertIn("risky", second_tokens)
         self.assertIn("code-review", second_tokens)

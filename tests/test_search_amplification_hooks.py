@@ -27,9 +27,13 @@ class SearchHookTests(unittest.TestCase):
                       and re.search("[\u1100-\u11ff\u3000-\u9fff\uac00-\ud7af]", node.value))
         # Frozen from HEAD before the helper: covers the whole CJK literal
         # inventory, stronger than checking only a few named cue tables.
-        self.assertEqual(len(rows), 1352)
+        # 1352 -> 1296: the 56 removed literals were all cue words of the
+        # bundle's own workflow-intent classifier copies, deleted when awareness
+        # began importing the shared `workflow_intent` (which carries the
+        # router's cue tables); no literal was added.
+        self.assertEqual(len(rows), 1296)
         digest = hashlib.sha256(json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
-        self.assertEqual(digest, "9f627e49c658fedf38e21275dbc7d6583cee6dbf43d9661059391455f20de2c1")
+        self.assertEqual(digest, "574f700009cc1f96cb754e6502f1993b632c5604b76da4a052941af8ef1254f7")
 
     def test_disabled_awareness_uninstalled_research_and_ambiguous_requests_add_nothing(self):
         from omh.plugin_bundle.omh.hooks import llm_hooks
