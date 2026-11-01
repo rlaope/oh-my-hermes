@@ -891,7 +891,9 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
     "src/plugin_bundle/omh/jev_ask_client.py": (
         "omh_jev_ask -- the one opt-in bridge that POSTs typed questions to Jev with the user's own "
         "key; reached only from an explicit tool call, after the user named Jev in that turn and a "
-        "route resolved; fixed two-host HTTPS route table, redirects refused, bounded both ways; "
+        "route resolved; fixed route identities, TypeSafe host optionally configured through "
+        "TYPESAFE_BASE_URL as an HTTPS base URL without credentials/query/fragment, OpenRouter host fixed; "
+        "redirects refused, bounded both ways; "
         "documented as a scoped exception in CLAUDE.md and AGENTS.md."
     ),
 }

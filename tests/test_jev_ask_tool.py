@@ -116,7 +116,7 @@ class _Home:
 
     def call(self, args: dict[str, object], transport=None, session: str = SESSION) -> dict[str, object]:
         with patch.dict(os.environ, self.env, clear=False):
-            for name in ("TYPESAFE_API_KEY", "OPENROUTER_API_KEY"):
+            for name in ("TYPESAFE_API_KEY", "OPENROUTER_API_KEY", "TYPESAFE_BASE_URL"):
                 if name not in self.env:
                     os.environ.pop(name, None)
             return json.loads(omh_jev_ask_handler(dict(args), transport=transport, session_id=session))
@@ -734,6 +734,40 @@ class StatusTableTests(_ConsentedCase):
             self.assertNotIn("pip install", ledger)
             self.assertNotIn(SENTINEL, home.every_written_byte())
 
+    def test_custom_typesafe_endpoint_uses_the_hermes_base_url_setting(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = _Home(tmp, {
+                "TYPESAFE_API_KEY": SENTINEL,
+                "TYPESAFE_BASE_URL": "https://gateway.example/jev/v1/",
+            })
+            transport = _Recorder(
+                TransportReply(
+                    200,
+                    {},
+                    _answered_body(usage={"input_tokens": 10, "output_tokens": 1, "cost": 0.0007}),
+                )
+            )
+            result = home.call({"state": STATE, "questions": QUESTION}, transport)
+            self.assertEqual(result["status"], "answered")
+            usage = result.get("usage")
+            if not isinstance(usage, dict):
+                self.fail("answered result did not include a usage object")
+            self.assertEqual(usage.get("cost_source"), "reported_by_gateway")
+            request = transport.requests[0]
+            self.assertEqual(getattr(request, "full_url", ""), "https://gateway.example/jev/v1/systemone")
+
+    def test_invalid_custom_endpoint_is_reported_without_opening_transport(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = _Home(tmp, {
+                "TYPESAFE_API_KEY": SENTINEL,
+                "TYPESAFE_BASE_URL": "http://gateway.example/v1",
+            })
+            transport = _Recorder(TransportReply(200, {}, _answered_body()))
+            result = home.call({"state": STATE, "questions": QUESTION}, transport)
+            self.assertEqual(result["status"], "invalid_request")
+            self.assertIn("TYPESAFE_BASE_URL", str(result.get("error", "")))
+            self.assertEqual(transport.requests, [])
+
     def test_the_status_vocabulary_has_exactly_one_success(self) -> None:
         self.assertEqual(client.SUCCESS_STATUS, "answered")
         self.assertEqual(len(set(client.ASK_STATUSES)), len(client.ASK_STATUSES))
@@ -960,9 +994,27 @@ class TransportSafetyTests(unittest.TestCase):
         with self.assertRaises(client.AskRequestError):
             client.build_request_body("jev-latest", "x" * (client.MAX_REQUEST_BYTES + 1), QUESTION)
 
-    def test_base_url_variables_are_ignored(self) -> None:
-        with patch.dict(os.environ, {"TYPESAFE_BASE_URL": "https://attacker.example"}):
-            self.assertEqual(client.ROUTES["typesafe"][0], "https://api.typesafe.ai/v1/systemone")
+    def test_base_url_setting_is_normalized_and_https_only(self) -> None:
+        self.assertEqual(
+            client.route_url("typesafe", {"TYPESAFE_BASE_URL": "https://gateway.example/v1/"}),
+            "https://gateway.example/v1/systemone",
+        )
+        self.assertEqual(
+            client.route_url("typesafe", {"TYPESAFE_BASE_URL": "https://gateway.example/v1/systemone"}),
+            "https://gateway.example/v1/systemone",
+        )
+        self.assertEqual(
+            client.route_url("openrouter", {"TYPESAFE_BASE_URL": "https://gateway.example/v1"}),
+            client.ROUTES["openrouter"][0],
+        )
+        for value in (
+            "http://gateway.example/v1",
+            "https://user:pass@gateway.example/v1",
+            "https://gateway.example/v1?token=secret",
+            "https://gateway.example/v1#fragment",
+        ):
+            with self.subTest(value=value), self.assertRaises(client.AskRequestError):
+                client.route_url("typesafe", {"TYPESAFE_BASE_URL": value})
 
 
 class ValidationTests(_ConsentedCase):

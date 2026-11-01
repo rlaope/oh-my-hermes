@@ -4,9 +4,10 @@
 pins that no other module imports this one). Everything here exists to keep a
 single explicit, user-requested call narrow:
 
-* Two routes, fixed in `ROUTES`. The URL never comes from an argument or an
-  environment variable. `TYPESAFE_BASE_URL` is deliberately ignored: honoring
-  it would let one variable send the user's key to any host.
+* Two route identities, fixed in `ROUTES`. The TypeSafe endpoint defaults to
+  the Hermes-compatible `https://api.typesafe.ai/v1/systemone` and may use
+  `TYPESAFE_BASE_URL` for an operator-configured HTTPS base URL; the OpenRouter
+  route remains fixed. The request never accepts a URL argument.
 * HTTPS only, default certificate verification, and every 3xx refused.
   CPython's redirect handler copies `Authorization` onto the redirected
   request, including to another host, so a redirect is a non-answer here.
@@ -50,6 +51,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 import re
 import time
@@ -57,6 +59,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Final
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 
 ROUTE_TYPESAFE: Final = "typesafe"
@@ -64,8 +67,12 @@ ROUTE_OPENROUTER: Final = "openrouter"
 
 # route id -> (URL, key variable name). A third route is a code change with a
 # cited source, not configuration.
+TYPESAFE_BASE_URL_ENV: Final = "TYPESAFE_BASE_URL"
+TYPESAFE_DEFAULT_BASE_URL: Final = "https://api.typesafe.ai/v1"
+TYPESAFE_ENDPOINT_PATH: Final = "/systemone"
+
 ROUTES: Final[dict[str, tuple[str, str]]] = {
-    ROUTE_TYPESAFE: ("https://api.typesafe.ai/v1/systemone", "TYPESAFE_API_KEY"),
+    ROUTE_TYPESAFE: (f"{TYPESAFE_DEFAULT_BASE_URL}{TYPESAFE_ENDPOINT_PATH}", "TYPESAFE_API_KEY"),
     ROUTE_OPENROUTER: ("https://openrouter.ai/api/v1/systemone", "OPENROUTER_API_KEY"),
 }
 
@@ -254,6 +261,40 @@ def _header_view(headers: object) -> dict[str, str]:
     return view
 
 
+def route_url(route: str, environ: Mapping[str, str] | None = None) -> str:
+    """Resolve a route endpoint, honoring Hermes' TypeSafe base URL setting."""
+    if route not in ROUTES:
+        raise AskRequestError(f"route must be one of {', '.join(ROUTES)}")
+    default_url, _ = ROUTES[route]
+    if route != ROUTE_TYPESAFE:
+        return default_url
+    values = os.environ if environ is None else environ
+    raw_base_url = str(values.get(TYPESAFE_BASE_URL_ENV, "") or "").strip()
+    if not raw_base_url:
+        return default_url
+    if any(char.isspace() or ord(char) < 0x20 for char in raw_base_url):
+        raise AskRequestError(f"{TYPESAFE_BASE_URL_ENV} must be an HTTPS base URL")
+    try:
+        parsed = urlsplit(raw_base_url)
+        _ = parsed.port
+    except ValueError as error:
+        raise AskRequestError(f"{TYPESAFE_BASE_URL_ENV} must be an HTTPS base URL") from error
+    if (
+        parsed.scheme.lower() != "https"
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise AskRequestError(
+            f"{TYPESAFE_BASE_URL_ENV} must be an HTTPS base URL without credentials, query, or fragment"
+        )
+    base_path = parsed.path.rstrip("/")
+    endpoint_path = base_path if base_path.endswith(TYPESAFE_ENDPOINT_PATH) else f"{base_path}{TYPESAFE_ENDPOINT_PATH}"
+    return urlunsplit(("https", parsed.netloc, endpoint_path or TYPESAFE_ENDPOINT_PATH, "", ""))
+
+
 def build_request_body(model: str, state: object, questions: Mapping[str, Any]) -> bytes:
     """Serialize the documented body once, with exactly these three keys."""
     body = json.dumps({"model": model, "state": state, "questions": questions}, ensure_ascii=False)
@@ -283,7 +324,7 @@ def send_ask(
     """
     if route not in ROUTES:
         raise AskRequestError(f"route must be one of {', '.join(ROUTES)}")
-    url, _ = ROUTES[route]
+    url = route_url(route)
     if not url.startswith("https://"):
         raise AskRequestError("only HTTPS routes are sent")
     send = transport or _default_transport
@@ -670,13 +711,20 @@ def _probability_map(value: object, keys: list[str], question_id: str) -> dict[s
     return {key: _unit(value[key], question_id) for key in keys}
 
 
-def cost_for(route: str, usage: Mapping[str, Any]) -> dict[str, Any]:
+def cost_for(
+    route: str,
+    usage: Mapping[str, Any],
+    *,
+    endpoint_url: str | None = None,
+) -> dict[str, Any]:
     """Cost of one answered ask, with where the number came from; never a silent 0."""
-    if route == ROUTE_OPENROUTER:
-        gateway_cost = usage.get("gateway_cost")
-        if gateway_cost is None:
-            return {"cost_usd": None, "cost_source": "unknown", "price_read_on": PRICE_READ_ON}
+    gateway_cost = usage.get("gateway_cost")
+    if gateway_cost is not None:
         return {"cost_usd": float(gateway_cost), "cost_source": "reported_by_gateway", "price_read_on": PRICE_READ_ON}
+    if route == ROUTE_OPENROUTER or (
+        route == ROUTE_TYPESAFE and endpoint_url and endpoint_url != ROUTES[ROUTE_TYPESAFE][0]
+    ):
+        return {"cost_usd": None, "cost_source": "unknown", "price_read_on": PRICE_READ_ON}
     tokens = usage.get("input_tokens")
     if not isinstance(tokens, int):
         return {"cost_usd": None, "cost_source": "unknown", "price_read_on": PRICE_READ_ON}

@@ -21,9 +21,10 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   opt-in; spawns local agent CLIs, which make their own network calls. Nothing
   runs without that command.
 - `omh_jev_ask`: POSTs typed questions to Jev with the user's own key, only
-  when the user named Jev in that turn and a key resolves (TypeSafe, or
-  OpenRouter only with the operator setting in `<omh_home>/jev/settings.json`).
-  Stdlib, HTTPS only, a fixed two-host route table, redirects refused.
+  when the user named Jev in that turn and a key resolves (TypeSafe, with the
+  Hermes-compatible `TYPESAFE_BASE_URL` override when set, or OpenRouter only
+  with the operator setting in `<omh_home>/jev/settings.json`).
+  Stdlib, HTTPS only, redirects refused.
   `src/plugin_bundle/omh/jev_ask_client.py` is the only in-process network
   client in `src/`, pinned by INVARIANT 2's `NETWORK_CLIENT_BRIDGES`.
   Third-party Jev plugins are never called.

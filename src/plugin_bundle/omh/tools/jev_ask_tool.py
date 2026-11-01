@@ -63,6 +63,7 @@ from ..jev_ask_client import (
     build_request_body,
     carries_key_fragment,
     cost_for,
+    route_url,
     send_ask,
     validate_questions,
     validate_reply,
@@ -253,6 +254,7 @@ class _Ask:
         self.ask_id = secrets.token_hex(8)
         self.route = ""
         self.model = ""
+        self.endpoint_url = ""
         # Set only after validation: an unknown preset string never reaches
         # the ledger, the result, or `policy_result`.
         self.preset = ""
@@ -288,17 +290,21 @@ class _Ask:
                 "nothing was sent",
             )
         try:
+            self.endpoint_url = route_url(self.route)
             self.model = self._model_for_route()
             body = build_request_body(self.model, body_state, self.questions)
         except AskRequestError as error:
             return self._finish(STATUS_INVALID_REQUEST, error=str(error))
-        sent = send_ask(
-            route=self.route,
-            key=key,
-            body=body,
-            user_agent=f"oh-my-hermes/{_plugin_version()}",
-            transport=transport,
-        )
+        try:
+            sent = send_ask(
+                route=self.route,
+                key=key,
+                body=body,
+                user_agent=f"oh-my-hermes/{_plugin_version()}",
+                transport=transport,
+            )
+        except AskRequestError as error:
+            return self._finish(STATUS_INVALID_REQUEST, error=str(error))
         status = str(sent.get("status"))
         extra = {
             name: sent[name]
@@ -369,7 +375,7 @@ class _Ask:
             usage = {
                 "input_tokens": raw_usage["input_tokens"],
                 "output_tokens": raw_usage["output_tokens"],
-                **cost_for(self.route, raw_usage),
+                **cost_for(self.route, raw_usage, endpoint_url=self.endpoint_url),
             }
             served_model = validated["served_model"]
         # Filled only on an exact hit: TypeSafe serves `jev-1.13.0`. A gateway

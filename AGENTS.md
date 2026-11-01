@@ -131,13 +131,14 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   requires the Job Object to report zero active processes.
 - **`omh_jev_ask`**, the one scoped network integration: the plugin tool POSTs
   typed questions to Jev with the user's own key and returns probabilities.
-  It runs only when the person's own message for that turn names Jev (a
+  It runs only when the user's own message for that turn names Jev (a
   per-turn marker `pre_llm_call` records; otherwise it returns
   `consent_not_observed` and opens no socket), and only when a route
-  resolves: `TYPESAFE_API_KEY`, or `OPENROUTER_API_KEY` plus
+  resolves: `TYPESAFE_API_KEY`, with Hermes' optional `TYPESAFE_BASE_URL`
+  override for the TypeSafe endpoint, or `OPENROUTER_API_KEY` plus
   `{"openrouter_route": true}` in `<omh_home>/jev/settings.json`, which OMH
-  never writes. Stdlib only, HTTPS only, a fixed two-host route table, no
-  redirects, bounded bodies, no retry after a sent request times out. It
+  never writes. Stdlib only, HTTPS only, two route identities, no redirects,
+  bounded bodies, no retry after a sent request times out. It
   persists no key, `state`, question text, or reply; one metadata-only ledger
   row per ask. `src/plugin_bundle/omh/jev_ask_client.py` is the only
   in-process network client in `src/`, and only `tools/jev_ask_tool.py` may
