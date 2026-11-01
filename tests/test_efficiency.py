@@ -236,7 +236,12 @@ class EfficiencyContractTests(unittest.TestCase):
         # ~1.6k headroom this gate carried. The pack's review (#2301) drops
         # its everyday phrases and the tree measures 83,092, still over the old
         # ceiling, so this one stands.
-        self.assertLess(core["skill_body"]["bytes"], 85_000)
+        # 85,000 -> 88,000: `plan` (core) now gives each code-change task an id,
+        # dependencies, write scope and done check, ends with a closing gate,
+        # and offers `dag-ulw` after acceptance (+1,282 bytes). Main measures
+        # 84,762 and this tree 86,044; the ceiling restores the ~2k headroom
+        # this gate carried.
+        self.assertLess(core["skill_body"]["bytes"], 88_000)
         # 815,000 -> 825,000: one new installable body (`web-research`) plus the
         # sentence that split `best-practice-research`'s boundary in two. Set to
         # restore the ~10k headroom this gate is meant to carry rather than to
