@@ -295,6 +295,7 @@ _AWARENESS_TAGS: tuple[str, ...] = (
     "[OMH Code-Mode Discipline]",
     "[OMH Context Budget]",
     "[OMH continuation claim]",
+    "[OMH dag]",
     "[OMH Degraded]",
     "[OMH delegation]",
     "[OMH failed wait]",
