@@ -150,11 +150,11 @@ _PLAN_AMBITION_CHECK = (
     "When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap."
 )
 
-# plan's task shape: the fields an executor needs to run each task without
-# re-planning. The Hermes line adds the `dag-ulw` mapping, which only the
-# Hermes projection ships.
+# plan's task shape: the dependency, write-scope and done-check fields an
+# executor needs for each task. The Hermes line adds the `dag-ulw` mapping,
+# which only the Hermes projection ships.
 _PLAN_TASK_SHAPE = (
-    "When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above); two tasks with no order between them never write the same file."
+    "When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above); when two tasks write the same file, one lists the other directly among its dependencies, since an order through a third task does not count."
 )
 
 # Shared by ralplan's Hermes quality_bar, its portable override, and plan's
@@ -7107,10 +7107,10 @@ _DEFINITIONS = [
             "When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the id of the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.",
             "When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.",
             PortableLine(
-                _PLAN_TASK_SHAPE + " These are the fields of a `dag-ulw` node (id, depends_on, write_scope, VERIFY and STOP WHEN), so an accepted plan converts without re-planning.",
+                _PLAN_TASK_SHAPE + " These carry a `dag-ulw` node's id, depends_on and write_scope, and the done check feeds its VERIFY and STOP WHEN; converting still adds each node's label, category and full prompt, and a baseline node before a full-suite check.",
                 _PLAN_TASK_SHAPE,
             ),
-            "When the plan describes code changes, its last task is the closing gate: it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or the follow-on engine's own repair limit, after which the open findings are reported.",
+            "When the plan describes code changes, its last task is the closing gate, named as the verification task: it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or fewer when the engine running the plan stops sooner, after which the open findings are reported.",
             "When the plan describes code changes, run a proportion check before acceptance: if the plan text outgrows the code it leads to, or is mostly function bodies, implementation has leaked into it; reduce bodies to test names, assertions, and signatures.",
             *_PLAN_AMBITION_BAR,
             PLAN_ACCEPTANCE_ANSWER_RULE,

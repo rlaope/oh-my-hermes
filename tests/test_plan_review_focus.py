@@ -27,6 +27,7 @@ from __future__ import annotations
 import unittest
 
 from omh.skills.catalog import builtin_definitions
+from omh.skills.packaging import builtin_skill_reference_templates
 from omh.skills.render import agent_skill_templates, workflow_skill_from_definition
 
 PLAN_TOKENS = (
@@ -40,17 +41,21 @@ PLAN_TOKENS = (
 )
 
 # Execution shape (borrowed from OMC ultragoal's stories and final gate, adapted):
-# each task carries what an executor needs to run it without re-planning, and the
-# last task is a closing gate whose unclean review adds a bounded fix task.
+# each task carries its dependencies, write scope and done check, and the last
+# task is a closing gate whose unclean review adds a bounded fix task.
 PLAN_TASK_SHAPE_TOKENS = (
     "stable id (`T1`, `T2`, ...)",
     "the ids it depends on",
     "the files it may write",
     "its done check",
-    "never write the same file",  # unordered tasks have disjoint write scopes
+    # dag-ulw refuses a shared write scope unless one node lists the other
+    # directly (dag_core.shared_scope_pairs); an order through a third does not count
+    "when two tasks write the same file, one lists the other directly among its dependencies",
+    "an order through a third task does not count",
 )
 PLAN_CLOSING_GATE_TOKENS = (
     "its last task is the closing gate",
+    "named as the verification task",  # dag-ulw recognises a verification node by its name
     "depends on every other task",
     "runs the real verification commands",
     "someone other than the agent that built the work",  # never the builder's own reading
@@ -64,8 +69,9 @@ PLAN_CLOSING_GATE_TOKENS = (
 PLAN_DAG_ULW_TOKENS = (
     "`dag-ulw` for an accepted plan whose tasks form a graph",  # the follow-on path
     "plus a separate verification task",  # its fit reason
-    "fields of a `dag-ulw` node (id, depends_on, write_scope, VERIFY and STOP WHEN)",  # the mapping
-    "converts without re-planning",
+    "carry a `dag-ulw` node's id, depends_on and write_scope",  # the mapping
+    "the done check feeds its VERIFY and STOP WHEN",
+    "converting still adds each node's label, category and full prompt",  # not a ready-made graph
 )
 
 RALPLAN_TOKENS = (
@@ -138,9 +144,25 @@ class PlanReviewFocusTests(unittest.TestCase):
 
     def test_plan_completion_checklist_requires_task_fields_and_the_closing_gate(self) -> None:
         checklist = " ".join(_definition("plan").final_checklist)
-        for token in ("every task has an id, its dependencies, the files it may write, and a done check", "the last task is the closing gate"):
+        for token in (
+            "owning task ids",
+            "every task has an id, its dependencies, the files it may write, and a done check",
+            "the last task is the closing gate",
+        ):
             with self.subTest(token=token):
                 self.assertIn(token, checklist)
+
+    def test_plan_file_adoption_adds_the_task_fields_and_the_closing_gate(self) -> None:
+        # A `/plan` file adopted as the draft must gain what the checklist requires.
+        reference = next(
+            item.content
+            for item in builtin_skill_reference_templates()
+            if item.skill_name == "plan" and item.relative_path == "references/hermes-plan-mode.md"
+        )
+        line = next(line for line in reference.splitlines() if line.startswith("- Add what the file lacks"))
+        for token in ("`Review Focus`", "each task's id, dependencies, write scope and done check", "the closing gate task"):
+            with self.subTest(token=token):
+                self.assertIn(token, line)
 
     def test_dag_ulw_reaches_only_the_hermes_planning_bodies(self) -> None:
         for name in ("plan", "ralplan"):

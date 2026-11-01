@@ -47,14 +47,17 @@ All notable changes will be documented here.
   `og:image:type` beside the existing share card, and `test_site_seo` pins
   them so a home-page redesign cannot drop the share block unnoticed.
 
-- **A code-change plan from `plan` can be run as written.** Each task now
-  carries an id, the tasks it depends on, the files it may write and its done
-  check, which are the fields a `dag-ulw` node takes, so an accepted plan
-  converts without re-planning. The last task is a closing gate: real
-  verification commands run by someone other than the builder, then a review,
-  and an unclean review adds a fix task (at most two rounds) instead of ending
-  the plan. After acceptance, `plan` and `ulw-plan` now offer `dag-ulw` for a
-  plan whose tasks form a graph.
+- **A code-change plan from `plan` carries its execution order.** Each task
+  now has an id, the tasks it depends on, the files it may write and its done
+  check: the dependency and write-scope fields a `dag-ulw` node takes, and the
+  check its VERIFY and STOP WHEN come from. Of two tasks that write the same
+  file, one lists the other directly as a dependency, as `dag-ulw` requires.
+  Converting a plan to a graph still adds each node's label, category and full
+  prompt. The last task is a closing gate, named as the verification task:
+  real verification commands run by someone other than the builder, then a
+  review, and an unclean review adds a fix task (at most two rounds) instead
+  of ending the plan. After acceptance, `plan` and `ulw-plan` now offer
+  `dag-ulw` for a plan whose tasks form a graph.
 
 ## 4.0.4 - 2026-11-01
 

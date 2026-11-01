@@ -12,7 +12,7 @@ In that turn, follow its instructions: write the file, reply, and stop. OMH's ro
 
 When the user then asks to review, refine, accept, or hand off the plan, read that file and run this skill on it instead of writing another plan:
 
-- Add what the file lacks among goals, non-goals, risks, acceptance criteria, and verification shape, and the `Review Focus` section when it describes code changes.
+- Add what the file lacks among goals, non-goals, risks, acceptance criteria, and verification shape, and when it describes code changes, the `Review Focus` section, each task's id, dependencies, write scope and done check, and the closing gate task.
 - Hold every step to this skill's step shape.
 - Run the proportion check. `/plan` asks for complete code inside its steps, and this skill keeps code bodies out of a plan: reduce each body to the test name and what it asserts, an exact signature and its file, or a command and the output that passes. Say which steps you reduced. The file is the user's; change it only as part of the plan you put to them for acceptance.
 - Take acceptance from the user's own answer, exactly as for any plan. The file existing is not acceptance, and neither is `/plan`'s offer to carry it out: nothing is handed off or started until the user accepts.
