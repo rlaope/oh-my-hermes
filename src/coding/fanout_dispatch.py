@@ -3691,13 +3691,62 @@ def _merged_dispatch_summary(summary_path: Path, summary: dict[str, Any]) -> dic
     return merged
 
 
+def _config_fingerprint_note(
+    paths: OmhPaths, model_route: Mapping[str, Any] | None
+) -> dict[str, object] | None:
+    """Prepare-vs-dispatch skew note for config-sourced route fingerprints.
+
+    `identities.json` and `category-maestro.json` fingerprints carry a
+    `source` key naming their file. Re-reading that file here produces the
+    only digest the frozen value can honestly be compared against — the
+    local-inventory digest `catalog_fingerprint_note` uses is a different
+    basis and would report permanent false skew. Same advisory shape, plus
+    the `source` field so the reader knows which document drifted; absent or
+    validates-to-nothing reads compare as "no current basis" (`match` False).
+    """
+    if not isinstance(model_route, Mapping):
+        return None
+    fingerprint = model_route.get("catalog_fingerprint")
+    if not isinstance(fingerprint, Mapping):
+        return None
+    source = str(fingerprint.get("source", "") or "")
+    if not source:
+        return None
+    frozen = str(fingerprint.get("digest", "") or "")
+    current = ""
+    if source == "identities.json":
+        from .identity_profiles import read_identity_profiles_config
+
+        config = read_identity_profiles_config(paths.omh_home)
+    elif source == "category-maestro.json":
+        from .category_maestro import read_category_maestro_config
+
+        config = read_category_maestro_config(paths.omh_home)
+    else:
+        config = None
+    if isinstance(config, Mapping):
+        live = config.get("fingerprint")
+        if isinstance(live, Mapping):
+            current = str(live.get("digest", "") or "")
+    return {
+        "source": source,
+        "frozen_digest": frozen,
+        "current_digest": current,
+        "match": bool(frozen) and bool(current) and frozen == current,
+    }
+
+
 def _current_catalog_digest(units: Iterable[Mapping[str, Any]]) -> str:
     """Observe the current local-catalog digest once per dispatch, and only
-    when some unit's frozen route actually carries a catalog fingerprint —
-    contracts routed purely from built-in catalogs never trigger the read."""
+    when some unit's frozen route actually carries a local-inventory
+    fingerprint — contracts routed purely from built-in catalogs never
+    trigger the read, and a fingerprint naming another source
+    (`identities.json`, `category-maestro.json`) compares against that
+    file's own re-read, not this one."""
     for unit in units:
         route = recorded_model_route(unit)
-        if isinstance(route, Mapping) and isinstance(route.get("catalog_fingerprint"), Mapping):
+        fingerprint = route.get("catalog_fingerprint") if isinstance(route, Mapping) else None
+        if isinstance(fingerprint, Mapping) and fingerprint.get("source") is None:
             break
     else:
         return ""
@@ -4472,6 +4521,12 @@ def _dispatch_unit(
     routed_model = str(model_route.get("selected_model", "") or "") if model_route else ""
     routed_effort = str(model_route.get("selected_reasoning_effort", "") or "") if model_route else ""
     fingerprint_note = catalog_fingerprint_note(model_route, current_catalog_digest)
+    if fingerprint_note is None:
+        # The catalog fingerprint names a source other than the local
+        # inventory (identities.json or category-maestro.json): comparing its
+        # digest to the inventory's would report permanent false skew, so the
+        # skew check runs against the config the fingerprint actually names.
+        fingerprint_note = _config_fingerprint_note(paths, model_route)
     if model_route is not None and str(model_route.get("status", "")) == "choice_required":
         # A frozen choice_required route means the contract explicitly says
         # "a human or wrapper must pick the model". Spawning anyway would
@@ -4659,7 +4714,8 @@ def _dispatch_unit(
             **_dispatch_status_ladder(),
         }
         if fingerprint_note is not None:
-            planned["inventory_fingerprint"] = fingerprint_note
+            key = "inventory_fingerprint" if fingerprint_note.get("source") is None else "config_fingerprint"
+            planned[key] = fingerprint_note
         # Only when the operator asked for verification: a plan that named
         # commands nothing was going to run would read as a promise.
         if run_verification:
@@ -5657,7 +5713,8 @@ def _dispatch_unit(
         if key in _TELEMETRY_RESULT_KEYS:
             result[key] = value
     if fingerprint_note is not None:
-        result["inventory_fingerprint"] = fingerprint_note
+        key = "inventory_fingerprint" if fingerprint_note.get("source") is None else "config_fingerprint"
+        result[key] = fingerprint_note
     if limit_label:
         result["limit_shaped"] = True
         result["limit_pattern"] = limit_label

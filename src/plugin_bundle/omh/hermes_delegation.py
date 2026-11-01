@@ -1245,6 +1245,17 @@ def _valid_provenance_record(record: object) -> dict[str, Any] | None:
         if not isinstance(value, str) or len(value) > 160:
             return None
         cleaned[field] = value
+    # `identity`/`identity_digest` name the `omh_identity_profiles/v1` profile
+    # and identities.json digest a route was prepared under — additive-optional
+    # like `session_id`: old records carry neither, and a reader that predates
+    # the fields keeps only the bounded strings it knows. `identity_digest`
+    # never holds prompt text; it is the document's own sha256 prefix.
+    for field in ("identity", "identity_digest"):
+        value = record.get(field, "")
+        if not isinstance(value, str) or len(value) > 160:
+            return None
+        if value:
+            cleaned[field] = value
     # `session_id` names the Hermes session that prepared this route, and is
     # additive-optional inside `delegation_route_provenance/v1`: the key is
     # kept only when non-empty, so a writer that cannot name its session

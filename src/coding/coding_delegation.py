@@ -381,6 +381,8 @@ def build_coding_delegation_payload(
     model_chains: Mapping[str, Sequence[tuple[str, str]]] | None = None,
     requested_model: str = "",
     requested_effort: str = "",
+    requested_identity: str = "",
+    identity_config: Mapping[str, object] | None = None,
     input_representation: object = "text_only",
     transformation: Mapping[str, object] | None = None,
     now: str = "",
@@ -432,6 +434,8 @@ def build_coding_delegation_payload(
                 model_chains=dict(model_chains) if model_chains is not None else None,
                 requested_model=requested_model,
                 requested_effort=requested_effort,
+                requested_identity=requested_identity,
+                identity_config=identity_config,
                 handoff_contract=handoff_contract,
             )
         try:
@@ -474,6 +478,8 @@ def build_coding_delegation_payload(
         model_chains=model_chains,
         requested_model=requested_model,
         requested_effort=requested_effort,
+        requested_identity=requested_identity,
+        identity_config=identity_config,
         input_representation=input_representation,
         transformation=transformation,
         now=now,
@@ -512,6 +518,8 @@ def _build_coding_delegation_payload_native(
     model_chains: Mapping[str, Sequence[tuple[str, str]]] | None = None,
     requested_model: str = "",
     requested_effort: str = "",
+    requested_identity: str = "",
+    identity_config: Mapping[str, object] | None = None,
     input_representation: object = "text_only",
     transformation: Mapping[str, object] | None = None,
     now: str = "",
@@ -879,6 +887,14 @@ def _build_coding_delegation_payload_native(
         category=model_route_category,
         recommendation=model_recommendation,
     )
+    _attach_identity_model_route(
+        payload,
+        selection.selected_executor_profile or executor_target,
+        requested_identity=requested_identity,
+        requested_model=requested_model,
+        requested_effort=requested_effort,
+        identity_config=identity_config,
+    )
     modality_route = _primary_modality_route(
         selected_executor=selection.selected_executor_profile,
         recommendation=model_recommendation,
@@ -1004,6 +1020,49 @@ def _primary_modality_route(
         "wire_model": wire_model,
         "endpoint_mode": endpoint_mode,
     }
+
+
+def _attach_identity_model_route(
+    payload: dict[str, object],
+    executor_profile: str,
+    *,
+    requested_identity: str,
+    requested_model: str,
+    requested_effort: str,
+    identity_config: Mapping[str, object] | None,
+) -> None:
+    """Resolve a declared identity into a bounded `model_route` on the payload.
+
+    The coding-delegation payload resolves no route of its own, so the
+    identity's chain lands here as the same `coding_model_route/v2` block a
+    fanout unit freezes: `identity_id`, `identity_fingerprint`, selected
+    model/effort, attempted trail, and the route claim boundary — never the
+    prompt. Only a declared `requested_identity` triggers the resolve; every
+    other payload stays byte-identical to before this attach point existed.
+    The name is the caller's declared selector, not read from the message.
+    """
+    if not str(requested_identity or "").strip():
+        return
+    from .model_routing import resolve_model_route
+
+    route = resolve_model_route(
+        executor_profile,
+        requested_identity=str(requested_identity).strip(),
+        requested_model=requested_model,
+        requested_effort=requested_effort,
+        identity_config=identity_config,
+    )
+    payload["model_route"] = route
+    handoff = next(
+        (
+            value
+            for key in ("executor_handoff", "runtime_handoff", "prompt_handoff")
+            if isinstance((value := payload.get(key)), dict)
+        ),
+        None,
+    )
+    if handoff is not None:
+        handoff["model_route"] = route
 
 
 def _attach_model_routing_metadata(

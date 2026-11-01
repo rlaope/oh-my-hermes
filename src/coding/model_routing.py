@@ -75,6 +75,7 @@ MODEL_ROUTE_PROVENANCES: Final[tuple[str, ...]] = (
     "request_named_model_unavailable",
     "recommendation_chain_head",
     "category_chain_head",
+    "identity_chain_head",
     "role_chain_head",
     "role_unchained",
     "executor_default",
@@ -167,6 +168,11 @@ MODEL_CATALOG_KINDS: Final[tuple[str, ...]] = (
     # (`~/.omh/routing/category-maestro.json`); such routes also carry the
     # config's fingerprint so a frozen record names its exact basis.
     "operator_category_config",
+    # A validated `omh_identity_profiles/v1` identity supplied the chain
+    # (`~/.omh/routing/identities.json`); such routes also carry
+    # `identity_id`/`identity_fingerprint` so the frozen record names the
+    # exact profile and document it resolved from.
+    "user_identity_config",
 )
 
 EXECUTOR_MODEL_OPTIONS: Final[dict[str, tuple[dict[str, object], ...]]] = {
@@ -711,8 +717,10 @@ def resolve_model_route(
     requested_depth: str = "",
     requested_scale: str = "",
     requested_category: str = "",
+    requested_identity: str = "",
     chains: Mapping[str, Mapping[str, tuple[Mapping[str, str], ...]]] | None = None,
     category_config: Mapping[str, object] | None = None,
+    identity_config: Mapping[str, object] | None = None,
     local_catalog: Mapping[str, object] | None = None,
     active_models: Iterable[str | Mapping[str, object]] | None = None,
     recommendation_overrides: Mapping[str, object] | None = None,
@@ -740,17 +748,24 @@ def resolve_model_route(
     not that the override changed the outcome: a route whose chain happens to
     match the built-in one, or that a requested model won over, still records
     the operator basis because that is the table that would have adjudicated;
-    `local_catalog` (a `local_model_catalog/v1` payload derived by
-    the caller from an observed inventory — I/O stays in the caller, this
-    function remains pure) is consulted ONLY when the profile has no built-in
-    catalog and the payload names this profile. A route resolved from a local
-    catalog records `catalog_kind: "local_inventory"` plus the catalog's
-    `fingerprint` so the frozen record names its exact basis, and a local
-    catalog never gains effort authority — observed config variants are
-    evidence of use, not of a model's effort vocabulary. An absent
-    `catalog_fingerprint` on any route means "no local basis was consulted",
-    never "unknown basis" — v1 routes and built-in-catalog routes correctly
-    carry none.
+    `identity_config` (the validated `omh_identity_profiles/v1` payload read by
+    the caller — I/O stays in the caller) supplies an explicit named chain
+    under `requested_identity`, below `requested_model`/`requested_effort` and
+    above every role/category/depth/scale chain source: a resolved identity
+    IS the chain, records `catalog_kind: "user_identity_config"` plus
+    `identity_id`/`identity_fingerprint`, and skips the category-table paths
+    entirely; an unknown or empty-chain identity is named in `attempted[]` and
+    the existing sources apply unchanged; `local_catalog` (a
+    `local_model_catalog/v1` payload derived by the caller from an observed
+    inventory — I/O stays in the caller, this function remains pure) is
+    consulted ONLY when the profile has no built-in catalog and the payload
+    names this profile. A route resolved from a local catalog records
+    `catalog_kind: "local_inventory"` plus the catalog's `fingerprint` so the
+    frozen record names its exact basis, and a local catalog never gains
+    effort authority — observed config variants are evidence of use, not of a
+    model's effort vocabulary. An absent `catalog_fingerprint` on any route
+    means "no local basis was consulted", never "unknown basis" — v1 routes
+    and built-in-catalog routes correctly carry none.
 
     `requested_domain` is explicit unit data (never inferred from text). When
     a locally-derived chain resolves and the catalog's affinity vocabulary
@@ -854,7 +869,40 @@ def resolve_model_route(
                 + contract_hint,
             ],
         )
-    if profile == "hermes" and active_models is not None:
+    # The identity overlay resolves before every chain source below it: a
+    # validated `identities.json` profile supplies its own ordered chain,
+    # sitting below `requested_model`/`requested_effort` but above
+    # role/category/depth/scale and the Hermes recommendation lane. The
+    # loader already validated the entries, so the resolver consumes them
+    # as-is — no file I/O, no re-validation. An identity that does not
+    # resolve is named in `attempted[]` and the existing sources apply.
+    identity_id = str(requested_identity or "").strip()
+    identity_fingerprint: dict[str, object] | None = None
+    identity_chain: tuple[Mapping[str, str], ...] = ()
+    if identity_id:
+        raw_identities = (
+            identity_config.get("identities") if isinstance(identity_config, Mapping) else None
+        )
+        identity_profile = (
+            raw_identities.get(identity_id) if isinstance(raw_identities, Mapping) else None
+        )
+        raw_chain = (
+            identity_profile.get("model_chain") if isinstance(identity_profile, Mapping) else None
+        )
+        if isinstance(raw_chain, (list, tuple)) and raw_chain:
+            identity_chain = tuple(
+                entry for entry in raw_chain if isinstance(entry, Mapping)
+            )
+        if identity_chain:
+            raw_fp = (
+                identity_config.get("fingerprint")
+                if isinstance(identity_config, Mapping)
+                else None
+            )
+            if isinstance(raw_fp, Mapping):
+                identity_fingerprint = dict(raw_fp)
+
+    if not identity_chain and profile == "hermes" and active_models is not None:
         return _resolve_hermes_recommendation_route(
             role=normalized_role,
             requested_model=model,
@@ -894,10 +942,13 @@ def resolve_model_route(
     # The operator's category-maestro config applies only to profiles WITH a
     # built-in category table (the dispatchable CLIs); catalogless profiles
     # keep the local-inventory path as their single override source. `chains`
-    # stays the tests-only injection and wins over the operator table.
+    # stays the tests-only injection and wins over the operator table. When a
+    # requested identity resolves, the identity IS the chain source and the
+    # category table is never consulted, so the operator merge is skipped.
     operator_categories: Mapping[str, object] | None = None
     if (
-        category_config is not None
+        not identity_chain
+        and category_config is not None
         and chains is None
         and catalog_kind == MODEL_CATALOG_KIND
         and profile in BUILTIN_CATEGORY_MODELS
@@ -916,7 +967,22 @@ def resolve_model_route(
         else BUILTIN_CATEGORY_MODELS.get(profile, {})
     )
     candidates = [dict(option) for option in options]
-    if catalog_kind == "local_inventory":
+    attempted: list[dict[str, str]] = []
+    if identity_chain:
+        # The resolved identity IS the routing basis: the chain is not merged
+        # over any category table and the catalog kind names the identity
+        # config so a frozen record can name its exact source.
+        catalog_kind = "user_identity_config"
+        catalog_fingerprint = identity_fingerprint
+        role_chain = identity_chain
+        attempted.append(
+            {
+                "stage": "requested_identity",
+                "outcome": "applied",
+                "reason": f"identity `{identity_id}` supplies its ordered model chain",
+            }
+        )
+    elif catalog_kind == "local_inventory":
         role_chain = tuple(local_chains.get(normalized_role, ())) if normalized_role else ()
     elif operator_categories is not None:
         role_chain = (
@@ -927,7 +993,6 @@ def resolve_model_route(
     else:
         chain_table = ROLE_MODEL_CHAINS if chains is None else chains
         role_chain = tuple(chain_table.get(profile, {}).get(normalized_role, ())) if normalized_role else ()
-    attempted: list[dict[str, str]] = []
     if operator_categories is not None:
         attempted.append(
             {
@@ -939,7 +1004,18 @@ def resolve_model_route(
                 ),
             }
         )
-    if category:
+    if identity_id and not identity_chain:
+        attempted.append(
+            {
+                "stage": "requested_identity",
+                "outcome": "unknown",
+                "reason": (
+                    f"identity `{identity_id}` is not in the validated identity config; "
+                    "the existing chain sources apply"
+                ),
+            }
+        )
+    if category and not identity_chain:
         if catalog_kind == "local_inventory":
             raw_categories = local_catalog.get("categories", {}) if isinstance(local_catalog, Mapping) else {}
             category_chain = raw_categories.get(category, ()) if isinstance(raw_categories, Mapping) else ()
@@ -954,7 +1030,7 @@ def resolve_model_route(
             }
         )
     operator_table = effective_categories if operator_categories is not None else None
-    if depth and not category:
+    if depth and not category and not identity_chain:
         role_chain = _depth_selected_chain(
             depth,
             normalized_role,
@@ -964,7 +1040,7 @@ def resolve_model_route(
             attempted,
             operator_table=operator_table,
         )
-    if scale and not category:
+    if scale and not category and not identity_chain:
         role_chain = _scale_selected_chain(
             scale,
             normalized_role,
@@ -1004,6 +1080,8 @@ def resolve_model_route(
             domain=domain,
             depth=depth,
             category=category,
+            identity_id=identity_id if identity_chain else "",
+            identity_fingerprint=identity_fingerprint,
             chain=_chain_payload(options, role_chain, selected_model=""),
             attempted=attempted,
             candidates=candidates,
@@ -1011,7 +1089,7 @@ def resolve_model_route(
         )
     attempted.append({"stage": "requested_model", "outcome": "skipped", "reason": "no model requested"})
 
-    if not options:
+    if not options and not identity_chain:
         attempted.append(
             {"stage": "role_chain", "outcome": "skipped", "reason": "profile has no model catalog"}
         )
@@ -1042,19 +1120,25 @@ def resolve_model_route(
             ],
         )
 
-    if normalized_role or category:
+    if normalized_role or category or identity_chain:
         if role_chain:
             head = role_chain[0]
             selected = str(head.get("model_id", ""))
-            selected_stage = "category_chain" if category else "role_chain"
+            selected_stage = (
+                "requested_identity" if identity_chain else ("category_chain" if category else "role_chain")
+            )
             attempted.append(
                 {
                     "stage": selected_stage,
                     "outcome": "selected",
                     "reason": (
-                        f"chain head `{selected}` for category `{category}`"
-                        if category
-                        else f"chain head `{selected}` for role `{normalized_role}`"
+                        f"identity `{identity_id}` chain head `{selected}`"
+                        if identity_chain
+                        else (
+                            f"chain head `{selected}` for category `{category}`"
+                            if category
+                            else f"chain head `{selected}` for role `{normalized_role}`"
+                        )
                     ),
                 }
             )
@@ -1065,7 +1149,11 @@ def resolve_model_route(
             return _route_payload(
                 profile,
                 status="routed",
-                provenance="category_chain_head" if category else "role_chain_head",
+                provenance=(
+                    "identity_chain_head"
+                    if identity_chain
+                    else ("category_chain_head" if category else "role_chain_head")
+                ),
                 role=normalized_role,
                 selected_model=selected,
                 selected_reasoning_effort=selected_effort,
@@ -1075,16 +1163,24 @@ def resolve_model_route(
                 domain=domain,
                 depth=depth,
                 category=category,
+                identity_id=identity_id if identity_chain else "",
+                identity_fingerprint=identity_fingerprint,
                 chain=_chain_payload(options, role_chain, selected_model=selected),
                 attempted=attempted,
                 candidates=candidates,
                 reasons=role_reasons
                 + [
                     (
-                        f"Category `{category}` routes to its ordered chain head for `{profile}`; "
-                        f"role `{normalized_role or 'none'}` remains independent metadata."
-                        if category
-                        else f"Role `{normalized_role}` routes to its ordered chain head for `{profile}`."
+                        f"Identity `{identity_id}` routes to its ordered chain head for `{profile}`; "
+                        f"role `{normalized_role or 'none'}` and category `{category or 'none'}` "
+                        "remain independent metadata."
+                        if identity_chain
+                        else (
+                            f"Category `{category}` routes to its ordered chain head for `{profile}`; "
+                            f"role `{normalized_role or 'none'}` remains independent metadata."
+                            if category
+                            else f"Role `{normalized_role}` routes to its ordered chain head for `{profile}`."
+                        )
                     ),
                 ],
             )
@@ -1110,6 +1206,8 @@ def resolve_model_route(
             domain=domain,
             depth=depth,
             category=category,
+            identity_id=identity_id if identity_chain else "",
+            identity_fingerprint=identity_fingerprint,
             chain=[],
             attempted=attempted,
             candidates=candidates,
@@ -1144,6 +1242,8 @@ def resolve_model_route(
         domain=domain,
         depth=depth,
         category=category,
+        identity_id=identity_id if identity_chain else "",
+        identity_fingerprint=identity_fingerprint,
         chain=[],
         attempted=attempted,
         candidates=candidates,
@@ -1156,18 +1256,20 @@ def model_route_for_unit(
     executor_target: str,
     local_catalog: Mapping[str, object] | None = None,
     category_config: Mapping[str, object] | None = None,
+    identity_config: Mapping[str, object] | None = None,
 ) -> dict[str, object] | None:
     """Return the prepared model route for a fanout unit, or None when unrouted.
 
-    `local_catalog` and `category_config` are passed through verbatim; this
-    function stays pure and the resolver's precedence rules decide whether
-    either applies.
+    `local_catalog`, `category_config`, and `identity_config` are passed
+    through verbatim; this function stays pure and the resolver's precedence
+    rules decide whether any of them applies.
     """
     model = str(unit.get("model", "") or "").strip()
     effort = str(unit.get("reasoning_effort", "") or "").strip()
     role = str(unit.get("role", "") or "").strip()
     category = str(unit.get("category", unit.get("model_category", "")) or "").strip()
-    if not model and not effort and not role and not category:
+    identity = str(unit.get("identity", "") or "").strip()
+    if not model and not effort and not role and not category and not identity:
         # A declared domain alone never triggers routing: it advises chain
         # order, it does not request a model.
         return None
@@ -1180,7 +1282,9 @@ def model_route_for_unit(
         requested_depth=str(unit.get("depth", "") or "").strip(),
         requested_scale=str(unit.get("scale", "") or "").strip(),
         requested_category=category,
+        requested_identity=identity,
         category_config=category_config,
+        identity_config=identity_config,
         local_catalog=local_catalog,
     )
 
@@ -2118,6 +2222,8 @@ def _route_payload(
     domain: str = "",
     depth: str = "",
     category: str = "",
+    identity_id: str = "",
+    identity_fingerprint: dict[str, object] | None = None,
     refusal: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
@@ -2153,6 +2259,10 @@ def _route_payload(
         payload["domain"] = domain
     if depth:
         payload["depth"] = depth
+    if identity_id:
+        payload["identity_id"] = identity_id
+    if identity_fingerprint is not None:
+        payload["identity_fingerprint"] = identity_fingerprint
     if catalog_fingerprint is not None:
         payload["catalog_fingerprint"] = catalog_fingerprint
     if effort_change is not None:

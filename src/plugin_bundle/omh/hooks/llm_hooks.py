@@ -41,6 +41,7 @@ from ..installed_skills import installed_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
 from ..omh_roles import extract_role_marker, role_context_payload
+from ..omh_identities import extract_identity_marker, identity_context_payload
 from ..dispatch_outcomes import unacknowledged_outcomes
 from ..runtime_reader import read_omh_activity, read_omh_hud, read_omh_status, read_omh_todo
 from ..skill_shortlist import claim_candidate_line, skill_candidate_line, skill_candidates_for_turn
@@ -816,6 +817,44 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
             context_parts.append(
                 "[OMH Role Warning] "
                 f"Unknown role '{marker}'. Available roles: {', '.join(role_payload['available_roles']) or '(none)'}."
+            )
+
+    # An explicit `[omh-identity:<name>]` selects one of the user's identity
+    # profiles for this turn. The read is `request_message`, a notch tighter
+    # than the role marker's `person_text`: gateway-stripped quotes, relay
+    # prefixes and host frames never reach it, and a host-synthesized or
+    # host-command turn has no request at all, so host-written text cannot
+    # select an identity. A delegated child's own goal text IS its request,
+    # which is the structured-handoff channel the marker rides in on.
+    # Ordinary words never match; the prompt rides inside the shared fence --
+    # no second injection path -- and it is the ONLY place prompt text goes:
+    # nothing below or in `payload` copies it. The marker extract keeps the
+    # first marker only, so an identity lands exactly once.
+    identity_marker = extract_identity_marker(request_message)
+    if identity_marker:
+        identity_payload = identity_context_payload(identity_marker, omh_home=omh_home)
+        if identity_payload["status"] == "available":
+            context_parts.append(
+                "\n".join(
+                    [
+                        f"[OMH Identity: {identity_payload['identity']}]",
+                        str(identity_payload["context"]),
+                        str(identity_payload["claim_boundary"]),
+                    ]
+                )
+            )
+        else:
+            available = identity_payload.get("available_identities")
+            names = (
+                ", ".join(str(n) for n in available)
+                if isinstance(available, (list, tuple))
+                else ""
+            )
+            context_parts.append(
+                "[OMH Identity Warning] "
+                f"Unknown identity '{identity_marker}'. Available identities: "
+                + (names or "(none)")
+                + "."
             )
 
     # An open plan is a state, not a phrasing: while one exists, every turn

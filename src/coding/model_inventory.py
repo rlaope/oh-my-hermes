@@ -396,12 +396,16 @@ def catalog_fingerprint_note(
     names both digests and whether they match — advisory only: a mismatch
     never blocks dispatch (the frozen contract stays the explicit instruction
     and provider truth adjudicates the model), it only makes the skew visible.
-    Returns None for routes without a fingerprint.
+    Returns None for routes without a fingerprint — and for fingerprints that
+    name a different source (`identities.json`, `category-maestro.json`),
+    whose digest can only be compared against that same source's current
+    read; those take `_config_fingerprint_note`'s path instead of reporting
+    permanent false skew against the inventory digest.
     """
     if not isinstance(model_route, Mapping):
         return None
     fingerprint = model_route.get("catalog_fingerprint")
-    if not isinstance(fingerprint, Mapping):
+    if not isinstance(fingerprint, Mapping) or fingerprint.get("source") is not None:
         return None
     frozen = str(fingerprint.get("digest", "") or "")
     current = str(current_digest or "")

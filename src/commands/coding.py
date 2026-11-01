@@ -301,6 +301,8 @@ def cmd_coding_delegate(args: argparse.Namespace) -> int:
             # prepared here scopes its evidence to a real provider and wire
             # model rather than to an empty route no snapshot could match.
             model_recommendation=resolved_hermes_model_recommendation(executor_target, paths),
+            requested_identity=getattr(args, "identity", None) or "",
+            identity_config=_operator_identity_config(paths),
             input_representation=input_representation,
             transformation=transformation,
             handoff_contract=_handoff_contract_declaration(args),
@@ -1401,7 +1403,9 @@ def cmd_coding_model_route(args: argparse.Namespace) -> int:
         requested_domain=getattr(args, "domain", None) or "",
         requested_depth=getattr(args, "depth", None) or "",
         requested_category=getattr(args, "category", None) or "",
+        requested_identity=getattr(args, "identity", None) or "",
         category_config=category_config,
+        identity_config=_operator_identity_config(_paths(args)),
         local_catalog=local_catalog,
         active_models=active_models,
         recommendation_overrides=recommendation_overrides,
@@ -1598,6 +1602,23 @@ def _operator_category_config(paths) -> dict[str, object] | None:
     if isinstance(config, dict):
         for note in config.get("rejected", []):
             print(f"omh: category-maestro: ignored {note}", file=sys.stderr)
+    return config
+
+
+def _operator_identity_config(paths) -> dict[str, object] | None:
+    """Read the identity profiles document; the file's presence is the opt-in.
+
+    Same I/O boundary as `_operator_category_config`: the loader's `rejected`
+    notes are named on stderr so a dropped profile is visible during the
+    prepare/route/run that could not use it, while stdout keeps the JSON
+    contracts clean. Absent or validates-to-nothing returns None.
+    """
+    from ..coding.identity_profiles import read_identity_profiles_config
+
+    rejected: list[str] = []
+    config = read_identity_profiles_config(paths.omh_home, rejected_out=rejected)
+    for note in rejected:
+        print(f"omh: identities: ignored {note}", file=sys.stderr)
     return config
 
 
@@ -1921,6 +1942,7 @@ def cmd_coding_fanout_prepare(args: argparse.Namespace) -> int:
             source_metadata=_explicit_source_metadata(args),
             local_catalogs=_local_model_catalogs() if needs_inventory else {},
             category_config=_operator_category_config(paths),
+            identity_config=_operator_identity_config(paths),
             capability_snapshots=capability_snapshots,
             spawn_plan=spawn_plan,
         )
@@ -3041,6 +3063,10 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
         # table exactly like a fanout unit's `category` field; `--model` still
         # wins (requested > category chain head).
         "category": getattr(args, "category", None) or "",
+        # A declared `--identity` routes this unit through the same
+        # `omh_identity_profiles/v1` chain a fanout unit's `identity` field
+        # uses; `--model` still wins over the chain head.
+        "identity": getattr(args, "identity", None) or "",
     }
     needs_inventory = args.owner not in EXECUTOR_MODEL_OPTIONS
     try:
@@ -3057,6 +3083,7 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
             source_metadata=_explicit_source_metadata(args),
             local_catalogs=_local_model_catalogs() if needs_inventory else {},
             category_config=_operator_category_config(paths),
+            identity_config=_operator_identity_config(paths),
             capability_snapshots=capability_snapshots,
         )
     except (FanoutContractError, ExecutorCapabilitySnapshotError) as exc:
@@ -3752,6 +3779,14 @@ def _add_coding_commands(sub) -> None:
             "category-maestro table when one is configured. --model still wins."
         ),
     )
+    run_cmd.add_argument(
+        "--identity",
+        default=None,
+        help=(
+            "Identity profile name from routing/identities.json; resolves the run's model "
+            "through that profile's declared chain. --model still wins over the chain head."
+        ),
+    )
     _add_failure_recovery_arguments(run_cmd)
     run_cmd.set_defaults(func=cmd_coding_run)
 
@@ -3771,6 +3806,14 @@ def _add_coding_commands(sub) -> None:
         help="Explicit model id; passes through unvalidated, except a `non_generative` model, which is refused.",
     )
     model_route.add_argument("--effort", default=None, help="Reasoning effort for profiles that support one.")
+    model_route.add_argument(
+        "--identity",
+        default=None,
+        help=(
+            "Identity profile name from routing/identities.json; resolves the route "
+            "through that profile's declared chain. --model still wins over the chain head."
+        ),
+    )
     model_route.add_argument("--role", default=None, help="Subagent role: brain, implementation, design_visual, review, docs, research.")
     model_route.add_argument(
         "--category",
@@ -4113,6 +4156,15 @@ def _add_coding_commands(sub) -> None:
         "--effort",
         default=None,
         help="Reasoning effort already chosen for this request; supersedes the recommended effort.",
+    )
+    delegate.add_argument(
+        "--identity",
+        default=None,
+        help=(
+            "Identity profile name from routing/identities.json; resolves a bounded "
+            "model_route for this handoff through that profile's declared chain. "
+            "--model still wins over the chain head."
+        ),
     )
     delegate.add_argument(
         "--input-representation",

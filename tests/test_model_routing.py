@@ -1270,6 +1270,214 @@ class PiFamilyHostDetectionTests(unittest.TestCase):
             self.assertIsNone(build_dispatch_argv("pi-family-runtime", "work"))
 
 
+class IdentityRoutingTests(unittest.TestCase):
+    """Contracts for the validated identity overlay on `resolve_model_route`.
+
+    A resolved `omh_identity_profiles/v1` identity supplies its own ordered
+    chain below `requested_model`/`requested_effort` and above every
+    role/category/depth/scale source. The resolver consumes the loader's
+    validated output as-is; the fingerprint names the exact document basis.
+    """
+
+    _IDENTITY_CONFIG = {
+        "schema_version": "omh_identity_profiles/v1",
+        "identities": {
+            "script-coding": {
+                "prompt": "Implement small scripts directly.",
+                "model_chain": (
+                    {"model_id": "deepseek-flash", "reasoning_effort": "low"},
+                    {"model_id": "glm-5.3-flash", "reasoning_effort": "low"},
+                ),
+            },
+            "review": {
+                "prompt": "Find concrete defects first.",
+                "model_chain": (
+                    {"model_id": "gpt-6-astra", "reasoning_effort": "xhigh"},
+                ),
+            },
+        },
+        "fingerprint": {"source": "identities.json", "digest": "deadbeef12345678"},
+        "rejected": [],
+    }
+
+    def test_identity_chain_head_routes_with_bounded_metadata(self) -> None:
+        route = resolve_model_route(
+            "codex", requested_identity="script-coding", identity_config=self._IDENTITY_CONFIG
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "identity_chain_head")
+        self.assertEqual(route["selected_model"], "deepseek-flash")
+        self.assertEqual(route["selected_reasoning_effort"], "low")
+        self.assertEqual(route["model_family"], "deepseek")
+        self.assertEqual(route["catalog_kind"], "user_identity_config")
+        self.assertEqual(route["identity_id"], "script-coding")
+        self.assertEqual(route["identity_fingerprint"]["digest"], "deadbeef12345678")
+        self.assertEqual(route["catalog_fingerprint"]["digest"], "deadbeef12345678")
+        self.assertEqual(
+            [entry["model_id"] for entry in route["chain"]],
+            ["deepseek-flash", "glm-5.3-flash"],
+        )
+        self.assertEqual(route["chain"][0]["selected"], True)
+        self.assertEqual(route["chain"][1]["selected"], False)
+        identity_attempts = [
+            entry["outcome"] for entry in route["attempted"] if entry["stage"] == "requested_identity"
+        ]
+        self.assertEqual(identity_attempts, ["applied", "selected"])
+
+    def test_identity_chain_supplies_fallback_candidates(self) -> None:
+        route = resolve_model_route(
+            "claude-code", requested_identity="script-coding", identity_config=self._IDENTITY_CONFIG
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(
+            [(entry["model_id"], entry["reasoning_effort"]) for entry in route["chain"]],
+            [("deepseek-flash", "low"), ("glm-5.3-flash", "low")],
+        )
+        # The fallback candidates are the identity chain's later entries —
+        # prepared next-candidate advice, never retried by OMH.
+        self.assertEqual(route["selected_model"], "deepseek-flash")
+
+    def test_explicit_model_wins_over_identity(self) -> None:
+        route = resolve_model_route(
+            "codex",
+            requested_model="gpt-6-terra",
+            requested_identity="script-coding",
+            identity_config=self._IDENTITY_CONFIG,
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "request_named_model")
+        self.assertEqual(route["selected_model"], "gpt-6-terra")
+        # The identity was still the consulted basis, so its metadata stays
+        # on the record.
+        self.assertEqual(route["catalog_kind"], "user_identity_config")
+        self.assertEqual(route["identity_id"], "script-coding")
+        self.assertEqual(route["identity_fingerprint"]["digest"], "deadbeef12345678")
+
+    def test_explicit_effort_wins_over_identity_chain_effort(self) -> None:
+        route = resolve_model_route(
+            "codex",
+            requested_effort="high",
+            requested_identity="script-coding",
+            identity_config=self._IDENTITY_CONFIG,
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "identity_chain_head")
+        self.assertEqual(route["selected_model"], "deepseek-flash")
+        self.assertEqual(route["selected_reasoning_effort"], "high")
+        self.assertEqual(route["effort_change"]["requested"], "high")
+
+    def test_identity_wins_over_role_category_depth_and_scale(self) -> None:
+        route = resolve_model_route(
+            "codex",
+            role="brain",
+            requested_category="quick",
+            requested_depth="deep",
+            requested_scale="large",
+            requested_identity="review",
+            identity_config=self._IDENTITY_CONFIG,
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "identity_chain_head")
+        self.assertEqual(route["selected_model"], "gpt-6-astra")
+        self.assertEqual(route["selected_reasoning_effort"], "xhigh")
+        # Declared dials stay on the record as metadata even though the
+        # identity chain won.
+        self.assertEqual(route["role"], "brain")
+        self.assertEqual(route["category"], "quick")
+        self.assertEqual(route["depth"], "deep")
+
+    def test_identity_and_category_collision(self) -> None:
+        # An identity named `review` does not become the `review` category:
+        # the identity chain wins and the category is recorded metadata.
+        route = resolve_model_route(
+            "claude-code",
+            requested_category="review",
+            requested_identity="review",
+            identity_config=self._IDENTITY_CONFIG,
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "identity_chain_head")
+        self.assertEqual(route["selected_model"], "gpt-6-astra")
+        self.assertEqual(route["category"], "review")
+        self.assertEqual(route["catalog_kind"], "user_identity_config")
+
+    def test_unknown_identity_falls_through_to_existing_chain(self) -> None:
+        route = resolve_model_route(
+            "codex",
+            role="brain",
+            requested_identity="ghost",
+            identity_config=self._IDENTITY_CONFIG,
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "role_chain_head")
+        self.assertEqual(route["selected_model"], "gpt-6.1-sol")
+        self.assertNotIn("identity_id", route)
+        self.assertNotIn("identity_fingerprint", route)
+        outcomes = {entry["stage"]: entry["outcome"] for entry in route["attempted"]}
+        self.assertEqual(outcomes["requested_identity"], "unknown")
+
+    def test_identity_config_absent_falls_through(self) -> None:
+        route = resolve_model_route("codex", role="brain", requested_identity="script-coding")
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "role_chain_head")
+        self.assertEqual(route["selected_model"], "gpt-6.1-sol")
+        outcomes = {entry["stage"]: entry["outcome"] for entry in route["attempted"]}
+        self.assertEqual(outcomes["requested_identity"], "unknown")
+
+    def test_no_identity_compatibility_unchanged(self) -> None:
+        baseline = resolve_model_route("codex", role="brain")
+        route = resolve_model_route("codex", role="brain", identity_config=self._IDENTITY_CONFIG)
+        self.assertEqual(route, baseline)
+
+    def test_identity_routes_on_catalogless_profile(self) -> None:
+        route = resolve_model_route(
+            "generic", requested_identity="script-coding", identity_config=self._IDENTITY_CONFIG
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "identity_chain_head")
+        self.assertEqual(route["selected_model"], "deepseek-flash")
+        self.assertEqual(route["catalog_kind"], "user_identity_config")
+
+    def test_identity_on_hermes_lane_wins_over_recommendation(self) -> None:
+        route = resolve_model_route(
+            "hermes",
+            requested_identity="script-coding",
+            identity_config=self._IDENTITY_CONFIG,
+            active_models=("deepseek-flash", "glm-5.3-flash"),
+        )
+        self.assertEqual(route["status"], "routed")
+        self.assertEqual(route["provenance"], "identity_chain_head")
+        self.assertEqual(route["selected_model"], "deepseek-flash")
+        self.assertEqual(route["catalog_kind"], "user_identity_config")
+
+    def test_identity_route_provenance_is_v2_vocabulary(self) -> None:
+        route = resolve_model_route(
+            "codex", requested_identity="script-coding", identity_config=self._IDENTITY_CONFIG
+        )
+        provenance, vocabulary = route_provenance(route)
+        self.assertEqual(provenance, "identity_chain_head")
+        self.assertEqual(vocabulary, "v2")
+
+    def test_model_route_for_unit_passes_identity(self) -> None:
+        route = model_route_for_unit(
+            {"unit_id": "u", "identity": "script-coding"},
+            "codex",
+            identity_config=self._IDENTITY_CONFIG,
+        )
+        self.assertIsNotNone(route)
+        assert route is not None
+        self.assertEqual(route["provenance"], "identity_chain_head")
+        self.assertEqual(route["identity_id"], "script-coding")
+
+    def test_unit_without_identity_stays_compatible(self) -> None:
+        self.assertIsNone(model_route_for_unit({"unit_id": "u"}, "codex"))
+        route = model_route_for_unit({"unit_id": "u", "role": "brain"}, "codex")
+        self.assertIsNotNone(route)
+        assert route is not None
+        self.assertEqual(route["provenance"], "role_chain_head")
+        self.assertNotIn("identity_id", route)
+
+
 class UnitModelRouteTests(unittest.TestCase):
     def test_unit_without_model_fields_stays_unrouted(self) -> None:
         self.assertIsNone(model_route_for_unit({"unit_id": "core"}, "codex"))

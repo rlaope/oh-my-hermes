@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Name your own identity: a prompt and a model chain.** Write
+  `~/.omh/routing/identities.json` (`omh_identity_profiles/v1`) with one or
+  more named identities, then select one by putting `[omh-identity:name]` in a
+  request for its prompt, or `--identity name` on `omh coding model-route`,
+  `run` and `delegate` (an `identity` field on `fanout prepare` units, an
+  `identity` argument on `omh_delegate_route`) for its model chain. An
+  explicit `--model` still wins; the identity chain beats category, role,
+  depth and scale. Nothing is inferred and nothing carries to the next
+  session, and with no file routes are unchanged. Schema and limits are in the
+  Installation guide.
+
 ![Sprite Forge patch notes](https://raw.githubusercontent.com/rlaope/oh-my-hermes/main/assets/omh-sprite-forge-patch-notes.png)
 
 - **A rename's stale export is named before the turn ends.** When a turn

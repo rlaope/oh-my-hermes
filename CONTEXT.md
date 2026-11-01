@@ -52,6 +52,16 @@ in chat. Generated from the skill catalog; never hand-edited.
 _Avoid_: slash command, prompt template, OMC skill (that is a different
 product's concept)
 
+**Identity profile**:
+A user-named pair of one prompt and one ordered model chain, read from
+`<omh_home>/routing/identities.json` (`omh_identity_profiles/v1`) and selected
+only explicitly: `[omh-identity:<name>]` for the prompt, `--identity` or a
+unit `identity` field for the model route. Prepared guidance and routing, not
+evidence that a model ran.
+_Avoid_: role (a shipped specialist stance from `[omh-role:name]`), category
+(a work type with a model table), inferring or inheriting an identity across
+sessions
+
 **Hermes skill category**:
 The dashboard group Hermes shows a skill under in its startup banner and skills
 list. Hermes derives it from the SKILL.md's DIRECTORY, not from frontmatter, and

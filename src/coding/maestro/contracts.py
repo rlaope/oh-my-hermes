@@ -64,6 +64,14 @@ class ExternalHandoffRequest:
     model_chains: dict[str, Sequence[tuple[str, str]]] | None = None
     requested_model: str = ""
     requested_effort: str = ""
+    # The caller-declared `omh_identity_profiles/v1` name and the validated
+    # identity document the caller already read (I/O stays in the caller).
+    # When set, the native builder resolves the identity's model chain into a
+    # bounded `model_route` on the payload and handoff — the same route shape
+    # a fanout unit freezes. An unknown name resolves as `unknown` inside the
+    # route's attempted trail, never a silent fallback to another identity.
+    requested_identity: str = ""
+    identity_config: Mapping[str, object] | None = None
     # A caller-declared `handoff_contract/v1` declaration, validated and
     # rendered into the prepared handoff by the native builder.
     handoff_contract: Mapping[str, object] | None = None

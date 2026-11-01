@@ -181,6 +181,8 @@ _SCHEMA_ID_TERMS: tuple[str, ...] = (
     "omh_hook_manifest/v1",
     "omh_hud/v1",
     "omh_hud_fanout_cache/v1",
+    "omh_identity_context/v1",
+    "omh_identity_profiles/v1",
     "omh_inflight_marker/v1",
     "omh_interact_result/v1",
     "omh_jev_ask_record/v1",
@@ -296,6 +298,7 @@ _AWARENESS_TAGS: tuple[str, ...] = (
     "[OMH Degraded]",
     "[OMH delegation]",
     "[OMH failed wait]",
+    "[OMH Identity Warning]",
     "[OMH plan todo]",
     "[OMH Repeat Guard]",
     "[OMH Role Warning]",
@@ -308,7 +311,7 @@ _AWARENESS_TAGS: tuple[str, ...] = (
 
 # Heads built at runtime around a value (`[OMH Role: reviewer]`): the fixed
 # prefix is the literal, and the value runs to the closing bracket.
-_AWARENESS_TAG_PREFIXES: tuple[str, ...] = ("[OMH Role:",)
+_AWARENESS_TAG_PREFIXES: tuple[str, ...] = ("[OMH Identity:", "[OMH Role:")
 
 _AWARENESS_LINE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     tuple((tag, re.compile(re.escape(tag) + r"(?![\(\[:])")) for tag in _AWARENESS_TAGS)

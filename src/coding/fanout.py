@@ -56,6 +56,9 @@ from .media_handoff_capabilities import build_executor_modality_decision, normal
 
 _UNIT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _VERIFICATION_CHECK_ID_RE = re.compile(VERIFICATION_CHECK_ID_PATTERN)
+# Same token shape `omh_identity_profiles/v1` uses for identity names; units
+# declaring a name outside it can never resolve, so the freeze refuses them.
+_IDENTITY_NAME_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
 _FROZEN_CAPABILITY_SNAPSHOT_POLICY = "frozen_required"
 
 
@@ -67,6 +70,7 @@ def build_fanout_contract(
     source_metadata: Mapping[str, object] | None = None,
     local_catalogs: Mapping[str, Mapping[str, object]] | None = None,
     category_config: Mapping[str, object] | None = None,
+    identity_config: Mapping[str, object] | None = None,
     capability_snapshots: Mapping[str, Mapping[str, object]] | None = None,
     spawn_plan: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
@@ -98,6 +102,7 @@ def build_fanout_contract(
             fanout_id=fanout_id,
             local_catalogs=local_catalogs,
             category_config=category_config,
+            identity_config=identity_config,
             capability_snapshots=validated_capability_snapshots,
         )
         for unit in normalized_units
@@ -232,6 +237,15 @@ def validate_fanout_units(units: Sequence[Mapping[str, object]]) -> None:
         if category and not canonical_model_category(category):
             raise FanoutContractError(
                 f"unit {unit_id} category {category!r} is not one of {', '.join(MODEL_CATEGORIES)}"
+            )
+        identity = str(unit.get("identity", "") or "").strip()
+        if identity and not _IDENTITY_NAME_RE.match(identity):
+            # Same freeze-time discipline as `category`: a name that cannot
+            # match the `omh_identity_profiles/v1` token shape would freeze as
+            # an `unknown` route, hiding the typo inside a prepared contract.
+            raise FanoutContractError(
+                f"unit {unit_id} identity {identity!r} is not a valid identity name "
+                "([a-z0-9_-]{1,64})"
             )
         dependencies = list(unit.get("depends_on", []) or [])
         names = [str(dependency) for dependency in dependencies]
@@ -459,6 +473,11 @@ def _normalized_unit(unit: Mapping[str, object], index: int) -> dict[str, object
         # normalizes; validate_fanout_units rejects unknown vocabulary so a
         # typo fails the freeze instead of silently routing by role only.
         "category": str(unit.get("category", unit.get("model_category", "")) or "").strip(),
+        # The unit's declared `omh_identity_profiles/v1` name: the explicit
+        # structured-handoff field for identity routing, resolved at freeze
+        # against the caller-read config so each unit's identity stays bound
+        # to its own task and never to ambient profile state.
+        "identity": str(unit.get("identity", "") or "").strip(),
         "scale": str(unit.get("scale", "") or "").strip(),
         "domain": str(unit.get("domain", "") or "").strip(),
         "depth": str(unit.get("depth", "") or "").strip(),
@@ -835,13 +854,16 @@ def _contract_unit(
     fanout_id: str,
     local_catalogs: Mapping[str, Mapping[str, object]] | None = None,
     category_config: Mapping[str, object] | None = None,
+    identity_config: Mapping[str, object] | None = None,
     capability_snapshots: Mapping[str, Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
     unit_id = str(unit["unit_id"])
     own_scope = set(str(path) for path in unit.get("file_scope", []))
     executor_target = str(unit.get("owner")) if unit.get("owner") else "choose"
     local_catalog = (local_catalogs or {}).get(executor_target)
-    model_route = model_route_for_unit(unit, executor_target, local_catalog, category_config)
+    model_route = model_route_for_unit(
+        unit, executor_target, local_catalog, category_config, identity_config
+    )
     handoff: dict[str, object] = {
         "schema_version": "fanout_unit_handoff/v1",
         "executor_target": executor_target,

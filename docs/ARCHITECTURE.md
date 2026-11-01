@@ -277,7 +277,10 @@ The `pre_tool_call` hook enforces
 user-authored toolcall rules (a matching rule returns the host's block
 directive). An unknown `[omh-role:...]` marker in a delegate goal is warned in
 the child's own turn by `pre_llm_call`, since Hermes reads only `action` from a
-`pre_tool_call` result. The hook does not inject generic-tool checkpoint
+`pre_tool_call` result. A `[omh-identity:name]` marker in the person's request
+or a delegated child's goal adds that user-defined identity's prompt to the
+turn's fenced OMH context (an unknown name warns); host-written text never
+selects one. The hook does not inject generic-tool checkpoint
 metadata or raw tool input.
 `omh hud`
 exposes the same status-line payload for local operator smoke tests. The HUD

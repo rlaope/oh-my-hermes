@@ -793,6 +793,19 @@ Rules, all applied at freeze time:
   deliberately not configurable here — the local-inventory catalog remains
   their single override source, so "which basis resolved this route" always
   has one answer.
+- **Identity profiles (explicit prompt + chain).** A unit's optional
+  `identity` field (token `[a-z0-9_-]{1,64}`; `omh coding run --identity`,
+  `model-route --identity`, `delegate --identity` for one run) names an entry
+  of `<omh_home>/routing/identities.json` (`omh_identity_profiles/v1`; schema,
+  marker, and precedence in `docs/INSTALLATION.md`). The identity chain sits
+  below an explicit `--model`/unit `model` and above category, role, depth and
+  scale. The frozen `handoff.model_route` carries `identity_id`,
+  `identity_fingerprint`, `catalog_kind: "user_identity_config"` and
+  `provenance: "identity_chain_head"`, never the prompt, and a spawned agent
+  CLI does not receive the identity prompt. A malformed `identity` name fails
+  at freeze; an unknown one resolves `unknown` in `attempted[]` with no
+  silent switch to another identity. Editing `identities.json` after prepare
+  surfaces as a `config_fingerprint` note with `match: false` at dispatch.
 - **Request complexity (advisory).** `omh coding complexity "<request>"`
   scores a request deterministically — no model, no network — and returns a
   tier (`light` / `standard` / `deep`) with every contributing signal named,

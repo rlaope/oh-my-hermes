@@ -2414,6 +2414,79 @@ locally-derived model catalog (that runtime's own config). See
 `docs/FANOUT.md` (Category-maestro) for the full
 rules.
 
+A sixth sibling, `~/.omh/routing/identities.json`
+(`omh_identity_profiles/v1`), lets you name your own *identity*: one prompt
+paired with one ordered model chain. You write the file by hand; there is no
+`omh` command that creates or edits it, and nothing infers an identity from
+your request. Presence of the file is the opt-in. An absent, unreadable,
+malformed, or future-`schema_version` file reads as absent and changes
+nothing.
+
+```json
+{
+  "schema_version": "omh_identity_profiles/v1",
+  "identities": {
+    "script-coding": {
+      "prompt": "You write small, dependency-free scripts. Prefer the standard library.",
+      "model_chain": [
+        {"model_id": "deepseek-flash", "reasoning_effort": "high"},
+        {"model_id": "glm-5.3"}
+      ]
+    }
+  }
+}
+```
+
+An identity name is `[a-z0-9_-]{1,64}`. `prompt` is non-empty and at most
+4000 UTF-8 bytes. `model_chain` holds 1 to 8 entries; the first entry is the
+selection and later entries are fallback candidates. Each entry takes only
+`model_id` (a token with no whitespace and no leading `-`, at most 120
+characters, and not a non-generative model) and an optional
+`reasoning_effort` (at most 32 characters of `a-z`, `0-9`, `-`). Unknown
+fields are rejected. Each identity is validated on its own: a broken one is
+dropped (and named on stderr by `omh coding` commands) while the valid ones
+keep working.
+
+Select an identity explicitly, one of three ways:
+
+- **Prompt:** put `[omh-identity:script-coding]` in the request (or in a
+  delegated child's goal). The first marker wins. OMH adds the identity's
+  prompt to that turn's OMH context. A marker quoted, relayed, or written by
+  the host rather than typed by the person selects nothing, and an unknown
+  name adds a warning that lists the available identities instead of
+  falling back to another one.
+- **Model, from the CLI:** `--identity script-coding` on
+  `omh coding model-route`, `omh coding run`, and `omh coding delegate`, or
+  an `identity` field on a `fanout prepare` unit, resolves the identity's
+  chain head. The prepared route records `identity_id`, the identity
+  fingerprint, and `catalog_kind: "user_identity_config"`, never the prompt.
+  The `--identity` flag and the unit `identity` field carry model routing only;
+  the prompt reaches a turn through the marker above.
+- **Model, in Hermes-native delegation:** `omh_delegate_route` takes an
+  `identity` argument. Under the `default` backend, `set` writes the chain
+  head to the delegation route; under `model_map` it names the matching
+  option and writes nothing; under `profile_routes` or an unknown backend
+  it answers `not_applied`. An unknown identity answers `choice_required`.
+
+Precedence for the model, highest first: an explicit model or effort
+(`--model`, a unit `model`), then the identity's chain, then an explicit
+category, role, depth or scale, then the built-in chain or the executor's
+default. An identity that is unknown or has no valid chain is named in the
+route's `attempted` list and the lower sources apply unchanged. The
+vocabulary stays separate: a *role* (`[omh-role:name]`, `docs/ROLES.md`) is a
+shipped specialist stance, a *category* is a work type with a model table,
+and an *identity* is your own prompt plus chain.
+
+This is prepared routing and prompt guidance, not observed execution: an
+identity does not prove the named model ran, and a fallback is a candidate,
+not a record of one used. Compatibility is additive: with no
+`identities.json`, routes and prompts are byte-identical to before, and
+changing the file between `fanout prepare` and dispatch shows up as a
+`config_fingerprint` mismatch rather than silently re-routing. Not included
+in this version: a command to manage identities, picking an identity
+automatically, or carrying one from a session to the next; name it again
+when you want it.
+
 ### Reaching models through a provider
 
 Chains name models the way a person says them (`glm-5.3`, `kimi-k3.1-pro`). A host
