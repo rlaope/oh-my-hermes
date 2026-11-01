@@ -854,11 +854,12 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
         elif left:
             built = [str(node["id"]) for node in record["nodes"]
                      if dag_run.is_producer(node) and derived[str(node["id"])]["state"] != "superseded"]
-            after = f"every producer ({', '.join(built)})"
+            # A run of checks alone has no producer to name: the new node repeats the check and is read.
+            what = (f"that depends on every producer ({', '.join(built)}) and checks the goal criteria" if built
+                    else "that repeats the check and has its handoff read")
             say = say or (
                 f"Every node is accepted, but the goal is unverified ({'; '.join(reasons)}). Add a role=verify node "
-                f"with omh_dag action=extend that depends on {after} and checks the goal criteria ({rounds}); "
-                "until it passes, do not report the goal met.")
+                f"with omh_dag action=extend {what} ({rounds}); until it passes, do not report the goal met.")
         else:
             say = say or (
                 f"Every node is accepted, but the goal is unverified ({'; '.join(reasons)}) and the extend rounds "

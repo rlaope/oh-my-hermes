@@ -818,9 +818,10 @@ def goal_verdict(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     if unreached:
         reasons.append(f"verification_misses:{','.join(unreached)}")
     # An unread verify node counts for nothing; it is named where it alone follows a producer, and in a run that
-    # built nothing (only checks), wherever it is.
+    # built nothing (only checks) while no verify node was read, so a later check that was read clears it.
     reasons += [f"handoff_not_checked:{node['id']}" for node in passed if handoff_unchecked(node) and (
-                not built or uncovered - set(verification_misses(record["nodes"], [*checked, node], skip=superseded)))]
+                uncovered - set(verification_misses(record["nodes"], [*checked, node], skip=superseded))
+                if built else not checked)]
     return ("unverified", reasons) if reasons else ("verified", [])
 
 

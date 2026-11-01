@@ -1223,6 +1223,24 @@ class GoalVerdictTests(unittest.TestCase):
         settled(failed, "suite", "failed")
         self.assertEqual(finished(failed), ("needs_repair", "verify_failed", ["verify_failed:suite"]))
 
+    def test_an_unread_check_in_a_run_of_checks_is_cleared_by_a_read_one(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [node("suite", role="verify")], time.time())
+        settled(record, "suite", "accepted", unread="docker terminal not up")
+        unread = json.loads(dag_tool._result("status", record, dag_run.derive(record, [], time.time()), None))
+        self.assertEqual((unread["verdict"], unread["verdict_reasons"]), ("unverified", ["handoff_not_checked:suite"]))
+        self.assertIn("that repeats the check and has its handoff read", unread["say"])
+        self.assertNotIn("()", unread["say"])
+        dag_run.extend(record, dag_run.derive(record, [], time.time()), [node("suite2", role="verify")], "",
+                       time.time())
+        settled(record, "suite2", "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+        # A run that built something names its producers, never an empty list.
+        built = dag_run.new_record(PARENT, "built", "", "", [node("api", scope=("a.py",))], time.time())
+        settled(built, "api", "accepted")
+        said = json.loads(dag_tool._result("status", built, dag_run.derive(built, [], time.time()), None))["say"]
+        self.assertIn("every producer (api)", said)
+        self.assertNotIn("()", said)
+
     def test_a_run_that_built_nothing_is_unverified_and_not_sent_to_extend(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [
             node("survey", label="Survey the options"), node("summary", depends_on=("survey",)),
