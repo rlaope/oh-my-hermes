@@ -369,16 +369,35 @@ def _validated_node(raw: object) -> dict[str, Any]:
         "attempts": [],
     }
     guess = guessed_role(validated) if "role" not in raw else DEFAULT_ROLE
-    if guess in ("verify", "review") and validated["write_scope"]:
-        # As a build node it would go to an external coding owner and be repaired rather than run again: a builder
-        # approving itself. The parent says which it is.
-        raise DagRefusal("role_required",
-                         f"Node {node_id} writes files and reads like a {guess} node: give it role={guess}, "
-                         "or role=build when it builds.")
     if guess != DEFAULT_ROLE:
         # Advice only (`lint`): the node runs as a build node, and the role its label reads like is named.
         validated["role_guess"] = guess
     return validated
+
+
+def leading_check_role(label: str) -> str:
+    """``verify`` or ``review`` when a label's first word is a check word (Verify, Validate, Audit, QA, Review),
+    else "". Narrower than `guessed_role`: "Add input validation" or "Fix review comments" names build work."""
+    words = str(label).split()
+    first = words[0].casefold().rstrip(":,.;-") if words else ""
+    if _REVIEW_WORDS.match(first):
+        return "review"
+    return "verify" if _VERIFY_WORDS.match(first) else ""
+
+
+def require_named_roles(raw_nodes: Sequence[Mapping[str, Any]]) -> None:
+    """Refuse a node sent with no role that writes files and whose label opens with a check word (`role_required`).
+
+    As a build node it would go to an external coding owner and be repaired
+    rather than run again: a builder approving itself. The parent says which
+    it is. Called on validated nodes, before anything is recorded.
+    """
+    for raw in raw_nodes:
+        guess = "" if "role" in raw or not raw.get("write_scope") else leading_check_role(str(raw["label"]))
+        if guess:
+            raise DagRefusal("role_required",
+                             f"Node {raw['id']} writes files and its label opens like a {guess} node: give it "
+                             f"role={guess}, or role=build when it builds.")
 
 
 def _require_graph(
@@ -593,9 +612,12 @@ def definition_digest(nodes: Sequence[Mapping[str, Any]]) -> str:
 
 
 def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes: object, now: float, *,
-               oneshot_limit: int | None = None, oneshot_spent: int = 0) -> dict[str, Any]:
+               oneshot_limit: int | None = None, oneshot_spent: int = 0,
+               named_roles: bool = True) -> dict[str, Any]:
     """A validated run record. ``oneshot_limit`` and ``oneshot_spent``: the one-shot child budget and the children
-    this process already started against it; a graph over what is left is refused."""
+    this process already started against it; a graph over what is left is refused. ``named_roles=False`` leaves
+    `require_named_roles` to the caller: `dag_tool` first checks whether the run already exists (a run stored
+    before nodes carried a role, defined again unchanged, is the same run)."""
     if not isinstance(raw_nodes, list) or not raw_nodes:
         raise DagRefusal("empty_graph", "A run needs at least one node.")
     if len(raw_nodes) > MAX_NODES:
@@ -613,6 +635,8 @@ def new_record(session_id: str, run: str, name: object, goal: object, raw_nodes:
             "run the work interactively.",
         )
     nodes = [_validated_node(raw) for raw in raw_nodes]
+    if named_roles:
+        require_named_roles(raw_nodes)
     require_prompt_markers(nodes)
     _require_graph(nodes)
     title = _plain(name, MAX_NAME_CHARS, "invalid_name", "The run needs a short name.") if name else run
@@ -766,8 +790,8 @@ def goal_verdict(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     for what it repairs) is an ancestor of a verify node that was accepted
     with its handoff checked, and every verify node passed. ``verify_failed``:
     a verify node is failed or blocked and no accepted re-run replaced it.
-    Otherwise ``unverified``, with ``no_producers`` (nothing was built to
-    verify), ``no_verification_node``, ``verification_open:<ids>``,
+    Otherwise ``unverified``, with ``no_producers`` (no node wrote files and
+    none checked anything), ``no_verification_node``, ``verification_open:<ids>``,
     ``verification_misses:<ids>`` (no passed verify node follows them), or
     ``handoff_not_checked:<id>`` (only that unread verify node follows a
     producer; a checked later one clears it). Read from the record and the
@@ -780,10 +804,9 @@ def goal_verdict(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     failed = [str(node["id"]) for node in checks if derived[str(node["id"])]["state"] in ("failed", "blocked")]
     if failed:
         return "verify_failed", [f"verify_failed:{','.join(failed)}"]
-    if not any(is_producer(node) for node in live):
-        return "unverified", ["no_producers"]
+    built = any(is_producer(node) for node in live)
     if not checks:
-        return "unverified", ["no_verification_node"]
+        return "unverified", ["no_verification_node" if built else "no_producers"]
     passed = [node for node in checks if derived[str(node["id"])]["state"] == "accepted"]
     checked = [node for node in passed if not handoff_unchecked(node)]
     reasons = []
@@ -794,9 +817,10 @@ def goal_verdict(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     unreached = verification_misses(record["nodes"], passed, skip=superseded)
     if unreached:
         reasons.append(f"verification_misses:{','.join(unreached)}")
-    # An unread verify node counts for nothing; it is named only where it alone follows a producer.
-    reasons += [f"handoff_not_checked:{node['id']}" for node in passed if handoff_unchecked(node)
-                and uncovered - set(verification_misses(record["nodes"], [*checked, node], skip=superseded))]
+    # An unread verify node counts for nothing; it is named where it alone follows a producer, and in a run that
+    # built nothing (only checks), wherever it is.
+    reasons += [f"handoff_not_checked:{node['id']}" for node in passed if handoff_unchecked(node) and (
+                not built or uncovered - set(verification_misses(record["nodes"], [*checked, node], skip=superseded)))]
     return ("unverified", reasons) if reasons else ("verified", [])
 
 
@@ -1278,6 +1302,7 @@ def repair(
     if not isinstance(raw_nodes, list) or not raw_nodes:
         raise DagRefusal("empty_graph", "A repair needs at least one node.")
     added = [_validated_node(raw) for raw in raw_nodes]
+    require_named_roles(raw_nodes)
     require_prompt_markers(added)
     if len(nodes) + len(added) > MAX_NODES:
         raise DagRefusal("too_many_nodes", f"A run holds at most {MAX_NODES} nodes.")
@@ -1351,6 +1376,7 @@ def extend(
     if not isinstance(raw_nodes, list) or not raw_nodes:
         raise DagRefusal("empty_graph", "An extend round needs at least one node.")
     added = [_validated_node(raw) for raw in raw_nodes]
+    require_named_roles(raw_nodes)
     require_prompt_markers(added)
     if len(nodes) + len(added) > MAX_NODES:
         raise DagRefusal(

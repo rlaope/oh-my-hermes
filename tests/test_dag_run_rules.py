@@ -872,13 +872,13 @@ class NodeRoleTests(unittest.TestCase):
         self.assertEqual(named["lint"], [])
 
     def test_a_file_writing_node_that_reads_like_a_check_must_name_its_role(self) -> None:
-        for label, guess in (("Verify: typecheck + tests", "verify"), ("frontend observe-each-change + visual-qa",
-                                                                       "verify"), ("Review the diff", "review")):
+        for label, guess in (("Verify: typecheck + tests", "verify"), ("QA the build", "verify"),
+                             ("Review the diff", "review")):
             with self.subTest(label=label):
                 with self.assertRaises(dag_run.DagRefusal) as refused:
                     dag_run.new_record(PARENT, "feat", "", "", [node("ui", label=label, scope=("ui.tsx",))], time.time())
                 self.assertEqual(refused.exception.reason, "role_required")
-                self.assertIn(f"Node ui writes files and reads like a {guess} node", refused.exception.say)
+                self.assertIn(f"Node ui writes files and its label opens like a {guess} node", refused.exception.say)
                 built = dag_run.new_record(PARENT, "feat", "", "", [
                     node("ui", label=label, scope=("ui.tsx",), role="build")], time.time())
                 checked = dag_run.new_record(PARENT, "feat", "", "", [
@@ -907,6 +907,16 @@ class NodeRoleTests(unittest.TestCase):
                               nodes=[node("audit", label="Audit the fix", scope=("a.py",))])
                 self.assertEqual((result["status"], result["reason"]), ("refused", "role_required"), action)
                 self.assertEqual(dag_run.record_path(home.omh, PARENT, run).read_bytes(), before)
+
+    def test_build_work_that_mentions_a_check_word_later_in_its_label_is_not_refused(self) -> None:
+        for label, guess in (("Add input validation to the API", "verify"), ("Fix review comments", "review"),
+                             ("Implement audit log table", "verify"), ("Add QA fixtures", "verify"),
+                             ("frontend observe-each-change + visual-qa", "verify")):
+            with self.subTest(label=label):
+                record = dag_run.new_record(PARENT, "feat", "", "", [node("ui", label=label, scope=("ui.py",))],
+                                            time.time())
+                self.assertEqual(dag_run.node_role(record["nodes"][0]), "build")
+                self.assertIn(f"role_guess:ui={guess}", record["lint"])
 
     def test_an_unknown_role_is_refused_and_the_record_is_untouched(self) -> None:
         with self.assertRaises(dag_run.DagRefusal) as refused:
@@ -950,6 +960,24 @@ class NodeRoleTests(unittest.TestCase):
             path.write_text(json.dumps(record), encoding="utf-8")
             again = call(action="define", run="feat", nodes=definitions)
         self.assertEqual((again["status"], again.get("reused")), ("ok", True))
+
+    def test_a_stored_run_with_a_check_labelled_writer_defined_again_unchanged_is_reused(self) -> None:
+        definitions = [node("api", scope=("a.py",)),
+                       node("verify", label="Verify the feature", depends_on=("api",), scope=("report.md",))]
+        with homes() as home:
+            slots_table(home)
+            # Stored before nodes carried a role: written here as build (left out of the digest), then stripped.
+            stored_as = [{**item, "role": "build"} for item in definitions]
+            self.assertEqual(call(action="define", run="feat", nodes=stored_as)["status"], "ok")
+            path = dag_run.record_path(home.omh, PARENT, "feat")
+            record = json.loads(path.read_text(encoding="utf-8"))
+            for item in record["nodes"]:
+                item.pop("role")
+            path.write_text(json.dumps(record), encoding="utf-8")
+            again = call(action="define", run="feat", nodes=definitions)
+            fresh = call(action="define", run="fresh", nodes=definitions)
+        self.assertEqual((again["status"], again.get("reused")), ("ok", True))
+        self.assertEqual((fresh["status"], fresh["reason"]), ("refused", "role_required"))
 
     def test_the_external_owner_takes_build_nodes_by_role_never_a_verify_node(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [
@@ -1183,6 +1211,17 @@ class GoalVerdictTests(unittest.TestCase):
             node("base", role="baseline", scope=("b.txt",)), node("api", scope=("a.py",))], time.time())
         self.assertEqual([unit["unit_id"] for unit in dag_tool.export_units(
             exportable, dag_run.derive(exportable, [], time.time()), "codex")], ["api"])
+
+    def test_a_run_of_checks_alone_is_judged_by_its_checks(self) -> None:
+        passed = dag_run.new_record(PARENT, "feat", "", "", [node("suite", role="verify")], time.time())
+        settled(passed, "suite", "accepted")
+        self.assertEqual(finished(passed), ("done", "verified", []))
+        unread = dag_run.new_record(PARENT, "feat", "", "", [node("suite", role="verify")], time.time())
+        settled(unread, "suite", "accepted", unread="docker terminal not up")
+        self.assertEqual(finished(unread), ("done", "unverified", ["handoff_not_checked:suite"]))
+        failed = dag_run.new_record(PARENT, "feat", "", "", [node("suite", role="verify")], time.time())
+        settled(failed, "suite", "failed")
+        self.assertEqual(finished(failed), ("needs_repair", "verify_failed", ["verify_failed:suite"]))
 
     def test_a_run_that_built_nothing_is_unverified_and_not_sent_to_extend(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [

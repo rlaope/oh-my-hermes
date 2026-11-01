@@ -197,8 +197,9 @@ def run_loop_reference() -> str:
    `ready`, `settle`, `repair` and `extend` refuse it the same way, and the record is untouched.
    Each node's `role` says what it is for: `build` (the default), `baseline`, `verify` or `review`; any
    other role is refused. Only a `verify` node verifies the goal, and every other node with a `write_scope`
-   is a producer it has to follow. A node with no role that writes files and reads like a check or a review
-   is refused as `role_required`: send `role=verify` (or `review`), or `role=build` when it builds.
+   is a producer it has to follow. A node with no role that writes files and whose label opens with a check
+   word (Verify, Validate, Audit, QA, Review) is refused as `role_required`: send `role=verify` (or
+   `review`), or `role=build` when it builds.
    Lint is advice: a partial prompt-marker set, no verification node, a producer the verification node does
    not depend on, a node with no role whose label reads like another (`role_guess:<id>=verify`: give it
    the role), every node `deep`, more than one `ultrabrain`, and a graph of 5+ nodes whose critical
@@ -264,8 +265,9 @@ otherwise `unverified`, with `verdict_reasons` (`no_verification_node`, `verific
 `handoff_not_checked:<id>`: a checked later verify node clears it). A stopped run whose verify node failed
 is `verify_failed`. Report the goal met only on `verified`. An `unverified` done run gets a `role: verify`
 node through `extend`, depending on every producer, while rounds are left; after that, report the goal as
-unverified. A run where no node wrote files is `unverified` with `no_producers`: nothing was built to
-verify, so report what it found, not a goal met, and do not extend for it.
+unverified. A run of verify nodes alone is judged by those checks. A run where no node wrote files and no
+verify node ran is `unverified` with `no_producers`: nothing was built to verify, so report what it
+found, not a goal met, and do not extend for it.
 
 Check each node against its SCOPE and the goal criteria too. When work is missing:
 

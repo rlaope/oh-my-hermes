@@ -371,7 +371,7 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
     budget = oneshot_budget(hermes_home, segments)
     record = dag_run.new_record(durable, run, args.get("name"), args.get("goal"), args.get("nodes"), now,
                                 oneshot_limit=budget["limit"] if budget else None,
-                                oneshot_spent=budget["spent"] if budget else 0)
+                                oneshot_spent=budget["spent"] if budget else 0, named_roles=False)
     found = _find(omh_home, segments, run)
     if found is not None:
         existing, path = found
@@ -383,6 +383,7 @@ def _define(args: Mapping[str, object], omh_home: Path, hermes_home: Path, durab
         derived = dag_run.derive(existing, children, now)
         return _result("define", existing, derived, shown, say="This run was already defined; nothing changed.",
                        extra={"reused": True}, now=now, limits=limits, ignored=ignored)
+    dag_run.require_named_roles(args["nodes"])  # a new definition names the role of a node that reads like a check
     if not dag_run.make_room(omh_home, durable, _children(omh_home, segments, hermes_home), now):
         raise dag_run.DagRefusal(
             "too_many_runs", "This conversation already keeps the most dag runs it can; cancel one that is not needed.")
