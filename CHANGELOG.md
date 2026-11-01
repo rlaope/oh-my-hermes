@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw run that nothing will wake is named at the next turn.** A
+  parent re-enters a run only when a child completes, so a run whose parked
+  node passed its `wake_at`, or whose ready nodes were never handed out,
+  with no child running, sat open; so did a node past the stuck mark, which
+  was named only on an `omh_dag` call. The next turn's context now carries
+  one `[OMH dag]` line naming the run and the call to make
+  (`omh_dag action=ready` or `action=status`), once per situation. It blocks
+  nothing, OMH still starts no timer, and delegated children, finished runs
+  and conversations without a run get nothing.
+
 - **In a chat with many loaded tools, Hermes can save a stated preference or
   decision to OMH memory without searching for a tool first. On Discord, a
   fact saved in one conversation thread can be recalled in the next thread

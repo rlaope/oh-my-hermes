@@ -323,7 +323,10 @@ def pre_llm_call_context_scenario_chars() -> dict[str, int]:
       recorded ids, profiles and statuses; needs live executor records under
       `omh_home`;
     - the `[OMH Degraded]` line: a fixed sentence plus the failing component
-      names, emitted only when a local call failed.
+      names, emitted only when a local call failed;
+    - the `[OMH dag]` open-run line (`dag_open_run_nudge`): one fixed sentence
+      naming a run id and at most three node ids, once per situation, and
+      needs a stored dag run nothing will wake.
     """
     no_seed: tuple[Callable[[Path], None], ...] = ()
     later = {"is_first_turn": False}

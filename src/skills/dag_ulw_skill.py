@@ -227,8 +227,9 @@ def run_loop_reference() -> str:
    still runs (`delegate_task action=list`; settle failed and repair when none is live), or it came back
    unsettled (read the handoff and settle). The profile moves the marks under `plugins.entries.omh.settings`:
    `dag_stuck_after_s` (0 turns the warning off), `dag_stale_after_s` (when `ready` offers again a node no child
-   took, default 600) and `dag_max_lost_reoffers` (default 3). OMH still starts no timer: the warning shows only
-   on a `status`, `ready` or `settle` call.
+   took, default 600) and `dag_max_lost_reoffers` (default 3). OMH still starts no timer: the warning shows on a
+   `status`, `ready` or `settle` call, and once at a later turn's start, in an `[OMH dag]` line that also names a
+   passed `wake_at` or ready nodes nothing will wake, with the one call to make.
 
 A child handing off a still-running background process or CI run is not a failure: settle with
 `outcome=parked`, its `handle` (at most 120 characters), and `wake_at` (UTC ISO-8601 or epoch, future,
