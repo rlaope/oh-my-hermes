@@ -55,7 +55,7 @@ PLAN_TASK_SHAPE_TOKENS = (
 )
 PLAN_CLOSING_GATE_TOKENS = (
     "its last task is the closing gate",
-    "named as the verification task",  # dag-ulw recognises a verification node by its name
+    "named as the verification task",  # the closing gate a converted graph runs as its verify node
     "depends on every other task",
     "runs the real verification commands",
     "someone other than the agent that built the work",  # never the builder's own reading
@@ -72,6 +72,8 @@ PLAN_DAG_ULW_TOKENS = (
     "carry a `dag-ulw` node's id, depends_on and write_scope",  # the mapping
     "the done check feeds its VERIFY and STOP WHEN",
     "converting still adds each node's label, category and full prompt",  # not a ready-made graph
+    # dag-ulw recognises a verification node by its role, never by its name (#2476)
+    "named as the verification task (in `dag-ulw`, a node with `role: verify`)",
 )
 
 RALPLAN_TOKENS = (
@@ -141,6 +143,8 @@ class PlanReviewFocusTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, hermes)
                 self.assertIn(token, portable)
+        # The role a converted graph needs is Hermes' wording only.
+        self.assertNotIn("role: verify", portable)
 
     def test_plan_completion_checklist_requires_task_fields_and_the_closing_gate(self) -> None:
         checklist = " ".join(_definition("plan").final_checklist)

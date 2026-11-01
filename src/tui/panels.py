@@ -1610,6 +1610,10 @@ def dag_run_summary(graph: Mapping[str, Any]) -> str:
     unchecked = sum(1 for node in lanes if node.get("handoff_checked") is False)
     if unchecked:
         said.append(f"{unchecked} handoff not checked")
+    # A dag-ulw run's goal verdict (`dag_run.goal_verdict`): a done run is not verified unless it says so.
+    verdict = _safe_text(graph.get("dag_verdict"))
+    if verdict:
+        said.append(verdict)
     return " · ".join(["DAG", _safe_text(graph.get("name")) or "delegation", *said])
 
 

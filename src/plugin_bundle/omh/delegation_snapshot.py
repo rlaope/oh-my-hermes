@@ -365,12 +365,15 @@ def end_block(graph: Mapping[str, Any], lanes: Sequence[Mapping[str, Any]]) -> s
     """The run's end: each lane under Done, Failed, Stopped or Working (`collapse`), the first failure, the totals.
 
     The header says ``ended`` when every lane settled, ``stalled`` when some
-    are not moving and none is in flight, and ``so far`` while one is.
+    are not moving and none is in flight, and ``so far`` while one is; a
+    dag-ulw run's then says its goal verdict (`dag_run.goal_verdict`):
+    ``verified``, ``unverified`` or ``verify_failed``.
     """
     counts = tally(lanes)
     sep = UNICODE.separator
     verdict = "ended" if counts["settled"] else ("so far" if counts["working"] else "stalled")
-    lines = [sep.join(["DAG", graph_name(graph), verdict])]
+    goal = graph.get("dag_verdict")
+    lines = [sep.join(["DAG", graph_name(graph), verdict, *([goal] if isinstance(goal, str) and goal else [])])]
     width = max(len(word) for word, _glyph in COLLAPSE)
     for word, glyph_state in COLLAPSE:
         members = [node for node in lanes if collapse(node) == word]

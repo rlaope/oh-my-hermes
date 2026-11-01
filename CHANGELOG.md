@@ -76,6 +76,18 @@ All notable changes will be documented here.
   of ending the plan. After acceptance, `plan` and `ulw-plan` now offer
   `dag-ulw` for a plan whose tasks form a graph.
 
+- **A dag-ulw run that finished without a passing check no longer reads as a
+  verified goal.** Each node now declares a `role` (`build` by default,
+  `baseline`, `verify`, `review`) instead of OMH guessing it from the label,
+  which misread checks such as "independent verification vs baseline" and
+  producers such as "visual-qa motion reference". A finished run carries a
+  goal verdict apart from its state: `verified` only when every producer sits
+  under a verify node that was accepted with its handoff checked, otherwise
+  `unverified` (with the reason) or `verify_failed`. `omh_dag`, the run
+  summary, the messenger end block and the TUI end view all show it, and an
+  unverified done run is told to add a verify node through `extend`. Runs
+  stored before this update keep reading their nodes as before.
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write
