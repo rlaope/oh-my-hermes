@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "0090f8d63d70a441e424acb45fc50e866808898a7c9c116b95f73ce7470383f4",
+  "catalog_revision": "212a128921c459a14123db9265030978d483cc5a1b9608af575974066c2a6c54",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -181,7 +181,7 @@
     "omh-paper-learning/SKILL.md": "3570ec1b8c8eebfcc86899c3271bc56430f4ddf601ad3c8be4224e3e9e57a7ab",
     "omh-people-ops/SKILL.md": "b253ad5988f314b12a4add343353eb68e84d4dcc1d1b3f448636f29de9fcadf9",
     "omh-physical-device-readiness/SKILL.md": "1324c49b4b10b43fe408aeb8904b7edd4df74bab34f29c063039bd41128226a8",
-    "omh-plan/SKILL.md": "c83cfc272ed80a926780f7e8c1d32eb1f6b66b286c289cf4425a4a844dba425c",
+    "omh-plan/SKILL.md": "d5574063b1b73890b0ff3d02e3fd1c6e41f99a7d33298194f2a3d3c31cda325b",
     "omh-plan/references/project-constitution.md": "577991e718cf3e1d62ce93704d4a734f7e058a3d516b0722c636cc8cf7a519da",
     "omh-product-brief/SKILL.md": "3fce228b5da3c471d241cbe60787c1e4826be1143467a0f84a909f6cdfdebc27",
     "omh-product-discovery-validation/SKILL.md": "d81b2f489402b9eabfe33449828f2714c7ac7941c05b19e6ed498ad243ede19c",
