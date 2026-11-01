@@ -812,7 +812,7 @@ MEASURED_LABELS = (
 
 def stored(definition: dict) -> dict:
     """A node as a record written before nodes carried a role holds it: the validated shape without ``role``."""
-    validated = dag_run.new_record(PARENT, "old", "", "", [definition], time.time())["nodes"][0]
+    validated = dag_run.new_record(PARENT, "old", "", "", [{**definition, "role": "build"}], time.time())["nodes"][0]
     validated.pop("role")
     validated.pop("role_guess", None)
     return validated
@@ -855,7 +855,9 @@ class NodeRoleTests(unittest.TestCase):
         self.assertEqual(dag_run.node_role(stored(node("rev", label="Review the diff"))), "review")
 
     def test_a_new_node_without_a_role_is_build_and_its_guess_is_only_advice(self) -> None:
-        definitions = [node(node_id, label=label, scope=(f"{node_id}.py",)) for node_id, label, _m, _g in MEASURED_LABELS]
+        # A node that reads like a check and writes files is refused (`role_required`); these write nothing.
+        definitions = [node(node_id, label=label, scope=() if guess == "verify" else (f"{node_id}.py",))
+                       for node_id, label, _m, guess in MEASURED_LABELS]
         record = dag_run.new_record(PARENT, "feat", "", "", definitions, time.time())
         self.assertEqual({dag_run.node_role(item) for item in record["nodes"]}, {"build"})
         self.assertEqual([item for item in record["lint"] if item.startswith("role_guess:")],
@@ -868,6 +870,43 @@ class NodeRoleTests(unittest.TestCase):
             node("check", label="typecheck + pnpm test on the fix branch", depends_on=("frontend",), role="verify"),
         ], time.time())
         self.assertEqual(named["lint"], [])
+
+    def test_a_file_writing_node_that_reads_like_a_check_must_name_its_role(self) -> None:
+        for label, guess in (("Verify: typecheck + tests", "verify"), ("frontend observe-each-change + visual-qa",
+                                                                       "verify"), ("Review the diff", "review")):
+            with self.subTest(label=label):
+                with self.assertRaises(dag_run.DagRefusal) as refused:
+                    dag_run.new_record(PARENT, "feat", "", "", [node("ui", label=label, scope=("ui.tsx",))], time.time())
+                self.assertEqual(refused.exception.reason, "role_required")
+                self.assertIn(f"Node ui writes files and reads like a {guess} node", refused.exception.say)
+                built = dag_run.new_record(PARENT, "feat", "", "", [
+                    node("ui", label=label, scope=("ui.tsx",), role="build")], time.time())
+                checked = dag_run.new_record(PARENT, "feat", "", "", [
+                    node("ui", label=label, scope=("ui.tsx",), role=guess)], time.time())
+                self.assertEqual([unit["unit_id"] for unit in dag_tool.export_units(
+                    built, dag_run.derive(built, [], time.time()), "codex")], ["ui"])
+                with self.assertRaises(dag_run.DagRefusal) as native:
+                    dag_tool.export_units(checked, dag_run.derive(checked, [], time.time()), "codex")
+                self.assertEqual(native.exception.reason, "nothing_to_export")
+        # Without a write scope it runs as a build node, and the lint names what the label reads like.
+        quiet = dag_run.new_record(PARENT, "feat", "", "", [node("ui", label="Review the diff")], time.time())
+        self.assertIn("role_guess:ui=review", quiet["lint"])
+        with homes() as home:
+            slots_table(home)
+            first = call(action="define", run="feat", nodes=[node("check", label="Verify the build", scope=("r.md",))])
+            self.assertEqual((first["status"], first["reason"]), ("refused", "role_required"))
+            self.assertFalse(dag_run.record_path(home.omh, PARENT, "feat").exists())
+            call(action="define", run="feat", nodes=[node("api", scope=("a.py",))])
+            call(action="settle", run="feat", node="api", outcome="failed")
+            call(action="define", run="done", nodes=[node("api", scope=("a.py",))])
+            handoff(home, "done", "api")
+            self.assertEqual(call(action="settle", run="done", node="api", outcome="accepted")["state"], "done")
+            for run, action, extra in (("feat", "repair", {"node": "api"}), ("done", "extend", {})):
+                before = dag_run.record_path(home.omh, PARENT, run).read_bytes()
+                result = call(action=action, run=run, **extra,
+                              nodes=[node("audit", label="Audit the fix", scope=("a.py",))])
+                self.assertEqual((result["status"], result["reason"]), ("refused", "role_required"), action)
+                self.assertEqual(dag_run.record_path(home.omh, PARENT, run).read_bytes(), before)
 
     def test_an_unknown_role_is_refused_and_the_record_is_untouched(self) -> None:
         with self.assertRaises(dag_run.DagRefusal) as refused:
@@ -915,7 +954,7 @@ class NodeRoleTests(unittest.TestCase):
     def test_the_external_owner_takes_build_nodes_by_role_never_a_verify_node(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [
             node("motion", label="visual-qa motion continuity reference", scope=("motion.ts",), role="build"),
-            node("frontend", label="frontend observe-each-change + visual-qa", scope=("ui.tsx",)),
+            node("frontend", label="frontend observe-each-change + visual-qa", scope=("ui.tsx",), role="build"),
             node("check", label="Typecheck the branch", scope=("report.md",), role="verify"),
             node("diff", label="Look over the diff", scope=("notes.md",), role="review"),
         ], time.time())
@@ -962,7 +1001,7 @@ class GoalVerdictTests(unittest.TestCase):
         for node_id in ("base", "api", "ui", "diff"):
             settled(record, node_id, "accepted")
         self.assertEqual(finished(record), ("running", "unverified",
-                                           ["verification_open:check", "verification_misses:api,ui"]))
+                                           ["verification_open:check", "verification_misses:api,base,ui"]))
         settled(record, "check", "accepted")
         self.assertEqual(finished(record), ("done", "verified", []))
 
@@ -1065,6 +1104,124 @@ class GoalVerdictTests(unittest.TestCase):
                 call(action="settle", run="feat", node=f"fix{cycle}", outcome="accepted")
             stopped = call(action="settle", run="feat", node="check", outcome="failed")
         self.assertEqual((stopped["state"], stopped["verdict"]), ("stopped", "verify_failed"))
+
+    def test_a_checked_verify_node_added_by_extend_clears_an_unread_one(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", depends_on=("api",), role="verify"),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "check", "accepted", unread="docker terminal not up")
+        self.assertEqual(finished(record), ("done", "unverified", ["handoff_not_checked:check"]))
+        dag_run.extend(record, dag_run.derive(record, [], time.time()),
+                       [node("check2", depends_on=("api",), role="verify")], "", time.time())
+        settled(record, "check2", "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+        # An unread verify node is named only where it alone follows a producer.
+        other = dag_run.new_record(PARENT, "other", "", "", [
+            node("api", scope=("a.py",)), node("ui", scope=("u.py",)),
+            node("check", depends_on=("api",), role="verify"), node("check-ui", depends_on=("ui",), role="verify"),
+        ], time.time())
+        for node_id in ("api", "ui", "check"):
+            settled(other, node_id, "accepted")
+        settled(other, "check-ui", "accepted", unread="docker terminal not up")
+        self.assertEqual(finished(other), ("done", "unverified", ["handoff_not_checked:check-ui"]))
+
+    def test_a_superseded_verify_node_of_an_older_repair_group_does_not_fail_the_goal(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", depends_on=("api",), role="verify"),
+        ], time.time())
+        settled(record, "api", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "api", [
+            node("fix1", scope=("a.py",)), node("vfix1", depends_on=("fix1",), role="verify")], time.time())
+        settled(record, "fix1", "accepted")
+        settled(record, "vfix1", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "vfix1",
+                       [node("fix2", scope=("a.py",))], time.time())
+        settled(record, "fix2", "accepted")
+        derived = dag_run.derive(record, [], time.time())
+        self.assertEqual((derived["vfix1"]["state"], derived["api"]["state"]), ("superseded", "repaired"))
+        settled(record, "check", "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+
+    def test_a_repaired_producer_counts_through_its_repair_and_a_superseded_one_not_at_all(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", depends_on=("api",), role="verify"),
+        ], time.time())
+        settled(record, "api", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "api",
+                       [node("api-fix", scope=("a.py",))], time.time())
+        settled(record, "api-fix", "accepted")
+        settled(record, "check", "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+        # A producer no verify node follows: its superseded first repair is not listed, its live one is.
+        loose = dag_run.new_record(PARENT, "loose", "", "", [
+            node("api", scope=("a.py",)), node("ui", scope=("u.py",)), node("check", depends_on=("ui",), role="verify"),
+        ], time.time())
+        settled(loose, "ui", "accepted")
+        settled(loose, "check", "accepted")
+        settled(loose, "api", "failed")
+        dag_run.repair(loose, dag_run.derive(loose, [], time.time()), "api", [node("fix1", scope=("a.py",))],
+                       time.time())
+        settled(loose, "fix1", "failed")
+        dag_run.repair(loose, dag_run.derive(loose, [], time.time()), "fix1", [node("fix2", scope=("a.py",))],
+                       time.time())
+        settled(loose, "fix2", "accepted")
+        self.assertEqual(dag_run.derive(loose, [], time.time())["fix1"]["state"], "superseded")
+        self.assertEqual(finished(loose), ("done", "unverified", ["verification_misses:api,fix2"]))
+
+    def test_baseline_and_review_writers_are_work_a_verify_node_follows(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("base", role="baseline", scope=("base.txt",)), node("notes", role="review", scope=("notes.md",)),
+            node("api", scope=("a.py",)), node("check", depends_on=("api",), role="verify"),
+        ], time.time())
+        for node_id in ("base", "notes", "api", "check"):
+            settled(record, node_id, "accepted")
+        self.assertEqual(finished(record), ("done", "unverified", ["verification_misses:base,notes"]))
+        self.assertIn("verification_misses:base,notes", record["lint"])
+        # The external owner still takes build nodes only.
+        exportable = dag_run.new_record(PARENT, "x", "", "", [
+            node("base", role="baseline", scope=("b.txt",)), node("api", scope=("a.py",))], time.time())
+        self.assertEqual([unit["unit_id"] for unit in dag_tool.export_units(
+            exportable, dag_run.derive(exportable, [], time.time()), "codex")], ["api"])
+
+    def test_a_run_that_built_nothing_is_unverified_and_not_sent_to_extend(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("survey", label="Survey the options"), node("summary", depends_on=("survey",)),
+        ], time.time())
+        for node_id in ("survey", "summary"):
+            settled(record, node_id, "accepted")
+        self.assertEqual(finished(record), ("done", "unverified", ["no_producers"]))
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("survey", label="Survey the options")])
+            handoff(home, "feat", "survey")
+            done = call(action="settle", run="feat", node="survey", outcome="accepted")
+        self.assertEqual((done["state"], done["verdict"], done["verdict_reasons"]), ("done", "unverified", ["no_producers"]))
+        self.assertIn("nothing was built for a verify node to check", done["say"])
+        self.assertNotIn("extend", done["say"])
+
+    def test_the_graph_names_a_verdict_only_for_a_finished_run(self) -> None:
+        from omh.plugin_bundle.omh.delegation_graph import build_delegation_graph
+
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=[node("api", scope=("a.py",)),
+                                                     node("check", depends_on=("api",), role="verify")])
+            handoff(home, "feat", "api")
+            call(action="settle", run="feat", node="api", outcome="accepted")
+            failed = call(action="settle", run="feat", node="check", outcome="failed")
+            open_graph = build_delegation_graph(home.omh, home.hermes, PARENT)
+            call(action="repair", run="feat", node="check", nodes=[node("fix", scope=("a.py",))])
+            handoff(home, "feat", "fix")
+            call(action="settle", run="feat", node="fix", outcome="accepted")
+            handoff(home, "feat", "check")
+            call(action="settle", run="feat", node="check", outcome="accepted")
+            done_graph = build_delegation_graph(home.omh, home.hermes, PARENT)
+        self.assertEqual(failed["state"], "needs_repair")
+        self.assertNotIn("verdict", failed)
+        self.assertFalse(open_graph["dag_open"])
+        self.assertNotIn("dag_verdict", open_graph)
+        self.assertEqual(done_graph["dag_verdict"], "verified")
 
 
 if __name__ == "__main__":

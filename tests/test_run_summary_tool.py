@@ -168,7 +168,9 @@ class RunSummaryToolTest(unittest.TestCase):
         unverified = self._call(language="ko", omh_home=str(omh_home))
         self.assertEqual(unverified["summary_text"].splitlines()[-1], "목표 검증 (DAG export): unverified")
         self.assertEqual(unverified["dag_goal"], {"run": "export", "name": "export", "state": "done",
-                                                  "verdict": "unverified", "reasons": ["no_verification_node"]})
+                                                  "verdict": "unverified", "reasons": ["no_verification_node"],
+                                                  "claim_boundary": dag_run.VERDICT_CLAIM_BOUNDARY})
+        self.assertIn("Not observed verification", unverified["dag_goal"]["claim_boundary"])
 
     def test_an_unknown_language_falls_back_to_english(self):
         self.assertTrue(self._call(language="fr")["summary_text"].startswith("Elapsed time:"))

@@ -829,6 +829,7 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
     elif state == "stopped":
         payload["open"] = dag_run.open_failures(record, derived)
         say = say or "The repair cycles are spent: report what is still open, and do not repair again."
+    verdict, reasons = "", []
     if state in dag_run.FINISHED_STATES:
         # Whether a passing verify node covers the work (`dag_run.goal_verdict`): a done run may still be unverified.
         verdict, reasons = dag_run.goal_verdict(record, derived)
@@ -845,10 +846,14 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
                 if left else
                 "Every node is accepted and the extend rounds are spent. Check each one against its SCOPE and the "
                 "goal criteria, then report the goal met or what is still open.")
+        elif reasons == ["no_producers"]:
+            say = say or (
+                "Every node is accepted. No node wrote files, so nothing was built for a verify node to check: "
+                "report what the nodes found, and the goal as unverified, not as met.")
         elif left:
             built = [str(node["id"]) for node in record["nodes"]
-                     if dag_run.is_coding(node) and derived[str(node["id"])]["state"] != "superseded"]
-            after = f"every producer ({', '.join(built)})" if built else "the nodes whose work it checks"
+                     if dag_run.is_producer(node) and derived[str(node["id"])]["state"] != "superseded"]
+            after = f"every producer ({', '.join(built)})"
             say = say or (
                 f"Every node is accepted, but the goal is unverified ({'; '.join(reasons)}). Add a role=verify node "
                 f"with omh_dag action=extend that depends on {after} and checks the goal criteria ({rounds}); "

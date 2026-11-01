@@ -174,7 +174,8 @@ def _dag_goal(omh_home: Path, hermes_home: Path, session_id: str) -> dict[str, A
     if state not in dag_run.FINISHED_STATES:
         return None
     verdict, reasons = dag_run.goal_verdict(record, derived)
-    return {"run": record["run"], "name": record["name"], "state": state, "verdict": verdict, "reasons": reasons}
+    return {"run": record["run"], "name": record["name"], "state": state, "verdict": verdict, "reasons": reasons,
+            "claim_boundary": dag_run.VERDICT_CLAIM_BOUNDARY}
 
 
 def _number(value: Any) -> float:

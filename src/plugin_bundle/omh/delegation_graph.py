@@ -68,6 +68,7 @@ from urllib.parse import quote
 from .dag_core import layer_of
 from .dag_run import (
     ADDED_ORIGIN_KINDS,
+    FINISHED_STATES,
     HANDOFF_NOT_CHECKED,
     derive,
     goal_verdict,
@@ -845,8 +846,8 @@ def _build(
         # reopens the run (`delegation_snapshot`).
         graph["dag_open"] = dag_open
         graph["dag_topology"] = _dag_topology(dag["record"])
-        if not dag_open:
-            # Where the run's end is drawn, the word for whether a passing verify node covers its work.
+        if dag["state"] in FINISHED_STATES:
+            # A finished run's goal verdict, as `omh_dag` and `omh_run_summary` give it (the same states).
             graph["dag_verdict"] = goal_verdict(dag["record"], dag["derived"])[0]
     return graph
 

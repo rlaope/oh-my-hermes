@@ -122,6 +122,11 @@ ROLES: Final = ("build", "baseline", "verify", "review")
 DEFAULT_ROLE: Final = "build"
 # A run's goal verdict (`goal_verdict`), apart from its state: a ``done`` run may be ``unverified``.
 VERDICTS: Final = ("verified", "unverified", "verify_failed")
+# What a goal verdict is (`goal_verdict`), carried wherever the verdict leaves the tool's own payload.
+VERDICT_CLAIM_BOUNDARY: Final = (
+    "A goal verdict derived from the dag run record: the outcomes the parent settled, Hermes' child status and the "
+    "handoff reads. Not observed verification, CI or review evidence."
+)
 DAG_CLAIM_BOUNDARY: Final = (
     "The plan a parent agent declared for a dag-ulw run and the outcomes it settled. A settled outcome is the "
     "parent's judgement; a child's status is Hermes' report. Not execution, verification, review, CI or merge "
@@ -363,9 +368,16 @@ def _validated_node(raw: object) -> dict[str, Any]:
         "found_by": "",
         "attempts": [],
     }
-    if "role" not in raw and guessed_role(validated) != DEFAULT_ROLE:
+    guess = guessed_role(validated) if "role" not in raw else DEFAULT_ROLE
+    if guess in ("verify", "review") and validated["write_scope"]:
+        # As a build node it would go to an external coding owner and be repaired rather than run again: a builder
+        # approving itself. The parent says which it is.
+        raise DagRefusal("role_required",
+                         f"Node {node_id} writes files and reads like a {guess} node: give it role={guess}, "
+                         "or role=build when it builds.")
+    if guess != DEFAULT_ROLE:
         # Advice only (`lint`): the node runs as a build node, and the role its label reads like is named.
-        validated["role_guess"] = guessed_role(validated)
+        validated["role_guess"] = guess
     return validated
 
 
@@ -530,9 +542,15 @@ def is_coding(node: Mapping[str, Any]) -> bool:
     return bool(node["write_scope"]) and node_role(node) == DEFAULT_ROLE
 
 
+def is_producer(node: Mapping[str, Any]) -> bool:
+    """Work a verify node has to follow: any node that writes files and is no verify node (baselines and review
+    writers count, as they did before nodes carried a role). Wider than `is_coding`, which only build nodes pass."""
+    return bool(node["write_scope"]) and not is_verification(node)
+
+
 def verification_misses(nodes: Sequence[Mapping[str, Any]], verifiers: Sequence[Mapping[str, Any]], *,
                         skip: Iterable[str] = ()) -> list[str]:
-    """The producers (`is_coding`) no node of ``verifiers`` follows, sorted; ``skip`` names nodes left out.
+    """The producers (`is_producer`) no node of ``verifiers`` follows, sorted; ``skip`` names nodes left out.
 
     A repair node stands in for the node it repairs; a verification node's repair is checked by its re-run.
     """
@@ -543,7 +561,7 @@ def verification_misses(nodes: Sequence[Mapping[str, Any]], verifiers: Sequence[
     checks = {str(verifier["id"]) for verifier in verifiers}
     covered |= {str(node["id"]) for node in nodes if node.get("repairs") and node["repairs"] in covered | checks}
     left_out = covered | set(skip)
-    return sorted(str(node["id"]) for node in nodes if is_coding(node) and str(node["id"]) not in left_out)
+    return sorted(str(node["id"]) for node in nodes if is_producer(node) and str(node["id"]) not in left_out)
 
 
 def ancestors(node_id: str, parents: Mapping[str, Iterable[str]]) -> set[str]:
@@ -744,32 +762,41 @@ def goal_verdict(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, A
     """Whether a passing verify node covers the run's work, and the reason codes when none does. Apart from
     `run_state`: a ``done`` run may be ``unverified``.
 
-    ``verified``: at least one verify node, each accepted with its handoff
-    checked, and every producer an ancestor of one (a repair node standing in
-    for what it repairs). ``verify_failed``: a verify node is failed or
-    blocked and no accepted re-run replaced it. Otherwise ``unverified``,
-    with ``no_verification_node``, ``verification_open:<ids>``,
-    ``verification_misses:<ids>`` or ``handoff_not_checked:<id>``. Read from
-    the record and the derived states only (the outcomes the parent settled,
-    Hermes' child status, the handoff reads), never from a child's or the
-    model's own words.
+    ``verified``: every producer (`is_producer`; a repair node standing in
+    for what it repairs) is an ancestor of a verify node that was accepted
+    with its handoff checked, and every verify node passed. ``verify_failed``:
+    a verify node is failed or blocked and no accepted re-run replaced it.
+    Otherwise ``unverified``, with ``no_producers`` (nothing was built to
+    verify), ``no_verification_node``, ``verification_open:<ids>``,
+    ``verification_misses:<ids>`` (no passed verify node follows them), or
+    ``handoff_not_checked:<id>`` (only that unread verify node follows a
+    producer; a checked later one clears it). Read from the record and the
+    derived states only (the outcomes the parent settled, Hermes' child
+    status, the handoff reads), never from a child's or the model's own words.
     """
     superseded = {node_id for node_id, info in derived.items() if info["state"] == "superseded"}
-    checks = [node for node in record["nodes"] if str(node["id"]) not in superseded and is_verification(node)]
+    live = [node for node in record["nodes"] if str(node["id"]) not in superseded]
+    checks = [node for node in live if is_verification(node)]
     failed = [str(node["id"]) for node in checks if derived[str(node["id"])]["state"] in ("failed", "blocked")]
     if failed:
         return "verify_failed", [f"verify_failed:{','.join(failed)}"]
+    if not any(is_producer(node) for node in live):
+        return "unverified", ["no_producers"]
     if not checks:
         return "unverified", ["no_verification_node"]
     passed = [node for node in checks if derived[str(node["id"])]["state"] == "accepted"]
+    checked = [node for node in passed if not handoff_unchecked(node)]
     reasons = []
     still = [str(node["id"]) for node in checks if node not in passed]
     if still:
         reasons.append(f"verification_open:{','.join(still)}")
-    misses = verification_misses(record["nodes"], passed, skip=superseded)
-    if misses:
-        reasons.append(f"verification_misses:{','.join(misses)}")
-    reasons += [f"handoff_not_checked:{node['id']}" for node in passed if handoff_unchecked(node)]
+    uncovered = set(verification_misses(record["nodes"], checked, skip=superseded))
+    unreached = verification_misses(record["nodes"], passed, skip=superseded)
+    if unreached:
+        reasons.append(f"verification_misses:{','.join(unreached)}")
+    # An unread verify node counts for nothing; it is named only where it alone follows a producer.
+    reasons += [f"handoff_not_checked:{node['id']}" for node in passed if handoff_unchecked(node)
+                and uncovered - set(verification_misses(record["nodes"], [*checked, node], skip=superseded))]
     return ("unverified", reasons) if reasons else ("verified", [])
 
 
