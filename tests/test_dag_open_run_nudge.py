@@ -283,10 +283,76 @@ class SlotTests(NudgeTestCase):
             freed = line(home, moment + 20)
         self.assertEqual(held, (
             "[OMH dag] Run feat: node a ready and no node of this run is running, but other work holds every "
-            "delegate_task slot of this process, so ready would hand out nothing now and no completion of this run "
-            "will come. Call omh_dag action=ready run=feat at a later turn, once a slot is free."))
+            "delegate_task slot of this process, so ready would hand out nothing now. Call omh_dag action=ready "
+            "run=feat at a later turn, once a slot is free."))
         self.assertEqual(again, "")
         self.assertIn("node a ready and no node of this run is running. Call omh_dag action=ready", freed)
+
+
+class RepairTests(NudgeTestCase):
+    """A failed node with a repair cycle left: the run is needs_repair and only the parent moves it.
+
+    Mutation: drop the needs_repair reason, name it while a child runs, or name a stopped run.
+    """
+
+    def failed(self, home, moment: float, nodes: list[dict]) -> None:
+        """Define ``nodes`` and settle ``a`` failed after its child came back."""
+        slots_table(home)
+        at(moment, action="define", run="feat", nodes=nodes)
+        child_started(home, "feat", "a", now=moment + 1)
+        stop(home, "child-a", "failed", now=moment + 2)
+        at(moment + 3, action="settle", run="feat", node="a", outcome="failed", reason="tests fail")
+
+    def test_a_failed_node_with_a_cycle_left_names_repair(self) -> None:
+        moment = time.time()
+        with homes() as home:
+            self.failed(home, moment, [node("a"), node("b", depends_on=("a",))])
+            record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
+            self.assertEqual(dag_run.run_state(record, dag_run.derive(record, [], moment)), "needs_repair")
+            texts = [line(home, moment + 60), line(home, moment + 2 * HOUR), line(home, moment + 24 * HOUR)]
+        self.assertEqual(texts, [
+            "[OMH dag] Run feat: node a failed or blocked with a repair cycle left, and no node of this run is "
+            "running. Call omh_dag action=repair run=feat node=a, or report what is open and cancel the run.", "", ""])
+
+    def test_only_failures_with_a_cycle_left_are_named(self) -> None:
+        """Mutation: name every open failure, including one whose repair cycles are spent."""
+        moment = time.time()
+        with homes() as home:
+            record = stored(home, [node("a"), node("c")], moment)
+            failed = [{"n": 1, "handed_out_at": moment, "outcome": "failed", "settled_at": moment}]
+            record["nodes"][0]["attempts"] = failed
+            record["nodes"][1]["attempts"] = list(failed)
+            for repair in ("r1", "r2"):
+                record["nodes"].append({**node(repair), "repairs": "a", "attempts": list(failed)})
+            record["repairs"] = {"a": [["r1"], ["r2"]]}
+            dag_run.write_run(dag_run.record_path(home.omh, PARENT, "feat"), record)
+            self.assertEqual(dag_run.run_state(record, dag_run.derive(record, [], moment)), "needs_repair")
+            text = line(home, moment + 60)
+        self.assertIn("Run feat: node c failed or blocked with a repair cycle left", text)
+        self.assertIn("action=repair run=feat node=c,", text)
+
+    def test_a_failed_node_beside_a_running_child_gets_only_the_stuck_line(self) -> None:
+        moment = time.time()
+        with homes() as home:
+            self.failed(home, moment, [node("a"), node("c")])
+            child_started(home, "feat", "c", now=moment + 1)
+            below = line(home, moment + 60)
+            past = line(home, moment + 2 * HOUR)
+        self.assertEqual(below, "")
+        self.assertIn("node c open past the 1h stuck mark", past)
+
+    def test_a_stopped_run_with_no_cycle_left_gets_nothing(self) -> None:
+        moment = time.time()
+        with homes() as home:
+            record = stored(home, [node("a"), node("b", depends_on=("a",))], moment)
+            failed = [{"n": 1, "handed_out_at": moment, "outcome": "failed", "settled_at": moment}]
+            record["nodes"][0]["attempts"] = failed
+            for repair in ("r1", "r2"):
+                record["nodes"].append({**node(repair), "repairs": "a", "attempts": list(failed)})
+            record["repairs"] = {"a": [["r1"], ["r2"]]}
+            dag_run.write_run(dag_run.record_path(home.omh, PARENT, "feat"), record)
+            self.assertEqual(dag_run.run_state(record, dag_run.derive(record, [], moment)), "stopped")
+            self.assertEqual([line(home, moment + 60), line(home, moment + 24 * HOUR)], ["", ""])
 
 
 class ManyRunsTests(NudgeTestCase):

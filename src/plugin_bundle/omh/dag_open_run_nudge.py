@@ -25,11 +25,19 @@ is one of its nodes whose child is running. With none, the first of:
   child, or none took it past ``dag_stale_after_s``): ``omh_dag action=ready``;
 * ready nodes: ``omh_dag action=ready``. When other work holds every
   `delegate_task` slot of this process (`dag_tool.free_slots`), ``ready``
-  would hand out nothing and say to wait for a completion this run will not
-  have, so the line says to call it at a later turn instead.
+  would hand out nothing now, so the line says to call it at a later turn
+  instead;
+* a failed or blocked node with a repair cycle left, so the run is
+  ``needs_repair`` and nothing else moves it: ``omh_dag action=repair``, or
+  report what is open and cancel.
 
 And, a child running or not, a node open past the stuck mark (the profile's
 ``dag_stuck_after_s``, ``0`` turns it off): ``omh_dag action=status``.
+
+Not named: a node out within ``dag_stale_after_s`` (its child may still be
+starting), a parked node whose ``wake_at`` is ahead, and a node exported to a
+coding owner or left to the parent (``lane`` fanout or parent), which its
+fanout result or the parent's own work settles.
 
 The line says what is true of the run: no node of it is running. It does not
 claim the parent will not wake, since another run's child may.
@@ -77,7 +85,9 @@ from .tools import dag_tool
 MAX_NAMED_RUNS: Final = 512
 MAX_FINISHED_RECORDS: Final = 512
 MAX_NODES_NAMED: Final = 3
-REASONS: Final = ("returned", "lost", "parked_due", "out_no_child", "ready_idle", "ready_held", "stuck")
+REASONS: Final = (
+    "returned", "lost", "parked_due", "out_no_child", "ready_idle", "ready_held", "needs_repair", "stuck",
+)
 
 _lock = threading.Lock()
 _named: "OrderedDict[tuple[str, str], tuple[Any, ...]]" = OrderedDict()
@@ -91,7 +101,8 @@ def wake_needed(
     """``(reason, node ids)`` when one call would move this run, else None.
 
     With no node running: ``returned`` (unsettled), ``lost`` (`dag_run.lost_for_good`), then what
-    `dag_run.offerable` would hand out now, by state: ``parked_due``, ``out_no_child``, ``ready_idle``.
+    `dag_run.offerable` would hand out now, by state: ``parked_due``, ``out_no_child``, ``ready_idle``; then
+    ``needs_repair`` (`dag_run.run_state`), its failed or blocked nodes with a repair cycle left.
     Running or not: ``stuck`` from `dag_run.stuck`.
     """
     states = {node_id: str(info["state"]) for node_id, info in derived.items()}
@@ -107,6 +118,9 @@ def wake_needed(
             nodes = [node_id for node_id in offered if states[node_id] == state]
             if nodes:
                 return reason, nodes
+        if dag_run.run_state(record, derived) == "needs_repair":
+            return "needs_repair", [node_id for node_id in dag_run.open_failures(record, derived)
+                                    if dag_run.cycles_left(record, node_id) > 0]
     found = dag_run.stuck(record, derived, now, limits=limits)
     if found:
         return "stuck", [node_id for node_id, _age in found]
@@ -140,8 +154,12 @@ def open_run_text(reason: str, run: str, nodes: list[str], mark: str) -> str:
                 "returns.")
     if reason == "ready_held":
         return (f"{head} {named} ready and {idle}, but other work holds every delegate_task slot of this process, so "
-                f"ready would hand out nothing now and no completion of this run will come. Call omh_dag action=ready "
-                f"run={run} at a later turn, once a slot is free.")
+                f"ready would hand out nothing now. Call omh_dag action=ready run={run} at a later turn, once a slot "
+                "is free.")
+    if reason == "needs_repair":
+        target = f"node={nodes[0]}" if one else "node=<id> for each"
+        return (f"{head} {named} failed or blocked with a repair cycle left, and {idle}. Call omh_dag action=repair "
+                f"run={run} {target}, or report what is open and cancel the run.")
     return f"{head} {named} open past the {mark} stuck mark. Call omh_dag action=status run={run} for what to check."
 
 
