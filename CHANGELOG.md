@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The info line's badge carries the version.** It reads
+  `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
+  narrow line the version is the first part of the left side to go, before
+  the branch name is cut and before the badge shortens.
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write
