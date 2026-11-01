@@ -4,6 +4,23 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A dag-ulw run with no node running is named at the next turn.** A
+  parent re-enters a run only when a child completes, so a run with no child
+  running sat open: a parked node past its `wake_at`, ready nodes never
+  handed out, a node out with no child (a restart ended it, or none took
+  it), a node a restart ended past the re-offer bound, a node that came back
+  and was never settled, or a failed node with a repair cycle left; so did a
+  node past the stuck mark, which was named only on an `omh_dag` call. The
+  next turn's context now carries one `[OMH dag]` line naming the run and the
+  call to make (`omh_dag action=ready`, `settle`, `repair` or `status`), once
+  per situation; when other work holds every `delegate_task` slot, it says to
+  call `ready` at a later turn. Not named: a node out within
+  `dag_stale_after_s` (its child may still be starting), a parked node whose
+  `wake_at` is ahead, and a node exported to a coding owner or left to the
+  parent, which its fanout result or the parent's own work settles.
+  It blocks nothing, OMH still starts no timer, and delegated children,
+  finished runs and conversations without a run get nothing.
+
 - **A plain knowledge question no longer pulls in an OMH skill.** "Explain
   TCP vs UDP briefly", "What's the difference between git merge and
   rebase?" or "클로저가 뭐야?" used to get a route hint or a "Skills that may
