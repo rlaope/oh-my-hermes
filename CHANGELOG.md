@@ -4,15 +4,18 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **A dag-ulw run that nothing will wake is named at the next turn.** A
-  parent re-enters a run only when a child completes, so a run whose parked
-  node passed its `wake_at`, or whose ready nodes were never handed out,
-  with no child running, sat open; so did a node past the stuck mark, which
-  was named only on an `omh_dag` call. The next turn's context now carries
-  one `[OMH dag]` line naming the run and the call to make
-  (`omh_dag action=ready` or `action=status`), once per situation. It blocks
-  nothing, OMH still starts no timer, and delegated children, finished runs
-  and conversations without a run get nothing.
+- **A dag-ulw run with no node running is named at the next turn.** A
+  parent re-enters a run only when a child completes, so a run with no child
+  running sat open: a parked node past its `wake_at`, ready nodes never
+  handed out, a node out with no child (a restart ended it, or none took
+  it), a node a restart ended past the re-offer bound, or a node that came
+  back and was never settled; so did a node past the stuck mark, which was
+  named only on an `omh_dag` call. The next turn's context now carries one
+  `[OMH dag]` line naming the run and the call to make (`omh_dag
+  action=ready`, `settle` or `status`), once per situation; when other work
+  holds every `delegate_task` slot, it says to call `ready` at a later turn.
+  It blocks nothing, OMH still starts no timer, and delegated children,
+  finished runs and conversations without a run get nothing.
 
 - **A fanout check that could never pass is refused before dispatch, and
   finished work that nobody verified is `unverified`, not `failed` (#2460,
