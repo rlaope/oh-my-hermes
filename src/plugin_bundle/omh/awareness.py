@@ -23,6 +23,7 @@ from .invocation_cues import invoked_instruction
 from .name_report_cues import about_the_skill
 from .data_share_cues import DATA_SHARE_REVIEW_PHRASES, data_share_phrases_said, data_share_request_admitted
 from .pi_family_names import RUNTIME_HOME
+from .plain_question_cues import plain_question
 from .executor_cues import (
     CODING_DELIVERY_REQUEST_PHRASES as _CODING_DELIVERY_REQUEST_PHRASES,
     CODING_DELIVERY_REQUEST_TOKENS as _CODING_DELIVERY_REQUEST_TOKENS,
@@ -5739,7 +5740,12 @@ def awareness_route_hint(message: str, *, max_hints: int = 2, context_removed: b
     """
     request = "" if host_command_turn(message) else person_request_text(message)
     context_removed = context_removed or host_context_removed(message)
-    return _copy_awareness_route_hint_payload(_awareness_route_hint_cached(request, max(max_hints, 0), context_removed))
+    # The predicate reads the raw message: person_request_text strips the
+    # newline and the executable projection masks the URL or fence that mark work.
+    plain = bool(request) and plain_question(message)
+    return _copy_awareness_route_hint_payload(
+        _awareness_route_hint_cached(request, max(max_hints, 0), context_removed, plain)
+    )
 
 
 def _copy_awareness_route_hint_payload(payload: dict[str, object]) -> dict[str, object]:
@@ -5826,7 +5832,9 @@ def _route_hint_with_action_labels(hint: dict[str, object]) -> dict[str, object]
 
 
 @lru_cache(maxsize=512)
-def _awareness_route_hint_cached(message: str, max_hints: int, context_removed: bool = False) -> dict[str, object]:
+def _awareness_route_hint_cached(
+    message: str, max_hints: int, context_removed: bool = False, plain_knowledge_question: bool = False
+) -> dict[str, object]:
     degraded: list[tuple[str, str]] = []
     matching_message = executable_routing_text(message)
     intent = classify_workflow_intent(matching_message)
@@ -5945,6 +5953,9 @@ def _awareness_route_hint_cached(message: str, max_hints: int, context_removed: 
             if rule["id"] == "long_document_reading" and not phrase_matches and long_document_page_count_match:
                 phrase_matches = ["guard:long_document_page_count"]
             if not phrase_matches and not token_matches:
+                continue
+            if plain_knowledge_question and not phrase_matches:
+                # A plain knowledge question carries no work, so a bare word match is not a route.
                 continue
             workflow = str(rule["workflow"])
             next_action = str(rule["next_action"])
