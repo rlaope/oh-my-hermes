@@ -29,8 +29,15 @@ UNIT_STATE_DATA_MISSING = "data_missing"
 # threshold, or the same error and the same workaround repeating.
 UNIT_STATE_PROGRESS_STALLED = "progress_stalled"
 # The process ended without a verified result. An exit code of 0 with the
-# required result missing is this state, never `verified`.
+# required result missing is this state, never `verified`. So is a declared
+# check the dispatcher ran and saw fail.
 UNIT_STATE_FAILED = "failed"
+# The process exited 0 and returned a validated result, but no verification
+# was observed: none was declared, or none was asked to run. Nothing failed,
+# and nothing was verified either, so this is neither `failed` nor `verified`
+# (#2461). A reader retrying `failed` units must not retry this one; a reader
+# that needs proof of the work must still check it.
+UNIT_STATE_UNVERIFIED = "unverified"
 # The result record was validated against the contract and its verification
 # was observed. This is the only success state.
 UNIT_STATE_VERIFIED = "verified"
@@ -43,11 +50,12 @@ UNIT_EXECUTION_STATES = (
     UNIT_STATE_DATA_MISSING,
     UNIT_STATE_PROGRESS_STALLED,
     UNIT_STATE_FAILED,
+    UNIT_STATE_UNVERIFIED,
     UNIT_STATE_VERIFIED,
 )
 
 # States that end a unit. Everything else is still someone's job to observe.
-UNIT_TERMINAL_STATES = frozenset({UNIT_STATE_FAILED, UNIT_STATE_VERIFIED})
+UNIT_TERMINAL_STATES = frozenset({UNIT_STATE_FAILED, UNIT_STATE_UNVERIFIED, UNIT_STATE_VERIFIED})
 
 # States where the process may well be alive and the work is still not
 # moving. A supervisor must treat these as needing intervention, not waiting.
@@ -65,7 +73,9 @@ UNIT_EXECUTION_STATE_CLAIM_BOUNDARY = (
     "States describe what OMH observed about the unit's work, not whether its "
     "process exists. `running` requires new evidence; a live process with no "
     "new evidence is `progress_stalled`. `verified` requires a validated "
-    "result record; an exit code alone never reaches it. The one exception is "
+    "result record; an exit code alone never reaches it. `unverified` is a "
+    "completed unit whose verification was never observed, not a failure and "
+    "not a success. The one exception is "
     "a Hermes recovery attempt, whose file-tools-only child returns no result "
     "record: there `verified` means the child changed something, the "
     "dispatcher committed all of it, and the unit's declared checks passed on "

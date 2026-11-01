@@ -3086,6 +3086,12 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
         # uses; `--model` still wins over the chain head.
         "identity": getattr(args, "identity", None) or "",
     }
+    # The shorthand's only way to declare acceptance (#2461). Frozen through
+    # the same `verification_commands` field a fanout unit uses, so the
+    # freeze-time checks (count, length, no shell operators) apply unchanged.
+    verification_commands = list(getattr(args, "verification_command", None) or [])
+    if verification_commands:
+        unit["verification_commands"] = verification_commands
     needs_inventory = args.owner not in EXECUTOR_MODEL_OPTIONS
     try:
         capability_snapshots = {
@@ -3143,7 +3149,9 @@ def cmd_coding_run(args: argparse.Namespace) -> int:
             max_retries=parallelism["max_retries"],
             timeout=args.timeout,
             dry_run=bool(args.dry_run),
-            run_verification=bool(args.run_verification),
+            # A check declared on this command line is a request to run it: a
+            # declared check left unrun would only end the unit `unverified`.
+            run_verification=bool(args.run_verification or verification_commands),
             allow_unconfined=bool(args.allow_unconfined),
             environment_policy=environment_policy,
             **_failure_recovery_kwargs(args),
@@ -3764,6 +3772,17 @@ def _add_coding_commands(sub) -> None:
         "--run-verification",
         action="store_true",
         help="Run the unit's contract verification_commands in its worktree after the process exits 0.",
+    )
+    run_cmd.add_argument(
+        "--verification-command",
+        action="append",
+        default=None,
+        metavar="COMMAND",
+        help=(
+            "A check the dispatcher runs in the unit's worktree after the process exits 0 and its result "
+            "validates (repeatable, one command each, run without a shell; at most 8). Declaring one "
+            "implies --run-verification. Without any, the unit can end `unverified`, never `verified`."
+        ),
     )
     run_cmd.add_argument(
         "--allow-unconfined",

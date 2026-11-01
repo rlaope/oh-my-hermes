@@ -1688,8 +1688,13 @@ class FanoutVerificationCommandTests(unittest.TestCase):
         self.assertEqual(argv, ["python", "-c", "print(1)"])
 
         # No shell runs these, so a pipe is an argument rather than an operator.
+        # The parser itself still splits it that way (handoff_contract
+        # postconditions compile through it); the fanout freeze refuses it.
         _env, argv = verification_command_argv("python -c 'print(1)' | tee log")
         self.assertEqual(argv, ["python", "-c", "print(1)", "|", "tee", "log"])
+        with self.assertRaises(FanoutContractError) as raised:
+            build_fanout_contract("split work", self._with_commands(["python -c 'print(1)' | tee log"]))
+        self.assertIn("'|'", str(raised.exception))
 
 
 class FanoutVerificationChecksContractTests(unittest.TestCase):

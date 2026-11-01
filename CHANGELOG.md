@@ -4,6 +4,36 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A plain knowledge question no longer pulls in an OMH skill.** "Explain
+  TCP vs UDP briefly", "What's the difference between git merge and
+  rebase?" or "클로저가 뭐야?" used to get a route hint or a "Skills that may
+  fit" line from one shared word (`explain` -> paper-learning, `merge` ->
+  ulw-work, `explain` + `vs` -> finance-analysis), and the model then spent
+  an extra call loading a skill it did not need. A one-sentence concept
+  question with no work object (no my/our, no file, PR, CI or agent word, no
+  URL or code) now gets neither a token-only hint nor a candidate line;
+  phrase matches such as "explain this paper" keep theirs. On a 55-question
+  English and Korean probe, suggestions went from 13 to 1, and none of the
+  1,098 dispatch cases in the routing corpus lost a hint (#2472).
+
+- **A fanout check that could never pass is refused before dispatch, and
+  finished work that nobody verified is `unverified`, not `failed` (#2460,
+  #2461, reported by @vince2930).** The dispatcher runs every
+  `verification_commands` entry without a shell, so `test -f X && grep -q Y
+  X` handed `&&` to `test` as an argument: it exited 2 on correct work and
+  the unit landed `verification_failed`, yet `fanout validate` had accepted
+  it. Freeze, `validate` and `prepare` now refuse an unquoted `&&`, `||`, `|`,
+  `;`, `&`, `>`, `<`, `$(` or backtick in a verification command,
+  `reproduction_command` or `task_linked_test_runner`, and name both fixes:
+  one command per step, or `sh -c "..."`. Quoted text such as `grep -E 'a|b'`
+  is unaffected. A unit that exited 0 with a valid result and no observed
+  check now ends `unit_state: unverified` (reason unchanged,
+  `verification_not_observed`) instead of `failed`, so failure counts and
+  retry automation stop treating finished work as broken; `failed` is kept
+  for a check that ran and failed. `omh coding run` gains a repeatable
+  `--verification-command`, which implies `--run-verification`, so the
+  shorthand can reach `verified`.
+
 - **In a chat with many loaded tools, Hermes can save a stated preference or
   decision to OMH memory without searching for a tool first. On Discord, a
   fact saved in one conversation thread can be recalled in the next thread
@@ -12,6 +42,10 @@ All notable changes will be documented here.
   using the existing admission and session-lens gates. Discord threads Hermes
   auto-created from channel messages use their parent channel's memory scope;
   other threads keep their own.
+- **omher.app pages carry X's full share-card tag set.** Every indexable site page now
+  carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
+  `og:image:type` beside the existing share card, and `test_site_seo` pins
+  them so a home-page redesign cannot drop the share block unnoticed.
 
 - **A code-change plan from `plan` can be run as written.** Each task now
   carries an id, the tasks it depends on, the files it may write and its done

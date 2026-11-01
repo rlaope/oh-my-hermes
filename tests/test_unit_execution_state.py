@@ -20,6 +20,12 @@ class UnitExecutionStateVocabularyTests(unittest.TestCase):
         self.assertTrue(ues.is_terminal("failed"))
         self.assertFalse(ues.is_terminal("running"))
 
+    def test_unverified_ends_a_unit_without_claiming_success_or_failure(self):
+        # #2461: completed work whose verification was never observed.
+        self.assertTrue(ues.is_terminal("unverified"))
+        self.assertFalse(ues.is_stuck("unverified"))
+        self.assertNotIn(ues.UNIT_STATE_UNVERIFIED, (ues.UNIT_STATE_FAILED, ues.UNIT_STATE_VERIFIED))
+
     def test_a_stalled_unit_is_stuck_not_terminal_and_not_running(self):
         self.assertTrue(ues.is_stuck("progress_stalled"))
         self.assertFalse(ues.is_terminal("progress_stalled"))

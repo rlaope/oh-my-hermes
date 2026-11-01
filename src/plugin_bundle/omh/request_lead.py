@@ -12,7 +12,7 @@ Every reader takes the openers from here now:
   it looks for a request marker, which stays its own list;
 - `data_share_cues`, before the protective verb;
 - `hermes_session_commands`, before a loop on a timer;
-- `omh.routing.command_verb.command_words`, before the command verb that narrows
+- `command_verb.command_words`, before the command verb that narrows
   a guard.
 
 Stripping an opener admits nothing by itself: each reader still requires its
