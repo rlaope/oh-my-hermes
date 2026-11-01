@@ -211,7 +211,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # agent.log turn-exit read; only agent-debug moves, and main's
         # producer gives the previous pin
         # dea773e27e735e108611c1fe72c593375d3f70d89a79e0d3cd89bdef8b1f65e4.
-        self.assertEqual(_digest(legacy_hashes), '19b756e55d0c861edce77c0d7c556a4aaa2bbfcc0104a691a3562ebb0bc0cbe9')
+        # Then plan's task shape and closing gate, and the shared follow-on
+        # rule's `dag-ulw` clause; only plan and ralplan move, and main's
+        # producer gives the previous pin
+        # 19b756e55d0c861edce77c0d7c556a4aaa2bbfcc0104a691a3562ebb0bc0cbe9.
+        # The review round (direct-edge write rule, dag-ulw conversion
+        # wording, verification-task name) moves plan only.
+        self.assertEqual(_digest(legacy_hashes), '0e66028d94805874a359b8f53b05a866f8fb539893e78a615d09e83f8b0d9f77')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
