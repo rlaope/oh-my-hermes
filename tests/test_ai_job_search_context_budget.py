@@ -211,7 +211,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # agent.log turn-exit read; only agent-debug moves, and main's
         # producer gives the previous pin
         # dea773e27e735e108611c1fe72c593375d3f70d89a79e0d3cd89bdef8b1f65e4.
-        self.assertEqual(_digest(legacy_hashes), '19b756e55d0c861edce77c0d7c556a4aaa2bbfcc0104a691a3562ebb0bc0cbe9')
+        # Then dag-ulw names the node `role` field and reports the goal met only
+        # on `verdict: verified`; only dag-ulw moves, and main's producer gives
+        # the previous pin 19b756e55d0c861edce77c0d7c556a4aaa2bbfcc0104a691a3562ebb0bc0cbe9.
+        self.assertEqual(_digest(legacy_hashes), '972ab35358aea408f8b1d7f5177b76f7a66b30241c2753fcc2690fbb2e049151')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -239,7 +242,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72370,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143).
+            'plugin_tool_schema_chars': 72455,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85).
             'pre_llm_call_context_chars_max': 5632,  # The pi-family runtime rename (+6), then the route-hint dedup (-154).
             'pre_llm_call_context_fallback_chars_max': 7184,  # The same rename (+6), the human-voice primer sentence (+116), then the route-hint dedup (-154).
             'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).

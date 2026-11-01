@@ -114,7 +114,7 @@ OMH_DAG_SCHEMA = {
     "description": (
         "Keep a dag-ulw run: small nodes the parent dispatches via delegate_task. define records nodes "
         "(id, label, category, prompt with TASK / DELIVERABLE / SCOPE / VERIFY / STOP WHEN, depends_on, "
-        "write_scope) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
+        "write_scope, role) and refuses cycles, unknown or self-edges, write scopes shared without an edge, more "
         "than 48 nodes, and prompts naming none of the markers; a one-shot session caps nodes at "
         "delegation.oneshot_max_children. Lint is advice. ready returns delegate_task calls per category "
         "within the free slots: route each via omh_delegate_route, then delegate_task unchanged. After each "
@@ -143,6 +143,7 @@ OMH_DAG_SCHEMA = {
                         "prompt": {"type": "string"},
                         "depends_on": {"type": "array", "items": {"type": "string"}},
                         "write_scope": {"type": "array", "items": {"type": "string"}},
+                        "role": {"type": "string", "enum": list(dag_run.ROLES)},
                     },
                     "required": ["id", "label", "category", "prompt"],
                 },
@@ -828,15 +829,34 @@ def _result(action: str, record: Mapping[str, Any], derived: Mapping[str, Mappin
     elif state == "stopped":
         payload["open"] = dag_run.open_failures(record, derived)
         say = say or "The repair cycles are spent: report what is still open, and do not repair again."
-    elif state == "done":
+    if state in dag_run.FINISHED_STATES:
+        # Whether a passing verify node covers the work (`dag_run.goal_verdict`): a done run may still be unverified.
+        verdict, reasons = dag_run.goal_verdict(record, derived)
+        payload["verdict"] = verdict
+        payload["verdict_reasons"] = reasons
+    if state == "done":
         left = dag_run.extend_rounds_left(record)
         payload["extend_rounds_left"] = left
-        say = say or (
-            "Every node is accepted. Check each one against its SCOPE and the goal criteria: when work is missing, "
-            f"extend the run ({left} round{'' if left == 1 else 's'} left); otherwise report the goal met."
-            if left else
-            "Every node is accepted and the extend rounds are spent. Check each one against its SCOPE and the goal "
-            "criteria, then report the goal met or what is still open.")
+        rounds = f"{left} round{'' if left == 1 else 's'} left"
+        if verdict == "verified":
+            say = say or (
+                "Every node is accepted. Check each one against its SCOPE and the goal criteria: when work is "
+                f"missing, extend the run ({rounds}); otherwise report the goal met."
+                if left else
+                "Every node is accepted and the extend rounds are spent. Check each one against its SCOPE and the "
+                "goal criteria, then report the goal met or what is still open.")
+        elif left:
+            built = [str(node["id"]) for node in record["nodes"]
+                     if dag_run.is_coding(node) and derived[str(node["id"])]["state"] != "superseded"]
+            after = f"every producer ({', '.join(built)})" if built else "the nodes whose work it checks"
+            say = say or (
+                f"Every node is accepted, but the goal is unverified ({'; '.join(reasons)}). Add a role=verify node "
+                f"with omh_dag action=extend that depends on {after} and checks the goal criteria ({rounds}); "
+                "until it passes, do not report the goal met.")
+        else:
+            say = say or (
+                f"Every node is accepted, but the goal is unverified ({'; '.join(reasons)}) and the extend rounds "
+                "are spent. Report the goal as unverified, with what is still open; do not report it met.")
     lost = dag_run.lost_for_good(record, derived, limits=limits)
     if lost:
         # Added to whatever else the reply says, on every action: nothing offers these nodes again.

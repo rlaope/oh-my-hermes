@@ -11,8 +11,11 @@
    this run, including non-dag `delegate_task` calls. If the host's one-shot detector itself
    cannot be read, define is refused as `oneshot_detection_unavailable` rather than run uncapped;
    `ready`, `settle`, `repair` and `extend` refuse it the same way, and the record is untouched.
+   Each node's `role` says what it is for: `build` (the default; with a `write_scope` it is a producer),
+   `baseline`, `verify` or `review`. Only a `verify` node verifies the goal; any other role is refused.
    Lint is advice: a partial prompt-marker set, no verification node, a producer the verification node does
-   not depend on, every node `deep`, more than one `ultrabrain`, and a graph of 5+ nodes whose critical
+   not depend on, a node with no role whose label reads like another (`role_guess:<id>=verify`: give it
+   the role), every node `deep`, more than one `ultrabrain`, and a graph of 5+ nodes whose critical
    path is at least 80% of it (`serial_graph`: split it into parallel lanes where the work allows).
 2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
    goes in a call of its own): run its `route` with `omh_delegate_route` (`set`, or `fallback`), then one
@@ -67,8 +70,14 @@ Verify, repair, extend, verify. The verification node runs the real command. Whe
 - In a one-shot session, repair and extend are refused as `oneshot_budget_exceeded` when they would need
   more children than the remaining one-shot budget; the record is not changed by a refused call.
 
-When every node passed (`state: done`), check each node against its SCOPE and the goal criteria. When
-work is missing:
+When every node passed (`state: done`), the result also carries `verdict`, from the record alone:
+`verified` only when every producer is under a `verify` node that was accepted with its handoff checked;
+otherwise `unverified`, with `verdict_reasons` (`no_verification_node`, `verification_misses:<ids>`,
+`handoff_not_checked:<id>`). A stopped run whose verify node failed is `verify_failed`. Report the goal
+met only on `verified`. An `unverified` done run gets a `role: verify` node through `extend`, depending on
+every producer, while rounds are left; after that, report the goal as unverified.
+
+Check each node against its SCOPE and the goal criteria too. When work is missing:
 
 - `omh_dag action=extend node=<the node whose check found the gap> nodes=[...]` adds the missing work to
   the same run, with its own verification node. New nodes may depend on the run's accepted nodes and on
@@ -105,8 +114,8 @@ person names the owner again.
 With such a choice:
 
 - `ready`, `settle`, `repair` and `extend` keep the ready coding nodes out of `calls` and list them in
-  `export`. A coding node writes files (`write_scope`) and is no verification or review node:
-  verification and review always run on `delegate_task`, because the builder never approves itself.
+  `export`. A coding node is a `build` node that writes files (`write_scope`): baseline, verify and review
+  nodes always run on `delegate_task`, because the builder never approves itself.
 - `omh_dag action=export owner=<codex|claude-code>` writes those nodes, and the waiting coding nodes
   whose every open parent goes with them, as a `fanout_contract/v2` units file and a goal file, and
   returns the two `omh coding fanout` commands to run (`prepare`, then `dispatch`). More than four units

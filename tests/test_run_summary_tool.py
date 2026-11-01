@@ -138,6 +138,38 @@ class RunSummaryToolTest(unittest.TestCase):
         self.assertEqual(breakdown["api_calls"], 46)
         self.assertAlmostEqual(breakdown["cost_usd"], 1.35)
 
+    def test_a_finished_dag_run_closes_with_its_goal_verdict_from_the_record(self):
+        from omh.plugin_bundle.omh import dag_run
+
+        omh_home = Path(self._tmp.name) / "omh"
+        prompt = "TASK: t\nDELIVERABLE: d\nSCOPE: s\nVERIFY: v\nSTOP WHEN: w"
+        record = dag_run.new_record("20260819_100000_main01", "export", "export", "", [
+            {"id": "api", "label": "Export API", "category": "quick", "prompt": prompt, "write_scope": ["a.py"]},
+            {"id": "check", "label": "Check the export", "category": "quick", "prompt": prompt,
+             "depends_on": ["api"], "role": "verify"},
+        ], 1_000_000.0)
+        path = dag_run.record_path(omh_home, "20260819_100000_main01", "export")
+        path.parent.mkdir(parents=True)
+
+        def settle_all(outcomes: dict[str, str]) -> None:
+            for item in record["nodes"]:
+                item["attempts"] = [{"n": 1, "handed_out_at": 1.0, "outcome": outcomes[item["id"]]}]
+            dag_run.write_run(path, record)
+
+        settle_all({"api": "accepted", "check": ""})  # the verify node is still out: no closing line yet
+        running = self._call(language="en", omh_home=str(omh_home))
+        self.assertNotIn("dag_goal", running)
+        self.assertNotIn("Goal check", running["summary_text"])
+        settle_all({"api": "accepted", "check": "accepted"})
+        verified = self._call(language="en", omh_home=str(omh_home))
+        self.assertEqual(verified["summary_text"].splitlines()[-1], "Goal check (DAG export): verified")
+        record["nodes"][1]["role"] = "build"  # the same run with no verify node: done, and not verified
+        settle_all({"api": "accepted", "check": "accepted"})
+        unverified = self._call(language="ko", omh_home=str(omh_home))
+        self.assertEqual(unverified["summary_text"].splitlines()[-1], "목표 검증 (DAG export): unverified")
+        self.assertEqual(unverified["dag_goal"], {"run": "export", "name": "export", "state": "done",
+                                                  "verdict": "unverified", "reasons": ["no_verification_node"]})
+
     def test_an_unknown_language_falls_back_to_english(self):
         self.assertTrue(self._call(language="fr")["summary_text"].startswith("Elapsed time:"))
 

@@ -66,7 +66,15 @@ from typing import Any, Final
 from urllib.parse import quote
 
 from .dag_core import layer_of
-from .dag_run import ADDED_ORIGIN_KINDS, HANDOFF_NOT_CHECKED, derive, handoff_unchecked, run_state, session_runs
+from .dag_run import (
+    ADDED_ORIGIN_KINDS,
+    HANDOFF_NOT_CHECKED,
+    derive,
+    goal_verdict,
+    handoff_unchecked,
+    run_state,
+    session_runs,
+)
 from .delegation_ledger import (
     child_title,
     ledger_key,
@@ -837,6 +845,9 @@ def _build(
         # reopens the run (`delegation_snapshot`).
         graph["dag_open"] = dag_open
         graph["dag_topology"] = _dag_topology(dag["record"])
+        if not dag_open:
+            # Where the run's end is drawn, the word for whether a passing verify node covers its work.
+            graph["dag_verdict"] = goal_verdict(dag["record"], dag["derived"])[0]
     return graph
 
 
