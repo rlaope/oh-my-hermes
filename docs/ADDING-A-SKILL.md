@@ -37,6 +37,10 @@ the file and structure to edit.
   `definition.triggers` canonical. Routing accepts the display form back through
   `canonical_display_mentions()` in `src/routing/display_names.py`, so a new
   skill gets echo-back for free; `tests/test_display_names.py` locks all three.
+  A skill that joins `WORKFLOW_VOCABULARY` also needs a row in
+  `WORKFLOW_DISPLAY_NAMES` (`src/plugin_bundle/omh/workflow_intent.py`): the
+  bundle has no catalog to derive its labels from, and
+  `tests/test_display_names.py` fails until the row is there.
 - The skill's `hermes_role` also decides the directory it installs into:
   `hermes_skill_category()` in `src/skills/catalog.py` maps role to the Hermes
   dashboard category, and installs land at
