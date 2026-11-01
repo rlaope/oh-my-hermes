@@ -33,10 +33,39 @@ PLAN_TOKENS = (
     "When the plan describes code changes",  # the scope: triage and hub requests are plans too
     "`Review Focus`",   # the section name
     "at most 5",        # the cap
-    "owning task",      # each line is assigned to the task that adds its test
+    "id of the owning task",  # each line is assigned, by id, to the task that adds its test
     "found none",       # an empty section is a recorded check, not a skipped one
     "outcome can be checked",  # one action per step
     "proportion check",  # plan length against the code it leads to
+)
+
+# Execution shape (borrowed from OMC ultragoal's stories and final gate, adapted):
+# each task carries what an executor needs to run it without re-planning, and the
+# last task is a closing gate whose unclean review adds a bounded fix task.
+PLAN_TASK_SHAPE_TOKENS = (
+    "stable id (`T1`, `T2`, ...)",
+    "the ids it depends on",
+    "the files it may write",
+    "its done check",
+    "never write the same file",  # unordered tasks have disjoint write scopes
+)
+PLAN_CLOSING_GATE_TOKENS = (
+    "its last task is the closing gate",
+    "depends on every other task",
+    "runs the real verification commands",
+    "someone other than the agent that built the work",  # never the builder's own reading
+    "ends with a review",
+    "adds a fix task with its own id and done check",  # an unclean review is not done
+    "instead of ending the plan",
+    "at most two fix rounds",  # bounded, unlike ultragoal's open-ended blocker stories
+    "open findings are reported",
+)
+# Only the Hermes projection ships `dag-ulw`, so only its body may name it.
+PLAN_DAG_ULW_TOKENS = (
+    "`dag-ulw` for an accepted plan whose tasks form a graph",  # the follow-on path
+    "plus a separate verification task",  # its fit reason
+    "fields of a `dag-ulw` node (id, depends_on, write_scope, VERIFY and STOP WHEN)",  # the mapping
+    "converts without re-planning",
 )
 
 RALPLAN_TOKENS = (
@@ -98,6 +127,33 @@ class PlanReviewFocusTests(unittest.TestCase):
             any("`Review Focus`" in line for line in definition.final_checklist),
             "plan can finish without the Review Focus section",
         )
+
+    def test_plan_body_carries_task_shape_and_closing_gate_tokens(self) -> None:
+        hermes = _hermes_body("plan")
+        portable = _portable_body("omh-plan")
+        for token in PLAN_TASK_SHAPE_TOKENS + PLAN_CLOSING_GATE_TOKENS:
+            with self.subTest(token=token):
+                self.assertIn(token, hermes)
+                self.assertIn(token, portable)
+
+    def test_plan_completion_checklist_requires_task_fields_and_the_closing_gate(self) -> None:
+        checklist = " ".join(_definition("plan").final_checklist)
+        for token in ("every task has an id, its dependencies, the files it may write, and a done check", "the last task is the closing gate"):
+            with self.subTest(token=token):
+                self.assertIn(token, checklist)
+
+    def test_dag_ulw_reaches_only_the_hermes_planning_bodies(self) -> None:
+        for name in ("plan", "ralplan"):
+            body = _hermes_body(name)
+            with self.subTest(skill=name, target="hermes"):
+                self.assertIn(PLAN_DAG_ULW_TOKENS[0], body)
+                self.assertIn(PLAN_DAG_ULW_TOKENS[1], body)
+        for token in PLAN_DAG_ULW_TOKENS[2:]:
+            with self.subTest(skill="plan", token=token):
+                self.assertIn(token, _hermes_body("plan"))
+        for name in ("omh-plan", "ulw-plan"):
+            with self.subTest(skill=name, target="agent-skills"):
+                self.assertNotIn("dag-ulw", _portable_body(name))
 
     def test_portable_projection_carries_the_same_tokens(self) -> None:
         cases = {"ulw-plan": RALPLAN_TOKENS, "omh-plan": PLAN_TOKENS}

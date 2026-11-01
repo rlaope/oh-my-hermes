@@ -150,6 +150,13 @@ _PLAN_AMBITION_CHECK = (
     "When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap."
 )
 
+# plan's task shape: the fields an executor needs to run each task without
+# re-planning. The Hermes line adds the `dag-ulw` mapping, which only the
+# Hermes projection ships.
+_PLAN_TASK_SHAPE = (
+    "When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above); two tasks with no order between them never write the same file."
+)
+
 # Shared by ralplan's Hermes quality_bar, its portable override, and plan's
 # quality_bar, so both planning skills read one acceptance rule. Host-neutral on
 # purpose: the portable projection has no `omh hermes plan-accept` and no Hermes
@@ -7097,8 +7104,13 @@ _DEFINITIONS = [
             "Where the repository declares non-negotiable principles, load `references/project-constitution.md` and record the check: a plan conflicting with a MUST is resolved by changing the plan, never by reinterpreting the principle.",
             "Keep draft plans unapproved until the user accepts; a wrapper must carry their answer.",
             "Only prepare coding handoff guidance after the plan is accepted.",
-            "When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.",
+            "When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the id of the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.",
             "When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.",
+            PortableLine(
+                _PLAN_TASK_SHAPE + " These are the fields of a `dag-ulw` node (id, depends_on, write_scope, VERIFY and STOP WHEN), so an accepted plan converts without re-planning.",
+                _PLAN_TASK_SHAPE,
+            ),
+            "When the plan describes code changes, its last task is the closing gate: it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or the follow-on engine's own repair limit, after which the open findings are reported.",
             "When the plan describes code changes, run a proportion check before acceptance: if the plan text outgrows the code it leads to, or is mostly function bodies, implementation has leaked into it; reduce bodies to test names, assertions, and signatures.",
             *_PLAN_AMBITION_BAR,
             PLAN_ACCEPTANCE_ANSWER_RULE,
@@ -7114,7 +7126,11 @@ _DEFINITIONS = [
             "and no implementation hidden inside the plan text."
         ),
         final_checklist=_CATEGORY_FINAL_CHECKLISTS["planning"]
-        + ("When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning tasks, or one stating the check found none.", _PLAN_AMBITION_CHECK),
+        + (
+            "When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.",
+            "When the plan describes code changes, every task has an id, its dependencies, the files it may write, and a done check, and the last task is the closing gate.",
+            _PLAN_AMBITION_CHECK,
+        ),
         situations=(
             "how should we build this feature",
             "break this work into steps",
@@ -7254,7 +7270,7 @@ _DEFINITIONS = [
                 "Consume a recorded `research` dossier when one exists: plan options and rejected alternatives should cite its decision drivers and verified claims.",
                 PLAN_ACCEPTANCE_ANSWER_RULE,
                 "End with a selected executor/runtime handoff shape only after the plan is accepted.",
-                "Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on path that fits the work's shape — `ultrawork` durable checkpoints for progress that must survive sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a single owner, `ultrawork` for one bounded delivery cycle, or a direct selected executor/runtime handoff for a single prepared coding change — state the fit reason in one line, and start it only after the user's explicit go-ahead.",
+                ENGINE_FIT_RECOMMENDATION_RULE.portable,
                 "Do not implement directly from consensus planning.",
             ),
             "why_this_exists": (
@@ -7265,7 +7281,7 @@ _DEFINITIONS = [
             "artifact_expectations": "a8eb07c3491b92fb1f72dc0bbd8bd5da29398f9b8aa6cae9b64b2b2c5aa3bae6",
             "safety_rules": "72126c765975b034ab683d27aa0349dbe84c564e45f29832f2b8424a1b3d28cc",
             "opening_steps": "f839a5ee9ecaca2834a76d29b601f18e03ca292e0abc0b2af5c92274b5fa4c7e",
-            "quality_bar": "8350281acd6839c81e5be9e9c79dc3f57c692b577ce110a00b4b3938a8ae5b13",
+            "quality_bar": "49e2e4c0ed3087467d5c5f06f247e79977916873d5055f264a09a2823bd936b7",
             "why_this_exists": "7c8d4e7c04114ed3e5fa532095f54cbd4f36aa5333d34f873c40d516f27c29e1",
         },
     ),
