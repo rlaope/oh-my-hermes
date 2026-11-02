@@ -6,6 +6,20 @@ reviewed repository's own documented standards override this baseline wherever
 they conflict. Cite the smell name in the finding so the author can look up the
 same definition. Adapted from the classic Fowler/Beck catalog.
 
+## Find the repository's standards first
+
+The override can only fire on standards someone read. Before applying the
+baseline, collect the reviewed repository's written conventions: `REVIEW.md`,
+`CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md`, any `*STANDARDS*.md` (such as
+`CODING_STANDARDS.md`), and the linter, formatter, and type-checker
+configuration. A dispatched review receives this list under Constraints
+(`references/review-dispatch.md`); a review run in place builds it itself. Name
+each file found by path and each one looked for and not found, so a reader can
+tell a standard that was checked from one that was never opened.
+
+Those files do more than silence smells. A diff that breaks a rule written in
+one of them is a finding of its own: cite the file and the rule.
+
 ## The twelve baseline smells
 
 | Smell | What it is | The usual fix |
@@ -36,6 +50,11 @@ contracts, existing reuse, and net maintenance benefit. A smell is not that proo
   next change will hurt.
 - Do not report a baseline smell the repository's standards explicitly accept;
   cite the standard instead and move on.
+- Skip a smell the repository's linter, formatter, or type checker already
+  enforces on this diff: the rule is switched on and runs in CI or a hook. A
+  suppression the diff adds (`noqa`, `eslint-disable`, `type: ignore`, an
+  `allow` attribute) is itself reviewable, because it turns that enforcement
+  off for exactly these lines.
 - New code matching surrounding style beats abstract purity: a smell the whole
   file already commits to belongs in a follow-up scope question, not a blocking
   finding on this diff.

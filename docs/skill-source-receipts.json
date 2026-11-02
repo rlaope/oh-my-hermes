@@ -696,6 +696,116 @@
       "supersedes": null
     },
     {
+      "receipt_id": "ssc-2026-11-02-verification-gate-oh-my-openagent",
+      "candidate_key": "verification-gate@github.com/code-yeongyu/oh-my-openagent",
+      "prior_checkpoint": null,
+      "next_checkpoint": "657ea5a2a73e69506df16cc8ce50f07874d1e37d",
+      "disposition": "adopted",
+      "decision_ref": "#2506",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Moved the reviewed test questions and guards-nothing shapes from the TDD page into the shared test-authoring page; no new upstream material.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-backend-mattpocock-skills",
+      "candidate_key": "backend@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2506",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted one test per contract row, read-back through the interface and stand-ins by dependency category (contract-tests.md), and the interface-as-test-surface and second-adapter rules (service-contract.md §7, #2507).",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-llm-app-dev-mattpocock-skills",
+      "candidate_key": "llm-app-dev@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2498",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the two-adapter seam as a deterministic fake at the provider boundary for offline unit tests; evals stay a separate suite against the pinned model.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-rust-mattpocock-skills",
+      "candidate_key": "rust@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2498",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted interface-level tests for Rust binaries and the rule that a trait with one implementation is not a seam; the CLI and gate contract is OMH's own.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-code-review-mattpocock",
+      "candidate_key": "code-review@github.com/mattpocock",
+      "prior_checkpoint": "plugin 1.2.3",
+      "next_checkpoint": "plugin 1.3.1",
+      "disposition": "adopted",
+      "decision_ref": "#2497",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted standards-file discovery before the smell baseline and skipping tooling-enforced smells; foreground sub-agents were already covered and the tracker-doc change does not apply.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-commit-pr-authoring-mattpocock",
+      "candidate_key": "commit-pr-authoring@github.com/mattpocock",
+      "prior_checkpoint": null,
+      "next_checkpoint": "plugin 1.3.1",
+      "disposition": "adopted",
+      "decision_ref": "#2497",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted a reversibility line and the smallest structural view for the no-template fallback; the fixed Summary/Evidence/Merge Danger template was rejected as an imposed convention.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-rules-distill-mattpocock",
+      "candidate_key": "rules-distill@github.com/mattpocock",
+      "prior_checkpoint": null,
+      "next_checkpoint": "plugin 1.3.1",
+      "disposition": "adopted",
+      "decision_ref": "#2497",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted mechanical-or-judgement classification with an inject-a-violation proof for checks; the retro categories and the TypeScript dependency-cruiser setup were not adopted.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-app-debugging-diagnosing-bugs",
+      "candidate_key": "app-debugging@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted symptom match, loop cost, minimise, the no-test loop ladder with person-run capture, probe tags, redaction and the hypothesis in the commit as record fields; the method stays Hermes' own.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-native-debugging-diagnosing-bugs",
+      "candidate_key": "native-debugging@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted symptom match, the minimise step and the probe tag for the native fault statement and the print-and-rebuild fallback.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-verification-gate-mattpocock-skills",
+      "candidate_key": "verification-gate@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the pre-fix red witness with a forced-red diff as a HOLD reason, and the test-shape ideas behind the shared test-authoring reference; tracker publishing and approval checkpoints rejected.",
+      "supersedes": null
+    },
+    {
       "receipt_id": "ssc-2026-11-02-decision-prototype-mattpocock-prototype",
       "candidate_key": "decision-prototype@github.com/mattpocock/skills",
       "prior_checkpoint": null,

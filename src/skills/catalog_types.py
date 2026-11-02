@@ -1012,6 +1012,17 @@ ADAPTATION_QUALITY_READ_RULE = PortableLine(
     "into tasks and evidence.",
 )
 
+# The shared test-authoring contract that code skills load outside tests-first mode.
+TEST_AUTHORING_REFERENCE_PATH = "omh-verification-gate/references/test-authoring.md"
+
+
+def shared_test_authoring_line(before: str, after: str) -> PortableLine:
+    """A body line that loads the shared test-authoring reference between `before` and `after`."""
+    return PortableLine(
+        f"{before}load `{skill_view_call(TEST_AUTHORING_REFERENCE_PATH)}`{after}",
+        f"{before}read `../{TEST_AUTHORING_REFERENCE_PATH}`{after}",
+    )
+
 
 @dataclass(frozen=True)
 class SkillExample:

@@ -42,9 +42,10 @@ Bad example:
 
 ## Completion Checklist
 
-- The durable fact, source evidence, retrieval hint, and staleness risk are recorded.
-- Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.
-- Separate coding or docs tasks are extracted instead of buried in notes.
+- Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on; a candidate resting on one observation stays needs-evidence in review_queue/v1.
+- Every candidate is classed mechanical or judgement before it is worded. A mechanical candidate is a miss a machine can find from the text alone (a forbidden call, a disallowed import, a file in the wrong place), and its destination is a check (a linter rule, test, hook, or CI step); when the repository already has a check for it that never runs or no longer fails, the candidate is repairing that check, not adding another. Its approved_patch_handoff/v1 names the check and where it is wired, and sets as an acceptance criterion the run the implementer must observe: the check fails with the violation injected and passes once it is reverted. A mechanical candidate outside the chosen destination boundary is reported as a check proposal outside the boundary, never reworded as prose. Only judgement candidates, which need a reader (consistency across files, fit with the code around them), are worded as prose.
+- duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.
+- Nothing reached a destination without an approval recorded in review_queue/v1.
 
 ## Recovery Notes
 
@@ -77,7 +78,7 @@ Quality bar:
 Required inputs:
 
 - source corpus: skills, prompts, traces, reviews, failures, or docs
-- destination boundary: AGENTS, skill catalog, prompt, docs, memory, or no-write review
+- destination boundary: AGENTS, skills, prompt, docs, memory, check, or no-write review
 - rule granularity and acceptance criteria
 - reviewer or approval requirement
 
@@ -92,7 +93,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- principle_candidate_set/v1 with source references, repeated pattern, candidate wording, scope, non-goals, and risk
+- principle_candidate_set/v1 with source references, repeated pattern, mechanical or judgement class, candidate wording or check, scope, non-goals, and risk
 - duplication_conflict_report/v1 with already-covered rules, conflicts, and stale guidance
 - review_queue/v1 separating proposed, approved, rejected, deferred, and needs-evidence candidates
 

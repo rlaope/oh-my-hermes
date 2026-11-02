@@ -659,6 +659,8 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
         added = (
             '(allow mach-lookup (global-name "com.apple.cfprefsd.daemon"))'
             '(allow mach-lookup (global-name "com.apple.cfprefsd.agent"))'
+            '(allow mach-lookup (global-name "com.apple.trustd.agent"))'
+            '(allow mach-lookup (global-name "com.apple.trustd"))'
             '(allow ipc-posix-shm-read-data (ipc-posix-name-prefix "apple.cfprefs."))'
         )
         self.assertEqual(policy.count(added), 1)
@@ -674,7 +676,7 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
             inherit_environment=True,
             write_paths_resolved=True,
         )[2]
-        # Removing exactly the three rules restores the previous profile, so no
+        # Removing exactly these five rules restores the previous profile, so no
         # file-write, process, or other IPC allowance moved with them.
         self.assertEqual(policy.replace(added, ""), without_preferences)
         # cfprefsd refuses a write from a client whose sandbox lacks this.

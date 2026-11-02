@@ -38,6 +38,10 @@ State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refus
 
 Every step carries its statement, the lock it takes and for how long, its timeout, and its rollback. A plan with any step missing lock behaviour or rollback is not ready.
 
+- **Non-transactional DDL gets its own migration.** Most migration tools wrap each migration in a transaction, and `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY`) refuses to run inside one. Mark that migration non-transactional in the project's tool and keep the statement alone in it. Removing `CONCURRENTLY` to get past the error turns an online build into a write lock.
+- **Each backfill batch runs under a `statement_timeout`** sized to the batch, beside the `lock_timeout`, so a batch that hits a slow plan fails fast and resumes instead of holding locks.
+- **Read the SQL that will run.** When an ORM or migration tool generates the statement, plan against the SQL it emits (its statement log or its to-SQL output), not against the call that produced it.
+
 ## 4. Index selection and sizing
 
 | Need | Index type |
@@ -48,6 +52,7 @@ Every step carries its statement, the lock it takes and for how long, its timeou
 | Huge append-only table ordered by time | BRIN |
 | Query touches a known subset | partial index with that `WHERE` |
 | Query reads few columns | covering index (`INCLUDE`) for an index-only scan |
+| Keyset (cursor) pagination: `WHERE (sort_col, id) > ($1, $2) ORDER BY sort_col, id LIMIT n` | B-tree on the equality-filter columns first, then the sort columns in sort direction, then the unique tie-breaker; the plan shows an index scan with no sort step. Mixed sort directions need the index to match them and the predicate written as `OR` terms, because a row comparison assumes one direction. On MySQL write the expanded `OR` form even for a single direction, because an equality prefix followed by a row comparison uses only the prefix columns of the index; check that the plan's `key_len` and range cover the sort columns, not only that there is no filesort |
 
 Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build.
 
@@ -58,3 +63,23 @@ The symptom is one query for the list and one more per row, and the count scales
 ## 6. When to partition or shard
 
 Project rows, bytes, and write rate for 12 to 24 months. Partition when one table's maintenance (vacuum, index builds, retention deletes) outgrows its window; partitioning keeps one node. Shard only when a single primary cannot hold the write rate or the working set after vertical scaling, read replicas, and partitioning; name the shard key, the cross-shard queries it breaks, and the rebalancing plan.
+
+## 7. Concurrency
+
+Sections 1 and 2 cover the locks DDL takes. These rules cover two transactions writing the same rows.
+
+| | PostgreSQL | MySQL (InnoDB) |
+| --- | --- | --- |
+| Default isolation | `READ COMMITTED` | `REPEATABLE READ` |
+| Serialization failure | SQLSTATE `40001`, at `REPEATABLE READ` and `SERIALIZABLE` | not raised at the default level; a plain `SELECT` reads an old snapshot while `UPDATE` sees the latest row |
+| Rollback scope after an error | any error aborts the whole transaction; only a savepoint taken before the statement lets the transaction continue | depends on the error; see the two rows below |
+| Deadlock | SQLSTATE `40P01` | error 1213 (SQLSTATE `40001`); the whole transaction is rolled back |
+| Lock wait timeout | `lock_timeout` raises SQLSTATE `55P03`; the transaction is aborted | error 1205; by default only the statement is rolled back, so either retry that statement or `ROLLBACK` before retrying the whole transaction |
+| Upsert | `INSERT ... ON CONFLICT (cols) DO UPDATE` / `DO NOTHING`, with a unique index matching the conflict target | `INSERT ... ON DUPLICATE KEY UPDATE`, which fires on any unique key; with more than one unique key the row it updates is ambiguous |
+| Queue table | `SELECT ... FOR UPDATE SKIP LOCKED` (9.5+) | `SELECT ... FOR UPDATE SKIP LOCKED` (8.0+) |
+
+- **Read-modify-write takes the row lock first.** Read with `SELECT ... FOR UPDATE`, or move the arithmetic into the `UPDATE` itself (`SET qty = qty - $1 WHERE id = $2 AND qty >= $1`) and check the affected row count. A version column compared in the `WHERE` clause works without holding a lock across the read.
+- **A check-then-insert is a race.** Insert under the unique constraint and handle the violation, or use the upsert row above. Never select first and insert if absent.
+- **Lock rows in one order.** Two transactions that lock the same rows in different orders deadlock. Lock in a fixed order, for example `ORDER BY id` in the `FOR UPDATE` query, and lock parents before children everywhere.
+- **Retry the whole transaction, with a bound.** A serialization failure or a deadlock is retried by re-running the transaction from its start, with backoff and a maximum attempt count; retrying the failed statement alone runs it without the locks and effects of the statements before it, which the rollback already undid. On PostgreSQL every error aborts the transaction, so a whole-transaction retry always starts with `ROLLBACK`; a savepoint only lets you handle other errors inside the transaction, never `40001`/`40P01`. A MySQL lock wait timeout (1205) leaves the transaction open: retry that statement, or `ROLLBACK` first and retry the whole transaction, never resume as if nothing failed. Name the error codes that are retried; every other error is not.
+- **Keep the transaction short.** No network call, user wait, or model call happens while a transaction holds row locks.
