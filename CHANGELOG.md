@@ -107,9 +107,11 @@ All notable changes will be documented here.
   stays on `delegate_task`; the lint names the role it reads like, and
   `role=build` sends it to the owner. Build work that reads the same way
   ("Add input validation to the API") stays native too until the parent
-  names its role. A new advisory lint, `no_review_node`, names a run whose
-  build nodes write more than docs files with no `review` node; it never
-  refuses a run or moves its state or goal verdict.
+  names its role. When such a node reads like a verify node and fails, it
+  runs again after its repair, the way a verify node does. A new advisory
+  lint, `no_review_node`, names a run whose build nodes write more than docs
+  with no `review` node; it never refuses a run or moves its state or goal
+  verdict.
 
 - **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
   `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an

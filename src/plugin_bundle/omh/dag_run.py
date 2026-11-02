@@ -41,8 +41,8 @@ dependents and nothing else. ``repair`` adds a group
 of repair nodes for a failed or blocked node, at most `MAX_REPAIR_CYCLES` per
 original node. Once its latest group is all accepted the original counts as
 satisfied and the nodes after it read the group's handoff files, except a
-verification node: it runs again, and only its own accepted re-run satisfies
-it. Nodes of an earlier group that never got accepted are superseded. ``extend`` adds a round of nodes to a run whose every node passed
+verification node (or a role-less writer guessed as one, ``role_guess``): it
+runs again, and only its own accepted re-run satisfies it. Nodes of an earlier group that never got accepted are superseded. ``extend`` adds a round of nodes to a run whose every node passed
 when the goal check finds work missing, at most `MAX_EXTEND_ROUNDS` per run.
 Each node records where it came from (``origin``): ``define``,
 ``repair:<root>`` or ``extend:<round>``.
@@ -142,6 +142,8 @@ _REVIEW_WORDS: Final = re.compile(r"(?<![a-z])review")
 _DOUBLE_CHECK: Final = re.compile(r"(?<![a-z])double[- ]check")
 # A write scope entry with one of these suffixes is docs, not code (`writes_code`).
 DOC_SUFFIXES: Final = frozenset({".md", ".markdown", ".rst", ".adoc", ".txt"})
+# A write scope entry named exactly one of these (casefolded, no suffix) is docs, not code (`writes_code`).
+DOC_NAMES: Final = frozenset({"readme", "changelog", "license", "notice", "authors", "contributing", "copying"})
 _MARKER_PATTERNS: Final = {
     marker: re.compile(r"(?<![A-Za-z])" + r"\s+".join(marker.split()) + r"\s*:", re.IGNORECASE)
     for marker in PROMPT_MARKERS
@@ -514,7 +516,8 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
     verifiers = [node for node in nodes if is_verification(node)]
     if len(nodes) > 1 and not verifiers:
         findings.append("no_verification_node")
-    if (len(nodes) > 1 and not any(node_role(node) == "review" for node in nodes)
+    # A role-less node guessed as review ("Review the diff") counts as the review here, and its guess is named above.
+    if (len(nodes) > 1 and not any(node_role(node) == "review" or node.get("role_guess") == "review" for node in nodes)
             and any(node_role(node) == DEFAULT_ROLE and writes_code(node) for node in nodes)):
         findings.append("no_review_node")
     if verifiers:
@@ -535,13 +538,22 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
 
 
 def writes_code(node: Mapping[str, Any]) -> bool:
-    """Whether a node's write scope may touch code (`no_review_node`): any entry that is not a docs file.
+    """Whether a node's write scope may touch code (`no_review_node`): any entry that is not docs.
 
-    A directory, a glob or a file of any other kind counts as code; only a
-    scope whose every entry ends in a docs suffix (``DOC_SUFFIXES``) does not.
-    Advice only, so it errs toward naming the missing review.
+    An entry is docs when it ends in a docs suffix (``DOC_SUFFIXES``), sits
+    under a leading ``docs/`` segment, or is named one of ``DOC_NAMES``
+    (README, CHANGELOG, LICENSE, ...). Any other directory, glob or file
+    counts as code. Advice only, so it errs toward naming the missing review.
     """
-    return any(posixpath.splitext(str(entry).casefold())[1] not in DOC_SUFFIXES for entry in node["write_scope"])
+    return not all(_is_docs_entry(str(entry)) for entry in node["write_scope"])
+
+
+def _is_docs_entry(entry: str) -> bool:
+    segments = [segment for segment in entry.casefold().split("/") if segment not in ("", ".")]
+    if not segments:
+        return False
+    return (posixpath.splitext(segments[-1])[1] in DOC_SUFFIXES or segments[0] == "docs"
+            or segments[-1] in DOC_NAMES)
 
 
 def guessed_role(node: Mapping[str, Any]) -> str:
@@ -750,7 +762,8 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
             base.get(member, {}).get("state") == "accepted" for member in latest
         ):
             failures = sum(1 for attempt in nodes[root].get("attempts") or [] if attempt.get("outcome") in ("failed", "blocked"))
-            if not is_verification(nodes[root]):
+            # A role-less writer guessed as verify ("Re-verify the fix") re-runs too, though it covers nothing.
+            if not (is_verification(nodes[root]) or nodes[root].get("role_guess") == "verify"):
                 base[root]["state"] = "repaired"
             elif failures <= len(root_groups):
                 base[root].update(state="pending", child=None)

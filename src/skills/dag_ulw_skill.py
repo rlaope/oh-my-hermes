@@ -203,7 +203,8 @@ def run_loop_reference() -> str:
    Lint is advice: a partial prompt-marker set, no verification node, a producer the verification node does
    not depend on, a node with no role whose label reads like another (`role_guess:<id>=verify`: give it
    the role; until then it runs as a native build node), a build node whose `write_scope` holds anything
-   but docs files with no `review` node in the run (`no_review_node`), every node `deep`, more than one
+   but docs with no `review` node in the run (`no_review_node`: add a `role=review` node when the change
+   warrants a separate review, otherwise go on), every node `deep`, more than one
    `ultrabrain`, and a graph of 5+ nodes whose critical path is at least 80% of it (`serial_graph`: split
    it into parallel lanes where the work allows).
 2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
@@ -255,7 +256,7 @@ Verify, repair, extend, verify. The verification node runs the real command. Whe
 - read why, then `omh_dag action=repair node=<failed id> nodes=[...]`. Repair nodes may depend only on
   accepted nodes or on each other. Once the latest repair group is all accepted, a failed producer counts
   as done, and a failed verification node is offered again: only its own accepted re-run says the goal
-  holds.
+  holds. A node with no role guessed as verify (`role_guess`) is offered again too.
 - a node gets at most two repair cycles. After that the run state is `stopped`: report what is still
   open, and do not repair again.
 - In a one-shot session, repair and extend are refused as `oneshot_budget_exceeded` when they would need

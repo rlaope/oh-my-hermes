@@ -1034,6 +1034,42 @@ class CheckLabelledWriterTests(unittest.TestCase):
                 self.assertNotIn("role_guess", named["nodes"][1])
                 self.assertEqual(exported(named), ["api", "check"])
 
+    def test_a_failed_writer_guessed_as_verify_runs_again_after_its_repair(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",)),
+            node("gate", depends_on=("check",), role="verify"),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "check", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "check",
+                       [node("fix", depends_on=("api",), scope=("a.py",))], time.time())
+        settled(record, "fix", "accepted")
+        self.assertEqual(dag_run.derive(record, [], time.time())["check"]["state"], "ready")
+        settled(record, "check", "accepted")
+        self.assertEqual(finished(record)[:2], ("running", "unverified"))
+        settled(record, "gate", "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+        # A failed build or a role-less writer guessed as review is repaired, not run again.
+        for label in ("Node check", "Re-review the diff"):
+            with self.subTest(label=label):
+                other = dag_run.new_record(PARENT, "feat", "", "", [
+                    node("api", scope=("a.py",)), node("check", label=label, depends_on=("api",), scope=("c.py",)),
+                ], time.time())
+                settled(other, "api", "accepted")
+                settled(other, "check", "failed")
+                dag_run.repair(other, dag_run.derive(other, [], time.time()), "check",
+                               [node("fix", depends_on=("api",), scope=("a.py",))], time.time())
+                settled(other, "fix", "accepted")
+                self.assertEqual(dag_run.derive(other, [], time.time())["check"]["state"], "repaired")
+
+    def test_a_writer_guessed_as_verify_alone_leaves_the_goal_unverified(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",)),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "check", "accepted")
+        self.assertEqual(finished(record), ("done", "unverified", ["no_verification_node"]))
+
     def test_double_check_is_guessed_only_for_a_new_node(self) -> None:
         old = stored(node("mig", label="Double-check the migration", scope=("m.py",)))
         self.assertEqual(dag_run.node_role(old), "build")
@@ -1076,7 +1112,8 @@ class ReviewLintTests(unittest.TestCase):
     """
 
     def test_a_code_writing_run_with_no_review_node_is_linted_and_still_verified(self) -> None:
-        for scope in (("src/api.py",), ("src/",), ("docs/api.md", "src/api.py")):
+        for scope in (("src/api.py",), ("src/",), ("docs/api.md", "src/api.py"), ("src/docs/gen.py",),
+                      ("changelog.py",)):
             with self.subTest(scope=scope):
                 record = dag_run.new_record(PARENT, "feat", "", "", [
                     node("api", scope=scope), node("check", depends_on=("api",), role="verify"),
@@ -1093,6 +1130,12 @@ class ReviewLintTests(unittest.TestCase):
                             node("check", depends_on=("api", "diff"), role="verify")],
             "docs only": [node("docs", scope=("docs/api.md", "README.rst", "NOTES.TXT")),
                           node("check", depends_on=("docs",), role="verify")],
+            "docs directory": [node("docs", scope=("docs/", "./docs/guide/setup.png")),
+                               node("check", depends_on=("docs",), role="verify")],
+            "extensionless docs": [node("docs", scope=("CHANGELOG", "README", "pkg/LICENSE")),
+                                   node("check", depends_on=("docs",), role="verify")],
+            "review guessed from a label": [node("api", scope=("src/api.py",)),
+                                            node("diff", label="Review the diff", depends_on=("api",))],
             "one node": [node("api", scope=("src/api.py",))],
             "only checks write code": [node("base", scope=("base.py",), role="baseline"),
                                        node("check", depends_on=("base",), scope=("report.py",), role="verify")],
