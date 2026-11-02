@@ -248,7 +248,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # f0f941b8604a5e4680dad6819edb593cf59048d03d84c4567279dfad8908bf42.
         # Merged with main after #2502: both sides' bodies; main's pin before the
         # merge was e498851bd607d40942631386858a10c1ed1ea5ea8e3a17a033b866d2c1bbe956.
-        self.assertEqual(_digest(legacy_hashes), 'e352ad0c1c3d64e7f0fa179df5e11f9637816c2f628a2dd2d6434efb2566b230')
+        # Then show-reel's launch-film lane pointer (one opening-step line);
+        # only show-reel moves, and main's producer gives the previous pin
+        # e352ad0c1c3d64e7f0fa179df5e11f9637816c2f628a2dd2d6434efb2566b230.
+        self.assertEqual(_digest(legacy_hashes), '1ffcff6d4f60a3351eb36ff5c213ae35fc846c8c023f7d2fb64cfe98872a782d')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
