@@ -23,6 +23,29 @@ All notable changes will be documented here.
   dispatch it only beside its own words, such as "tech debt". An
   architecture that is not code (a model, cloud infra, an org chart, a
   building) routes exactly as before.
+- **The OMH TUI and `omh doctor` say what Hermes' gateway needs, and why.**
+  Three cases used to leave a slow TUI, an empty `/resume`, refused
+  messages or missing skills with no reason given. Each line is said as
+  Hermes', only while its `gateway_state.json` is fresh:
+  - **A session store failure** is said when the record says `unavailable`
+    and Hermes' error log holds a store failure from after the last start.
+    A deleted profile still referenced (a cron job, a kanban board or a
+    served profile) is named, with no restart advice, since a restart does
+    not clear it. A replaced store gets `hermes gateway restart`, with what
+    that restart does to every bot it serves.
+  - **A gateway started before the last OMH update** still runs the old
+    OMH plugin code, and the line says so.
+  - **A draining gateway** starts no new turns, and Hermes holds or refuses
+    new messages as `runtime_draining`. A restart is named with its turns,
+    its seconds left and `agent.restart_after_turn_timeout`; a drain
+    request with the fact that the gateway keeps running; anything else as
+    a stop.
+
+  The TUI shows each once at launch; doctor shows them as the
+  `hermes_gateway` warning row. `omh update --json` now carries the update
+  restart hints as `gateway_restart_hints` (`null` on a dry run, which
+  computes none). Local files only, read in bounded reads; OMH stops and
+  restarts nothing.
 
 - **Code skills tell the executor how to write a test, not only in TDD mode.**
   The questions before a new test and the shapes of tests that guard nothing
@@ -130,6 +153,17 @@ All notable changes will be documented here.
   temporary worktree, with writes stubbed; and prototype code the receipt
   lets later work reference is kept on a named throwaway ref the receipt
   cites.
+
+- **The round-end check names a test whose expectation a keep-behaviour turn
+  rewrote, and diffs a Python file a command names.** A new always-on test
+  check names an existing test that lost an expected value when the request
+  asked for the behaviour, the output or the result to stay the same as a
+  whole, and did not name that test, ask to update a test, or state a new
+  result. A test a command appends to (`printf >> tests/...`) is now diffed
+  instead of firing as an unseen edit. The copy check is unchanged: a
+  look-alike that says it differs on purpose still fires it, because four
+  review rounds showed a note can hide a real copy. The bench gains the
+  `C-TEST-UPDATE` control.
 
 - **The frontend skill now covers data, forms, and input, not only the look.**
   A page that reads or writes remote data loads the state rules that until now

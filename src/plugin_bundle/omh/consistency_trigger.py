@@ -10,9 +10,12 @@ deterministically and from the disk alone, whether such a thing exists:
      also given a digest of its bytes: a same-size rewrite inside one tick of the filesystem's clock
      keeps its ``(mtime, size)``, so only its bytes can show it changed.
    - Before each ``patch`` / ``write_file`` of such a file, it keeps the file's text, once per turn
-     (``""`` for a file that does not exist yet).
-   - A file that changed since the index before its first snapshot (a ``sed``, ``execute_code`` or a
-     delegated child's edit) is marked as having no turn-start text.
+     (``""`` for a file that does not exist yet). Before each ``terminal`` / ``execute_code`` call it
+     does the same for every such file the call's arguments name (``printf ... >> tests/test_x.py``,
+     ``sed -i ... a.py``), within a budget of their own; at the next tool call the ones the command left
+     unchanged are dropped.
+   - A file that changed since the index before its first snapshot (a command that did not name it,
+     or a delegated child's edit) is marked as having no turn-start text.
    - No index is taken for a session whose platform never gets the check (``note_turn_posture``, from
      ``pre_llm_call``), or for a root whose last index ran over budget within ``OVER_BUDGET_SECONDS``.
    - Residual: Hermes blocks a tool call whose ``pre_tool_call`` times out, so no call this hook
@@ -108,8 +111,19 @@ _BUILD_PEEK_DIRS: Final = 64
 MIN_COPY_LINE_CHARS: Final = 30
 _MAX_SESSIONS: Final = 64
 _EDIT_TOOLS: Final = frozenset({"patch", "write_file"})
+# Tools that run a command or code, and so can change any file they name (`_named_python_files`).
+_COMMAND_TOOLS: Final = frozenset({"terminal", "execute_code"})
 _V4A_HEADER: Final = re.compile(r"^\*\*\*\s*(?:Update|Add|Delete)\s+File:\s*(.+)$", re.MULTILINE)
 _V4A_MOVE: Final = re.compile(r"^\*\*\*\s*Move\s+File:\s*(.+?)\s*->\s*(.+)$", re.MULTILINE)
+# A Python file named in a non-edit call's argument (a shell command, a code string): a whole run of
+# path characters that ends in `.py` / `.pyi` (so `x.pyc` and `a.py.bak` are not one). Only the first
+# `MAX_NAMED_SCAN_CHARS` of each argument are read.
+_PATH_RUN: Final = re.compile(r"[\w./@+~-]+")
+MAX_NAMED_FILES: Final = 8
+MAX_NAMED_SCAN_CHARS: Final = 65_536
+# The command-named snapshots' own budget per session, apart from the edits' 32 files / 4 MB.
+MAX_NAMED_SNAPSHOTS: Final = 16
+MAX_NAMED_SNAPSHOT_BYTES: Final = 512_000
 # Top-level names many unrelated modules define; one of them defined elsewhere is not a copy.
 _COMMON_NAMES: Final = frozenset({"main", "log", "LOG", "logger", "LOGGER", "app"})
 _CONSTRUCTOR_METHODS: Final = frozenset({"__init__", "__new__", "__call__"})
@@ -150,36 +164,74 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
         if not session_id:
             return
         state = _turn_state(session_id, kwargs)
+        _prune_named(state)
         tool_name = kwargs.get("tool_name")
-        if tool_name not in _EDIT_TOOLS or not isinstance(tool_input, dict):
+        if not isinstance(tool_input, dict):
+            return
+        if tool_name in _EDIT_TOOLS:
+            requested_paths = _edit_targets(str(tool_name), tool_input)
+        elif tool_name in _COMMAND_TOOLS:
+            # A command or a code string that names a Python file may change it: its text is kept now,
+            # before the call runs, so a `printf >> tests/x.py` or a `sed -i` on a named file is
+            # diffed like a patch instead of firing as opaque. A file the call changes without naming
+            # it still has no snapshot, and fires as before.
+            requested_paths = _named_python_files(tool_input)
+        else:
             return
         root = state["root"]
-        for requested in _edit_targets(str(tool_name), tool_input):
+        index = state["index"]
+        named = tool_name in _COMMAND_TOOLS
+        if named and index is None:
+            return  # without an index every verdict fires anyway; a command's snapshot buys nothing
+        for requested in requested_paths:
             if not requested.endswith(PYTHON_SUFFIXES):
                 continue
             path = _resolve(requested, root)
             if path is None:
                 continue
             with _lock:
-                if path in state["before"] or path in state["opaque"]:
+                if path in state["before"] or path in state["named"] or path in state["opaque"]:
                     continue
-            index = state["index"]
             if index is not None and _differs(index.get(path), _stat(path), path):
-                # Changed since the turn began, by something that was not a patch or write_file:
-                # the text on disk now is not the turn's starting text.
+                # Changed since the turn began, by a call that did not name it: the text on disk now
+                # is not the turn's starting text.
                 with _lock:
                     state["opaque"].add(path)
                 continue
             text = _read(path, missing="")
             with _lock:
-                if text is None or len(state["before"]) >= MAX_SNAPSHOT_FILES \
-                        or state["bytes"] + len(text) > MAX_SNAPSHOT_BYTES:
+                if text is None:
                     continue
-                if path not in state["before"]:
-                    state["before"][path] = text
-                    state["bytes"] += len(text)
+                if named:
+                    # A budget of their own, so files a read-only command names never take the slots
+                    # an edit needs; `_prune_named` frees the ones the command left unchanged.
+                    if len(state["named"]) >= MAX_NAMED_SNAPSHOTS \
+                            or state["named_bytes"] + len(text) > MAX_NAMED_SNAPSHOT_BYTES:
+                        continue
+                    state["named"][path] = text
+                    state["named_bytes"] += len(text)
+                    state["pending"].append(path)
+                    continue
+                if len(state["before"]) >= MAX_SNAPSHOT_FILES or state["bytes"] + len(text) > MAX_SNAPSHOT_BYTES:
+                    continue
+                state["before"][path] = text
+                state["bytes"] += len(text)
     except Exception as exc:  # noqa: BLE001 - never fail the call; a missing snapshot fires the check
         _LOG.warning("consistency_trigger snapshot failed=%s: %s", type(exc).__name__, exc)
+
+
+def _prune_named(state: dict[str, Any]) -> None:
+    """At the next tool call, drop the command-named snapshots the command left unchanged: only a file
+    the command changed needs its turn-start text, and the rest would sit in memory for nothing."""
+    index = state["index"]
+    with _lock:
+        pending, state["pending"] = state["pending"], []
+    for path in pending:
+        if index is not None and not _differs(index.get(path), _stat(path), path):
+            with _lock:
+                text = state["named"].pop(path, None)
+                if text is not None:
+                    state["named_bytes"] -= len(text)
 
 
 def round_end_trigger(session_id: str, code_paths: tuple[str, ...]) -> Verdict:
@@ -204,6 +256,16 @@ def turn_root(session_id: object) -> str | None:
     with _lock:
         state = _sessions.get(session_id)
         return state["root"] if state is not None else None
+
+
+def turn_snapshots(session_id: object) -> dict[str, str]:
+    """A copy of this turn's turn-start texts (realpath -> text, ``""`` for a file that did not exist),
+    without consuming the session's state. Empty when the session has none."""
+    if not isinstance(session_id, str) or not session_id:
+        return {}
+    with _lock:
+        state = _sessions.get(session_id)
+        return {**state["named"], **state["before"]} if state is not None else {}
 
 
 def discard_snapshots(session_id: object) -> None:
@@ -266,7 +328,7 @@ def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         if state is not None and state["turn"] == turn:  # a parallel first call got here first
             return state
         state = {"turn": turn, "root": root, "index": index, "unindexed": unindexed, "before": {},
-                 "opaque": set(), "bytes": 0}
+                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": []}
         _sessions.pop(session_id, None)
         _sessions[session_id] = state
         while len(_sessions) > _MAX_SESSIONS:
@@ -299,12 +361,13 @@ def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline:
     changed |= reported
     needles = _Needles()
     for path in sorted(changed):
-        if path in state["opaque"] or path not in state["before"]:
+        before = state["before"].get(path, state["named"].get(path))
+        if path in state["opaque"] or before is None:
             return Verdict(True, "opaque_edit", _relative(path, root))
         after = _read(path, missing="")
         if after is None:
             return Verdict(True, "too_large", _relative(path, root))
-        status = _collect(state["before"][path], after, needles)
+        status = _collect(before, after, needles)
         if status != "ok":
             return Verdict(True, status, _relative(path, root))
     if needles.empty():
@@ -635,6 +698,27 @@ def _relative(path: str, root: str) -> str:
     return workspace_relative(path, root) if inside(path, root) else os.path.basename(path)
 
 
+def _named_python_files(args: dict[str, Any]) -> list[str]:
+    """The ``.py`` / ``.pyi`` paths spelled in a call's top-level string arguments, at most
+    ``MAX_NAMED_FILES`` of them. Each is resolved against the workspace root, so one written relative
+    to a directory the shell moved into resolves to another file or to none: the file the call
+    really changed then has no snapshot and fires as opaque, as it did before."""
+    found: list[str] = []
+    for value in args.values():
+        if not isinstance(value, str):
+            continue
+        for match in _PATH_RUN.finditer(value, 0, MAX_NAMED_SCAN_CHARS):
+            token = match.group(0)
+            # `~` is the shell's, not a workspace path; a bare `.py` is a glob's leftover (`*.py`).
+            if token.startswith("~") or os.path.basename(token) in PYTHON_SUFFIXES:
+                continue
+            if token.endswith(PYTHON_SUFFIXES) and token not in found:
+                found.append(token)
+                if len(found) >= MAX_NAMED_FILES:
+                    return found
+    return found
+
+
 def _edit_targets(tool_name: str, args: dict[str, Any]) -> list[str]:
     if tool_name == "patch" and args.get("mode") == "patch":
         body = args.get("patch")
@@ -677,4 +761,4 @@ def _parse(text: str) -> ast.AST | None:
 
 
 __all__ = ["Verdict", "discard_snapshots", "note_turn_posture", "reset", "round_end_trigger", "snapshot_before_edit",
-           "turn_root"]
+           "turn_root", "turn_snapshots"]

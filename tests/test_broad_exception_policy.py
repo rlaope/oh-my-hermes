@@ -774,6 +774,22 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "A note is only ever built from names the parsed files show missing, so a failure never claims one is.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/test_expectation_check.py",
+        "note_request",
+        INTENTIONAL,
+        "Runs in pre_llm_call and must never fail the turn. A failure is logged as a warning naming the exception "
+        "class (`test_expectation_check note_request failed=`) and records nothing for the turn, and a turn with no "
+        "record gets no test note; it is never read as a request that asked for behaviour to stay the same.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/test_expectation_check.py",
+        "round_end_note",
+        INTENTIONAL,
+        "An unexpected failure comparing the turn's test files is logged as a warning naming the exception class "
+        "(`test_expectation_check round_end ... failed=`) and yields no note; the turn ends as it would without "
+        "the check. A note is only ever built from expected values the parsed turn-start test shows lost.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/impact_check.py",
         "enabled",
         INTENTIONAL,
@@ -944,8 +960,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 96 -> 97 / 87 -> 88: `update_notice.UpdateCheck._ask`, the OMH TUI's update
 # notice thread (a failure keeps the cached version and is recorded as
 # `problem`, never a traceback over the screen).
-EXPECTED_HANDLER_COUNT = 97
-EXPECTED_ANCHOR_COUNT = 88
+# 97 -> 99 / 88 -> 90: `test_expectation_check.note_request` and `round_end_note`,
+# the round-end test check: a pre_llm_call body that records nothing on a failure,
+# and a note that says nothing on one.
+EXPECTED_HANDLER_COUNT = 99
+EXPECTED_ANCHOR_COUNT = 90
 
 
 class DerivedSite(NamedTuple):

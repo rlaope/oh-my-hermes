@@ -472,7 +472,7 @@ def bundled_plugin_records() -> list[dict[str, str]]:
 def read_plugin_manifest(plugin_dir: Path) -> dict[str, Any] | None:
     try:
         return read_json_object(plugin_dir / PLUGIN_MANAGED_MANIFEST)
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return None
 
 
