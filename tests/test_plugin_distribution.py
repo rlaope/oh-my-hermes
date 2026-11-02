@@ -1972,7 +1972,7 @@ class PluginReinstallSafetyTests(unittest.TestCase):
         before = (self.target / "__init__.py").stat()
         result = install_plugin_bundle(self.paths)
         self.assertFalse(result["changed"])
-        self.assertFalse(result["files_changed"])
+        self.assertFalse(result["bundle_files_changed"])
         manifest = json.loads((self.target / PLUGIN_MANAGED_MANIFEST).read_text(encoding="utf-8"))
         self.assertEqual(manifest["installed_at"], installed_at)
         self.assertEqual((self.target / "__init__.py").stat().st_ino, before.st_ino)
@@ -1985,12 +1985,23 @@ class PluginReinstallSafetyTests(unittest.TestCase):
             result = install_plugin_bundle(self.paths)
             current = inspect_plugin_bundle(self.paths)["plugin_manifest_current"]
         self.assertTrue(result["changed"])
-        self.assertFalse(result["files_changed"])
+        self.assertFalse(result["bundle_files_changed"])
         manifest = json.loads((self.target / PLUGIN_MANAGED_MANIFEST).read_text(encoding="utf-8"))
         self.assertEqual(manifest["package_site"], site)
         self.assertEqual(manifest["installed_at"], installed_at)
         self.assertEqual((self.target / "__init__.py").stat().st_ino, before.st_ino)
         self.assertTrue(current)
+
+    def test_a_manifest_rewrite_a_crash_left_behind_does_not_block_an_update(self) -> None:
+        # A `package_site` move rewrites the manifest in place through
+        # `atomic_write_json`; a crash mid-write leaves its staging file.
+        leftover = self.target / f".{PLUGIN_MANAGED_MANIFEST}.4242-0123456789abcdef.tmp"
+        leftover.write_text("{", encoding="utf-8")
+        install_plugin_bundle(self.paths)
+        lookalike = self.target / "notes.tmp"
+        lookalike.write_text("user data", encoding="utf-8")
+        with self.assertRaisesRegex(PluginPackError, "notes.tmp"):
+            install_plugin_bundle(self.paths)
 
     def test_a_new_bundled_path_is_not_owned_by_the_old_manifest(self) -> None:
         manifest_path = self.target / PLUGIN_MANAGED_MANIFEST

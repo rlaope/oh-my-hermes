@@ -3341,8 +3341,10 @@ bundle's files, so an update that ships the same bundle (only the package
 directory the bundle imports `omh` from moved to the new generation) asks
 for no restart, and a gateway running without a pid record is not named.
 A gateway that keeps running imports `omh` from the generation it started
-on while that directory exists; once an update collects it, the next import
-comes from the generation the bundle now records.
+on while that directory exists. Once an update collects it, the next import
+comes from the generation the bundle now records if that holds the same
+version; another version is reported as `stale_until_restart` and needs the
+restart.
 
 To opt one bot out of managed skill registration, unregister that profile only:
 
@@ -4933,8 +4935,10 @@ place. It runs as a transaction:
    an open OMH TUI started on (it holds an OS lock on a file under
    `generation-holds/` until it exits). When the activation history cannot
    say which generation a gateway started on, every generation created before
-   that start is kept, and the update prints a `note:` saying so; the first
-   update after that gateway restarts collects them. On failure, attempt to
+   that start is kept, and the update prints a `note:` saying so; an update
+   collects them once that gateway has restarted, or once its `gateway.pid`
+   record is gone. A SIGTERM sent to `omh` alone releases the TUI's hold while
+   the TUI itself runs on. On failure, attempt to
    move the pointer back and re-enter the previous generation; shared-resource
    restoration must succeed before recovery is considered complete.
 

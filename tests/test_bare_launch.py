@@ -117,6 +117,43 @@ class LaunchHomeTests(unittest.TestCase):
                     self.assertEqual(json.loads(record.read_text()), str(paths.hermes_home))
 
 
+    def test_the_tui_session_runs_inside_a_generation_hold(self) -> None:
+        # `omh update`'s GC keeps a generation only while something holds it;
+        # the hold has to be taken before the child starts and kept until it exits.
+        from contextlib import contextmanager
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from omh.commands import bare_launch
+        from omh.install import generation_hold
+        from omh.paths import resolve_paths
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flag, record = root / "held", root / "seen"
+
+            @contextmanager
+            def fake_hold(prefix=None):
+                flag.touch()
+                try:
+                    yield "fixture"
+                finally:
+                    flag.unlink()
+
+            hermes = root / "hermes"
+            hermes.write_text(
+                f"#!{sys.executable}\nimport os\n"
+                f"open({str(record)!r}, 'w').write(str(os.path.exists({str(flag)!r})))\n",
+                encoding="utf-8",
+            )
+            hermes.chmod(0o755)
+            args = bare_launch_args(["--hermes-home", str(root / "selected")])
+            paths = resolve_paths(str(root / "omh"), str(root / "selected"))
+            with patch.object(generation_hold, "hold_running_generation", fake_hold), \
+                    patch.object(bare_launch, "_omh_tui_blocker", return_value=""):
+                self.assertEqual(bare_launch._run_terminal(str(hermes), args, paths), 0)
+            self.assertEqual(record.read_text(), "True")
+            self.assertFalse(flag.exists())
+
 class BareImportTests(unittest.TestCase):
     def test_a_bare_launch_does_not_import_the_command_tree(self) -> None:
         # stdin is not a terminal, so the launch has nothing to open and prints the welcome text.

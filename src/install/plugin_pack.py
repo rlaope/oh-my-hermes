@@ -258,9 +258,7 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
     # already runs these exact bundle bytes, and the restart hint reads that
     # stamp, so a move alone must not ask anyone to restart.
     site = package_site_record()
-    site_moved = existing_manifest is not None and not files_changed and (
-        existing_manifest.get(PACKAGE_SITE_KEY) != site or existing_manifest.get("version") != __version__
-    )
+    site_moved = existing_manifest is not None and not files_changed and existing_manifest.get(PACKAGE_SITE_KEY) != site
     result = _plugin_distribution_payload(
         paths,
         dry_run=dry_run,
@@ -269,7 +267,7 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
         file_records=source_records,
         dirty_files=dirty,
     )
-    result["files_changed"] = files_changed
+    result["bundle_files_changed"] = files_changed
     if dry_run:
         result["observed_scope"] = "dry run only; no plugin files were written"
         return result
@@ -279,7 +277,6 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
         )
     elif site_moved and existing_manifest is not None:
         moved = {key: value for key, value in existing_manifest.items() if key != PACKAGE_SITE_KEY}
-        moved["version"] = __version__
         if site is not None:
             moved[PACKAGE_SITE_KEY] = site
         atomic_write_json(target / PLUGIN_MANAGED_MANIFEST, moved)
@@ -521,6 +518,10 @@ def _plugin_unmanaged_entries(manifest: dict[str, Any], plugin_dir: Path) -> lis
     """
     managed = set(_manifest_file_map(manifest)) | {PLUGIN_MANAGED_MANIFEST}
     managed_dirs = {parent.as_posix() for rel in managed for parent in Path(rel).parents}
+    # `atomic_write_json` stages a manifest rewrite as
+    # `.<manifest>.<pid>-<hex>.tmp` beside it; one a crash left behind is
+    # OMH's own, not the person's, and must not block the next update.
+    manifest_temp_prefix = f".{PLUGIN_MANAGED_MANIFEST}."
     unknown: list[str] = []
 
     def visit(directory: Path) -> None:
@@ -534,6 +535,8 @@ def _plugin_unmanaged_entries(manifest: dict[str, Any], plugin_dir: Path) -> lis
                 unknown.append(rel)
             elif entry.is_dir():
                 visit(entry)
+            elif rel.startswith(manifest_temp_prefix) and rel.endswith(".tmp") and "/" not in rel:
+                continue
             elif rel not in managed and not _generated_plugin_bytecode(entry, plugin_dir, managed):
                 unknown.append(rel)
 

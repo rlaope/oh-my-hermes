@@ -16,9 +16,13 @@ All notable changes will be documented here.
   gateway restart hint fired after every update; a moved package directory
   now updates only the manifest's `package_site`, and the hint fires only
   when the bundle's files change. Last, a gateway's `omh` finder never looked
-  at the manifest again; it now keeps its directory while that exists and
-  falls forward to the recorded one once an update removes it, so later
-  `omh.*` imports keep working.
+  at the manifest again. It now keeps its directory while that exists. Once
+  an update removes it, the finder moves to the recorded directory when that
+  holds the version already loaded (`package_site` status `moved`), so later
+  `omh.*` imports keep working; code that reads files through an old
+  module's `__file__` still points at the removed directory until a restart.
+  The recorded directory holding another version is reported as
+  `stale_until_restart`, and nothing is loaded from it.
 
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a

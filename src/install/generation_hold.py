@@ -19,6 +19,7 @@ from contextlib import ExitStack, contextmanager
 import os
 from pathlib import Path
 import sys
+import time
 
 try:
     from ..system.local_store import FileLockTimeout, file_lock
@@ -26,6 +27,8 @@ except ImportError:  # pragma: no cover - direct-source installer smoke.
     from system.local_store import FileLockTimeout, file_lock
 
 HOLDS_DIRNAME = "generation-holds"
+HOLD_ATTEMPTS = 20
+HOLD_RETRY_SECONDS = 0.05
 
 
 def _generation_of(prefix: Path) -> Path | None:
@@ -59,9 +62,15 @@ def hold_running_generation(prefix: str | None = None) -> Iterator[str]:
     stem = f"{generation.name}.{os.getpid()}"
     lock = ExitStack()
     held = ""
-    for _attempt in range(3):
+    for _attempt in range(HOLD_ATTEMPTS):
         try:
             lock.enter_context(file_lock(holds / stem, timeout_seconds=0.0, private=True))
+        except FileLockTimeout:
+            # A GC probe locks every hold file it lists for a moment, this new
+            # one included; it lets go at once, so try again.
+            lock.close()
+            time.sleep(HOLD_RETRY_SECONDS)
+            continue
         except OSError:
             break
         # A GC probe that took this file before the lock did removes it while
@@ -70,6 +79,12 @@ def hold_running_generation(prefix: str | None = None) -> Iterator[str]:
             held = generation.name
             break
         lock.close()
+    if not held:
+        print(
+            f"omh: could not hold generation {generation.name} for this session; "
+            "an `omh update` while it runs may remove the files it imports from.",
+            file=sys.stderr,
+        )
     try:
         yield held
     finally:

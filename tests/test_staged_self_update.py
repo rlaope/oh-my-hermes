@@ -999,6 +999,100 @@ class StagedSelfUpdateTests(unittest.TestCase):
             collect_garbage(root, dict(state), result, running_generation=None)
             self.assertFalse(tui.exists())
 
+    def test_gc_keeps_by_the_latest_of_several_unmatched_starts(self):
+        # Two gateways (two profiles) whose starts no stamped activation
+        # precedes: a generation created between them may be the one the later
+        # gateway serves, so the later start decides.
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _legacy, _args, _plan = self._fixture(root, pointer=True)
+            names = {
+                "between": "20261029120000000000-aaaaaaaaaa",
+                "after_both": "20261030120000000000-bbbbbbbbbb",
+                "active": "20261102020057175032-edfca25300",
+            }
+            generations = {key: root / "generations" / name for key, name in names.items()}
+            for generation in generations.values():
+                generation.mkdir(parents=True, exist_ok=True)
+            state: dict[str, JsonValue] = {
+                "active": self._entry(generations["active"]),
+                "previous_known_good": None,
+                "activations": [{"id": names["active"], "activated_at": "2026-11-02T02:01:00Z"}],
+            }
+            starts = [
+                datetime.fromisoformat("2026-10-29T00:00:00+00:00").timestamp(),
+                datetime.fromisoformat("2026-10-29T18:00:00+00:00").timestamp(),
+            ]
+            result: GarbageCollectionResult = {"cleanup": {"collected": []}}
+            collect_garbage(root, state, result, running_generation=None, gateway_starts=starts)
+            self.assertTrue(generations["between"].exists(), "GC judged by the earlier start")
+            self.assertFalse(generations["after_both"].exists())
+            self.assertIn("2026-10-29T18:00:00Z", result["cleanup"].get("reason", ""))
+
+    def _hold_fixture(self, root: Path) -> tuple[Path, Path]:
+        generation = root / "generations" / "20261102020057175032-edfca25300"
+        (generation / "venv").mkdir(parents=True)
+        return generation, root / generation_hold.HOLDS_DIRNAME / f".{generation.name}.{os.getpid()}.lock"
+
+    def test_a_hold_retries_past_a_gc_probe_that_has_its_file_locked(self):
+        import threading
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generation, sidecar = self._hold_fixture(root)
+            locked = threading.Event()
+
+            def gc_probe() -> None:
+                # What `held_generations` does to every file it lists, briefly.
+                with file_lock(sidecar.with_name(sidecar.name[1:-len(".lock")]), timeout_seconds=0.0):
+                    locked.set()
+                    time.sleep(0.2)
+
+            probe = threading.Thread(target=gc_probe)
+            probe.start()
+            self.assertTrue(locked.wait(2))
+            try:
+                with generation_hold.hold_running_generation(str(generation / "venv")) as held:
+                    self.assertEqual(held, generation.name)
+                    self.assertEqual(generation_hold.held_generations(root), {generation.name})
+            finally:
+                probe.join()
+
+    @unittest.skipIf(os.name == "nt", "Windows will not unlink a file a holder has open")
+    def test_a_hold_on_a_file_a_gc_probe_unlinked_is_retaken(self):
+        from omh.system import local_store
+
+        real_acquire = local_store._acquire_os_file_lock
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generation, sidecar = self._hold_fixture(root)
+            calls = 0
+
+            def unlink_first(handle, path, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    # A GC probe took and removed the file before this lock.
+                    sidecar.unlink()
+                return real_acquire(handle, path, **kwargs)
+
+            with patch.object(local_store, "_acquire_os_file_lock", unlink_first), \
+                    generation_hold.hold_running_generation(str(generation / "venv")) as held:
+                self.assertEqual(held, generation.name)
+                self.assertTrue(sidecar.exists(), "the hold locked a file nobody can see")
+            self.assertEqual(calls, 2)
+
+    def test_a_hold_that_cannot_be_taken_says_so(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generation, _sidecar = self._hold_fixture(root)
+            (root / generation_hold.HOLDS_DIRNAME).write_text("not a directory")
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr), \
+                    generation_hold.hold_running_generation(str(generation / "venv")) as held:
+                self.assertEqual(held, "")
+            self.assertIn(f"could not hold generation {generation.name}", stderr.getvalue())
+
     def test_a_hold_left_by_a_process_that_died_holds_nothing(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

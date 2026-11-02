@@ -100,7 +100,7 @@ import shutil
 import sys
 import types
 
-bundle, old, new = sys.argv[1:4]
+bundle, old, new, loaded_version, next_version = sys.argv[1:6]
 package = types.ModuleType("hermes_plugin_omh")
 package.__path__ = [bundle]
 sys.modules["hermes_plugin_omh"] = package
@@ -127,9 +127,22 @@ kept_site = package_site.active_site()
 import omh.early
 
 shutil.rmtree(old)
+if next_version != loaded_version:
+    # A release update: the bundle it copied declares the next version.
+    plugin_yaml = bundle + "/plugin.yaml"
+    with open(plugin_yaml, encoding="utf-8") as handle:
+        text = handle.read()
+    with open(plugin_yaml, "w", encoding="utf-8") as handle:
+        handle.write(text.replace(f'version: "{loaded_version}"', f'version: "{next_version}"'))
 moved = package_site.ensure_recorded_package_site()
-import omh.late
-import omh.sub.leaf
+state = package_site.package_site_state()
+try:
+    import omh.late
+    import omh.sub.leaf
+
+    late, leaf = omh.late.__file__, omh.sub.leaf.__file__
+except ImportError as error:
+    late, leaf = type(error).__name__, ""
 
 print(json.dumps({
     "first": first,
@@ -137,9 +150,10 @@ print(json.dumps({
     "kept_site": kept_site,
     "early": omh.early.__file__,
     "moved": moved,
+    "state": state,
     "moved_site": package_site.active_site(),
-    "late": omh.late.__file__,
-    "leaf": omh.sub.leaf.__file__,
+    "late": late,
+    "leaf": leaf,
 }))
 """
 
@@ -303,18 +317,23 @@ class RecordedPackageSiteTests(unittest.TestCase):
         self.assertIsNone(observed["omh_file"])
 
 
-    def test_a_finder_keeps_its_site_until_it_is_gone_then_falls_forward(self) -> None:
+    def fall_forward(self, next_version: str) -> dict:
         old, new = self.root / "generations" / "a" / "site", self.root / "generations" / "b" / "site"
         _fake_site(old, __version__)
-        _fake_site(new, __version__)
+        _fake_site(new, next_version)
         self.record(old)
         env = {"PATH": os.environ.get("PATH", ""), "HOME": str(self.root / "home"), "TMPDIR": str(self.root)}
         result = subprocess.run(
-            [sys.executable, "-I", "-S", "-B", "-c", _FALL_FORWARD_HOST, str(self.bundle), str(old), str(new)],
+            [sys.executable, "-I", "-S", "-B", "-c", _FALL_FORWARD_HOST, str(self.bundle), str(old), str(new),
+             __version__, next_version],
             env=env, cwd=str(self.root), capture_output=True, text=True, timeout=120, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        observed = json.loads(result.stdout)
+        return json.loads(result.stdout)
+
+    def test_a_finder_keeps_its_site_until_it_is_gone_then_falls_forward(self) -> None:
+        old, new = self.root / "generations" / "a" / "site", self.root / "generations" / "b" / "site"
+        observed = self.fall_forward(__version__)
         self.assertEqual(observed["first"], "added")
         # While the first site is there the process keeps importing from it.
         self.assertEqual(observed["kept"], "added")
@@ -322,10 +341,23 @@ class RecordedPackageSiteTests(unittest.TestCase):
         self.assertTrue(observed["early"].startswith(str(old)), observed["early"])
         # Once it is gone, the recorded site serves the next import, and a
         # subpackage loaded from the old site finds its submodules there too.
-        self.assertEqual(observed["moved"], "added")
+        # Reported as a move, not as a clean first install, so a restart can be named.
+        self.assertEqual(observed["moved"], "moved")
+        self.assertEqual(observed["state"]["former"], [str(old)])
+        self.assertEqual(observed["state"]["loaded_version"], __version__)
         self.assertEqual(observed["moved_site"], str(new))
         self.assertTrue(observed["late"].startswith(str(new)), observed["late"])
         self.assertTrue(observed["leaf"].startswith(str(new)), observed["leaf"])
+
+    def test_a_finder_never_falls_forward_onto_another_version(self) -> None:
+        # A release update removed the loaded 4.x directory and recorded the
+        # next release: mixing the two in one process is refused, and named.
+        observed = self.fall_forward("999.0.0")
+        self.assertEqual(observed["moved"], "stale_until_restart")
+        self.assertEqual(observed["state"]["loaded_version"], __version__)
+        self.assertEqual(observed["state"]["installed_version"], "999.0.0")
+        self.assertEqual(observed["moved_site"], str(self.root / "generations" / "a" / "site"))
+        self.assertEqual(observed["late"], "ModuleNotFoundError")
 
 class PackageSiteRecordTests(unittest.TestCase):
     """What `omh setup` writes beside the bundle."""

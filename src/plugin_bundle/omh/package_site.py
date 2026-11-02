@@ -26,7 +26,12 @@ The reach is deliberately narrow:
 * The recorded directory is used only when it holds an `oh-my-hermes`
   distribution whose version equals this bundle's `plugin.yaml` version, and
   an `omh/__init__.py`. A stale or mismatched install is reported, never
-  imported. The package needs Python 3.11 or newer and has no third-party
+  imported. A process that already imports `omh` from one directory keeps it
+  while it exists; once an update removed it, the process moves to the
+  recorded directory only when that holds the same version as the code it
+  already runs (`moved`, with the old directory in `former`). A different
+  version is reported as `stale_until_restart` and nothing is imported from
+  it. The package needs Python 3.11 or newer and has no third-party
   dependencies (`dependencies = []`), so it runs on Hermes' interpreter as it
   runs on its own.
 * Modules loaded this way never write bytecode: the directory belongs to OMH's
@@ -61,8 +66,17 @@ SITE_MISSING = "missing"
 SITE_VERSION_MISMATCH = "version_mismatch"
 SITE_UNREADABLE = "unreadable"
 SITE_UNSUPPORTED_PYTHON = "unsupported_python"
+# The directory this process imported `omh` from is gone and the recorded one
+# holds the same version: later imports come from there (`former` names the old).
+SITE_MOVED = "moved"
+# The directory this process imported `omh` from is gone and the recorded one
+# holds another version (`loaded_version` is the one in memory): only a
+# restart loads it.
+SITE_STALE = "stale_until_restart"
 
-_state: dict[str, Any] = {"status": "", "path": "", "installed_version": "", "bundle_version": ""}
+_state: dict[str, Any] = {
+    "status": "", "path": "", "installed_version": "", "bundle_version": "", "loaded_version": "", "former": [],
+}
 
 
 def _bundle_dir() -> Path:
@@ -74,8 +88,23 @@ def _bundle_version() -> str:
     return _runtime_reader._plugin_version(bundle, root=bundle)
 
 
-def _record(status: str, path: str = "", installed_version: str = "", bundle_version: str = "") -> str:
-    _state.update(status=status, path=path, installed_version=installed_version, bundle_version=bundle_version)
+def _record(
+    status: str,
+    path: str = "",
+    installed_version: str = "",
+    bundle_version: str = "",
+    *,
+    loaded_version: str = "",
+    former: list[str] | None = None,
+) -> str:
+    _state.update(
+        status=status,
+        path=path,
+        installed_version=installed_version,
+        bundle_version=bundle_version,
+        loaded_version=loaded_version,
+        former=list(former or ()),
+    )
     return status
 
 
@@ -144,13 +173,19 @@ def ensure_recorded_package_site() -> str:
     mix two installs while it can avoid it. When the directory is gone (an
     update collected the generation it belonged to), the finder falls forward
     to the directory the manifest records now, under the same checks a first
-    install passes, because the alternative is that every later `omh.*`
-    import fails until Hermes restarts.
+    install passes, and only when that directory holds the version already in
+    memory (`moved`); otherwise every later `omh.*` import would fail until
+    Hermes restarts. Another version is never mixed in: it is reported as
+    `stale_until_restart`.
     """
     finder = _installed_finder()
     if finder is not None:
         if os.path.isfile(os.path.join(finder.site, "omh", "__init__.py")):
-            return _record(SITE_ADDED, finder.site, finder.version, finder.version)
+            status = SITE_MOVED if finder.former else SITE_ADDED
+            return _record(
+                status, finder.site, finder.version, finder.version,
+                loaded_version=finder.version, former=finder.former,
+            )
     elif _omh_importable():
         return _record(SITE_ALREADY_IMPORTABLE)
     if sys.version_info < (3, 11):
@@ -178,9 +213,17 @@ def ensure_recorded_package_site() -> str:
     import importlib
 
     if finder is not None:
+        if installed_version != finder.version:
+            return _record(
+                SITE_STALE, path, installed_version, bundle_version,
+                loaded_version=finder.version, former=[*finder.former, finder.site],
+            )
         finder.move_to(path, installed_version)
         importlib.invalidate_caches()
-        return _record(SITE_ADDED, path, installed_version, bundle_version)
+        return _record(
+            SITE_MOVED, path, installed_version, bundle_version,
+            loaded_version=finder.version, former=finder.former,
+        )
     # First on `sys.meta_path`, so `omh.*` submodules are loaded by this
     # finder's read-only loader rather than by the default path finder, which
     # would write `.pyc` files into the installer's tree. It answers for
@@ -220,6 +263,8 @@ class _OmhSiteFinder:
             return None
         import importlib.machinery
 
+        # A package loaded from a directory the finder moved away from keeps
+        # that directory in its `__path__`; the lookup maps it here instead.
         search = [self.site] if fullname == "omh" else [_moved(entry, self.former, self.site) for entry in path or ()]
         # A submodule is ours only when its parent package came from this
         # directory; any other `omh` is left to the finders after this one.
@@ -284,7 +329,9 @@ __all__ = [
     "SITE_ADDED",
     "SITE_ALREADY_IMPORTABLE",
     "SITE_MISSING",
+    "SITE_MOVED",
     "SITE_NOT_RECORDED",
+    "SITE_STALE",
     "SITE_UNREADABLE",
     "SITE_UNSUPPORTED_PYTHON",
     "SITE_VERSION_MISMATCH",

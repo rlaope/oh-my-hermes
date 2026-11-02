@@ -266,7 +266,7 @@ def collect_garbage(
             result["cleanup"]["reason"] = (
                 f"kept generations created before the Hermes gateway start recorded at {stamp}: "
                 "no recorded activation says which one that gateway serves; "
-                "they are collected by the first update after it restarts"
+                "an update collects them once that gateway has restarted, or once its gateway.pid record is gone"
             )
         if item.name not in keep and not item.is_symlink() and not (junction and junction()):
             shutil.rmtree(item, ignore_errors=True)
