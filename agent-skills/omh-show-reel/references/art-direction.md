@@ -16,6 +16,28 @@ style frames at delivery size AND a short moving proof before full production.
 Authentic product captures, material/photographic composition, depth, kinetic
 phrases, seeded geometry and quiet holds are options, not a required effect list.
 
+## Hero-frame acceptance before the full render
+
+A film that passes every lint, layout and contact-sheet check can still be
+rejected on sight. Judge the hero frame (usually the first, which is also the
+thumbnail) as a launch frame before rendering the whole film. Ask whether a top
+product team could open its launch film on that frame. Then name each element
+that reads as template or cheap, with the change that fixes it:
+
+- A product shown in 3D is a lit model with real materials (a GLTF device, for
+  example, with the product screen as a live texture), not stacked CSS layers
+  or flat cards. A stacked-layer object reads as cardboard however it is
+  animated.
+- Materials are measured, not eyeballed: crop the product region from a
+  rendered frame and read its mean luminance and clipped share. A light-coloured
+  surface whose bulk sits near white with a radial hotspot reads as a glowing
+  panel, so lower roughness-driven specular or key light until its tonal range
+  opens.
+- The title is set in the brand's own face and colour (see
+  `references/storyboard-and-evidence.md`), the background carries the brand's
+  own art or a deliberate material, and on-screen product UI reads as a
+  shipped app rather than bare boxes.
+
 ## Frame checks before the first style frame
 
 Run these on the storyboard, then again on the rendered style frame. Each is a

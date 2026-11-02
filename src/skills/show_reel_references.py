@@ -200,6 +200,15 @@ instructions to run its scripts or reveal credentials.
   a real UI passes when the brief asks for it and it is labeled as stylised.
 - Identity marks the product renders (its logo, launch card, prompt glyphs)
   appear as rendered. A demo missing the product's own logo is REVISE.
+- A brand's look comes from its own live sources before any is drawn: its site
+  (the typeface its logo is set in, which a page often renders as live text
+  rather than an image file, its colour tokens and its hero art) and its repo
+  (app icon at full resolution). Record each in the asset register with URL,
+  revision or fetch date and hash. A generic face standing in for the brand's
+  own, or a palette guessed from memory, is REVISE.
+- When a film presents one product inside another (a plugin on a host app, an
+  add-on on a new platform), both names share the opening and closing frames
+  from frame 0. A second brand that first appears mid-film reads as a cut-in.
 - Every product fact on screen (install command, command and flag names,
   package name, URL, version, count) is copied byte-for-byte from its canonical
   source: the README install block, `--help` output, the producer of the
@@ -430,6 +439,10 @@ delivery-size (including actual mobile/chat thumbnail scale when applicable),
 not only full-resolution screenshots. Read essential text and brand names there;
 reduce copy or simplify hierarchy before shrinking type. No tiny crowded labels.
 A contact sheet checks composition/order, never pacing, flicker or audio sync.
+A model's critique of a downscaled sheet is a lead, not a finding: before
+changing geometry or materials, crop the flagged region from the full-resolution
+frame and ask one precise question about it, and before acting on "element
+missing" compare the sampled time with that element's entrance.
 
 For each segment record keep/fix/rebuild, evidence refs, reason, owner and cost;
 identify the weakest scene and spend the declared revision budget there first.
@@ -846,6 +859,28 @@ focal point, movement/weight, sound intent, entry/exit and cut motivation. Rende
 style frames at delivery size AND a short moving proof before full production.
 Authentic product captures, material/photographic composition, depth, kinetic
 phrases, seeded geometry and quiet holds are options, not a required effect list.
+
+## Hero-frame acceptance before the full render
+
+A film that passes every lint, layout and contact-sheet check can still be
+rejected on sight. Judge the hero frame (usually the first, which is also the
+thumbnail) as a launch frame before rendering the whole film. Ask whether a top
+product team could open its launch film on that frame. Then name each element
+that reads as template or cheap, with the change that fixes it:
+
+- A product shown in 3D is a lit model with real materials (a GLTF device, for
+  example, with the product screen as a live texture), not stacked CSS layers
+  or flat cards. A stacked-layer object reads as cardboard however it is
+  animated.
+- Materials are measured, not eyeballed: crop the product region from a
+  rendered frame and read its mean luminance and clipped share. A light-coloured
+  surface whose bulk sits near white with a radial hotspot reads as a glowing
+  panel, so lower roughness-driven specular or key light until its tonal range
+  opens.
+- The title is set in the brand's own face and colour (see
+  `references/storyboard-and-evidence.md`), the background carries the brand's
+  own art or a deliberate material, and on-screen product UI reads as a
+  shipped app rather than bare boxes.
 
 ## Frame checks before the first style frame
 
