@@ -77,7 +77,19 @@ on the operator's own owner-naming message) typing the command.
 ```sh
 omh coding run --owner claude-code --goal "Research pricing approaches and write a summary." \
   [--goal-file prompt.md] [--unit-id run] [--file-scope . ] [--repo-root .] [--base-ref HEAD] \
-  [--timeout 1800] [--dry-run] [--run-verification] [--model opus] [--effort high]
+  [--timeout 1800] [--dry-run] [--run-verification] [--verification-command <cmd> ...] \
+  [--model opus] [--effort high]
+```
+
+`--verification-command` (repeatable, one command each, at most 8) is the
+single run's own `verification_commands`, frozen through the same checks a
+fanout unit's are, and declaring one implies `--run-verification`. Without
+one, a run whose work completed ends `unverified`, never `verified`:
+
+```sh
+omh coding run --owner codex --goal "write one line to NOTES.md" --file-scope NOTES.md \
+  --verification-command "test -f NOTES.md" \
+  --verification-command "grep -qx 'OMH green B' NOTES.md"
 ```
 
 The claude-code dispatch template's `--allowedTools "Bash(git add:*),Bash(git
@@ -406,7 +418,15 @@ Rules, all applied at freeze time:
   is refused while the operator is still holding it. Leading `NAME=VALUE`
   tokens become environment overrides (this repo's own gate is spelled
   `PYTHONPATH=tests uv run ...`); everything after them is an argv run with
-  `shell=False`, so pipes and redirections are argument text, not operators.
+  `shell=False`. An unquoted shell operator (`&&`, `||`, `|`, `;`, `&`, `>`,
+  `<`, `$(`, a backtick) would therefore reach the program as a literal
+  argument and the check could never pass, so freeze (and `fanout validate`)
+  refuses it and names both fixes: declare each step as its own command, or
+  wrap the line in a shell explicitly (`sh -c "test -f X && grep -q Y X"`).
+  Operator characters inside quotes (`grep -E 'a|b'`) are ordinary text. The
+  same refusal covers `reproduction_command` and `task_linked_test_runner`,
+  and a contract frozen before it existed has such a check refused unrun, as
+  `invalid verification command`, rather than run and misreported.
   `omh coding fanout dispatch --run-verification` — explicit, never on by
   default — runs those commands with `cwd` set to the unit's own worktree,
   after that unit's process exited 0 *and* its sidecar validated, with a
@@ -423,7 +443,11 @@ Rules, all applied at freeze time:
   tail. A command that cannot start is a failed check, never a failed dispatch.
   A unit that ends with `unit_state_reason: verification_failed` makes the
   batch exit 1, the same code as a failed unit, even though its process exited
-  0 and it carries no `failure_kind`.
+  0 and it carries no `failure_kind`. A unit whose process exited 0 with a
+  validated result but whose verification was never observed (none declared,
+  or `--run-verification` not given) ends `unit_state: unverified` with
+  `unit_state_reason: verification_not_observed`: nothing ran and failed, so
+  it is not `failed`, and nothing was verified, so it is not `verified` either.
   Under `--dry-run` the flag only names the commands in
   `planned_verification_commands`. This runs inside the same sanctioned
   dispatch bridge as the unit spawns themselves: still operator-invoked, still
@@ -1320,10 +1344,11 @@ funnel into the same engine.
       reads `commit` with its code.
     - **State.** The attempt's `unit_state` is `verified` only when the child
       changed something, all of it was committed, and those checks ran on it
-      and passed; otherwise it is `failed` with `unit_state_reason`
+      and passed. A committed attempt whose checks were not run is
+      `unverified` with `unit_state_reason` `verification_not_observed`;
+      otherwise it is `failed` with `unit_state_reason`
       `process_not_completed`, `no_changes`, `untracked_leftovers`,
-      `out_of_scope_files`, `commit_failed`, `verification_failed`, or
-      `verification_not_observed`.
+      `out_of_scope_files`, `commit_failed`, or `verification_failed`.
   - **Wait** marks the unit `awaiting_retry` in the run journal with its
     failure kind. The next `--resume-journal` run re-dispatches exactly those
     units under the `rerun_awaiting_retry` action; units whose success was
@@ -1513,8 +1538,8 @@ omh coding fanout dispatch <fanout-id> --goal-file goal.txt \
   [--resume-journal ~/.omh/coding/fanout/<fanout-id>/run_journal.json]
 omh coding run --owner <profile> (--goal <words...> | --goal-file goal.txt) \
   [--unit-id run] [--file-scope <path> ...] [--repo-root .] [--base-ref HEAD] \
-  [--timeout 1800] [--dry-run] [--run-verification] [--source discord] \
-  [--model <id>] [--effort <level>] [--category <category>]
+  [--timeout 1800] [--dry-run] [--run-verification] [--verification-command <cmd> ...] \
+  [--source discord] [--model <id>] [--effort <level>] [--category <category>]
   # single-invocation: builds and dispatches a one-unit fanout_contract/v2 through
   # the same engine as `fanout dispatch`; see "Single-run entry" above
 omh coding fanout reap <fanout-id> [--pid N ...]  # terminate marker-named

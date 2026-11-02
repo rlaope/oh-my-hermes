@@ -582,7 +582,7 @@ does not grade.
 
 Vocabulary in `src/coding/unit_execution_state.py`; the mid-run verdict is
 derived by `src/coding/unit_progress.py` from the stdout snapshots the dispatch
-already takes, and the two terminal states are assigned only after exit.
+already takes, and the three terminal states are assigned only after exit.
 
 | State | What was observed | Terminal |
 | --- | --- | --- |
@@ -592,7 +592,8 @@ already takes, and the two terminal states are assigned only after exit.
 | `account_limit` | The provider refused for account reasons: session or usage limit, quota, credits. | no |
 | `data_missing` | Objects the work needs are absent in its isolation — partial-clone blobs, a missing base commit, a ref that was described but never fetched. | no |
 | `progress_stalled` | The process is alive and the work is not moving: no new output past the threshold (15 minutes, `UNIT_STALL_AFTER_SECONDS`), **or** the same *failure-shaped* line repeating three times even while bytes grow. Repetition alone is not a stall — a green run prints `... ok` endlessly — so only lines matching `_FAILURE_SHAPED_WORDS` are counted. | no |
-| `failed` | The process ended without a verified result. Exit code 0 with the required result record missing is this state, with reason `result_missing` — never `verified`. | yes |
+| `failed` | The process ended without a verified result. Exit code 0 with the required result record missing is this state, with reason `result_missing` — never `verified`. So is a declared check the dispatcher ran and saw fail (`verification_failed`). | yes |
+| `unverified` | The process exited 0 and its result record validated, but no verification was observed: none was declared, or none was asked to run (reason `verification_not_observed`). Nothing failed and nothing was verified; a retry would repeat finished work, and proof of the work still has to come from somewhere. | yes |
 | `verified` | The result record validated against the contract and its verification was observed. The only success state. | yes |
 
 The three non-`running` mid-run states above the stall are conditions retrying

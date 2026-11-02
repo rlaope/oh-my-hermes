@@ -1175,8 +1175,9 @@ class HermesRecoverySettlementTests(unittest.TestCase):
 
         self.assertEqual(attempt["recovery_commit"]["status"], "committed")
         self.assertNotIn("verification_status", attempt)
+        # Nothing ran and failed, so it is not `failed` either (#2461).
         self.assertEqual(
-            (attempt["unit_state"], attempt["unit_state_reason"]), ("failed", "verification_not_observed")
+            (attempt["unit_state"], attempt["unit_state_reason"]), ("unverified", "verification_not_observed")
         )
 
     def test_a_child_that_did_not_complete_is_neither_committed_nor_verified(self) -> None:

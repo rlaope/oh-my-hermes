@@ -27,8 +27,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .. import dag_run
 from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, observe_plugin_tool_call
 from ..cost_receipt import build_cost_receipt
+from ..delegation_graph import graph_segments
 from ..sqlite_readonly import connect_readonly
 
 RUN_SUMMARY_CLAIM_BOUNDARY = (
@@ -52,6 +54,12 @@ _SUMMARY_LABELS: dict[str, tuple[str, str, str]] = {
 # ("unknown") when the value is unmeasured, matching the sentinel word used
 # elsewhere in OMH's status renderers (e.g. `src/coding/status_board.py`).
 _ELAPSED_UNITS: dict[str, str] = {"en": "s", "ko": "초", "ja": "秒", "zh": "秒"}
+# The closing line of a conversation whose newest dag-ulw run is finished: its goal verdict (`dag_run.goal_verdict`),
+# the English word in every language, as `unknown` is.
+_GOAL_LABELS: dict[str, str] = {
+    "en": "Goal check (DAG {run}): {verdict}", "ko": "목표 검증 (DAG {run}): {verdict}",
+    "ja": "目標の検証 (DAG {run}): {verdict}", "zh": "目标验证 (DAG {run}): {verdict}",
+}
 _ELAPSED_UNKNOWN: str = "unknown"
 
 OMH_RUN_SUMMARY_SCHEMA = {
@@ -150,6 +158,26 @@ def _rows(
         connection.close()
 
 
+def _dag_goal(omh_home: Path, hermes_home: Path, session_id: str) -> dict[str, Any] | None:
+    """The conversation's newest dag-ulw run with its goal verdict once it is finished, else None. Read-only.
+
+    The verdict is the record's own (`dag_run.goal_verdict`): the outcomes
+    the parent settled and the handoff reads, never the model's words.
+    """
+    runs = [item for segment in graph_segments(hermes_home, session_id)
+            for item in dag_run.session_runs(omh_home, segment)]
+    if not runs:
+        return None
+    record = max(runs, key=lambda item: float(item[0].get("updated_at") or 0.0))[0]
+    derived = dag_run.derive(record, [], time.time())
+    state = dag_run.run_state(record, derived)
+    if state not in dag_run.FINISHED_STATES:
+        return None
+    verdict, reasons = dag_run.goal_verdict(record, derived)
+    return {"run": record["run"], "name": record["name"], "state": state, "verdict": verdict, "reasons": reasons,
+            "claim_boundary": dag_run.VERDICT_CLAIM_BOUNDARY}
+
+
 def _number(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return 0.0
@@ -231,6 +259,10 @@ def omh_run_summary_handler(args: dict[str, Any], **kwargs) -> str:
     ]
     if models:
         lines.append(models_line.format(models=", ".join(models)))
+    goal = _dag_goal(runtime_paths.plugin_home(args.get("omh_home")), home, session_id)
+    if goal is not None:
+        payload["dag_goal"] = goal
+        lines.append(_GOAL_LABELS[language].format(run=goal["name"], verdict=goal["verdict"]))
     payload.update(
         {
             "status": "observed",

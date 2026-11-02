@@ -186,8 +186,8 @@ guild-less interaction `"dm"`, user-installed app commands in group DMs
 included (`gateway/relay/adapter.py`). Relayed events are authorized upstream
 (`gateway/authz_mixin.py`), and nothing in the provider's kwargs says an
 event was relayed. So every Discord conversation, a DM included, is a
-`channel` with memory per `chat_id`, and Discord has no `owner_direct` or
-`direct` session.
+`channel`, and Discord has no `owner_direct` or `direct` session. Memory is
+per `chat_id`, except for Hermes auto-created threads as described below.
 
 Every other platform (Matrix, Mattermost, email, SMS, Feishu, DingTalk, WeCom,
 Weixin, QQ, LINE, Google Chat, Teams, IRC, BlueBubbles, SimpleX, ntfy, A2A,
@@ -252,9 +252,17 @@ channel got a kind of its own. Threads share their channel's scope: Slack's
 default `reply_in_thread` makes every top-level channel message its own thread
 session, and a Slack thread or a Telegram topic is visible to everyone in its
 channel, so a narrower scope protects nobody and would give each message an
-empty memory. Discord delivers a thread under its own channel id, so a Discord
-thread, private threads included, already has a scope of its own. A group gets
-no blocks, reminder, brief, digest or demote.
+empty memory. A group gets no blocks, reminder, brief, digest or demote.
+
+Discord delivers a thread under its own channel id. A public thread Hermes
+auto-created from a channel message instead shares its parent channel's memory
+scope, so a fact saved there is eligible for recall in the next auto-created
+thread in that channel and in the parent channel itself. The provider reads the
+session's `origin_json` from Hermes' `state.db` read-only, and uses
+`parent_chat_id` only for a Discord thread marked `auto_thread_created: true`
+with a valid parent id distinct from its own. Other threads, including private
+or manually created threads, keep their own scope. Missing or invalid origin
+data also leaves the conversation's own `chat_id` in use.
 
 Each turn is bound again at `on_turn_start`. A turn whose author is a bot, or
 whose author is not the DM partner, is shared for that turn: nothing
@@ -626,11 +634,18 @@ legacy v1 artifact fails closed with a reason code.
 Hermes writes into this store itself, with no operator step in the normal
 loop. When the user states a lasting preference, a decision, a fact about
 their setup or project, or a lesson, the model calls
-`omh_memory(action="capture", summary=..., record_type=..., tags=...,
-scope=..., retention_class=..., subject=...)`. The tool calls memory admission in-process
-(`memory_admission` in the plugin bundle, the same path `omh memory capture`
-reaches through its adapters), with duplicates skipped, and maps the result to
-one `status`:
+`omh_remember(action="save", summary=..., record_type=..., subject=...)`.
+The memory provider exposes this small, always-visible tool for `save` and
+`recall` (`action="recall", query=...`). Hermes' `tool_search` can defer plugin
+tools such as `omh_memory`; tools returned by a memory provider are never
+deferred, so saving a fact does not require a tool search first.
+
+The full `omh_memory(action="capture", summary=..., record_type=..., tags=...,
+scope=..., retention_class=..., subject=...)` entry point remains available for
+additional capture options. Both save entry points use the same session-lens
+and surface gates, and call memory admission in-process (`memory_admission` in
+the plugin bundle, the same path `omh memory capture` reaches through its
+adapters), with duplicates skipped, and map the result to one `status`:
 
 | `status` | Meaning |
 | --- | --- |

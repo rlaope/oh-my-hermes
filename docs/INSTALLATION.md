@@ -3396,11 +3396,13 @@ machine-readable payload.
 
 Setup also records OMH project-memory policy in `.omh/setup-profile.json`.
 The default is `auto-safe` memory: Hermes remembers durable facts itself
-through `omh_memory(action="capture")`, a locally safe summary is approved
-at once and recalled from the next turn, and nobody has to run an approval
-command. Credentials, raw logs, full transcripts, short-lived PR/commit IDs,
-relative-time phrases, duplicates, and temporary task progress are held for
-review or refused instead. Operators can choose:
+through the memory provider's always-visible `omh_remember(action="save")`
+tool. It uses the same admission path as `omh_memory(action="capture")`: a
+locally safe summary is approved at once and recalled from the next turn,
+and nobody has to run an approval command. Credentials, raw logs, full
+transcripts, short-lived PR/commit IDs, relative-time phrases, duplicates, and
+temporary task progress are held for review or refused instead. Operators can
+choose:
 
 ```sh
 omh setup --memory-mode off

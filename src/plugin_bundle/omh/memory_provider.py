@@ -18,11 +18,10 @@ ones that matter here:
 - ``on_memory_write``-- runs when Hermes writes its own memory, giving provenance
 - ``on_session_end`` -- runs at a session boundary, where consolidation belongs
 
-No tool schemas are exposed. ``memory_provider.py`` gives tool-schema bloat as
-the reason only one external provider may run at a time, and OMH already
-registers ten tools through the plugin path; the on-demand block read belongs on
-``omh_memory``, which exists, rather than on a second registration path that
-Hermes gates behind toolset config.
+The provider exposes one small save/recall tool, ``omh_remember``. Hermes
+tool_search never defers provider tools, so the save path stays visible without
+loading the full ``omh_memory`` plugin tool. The full tool still handles block
+reads and memory lifecycle operations through the plugin path.
 
 OMH still makes no model call and still cannot write Hermes memory. This
 provider reads OMH's own store, renders it, and records what it saw.
@@ -130,6 +129,7 @@ from .memory_session_lens import (
     OWNER_SURFACE_CLASSES,
     PRIMARY_AGENT_CONTEXTS,
     SESSION_LENS_STALE_HOURS,
+    SURFACE_BACKGROUND,
     SURFACE_CHANNEL,
     SURFACE_DIRECT,
     SURFACE_OPERATOR_CONSOLE,
@@ -161,6 +161,8 @@ from .memory_open_reminders import (
     select_open_reminder,
 )
 from .memory_state_files import state_file_lock, write_text_atomic, write_text_locked
+from .memory_thread_parent import auto_thread_parent_channel
+from .tools.memory_tool import REMEMBER_TOOL_SCHEMA, REMEMBER_TOOL_NAME, omh_remember_handler
 
 PROVIDER_NAME = "omh"
 # What Hermes prints in front of "recalled N memories" on every surface it
@@ -422,7 +424,11 @@ class OmhMemoryProvider(_MemoryProviderBase):
         if self._conversation is not None:
             self._authorization = HermesAuthorization(self._hermes_home)
             if self._conversation.kind == CHANNEL:
-                self._channel_scope = self._derive_channel_scope(self._conversation)
+                channel_identity = (
+                    auto_thread_parent_channel(self._hermes_home, self._session_id)
+                    if self._conversation.platform == "discord" and self._hermes_home is not None else None
+                )
+                self._channel_scope = self._derive_channel_scope(self._conversation, channel_identity=channel_identity)
         self._declared_class = memory_surface_class(
             platform=platform,
             agent_context=agent_context,
@@ -462,8 +468,20 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._evaluate_if_due("session_start_recovery")
 
     def get_tool_schemas(self) -> list[dict[str, Any]]:
-        """None. The on-demand block read lives on the existing `omh_memory` tool."""
-        return []
+        """Keep save/recall visible: Hermes tool_search never defers provider tools."""
+        return [REMEMBER_TOOL_SCHEMA]
+
+    def handle_tool_call(self, tool_name: str, args: dict, **kwargs: Any) -> str:
+        """Dispatch with this provider's session, never a model-supplied identity."""
+        if tool_name == REMEMBER_TOOL_NAME:
+            return omh_remember_handler(args, session_id=self._session_id)
+        return json.dumps({"status": "error", "reason": "unknown_tool"}, sort_keys=True)
+
+    def system_prompt_block(self) -> str:
+        """A static save reminder for foreground conversations, not background agents."""
+        if self._surface_class == SURFACE_BACKGROUND:
+            return ""
+        return "Use omh_remember to save lasting preferences, decisions and facts the user states, and to recall them in later conversations."
 
     def prefetch(
         self,
@@ -763,10 +781,10 @@ class OmhMemoryProvider(_MemoryProviderBase):
         except (OSError, PrincipalContractError):
             return None
 
-    def _derive_channel_scope(self, conversation: MessengerConversation) -> dict[str, str] | None:
-        """The channel scope of a group conversation: one per chat id, its threads included."""
+    def _derive_channel_scope(self, conversation: MessengerConversation, *, channel_identity: str | None = None) -> dict[str, str] | None:
+        """One scope per channel; Discord auto-created threads use their parent channel."""
         try:
-            ref = derive_channel_ref(self._omh_home, profile_ref=self._messenger_profile, surface_ref=conversation.platform, channel_identity=conversation.chat_id)
+            ref = derive_channel_ref(self._omh_home, profile_ref=self._messenger_profile, surface_ref=conversation.platform, channel_identity=channel_identity or conversation.chat_id)
         except (OSError, PrincipalContractError):
             return None
         return {"kind": "channel", "ref": ref}

@@ -88,7 +88,7 @@ from omh.plugin_bundle.omh.memory_records import (
     render_memory_records,
 )
 from omh.plugin_bundle.omh.metadata import MEMORY_PROVIDER_NAME, PROVIDED_TOOLS
-from omh.plugin_bundle.omh.tools.memory_tool import MEMORY_ACTIONS, OMH_MEMORY_SCHEMA, omh_memory_handler
+from omh.plugin_bundle.omh.tools.memory_tool import MEMORY_ACTIONS, OMH_MEMORY_SCHEMA, REMEMBER_TOOL_SCHEMA, omh_memory_handler
 from project_identity_fixture import memory_paths as resolve_paths
 from omh.workflows.memory import (
     approve_project_memory_candidate,
@@ -479,10 +479,9 @@ class ProviderRegistrationTests(unittest.TestCase):
         self.assertEqual(sorted(ctx.tools), sorted(PROVIDED_TOOLS))
         self.assertIn("on_session_end", ctx.hooks)
 
-    def test_the_provider_exposes_no_tool_schemas(self) -> None:
-        # `agent/memory_provider.py` names tool-schema bloat as the reason only
-        # one external provider may run; the block read lives on `omh_memory`.
-        self.assertEqual(OmhMemoryProvider().get_tool_schemas(), [])
+    def test_the_provider_exposes_only_the_small_save_recall_schema(self) -> None:
+        # Provider tools stay visible when Hermes tool_search defers plugin tools.
+        self.assertEqual(OmhMemoryProvider().get_tool_schemas(), [REMEMBER_TOOL_SCHEMA])
 
     def test_the_provider_name_matches_what_config_must_carry(self) -> None:
         self.assertEqual(OmhMemoryProvider().name, MEMORY_PROVIDER_NAME)

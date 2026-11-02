@@ -80,6 +80,7 @@ def _unshipped_skill_mentions(files, unshipped: dict[str, str]) -> list[str]:
 # fails naming the override once one of them ships portably.
 _OVERRIDES_AROUND_UNSHIPPED_SKILLS = {
     "ulw-loop::do_not_use_when": ("automation-blueprint",),
+    "ulw-plan::quality_bar": ("dag-ulw",),
     "ulw-work::quality_bar": ("maestro",),
     "ulw-qa::quality_bar": ("todo-checklist",),
     "omh-source-finder::use_when": ("research-department",),
