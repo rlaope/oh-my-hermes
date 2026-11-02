@@ -71,7 +71,7 @@ _WORD = re.compile(r"[a-z0-9#][a-z0-9#+.-]*")
 # Where a Korean message's clauses part: a comma, an aside in parentheses
 # ("코드 고쳐줘 (OMH 세션)", "테스트 작성해줘, OMH 환경이야"), a line break, or
 # the end of a sentence ("OMH가 설정 파일을 골랐어. 타임아웃 수정해줘"). A
-# sentence keeps its own mark, so "결제해줘?" stays a question, not a request.
+# sentence keeps its own mark for `korean_request` to read.
 _KOREAN_CLAUSE_BREAK = re.compile(r"[,，(（)）\n]|(?<=[.!?。])")
 
 
@@ -123,7 +123,7 @@ _FIND_OUT_BARE_QUESTIONS = frozenset(
         ("how", "it", "happened"), ("how", "that", "happened"), ("how", "this", "happened"),
     }
 )
-_FIND_OUT_BARE_TAILS = frozenset({"there", "here", "again", "for", "me", "us"})
+_FIND_OUT_BARE_TAILS = frozenset({"there", "here", "again", "for", "me", "us", "please", "pls", "thanks"})
 
 
 def find_out_refers_back(clause: str) -> bool:
@@ -218,7 +218,18 @@ def leads_with_code_edit(normalized_query: str) -> bool:
                 if word in _CODE_EDIT_LEAD_VERBS:
                     return True
     return any(
-        (request := korean_request(clause)) is not None and request.predicate in _KOREAN_CODE_EDIT_LEAD_PREDICATES
-        for clause in _KOREAN_CLAUSE_BREAK.split(normalized_query)
-        if clause.strip()
+        _korean_code_edit_request(clause) for clause in _KOREAN_CLAUSE_BREAK.split(normalized_query) if clause.strip()
     )
+
+
+def _korean_code_edit_request(clause: str) -> bool:
+    """`clause` ends on a Korean code-edit request; "수정해줘?" counts too.
+
+    `korean_request` reads "해줘?" as an echoed request, which matters to the
+    spend and data-share gates. For a code edit it is the ordinary casual way
+    to ask (#2485 review), so this reading alone retries without the "?".
+    """
+    request = korean_request(clause)
+    if request is None and clause.rstrip().endswith("?"):
+        request = korean_request(clause.rstrip().rstrip("?"))
+    return request is not None and request.predicate in _KOREAN_CODE_EDIT_LEAD_PREDICATES

@@ -26,6 +26,7 @@ from .command_verb import (
     leads_with_code_edit,
     ordered_words,
 )
+from . import skill_shortlist as _skill_shortlist
 from .display_names import canonical_display_mentions
 from .reference_regions import executable_routing_text, reference_regions
 from .text_fold import TOKEN_RE, contains_cue_phrase, normalized_phrase, routing_terms, routing_tokens
@@ -216,6 +217,10 @@ _CONCRETE_ARTIFACT_NOUNS = frozenset(
         "worker", "workers", "queue", "queues", "bucket", "buckets", "region", "env",
     }
 )
+# A chosen object headed by one of these is something OMH routes to, whatever
+# the words before it: "the cache skill", "the migration workflow".
+_OMH_ROUTING_TARGET_HEADS = frozenset({"skill", "skills", "workflow", "workflows", "lane", "lanes", "mode", "modes"})
+_OBJECT_DETERMINERS = frozenset({"the", "a", "an", "this", "that", "these", "those", "my", "our", "your", "its", "their"})
 # Where the object of a choice verb ends: "OMH picked the config for staging".
 _OBJECT_ENDS = frozenset(
     {"for", "when", "while", "after", "before", "because", "since", "instead", "over", "to", "into", "in", "on",
@@ -780,17 +785,43 @@ def _clause_complains(clause: str) -> bool:
     words = ordered_words(clause)
     if inquiry_why_lead_length(words) or set(words) & (_OMH_ROUTING_VERBS | _OMH_COMPLAINT_WORDS):
         return True
-    return not set(_chosen_object(words)) & _CONCRETE_ARTIFACT_NOUNS
+    return not _names_concrete_artifact(_chosen_object(words))
 
 
 def _chosen_object(words: list[str]) -> list[str]:
-    """The words after the clause's first choice verb, up to a preposition or the clause's end."""
+    """The words after the clause's first choice verb, up to a preposition or the clause's end, without determiners."""
     for index, word in enumerate(words):
         if word in _OMH_CHOICE_VERBS:
             rest = words[index + 1 :]
             end = next((i for i, w in enumerate(rest) if w in _OBJECT_ENDS), len(rest))
-            return rest[:end]
+            span = rest[:end]
+            while span[:1] and span[0] in _OBJECT_DETERMINERS:
+                span = span[1:]
+            return span
     return []
+
+
+def _names_concrete_artifact(span: list[str]) -> bool:
+    """`span`'s head (last) noun is a concrete artifact, and the span names no OMH skill or workflow.
+
+    "the nginx config" is an artifact. "data-pipelines", "the report package
+    skill" and "the cache skill" are skills: a routing-target head, or the
+    span (or two or more of its words) spelling a catalog skill name, which
+    the bundle's skill-shortlist sidecar lists (#2485 review).
+    """
+    if not span or span[-1] not in _CONCRETE_ARTIFACT_NOUNS or span[-1] in _OMH_ROUTING_TARGET_HEADS:
+        return False
+    if _mentioned_workflows(" ".join(span), set(span)):
+        return False
+    return not _spells_catalog_skill(span)
+
+
+def _spells_catalog_skill(span: list[str]) -> bool:
+    """The whole span, or a run of two or more of its words, joined by "-", is a catalog skill name or label."""
+    names = _skill_shortlist.catalog_skill_names() or frozenset()
+    candidates = {"-".join(span)}
+    candidates.update("-".join(span[i:j]) for i in range(len(span)) for j in range(i + 2, len(span) + 1))
+    return any(candidate in names or f"omh-{candidate}" in names for candidate in candidates)
 
 
 def _clause_reports_omh_behaviour(words: list[str]) -> bool:

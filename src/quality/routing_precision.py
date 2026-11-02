@@ -12270,6 +12270,19 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # #2455 follow-up: reports the classifier missed. On origin/main the
     # Korean one dispatched the code-review it names (보냈어, "sent", read as
     # the execution cue 보내), and the other two asked a clarifying question.
+    # #2485 second review: "고쳐줘?" is the casual way to ask for the edit, so
+    # after a setting sentence it keeps the coding lane (a2d8bf6c2 dispatched
+    # workflow-learning).
+    RoutingInterventionCase(
+        "korean-casual-edit-question-after-setting-keeps-coding-lane",
+        "A Korean casual edit request ending in a question mark after what OMH picked keeps the coding lane",
+        "OMH가 라우터 파일을 골랐어. 라우터 테스트 고쳐줘?",
+        "dispatch",
+        "ultrawork",
+        "present_plan",
+        "plan",
+        "ultrawork",
+    ),
     RoutingInterventionCase(
         "korean-omh-sent-my-message-to-code-review-reaches-workflow-learning",
         "A Korean question on why OMH sent a message to code-review is a report on OMH's routing",

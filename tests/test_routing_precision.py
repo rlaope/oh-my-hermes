@@ -244,8 +244,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # release-cut, and two more reports keep workflow-learning. A command
         # after "then" keeps command-operator, and "list the reasons" is a report.
         # Three reports the classifier missed (a Korean 보냈어, OMH ignoring the
-        # request, OMH "apparently" choosing) reach workflow-learning.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1222)
+        # request, OMH "apparently" choosing) reach workflow-learning, and a
+        # Korean casual "고쳐줘?" after what OMH picked keeps the coding lane.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1223)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

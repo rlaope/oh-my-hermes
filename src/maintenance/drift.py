@@ -1533,8 +1533,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # and "list the reasons" after what OMH chose is a complaint (+2).
             # #2455 follow-up: a Korean "why did OMH send it" (보냈어), OMH
             # ignoring the request, and OMH "apparently" choosing ultrawork reach
-            # workflow-learning (+3).
-            expected=1222,
+            # workflow-learning (+3). Its second review: a Korean casual edit
+            # request ending in "?" after a setting sentence keeps ultrawork (+1).
+            expected=1223,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

@@ -885,6 +885,44 @@ class HookManifestTests(unittest.TestCase):
                 self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
 
+    def test_a_catalog_skill_with_an_artifact_word_in_its_name_stays_a_complaint(self) -> None:
+        # #2485 second review: any artifact word in the chosen object made it a
+        # setting, so "OMH picked data-pipelines ...; find out ..." lost main's
+        # report. Only the head noun counts, never a skill/workflow/lane head,
+        # and never a catalog skill name. Derived from the bundle's catalog.
+        from omh.plugin_bundle.omh.skill_shortlist import catalog_skill_names
+        from omh.plugin_bundle.omh.workflow_intent import _CONCRETE_ARTIFACT_NOUNS
+
+        names = sorted(
+            name
+            for name in {label.removeprefix("omh-") for label in catalog_skill_names() or ()}
+            if name.split("-")[-1] in _CONCRETE_ARTIFACT_NOUNS
+        )
+        self.assertTrue(names, "the catalog no longer has a skill named like an artifact; pick another probe")
+        for name in names:
+            for message in (
+                f"OMH picked {name} for my greeting; find out which rule fired",
+                f"OMH chose {name.replace('-', ' ')} for a hello. Find out what it matched",
+            ):
+                with self.subTest(message=message):
+                    self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+        for message in (
+            "OMH picked the cache skill for my hello; find out what it noticed",
+            "OMH chose the parser workflow for a typo; find out which trigger fired",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+        for message in (
+            "OMH picked the packaging script; find out which files it copies",
+            "OMH chose the CI workflow file, find out which jobs it skips",
+            "OMH picked the report template config; find out which keys it sets",
+        ):
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
     def test_korean_edit_request_after_a_setting_sentence_gets_no_workflow_learning_hint(self) -> None:
         # #2485 review: the Korean code-edit lead split clauses only on commas,
         # so an edit after a period or a line break was no lead, and 리팩터링 /
@@ -894,6 +932,9 @@ class HookManifestTests(unittest.TestCase):
             "OMH가 설정 파일을 골랐어. 재시도 횟수 수정해줘",
             "OMH는 파서 모듈을 골랐어.\n테스트 코드 리팩터링해줘",
             "OMH가 라우터 파일을 골랐어. 라우터 테스트 마이그레이션해줘",
+            # "해줘?" is the casual way to ask, not a question (second review).
+            "OMH가 설정 파일을 골랐어. 타임아웃 기본값 수정해줘?",
+            "OMH는 파서 모듈을 골랐어.\n이 함수 리팩터링해줘?",
         )
         for message in cases:
             with self.subTest(message=message):
