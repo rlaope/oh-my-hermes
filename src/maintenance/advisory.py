@@ -1387,6 +1387,86 @@ def _personal_file_skipped(check_id: str, files: str) -> AdviceEntry:
     )
 
 
+_LSP_TOOLS_ON = frozenset({"1", "true", "yes", "on"})
+
+
+def check_lsp_tools_disabled(hermes_home: str | Path | None = None) -> AdviceEntry:
+    """Is the opt-in `omh-lsp` toolset enabled for this profile?
+
+    The `lsp_definition` / `lsp_references` / `lsp_rename` / `lsp_diagnostics`
+    tools stay out of every turn's schema unless the operator sets
+    `OMH_LSP_TOOLS=1` or `plugins.entries.omh.settings.lsp_tools`. The
+    cross-file impact check runs without them; the tools only add direct
+    semantic navigation and re-check. An unset or off value is advice, not a
+    health failure, so this lives in the advisory lane.
+
+    Report-only. OMH does not write this key.
+    """
+    import os
+
+    home = _resolve_hermes_home(hermes_home)
+    config_path = home / "config.yaml"
+    evidence_boundary = (
+        "Local read of this profile's config.yaml `plugins.entries.omh.settings.lsp_tools` "
+        "plus the `OMH_LSP_TOOLS` environment, with the same block-style scan the tool gate "
+        "reads it with. The managed config overlay is not read."
+    )
+    remediation = (
+        "Set `OMH_LSP_TOOLS=1` or `plugins.entries.omh.settings.lsp_tools` to `true` in this "
+        "profile's config.yaml (block style), then restart Hermes so the `omh-lsp` toolset "
+        "registers."
+    )
+    try:
+        if os.environ.get("OMH_LSP_TOOLS", "").strip().lower() in _LSP_TOOLS_ON:
+            return AdviceEntry(
+                "lsp_tools_disabled",
+                "ok",
+                remediation,
+                evidence_boundary,
+                "lsp_tools is enabled via OMH_LSP_TOOLS",
+            )
+    except Exception:
+        return AdviceEntry(
+            "lsp_tools_disabled",
+            "unobserved",
+            remediation,
+            evidence_boundary,
+            "could not read the OMH_LSP_TOOLS environment",
+        )
+    if not config_path.exists():
+        return AdviceEntry(
+            "lsp_tools_disabled", "unobserved", remediation, evidence_boundary, f"{config_path} not found"
+        )
+    try:
+        from ..plugin_bundle.omh.runtime_paths import plugin_setting_text
+
+        text = config_path.read_text(encoding="utf-8")
+        value = plugin_setting_text(text, "lsp_tools")
+    except Exception:
+        return AdviceEntry(
+            "lsp_tools_disabled",
+            "unobserved",
+            remediation,
+            evidence_boundary,
+            "config.yaml could not be read by the block-style scan, so the setting is unknown",
+        )
+    if value is not None and value.strip().lower() in _LSP_TOOLS_ON:
+        return AdviceEntry(
+            "lsp_tools_disabled",
+            "ok",
+            remediation,
+            evidence_boundary,
+            f"lsp_tools: {value.strip()}; the omh-lsp toolset is enabled",
+        )
+    observed = (
+        "lsp_tools is unset; the omh-lsp toolset stays hidden and the impact check "
+        "reports without direct re-check"
+        if value is None
+        else f"lsp_tools is {value.strip()!r}; the omh-lsp toolset stays hidden"
+    )
+    return AdviceEntry("lsp_tools_disabled", "advice", remediation, evidence_boundary, observed)
+
+
 def run_config_advisories(
     hermes_home: str | Path | None = None,
     *,
@@ -1427,5 +1507,6 @@ def run_config_advisories(
             check_turn_budget_loop_exposure(hermes_home),
             check_loop_hard_stop_disabled(hermes_home),
             check_dreaming_mode_setting(hermes_home),
+            check_lsp_tools_disabled(hermes_home),
         ],
     )

@@ -27,6 +27,7 @@ from omh.maintenance.advisory import (
     check_legacy_plan_artifacts,
     check_orphaned_project_scope_store,
     check_loop_hard_stop_disabled,
+    check_lsp_tools_disabled,
     check_soul_missing_or_starter,
     check_turn_budget_loop_exposure,
     check_workflow_engine_reach,
@@ -53,6 +54,7 @@ ADVISORY_CHECK_IDS = {
     "turn_budget_loop_exposure",
     "loop_hard_stop_disabled",
     "mode_setting_unrecognized",
+    "lsp_tools_disabled",
 }
 
 ALL_AUTO_AUXILIARY = """version: 1
@@ -471,6 +473,9 @@ class MembershipGuardrailTests(unittest.TestCase):
                 # The fixture config sets no `dreaming_mode`: unset reads as
                 # the default, which nobody needs telling about.
                 "mode_setting_unrecognized": "ok",
+                # The fixture config sets no `lsp_tools`: hidden tools with a
+                # named enable path, which is advice, not failure.
+                "lsp_tools_disabled": "advice",
             },
         )
 
@@ -828,4 +833,62 @@ class LoopExposureAdvisoryTests(unittest.TestCase):
         before = (home / "config.yaml").read_bytes()
         check_turn_budget_loop_exposure(home)
         check_loop_hard_stop_disabled(home)
+        self.assertEqual((home / "config.yaml").read_bytes(), before)
+
+
+class LspToolsAdvisoryTests(unittest.TestCase):
+    """The opt-in `omh-lsp` toolset has a named enable path, and now says so.
+
+    The tools stay out of the schema unless `OMH_LSP_TOOLS=1` or
+    `plugins.entries.omh.settings.lsp_tools` is on. Unset or off is advice
+    with the enable path, never a health failure.
+    """
+
+    def _home(self, config_text: str | None) -> Path:
+        home = Path(tempfile.mkdtemp()) / ".hermes"
+        home.mkdir(parents=True)
+        if config_text is not None:
+            _write(home / "config.yaml", config_text)
+        return home
+
+    def test_unset_is_advice_with_the_enable_path(self) -> None:
+        entry = check_lsp_tools_disabled(self._home("version: 1\n"))
+        self.assertEqual(entry.check_id, "lsp_tools_disabled")
+        self.assertEqual(entry.status, "advice")
+        self.assertIn("unset", entry.observed)
+        self.assertIn("OMH_LSP_TOOLS=1", entry.remediation)
+        self.assertIn("lsp_tools", entry.remediation)
+
+    def test_explicit_off_is_advice_with_its_value(self) -> None:
+        entry = check_lsp_tools_disabled(
+            self._home("plugins:\n  entries:\n    omh:\n      settings:\n        lsp_tools: false\n")
+        )
+        self.assertEqual(entry.status, "advice")
+        self.assertIn("false", entry.observed)
+
+    def test_enabled_is_ok(self) -> None:
+        for value in ("true", "yes", "on", "1"):
+            with self.subTest(value=value):
+                entry = check_lsp_tools_disabled(
+                    self._home(
+                        "plugins:\n  entries:\n    omh:\n      settings:\n"
+                        f"        lsp_tools: {value}\n"
+                    )
+                )
+                self.assertEqual(entry.status, "ok")
+
+    def test_env_enable_is_ok(self) -> None:
+        with mock.patch.dict(os.environ, {"OMH_LSP_TOOLS": "1"}):
+            entry = check_lsp_tools_disabled(self._home("version: 1\n"))
+        self.assertEqual(entry.status, "ok")
+        self.assertIn("OMH_LSP_TOOLS", entry.observed)
+
+    def test_missing_config_is_unobserved(self) -> None:
+        entry = check_lsp_tools_disabled(self._home(None))
+        self.assertEqual(entry.status, "unobserved")
+
+    def test_advisory_changes_no_file(self) -> None:
+        home = self._home("version: 1\n")
+        before = (home / "config.yaml").read_bytes()
+        check_lsp_tools_disabled(home)
         self.assertEqual((home / "config.yaml").read_bytes(), before)
