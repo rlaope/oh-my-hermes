@@ -694,6 +694,28 @@
       "reviewed_on": "2026-10-27",
       "rationale": "Adopted the AI-tell account as an on-demand human-voice reference, a reply-rule sentence and a high-precision reply-lint finding; the persona keeps the voice.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-app-debugging-diagnosing-bugs",
+      "candidate_key": "app-debugging@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted symptom match, loop cost, minimise, the no-test loop ladder with person-run capture, probe tags, redaction and the hypothesis in the commit as record fields; the method stays Hermes' own.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-native-debugging-diagnosing-bugs",
+      "candidate_key": "native-debugging@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted symptom match, the minimise step and the probe tag for the native fault statement and the print-and-rebuild fallback.",
+      "supersedes": null
     }
   ]
 }
