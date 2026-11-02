@@ -12,7 +12,7 @@ import unittest
 
 from test_tui_modes import answer, make_app, notices
 from test_tui_muscle_memory import commands, send
-from omh.tui.app import REWIND_BUSY_NOTICE
+from omh.tui.app import REWIND_BUSY_NOTICE, SESSIONS_EMPTY_NOTICE
 from omh.tui.slash import COMMANDS, LOCAL
 from omh.tui.transcript import AssistantBlock
 
@@ -56,7 +56,7 @@ class EchoTests(unittest.TestCase):
         said = {
             "rewind": REWIND_BUSY_NOTICE,
             "logs": "The gateway has written nothing to stderr.",
-            "sessions": "Hermes has no stored sessions to switch to.",
+            "sessions": SESSIONS_EMPTY_NOTICE,
         }
         for name, notice in said.items():
             with self.subTest(name=name):

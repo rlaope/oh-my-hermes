@@ -351,9 +351,16 @@ pass straight through on that bare launch:
 
 ```sh
 omh --resume <session-id>    # reopen one session by id (short form: -r)
+omh --resume                 # open the TUI on the session picker, to choose one
 omh --continue               # continue the most recent session (short form: -c)
 omh -p <profile>             # open a bot profile's own home
 ```
+
+A bare `omh --resume` passes no id to Hermes: the OMH TUI starts as plain `omh`
+does and opens its session picker (the one `/resume` opens) at once, so you
+pick a stored session or press Esc to stay in the new one. When the OMH TUI
+cannot start and Hermes' own terminal opens instead, that terminal starts a
+new session, and its own `/resume` picks one.
 
 They are a bare-launch surface only. Passing one together with a subcommand
 is an error naming the flag, never a silent no-op, because dropping `-p`

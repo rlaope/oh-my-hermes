@@ -29,6 +29,8 @@ BARE = (
     ["--pretty"],
     ["-r", "sess-1"],
     ["--resume", "sess-1", "-p", "work"],
+    ["--resume"],  # no id: the TUI opens on its session picker
+    ["-r", "-p", "work"],
     ["-c"],
     ["--continue", "doctor"],  # continue's optional value swallows the token, as the full parser reads it
     ["-c", "-p", "work"],
@@ -70,6 +72,18 @@ class BareArgvTests(unittest.TestCase):
                 self.assertIsNone(full.command)
                 self.assertEqual({dest: getattr(light, dest) for dest in TOP_LEVEL_DESTS},
                                  {dest: getattr(full, dest) for dest in TOP_LEVEL_DESTS})
+
+    def test_a_bare_resume_forwards_no_id_and_asks_the_tui_for_its_picker(self) -> None:
+        from omh.commands.bare_launch import _hermes_passthrough_argv
+
+        for argv, forwarded in ((["--resume"], ["--tui"]), (["-r"], ["--tui"]),
+                                (["--resume", "sess-1"], ["--tui", "--resume", "sess-1"]),
+                                (["-c", "notes"], ["--tui", "--continue", "notes"])):
+            with self.subTest(argv=argv):
+                args = bare_launch_args(argv)
+                self.assertEqual(_hermes_passthrough_argv(args, tui=True), forwarded)
+        self.assertEqual(bare_launch_args(["--resume"]).tui_resume, "")
+        self.assertIsNone(bare_launch_args([]).tui_resume)
 
     def test_anything_else_goes_to_the_full_parser(self) -> None:
         for argv in NOT_BARE:

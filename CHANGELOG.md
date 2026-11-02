@@ -4,6 +4,30 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`/resume` always answers, and `omh --resume` opens the picker.** A bare
+  `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
+  list, which during a turn can take a while. Now `Loading sessions…` stands
+  where the picker opens, keys typed meanwhile stay in the composer (the
+  picker opens with an empty filter and the draft is there when it closes),
+  and no stored session, a refusal in Hermes' words, or no answer within the
+  call's wait each say so. A list that arrives while you are typing shows its
+  rows but takes keys only after a pause (the same 0.4 s an approval waits),
+  so the rest of a prompt never becomes the picker's filter. `omh --resume` with no id (short form `-r`) starts
+  the TUI on that picker; `omh --resume <id>` and `omh --continue` are
+  unchanged.
+
+- **A prompt sent while a session switch waits goes to the session it opens.**
+  While `/new`, `/resume <id>` or a pick waits on Hermes, `switching to
+  <title>…` (or `starting a new session…`) shows under the queue, and a prompt
+  sent then is held and sent in the new session once it is live; before, it
+  went into the session being left, which was then closed. Prompts still
+  queued behind the old session's turn come back to the composer with a
+  notice instead of vanishing, and so do prompts held for a switch that
+  failed. Of two switches out at once only the newer lands: a session the
+  older one opened late is closed again, with a notice. A second `/resume`
+  while the list is out sends no second call, and an answer that comes while
+  the picker is open no longer resets its highlight or filter.
+
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
   grey edge (`#4A4F66`); they are now a muted violet (`#6E5A9E`), lifted for
