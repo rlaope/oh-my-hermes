@@ -1078,7 +1078,8 @@ class Composer:
             if not adds_line and continues:  # in NORMAL, Enter always sends
                 self._replace(self.caret - 1, self.caret, NEWLINE)
                 return NOTHING
-            if adds_line:
+            # In vim mode INSERT is for writing, so Enter adds a line there and only NORMAL sends.
+            if adds_line or (self.vim and not self.normal and not self.masked):
                 self._insert(NEWLINE)
                 return NOTHING
             return self._submit()

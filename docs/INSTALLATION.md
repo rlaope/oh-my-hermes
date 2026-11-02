@@ -1340,9 +1340,10 @@ rest of this page says.
     below or above the line); `u` undoes and Ctrl+R redoes;
   - a count before a command or a motion repeats it: `3w`, `2dd`, `d2w`,
     `2dw`, `3x`, `2p`, `3G`; `i a I A o O` and `0 ^ $` take none.
-- Enter in NORMAL always sends the composer, as Enter does in INSERT, even
-  with a `\` under or before the caret; `\` then Enter adds a line in INSERT
-  only, and Alt+Enter, Shift+Enter and Ctrl+J add one in both modes.
+- Enter sends the composer in NORMAL only, even with a `\` under or before
+  the caret; in INSERT it adds a line (`\` then Enter does too, taking the
+  backslash), as do Alt+Enter, Shift+Enter and Ctrl+J in both modes. Esc, then
+  Enter, sends.
   A sent prompt starts the next one in INSERT. Any other character in NORMAL
   does nothing, and so does a key that arrives while a command is typed
   halfway (`d` then Enter sends nothing): it drops the command. Backspace is

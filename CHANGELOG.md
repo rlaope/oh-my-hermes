@@ -7,6 +7,8 @@ All notable changes will be documented here.
 - **Vim mode changes the cursor shape.** With `display.vim_mode` on, the terminal's cursor is a beam in INSERT and a
   block in NORMAL (DECSCUSR), as in `hermes --cli`. It is written only when the mode changes, and the terminal's own
   shape comes back when a question or picker takes the keys, when vim mode goes off, and on exit or Ctrl+Z.
+- **Vim mode: Enter sends only in NORMAL.** With `display.vim_mode` on, Enter in INSERT adds a line and Esc then
+  Enter sends. Without vim mode, and in a masked composer, Enter sends as before.
 
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with
