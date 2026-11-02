@@ -45,7 +45,7 @@ from _tui_gateway_replay import (
     replay_env,
     spans,
 )
-from _tui_lines import info_row_index, without_badge, composer_text, INFO_INSET, line_text, RULE_ROW, rule_rows
+from _tui_lines import badge_text, info_row_index, without_badge, composer_text, INFO_INSET, line_text, RULE_ROW, rule_rows
 from _vt_screen import VTScreen
 from omh.tui import terminal as terminal_module
 from omh.skin_pack import default_theme, hex_to_rgb, theme_for_name, write_theme_choice
@@ -594,7 +594,7 @@ class SessionTests(AppTestCase):
         self.assert_clean_run(run, CLOSED_EXIT)  # `omh` launched it: Hermes prints no epilogue, `omh` its card
         screen = run.terminal.captures["ready"]
         info = info_index(screen)
-        self.assertTrue(screen[info].startswith(INFO_INSET + "[⚚ OMH Native]   "), screen)  # the badge alone on the left
+        self.assertTrue(screen[info].startswith(INFO_INSET + badge_text() + "   "), screen)  # the badge alone on the left
         self.assertIn("v4.1-flash-ultrafast · ", screen[info])  # its short name beside the badge at 80 columns
         composer = info - 1 - UNDER_COMPOSER
         self.assertEqual(composer_text(screen[composer]), "❯ Ask Hermes anything", screen)
@@ -1325,6 +1325,11 @@ class InfoLineRightTests(unittest.TestCase):
 
     MODEL = "deepseek/deepseek-v4.1-flash-ultrafast"
 
+    def setUp(self) -> None:
+        patched = patch("omh.tui.app.__version__", "9.9.9")  # the badge's version, fixed: no width moves with a release
+        patched.start()
+        self.addCleanup(patched.stop)
+
     def app(self, cols: int = 100) -> App:
         app = App(ScriptedTerminal(rows=24, cols=cols), None, {}, poller=FakePoller())  # type: ignore[arg-type]
         app.model, app.context_percent, app.effort = self.MODEL, 5.0, "high"
@@ -1344,22 +1349,23 @@ class InfoLineRightTests(unittest.TestCase):
             self.assertNotIn(gone, row)
 
     def test_the_model_shortens_first_then_goes_then_the_effort_then_the_context(self) -> None:
-        # The inset, the badge and the 3-cell gap take 19 cells; the right side takes the longest form that fits
-        # beside, and goes whole before the badge shortens. No token counts here: the gauge is the longest context.
+        # The inset, the badge with its version and the 3-cell gap take 26 cells; the right side takes the longest form
+        # that fits beside, and goes whole before the badge shortens. No token counts here: the gauge is the longest
+        # context.
         app = self.app()
         expected = {
-            93: f"{self.MODEL} · ctx ━─────────── 5% · effort high",
-            92: "deepseek-v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
-            84: "deepseek-v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
-            83: "v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
-            75: "v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
-            74: "ctx ━─────────── 5% · effort high",
-            52: "ctx ━─────────── 5% · effort high",
-            51: "ctx ━─────────── 5%",
-            38: "ctx ━─────────── 5%",
-            37: "ctx 5%",
-            25: "ctx 5%",
-            24: "",
+            100: f"{self.MODEL} · ctx ━─────────── 5% · effort high",
+            99: "deepseek-v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
+            91: "deepseek-v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
+            90: "v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
+            82: "v4.1-flash-ultrafast · ctx ━─────────── 5% · effort high",
+            81: "ctx ━─────────── 5% · effort high",
+            59: "ctx ━─────────── 5% · effort high",
+            58: "ctx ━─────────── 5%",
+            45: "ctx ━─────────── 5%",
+            44: "ctx 5%",
+            32: "ctx 5%",
+            31: "",
         }
         self.assertEqual({width: self.right(app, width) for width in expected}, expected)
 
@@ -1398,17 +1404,17 @@ class InfoLineRightTests(unittest.TestCase):
         app._take_usage({"context_used": 74_000, "context_max": 200_000, "context_percent": 37})
         full, gauge = "ctx ━━━━──────── 37% 74k/200k", "ctx ━━━━──────── 37%"
         expected = {
-            102: f"deepseek-v4.1-flash-ultrafast · {full} · effort high",
-            93: f"v4.1-flash-ultrafast · {full} · effort high",
-            84: f"{full} · effort high",
-            62: f"{full} · effort high",
-            61: full,
-            48: full,
-            47: gauge,
-            39: gauge,
-            38: "ctx 37%",
-            26: "ctx 37%",
-            25: "",
+            109: f"deepseek-v4.1-flash-ultrafast · {full} · effort high",
+            100: f"v4.1-flash-ultrafast · {full} · effort high",
+            91: f"{full} · effort high",
+            69: f"{full} · effort high",
+            68: full,
+            55: full,
+            54: gauge,
+            46: gauge,
+            45: "ctx 37%",
+            33: "ctx 37%",
+            32: "",
         }
         self.assertEqual({width: self.right(app, width) for width in expected}, expected)
 
