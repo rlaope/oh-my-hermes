@@ -696,6 +696,28 @@
       "supersedes": null
     },
     {
+      "receipt_id": "ssc-2026-11-02-frontend-modern-web-guidance",
+      "candidate_key": "frontend@github.com/googlechrome/modern-web-guidance",
+      "prior_checkpoint": null,
+      "next_checkpoint": "4f2b13e25c5815b3f080ca0d983e828d96561a0f",
+      "disposition": "adopted",
+      "decision_ref": "#2502",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the form, validation-timing, IME-safe Enter, dialog and browser-support ideas as an OMH forms reference and one required input; the CLI and its network retrieval are not used.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-frontend-claude-plugins-official",
+      "candidate_key": "frontend@github.com/anthropics/claude-plugins-official",
+      "prior_checkpoint": null,
+      "next_checkpoint": "44490cccaf6d9f82fdeec9416fbf7c9bd72575dc",
+      "disposition": "adopted",
+      "decision_ref": "#2502",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the interface-copy ideas as an OMH taste-foundations section; the studio persona and calibration hex values are rejected.",
+      "supersedes": null
+    },
+    {
       "receipt_id": "ssc-2026-11-02-tech-debt-audit-mattpocock-skills",
       "candidate_key": "tech-debt-audit@github.com/mattpocock/skills",
       "prior_checkpoint": null,
