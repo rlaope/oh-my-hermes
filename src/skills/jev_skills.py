@@ -570,10 +570,10 @@ non-generative: it answers typed questions about a `state` with probabilities an
 
 ## Routes
 
-- `TYPESAFE_API_KEY` enables the TypeSafe route. OMH also honors Hermes' optional
-  `TYPESAFE_BASE_URL` setting for that route, appending `/systemone` to the
-  configured HTTPS base URL (or accepting a base URL that already ends in
-  `/systemone`). The OpenRouter route remains an explicit local opt-in: an
+- `TYPESAFE_API_KEY` enables the TypeSafe route. OMH also honors `TYPESAFE_BASE_URL`, the
+  API-root variable TypeSafe's own SDKs read, for that route: an HTTPS root gets `/v1/systemone`
+  appended, a root already ending in `/v1` gets `/systemone`, and one already ending in
+  `/systemone` is used as is. The OpenRouter route remains an explicit local opt-in: an
   `OPENROUTER_API_KEY` alone enables nothing; it needs
   `{"openrouter_route": true}` in `<omh_home>/jev/settings.json`, which OMH
   never writes. `omh doctor` reports the route in its `plugin_jev_sidekick`

@@ -734,7 +734,7 @@ class StatusTableTests(_ConsentedCase):
             self.assertNotIn("pip install", ledger)
             self.assertNotIn(SENTINEL, home.every_written_byte())
 
-    def test_custom_typesafe_endpoint_uses_the_hermes_base_url_setting(self) -> None:
+    def test_custom_typesafe_endpoint_uses_the_typesafe_base_url_setting(self) -> None:
         with TemporaryDirectory() as tmp:
             home = _Home(tmp, {
                 "TYPESAFE_API_KEY": SENTINEL,
@@ -755,6 +755,32 @@ class StatusTableTests(_ConsentedCase):
             self.assertEqual(usage.get("cost_source"), "reported_by_gateway")
             request = transport.requests[0]
             self.assertEqual(getattr(request, "full_url", ""), "https://gateway.example/jev/v1/systemone")
+
+    def test_the_sdk_style_root_reaches_the_default_endpoint_and_list_price(self) -> None:
+        # TypeSafe's SDKs read TYPESAFE_BASE_URL as the API root, without /v1.
+        with TemporaryDirectory() as tmp:
+            home = _Home(tmp, {
+                "TYPESAFE_API_KEY": SENTINEL,
+                "TYPESAFE_BASE_URL": "https://api.typesafe.ai/",
+            })
+            transport = _Recorder(TransportReply(200, {}, _answered_body()))
+            result = home.call({"state": STATE, "questions": QUESTION}, transport)
+            self.assertEqual(result["status"], "answered")
+            self.assertEqual(transport.requests[0].full_url, "https://api.typesafe.ai/v1/systemone")
+            self.assertEqual(result["usage"]["cost_source"], "estimated_from_list_price")
+
+    def test_a_custom_endpoint_without_a_reported_cost_is_unpriced(self) -> None:
+        with TemporaryDirectory() as tmp:
+            home = _Home(tmp, {
+                "TYPESAFE_API_KEY": SENTINEL,
+                "TYPESAFE_BASE_URL": "https://gateway.example",
+            })
+            transport = _Recorder(TransportReply(200, {}, _answered_body()))
+            result = home.call({"state": STATE, "questions": QUESTION}, transport)
+            self.assertEqual(result["status"], "answered")
+            self.assertEqual(transport.requests[0].full_url, "https://gateway.example/v1/systemone")
+            self.assertEqual(result["usage"]["cost_source"], "unknown")
+            self.assertIsNone(result["usage"]["cost_usd"])
 
     def test_invalid_custom_endpoint_is_reported_without_opening_transport(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -1003,6 +1029,18 @@ class TransportSafetyTests(unittest.TestCase):
             client.route_url("typesafe", {"TYPESAFE_BASE_URL": "https://gateway.example/v1/systemone"}),
             "https://gateway.example/v1/systemone",
         )
+        # The SDK form: an API root without the version segment.
+        for value in ("https://api.typesafe.ai", "https://api.typesafe.ai/"):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    client.route_url("typesafe", {"TYPESAFE_BASE_URL": value}), client.ROUTES["typesafe"][0]
+                )
+        self.assertEqual(
+            client.route_url("typesafe", {"TYPESAFE_BASE_URL": "https://gateway.example/jev"}),
+            "https://gateway.example/jev/v1/systemone",
+        )
+        self.assertEqual(client.route_url("typesafe", {"TYPESAFE_BASE_URL": "  "}), client.ROUTES["typesafe"][0])
+        self.assertEqual(client.route_url("typesafe", {}), client.ROUTES["typesafe"][0])
         self.assertEqual(
             client.route_url("openrouter", {"TYPESAFE_BASE_URL": "https://gateway.example/v1"}),
             client.ROUTES["openrouter"][0],
@@ -1012,6 +1050,11 @@ class TransportSafetyTests(unittest.TestCase):
             "https://user:pass@gateway.example/v1",
             "https://gateway.example/v1?token=secret",
             "https://gateway.example/v1#fragment",
+            "https://:443/v1",
+            "https:///v1",
+            "https://gateway.example:notaport/v1",
+            "https://gateway.example/v1 extra",
+            "gateway.example/v1",
         ):
             with self.subTest(value=value), self.assertRaises(client.AskRequestError):
                 client.route_url("typesafe", {"TYPESAFE_BASE_URL": value})

@@ -5,9 +5,10 @@ pins that no other module imports this one). Everything here exists to keep a
 single explicit, user-requested call narrow:
 
 * Two route identities, fixed in `ROUTES`. The TypeSafe endpoint defaults to
-  the Hermes-compatible `https://api.typesafe.ai/v1/systemone` and may use
-  `TYPESAFE_BASE_URL` for an operator-configured HTTPS base URL; the OpenRouter
-  route remains fixed. The request never accepts a URL argument.
+  `https://api.typesafe.ai/v1/systemone`; `TYPESAFE_BASE_URL`, the API-root
+  variable TypeSafe's own SDKs read, may name an operator-configured HTTPS
+  root instead (`route_url`). The OpenRouter route remains fixed. The request
+  never accepts a URL argument.
 * HTTPS only, default certificate verification, and every 3xx refused.
   CPython's redirect handler copies `Authorization` onto the redirected
   request, including to another host, so a redirect is a non-answer here.
@@ -68,11 +69,15 @@ ROUTE_OPENROUTER: Final = "openrouter"
 # route id -> (URL, key variable name). A third route is a code change with a
 # cited source, not configuration.
 TYPESAFE_BASE_URL_ENV: Final = "TYPESAFE_BASE_URL"
-TYPESAFE_DEFAULT_BASE_URL: Final = "https://api.typesafe.ai/v1"
+TYPESAFE_DEFAULT_BASE_URL: Final = "https://api.typesafe.ai"
+TYPESAFE_VERSION_PATH: Final = "/v1"
 TYPESAFE_ENDPOINT_PATH: Final = "/systemone"
 
 ROUTES: Final[dict[str, tuple[str, str]]] = {
-    ROUTE_TYPESAFE: (f"{TYPESAFE_DEFAULT_BASE_URL}{TYPESAFE_ENDPOINT_PATH}", "TYPESAFE_API_KEY"),
+    ROUTE_TYPESAFE: (
+        f"{TYPESAFE_DEFAULT_BASE_URL}{TYPESAFE_VERSION_PATH}{TYPESAFE_ENDPOINT_PATH}",
+        "TYPESAFE_API_KEY",
+    ),
     ROUTE_OPENROUTER: ("https://openrouter.ai/api/v1/systemone", "OPENROUTER_API_KEY"),
 }
 
@@ -262,7 +267,15 @@ def _header_view(headers: object) -> dict[str, str]:
 
 
 def route_url(route: str, environ: Mapping[str, str] | None = None) -> str:
-    """Resolve a route endpoint, honoring Hermes' TypeSafe base URL setting."""
+    """Resolve a route endpoint; the TypeSafe one may come from `TYPESAFE_BASE_URL`.
+
+    TypeSafe's Python and JavaScript SDKs read `TYPESAFE_BASE_URL` as the API
+    root (default `https://api.typesafe.ai`) and append `/v1/systemone`, so a
+    value set for them must reach the same endpoint here. A root that already
+    ends in `/v1` gets `/systemone`, and one that already ends in `/systemone`
+    is used as is. Anything but an HTTPS URL with a host and no userinfo,
+    query or fragment is refused before a socket opens.
+    """
     if route not in ROUTES:
         raise AskRequestError(f"route must be one of {', '.join(ROUTES)}")
     default_url, _ = ROUTES[route]
@@ -281,7 +294,7 @@ def route_url(route: str, environ: Mapping[str, str] | None = None) -> str:
         raise AskRequestError(f"{TYPESAFE_BASE_URL_ENV} must be an HTTPS base URL") from error
     if (
         parsed.scheme.lower() != "https"
-        or not parsed.netloc
+        or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
         or parsed.query
@@ -291,8 +304,13 @@ def route_url(route: str, environ: Mapping[str, str] | None = None) -> str:
             f"{TYPESAFE_BASE_URL_ENV} must be an HTTPS base URL without credentials, query, or fragment"
         )
     base_path = parsed.path.rstrip("/")
-    endpoint_path = base_path if base_path.endswith(TYPESAFE_ENDPOINT_PATH) else f"{base_path}{TYPESAFE_ENDPOINT_PATH}"
-    return urlunsplit(("https", parsed.netloc, endpoint_path or TYPESAFE_ENDPOINT_PATH, "", ""))
+    if base_path.endswith(TYPESAFE_ENDPOINT_PATH):
+        endpoint_path = base_path
+    elif base_path.endswith(TYPESAFE_VERSION_PATH):
+        endpoint_path = f"{base_path}{TYPESAFE_ENDPOINT_PATH}"
+    else:
+        endpoint_path = f"{base_path}{TYPESAFE_VERSION_PATH}{TYPESAFE_ENDPOINT_PATH}"
+    return urlunsplit(("https", parsed.netloc, endpoint_path, "", ""))
 
 
 def build_request_body(model: str, state: object, questions: Mapping[str, Any]) -> bytes:

@@ -134,8 +134,8 @@ and evidence obvious to a reviewer reading the PR without the chat history.
   It runs only when the user's own message for that turn names Jev (a
   per-turn marker `pre_llm_call` records; otherwise it returns
   `consent_not_observed` and opens no socket), and only when a route
-  resolves: `TYPESAFE_API_KEY`, with Hermes' optional `TYPESAFE_BASE_URL`
-  override for the TypeSafe endpoint, or `OPENROUTER_API_KEY` plus
+  resolves: `TYPESAFE_API_KEY`, with TypeSafe's optional `TYPESAFE_BASE_URL`
+  API root for the TypeSafe endpoint, or `OPENROUTER_API_KEY` plus
   `{"openrouter_route": true}` in `<omh_home>/jev/settings.json`, which OMH
   never writes. Stdlib only, HTTPS only, two route identities, no redirects,
   bounded bodies, no retry after a sent request times out. It

@@ -2828,8 +2828,10 @@ quietly widening what the sentence covers.
 The plugin tool `omh_jev_ask` is the second place, and the only network client
 core omh has in `src/`: `plugin_bundle/omh/jev_ask_client.py` POSTs typed questions to Jev
 over two route identities: TypeSafe defaults to `api.typesafe.ai` with
-`TYPESAFE_API_KEY` and may use Hermes' `TYPESAFE_BASE_URL` as an HTTPS base URL
-without credentials, query, or fragment; OMH appends `/systemone`. OpenRouter
+`TYPESAFE_API_KEY` and may use `TYPESAFE_BASE_URL`, the API-root variable
+TypeSafe's SDKs read, as an HTTPS root with a host and no credentials, query, or
+fragment; OMH appends `/v1/systemone` (`/systemone` to a root already ending in
+`/v1`). OpenRouter
 uses `openrouter.ai` only when the operator also set `openrouter_route` in
 `<omh_home>/jev/settings.json`. It refuses every redirect, bounds both bodies and
 the whole call by a deadline, and retries only 429, 503, and 529. It opens no
