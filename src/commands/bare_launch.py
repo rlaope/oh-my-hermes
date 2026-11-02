@@ -57,9 +57,11 @@ def add_top_level_options(parser: argparse.ArgumentParser) -> None:
         "-r",
         "--resume",
         dest="tui_resume",
+        nargs="?",
+        const="",
         default=None,
         metavar="SESSION",
-        help="Bare launch only: reopen this Hermes session id in the terminal.",
+        help="Bare launch only: reopen this Hermes session id in the terminal, or pick one when no id is given.",
     )
     parser.add_argument(
         "-c",
@@ -522,6 +524,7 @@ def _run_terminal(
                 omh_home=_tui_omh_home(args, paths),
                 fallback_sentinel=sentinel,
                 session_file=sentinel.with_name("session"),
+                pick_session=getattr(args, "tui_resume", None) == "",
             )
             child = subprocess.Popen([hermes, *_hermes_passthrough_argv(args, tui=True)], env=environment)
             returncode = int(child.wait())
