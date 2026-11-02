@@ -166,6 +166,8 @@ from .inflight import (
     write_inflight_marker,
 )
 from .parallelism_policy import FANOUT_MAX_DEPTH_DEFAULT, FANOUT_RUN_SPAWN_CEILING_DEFAULT
+from .codex_windows_sandbox import CODEX_WINDOWS_SANDBOX_BACKENDS
+from .fanout_settings import merged_environment_policy, stored_codex_windows_sandbox
 from .fanout_repair import (
     REPAIR_ATTEMPT_OBSERVED_EVENT,
     REPAIR_ATTEMPT_STARTED_EVENT,
@@ -904,15 +906,34 @@ DISPATCH_REASONING_OPTION_TEMPLATES: dict[str, tuple[str, ...]] = {
 _DISPATCH_OPTION_INSERT_INDEX: dict[str, int | None] = {"codex": 2, "claude-code": None, "pi-family-runtime": 5}
 
 
+# What the journal says when the executor's own sandbox explains a unit with no
+# result. Each names the fix, since the cause is otherwise visible only in the
+# executor's session log (#2471).
+_SANDBOX_REFUSAL_SUMMARIES = {
+    'executor_sandbox_read_only': (
+        "Executor sandbox was read-only; the unit's writes were refused. On native Windows set "
+        "[windows] sandbox in Codex config.toml or codex.windows_sandbox in OMH fanout settings."
+    ),
+    'executor_sandbox_start_failed': (
+        "Executor sandbox failed to start; the unit's shell commands never ran. Check the "
+        "variables the sandbox names against the child environment receipt."
+    ),
+}
+
+
 def build_dispatch_argv(
     owner: str,
     prompt: str,
     model_route: Mapping[str, Any] | None = None,
+    *,
+    codex_windows_sandbox: str = "",
 ) -> list[str] | None:
     """Return the spawn argv for one owner, or None when the owner has no template.
 
     Without a model route the argv is byte-identical to the base template; a
-    routed model/effort inserts the per-owner option fragments only.
+    routed model/effort inserts the per-owner option fragments only. A stored
+    codex Windows sandbox backend inserts `--config windows.sandbox=<backend>`
+    the same way (#2471); with none set the argv is unchanged.
     """
     if owner == "pi-family-runtime":
         host = pi_family_host()
@@ -939,6 +960,10 @@ def build_dispatch_argv(
         options.extend(part.replace("{model}", model) for part in model_template)
     if effort:
         options.extend(part.replace("{effort}", effort) for part in effort_template)
+    if owner == "codex" and codex_windows_sandbox:
+        if codex_windows_sandbox not in CODEX_WINDOWS_SANDBOX_BACKENDS:
+            raise ValueError(f"unknown codex Windows sandbox backend: {codex_windows_sandbox!r}")
+        options.extend(("--config", f"windows.sandbox={codex_windows_sandbox}"))
     if not options:
         return argv
     insert_at = insert_index
@@ -2115,6 +2140,9 @@ def dispatch_fanout(
     # subprocess starts, and a refusal must not depend on a contract read, a
     # readiness probe, or a worktree first.
     guard_env: Mapping[str, str] = os.environ if env is None else env
+    # The operator's stored grants join the command's own (#2471), so an
+    # agent-driven dispatch gets the same environment as a hand-typed one.
+    environment_policy = merged_environment_policy(paths.omh_home, environment_policy)
     effective_max_depth = FANOUT_MAX_DEPTH_DEFAULT if max_depth is None else max(1, int(max_depth))
     current_depth = read_fanout_depth(guard_env)
     if current_depth >= effective_max_depth:
@@ -4679,7 +4707,10 @@ def _dispatch_unit(
     clarification = None
     if not dry_run and fanout_id and repair is None:
         clarification = read_clarification(clarification_path(paths, fanout_id, unit_id))
-    argv = build_dispatch_argv(owner, prompt, effective_model_route)
+    # `-c windows.sandbox=<backend>` for codex when the operator stored one;
+    # without it native-Windows Codex runs read-only (#2471).
+    codex_sandbox_backend = stored_codex_windows_sandbox(paths.omh_home) if owner == "codex" else ""
+    argv = build_dispatch_argv(owner, prompt, effective_model_route, codex_windows_sandbox=codex_sandbox_backend)
     child_environment = fanout_child_environment(
         os.environ if base_env is None else base_env,
         depth=dispatch_depth,
@@ -4875,7 +4906,7 @@ def _dispatch_unit(
         # The early read is not authority: serialize only the atomically validated claim.
         assembled = _assemble_prompt(sidecar_path, clarification)
         prompt = assembled.text
-        argv = build_dispatch_argv(owner, prompt, effective_model_route)
+        argv = build_dispatch_argv(owner, prompt, effective_model_route, codex_windows_sandbox=codex_sandbox_backend)
     known_secrets = (goal_text, prompt, *tuple(
         value for key, value in child_env.items()
         if any(marker in key.upper() for marker in ('TOKEN', 'SECRET', 'PASSWORD', 'API_KEY'))
@@ -5193,7 +5224,7 @@ def _dispatch_unit(
                 if previous_path is not None and sidecar_path is not None:
                     assembled = _assemble_prompt(sidecar_path, clarification)
                     prompt = assembled.text
-                    argv = build_dispatch_argv(owner, prompt, effective_model_route)
+                    argv = build_dispatch_argv(owner, prompt, effective_model_route, codex_windows_sandbox=codex_sandbox_backend)
                     assert argv is not None  # Same previously admitted owner and route.
                     argv = session_argv(argv)
                     if confinement is not None:
@@ -5285,7 +5316,8 @@ def _dispatch_unit(
                 output_tail = capture.error_window('stdout')
                 stderr_tail = capture.error_window('stderr')
                 if exit_code != 0:
-                    failure_diagnostic = diagnostic('worker', 'nonzero', exit_code, 'process')
+                    failure_diagnostic = diagnostic(
+                        'worker', capture.sandbox_refusal() or 'nonzero', exit_code, 'process')
             except CapacityBlocked as exc:
                 entry = _capacity_entry(paths, unit, admission_binding, exc.trip,
                                         worktree_created=True, contract_digest=session_contract_digest,
@@ -5484,11 +5516,14 @@ def _dispatch_unit(
         "worker_ref": unit_id, "worktree_ref": str(worktree), "runtime_profile": owner,
     })
     if failure_diagnostic is None and not unit_result.get('result_schema_valid'):
-        failure_diagnostic = diagnostic('unit_result', 'malformed_result', exit_code, 'process')
+        # A sandbox that refused the unit's writes, or never started, exits 0
+        # with no result: name that cause instead of the missing result (#2471).
+        sandbox_refusal = capture.sandbox_refusal()
+        failure_diagnostic = diagnostic('unit_result', sandbox_refusal or 'malformed_result', exit_code, 'process')
         append_journal_observation(paths, {
             'target_type': 'run', 'target_id': run_ref, 'run_id': run_ref,
             'event': 'unit_result_invalid', 'status': 'failed',
-            'summary': 'Unit return contract unavailable or invalid',
+            'summary': _SANDBOX_REFUSAL_SUMMARIES.get(sandbox_refusal, 'Unit return contract unavailable or invalid'),
             'worker_ref': unit_id, 'runtime_profile': owner, 'attempt_id': attempt_id,
             'failure_diagnostic': failure_diagnostic})
     # Both rungs below it must already hold: a unit whose process failed has
