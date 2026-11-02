@@ -21,6 +21,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from _cli_harness import run_cli  # noqa: E402
+from _verification_python import verification_python, verification_python_path  # noqa: E402
 from _fanout_interrupt_flag import InterruptFlagIsolatedTestCase  # noqa: E402
 
 from omh.coding.executor_readiness import (  # noqa: E402
@@ -3931,7 +3932,7 @@ class FanoutBriefTextCeilingTests(unittest.TestCase):
         self.assertTrue(text.endswith("Boundary text."))
 
 
-_PY = shlex.quote(sys.executable)
+_PY = verification_python()
 _PASSING_COMMAND = f"{_PY} -c pass"
 _FAILING_COMMAND = f"{_PY} -c 'import sys; sys.stdout.write(\"boom\"); sys.exit(3)'"
 _ENV_COMMAND = f"OMH_VERIFY=1 {_PY} -c 'import os,sys; sys.exit(0 if os.environ.get(\"OMH_VERIFY\") else 1)'"
@@ -4449,7 +4450,7 @@ class FanoutDispatchPlannedVerificationTests(unittest.TestCase):
 
             def runner(argv, **kwargs):
                 completed = original_runner(argv, **kwargs)
-                if argv[:2] == [sys.executable, "-c"]:
+                if argv[:2] == [verification_python_path(), "-c"]:
                     verification_envs.append(dict(kwargs.get("env") or {}))
                 return completed
 
