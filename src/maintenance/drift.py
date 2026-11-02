@@ -978,8 +978,12 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # model's, a bridge's, and (in Korean) a model's, cloud infra's and
             # company org's architecture improvement, a course's shallow
             # modules, deepening opportunities with clients, and a solar module
-            # that is hard to test never name it either (+8).
-            expected=1361,
+            # that is hard to test never name it either (+8). Its second
+            # review: twenty English requests that quote a shipped phrase (job
+            # ads, translations, a README line, a bank repo, a contract) never
+            # dispatch it, and a Korean course, blog post, job posting, dress
+            # code and QR code never name it (+25).
+            expected=1386,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1560,8 +1564,12 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # architecture-deepening requests dispatch tech-debt-audit, a
             # Korean codebase-architecture request and shallow modules in this
             # repo name it as the clarify candidate, and improving an
-            # architecture diagram stays codebase-uml's dispatch (+6).
-            expected=1233,
+            # architecture diagram stays codebase-uml's dispatch (+6). Its
+            # second review makes the phrases clarify-only: five requests name
+            # the audit in the question, a tech-debt request that also names
+            # the architecture still dispatches it, and Korean meeting notes
+            # and a paper search keep operating-rhythm and source-finder (+3).
+            expected=1236,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

@@ -7777,11 +7777,9 @@ _DEFINITIONS = [
             "code debt audit",
             "where is our tech debt",
             "improve the codebase architecture",
-            "improve the architecture of this codebase",
             "improve the architecture of this repo",
             "deepening opportunities in this codebase",
             "shallow modules in this codebase",
-            "shallow modules in this repo",
         ),
         (
             "Use when the codebase's accumulated debt should be measured and ranked as a ledger - findings "

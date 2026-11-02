@@ -120,8 +120,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # review moves the tech-debt-audit "+N more triggers" count (same length). Merged with
             # main: base and digest re-derived from the producer (#2501's pin before the merge was
             # b073f4fb...eda7 at 529803, main's 83828030...e82a at 530293).
+            # #2501's second review moves only tech-debt-audit's "+N more triggers"
+            # count (same length); the digest before it was 3a45e62c...32d7.
             (skill_capabilities, 530427, FULL_ROW_DELTA_CAP,
-             '3a45e62c1db4289f129d86763c9e6628efc57e5d03a89fde354d046b54ea32d7',
+             '93de88ace8292b9aa1aadae79a64f518df2720597a1815f4b7a2c0b478c881c0',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -309,7 +311,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # e498851bd607d40942631386858a10c1ed1ea5ea8e3a17a033b866d2c1bbe956.
         # Merged with main after #2506 (the whole chain): both sides' bodies; main's pin before the merge was
         # 491fb471be66fac6154ef944b02563994a1ed46fbc59a89b79243c24d941fdff.
-        self.assertEqual(_digest(legacy_hashes), '81f862a9acafaf3d2d845069dd68b643e0e0284bacad19b62228c2d62fae97f5')
+        # #2501's second review cuts tech-debt-audit's phrases to four and the
+        # Korean ones to their request forms; only that body's routing-signal
+        # line moves, and the pin before it was 81f862a9...97f5.
+        self.assertEqual(_digest(legacy_hashes), '7a5aacd754cae58c4ef6c53739768abc1f4a323f0f53aaebd9e704b3b0d9ba1e')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

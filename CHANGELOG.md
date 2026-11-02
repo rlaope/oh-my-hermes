@@ -17,10 +17,11 @@ All notable changes will be documented here.
   `ai-slop-cleaner` keeps a single-caller module that hides real complexity
   instead of inlining it. Requests that name the code ("improve the codebase
   architecture", "improve the architecture of this repo", "find deepening
-  opportunities in this codebase") now reach the audit, and "shallow modules
-  in this repo" and "코드베이스 아키텍처 개선해줘" name it in the clarifying
-  question; on main they asked about codebase onboarding or unrelated lanes.
-  An architecture that is not code (a model, cloud infra, an org chart, a
+  opportunities in this codebase", "shallow modules in this codebase",
+  "코드베이스 아키텍처 개선해줘") now name the audit in the clarifying
+  question, where main named codebase onboarding or unrelated lanes; they
+  dispatch it only beside its own words, such as "tech debt". An
+  architecture that is not code (a model, cloud infra, an org chart, a
   building) routes exactly as before.
 
 - **Code skills tell the executor how to write a test, not only in TDD mode.**

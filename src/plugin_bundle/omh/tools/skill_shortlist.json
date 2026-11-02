@@ -1090,8 +1090,8 @@
 },
 {
 "anchors":"budget clean cleanup quick rank win worst",
-"hangul":"감사 개선 기술 드베 베이 부채 사해 술부 아키 원장 이스 장부 점검 코드 키텍 텍처",
-"hangul_anchors":"감사 개선 기술 드베 베이 부채 사해 술부 아키 원장 이스 장부 점검 키텍 텍처",
+"hangul":"감사 개선 기술 드베 베이 부채 사해 선해 술부 아키 원장 이스 장부 점검 코드 키텍 텍처",
+"hangul_anchors":"감사 개선 기술 드베 베이 부채 사해 선해 술부 아키 원장 이스 장부 점검 키텍 텍처",
 "label":"omh-tech-debt-audit",
 "name":"tech-debt-audit",
 "situation":"Accumulated tech debt or architecture deepening to rank",

@@ -201,12 +201,14 @@ FROZEN_HANGUL_TRIGGERS_BY_SKILL: dict[str, int] = {
     # admission rule admits.
     "spend-gate": 24,
     "strategy-brief": 6,
-    # 7 -> 9 (2026-11-02, architecture deepening): "코드베이스 아키텍처 개선"
-    # and "코드 아키텍처 개선" arrived WITH their English base corpus in the
-    # same commit ("improve the codebase architecture", "... of this repo"),
-    # new capability reach for an intent the audit had no trigger for in any
-    # language. Both name the code; a bare 아키텍처 개선 is ML, infra, org and
-    # building work, so it stays out. Frozen here from now on.
+    # 7 -> 9 (2026-11-02, architecture deepening): "코드베이스 아키텍처
+    # 개선해줘" and "코드 아키텍처 개선해줘" arrived WITH their English base
+    # corpus in the same commit ("improve the codebase architecture", "... of
+    # this repo"), new capability reach for an intent the audit had no trigger
+    # for in any language. Both name the code and are the request form, so a
+    # course, paper or job post about the topic does not count; a bare 아키텍처
+    # 개선 is ML, infra, org and building work, so it stays out. Frozen here
+    # from now on.
     "tech-debt-audit": 9,
     "toolbelt-readiness": 5,
     "ultragoal": 4,
