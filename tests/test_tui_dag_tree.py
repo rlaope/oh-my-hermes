@@ -22,6 +22,7 @@ import re
 import unittest
 
 from _delegation_graphs import graph, lane, root
+from _tui_lines import badge_text
 from test_tui_agent_view import agent_event, mode_row, view_text, with_graph
 from test_tui_modes import SID, answer, drawn, make_app, notices, type_text
 from test_tui_subagents import FRAMES, feed
@@ -1167,7 +1168,7 @@ class RunEndTests(unittest.TestCase):
         info = box_top(screen) + 3
         # The tree's rows are blank under the info line, down to the region's last row.
         self.assertEqual(screen[info + 1 : 42], [""] * (41 - info), "the tree's rows are blank under the info line")
-        self.assertIn("[⚚ OMH Native]", screen[info])
+        self.assertIn(badge_text(), screen[info])
         above = screen[box_top(screen) - 2 : box_top(screen)]
         self.assertTrue(above[0].strip().startswith("✻"), screen)  # the turn's summary line, then one spacer row
         self.assertEqual(drawn(app), screen, "the next frame keeps them")
