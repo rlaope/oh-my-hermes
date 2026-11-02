@@ -3772,13 +3772,13 @@ class App(ModesMixin, AgentViewMixin):
         ):
             self.exit_code = 0
             return
-        action = self._edit(self.composer, event)
+        action = self._edit(self.composer, event, submit_now=event == SEND_NOW_KEY and self._steer_keys_live())
         self._on_composer(action, event, steer=isinstance(event, Key) and event.name == ENTER and event.ctrl)
 
-    def _edit(self, composer: Composer, event: Key | Paste) -> ComposerAction:
+    def _edit(self, composer: Composer, event: Key | Paste, *, submit_now: bool = False) -> ComposerAction:
         """`event` to `composer`, the person's own key: one that changes its text reopens the `/` menu at its top."""
         before, editing = composer.text, composer.normal
-        action = composer.handle(event)
+        action = composer.handle(event, submit_now=submit_now)
         if composer.text != before:
             self.menu_index = 0
             self.menu_closed = None

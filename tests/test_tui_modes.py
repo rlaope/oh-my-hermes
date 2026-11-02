@@ -187,6 +187,49 @@ class SteerTests(unittest.TestCase):
         self.assertEqual(client.named("prompt.submit"), [])
         self.assertFalse(app.queued)
 
+    def test_ctrl_enter_in_vim_steers_during_a_turn_in_either_mode(self) -> None:
+        for normal_mode in (False, True):
+            for text in ("use the other file", "keep this\\"):
+                with self.subTest(normal=normal_mode, text=text):
+                    app, client = make_app(busy=True)
+                    app.composer.set_vim(True)
+                    type_text(app, text)
+                    if normal_mode:
+                        app._on_input(Key("escape"))
+                    app._on_input(CTRL_ENTER)
+                    self.assertEqual(client.calls, [("session.steer", {"session_id": SID, "text": text})])
+                    self.assertEqual(app.composer.text, "")
+                    self.assertFalse(app.queued)
+
+    def test_ctrl_enter_in_vim_while_idle_matches_enter_in_either_mode(self) -> None:
+        for normal_mode in (False, True):
+            for text in ("a prompt", "keep this\\"):
+                results = []
+                for key in (Key(ENTER), CTRL_ENTER):
+                    app, client = make_app()
+                    app.composer.set_vim(True)
+                    type_text(app, text)
+                    if normal_mode:
+                        app._on_input(Key("escape"))
+                    app._on_input(key)
+                    results.append((client.calls, app.composer.text))
+                with self.subTest(normal=normal_mode, text=text):
+                    self.assertEqual(results[0], results[1])
+                    if normal_mode:
+                        self.assertEqual(results[0], ([("prompt.submit", {"session_id": SID, "text": text})], ""))
+                    else:
+                        self.assertEqual(results[0], ([], text.rstrip("\\") + "\n"))
+
+    def test_vim_enter_and_modified_ctrl_enter_still_add_lines_during_a_turn(self) -> None:
+        for key in (Key(ENTER), Key(ENTER, ctrl=True, shift=True), Key(ENTER, ctrl=True, alt=True)):
+            with self.subTest(key=key):
+                app, client = make_app(busy=True)
+                app.composer.set_vim(True)
+                type_text(app, "first line")
+                app._on_input(key)
+                self.assertEqual(client.calls, [])
+                self.assertEqual(app.composer.text, "first line\n")
+
     def test_a_steer_of_two_lines_shows_both(self) -> None:
         app, client = make_app(busy=True)
         type_text(app, "first line")
