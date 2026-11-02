@@ -13242,6 +13242,12 @@ axis explicitly; a PASS with no named evidence per axis is not a review.
   invented paths) each carry a stated reason or are replaced. FAIL: a default present
   with no rationale, checked against the review prompts in
   `omh-frontend/references/taste-foundations.md`.
+- **Material credibility** — for a composed frame that shows a physical
+  product (a device, a package, hardware), the object reads as a lit model
+  with real materials and a measured tonal range. FAIL: an object built from
+  stacked flat layers, a surface whose measured bulk sits near white around a
+  radial hotspot, or a brand title set in a generic face where the brand's own
+  live typeface was available.
 
 ## Scoring the axes
 

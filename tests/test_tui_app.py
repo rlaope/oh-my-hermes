@@ -1064,7 +1064,12 @@ class PromptSlotTests(AppTestCase):
             Step(b"\x1b[C\r", when=terminal.shows("Hermes asks to run"), label="the approval slot"),
             Step(when=lambda: not now.__setitem__(0, 100.0 + SLOT_ARM_SECONDS / 2), label="half the delay"),
             Step(b"\r", when=terminal.shows("Hermes asks to run"), label="still arming"),
-            Step(when=lambda: not now.__setitem__(0, 100.0 + SLOT_ARM_SECONDS), label="the delay passed"),
+            # The delay starts again from the last early key: one delay after the opening the slot still arms, so
+            # this Enter (allow once, were it armed) answers nothing and starts the delay again.
+            Step(when=lambda: not now.__setitem__(0, 100.0 + SLOT_ARM_SECONDS), label="one delay on"),
+            Step(b"\r", when=terminal.shows("Hermes asks to run"), label="restarted"),
+            # A hair past (100.8 - 100.4 is a little under 0.4 in floats), and short of a doubled delay.
+            Step(when=lambda: not now.__setitem__(0, 100.0 + SLOT_ARM_SECONDS * 2 + 0.01), label="the delay passed"),
             Step(b"d", when=terminal.shows("Hermes asks to run"), label="armed"),
             Step(b"\x04", when=lambda: "proceed." in terminal.history() and terminal.idle(), label="end"),
         )
@@ -1162,7 +1167,8 @@ class PromptSlotTests(AppTestCase):
 
     def test_keys_and_an_enter_that_arrive_as_a_clarify_opens_answer_nothing(self) -> None:
         # Enter would pick the highlighted `red`, and so would `1`. Typed for the composer as the
-        # question lands, they reach it inside the arm delay and do nothing; the replay records `blue`.
+        # question lands, they reach it inside the arm delay and answer nothing (the `1` stays in the
+        # draft); the replay records `blue`.
         run = self.prepare(
             Scenario("session", spans("session", "startup", "create", "clarify_turn"), answers=startup_answers())
         )
@@ -1178,8 +1184,17 @@ class PromptSlotTests(AppTestCase):
             Step(b"\r", when=question, label="the clarify slot"),
             Step(when=lambda: not now.__setitem__(0, 100.0 + SLOT_ARM_SECONDS / 2), label="half the delay"),
             Step(b"1", when=question, label="still arming"),
-            Step(when=lambda: not now.__setitem__(0, 100.0 + SLOT_ARM_SECONDS), label="the delay passed"),
+            # The delay starts again from the last early key: one delay after the opening the slot still arms, so
+            # this Enter (`red`, were it armed) answers nothing and starts the delay again.
+            Step(when=lambda: not now.__setitem__(0, 100.0 + SLOT_ARM_SECONDS), label="one delay on"),
+            Step(b"\r", when=question, label="restarted"),
+            # A hair past (100.8 - 100.4 is a little under 0.4 in floats), and short of a doubled delay.
+            Step(when=lambda: not now.__setitem__(0, 100.0 + SLOT_ARM_SECONDS * 2 + 0.01), label="the delay passed"),
             Step(b"2", when=question, label="armed"),
+            # The early `1` went on into the draft, not the answer: once the turn ends, Ctrl+C clears it (with text
+            # typed it clears, never interrupts) and Ctrl+D leaves.
+            Step(b"\x03", when=lambda: not any(WORKING_CLOCK.search(line) for line in terminal.screen.lines())
+                 and "blue" in terminal.history(), label="the turn ended"),
             Step(b"\x04", when=terminal.idle, label="the end of the turn"),
         )
         with terminal:
