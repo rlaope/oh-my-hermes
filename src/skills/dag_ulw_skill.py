@@ -92,10 +92,10 @@ DEFINITION = SkillDefinition(
         "revisions. Never exempt a changed same-id failure, missing evidence, skipped or reduced coverage, "
         "collection/exit errors, or security/mandatory gates; disclose genuine baseline failures as pre-existing "
         "rather than calling a full-suite-green goal met.",
-        "End every run with a verification node that depends on every producer, runs the real command, and is "
+        "End every run with a `role: verify` node that depends on every producer, runs the real command, and is "
         "never the node that built the work.",
-        "Completion is a claim: before reporting the goal met, check each node against its SCOPE in both "
-        "directions, nothing owed missing and nothing beyond it done.",
+        "Completion is a claim: report the goal met only when `omh_dag` says `verdict: verified`, and first check "
+        "each node against its SCOPE in both directions, nothing owed missing and nothing beyond it done.",
         "Goal loop: verify, repair, extend, verify. A failed check gets repair nodes (`omh_dag action=repair`, two "
         "cycles per node); when every node passed but the goal check finds work missing, add it to the same run "
         "(`omh_dag action=extend`, two rounds per run). Past either limit, report what is still open.",
@@ -116,7 +116,8 @@ DEFINITION = SkillDefinition(
     opening_steps=(
         "Start at once; there is no plan approval. Write the goal criteria in one line.",
         "Plan the graph and call `omh_dag action=define` with the complete run `goal` and each node's id, label, category, prompt, "
-        "depends_on and write_scope; fix every refusal and read the lint before going on. Never `delegate_task` "
+        "depends_on, write_scope and role (`build` by default; `baseline`, `verify`, `review`); "
+        "fix every refusal and read the lint before going on. Never `delegate_task` "
         "before `define` returns its calls. The saved goal reaches every native task; local VERIFY does not replace goal acceptance.",
         f"Keep the plan todo as the run's layers in ONE tool: `{NATIVE_TODO_TOOL}` when "
         f"{native_tool_presence_clause(NATIVE_TODO_TOOL, code=True)} (OMH mirrors it), else `omh_todo`. One item per "
@@ -194,8 +195,14 @@ def run_loop_reference() -> str:
    this run, including non-dag `delegate_task` calls. If the host's one-shot detector itself
    cannot be read, define is refused as `oneshot_detection_unavailable` rather than run uncapped;
    `ready`, `settle`, `repair` and `extend` refuse it the same way, and the record is untouched.
+   Each node's `role` says what it is for: `build` (the default), `baseline`, `verify` or `review`; any
+   other role is refused. Only a `verify` node verifies the goal, and every other node with a `write_scope`
+   is a producer it has to follow. A node with no role that writes files and whose label opens with a check
+   word (Verify, Validate, Audit, QA, Review) is refused as `role_required`: send `role=verify` (or
+   `review`), or `role=build` when it builds.
    Lint is advice: a partial prompt-marker set, no verification node, a producer the verification node does
-   not depend on, every node `deep`, more than one `ultrabrain`, and a graph of 5+ nodes whose critical
+   not depend on, a node with no role whose label reads like another (`role_guess:<id>=verify`: give it
+   the role), every node `deep`, more than one `ultrabrain`, and a graph of 5+ nodes whose critical
    path is at least 80% of it (`serial_graph`: split it into parallel lanes where the work allows).
 2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
    goes in a call of its own): run its `route` with `omh_delegate_route` (`set`, or `fallback`), then one
@@ -227,8 +234,10 @@ def run_loop_reference() -> str:
    still runs (`delegate_task action=list`; settle failed and repair when none is live), or it came back
    unsettled (read the handoff and settle). The profile moves the marks under `plugins.entries.omh.settings`:
    `dag_stuck_after_s` (0 turns the warning off), `dag_stale_after_s` (when `ready` offers again a node no child
-   took, default 600) and `dag_max_lost_reoffers` (default 3). OMH still starts no timer: the warning shows only
-   on a `status`, `ready` or `settle` call.
+   took, default 600) and `dag_max_lost_reoffers` (default 3). OMH still starts no timer: the warning shows on a
+   `status`, `ready` or `settle` call, and once at a later turn's start, in an `[OMH dag]` line that also names a
+   run with no node running whose next step is yours (a passed `wake_at`, ready nodes, a node out with no child, one
+   back and unsettled, or a failure with a repair cycle left), with the one call to make.
 
 A child handing off a still-running background process or CI run is not a failure: settle with
 `outcome=parked`, its `handle` (at most 120 characters), and `wake_at` (UTC ISO-8601 or epoch, future,
@@ -250,8 +259,17 @@ Verify, repair, extend, verify. The verification node runs the real command. Whe
 - In a one-shot session, repair and extend are refused as `oneshot_budget_exceeded` when they would need
   more children than the remaining one-shot budget; the record is not changed by a refused call.
 
-When every node passed (`state: done`), check each node against its SCOPE and the goal criteria. When
-work is missing:
+When every node passed (`state: done`), the result also carries `verdict`, from the record alone:
+`verified` only when every producer is under a `verify` node that was accepted with its handoff checked;
+otherwise `unverified`, with `verdict_reasons` (`no_verification_node`, `verification_misses:<ids>`,
+`handoff_not_checked:<id>`: a checked later verify node clears it). A stopped run whose verify node failed
+is `verify_failed`. Report the goal met only on `verified`. An `unverified` done run gets a `role: verify`
+node through `extend`, depending on every producer, while rounds are left; after that, report the goal as
+unverified. A run of verify nodes alone is judged by those checks. A run where no node wrote files and no
+verify node ran is `unverified` with `no_producers`: nothing was built to verify, so report what it
+found, not a goal met, and do not extend for it.
+
+Check each node against its SCOPE and the goal criteria too. When work is missing:
 
 - `omh_dag action=extend node=<the node whose check found the gap> nodes=[...]` adds the missing work to
   the same run, with its own verification node. New nodes may depend on the run's accepted nodes and on
@@ -288,8 +306,8 @@ person names the owner again.
 With such a choice:
 
 - `ready`, `settle`, `repair` and `extend` keep the ready coding nodes out of `calls` and list them in
-  `export`. A coding node writes files (`write_scope`) and is no verification or review node:
-  verification and review always run on `delegate_task`, because the builder never approves itself.
+  `export`. A coding node is a `build` node that writes files (`write_scope`): baseline, verify and review
+  nodes always run on `delegate_task`, because the builder never approves itself.
 - `omh_dag action=export owner=<codex|claude-code>` writes those nodes, and the waiting coding nodes
   whose every open parent goes with them, as a `fanout_contract/v2` units file and a goal file, and
   returns the two `omh coding fanout` commands to run (`prepare`, then `dispatch`). More than four units

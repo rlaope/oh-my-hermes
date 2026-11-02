@@ -41,7 +41,9 @@ Discord has no DM check. The relay transport turns a missing `chat_type` into
 guild-less interaction "dm", user-installed app commands in group DMs
 included (`gateway/relay/adapter.py`); relayed events are authorized upstream
 and nothing in the provider's kwargs says an event was relayed. So every
-Discord conversation is a channel, with memory per `chat_id`.
+Discord conversation is a channel, with memory per `chat_id`. A thread Hermes
+auto-created from a channel message shares the parent channel's memory (see
+`memory_thread_parent`); other threads keep their own scope.
 
 The authorized set is what Hermes would admit on the platform, read the way
 Hermes reads it and never written: `<PLATFORM>_ALLOWED_USERS` and

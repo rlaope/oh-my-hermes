@@ -363,7 +363,14 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # name; the chain-head and model_map behavior is enforced in code. Measured by
 # per_turn_context.plugin_tool_schema_chars_by_tool() against base 812ec53.
 # No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72370
+# 72370 -> 72455: the node `role` field on omh_dag (+85, 2983 -> 3068): a bare
+# four-value enum (build, baseline, verify, review) and the word in the
+# description's field list. Roles were guessed from labels and misread checks
+# and producers; the explicit field is what the run's goal verdict reads. The
+# enum carries no description (the skill and the tool's results explain it).
+# Measured by per_turn_context.plugin_tool_schema_chars_by_tool() against base
+# c90d94551. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

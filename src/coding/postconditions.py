@@ -29,7 +29,7 @@ from typing import Any, Mapping, Sequence
 
 from ..codegraph import CODEGRAPH_TEST_SELECTION_SCHEMA_VERSION, select_tests_for_changes
 
-from .fanout_contracts import FanoutContractError, verification_command_argv
+from .fanout_contracts import FanoutContractError, require_shell_free_command, verification_command_argv
 
 TASK_LINKED_POSTCONDITION_SCHEMA_VERSION = "task_linked_postcondition/v1"
 TASK_LINKED_TEST_RULE = "direct_importer_tests"
@@ -67,6 +67,10 @@ def normalized_task_linked_test_runner(value: object, index: int) -> str:
             f"unit at index {index} task_linked_test_runner must be at most "
             f"{MAX_TASK_LINKED_TEST_RUNNER_CHARS} chars"
         )
+    try:
+        require_shell_free_command(runner, field="task_linked_test_runner")
+    except FanoutContractError as exc:
+        raise FanoutContractError(f"unit at index {index} {exc}") from exc
     verification_command_argv(runner)
     return runner
 

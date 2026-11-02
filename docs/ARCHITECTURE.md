@@ -331,9 +331,11 @@ settings and compact summaries do not rely on an unnamed list-order convention.
 `workflows/memory.py` owns OMH project memory. It stores candidates, reviewed
 records, review decisions, and recall packs under `.omh/memory/` using local
 JSON files. Setup records `project_memory_policy/v1` with `off`,
-`review-first`, or `auto-safe` mode (`auto-safe` by default). The Hermes model
-writes through `omh_memory(action="capture")`, which runs the installed CLI's
-capture path, and the plugin's memory provider reads the store on every turn.
+`review-first`, or `auto-safe` mode (`auto-safe` by default). The memory provider
+exposes the always-visible `omh_remember` save/recall tool through
+`get_tool_schemas()`. Its save action and `omh_memory(action="capture")` use the
+same in-process admission path and session-lens gates; the provider reads the
+store on every turn.
 Coding handoffs can receive
 `project_memory_recall_pack/v1` when reviewed records are relevant. These packs are
 prepared context only; they are not execution, review, CI, merge, or Hermes
@@ -2825,9 +2827,13 @@ quietly widening what the sentence covers.
 
 The plugin tool `omh_jev_ask` is the second place, and one of the two network
 clients core omh has in `src/`: `plugin_bundle/omh/jev_ask_client.py` POSTs typed questions to Jev
-over one of two fixed HTTPS hosts (`api.typesafe.ai` with `TYPESAFE_API_KEY`,
-or `openrouter.ai` only when the operator also set `openrouter_route` in
-`<omh_home>/jev/settings.json`), refuses every redirect, bounds both bodies and
+over two route identities: TypeSafe defaults to `api.typesafe.ai` with
+`TYPESAFE_API_KEY` and may use `TYPESAFE_BASE_URL`, the API-root variable
+TypeSafe's SDKs read, as an HTTPS root with a host and no credentials, query, or
+fragment; OMH appends `/v1/systemone` (`/systemone` to a root already ending in
+`/v1`). OpenRouter
+uses `openrouter.ai` only when the operator also set `openrouter_route` in
+`<omh_home>/jev/settings.json`. It refuses every redirect, bounds both bodies and
 the whole call by a deadline, and retries only 429, 503, and 529. It opens no
 socket unless the person's own message for that turn names Jev: `pre_llm_call`
 records a consent marker bound to the turn's id (`jev_consent.py`), only an

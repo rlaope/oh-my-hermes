@@ -30,7 +30,7 @@ from test_tui_muscle_memory import send  # noqa: E402
 from test_tui_panels import THEME  # noqa: E402
 
 NODES = [node("api", scope=("src/api.py",), label="Export API"), node("ui", scope=("src/ui.py",), label="Export button"),
-         node("verify", depends_on=("api", "ui"), label="Verify export")]
+         node("verify", depends_on=("api", "ui"), label="Verify export", role="verify")]
 
 
 def completed(result: dict, *, name: str = "omh_dag", tool_id: str = "t1") -> Event:
@@ -56,7 +56,7 @@ def run_results(home) -> dict[str, dict]:
     results["ready"] = call(action="ready", run="export")
     results["extend"] = call(action="extend", run="export", nodes=[
         node("csv", scope=("src/api.py",), depends_on=("api",), label="CSV export"),
-        node("verify-csv", depends_on=("csv",), label="Verify CSV")])
+        node("verify-csv", depends_on=("csv",), label="Verify CSV", role="verify")])
     for node_id in ("csv", "verify-csv"):
         handoff(home, "export", node_id)
         results[f"end-{node_id}"] = call(action="settle", run="export", node=node_id, outcome="accepted")
@@ -73,8 +73,8 @@ class MomentTests(unittest.TestCase):
         self.assertEqual(seen["define"], ("plan", "export", []))
         self.assertEqual(seen["repair"], ("repair · +1 node", "export", ["ui-fix"]))
         self.assertEqual(seen["extend"], ("extend · +2 nodes", "export", ["csv", "verify-csv"]))
-        self.assertEqual(seen["end"], ("end · done", "export", []))
-        self.assertEqual(seen["end-verify-csv"], ("end · done", "export", []))  # the extended run ends again
+        self.assertEqual(seen["end"], ("end · done · verified", "export", []))
+        self.assertEqual(seen["end-verify-csv"], ("end · done · verified", "export", []))  # the extended run ends again
         for quiet in ("reused", "status", "settle", "ready", "end-csv"):
             self.assertIsNone(seen[quiet], quiet)
         # A status or ready that reads an ended run is not its end, even where no end was printed yet.
@@ -85,6 +85,28 @@ class MomentTests(unittest.TestCase):
         self.assertIsNone(dag_block.moment({"name": "terminal", "result": json.dumps(results["define"])}, set()))
         self.assertIsNone(dag_block.moment({"name": "omh_dag", "result": json.dumps(
             {"status": "refused", "action": "define", "reason": "dependency_cycle"})}, set()))
+
+    def test_a_run_done_without_a_verify_node_ends_unverified_wherever_its_end_is_drawn(self) -> None:
+        """Mutation: drop the verdict from the end title, the one-line summary, or the messenger end block."""
+        from omh.plugin_bundle.omh.delegation_snapshot import end_block, lanes_of
+        from omh.tui.panels import dag_run_summary
+
+        self.assertEqual(dag_block.VERDICTS, dag_run.VERDICTS)
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="export", name="export feature", nodes=NODES[:2])
+            for node_id in ("api", "ui"):
+                handoff(home, "export", node_id)
+                end = call(action="settle", run="export", node=node_id, outcome="accepted")
+            graph = build_delegation_graph(home.omh, home.hermes, PARENT)
+        self.assertEqual(dag_block.moment({"name": "omh_dag", "result": json.dumps(end)}, set()),
+                         ("end · done · unverified", "export", []))
+        self.assertEqual(graph["dag_verdict"], "unverified")
+        self.assertEqual(dag_run_summary(graph), "DAG · export feature · done 2/2 · unverified")
+        self.assertTrue(end_block(graph, lanes_of(graph)).splitlines()[1].endswith("ended · unverified"))
+        # A word the payload does not know is not printed.
+        self.assertEqual(dag_block.moment({"name": "omh_dag", "result": json.dumps({**end, "verdict": "goal met"})},
+                                          set()), ("end · done", "export", []))
 
 
 class BlockTests(unittest.TestCase):
@@ -175,10 +197,10 @@ class BlockTests(unittest.TestCase):
                 end = call(action="settle", run="export", node=node_id, outcome="accepted")
             graph = build_delegation_graph(home.omh, home.hermes, PARENT)
         self.assertEqual(dag_block.moment({"name": "omh_dag", "result": json.dumps(end)}, set()),
-                         ("end · done", "export", []))
+                         ("end · done · verified", "export", []))
         text = self._text(dag_block.DagBlock("end · done", graph), 140)
         self.assertEqual(sum("Handoff not checked" in line for line in text), 1, text)
-        self.assertEqual(dag_run_summary(graph), "DAG · export feature · done 3/3 · 1 handoff not checked")
+        self.assertEqual(dag_run_summary(graph), "DAG · export feature · done 3/3 · 1 handoff not checked · verified")
 
 
 def big_run(sizes: tuple[int, ...], states: dict[str, str] | None = None) -> dict:
@@ -326,7 +348,7 @@ class AppTests(unittest.TestCase):
         for index, key in enumerate(("ready", "extend")):
             app._on_event(completed(results[key], tool_id=f"u{index}"))
         app._on_event(turn_ended())
-        self.assertEqual(self._titles(app), ["plan", "repair · +1 node", "end · done", "extend · +2 nodes"])
+        self.assertEqual(self._titles(app), ["plan", "repair · +1 node", "end · done · verified", "extend · +2 nodes"])
         self.assertEqual(dag_run.DAG_SCHEMA_VERSION, "omh_dag/v1")
 
     def test_a_repair_print_names_the_nodes_it_added(self) -> None:
@@ -340,7 +362,7 @@ class AppTests(unittest.TestCase):
         blocks = [block for block in app.transcript.blocks + app.transcript._held
                   if isinstance(block, dag_block.DagBlock)]
         self.assertEqual([(block.title, block.added) for block in blocks], [
-            ("plan", ()), ("repair · +1 node", ("ui-fix",)), ("end · done", ())])
+            ("plan", ()), ("repair · +1 node", ("ui-fix",)), ("end · done · verified", ())])
 
     def test_an_end_the_same_turn_extends_prints_nothing_and_the_last_end_prints_once(self) -> None:
         with homes() as home:
@@ -355,7 +377,7 @@ class AppTests(unittest.TestCase):
         app._on_event(completed(results["end-verify-csv"], tool_id="t9"))
         app._on_event(turn_ended())
         app._on_event(turn_ended())
-        self.assertEqual(self._titles(app), ["plan", "extend · +2 nodes", "end · done"])
+        self.assertEqual(self._titles(app), ["plan", "extend · +2 nodes", "end · done · verified"])
 
     def test_an_end_whose_run_moved_on_before_the_turn_ended_prints_nothing(self) -> None:
         with homes() as home:

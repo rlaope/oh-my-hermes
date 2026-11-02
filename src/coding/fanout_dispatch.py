@@ -136,6 +136,7 @@ from .fanout_contracts import (
     REPRODUCTION_UNIT_KIND,
     UNIT_VERIFICATION_OBSERVATION_SOURCE,
     FanoutContractError,
+    require_shell_free_command,
     verification_command_argv,
 )
 from .fanout_clarification_dispatch import (
@@ -192,6 +193,7 @@ from .unit_execution_state import (
     UNIT_STATE_AWAITING_INPUT,
     UNIT_STATE_FAILED,
     UNIT_STATE_PERMISSION_BLOCKED,
+    UNIT_STATE_UNVERIFIED,
     UNIT_STATE_VERIFIED,
 )
 from .unit_progress import (
@@ -1243,6 +1245,24 @@ def _apply_integration_readiness(units: Sequence[dict[str, Any]]) -> None:
         merge_order_position_satisfied = ladder["integration_ready"]
 
 
+def _verification_unit_state(verification_status: object, verification_observed: bool) -> tuple[str, str]:
+    """The terminal state of a unit whose process and result rungs both held.
+
+    Three answers, because there are three things the dispatcher can have
+    seen. Every declared check passed: `verified`. A check ran and failed:
+    `failed`, reason `verification_failed`. Nothing was observed at all (no
+    check declared, `--run-verification` not given, or integration-tier checks
+    still held): `unverified`, reason `verification_not_observed`. That last
+    one used to read `failed`, which overstated failure counts and sent
+    retry automation after work that had succeeded (#2461).
+    """
+    if verification_observed:
+        return UNIT_STATE_VERIFIED, ""
+    if verification_status == "failed":
+        return UNIT_STATE_FAILED, "verification_failed"
+    return UNIT_STATE_UNVERIFIED, "verification_not_observed"
+
+
 def _unit_verification_is_observed(paths: OmhPaths, run_ref: str) -> bool:
     """Project the complete journal so an old receipt cannot fall off a tail."""
     from ..workflows.observation_journal import project_run_lifecycle, read_observation_events
@@ -1449,9 +1469,14 @@ def _run_verification_command(
         return 'failed', detail, None
 
     try:
+        # A contract frozen before the freeze-time refusal can still carry a
+        # shell operator. Running it would only report the program's own
+        # usage error (exit 2) as if the work had failed, and a repair could
+        # never make it pass, so it is refused here as not observed (#2460).
+        require_shell_free_command(command)
         env_overrides, argv = verification_command_argv(command)
-    except FanoutContractError:
-        return failed('denial', None, 'not_observed', 'invalid verification command')
+    except FanoutContractError as exc:
+        return failed('denial', None, 'not_observed', f'invalid verification command: {exc}')
     try:
         environment_decision = resolve_child_environment(
             os.environ if child_env is None else child_env,
@@ -1798,6 +1823,7 @@ def _run_integration_verification_wave(
             entry["integration_environment_policy"] = integration_decision.receipt
             entry["verification_status"] = "failed"
             entry["verification_failures"] = ["child environment policy not ready for integration verification"]
+            entry["unit_state"], entry["unit_state_reason"] = _verification_unit_state("failed", False)
             continue
         integration_environment = integration_decision.environment
         integration_argv: list[list[str]] = []
@@ -1851,6 +1877,12 @@ def _run_integration_verification_wave(
         entry.pop("verification_failures", None)
         entry.update(rerun)
         entry["unit_verification_observed"] = _unit_verification_is_observed(paths, str(entry["run_ref"]))
+        # The worker stamped this unit before the fan-in, while its
+        # integration-tier checks were still held; the wave is what observed
+        # them, so the state follows the wave rather than the stale stamp.
+        entry["unit_state"], entry["unit_state_reason"] = _verification_unit_state(
+            entry.get("verification_status"), bool(entry["unit_verification_observed"])
+        )
         if diagnostic_engine is not None and diagnostic_engine.settings.enabled:
             diagnostics = run_post_green_diagnostics(
                 diagnostic_engine,
@@ -3403,13 +3435,8 @@ def _hermes_recovery_dispatch(
         )
     record.update(verification)
     outcome = verification.get("verification_status")
-    if outcome == "passed":
-        record.update(unit_state=UNIT_STATE_VERIFIED, unit_state_reason="")
-    else:
-        record.update(
-            unit_state=UNIT_STATE_FAILED,
-            unit_state_reason="verification_failed" if outcome == "failed" else "verification_not_observed",
-        )
+    unit_state, unit_state_reason = _verification_unit_state(outcome, outcome == "passed")
+    record.update(unit_state=unit_state, unit_state_reason=unit_state_reason)
     return record
 
 
@@ -5631,12 +5658,10 @@ def _dispatch_unit(
         unit_state, unit_state_reason = UNIT_STATE_FAILED, "result_missing"
     elif not result_schema_valid:
         unit_state, unit_state_reason = UNIT_STATE_FAILED, "result_invalid"
-    elif verification_failed_now:
-        # Ran and failed, as opposed to never observed: a reader deciding what
-        # to do next needs to tell the two apart without reading the rows.
-        unit_state, unit_state_reason = UNIT_STATE_FAILED, "verification_failed"
     else:
-        unit_state, unit_state_reason = UNIT_STATE_FAILED, "verification_not_observed"
+        unit_state, unit_state_reason = _verification_unit_state(
+            verification.get("verification_status"), verification_observed
+        )
     result = {
         "unit_id": unit_id,
         "run_ref": run_ref,

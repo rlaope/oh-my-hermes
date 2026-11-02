@@ -20,10 +20,12 @@ platform and the tool's real handler; nothing patches the classifier.
 
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
+import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -37,7 +39,7 @@ from omh.paths import resolve_paths  # noqa: E402
 from omh.plugin_bundle.omh.memory_admission import capture_project_memory_candidate  # noqa: E402
 from omh.plugin_bundle.omh.memory_blocks import approve_memory_block, build_memory_block, write_memory_block  # noqa: E402
 from omh.plugin_bundle.omh.memory_messenger import ALLOWLIST_ENV, HermesAuthorization, classify_conversation  # noqa: E402
-from omh.plugin_bundle.omh.memory_principals import principal_operation_decision, principal_recall_decision  # noqa: E402
+from omh.plugin_bundle.omh.memory_principals import derive_channel_ref, principal_operation_decision, principal_recall_decision  # noqa: E402
 from omh.plugin_bundle.omh.memory_provider import OmhMemoryProvider  # noqa: E402
 from omh.plugin_bundle.omh.memory_session_digest import write_session_close  # noqa: E402
 from omh.plugin_bundle.omh.memory_session_lens import (  # noqa: E402
@@ -722,7 +724,7 @@ class GroupChannelTests(_Messenger):
         self.assertEqual(self.tool("retire", "team-owner", record_id=self.owner_record, reason="no_longer_true")["reason"], "record_not_in_scope")
         self.assertEqual(self.store_bytes(), before)
 
-    def test_threads_share_their_channel_except_on_discord(self) -> None:
+    def test_telegram_topics_share_channel_but_unverified_discord_threads_do_not(self) -> None:
         # Telegram: a forum topic is the group's; Slack: covered above.
         group = self.gateway("tg-group", "telegram", chat_type="group", chat_id="-1001234567890", user_id=TELEGRAM_OWNER)
         topic = self.gateway("tg-topic", "telegram", chat_type="group", chat_id="-1001234567890", user_id="5550001", thread_id="7")
@@ -777,6 +779,121 @@ class GroupChannelTests(_Messenger):
         refused = self.tool("capture", "team-owner", summary="A bot says the standup moved.")
         self.assertEqual(refused["reason"], "shared_surface_writes_refused")
         self.assertEqual(self.store_bytes(), before)
+
+
+class DiscordThreadScopeTests(_Messenger):
+    """Only threads Hermes auto-created share the parent channel's memory."""
+
+    PARENT = "1111111111111111111"
+    OTHER_PARENT = "4444444444444444444"
+    THREAD_A = "2222222222222222222"
+    THREAD_B = "3333333333333333333"
+    OTHER_THREAD = "5555555555555555555"
+
+    def write_thread_origin(self, session_id: str, chat_id: str, parent_chat_id: str, **provenance: object) -> None:
+        origin = {"platform": "discord", "chat_type": "thread", "chat_id": chat_id, "parent_chat_id": parent_chat_id, **provenance}
+        # Default rollback journaling leaves no WAL sidecars for the reader.
+        with closing(sqlite3.connect(self.hermes / "state.db")) as connection:
+            with connection:
+                connection.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, origin_json TEXT)")
+                connection.execute("INSERT INTO sessions (id, origin_json) VALUES (?, ?)", (session_id, json.dumps(origin)))
+
+    def thread(self, session_id: str, chat_id: str) -> OmhMemoryProvider:
+        return self.gateway(session_id, "discord", chat_type="thread", chat_id=chat_id, thread_id=chat_id, user_id=DISCORD_OWNER)
+
+    def test_auto_threads_share_only_their_parent_channel_scope(self) -> None:
+        for session_id, chat_id, parent_id in (
+            ("dc-thread-a", self.THREAD_A, self.PARENT),
+            ("dc-thread-b", self.THREAD_B, self.PARENT),
+            ("dc-other-thread", self.OTHER_THREAD, self.OTHER_PARENT),
+        ):
+            self.write_thread_origin(session_id, chat_id, parent_id, auto_thread_created=True)
+        parent = self.gateway("dc-parent", "discord", chat_type="group", chat_id=self.PARENT, user_id=DISCORD_OWNER)
+        first = self.thread("dc-thread-a", self.THREAD_A)
+        second = self.thread("dc-thread-b", self.THREAD_B)
+        other = self.thread("dc-other-thread", self.OTHER_THREAD)
+        for live, chat_id in ((first, self.THREAD_A), (second, self.THREAD_B)):
+            with self.subTest(session=live._session_id):
+                self.assertEqual(live._channel_scope, parent._channel_scope)
+                self.assertEqual(live._conversation.chat_id, chat_id, "only the scope changes, not the conversation")
+                self.assertEqual(live._surface_class, SURFACE_CHANNEL)
+                self.assertIsNone(live._principal_context)
+                self.assertEqual(read_session_lens(self.home, live._session_id)["channel_scope"], parent._channel_scope)
+        self.assertNotEqual(other._channel_scope, parent._channel_scope)
+
+    def test_remember_in_one_auto_thread_prefetches_in_the_next_but_not_another_channel(self) -> None:
+        self.write_thread_origin("dc-thread-a", self.THREAD_A, self.PARENT, auto_thread_created=True)
+        self.write_thread_origin("dc-thread-b", self.THREAD_B, self.PARENT, auto_thread_created=True)
+        self.write_thread_origin("dc-other-thread", self.OTHER_THREAD, self.OTHER_PARENT, auto_thread_created=True)
+        first = self.thread("dc-thread-a", self.THREAD_A)
+        self.turn(first, 1, "Channel reviews use the release checklist.", author_id=DISCORD_OWNER)
+        saved = json.loads(first.handle_tool_call("omh_remember", {"action": "save", "summary": "Channel reviews use the release checklist."}))
+        self.assertEqual((saved["status"], saved["action"], saved["plugin_tool"]), ("remembered", "save", "omh_remember"), saved)
+        record_id = saved["record_id"]
+        record = self.record(record_id)
+        self.assertEqual(record["scope"], first._channel_scope)
+        self.assertEqual(record["source_ref"], "hermes-session:dc-thread-a")
+        second = self.thread("dc-thread-b", self.THREAD_B)
+        self.assertEqual(rendered_ids(self.turn(second, 1, "release checklist", author_id=DISCORD_OWNER)), [record_id])
+        parent = self.gateway("dc-parent", "discord", chat_type="group", chat_id=self.PARENT, user_id=DISCORD_OWNER)
+        self.assertEqual(rendered_ids(self.turn(parent, 1, "release checklist", author_id=DISCORD_OWNER)), [record_id])
+        unrelated = self.gateway("dc-other-parent", "discord", chat_type="group", chat_id=self.OTHER_PARENT, user_id=DISCORD_OWNER)
+        for live in (unrelated, self.thread("dc-other-thread", self.OTHER_THREAD), self.thread("dc-plain-thread", self.THREAD_A)):
+            with self.subTest(session=live._session_id):
+                self.assertNotIn(record_id, self.turn(live, 1, "release checklist", author_id=DISCORD_OWNER))
+
+    def test_threads_without_auto_creation_provenance_keep_their_own_scope(self) -> None:
+        parent = self.gateway("dc-parent", "discord", chat_type="group", chat_id=self.PARENT, user_id=DISCORD_OWNER)
+        plain = self.thread("dc-no-row", self.THREAD_A)
+        self.assertNotEqual(plain._channel_scope, parent._channel_scope)
+        for session_id, provenance in (("dc-no-marker", {}), ("dc-manual-thread", {"auto_thread_created": False})):
+            with self.subTest(session=session_id):
+                self.write_thread_origin(session_id, self.THREAD_A, self.PARENT, **provenance)
+                live = self.thread(session_id, self.THREAD_A)
+                self.assertEqual(live._channel_scope, plain._channel_scope)
+                self.assertNotEqual(live._channel_scope, parent._channel_scope)
+
+    def test_a_failed_store_keeps_the_thread_on_its_own_scope(self) -> None:
+        (self.hermes / "state.db").mkdir()
+        live = self.thread("dc-thread-a", self.THREAD_A)
+        expected = derive_channel_ref(self.home, profile_ref="default", surface_ref="discord", channel_identity=self.THREAD_A)
+        self.assertEqual(live._channel_scope, {"kind": "channel", "ref": expected})
+        self.assertTrue((self.hermes / "state.db").is_dir())
+
+    def test_slack_and_telegram_keep_their_scope_without_a_parent_lookup(self) -> None:
+        (self.hermes / "state.db").mkdir()
+        with patch("omh.plugin_bundle.omh.memory_provider.auto_thread_parent_channel", side_effect=AssertionError("non-Discord store read")) as lookup:
+            for platform, chat_id, author in (("slack", SLACK_TEAM, SLACK_OWNER), ("telegram", "-1001234567890", TELEGRAM_OWNER)):
+                with self.subTest(platform=platform):
+                    group = self.gateway(f"{platform}-group", platform, chat_type="group", chat_id=chat_id, user_id=author)
+                    topic = self.gateway(f"{platform}-topic", platform, chat_type="group", chat_id=chat_id, user_id=author, thread_id="7")
+                    expected = derive_channel_ref(self.home, profile_ref="default", surface_ref=platform, channel_identity=chat_id)
+                    self.assertEqual(group._channel_scope, {"kind": "channel", "ref": expected})
+                    self.assertEqual(topic._channel_scope, group._channel_scope)
+            lookup.assert_not_called()
+
+    def test_compression_keeps_the_parent_scope_without_another_store_read(self) -> None:
+        self.write_thread_origin("dc-thread-a", self.THREAD_A, self.PARENT, auto_thread_created=True)
+        live = self.thread("dc-thread-a", self.THREAD_A)
+        expected = dict(live._channel_scope)
+        with patch("omh.plugin_bundle.omh.memory_provider.auto_thread_parent_channel", side_effect=AssertionError("scope re-derived during compression")) as lookup:
+            live.on_session_switch("dc-compressed", parent_session_id="dc-thread-a", reset=False)
+            self.turn(live, 1, "release checklist", author_id=DISCORD_OWNER)
+            lookup.assert_not_called()
+        self.assertEqual(live._channel_scope, expected)
+        self.assertEqual(live._conversation.chat_id, self.THREAD_A)
+        self.assertEqual(read_session_lens(self.home, "dc-compressed")["channel_scope"], expected)
+
+    def test_a_late_origin_does_not_widen_the_scope_mid_conversation(self) -> None:
+        live = self.thread("dc-thread-a", self.THREAD_A)
+        expected = dict(live._channel_scope)
+        self.write_thread_origin("dc-thread-a", self.THREAD_A, self.PARENT, auto_thread_created=True)
+        with patch("omh.plugin_bundle.omh.memory_provider.auto_thread_parent_channel", side_effect=AssertionError("late origin lookup")) as lookup:
+            self.turn(live, 1, "release checklist", author_id=DISCORD_OWNER)
+            live.on_session_switch("dc-compressed", parent_session_id="dc-thread-a", reset=False)
+            lookup.assert_not_called()
+        self.assertEqual(live._channel_scope, expected)
+        self.assertEqual(read_session_lens(self.home, "dc-compressed")["channel_scope"], expected)
 
 
 class HandoffTests(_Messenger):

@@ -45,16 +45,21 @@ PROMPT = "TASK: do it\nDELIVERABLE: a change\nSCOPE: only its files\nVERIFY: run
 
 
 def node(node_id: str, *, category: str = "quick", depends_on: tuple[str, ...] = (), scope: tuple[str, ...] = (),
-         label: str = "", prompt: str = PROMPT) -> dict:
-    return {"id": node_id, "label": label or f"Node {node_id}", "category": category, "prompt": prompt,
-            "depends_on": list(depends_on), "write_scope": list(scope)}
+         label: str = "", prompt: str = PROMPT, role: str = "") -> dict:
+    """A node as the parent sends it; ``role`` only when given, as a parent that names none sends none."""
+    raw = {"id": node_id, "label": label or f"Node {node_id}", "category": category, "prompt": prompt,
+           "depends_on": list(depends_on), "write_scope": list(scope)}
+    if role:
+        raw["role"] = role
+    return raw
 
 
 FEATURE = [
     node("api", scope=("src/api.py",)),
     node("ui", category="unspecified-low", scope=("src/ui.py",)),
     node("docs", category="writing", depends_on=("api",), scope=("docs/api.md",)),
-    node("verify", category="unspecified-high", depends_on=("api", "ui", "docs"), label="Verify the feature"),
+    node("verify", category="unspecified-high", depends_on=("api", "ui", "docs"), label="Verify the feature",
+         role="verify"),
 ]
 
 
@@ -309,7 +314,7 @@ class DefineTests(unittest.TestCase):
             deep = call(action="define", run="deep", nodes=[node("a", category="deep"), node("b", category="deep-work")])
         self.assertIn("all_nodes_deep", deep["lint"])
         with homes():
-            miss = call(action="define", run="miss", nodes=[node("a", scope=("a.py",)), node("verify")])
+            miss = call(action="define", run="miss", nodes=[node("a", scope=("a.py",)), node("verify", role="verify")])
         self.assertIn("verification_misses:a", miss["lint"])
 
     def test_the_same_definition_is_reused_and_a_different_one_refused(self) -> None:
@@ -352,7 +357,7 @@ class SlotTests(unittest.TestCase):
 
     def test_a_category_larger_than_the_cap_splits_into_calls(self) -> None:
         nodes = [node(f"n{index}", scope=(f"f{index}",)) for index in range(3)] + [
-            node("verify", depends_on=("n0", "n1", "n2"))]
+            node("verify", role="verify", depends_on=("n0", "n1", "n2"))]
         with homes() as home:
             home.hermes.joinpath("config.yaml").write_text("delegation:\n  max_concurrent_children: 2\n")
             slots_table(home)
@@ -794,7 +799,7 @@ class RepairTests(unittest.TestCase):
 
     def _failed_verify(self, home) -> None:
         slots_table(home)
-        call(action="define", run="feat", nodes=[node("api", scope=("a.py",)), node("verify", depends_on=("api",))])
+        call(action="define", run="feat", nodes=[node("api", scope=("a.py",)), node("verify", role="verify", depends_on=("api",))])
         handoff(home, "feat", "api")
         call(action="settle", run="feat", node="api", outcome="accepted")
         call(action="settle", run="feat", node="verify", outcome="failed", reason="2 tests red")
@@ -803,7 +808,7 @@ class RepairTests(unittest.TestCase):
         with homes() as home:
             self._failed_verify(home)
             repaired = call(action="repair", run="feat", node="verify", nodes=[
-                node("fix", scope=("a.py",), depends_on=("api",)), node("verify2", depends_on=("fix",))])
+                node("fix", scope=("a.py",), depends_on=("api",)), node("verify2", role="verify", depends_on=("fix",))])
             handoff(home, "feat", "fix")
             call(action="settle", run="feat", node="fix", outcome="accepted")
             handoff(home, "feat", "verify2")
@@ -1110,7 +1115,7 @@ class OneShotBudgetTests(unittest.TestCase):
             self.assertEqual(delegation_ledger.oneshot_children_spawned(["other-session"]), 0)
 
     def _failed_verify(self, home) -> None:
-        call(action="define", run="feat", nodes=[node("api", scope=("a.py",)), node("verify", depends_on=("api",))])
+        call(action="define", run="feat", nodes=[node("api", scope=("a.py",)), node("verify", role="verify", depends_on=("api",))])
         child_started(home, "feat", "api")
         handoff(home, "feat", "api")
         call(action="settle", run="feat", node="api", outcome="accepted")
@@ -1118,7 +1123,7 @@ class OneShotBudgetTests(unittest.TestCase):
         call(action="settle", run="feat", node="verify", outcome="failed", reason="2 tests red")
 
     def test_repair_and_extend_refuse_more_nodes_than_children_left(self) -> None:
-        repair_nodes = [node("fix", scope=("a.py",), depends_on=("api",)), node("verify2", depends_on=("fix",))]
+        repair_nodes = [node("fix", scope=("a.py",), depends_on=("api",)), node("verify2", role="verify", depends_on=("fix",))]
         extend_nodes = [node("more", depends_on=("api",)), node("check", depends_on=("more",))]
         for oneshot in (True, False):
             with self.subTest(oneshot=oneshot), homes() as home, \
@@ -1173,7 +1178,7 @@ class ExtendTests(unittest.TestCase):
     def _done(self, home) -> dict:
         slots_table(home)
         call(action="define", run="feat", nodes=[node("api", scope=("a.py",)),
-                                                 node("verify", depends_on=("api",), label="Verify the feature")])
+                                                 node("verify", role="verify", depends_on=("api",), label="Verify the feature")])
         handoff(home, "feat", "api")
         call(action="settle", run="feat", node="api", outcome="accepted")
         handoff(home, "feat", "verify")
@@ -1183,7 +1188,7 @@ class ExtendTests(unittest.TestCase):
         with homes() as home:
             done = self._done(home)
             extended = call(action="extend", run="feat", nodes=[
-                node("csv", scope=("a.py",), depends_on=("api",)), node("verify2", depends_on=("csv",),
+                node("csv", scope=("a.py",), depends_on=("api",)), node("verify2", role="verify", depends_on=("csv",),
                                                                         label="Verify CSV")])
             record = dag_run.read_run(dag_run.record_path(home.omh, PARENT, "feat"))
         self.assertEqual((done["state"], done["extend_rounds_left"]), ("done", 2))
@@ -1267,7 +1272,7 @@ class ExtendTests(unittest.TestCase):
 
     def _done_after_a_superseded_repair(self, home) -> None:
         slots_table(home)
-        call(action="define", run="feat", nodes=[node("api", scope=("a.py",)), node("verify", depends_on=("api",))])
+        call(action="define", run="feat", nodes=[node("api", scope=("a.py",)), node("verify", role="verify", depends_on=("api",))])
         handoff(home, "feat", "api")
         call(action="settle", run="feat", node="api", outcome="accepted")
         call(action="settle", run="feat", node="verify", outcome="failed")
@@ -1571,7 +1576,7 @@ CODING = [
     node("plan", category="unspecified-low", label="Plan the change"),
     node("api", depends_on=("plan",), scope=("src/api.py",)),
     node("ui", depends_on=("plan",), scope=("src/ui.py",)),
-    node("review", depends_on=("plan",), scope=("docs/review.md",), label="Review the plan"),
+    node("review", role="review", depends_on=("plan",), scope=("docs/review.md",), label="Review the plan"),
     node("verify", category="unspecified-high", depends_on=("api", "ui", "review"), label="Verify the feature"),
 ]
 
@@ -1634,7 +1639,7 @@ class ExportTests(unittest.TestCase):
     def test_export_round_trips_into_a_fanout_contract(self) -> None:
         nodes = [node("api", scope=("src/api.py",)), node("ui", scope=("src/ui.py",)),
                  node("docs", depends_on=("api",), scope=("docs/api.md",)),
-                 node("verify", depends_on=("api", "ui", "docs"))]
+                 node("verify", role="verify", depends_on=("api", "ui", "docs"))]
         with homes() as home:
             slots_table(home)
             choose(home, "codex")
@@ -1661,7 +1666,7 @@ class ExportTests(unittest.TestCase):
         # api goes first; ui waits on a native node, so it goes in a second export once that node passed. The first
         # export's prepare or dispatch may not have run yet: its goal file must still be the one its id was made from.
         nodes = [node("api", scope=("src/api.py",)), node("notes", depends_on=("api",), label="Write the notes"),
-                 node("ui", depends_on=("notes",), scope=("src/ui.py",)), node("verify", depends_on=("ui",))]
+                 node("ui", depends_on=("notes",), scope=("src/ui.py",)), node("verify", role="verify", depends_on=("ui",))]
         with homes() as home:
             slots_table(home)
             choose(home, "codex")

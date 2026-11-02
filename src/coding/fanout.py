@@ -41,6 +41,7 @@ from .fanout_contracts import (
     is_verification_check_resource_class,
     VERIFICATION_CHECK_SAFETIES,
     VERIFICATION_CHECK_TIERS,
+    require_shell_free_command,
     verification_command_argv,
 )
 from .executor_capability_snapshots import (
@@ -696,6 +697,10 @@ def _normalized_verification_commands(value: object, index: int) -> list[str]:
             )
         # Parsed at freeze time so a command no dispatcher could run fails here,
         # where the operator is still holding it, rather than mid-dispatch.
+        try:
+            require_shell_free_command(command)
+        except FanoutContractError as exc:
+            raise FanoutContractError(f"unit at index {index} {exc}") from exc
         verification_command_argv(command)
         commands.append(command)
     return commands
@@ -734,6 +739,10 @@ def _normalized_unit_kind(unit: Mapping[str, object], index: int) -> tuple[str, 
         )
     # Parsed at freeze for the reason verification commands are: the
     # dispatcher runs it through the same argv split with `shell=False`.
+    try:
+        require_shell_free_command(command, field="reproduction_command")
+    except FanoutContractError as exc:
+        raise FanoutContractError(f"unit at index {index} {exc}") from exc
     verification_command_argv(command)
     return kind, command
 

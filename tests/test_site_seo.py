@@ -121,6 +121,13 @@ class SiteSeoTests(unittest.TestCase):
                 self.assertEqual(page.meta.get("og:image"), SHARE_IMAGE)
                 self.assertEqual(page.meta.get("twitter:image"), SHARE_IMAGE)
                 self.assertEqual(page.meta.get("twitter:card"), "summary_large_image")
+                # X previews a bare-domain link only with these; a redesign once dropped
+                # the whole share block, so pin the X-specific tags too.
+                self.assertEqual(page.meta.get("twitter:site"), "@rlaope")
+                self.assertEqual(page.meta.get("og:image:type"), "image/png")
+                self.assertEqual(
+                    page.meta.get("twitter:image:alt"), page.meta.get("og:image:alt")
+                )
                 for key in ("og:title", "og:description", "og:site_name", "og:type"):
                     self.assertTrue(page.meta.get(key, "").strip(), key)
                 self.assertEqual(page.h1, 1 + (path.parent.name == "hermes-agent-architecture"))
