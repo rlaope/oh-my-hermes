@@ -222,10 +222,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # node in dag-ulw (Hermes projection only); only dag-ulw and plan move,
         # and main's producer gives the previous pin
         # 0e66028d94805874a359b8f53b05a866f8fb539893e78a615d09e83f8b0d9f77.
-        # #2488 adds the short-promo line to show-reel's idea lane (only
-        # show-reel moves); the previous pin is
+        # Then plan's done check is a command with the result that counts as passing, for a code task;
+        # only plan moves, and main's producer gives the previous pin
         # 2f7f10cca0591d057e137b6a697cee02a77858695561d57043b0e26ed592b27c.
-        self.assertEqual(_digest(legacy_hashes), 'a0931a73ee13c9d04a60d55d45c997320be928feee8af1dd2de1c76eada74c88')
+        # #2488 adds the short-promo line to show-reel's idea lane (only
+        # show-reel moves); main's pin before it is
+        # 52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c.
+        self.assertEqual(_digest(legacy_hashes), 'ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

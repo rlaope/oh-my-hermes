@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import shlex
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -15,6 +14,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from _cli_harness import run_cli  # noqa: E402
+from _verification_python import verification_python, verification_python_path  # noqa: E402
 
 from omh.coding.dispatch_failure_recovery import (  # noqa: E402
     CHOICE_HERMES,
@@ -804,7 +804,7 @@ class DispatchRecoveryChoiceTests(unittest.TestCase):
             self.assertNotIn("failure_recovery", summary)
 
 
-_PY = shlex.quote(sys.executable)
+_PY = verification_python()
 _CHECK_FIX_COMMITTED = (
     f"{_PY} -c 'import subprocess,sys; "
     "sys.exit(subprocess.run([\"git\", \"cat-file\", \"-e\", \"HEAD:src/core/fix.txt\"]).returncode)'"
@@ -842,7 +842,7 @@ def _limit_then_real(argv, **kwargs):
     """Codex refuses on a usage limit; git and the declared checks really run."""
     if argv[0] == "git":
         return subprocess.run(argv, **kwargs)
-    if argv[0] == sys.executable:
+    if argv[0] in (sys.executable, verification_python_path()):
         return subprocess.run(argv, cwd=kwargs.get("cwd"), env=kwargs.get("env"), text=True,
                               capture_output=True, timeout=kwargs.get("timeout"))
     return _FakeCompleted(1, _LIMIT_FAILURE_TEXT)
@@ -851,7 +851,7 @@ def _limit_then_real(argv, **kwargs):
 def _limit_after(leftover):
     """Codex does `leftover(worktree)` -- half its work, a branch switch -- then hits the limit."""
     def runner(argv, **kwargs):
-        if argv[0] not in ("git", sys.executable):
+        if argv[0] not in ("git", sys.executable, verification_python_path()):
             leftover(Path(kwargs["cwd"]))
         return _limit_then_real(argv, **kwargs)
 
