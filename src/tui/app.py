@@ -225,7 +225,6 @@ from .screen import (
     CURSOR_HOME,
     CURSOR_SHAPE_BEAM,
     CURSOR_SHAPE_BLOCK,
-    CURSOR_SHAPE_DEFAULT,
     ERASE_SCROLLBACK,
     HIDE_CURSOR,
     SHOW_CURSOR,
@@ -1025,6 +1024,7 @@ class TerminalLike(Protocol):
     def read(self, timeout: float, wake: int | None = None) -> bytes: ...
     def write(self, text: str) -> None: ...
     def set_mouse(self, enabled: bool, drag: bool = False) -> None: ...
+    def set_cursor_shape(self, shape: str | None) -> None: ...
     def suspend(self) -> bool: ...
 
 
@@ -7229,14 +7229,14 @@ class App(ModesMixin, AgentViewMixin):
         label = self.composer.vim_label if self._composer_open() else ""
         shape = CURSOR_SHAPE_BLOCK if label == VIM_NORMAL else CURSOR_SHAPE_BEAM if label == VIM_INSERT else None
         if shape != self.cursor_shape:
-            self.terminal.write(shape or CURSOR_SHAPE_DEFAULT)
+            self.terminal.set_cursor_shape(shape)
             self.cursor_shape = shape
 
     def _restore_cursor_shape(self) -> None:
         """Put the terminal's own cursor shape back if vim mode set one: on every way out and at a stop."""
         if self.cursor_shape is not None:
             self.cursor_shape = None
-            self.terminal.write(CURSOR_SHAPE_DEFAULT)
+            self.terminal.set_cursor_shape(None)
 
     def _restore_ground(self) -> None:
         """Put the terminal's own background back if the wallpaper set another: on every way out (`_shutdown`), at a
