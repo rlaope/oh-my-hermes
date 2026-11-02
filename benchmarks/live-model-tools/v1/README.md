@@ -734,6 +734,24 @@ Recomputed from the raw run records, the session-DB snapshots and the profile lo
 `OPT/OPT-I/gate.py`, not from the driver log. If any clause fails, the failure is recorded here
 and the branch does not ask to merge.
 
+#### Amendment 2 (2026-11-02, during the counted runs, before any result was computed)
+
+From 11:11 KST the host's load average ran at 47 to 75, from other agents' test suites. Runs
+on h45, luna and sol then began to end as `process_crash`, exit 1, after 15 to 230 s, in both
+arms. In each one, the Hermes client's websocket to the gateway dropped
+(`ws response send failed`) while the gateway turn was still running, and the bench then
+removed the workspace under that turn. These are harness failures, not model outcomes, and
+the retry rule above does not cover them.
+
+The amendment:
+- The original records stay as recorded and are the **strict reading**, scored as registered.
+- After the lanes finish, each instance whose last record in an arm is a `process_crash` is
+  run once more, in that arm only, on the same route, into a separate `runs-rerun/` folder.
+  Nothing else is re-run.
+- The **re-run reading** replaces those records with their re-runs.
+- `gate.py` reports every clause under both readings, with the crash count per arm. If the
+  readings disagree, the result says so, and the branch asks to merge only with that stated.
+
 ### 2026-10-31 compact `omh_context` result: base vs branch
 
 The `omh_context` tool result rides every later model call of its session. In the 2026-10-30
