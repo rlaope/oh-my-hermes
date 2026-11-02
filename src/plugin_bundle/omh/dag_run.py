@@ -541,7 +541,7 @@ def writes_code(node: Mapping[str, Any]) -> bool:
     """Whether a node's write scope may touch code (`no_review_node`): any entry that is not docs.
 
     An entry is docs when it ends in a docs suffix (``DOC_SUFFIXES``), sits
-    under a leading ``docs/`` segment, or is named one of ``DOC_NAMES``
+    under a ``docs`` directory anywhere in its path, or is named one of ``DOC_NAMES``
     (README, CHANGELOG, LICENSE, ...). Any other directory, glob or file
     counts as code. Advice only, so it errs toward naming the missing review.
     """
@@ -549,10 +549,13 @@ def writes_code(node: Mapping[str, Any]) -> bool:
 
 
 def _is_docs_entry(entry: str) -> bool:
+    """Docs: a docs suffix or name, or a ``docs`` directory anywhere in the path (``/repo/docs/``, ``../wt/docs/x``).
+    An entry ending in ``/`` is all directories; otherwise its last segment is the file, so ``src/docs`` is code."""
     segments = [segment for segment in entry.casefold().split("/") if segment not in ("", ".")]
     if not segments:
         return False
-    return (posixpath.splitext(segments[-1])[1] in DOC_SUFFIXES or segments[0] == "docs"
+    directories = segments if entry.endswith("/") else segments[:-1]
+    return (posixpath.splitext(segments[-1])[1] in DOC_SUFFIXES or "docs" in directories
             or segments[-1] in DOC_NAMES)
 
 
@@ -762,8 +765,10 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
             base.get(member, {}).get("state") == "accepted" for member in latest
         ):
             failures = sum(1 for attempt in nodes[root].get("attempts") or [] if attempt.get("outcome") in ("failed", "blocked"))
-            # A role-less writer guessed as verify ("Re-verify the fix") re-runs too, though it covers nothing.
-            if not (is_verification(nodes[root]) or nodes[root].get("role_guess") == "verify"):
+            # A role-less writer guessed as verify ("Re-verify the fix") re-runs too, though it covers nothing, but only
+            # after a group `repair` stamped ``reruns_root``: a group stored before that rule keeps the root repaired.
+            reruns = any(nodes.get(member, {}).get("reruns_root") for member in latest)
+            if not (is_verification(nodes[root]) or reruns):
                 base[root]["state"] = "repaired"
             elif failures <= len(root_groups):
                 base[root].update(state="pending", child=None)
@@ -1353,6 +1358,8 @@ def repair(
                 f"Repair node {node['id']} may depend only on accepted nodes or its own group, not {', '.join(outside)}.",
             )
         node.update(repairs=root, cycle=len(groups) + 1, origin=f"repair:{root}")
+        if nodes[root].get("role_guess") == "verify":
+            node["reruns_root"] = True  # `derive` runs the root again once this group is accepted; not in the digest
     runnable = {key for key, info in derived.items() if info["state"] in LIVE | {"ready", "waiting", "held"}}
     # The group runs before every node that waits on the root (they wait on the root, the root on the group), so a
     # dependent writing what the group writes is ordered, not an overlap.

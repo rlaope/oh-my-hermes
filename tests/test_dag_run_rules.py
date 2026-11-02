@@ -1062,6 +1062,55 @@ class CheckLabelledWriterTests(unittest.TestCase):
                 settled(other, "fix", "accepted")
                 self.assertEqual(dag_run.derive(other, [], time.time())["check"]["state"], "repaired")
 
+    def test_a_repair_stored_before_the_rerun_rule_keeps_the_guessed_root_repaired(self) -> None:
+        # Stored between #2476 and this rule: the node carried role_guess verify and its accepted repair group made it
+        # repaired, so the run was done. Its groups carry no ``reruns_root`` stamp.
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",)),
+            node("gate", depends_on=("check",), role="verify"),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "check", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "check",
+                       [node("fix", depends_on=("api",), scope=("a.py",))], time.time())
+        fix = next(item for item in record["nodes"] if item["id"] == "fix")
+        stamped = dag_run.definition_digest([fix])
+        self.assertIs(fix.pop("reruns_root"), True)
+        self.assertEqual(dag_run.definition_digest([fix]), stamped)
+        settled(record, "fix", "accepted")
+        self.assertEqual(dag_run.derive(record, [], time.time())["check"]["state"], "repaired")
+        settled(record, "gate", "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+        self.assertEqual(record["digest"], dag_run.definition_digest(record["nodes"][:3]))
+
+    def test_the_rerun_stamp_survives_the_record_and_stays_out_of_the_digest(self) -> None:
+        definitions = [node("api", scope=("a.py",)),
+                       node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",))]
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=definitions)
+            path = dag_run.record_path(home.omh, PARENT, "feat")
+            digest = dag_run.read_run(path)["digest"]
+            handoff(home, "feat", "api")
+            call(action="settle", run="feat", node="api", outcome="accepted")
+            call(action="settle", run="feat", node="check", outcome="failed")
+            repaired = call(action="repair", run="feat", node="check",
+                            nodes=[node("fix", depends_on=("api",), scope=("a.py",))])
+            self.assertEqual(repaired["status"], "ok", repaired)
+            stored_run = dag_run.read_run(path)
+            self.assertIs(next(item for item in stored_run["nodes"] if item["id"] == "fix")["reruns_root"], True)
+            self.assertEqual(stored_run["digest"], digest)
+            again = call(action="define", run="feat", nodes=definitions)
+            handoff(home, "feat", "fix")
+            rerun = call(action="settle", run="feat", node="fix", outcome="accepted")
+            self.assertEqual([call_row["nodes"] for call_row in rerun["calls"]], [["check"]])
+            handoff(home, "feat", "check")
+            self.assertEqual(call(action="settle", run="feat", node="check", outcome="accepted")["state"], "done")
+            extended = call(action="extend", run="feat",
+                            nodes=[node("gate", depends_on=("check",), role="verify")])
+            self.assertEqual(extended["status"], "ok", extended)
+        self.assertEqual((again["status"], again.get("reused")), ("ok", True))
+
     def test_a_writer_guessed_as_verify_alone_leaves_the_goal_unverified(self) -> None:
         record = dag_run.new_record(PARENT, "feat", "", "", [
             node("api", scope=("a.py",)), node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",)),
@@ -1112,8 +1161,8 @@ class ReviewLintTests(unittest.TestCase):
     """
 
     def test_a_code_writing_run_with_no_review_node_is_linted_and_still_verified(self) -> None:
-        for scope in (("src/api.py",), ("src/",), ("docs/api.md", "src/api.py"), ("src/docs/gen.py",),
-                      ("changelog.py",)):
+        for scope in (("src/api.py",), ("src/",), ("docs/api.md", "src/api.py"), ("src/docs_parser.py",),
+                      ("src/docs",), ("/repo/docsite/app.py",), ("changelog.py",)):
             with self.subTest(scope=scope):
                 record = dag_run.new_record(PARENT, "feat", "", "", [
                     node("api", scope=scope), node("check", depends_on=("api",), role="verify"),
@@ -1132,6 +1181,8 @@ class ReviewLintTests(unittest.TestCase):
                           node("check", depends_on=("docs",), role="verify")],
             "docs directory": [node("docs", scope=("docs/", "./docs/guide/setup.png")),
                                node("check", depends_on=("docs",), role="verify")],
+            "absolute and worktree docs": [node("docs", scope=("/repo/docs/", "../wt/docs/x.md", "../wt/docs/img.png")),
+                                           node("check", depends_on=("docs",), role="verify")],
             "extensionless docs": [node("docs", scope=("CHANGELOG", "README", "pkg/LICENSE")),
                                    node("check", depends_on=("docs",), role="verify")],
             "review guessed from a label": [node("api", scope=("src/api.py",)),
