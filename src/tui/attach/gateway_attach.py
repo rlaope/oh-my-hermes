@@ -1534,10 +1534,14 @@ async def relay(api: AttachApi, url: str, protocols: list[str], adapter: Adapter
     """Relay the TUI's stdio and the owner's WebSocket through `adapter` until either side ends.
 
     0 when the TUI closed its input (the person left); 1 when the owner's side
-    ended first, which the TUI reads as a gateway that exited on its own.
+    ended first, which the TUI reads as a dropped connection to a gateway that
+    may still run the turn: it resumes the session over a new one.
     """
+    # No keepalive ping, as Hermes' own loopback policy (`hermes_cli/web_server.py`): the gateway answers a ping on its
+    # event loop, which a busy worker can hold for minutes, and websockets' default (20 s + 20 s) then closes a healthy
+    # connection while the turn runs on. A gateway that dies closes the loopback socket itself.
     async with api.dial(url, subprotocols=protocols, open_timeout=OPEN_TIMEOUT_SECONDS,
-                           max_size=None, proxy=None) as socket:
+                           max_size=None, proxy=None, ping_interval=None) as socket:
         if socket.subprotocol != api.protocol:
             _say(f"Hermes' gateway answered with protocol {socket.subprotocol!r}, not {api.protocol!r}")
             return 1

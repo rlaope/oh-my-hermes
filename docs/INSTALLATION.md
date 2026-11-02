@@ -351,9 +351,16 @@ pass straight through on that bare launch:
 
 ```sh
 omh --resume <session-id>    # reopen one session by id (short form: -r)
+omh --resume                 # open the TUI on the session picker, to choose one
 omh --continue               # continue the most recent session (short form: -c)
 omh -p <profile>             # open a bot profile's own home
 ```
+
+A bare `omh --resume` passes no id to Hermes: the OMH TUI starts as plain `omh`
+does and opens its session picker (the one `/resume` opens) at once, so you
+pick a stored session or press Esc to stay in the new one. When the OMH TUI
+cannot start and Hermes' own terminal opens instead, that terminal starts a
+new session, and its own `/resume` picks one.
 
 They are a bare-launch surface only. Passing one together with a subcommand
 is an error naming the flag, never a silent no-op, because dropping `-p`
@@ -3387,10 +3394,16 @@ it loaded at start. When Hermes' own records in a home (`gateway.pid` and the
 home's bundle install, the update names it with the command that loads the
 new plugin code: `hermes gateway restart` for the primary home,
 `hermes --profile <name> gateway restart` for a profile. That is file
-evidence only: the bundle stamp is rewritten by every update, so the hint
-covers gateways whose last recorded start precedes this update, and a
-gateway running without a pid record is not named. `omh update --json`
-carries the same lines as `gateway_restart_hints`.
+evidence only: the bundle stamp moves only when an update changes the
+bundle's files, so an update that ships the same bundle (only the package
+directory the bundle imports `omh` from moved to the new generation) asks
+for no restart, and a gateway running without a pid record is not named.
+A gateway that keeps running imports `omh` from the generation it started
+on while that directory exists. Once an update collects it, the next import
+comes from the generation the bundle now records if that holds the same
+version; another version is reported as `stale_until_restart` and needs the
+restart.
+`omh update --json` carries the same lines as `gateway_restart_hints`.
 
 The OMH TUI says the same at launch, once, as a transcript warning (under a
 resumed session's history), and `omh doctor` reports it as the
@@ -5005,9 +5018,17 @@ place. It runs as a transaction:
    is the only step that makes the new version visible.
 6. Re-enter through the pointer to confirm the activated version actually runs.
 7. On success, keep the previous generation as the known-good fallback and
-   collect the rest. On failure, attempt to move the pointer back and re-enter
-   the previous generation; shared-resource restoration must succeed before
-   recovery is considered complete.
+   collect the rest, except a generation something still runs from: the one
+   current at each running Hermes gateway's last recorded start, and the one
+   an open OMH TUI started on (it holds an OS lock on a file under
+   `generation-holds/` until it exits). When the activation history cannot
+   say which generation a gateway started on, every generation created before
+   that start is kept, and the update prints a `note:` saying so; an update
+   collects them once that gateway has restarted, or once its `gateway.pid`
+   record is gone. A SIGTERM sent to `omh` alone releases the TUI's hold while
+   the TUI itself runs on. On failure, attempt to
+   move the pointer back and re-enter the previous generation; shared-resource
+   restoration must succeed before recovery is considered complete.
 
 The pointer makes the command/workflow-pack selection atomic, not all shared
 resource changes. Both things that consume the
@@ -5030,6 +5051,7 @@ current -> generations/<id>     # the single activation pointer
 generations/<id>/venv           # that generation's command environment
 generations/<id>/skills         # that generation's workflow pack
 self-update.json                # private activation state (self_update_state/v1)
+generation-holds/               # lock files of open OMH TUIs, one per process
 venv/                           # the pre-generation environment, kept as fallback
 ```
 
