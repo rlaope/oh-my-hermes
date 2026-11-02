@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **LSP navigation works on Windows.** `lsp_definition`, `lsp_references`
+  and `lsp_rename` answered `no_result` on Windows while the language server
+  was active: OMH named the file `file://C:%5CUsers%5C...` while Hermes had
+  opened it as `file:///C:/Users/...`, so the server answered for a document
+  it never opened. OMH now builds the same URI Hermes does, and reads back
+  the server's forms of a drive (`file:///c%3A/...` included) as the local
+  path, so the workspace-scope checks see real paths (#2470).
+
 - **`/resume` always answers, and `omh --resume` opens the picker.** A bare
   `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
   list, which during a turn can take a while. Now `Loading sessions…` stands
