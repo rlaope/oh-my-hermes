@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Ctrl+N and Ctrl+P navigate lists across the OMH TUI.** In the `/model`,
+  `/sessions`, `/rewind` and `/theme` pickers, the agent list (ordinary roster
+  and DAG tree modes), history search, and slash and `@` path completion menus,
+  Ctrl+N moves down and Ctrl+P moves up by one row, matching Down and Up arrow
+  navigation. On an open completion menu, Ctrl+P navigates the menu rather than
+  folding the plan.
+
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface
   nearly as large as what it hides), proves each one with the deletion test

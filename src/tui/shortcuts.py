@@ -34,6 +34,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
           "it and its output are not sent to the model"),
     ("?", "On an empty composer, shows this list; /keys does too"),
     ("↑ / ↓", "Move between the composer's rows, walk the input history at its first and last row "
+              "(earlier sessions' too, shared with hermes --tui), or move through an open completion menu "
               "(earlier sessions' too, shared with hermes --tui), or move through an open completion menu"),
     ("Ctrl+R", "Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, "
                "Esc leaves the composer as it was"),
@@ -41,7 +42,8 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+S", "Opens the bot board, as /bots does: this machine's Hermes profiles, their gateways and sessions, "
                "read-only"),
     ("Ctrl+P", "Folds the plan above the composer to its header and the item it is on, or expands it again, while "
-               "a turn runs or between turns; the header says which on its right"),
+               "a turn runs or between turns; the header says which on its right; on an open menu, Ctrl+P and Ctrl+N "
+               "move the menu instead"),
     ("↑", "On an empty composer with prompts queued, takes them back into the composer to edit; a queued shell line comes back on its own"),
     ("↓", "On an empty composer while the agent view under the info line shows subagents, gives its rows the keys "
           "as the agent list; in a DAG run, to its folding tree"),

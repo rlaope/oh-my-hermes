@@ -44,7 +44,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from . import gateway_contract as contract
-from .keys import BUTTON_LEFT, CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Mouse, Paste
+from .keys import BUTTON_LEFT, CHAR, DOWN, ENTER, ESCAPE, LEFT, RIGHT, UP, Key, Mouse, Paste, list_nav_step
 from .layout import Budget, agent_view_cap, is_tiny, max_height
 from .dag_tree import TreeState, run_key, tree_lines
 from .panels import (
@@ -331,8 +331,10 @@ class AgentViewMixin:
         expanded = state.expanded.get(key, False)
         action = event.char if isinstance(event, Key) and name == CHAR and not event.ctrl and not event.alt else ""
         agent = state.agents.get(key)
-        if name in (UP, DOWN):
-            at = state.order.index(key) + (-1 if name == UP else 1)
+        step = list_nav_step(event)
+        if step != 0 or name in (UP, DOWN):
+            delta = step if step != 0 else (-1 if name == UP else 1)
+            at = state.order.index(key) + delta
             self.tree_selected = state.order[min(max(at, 0), len(state.order) - 1)]
         elif name == LEFT:
             if expanded:
@@ -529,9 +531,10 @@ class AgentViewMixin:
         action = event.char if isinstance(event, Key) and name == CHAR and not event.ctrl and not event.alt else ""
         if action in ("x", "s") and self.list_selected != MAIN_ID:
             self._agent_action(action, self.list_selected, armed)
-        elif name in (UP, DOWN):
+        elif (step := list_nav_step(event)) != 0 or name in (UP, DOWN):
+            delta = step if step != 0 else (-1 if name == UP else 1)
             ids = self.roster.ids()
-            row = ids.index(self.list_selected) + (-1 if name == UP else 1)
+            row = ids.index(self.list_selected) + delta
             self.list_selected = ids[min(max(row, 0), len(ids) - 1)]
         elif name == ENTER and self.list_selected != MAIN_ID:
             self._open_agent_log(self.list_selected)  # over the list: leaving the log comes back to it
