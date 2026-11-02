@@ -4,6 +4,42 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI rides out a slow or busy Hermes gateway.** Its connection to
+  the shared gateway sent websockets' default keepalive ping, so a gateway
+  whose event loop was busy for about 40 s (a long `/compress`, a heavy
+  turn) had a healthy connection closed under it. The TUI then said the
+  gateway exited, marked the running turn lost, and gave the resume 30 s
+  before leaving. Now:
+  - The connection sends no keepalive ping, as Hermes' own loopback
+    connections do not. During a turn, once nothing has come from the
+    gateway for 45 s and no tool is running (Hermes sends nothing while a
+    terminal tool runs), the working row says "no word from Hermes' gateway
+    for N s"; the TUI closes nothing.
+  - A connection that does drop says "the connection to Hermes' gateway
+    dropped; the turn may still be running". The resume reads whether the
+    turn still runs (or Hermes has started it): one that
+    does goes on with its clock and any stop already asked, and one that
+    ended meanwhile says so. A gateway that started again (a new authority
+    epoch) says the turn was lost.
+  - The launch's and a respawn's session calls wait 120 s, as Hermes' own
+    TUI and the TUI's in-session calls do, not 30 s.
+  - `omh --resume <id>` that Hermes refuses (`not_found`,
+    `permission_denied`, ...) says why and exits 1; a session Hermes keeps
+    for another app is to be opened where it was started. It used to open
+    Hermes' own TUI, which starts a new session in its place without a word.
+  - `session.replay_gap`, sent when the gateway stops sending this screen a
+    session's events because it fell behind, resumes the session, as
+    Hermes' own TUI does. Before, the turn spun with no end. The turn's own
+    events that arrive before the answer win over it. A resume refused or
+    unanswered closes the turn and holds the queue; one that names a newer
+    id for the session moves the screen to it and closes the turn shown.
+  - `skills.changed` asks for the command catalog again, once per burst, so
+    a skill installed from another terminal reaches completion and `/help`.
+  - A turn Hermes interrupted itself says "Hermes interrupted this turn;
+    send `continue` to go on" instead of "Interrupted.". A stop the person
+    asked for (Esc, `/stop`, a prompt in busy mode `interrupt`) still says
+    "Interrupted.".
+
 - **`/resume` always answers, and `omh --resume` opens the picker.** A bare
   `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
   list, which during a turn can take a while. Now `Loading sessions…` stands
