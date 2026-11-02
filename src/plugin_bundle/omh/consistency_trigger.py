@@ -6,7 +6,9 @@ deterministically and from the disk alone, whether such a thing exists:
 
 1. ``snapshot_before_edit`` (``pre_tool_call``, before any gate):
    - At the turn's first tool call of any kind, it records a bounded ``(mtime, size)`` index of the
-     workspace's ``.py`` / ``.pyi`` files.
+     workspace's ``.py`` / ``.pyi`` files. A file modified within ``RACY_WINDOW_NS`` of the index is
+     also given a digest of its bytes: a same-size rewrite inside one tick of the filesystem's clock
+     keeps its ``(mtime, size)``, so only its bytes can show it changed.
    - Before each ``patch`` / ``write_file`` of such a file, it keeps the file's text, once per turn
      (``""`` for a file that does not exist yet).
    - A file that changed since the index before its first snapshot (a ``sed``, ``execute_code`` or a
@@ -36,7 +38,8 @@ deterministically and from the disk alone, whether such a thing exists:
 No signal means the check is skipped. Every other outcome fires it as it fired before this module:
 
 - a changed source file that is not Python;
-- a Python file changed this turn without a turn-start snapshot (``opaque_edit``);
+- a Python file changed this turn without a turn-start snapshot (``opaque_edit``), including a racy one
+  too large or unreadable to digest, which counts as changed;
 - a changed file that does not parse;
 - a non-trivial change that touches no definition, import or docstring (``unattributed``);
 - an index or scan over its entry or time budget, or a root cached as over budget;
@@ -53,6 +56,7 @@ from __future__ import annotations
 
 import ast
 import difflib
+import hashlib
 import logging
 import os
 import re
@@ -77,6 +81,14 @@ MAX_SCAN_ENTRIES: Final = 5000
 # The turn-start index runs inside `pre_tool_call`; the verdict (re-index plus scan) inside `pre_verify`.
 INDEX_SECONDS: Final = 0.5
 SCAN_SECONDS: Final = 2.0
+# A file modified this close to the index's clock is racy: a later same-size rewrite can land in the
+# same tick of the filesystem's clock (about 16 ms on Windows, a scheduler tick on Linux, 1 s on HFS+)
+# and leave its (mtime, size) unmoved. Such a file is indexed with a digest of its bytes as well.
+# Each digest is a read inside the index's budget, so a workspace with many files this fresh (a
+# checkout seconds old) can run the index past INDEX_SECONDS, which fails open as `index_budget`.
+# The window is measured on this machine's clock: on a network filesystem whose server clock lags it
+# by more than the window less one tick, a fresh file is not digested and such a rewrite goes unseen.
+RACY_WINDOW_NS: Final = 2_000_000_000
 _DEADLINE_EVERY: Final = 64
 # A root whose index ran over budget is not walked again for this long, in this process: later turns
 # fire the check without paying for a walk that will not finish.
@@ -112,7 +124,7 @@ _lock = threading.Lock()
 _over_budget: "OrderedDict[str, tuple[float, tuple[str, str]]]" = OrderedDict()
 # session -> False when the session's platform never gets the check (`note_turn_posture`).
 _posture: "OrderedDict[str, bool]" = OrderedDict()
-# session -> {"turn", "root", "index": {realpath: (mtime_ns, size)} | None, "before": {realpath: str},
+# session -> {"turn", "root", "index": {realpath: (mtime_ns, size[, digest])} | None, "before": {realpath: str},
 #             "opaque": set[str], "bytes": int}
 _sessions: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 
@@ -152,7 +164,7 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
                 if path in state["before"] or path in state["opaque"]:
                     continue
             index = state["index"]
-            if index is not None and _stat(path) != index.get(path):
+            if index is not None and _differs(index.get(path), _stat(path), path):
                 # Changed since the turn began, by something that was not a patch or write_file:
                 # the text on disk now is not the turn's starting text.
                 with _lock:
@@ -167,7 +179,7 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
                     state["before"][path] = text
                     state["bytes"] += len(text)
     except Exception as exc:  # noqa: BLE001 - never fail the call; a missing snapshot fires the check
-        _LOG.warning("consistency_trigger snapshot failed=%s", type(exc).__name__)
+        _LOG.warning("consistency_trigger snapshot failed=%s: %s", type(exc).__name__, exc)
 
 
 def round_end_trigger(session_id: str, code_paths: tuple[str, ...]) -> Verdict:
@@ -230,7 +242,7 @@ def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         if state is not None and state["turn"] == turn:
             return state
     root = os.path.realpath(_workspace_root(kwargs.get("task_id")) or os.getcwd())
-    index: dict[str, tuple[int, int]] | None = None
+    index: dict[str, tuple[Any, ...]] | None = None
     unindexed: tuple[str, str] = ("", "")
     with _lock:
         eligible = _posture.get(session_id, True)
@@ -282,7 +294,8 @@ def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline:
     except _OutsideLink as exc:
         return Verdict(True, "outside_link", str(exc))
     before_index = state["index"]
-    changed = {path for path in set(before_index) | set(current) if before_index.get(path) != current.get(path)}
+    changed = {path for path in set(before_index) | set(current)
+               if _differs(before_index.get(path), current.get(path), path)}
     changed |= reported
     needles = _Needles()
     for path in sorted(changed):
@@ -481,8 +494,44 @@ def _children(directory: str) -> list[tuple[str, bool]] | None:
         return None
 
 
-def _index(root: str, deadline: float) -> dict[str, tuple[int, int]]:
-    return {path: stat for path in _walk(root, PYTHON_SUFFIXES, deadline) if (stat := _stat(path)) is not None}
+def _index(root: str, deadline: float) -> dict[str, tuple[Any, ...]]:
+    """``(mtime_ns, size)`` per Python file under ``root``, with the digest of its bytes appended when it
+    was modified within ``RACY_WINDOW_NS`` of the walk. A digest is read between the walk's own deadline
+    checks, so it is paid for out of the same budget."""
+    racy_from = time.time_ns() - RACY_WINDOW_NS
+    index: dict[str, tuple[Any, ...]] = {}
+    for path in _walk(root, PYTHON_SUFFIXES, deadline):
+        stat = _stat(path)
+        if stat is not None:
+            index[path] = stat + (_digest(path),) if stat[0] >= racy_from else stat
+    return index
+
+
+def _differs(indexed: tuple[Any, ...] | None, current: tuple[Any, ...] | None, path: str) -> bool:
+    """Whether ``path`` changed since the index saw it as ``indexed`` (None: absent then). ``current`` is
+    its stat or index entry now (None: absent now). An unmoved stat proves nothing for a racy entry, so
+    its bytes are compared; one too large or unreadable to digest counts as changed."""
+    if indexed is None or current is None:
+        return indexed is not current
+    if indexed[:2] != current[:2]:
+        return True
+    if len(indexed) < 3:
+        return False
+    return indexed[2] is None or indexed[2] != (current[2] if len(current) > 2 else _digest(path))
+
+
+def _digest(path: str) -> str | None:
+    """A digest of a racy file's bytes; None when it is larger than ``MAX_FILE_BYTES`` (checked before
+    any read, so the pre-edit snapshot, which has no deadline, never reads a large file whole) or cannot
+    be read. ``_differs`` counts None as changed, as the scan counts a file it cannot read."""
+    try:
+        with open(path, "rb") as handle:
+            if os.fstat(handle.fileno()).st_size > MAX_FILE_BYTES:
+                return None
+            data = handle.read(MAX_FILE_BYTES + 1)
+    except OSError:
+        return None
+    return hashlib.sha256(data).hexdigest() if len(data) <= MAX_FILE_BYTES else None
 
 
 def _stat(path: str) -> tuple[int, int] | None:

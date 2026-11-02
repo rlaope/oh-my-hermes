@@ -31,6 +31,15 @@ All notable changes will be documented here.
   (1,083 scored messages, hint and chat route), no message the previous
   router answered right is answered wrong.
 
+- **A same-size rewrite in one clock tick no longer hides from the round-end
+  check.** The workspace index kept each Python file's modification time and
+  size. A `sed`, `execute_code` or delegated child that rewrote a file at the
+  same size within one tick of the filesystem's clock (about 16 ms on
+  Windows) left both unchanged, so the edit went unseen and the check was
+  skipped. A file modified within two seconds of the index is now also indexed
+  by a digest of its bytes and compared by content. This was also why two
+  `test_consistency_trigger` tests failed now and then on Windows CI.
+
 - **An answer Hermes sends late no longer acts on what the person moved on
   to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s
   draft, an alias) that arrives after a session switch is dropped with a
@@ -218,6 +227,17 @@ All notable changes will be documented here.
   custom root is configured without printing it, and a custom endpoint that
   reports no cost is shown as unpriced instead of at TypeSafe's list price.
   Contributed by @yqm-307 (#2473; requested in #2468).
+
+- **Short promo clips get their own design rules.** A launch clip of 15
+  seconds or less is one segment, so `show-reel` no longer applies its
+  multi-segment habits (scene variety, transitions, a giant number scene, an
+  end card) to it. The new Short promo clips section in `craft-design.md` asks
+  for one hero scene held throughout, no meta text (labels, IDs, URLs and
+  prices go in the post body), one number smaller than the logo, and the
+  official logo at 25% or more of the frame height, checked on a still sheet
+  before the render. `design-quality-gate` scores the same items as a
+  Short-clip discipline axis. Generalized from six review rounds on one
+  launch clip. (#2488)
 
 ## 4.0.4 - 2026-11-01
 
