@@ -416,6 +416,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'show-reel/references/art-direction.md',
     'show-reel/references/game-capture.md',
     'show-reel/references/kinetic-type.md',
+    'show-reel/references/launch-film.md',
     'show-reel/references/genres.md',
     'show-reel/references/craft-workflow.md',
     'show-reel/references/craft-brief.md',

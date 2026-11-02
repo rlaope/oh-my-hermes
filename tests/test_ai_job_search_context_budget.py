@@ -314,7 +314,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # #2501's second review cuts tech-debt-audit's phrases to four and the
         # Korean ones to their request forms; only that body's routing-signal
         # line moves, and the pin before it was 81f862a9...97f5.
-        self.assertEqual(_digest(legacy_hashes), '7a5aacd754cae58c4ef6c53739768abc1f4a323f0f53aaebd9e704b3b0d9ba1e')
+        # Merged with main after #2509: show-reel's launch-film lane pointer moves show-reel
+        # only; main's pin before the merge was 8f5163156f133106895decf6e2a78fccd53eccc614e2e1025c86cfc0e3dee37a
+        # and #2501's was 7a5aacd754cae58c4ef6c53739768abc1f4a323f0f53aaebd9e704b3b0d9ba1e.
+        self.assertEqual(_digest(legacy_hashes), 'fac0aeb1db64b01df8b9c2ed35c1e15c97d0ef4bcff316586c1f8d1b04e88048')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

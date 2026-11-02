@@ -574,6 +574,17 @@ All notable changes will be documented here.
   line, plan notes, the subagent summary and backend notices use a text tone
   between Desktop's secondary and tertiary roles, readable in the light
   theme where tertiary alone was faint. In Korean the count reads `1개 실패`.
+- **`show-reel` has a launch-film lane for 60-120 s feature releases.** A new
+  opt-in reference, `launch-film.md`, gives the act sheet (mark, title becomes
+  the product, one honest loop, escalating range, turn, reach, climax and
+  close) with time shares, and the devices that carry it: the feature name
+  stacking and bending back into the captured window, typing anchored to the
+  measured line so it never re-centres, two-tone escalation copy, word cards
+  around compressed agent runs, close-ups only on decisions, a window on a
+  blurred ground instead of a device mock, and one declared breath before the
+  heaviest montage. Short promos keep the one-scene rule; every capture and
+  citation rule still applies. Method notes come from a frame-by-frame study of
+  a public 99 s launch film; nothing was copied.
 
 ## 4.0.4 - 2026-11-01
 
