@@ -481,7 +481,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         """A static save reminder for foreground conversations, not background agents."""
         if self._surface_class == SURFACE_BACKGROUND:
             return ""
-        return "When the user states lasting preferences, decisions or facts, call omh_remember save in that same turn, before other work, even if the message also asks for something. Use its recall action in later conversations."
+        return "When the user states lasting preferences, decisions or facts, call omh_remember save in that same turn, before other work, even if the message also asks for something. If a shown OMH record already says it, pass its id as replaces. Use recall later."
 
     def prefetch(
         self,
