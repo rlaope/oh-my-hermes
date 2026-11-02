@@ -3866,7 +3866,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - On Hermes, read a curator run report (`logs/curator/<run>/REPORT.md` and `run.json` under the active profile's Hermes home) as a source like a review or a trace: it records which skills the curator consolidated, archived, or created in that run, and one report is one observation, never repeated evidence by itself.
 - Completion checklist:
   - Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on; a candidate resting on one observation stays needs-evidence in review_queue/v1.
-  - Every candidate is classed mechanical or judgement before it is worded. A mechanical miss (a fixed syntactic pattern, a banned API, an import shape, a file-location rule) becomes a check (a linter rule, test, hook, or CI step), and an existing check that is unwired or silently broken is named instead of a new one; its approved handoff carries the proof that the check fails on an injected violation and passes once the violation is reverted. Only judgement calls (cross-file consistency, fit with the surrounding code) are worded as prose.
+  - Every candidate is classed mechanical or judgement before it is worded. A mechanical candidate is a miss a machine can find from the text alone (a forbidden call, a disallowed import, a file in the wrong place), and its destination is a check (a linter rule, test, hook, or CI step); when the repository already has a check for it that never runs or no longer fails, the candidate is repairing that check, not adding another. Its approved_patch_handoff/v1 names the check and where it is wired, and sets as an acceptance criterion the run the implementer must observe: the check fails with the violation injected and passes once it is reverted. A mechanical candidate outside the chosen destination boundary is reported as a check proposal outside the boundary, never reworded as prose. Only judgement candidates, which need a reader (consistency across files, fit with the code around them), are worded as prose.
   - duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.
   - Nothing reached a destination without an approval recorded in review_queue/v1.
 - Recovery notes:
@@ -3874,7 +3874,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If the fact may be stale, record the staleness warning and next refresh action.
 - Required inputs:
   - source corpus: skills, prompts, traces, reviews, failures, or docs
-  - destination boundary: AGENTS, skill catalog, prompt, docs, memory, or no-write review
+  - destination boundary: AGENTS, skills, prompt, docs, memory, check, or no-write review
   - rule granularity and acceptance criteria
   - reviewer or approval requirement
 - Expected outputs:
@@ -3939,9 +3939,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The stop condition named at the start is met, or the reply names what was left unread.
 - Recovery notes:
   - If the repository is too large for the stated depth, narrow to the entrypoint the audience touches first and record the rest as unread rather than summarizing it from file names.
-  - If a build, test, or setup command could not run (read-only mode, missing toolchain, secrets), list it in first_task_runway/v1 as not run with the reason, never as a known-good command.
+  - If a build, test, or setup command could not run (read-only mode, missing toolchain, secrets), list it in first_task_runway/v1 as not run with the reason, never as a known-good command. A command that installs or syncs dependencies as a side effect (`npm ci`, `uv sync`, and `uv run`, which syncs first) counts as setup and stays not run.
   - If docs and code disagree, report what the code does, cite both, and add the disagreement to risk_and_unknowns_map/v1 instead of trusting the docs.
-  - If the user names a concrete task mid-tour, stop at the current reading_path/v1 entry and hand the runway so far to planning.
+  - If the user names a concrete task mid-tour, stop at the current reading_path/v1 entry and hand the runway so far to `omh-plan`, or to `ulw-work` or `omh-idea-to-deploy` when the task already has acceptance criteria.
 - Required inputs:
   - repo root or supplied source context
   - target audience: operator, new contributor, maintainer, or executor
@@ -5040,7 +5040,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.
   - To dispatch a reviewer rather than write the findings yourself, load `omh-code-review/references/review-dispatch.md`; it carries the base-SHA rule, the findings schema the return is checked against, and the implementer status contract.
   - When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.
-  - For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it names the twelve baseline smells with their fixes and the repo-standards-override rule.
+  - For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.
   - Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.
   - Before final findings, load `omh-code-review/references/finding-validation.md` for candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
 - Required inputs:

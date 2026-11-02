@@ -4858,8 +4858,8 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 
 - Subject: the repository's shape, the change's effect, within the length the log uses.
 - Body: why the change exists and what is now true, not a restated diff. Measured before/after values belong here when the change is about a measurement.
-- When the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
-- Reversibility, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks): say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
+- In a PR body, when the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
+- Reversibility: in a PR body always, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks); in a commit message only when the recent log already carries a risk or rollback line or trailer (such as `Scope-risk:`). Say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
 - `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`.
 
 ## 5. Trailers and sign-off
@@ -8453,13 +8453,16 @@ same definition. Adapted from the classic Fowler/Beck catalog.
 ## Find the repository's standards first
 
 The override can only fire on standards someone read. Before applying the
-baseline, search the reviewed repository for every file that says how its code
-should be written: `REVIEW.md`, `CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md`,
-any `*STANDARDS*.md` (such as `CODING_STANDARDS.md`), and the linter, formatter,
-and type-checker configuration. A dispatched review receives this list under
-Constraints (`references/review-dispatch.md`); a review run in place builds it
-itself. Name each file found by path and each one looked for and not found, so a
-reader can tell a standard that was checked from one that was never opened.
+baseline, collect the reviewed repository's written conventions: `REVIEW.md`,
+`CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md`, any `*STANDARDS*.md` (such as
+`CODING_STANDARDS.md`), and the linter, formatter, and type-checker
+configuration. A dispatched review receives this list under Constraints
+(`references/review-dispatch.md`); a review run in place builds it itself. Name
+each file found by path and each one looked for and not found, so a reader can
+tell a standard that was checked from one that was never opened.
+
+Those files do more than silence smells. A diff that breaks a rule written in
+one of them is a finding of its own: cite the file and the rule.
 
 ## The twelve baseline smells
 
@@ -8491,9 +8494,11 @@ contracts, existing reuse, and net maintenance benefit. A smell is not that proo
   next change will hurt.
 - Do not report a baseline smell the repository's standards explicitly accept;
   cite the standard instead and move on.
-- Skip a smell the repository's configured linter, formatter, or type checker
-  already enforces. Tooling reports it on every run; a finding that repeats it
-  spends the review on what a machine already guards.
+- Skip a smell the repository's linter, formatter, or type checker already
+  enforces on this diff: the rule is switched on and runs in CI or a hook. A
+  suppression the diff adds (`noqa`, `eslint-disable`, `type: ignore`, an
+  `allow` attribute) is itself reviewable, because it turns that enforcement
+  off for exactly these lines.
 - New code matching surrounding style beats abstract purity: a smell the whole
   file already commits to belongs in a follow-up scope question, not a blocking
   finding on this diff.

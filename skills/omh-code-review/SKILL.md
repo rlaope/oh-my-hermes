@@ -60,7 +60,7 @@ Bad example:
 - If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.
 - To dispatch a reviewer rather than write the findings yourself, load `omh-code-review/references/review-dispatch.md`; it carries the base-SHA rule, the findings schema the return is checked against, and the implementer status contract.
 - When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.
-- For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it names the twelve baseline smells with their fixes and the repo-standards-override rule.
+- For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.
 - Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.
 - Before final findings, load `omh-code-review/references/finding-validation.md` for candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
 
