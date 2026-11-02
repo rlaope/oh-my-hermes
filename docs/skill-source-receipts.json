@@ -714,7 +714,7 @@
       "disposition": "adopted",
       "decision_ref": "#2506",
       "reviewed_on": "2026-11-02",
-      "rationale": "Adopted one test per contract row, read-back through the interface and stand-ins by dependency category as the backend contract-tests page; TS-only stand-in names rejected.",
+      "rationale": "Adopted one test per contract row, read-back through the interface and stand-ins by dependency category (contract-tests.md), and the interface-as-test-surface and second-adapter rules (service-contract.md §7, #2507).",
       "supersedes": null
     }
   ]
