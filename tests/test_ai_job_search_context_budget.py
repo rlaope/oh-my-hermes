@@ -97,8 +97,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 529429 -> 529669 and the digest re-derived: show-reel's idea-video
             # scope widens its row (+240, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved.
-            (skill_capabilities, 529669, FULL_ROW_DELTA_CAP,
-             'd946e521363bf140d24edb97f2a769f4e0a2bc46f3921f45c67a386afc972173',
+            # 529669 -> 530006 and the digest re-derived: the llm-app-dev
+            # (+307) and rust (+30) quality-bar lines (#2498, itemized at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved, and
+            # main's producer gives the previous pin d946e521...2173.
+            (skill_capabilities, 530006, FULL_ROW_DELTA_CAP,
+             'c409741a3b0caebabeac7411f9e44124b20f2ccc7107c3aaa8ff2a495b1973ca',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -228,7 +232,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # #2488 adds the short-promo line to show-reel's idea lane (only
         # show-reel moves); main's pin before it is
         # 52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c.
-        self.assertEqual(_digest(legacy_hashes), 'ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b')
+        # #2498 adds the fake-adapter, stop-reason, and tool-argument rules to
+        # llm-app-dev and names rust's binary and dependency sections; only
+        # llm-app-dev and rust move, and main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        self.assertEqual(_digest(legacy_hashes), 'fa17adda7624d333e23bc6c1c560e24fa0c9d76675bdc5f3dfd9f4eaa6421c92')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
