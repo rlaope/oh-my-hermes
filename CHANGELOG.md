@@ -4,6 +4,26 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh` says what it waits for while the Hermes gateway restarts.** The
+  launch waited for the gateway and for the session before drawing
+  anything, so a busy or restarting gateway left the shell silent for up to a
+  minute, and a gateway mid-restart sent the launch straight to Hermes' own
+  terminal. Now, after a second and a half of quiet, one line on the shell
+  says `connecting to the Hermes gateway… (Ns)`,
+  `the Hermes gateway is restarting; waiting… (Ns)` or
+  `waiting for the Hermes gateway to open a session… (Ns)`. A gateway that
+  is starting or draining, whose control socket is missing, refuses or
+  closes without answering, or whose WebSocket connection is refused or
+  times out is tried again for up to about a minute; so, at most twice, is
+  one that closes the connection as going away (a restart) while the session
+  opens. A gateway that crashes while it opens the session, refuses this
+  client, or denies its socket falls back at once, as before. Once the
+  minute is spent the launch says how long it waited, that the gateway did
+  not answer, and to check `hermes gateway status`, then falls back. The
+  line is erased however the launch ends, Ctrl+C included. A normal launch
+  prints nothing new. The attach child exits 69 for a gateway that is not
+  answering yet; every other failure still exits 1.
+
 - **Show-reel judges the hero frame before the full render.** A product film
   that passes every lint and contact-sheet check can still read as cheap on
   sight, so `show-reel` now asks for a launch-frame verdict on the first frame:
