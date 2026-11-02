@@ -10,16 +10,18 @@ key in the returned dict and the same key in ``tests/test_http_client.py``.
 
 - this turn's request asked for behaviour to stay the same (``note_request``, from ``pre_llm_call``):
   a whitelist, `_KEEPS_BEHAVIOUR`, whose subject is the behaviour, the output, the result, the return
-  value, "what <fn> returns", the tests or an unscoped "everything", in a clause `_SCOPED_KEEP` does not
-  narrow. A keep of a named part ("the signature stays the same", "the API is unchanged") is no keep;
+  value, "what <fn> returns", the tests or an unscoped "everything", ending its clause, in a clause
+  `_SCOPED_KEEP` does not narrow and with no limiting clause after it. A keep of a named part ("the
+  signature stays the same", "the API is unchanged") or a narrowed one ("stays the same shape") is no
+  keep;
 - the request neither names the test file (its path, file name or module name) or the test, nor
   asks to update a test or states a result the code must now give (`_ASKS_TEST_EDIT`, unless a
   negation right before it takes it back): an edit the task asked for is not questioned;
 - the turn also changed a Python file that is not a test;
 - a test file that existed at the turn's start lost an expected value: a literal constant inside an
-  ``assert`` statement or the compared arguments of a unittest ``self.assert*`` call is gone, counted
-  over every test file the turn changed (so an assertion moved between test files, or folded into a
-  ``@pytest.mark.parametrize`` table, loses nothing). A
+  ``assert`` statement or the compared arguments of a unittest ``self.assert*`` call is gone, by
+  presence, over every test file the turn changed (so an assertion moved between test files, or folded
+  into a ``@pytest.mark.parametrize`` table even when two asserts shared one input, loses nothing). A
   subscript key is how a value is reached, not an expected value, and a unittest message is not one
   either. A test that only gained assertions, a renamed test, or a renamed identifier inside an
   assertion loses none.
@@ -36,7 +38,7 @@ import logging
 import os
 import re
 import threading
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 from typing import Final, NamedTuple
 
 from .consistency_trigger import turn_snapshots
@@ -53,17 +55,24 @@ _MAX_SESSIONS: Final = 64
 # to change the tests. "The signature stays the same", "the public API is unchanged", "the return
 # type stays the same" and "values stay the same" keep a named part only, so they are no keep.
 _KEEP_SUBJECT: Final = (r"(?:(?:its|the|their|this|existing|current|observable|overall) )*"
-                        r"(?:behaviou?r|outputs?|results?|return values?|what [\w.()]+ returns|tests|everything)")
+                        r"(?:behaviou?r|outputs?|results?|return value|what [\w.()]+ returns|tests|everything)")
 _KEEP_VERB: Final = (r"(?:(?:must|should|will|shall|has to|have to|needs to|need to) )?"
                      r"(?:(?:stays?|remains?) (?:the same|unchanged)|(?:is|are) unchanged"
                      r"|(?:must not|mustn't|does not|doesn't|do not|don't|should not|shouldn't|may not|cannot"
                      r"|can't|will not|won't|must never|should never) change)")
+# The keep is anchored at the end of its clause: only "exactly", "as before", "as today" or "as it is
+# now" may follow it, so a noun that narrows it ("the output stays the same shape", "the result must not
+# change in structure") is no keep.
 _KEEPS_BEHAVIOUR: Final = re.compile(
-    rf"\b{_KEEP_SUBJECT} {_KEEP_VERB}\b"
-    r"|\bwithout changing (?:(?:its|the|their|any|existing|current) )*(?:behaviou?r|outputs?|tests)\b"
-    r"|\b(?:do not|don't|dont|never|must not|mustn't|should not|shouldn't) (?:change|update|modify|edit|touch"
-    r"|rewrite|alter) (?:(?:the|any|its|their|existing|current) )*tests?\b"
+    rf"\b(?:{_KEEP_SUBJECT} {_KEEP_VERB}"
+    r"|without changing (?:(?:its|the|their|any|existing|current) )*(?:behaviou?r|outputs?|tests)"
+    r"|(?:do not|don't|dont|never|must not|mustn't|should not|shouldn't) (?:change|update|modify|edit|touch"
+    r"|rewrite|alter) (?:(?:the|any|its|their|existing|current) )*tests?)"
+    r"(?: (?:exactly|as before|as today|as it is now))?[\s.;,!]*$"
 )
+# A clause right after a keep that starts with one of these narrows it: "the result stays the same, just
+# a different container".
+_LIMITING_FOLLOW: Final = re.compile(r"^(?:just|only|merely|except|save|other than|apart from|aside from)\b")
 # A keep in a clause that scopes it ("everything else stays the same", "otherwise behaviour should stay
 # the same", "behaviour stays the same for exact multiples") keeps nothing about the part the request
 # changes.
@@ -122,9 +131,12 @@ def note_request(session_id: object, user_message: object) -> None:
 
 
 def _keeps_behaviour(text: str) -> bool:
-    """A keep phrase in a clause no scope word narrows."""
+    """A keep phrase that ends its clause, in a clause no scope word narrows, with no limiting clause
+    right after it."""
+    clauses = [clause.strip() for clause in _CLAUSE_BREAK.split(text)]
     return any(_KEEPS_BEHAVIOUR.search(clause) and not _SCOPED_KEEP.search(clause)
-               for clause in _CLAUSE_BREAK.split(text))
+               and not (index + 1 < len(clauses) and _LIMITING_FOLLOW.search(clauses[index + 1]))
+               for index, clause in enumerate(clauses))
 
 
 def _asks_test_edit(text: str) -> bool:
@@ -162,7 +174,7 @@ def _decide(session_id: str, root: str | None) -> tuple[str, list[tuple[str, int
     # test file to another (or into a new one) loses nothing.
     named = False
     old: list[tuple[str, str, str, ast.AST, list[tuple[str, str]]]] = []
-    gained: Counter[tuple[str, str]] = Counter()
+    gained: set[tuple[str, str]] = set()
     for path in sorted(changed):
         if not _is_test_file(path, root):
             continue
@@ -181,18 +193,17 @@ def _decide(session_id: str, root: str | None) -> tuple[str, list[tuple[str, int
         if old_tree is not None:
             old += [(_relative(path, root), before, test, node, values) for test, node, values in _expectations(old_tree)
                     if test.lower() not in request.named]
-    lost = Counter(value for *_rest, values in old for value in values) - gained
+    # By presence, not count: folding two asserts on one input into a parametrized test keeps every
+    # expected value, though the shared input now appears once.
+    lost = {value for *_rest, values in old for value in values} - gained
     rows: list[tuple[str, int, str]] = []
     for where, before, _test, node, values in old:
-        if not any(lost[value] for value in values):
+        if not any(value in lost for value in values):
             continue
         source = " ".join((ast.get_source_segment(before, node) or "").split())
         if len(source) > MAX_SOURCE_CHARS:
             source = source[:MAX_SOURCE_CHARS - 3] + "..."
         rows.append((where, node.lineno, source))
-        for value in values:
-            if lost[value]:
-                lost[value] -= 1
     return ("lost_expectation" if rows else "test_named" if named else "kept_expectations"), rows
 
 

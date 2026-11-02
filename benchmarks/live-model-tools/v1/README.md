@@ -909,8 +909,22 @@ A second review round turned both rules into whitelists, silent otherwise:
   - A module sentence that names no definition speaks only for the one definition its module
     shares with the edited file. The bench decoy shares only `_to_cents`.
 
-The offline replay of the 132 H2H2 `omn` sessions, re-run on the code after both rounds
-(`OPT/OPT-I/replay-omn-review2.txt`):
+A third review round made both guards structural:
+- **A body gate for `declared_divergent`.** A note can suppress a `copy` only when the
+  look-alike's body already differs from the edited definition's pre-edit body (`ast`
+  comparison, ignoring layout, comments and the docstring).
+  - The bench decoy passes this gate because its `_to_cents` is spelled differently
+    (`decimal.Decimal(...)` with a literal, against `Decimal(...)` with `CENT`), not because
+    the two round differently before the edit. The gate is textual, not semantic.
+  - A definition-level note must also name the edited file.
+  - TODO / FIXME notes and questions declare nothing.
+- **The test check's keep must end its clause,** and a following "just ..." / "only ..."
+  clause voids it.
+- **Expected values are compared by presence,** so a fold into `@pytest.mark.parametrize`
+  over one shared input loses nothing.
+
+The offline replay of the 132 H2H2 `omn` sessions, re-run on the code after all three rounds
+(`OPT/OPT-I/replay-omn-review3.txt`):
 - `C-DECOY`: 12 continues to 0.
 - `C-DUPLICATE`: 8 of 8 fires kept.
 - The `I-KWARG` test note fires on the 3 failed Haiku runs only.

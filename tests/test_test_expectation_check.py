@@ -268,6 +268,34 @@ class TestExpectationNoteTest(_Turn):
                   "def test_cents(amount, cents):\n    assert to_cents(amount) == cents\n")
         self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
 
+    def test_asserts_on_one_input_folded_into_parametrize_lose_nothing(self):
+        # Third review of #2494: two asserts on fetch("u") folded into one parametrized test spell "u" once.
+        tc.note_request(SESSION, KWARG)
+        self.write("src/benchapp/http_client.py", CLIENT)
+        self.write("tests/test_http_client.py", 'from benchapp.http_client import fetch\n\n\ndef test_fetch_defaults():\n'
+                                                '    assert fetch("u")["timeout"] == 5.0\n    assert fetch("u")["retries"] == 1\n')
+        self.edit("src/benchapp/http_client.py", 'timeout: float = 5.0', 'timeout_s: float = 5.0')
+        self.edit("tests/test_http_client.py",
+                  'def test_fetch_defaults():\n    assert fetch("u")["timeout"] == 5.0\n    assert fetch("u")["retries"] == 1\n',
+                  "import pytest\n\n\n@pytest.mark.parametrize('key, value', [('timeout', 5.0), ('retries', 1)])\n"
+                  'def test_fetch_defaults(key, value):\n    assert fetch("u")[key] == value\n')
+        self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
+
+    def test_a_narrowed_whole_subject_keep_is_no_keep(self):
+        for text in ("Return a tuple now; the return value stays the same type.",
+                     "Reorder the fields; the output stays the same shape.",
+                     "Switch to JSON lines; the output remains the same format.",
+                     "Use a dataclass; the result must not change in structure.",
+                     "The result stays the same, just a different container.",
+                     "Behaviour stays the same, only faster.",
+                     "The return values stay the same."):
+            tc.note_request(SESSION, text)
+            self.assertFalse(tc._requests[SESSION].keeps_behaviour, text)
+        for text in ("What fetch returns stays the same.", "The result stays the same as before.",
+                     "Its output must not change, and the tests must pass."):
+            tc.note_request(SESSION, text)
+            self.assertTrue(tc._requests[SESSION].keeps_behaviour, text)
+
     def test_a_unittest_message_is_not_an_expected_value(self):
         tc.note_request(SESSION, "Speed up total without changing behaviour.")
         self.write("src/app/calc.py", "def total(xs):\n    return sum(xs)\n")

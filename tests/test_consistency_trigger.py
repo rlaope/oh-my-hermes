@@ -500,21 +500,62 @@ class DeclaredDivergenceTest(_Workspace):
         self.write("src/app/duty.py", DECOY.replace("from invoice.py", "from orders.py"))
         self.assertEqual(self.verdict(self.fix_invoice()), ct.Verdict(True, "copy", "_to_cents in src/app/duty.py"))
 
-    def test_a_definition_docstring_or_comment_declares_it_without_naming_a_file(self):
+    def test_a_definition_docstring_or_comment_that_names_the_edited_file_declares_it(self):
         body = '    return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)\n'
         variants = {
             "docstring": ('import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:\n'
-                          '    """Half to even, deliberately different from the other totals."""\n' + body),
-            "comment above": ("import decimal\n\n\n# Banker's rounding: this intentionally differs from the totals.\n"
+                          '    """Half to even, deliberately different from invoice.py."""\n' + body),
+            "comment above": ("import decimal\n\n\n# Banker's rounding: this intentionally differs from invoice.py.\n"
                               "def _to_cents(amount: str) -> decimal.Decimal:\n" + body),
-            "first-line comment": ("import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:  # by design it diverges\n"
-                                   + body),
+            "first-line comment": ("import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:"
+                                   "  # by design it diverges from app.invoice\n" + body),
         }
         for label, text in variants.items():
             with self.subTest(label):
                 ct.reset()
                 self.write("src/app/duty.py", text)
                 self.assertEqual(self.verdict(self.fix_invoice())[:2], (False, "declared_divergent"))
+
+    def test_a_definition_note_naming_another_file_declares_nothing(self):
+        for note in ("Half to even, deliberately different from ledger.py.", "Half to even, deliberately different."):
+            with self.subTest(note=note):
+                ct.reset()
+                self.write("src/app/duty.py", DECOY.replace(
+                    "decimal.Decimal:\n", f'decimal.Decimal:\n    """{note}"""\n', 1).replace("from invoice.py", "from orders.py"))
+                self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
+
+    def test_a_note_cannot_hide_a_body_equal_to_the_edited_one_before_the_edit(self):
+        # Third review of #2494: in every one of these the look-alike's body equals invoice.py's before the
+        # edit, so the code contradicts the note and the copy fires, whatever the note says.
+        same_body = INVOICE.split("def invoice_total")[0].replace('"""Invoice totals."""', '"""{note}"""')
+        notes = (
+            "Receipt totals; intentionally different from invoice.py except in rounding.",
+            "Receipt totals; deliberately different from invoice.py, in its imports alone.",
+            "Receipt totals; intentionally differs from invoice.py, but rounds exactly like it.",
+            "Receipt totals; purposely different from invoice.py, save for the docstring.",
+            "Receipt totals; intentionally different from invoice.py, merely cosmetically.",
+            "Receipt totals; deliberately different from invoice.py. TODO: make it differ.",
+            "Receipt totals; intentionally different from invoice.py?",
+            "Receipt totals; it used to be deliberately different from invoice.py, for now.",
+            "Receipt totals; supposedly intentionally different from invoice.py; merged next sprint.",
+            # A note that declares on a differing body (see the decoy) still declares nothing here.
+            "Receipt totals; the rounding here is intentionally different from invoice.py.",
+        )
+        for note in notes:
+            with self.subTest(note=note):
+                ct.reset()
+                self.write("src/app/receipt.py", same_body.replace("{note}", note))
+                self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
+
+    def test_hedged_notes_on_a_differing_body_declare_nothing(self):
+        for note in ("TODO: this is deliberately different from invoice.py.",
+                     "Is this intentionally different from invoice.py?",
+                     "FIXME intentionally different from invoice.py"):
+            with self.subTest(note=note):
+                ct.reset()
+                self.write("src/app/duty.py", DECOY.replace(
+                    "decimal.Decimal:\n", f'decimal.Decimal:\n    """{note}"""\n', 1).replace("from invoice.py", "from orders.py"))
+                self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
 
     def test_a_note_that_the_copy_must_not_differ_declares_nothing(self):
         # Review of #2494: each of these once read as a declared divergence and hid a real copy.

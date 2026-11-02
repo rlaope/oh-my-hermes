@@ -148,7 +148,7 @@ _REFUSES_DIVERGENCE: Final = re.compile(
     r"\b(?:not|never|no|nor|cannot|without)\b|n't\b|\bis a bug\b"
     r"|\b(?:identical|same|copy|copies|copied|mirror(?:s|ed|ing)?|duplicat\w*|in step|in sync)\b"
     r"|\b(?:only|match(?:es|ed|ing)?|equal(?:s|ly)?|equivalent|shar(?:e|es|ed|ing)|track(?:s|ed|ing)?"
-    r"|agree(?:s|d)?|consistent)\b")
+    r"|agree(?:s|d)?|consistent|todo|fixme|xxx)\b")
 _SENTENCE_BREAK: Final = re.compile(r"(?<=[.!?;:])\s+")
 
 _LOG = logging.getLogger("omh.consistency_trigger")
@@ -397,6 +397,7 @@ def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline:
 class _Needles:
     def __init__(self) -> None:
         self.defined: dict[str, set[str]] = {}  # copy: defined at the top level elsewhere -> edited files' stems
+        self.pre_bodies: dict[str, set[str]] = {}  # copy: the pre-edit body key of each such definition
         self.renamed: set[str] = set()   # renamed: named elsewhere, Python or config
         self.signature: set[str] = set()  # signature: named elsewhere
         self.lines: set[str] = set()     # line_copy: appears as a line elsewhere
@@ -447,6 +448,7 @@ def _collect(before: str, after: str, needles: _Needles, path: str = "") -> str:
         top = qualified.split(".", 1)[0]
         if not _dunder(top) and top not in _COMMON_NAMES and not top.startswith("test"):
             needles.defined.setdefault(top, set()).add(_stem(path))
+            needles.pre_bodies.setdefault(top, set()).update(_body_key(node) for _s, _e, node in old_defs.get(top, ()))
         old_sigs = sorted(_signature(node) for _s, _e, node in entries if _is_function(node))
         new_sigs = sorted(_signature(node) for _s, _e, node in new_defs[qualified] if _is_function(node))
         if old_sigs != new_sigs and not _dunder(name):
@@ -488,7 +490,7 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
                 continue
             for name, pattern in defined.items():
                 if name in text and pattern.search(text):
-                    if _declared_divergent(text, name, needles.defined[name], edited_tops):
+                    if _declared_divergent(text, name, needles.defined[name], edited_tops, needles.pre_bodies.get(name, set())):
                         divergent.append(f"{name} in {where}")
                         continue
                     return Verdict(True, "copy", f"{name} in {where}")
@@ -520,13 +522,36 @@ def _edited_tops(edited: set[str]) -> dict[str, set[str]]:
     return tops
 
 
-def _declared_divergent(text: str, name: str, stems: set[str], edited_tops: dict[str, set[str]]) -> bool:
+def _body_key(node: ast.AST) -> str:
+    """A definition's body, normalized by ``ast`` (layout, comments and a docstring do not count): the
+    statements of a function or class, or the value of an assignment."""
+    if isinstance(node, (*_FUNCTION_TYPES, ast.ClassDef)):
+        body = list(node.body)
+        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
+                and isinstance(body[0].value.value, str):
+            body = body[1:]
+        return ast.dump(ast.Module(body=body, type_ignores=[]))
+    return ast.dump(getattr(node, "value", None) or node)
+
+
+def _names_file(sentence: str, stem: str) -> bool:
+    """Whether ``sentence`` names the edited file as a file: ``billing.py``, or a module ending ``.billing``."""
+    return bool(stem) and bool(re.search(rf"(?:\b{re.escape(stem)}\.pyi?\b|\.{re.escape(stem)}\b)", sentence))
+
+
+def _declared_divergent(text: str, name: str, stems: set[str], edited_tops: dict[str, set[str]],
+                        pre_bodies: set[str] | None = None) -> bool:
     """Whether the file ``text`` says its ``name`` differs from the edited one on purpose, so it is not a
     copy that has to change with the edit. Read with ``ast``, in two places only:
 
+    First a structural gate: when a look-alike's body (``_body_key``) equals the edited definition's
+    pre-edit body, it is a copy whatever the note says. A note can only explain a difference the code
+    already has. Then the note, in two places only:
+
     - the docstring of a top-level definition of ``name``, or the comment lines directly above it
-      or on its first line: a sentence there that says it differs on purpose, and no sentence there
-      that negates or speaks of identity;
+      or on its first line: a sentence there that says it differs on purpose from the edited file,
+      named as a file, and no sentence there that negates, speaks of identity, limits the difference,
+      is a TODO / FIXME or is a question;
     - the module docstring: such a sentence that also names one of the edited files as a file
       (``billing.py``, or a dotted module ending in ``.billing``; the bare word does not count). When
       that sentence names definitions of this module, it speaks only for those, so it must name
@@ -540,6 +565,10 @@ def _declared_divergent(text: str, name: str, stems: set[str], edited_tops: dict
     tree = _parse(text)
     if tree is None:
         return False
+    # The structural gate: a note can only explain a difference the code already has. A look-alike whose
+    # body equals the edited definition's pre-edit body is a copy, whatever its note says.
+    if pre_bodies and any(_body_key(node) in pre_bodies for _s, _e, node in _definitions(tree).get(name, ())):
+        return False
     lines = text.splitlines()
     for start, _end, node in _definitions(tree).get(name, ()):
         notes = [ast.get_docstring(node) or ""] if isinstance(node, (*_FUNCTION_TYPES, ast.ClassDef)) else []
@@ -550,10 +579,12 @@ def _declared_divergent(text: str, name: str, stems: set[str], edited_tops: dict
         first = lines[start - 1] if start <= len(lines) else ""
         if "#" in first:
             notes.append(first[first.index("#"):])
-        # A definition's note is judged whole: one negating or identity sentence anywhere in it voids it.
+        # A definition's note is judged whole: one negating, identity, limiting or hedged sentence anywhere
+        # in it voids it. It must also name the edited file, as the module docstring must.
         sentences = [sentence for note in notes for sentence in _sentences(note)]
         if any(_DIVERGENT.search(sentence) for sentence in sentences) \
-                and not any(_REFUSES_DIVERGENCE.search(sentence) for sentence in sentences):
+                and not any(_refuses(sentence) for sentence in sentences) \
+                and any(_names_file(sentence, stem) for sentence in sentences for stem in stems):
             return True
     module_doc = ast.get_docstring(tree) or ""
     own = {top.lower() for top in _definitions(tree) if "." not in top}
@@ -561,7 +592,7 @@ def _declared_divergent(text: str, name: str, stems: set[str], edited_tops: dict
         if not _says_divergent(sentence):
             continue
         for stem in stems:
-            if not stem or not re.search(rf"(?:\b{re.escape(stem)}\.pyi?\b|\.{re.escape(stem)}\b)", sentence):
+            if not _names_file(sentence, stem):
                 continue
             named = {word for word in re.findall(r"[a-z_][a-z0-9_]*", sentence) if word in own}
             if named:
@@ -577,8 +608,13 @@ def _sentences(note: str) -> list[str]:
     return [part for part in _SENTENCE_BREAK.split(folded) if part]
 
 
+def _refuses(sentence: str) -> bool:
+    """A sentence that voids a note: a negation, identity or limit word, a TODO / FIXME, or a question."""
+    return bool(_REFUSES_DIVERGENCE.search(sentence)) or sentence.rstrip().endswith("?")
+
+
 def _says_divergent(sentence: str) -> bool:
-    return bool(_DIVERGENT.search(sentence)) and not _REFUSES_DIVERGENCE.search(sentence)
+    return bool(_DIVERGENT.search(sentence)) and not _refuses(sentence)
 
 
 def _stem(path: str) -> str:
