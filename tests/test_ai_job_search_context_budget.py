@@ -97,8 +97,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 529429 -> 529669 and the digest re-derived: show-reel's idea-video
             # scope widens its row (+240, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved.
-            (skill_capabilities, 529669, FULL_ROW_DELTA_CAP,
-             'd946e521363bf140d24edb97f2a769f4e0a2bc46f3921f45c67a386afc972173',
+            # 529669 -> 529956 and the digest re-derived: the app-debugging row
+            # gains its record and redaction lines (+287, #2499); no other row
+            # moved, and main's producer gives the previous digest d946e521...2173.
+            (skill_capabilities, 529956, FULL_ROW_DELTA_CAP,
+             '509aec4186af1d28d5c2efa2bc2f14fd34c767cf4c74753c125a026b97b4ecd8',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -228,7 +231,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # #2488 adds the short-promo line to show-reel's idea lane (only
         # show-reel moves); main's pin before it is
         # 52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c.
-        self.assertEqual(_digest(legacy_hashes), 'ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b')
+        # #2499 adds the debugging-record and regression-witness lines; only
+        # app-debugging, native-debugging and verification-gate move, and
+        # main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        self.assertEqual(_digest(legacy_hashes), '5de5b570ce3c486ed066e97c97ae1f4e90c932cfa1668e6f0ad40188f3a24163')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

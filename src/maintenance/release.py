@@ -910,7 +910,11 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # product film to every authored video (explainer, motion graphics, kinetic
 # type, logo intro, 3D scene, data-viz, music visual, short), and its four
 # genre triggers move "+N more triggers". Measured by release drift; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 532741
+# 532741 -> 533028: the `app-debugging` row only (#2499). Its quality bar gains
+# the `symptom_match` and `minimised` lines and its safety rules the redaction
+# rule (+287). Re-derived from the producer on the tree merged with main; no
+# headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533028
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
