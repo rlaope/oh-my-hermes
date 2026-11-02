@@ -999,7 +999,8 @@ HERMES_INTERPRETER_SCRIPTS: dict[str, HermesScriptPolicy] = {
         # Hermes' own client dials with `proxy=None` (`hermes_cli/gateway_client.py`): without it websockets sends
         # the session-ticket upgrade through HTTP(S)_PROXY.
         # `ping_interval=None`: Hermes keeps no keepalive ping on loopback (`hermes_cli/web_server.py`), since a busy
-        # gateway answers it late and websockets' default then closes a connection whose turn still runs.
+        # gateway answers it late and websockets' default then closes a connection whose turn still runs. A liveness
+        # policy rather than a safety one, pinned here because this is where the dial's keywords are held.
         dial_pinned={"proxy": None, "ping_interval": None},
         private_attributes={},  # it reads no private attribute of anything but itself
         environ_key="TERMINAL_CWD",  # set for Hermes' path helper and restored (`HermesFiles.image`)

@@ -319,6 +319,7 @@ class WorkingRowTests(unittest.TestCase):
         app.transcript.activity = "(⌐■_■) pondering..."
         app.transcript.status = "🧠 OMH — recalled 4 memories"
         clock.now += 1086
+        app.inbound_at = clock.now  # the status just came from the gateway: no silence to name
         rows = working_rows(app, 140)
         self.assertEqual(rows[0][2:], "Pondering… (18m 6s · thinking with high effort · esc to interrupt) · "
                                       "OMH — recalled 4 memories")

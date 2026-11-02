@@ -15,14 +15,17 @@ from __future__ import annotations
 import io
 import unittest
 
+from _tui_lines import line_text
 from test_tui_app import FakePoller, ScriptedTerminal
-from test_tui_modes import SID, make_app, notices
+from test_tui_modes import SID, make_app, notices, type_text
 from test_tui_respawn import ENVIRON, STORED, RespawnClient, Spawner, crash, crashing
 from omh.tui.app import (
     CALL_ANSWER_SECONDS,
+    GATEWAY_SILENCE_SECONDS,
     RECONNECTED_NOTICE,
     RECONNECTED_WHY,
     REPLAY_GAP_REFUSED_NOTICE,
+    REPLAY_GAP_WHY,
     RESPAWN_LIMIT,
     RESPAWN_NOTICE,
     RESPAWN_WINDOW_SECONDS,
@@ -35,6 +38,7 @@ from omh.tui.app import (
     _Told,
 )
 from omh.tui.gateway import Event, GatewayCallError, Response
+from omh.tui.keys import ENTER, Key
 from omh.tui.launch import FALLBACK_EXIT
 from omh.tui.transcript import HERMES_INTERRUPTED_NOTICE, INTERRUPTED_NOTICE
 
@@ -133,6 +137,54 @@ class DroppedConnectionTests(unittest.TestCase):
             reason="The Hermes gateway exited (code 69)", session=STORED, attempt=1, limit=RESPAWN_LIMIT,
             window=RESPAWN_WINDOW_SECONDS), notices(app))
 
+    def test_a_different_authority_epoch_is_a_gateway_that_started_again(self) -> None:
+        new = RespawnClient(resume={**SHARED_RESUMED, "session_id": SID, "authority_epoch": 2, "running": False})
+        app, old, _spawner, _now = crashing(spawner=Spawner(new))
+        app.sid, app.shared_gateway, app.authority_epoch = SID, True, 1
+        streaming(app)
+        crash(app, old, 1)
+        said = notices(app)
+        self.assertIn(TURN_LOST_NOTICE, said)
+        self.assertIn(RESPAWNED_NOTICE.format(session=STORED), said)
+        self.assertNotIn(RECONNECTED_NOTICE.format(session=STORED), said)
+        self.assertNotIn(TURN_ENDED_UNSEEN_NOTICE, said)
+
+    def test_the_same_authority_epoch_is_the_same_gateway(self) -> None:
+        new = RespawnClient(resume={**SHARED_RESUMED, "session_id": SID, "authority_epoch": 1, "running": True})
+        app, old, _spawner, _now = crashing(spawner=Spawner(new))
+        app.sid, app.shared_gateway, app.authority_epoch = SID, True, 1
+        streaming(app)
+        crash(app, old, 1)
+        said = notices(app)
+        self.assertIn(RECONNECTED_NOTICE.format(session=STORED), said)
+        self.assertNotIn(TURN_LOST_NOTICE, said)
+        self.assertTrue(app._busy())
+
+    def test_a_kept_turn_keeps_its_clock_and_the_persons_stop(self) -> None:
+        new = RespawnClient(resume={**SHARED_RESUMED, "session_id": SID, "running": True})
+        app, old, _spawner, now = crashing(spawner=Spawner(new))
+        app.sid, app.shared_gateway = SID, True
+        streaming(app)
+        started = app.busy_since
+        app.interrupting = True  # the person pressed Esc; the connection dropped before the turn ended
+        now[0] += 30
+        crash(app, old, 1)
+        self.assertEqual(app.busy_since, started)
+        self.assertTrue(app.interrupting)
+        app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        said = notices(app)
+        self.assertIn(INTERRUPTED_NOTICE, said)
+        self.assertNotIn(HERMES_INTERRUPTED_NOTICE, said)
+
+    def test_a_turn_hermes_still_holds_as_queued_or_started_is_live(self) -> None:
+        for status, live in (("queued", True), ("started", True), ("unknown", False)):
+            with self.subTest(status=status):
+                resumed = {**SHARED_RESUMED, "session_id": SID, "running": False,
+                           "pending": [{"admission_id": "a1", "status": status}]}
+                app, _spawner = self.dropped(resumed)
+                self.assertEqual(app._busy(), live)  # type: ignore[attr-defined]
+                self.assertEqual(TURN_ENDED_UNSEEN_NOTICE in notices(app), not live)
+
     def test_a_crash_of_a_gateway_the_child_ran_itself_still_loses_the_turn(self) -> None:
         app, old, _spawner, _now = crashing(busy=True)  # the stdio entry: no subscription, the child is the gateway
         crash(app, old, 1)
@@ -162,8 +214,9 @@ class RefusedLaunchResumeTests(unittest.TestCase):
     def test_a_refusal_omh_has_words_for_says_them(self) -> None:
         code, said = self.launch(GatewayCallError("session.resume", 4003, "permission_denied"))
         self.assertEqual(code, 1)
-        self.assertIn("(4003: permission_denied). Hermes does not let this connection change that session: open it in "
-                      "Hermes' own TUI (`hermes --tui`) instead. Nothing was opened in its place.", said)
+        self.assertIn("(4003: permission_denied). Hermes does not let this connection open that session: open it "
+                      "where it was started (Hermes Desktop or the WebUI). Nothing was opened in its place.", said)
+        self.assertNotIn("hermes --tui", said)  # Hermes' TUI answers this refusal by opening a new session
 
     def test_drift_on_the_resume_still_falls_back(self) -> None:
         code, said = self.launch(GatewayCallError("session.resume", -32601, "method not found"))
@@ -230,6 +283,91 @@ class ReplayGapTests(unittest.TestCase):
         self.answer(app, client, error={"code": 4004, "message": "not_found"})
         self.assertIn(REPLAY_GAP_REFUSED_NOTICE.format(reason="not_found"), notices(app))
 
+    def test_the_turns_own_end_before_the_answer_is_not_reopened_by_it(self) -> None:
+        # Hermes subscribes the new view before it answers: the completion can come first, and the answer's
+        # `running` was read before it.
+        app, client = self.gap()
+        app._on_event(Event("message.complete", SID, {"text": "the whole reply", "status": "complete"}))
+        self.assertFalse(app._busy())
+        self.answer(app, client, {"session_id": SID, "running": True})
+        self.assertFalse(app._busy())
+        self.assertFalse(app.turn_pending)
+        self.assertNotIn(TURN_ENDED_UNSEEN_NOTICE, notices(app))
+
+    def test_a_turn_that_starts_before_the_answer_is_not_closed_by_it(self) -> None:
+        app, client = make_app()
+        app.stored_id = STORED
+        app._on_event(Event("session.replay_gap", SID, {}))
+        app._on_event(Event("message.start", SID, {}))
+        self.answer(app, client, {"session_id": SID, "running": False})
+        self.assertTrue(app._busy())
+        self.assertNotIn(TURN_ENDED_UNSEEN_NOTICE, notices(app))
+
+    def test_a_turn_that_started_in_the_gap_shows_as_running(self) -> None:
+        app, client = make_app()
+        app.stored_id = STORED
+        app._on_event(Event("session.replay_gap", SID, {}))
+        self.answer(app, client, {"session_id": SID, "running": True})
+        self.assertTrue(app._busy())
+
+    def test_a_submitted_turn_that_ended_in_the_gap_says_so(self) -> None:
+        app, client = make_app(busy=True)  # the prompt went out; no `message.start` reached this screen
+        app.stored_id = STORED
+        app._on_event(Event("session.replay_gap", SID, {}))
+        self.answer(app, client, {"session_id": SID, "running": False})
+        self.assertIn(TURN_ENDED_UNSEEN_NOTICE, notices(app))
+        self.assertFalse(app._busy())
+
+    def test_a_refused_resume_closes_the_turn_and_holds_the_queue(self) -> None:
+        app, client = self.gap()
+        app.queued.append(QueuedLine("next one"))
+        self.answer(app, client, error={"code": 4004, "message": "not_found"})
+        said = notices(app)
+        self.assertEqual(said.count(REPLAY_GAP_REFUSED_NOTICE.format(reason="not_found")), 1)
+        self.assertFalse([line for line in said if line.startswith("Hermes did not")], said)  # said once, its own way
+        self.assertIn(TURN_LEFT_RUNNING_NOTICE, said)
+        self.assertFalse(app._busy())
+        self.assertFalse(app.transcript.running)
+        self.assertEqual(app.composer.text, "next one")
+        self.assertIn(f"{REPLAY_GAP_WHY}: what you queued is back in the composer, not sent.", said)
+        self.assertEqual(client.named("prompt.submit"), [])
+
+    def test_a_refused_resume_ends_a_submitted_turn_no_event_showed(self) -> None:
+        app, client = make_app(busy=True)  # the prompt went out; no `message.start` reached this screen
+        app.stored_id = STORED
+        app._on_event(Event("session.replay_gap", SID, {}))
+        self.answer(app, client, error={"code": 4004, "message": "not_found"})
+        self.assertIn(TURN_LEFT_RUNNING_NOTICE, notices(app))
+        self.assertFalse(app._busy())
+
+    def test_an_unanswered_resume_closes_the_turn_too(self) -> None:
+        now = [100.0]
+        app, _client = make_app(clock=lambda: now[0])
+        app.stored_id = STORED
+        streaming(app)
+        app._on_event(Event("session.replay_gap", SID, {}))
+        now[0] += CALL_ANSWER_SECONDS + 1
+        app._expire_calls()
+        said = notices(app)
+        self.assertIn(REPLAY_GAP_REFUSED_NOTICE.format(reason=f"no answer in {CALL_ANSWER_SECONDS:g} s"), said)
+        self.assertIn(TURN_LEFT_RUNNING_NOTICE, said)
+        self.assertFalse(app._busy())
+
+    def test_an_answer_after_a_switch_leaves_the_view_it_opened(self) -> None:
+        app, client = self.gap()
+        app.sid = "live-9"  # a switch the person made was answered first
+        self.answer(app, client, {"session_id": SID, "subscription_id": "sub-x", "running": False})
+        self.assertEqual(client.named("session.close"), [{"session_id": SID}])
+        self.assertEqual(app.sid, "live-9")
+        self.assertNotIn(TURN_ENDED_UNSEEN_NOTICE, notices(app))
+
+    def test_an_answer_naming_the_sessions_newer_id_moves_the_screen_to_it(self) -> None:
+        app, client = self.gap()
+        self.answer(app, client, {"session_id": "live-tip", "running": True})
+        self.assertEqual(app.sid, "live-tip")
+        app._on_event(Event("message.complete", "live-tip", {"text": "done", "status": "complete"}))
+        self.assertFalse(app._busy())
+
     def test_a_gap_for_another_session_is_dropped(self) -> None:
         app, client = make_app()
         app._on_event(Event("session.replay_gap", "other", {}))
@@ -242,6 +380,12 @@ class SkillsChangedTests(unittest.TestCase):
     def test_skills_changed_asks_for_the_catalog_again(self) -> None:
         app, client = make_app()
         app._on_event(Event("skills.changed", "", {}))  # gateway-wide: Hermes sends it with no session
+        self.assertEqual(len(client.named("commands.catalog")), 1)
+
+    def test_a_burst_asks_once_while_the_catalog_is_unanswered(self) -> None:
+        app, client = make_app()
+        for _ in range(3):
+            app._on_event(Event("skills.changed", "", {}))
         self.assertEqual(len(client.named("commands.catalog")), 1)
 
     def test_with_no_session_yet_nothing_is_asked(self) -> None:
@@ -271,6 +415,74 @@ class HermesInterruptTests(unittest.TestCase):
         said = self.ended_interrupted(interrupting=True)
         self.assertIn(INTERRUPTED_NOTICE, said)
         self.assertNotIn(HERMES_INTERRUPTED_NOTICE, said)
+
+    def ended_after(self, ask: object) -> tuple[list[str], object]:
+        app, client = make_app()
+        streaming(app)
+        ask(app)  # type: ignore[operator]
+        app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        return notices(app), client
+
+    def test_a_prompt_sent_in_busy_mode_interrupt_is_the_persons_stop(self) -> None:
+        def replace(app: object) -> None:
+            app.busy_mode = "interrupt"  # type: ignore[attr-defined]
+            app._send_prompt("replace it")  # type: ignore[attr-defined]
+
+        said, client = self.ended_after(replace)
+        self.assertEqual([params["text"] for params in client.named("prompt.submit")], ["replace it"])  # type: ignore[attr-defined]
+        self.assertIn(INTERRUPTED_NOTICE, said)
+        self.assertNotIn(HERMES_INTERRUPTED_NOTICE, said)
+
+    def test_stop_is_the_persons_stop(self) -> None:
+        def stop(app: object) -> None:
+            type_text(app, "/stop")  # type: ignore[arg-type]
+            app._on_input(Key(ENTER))  # type: ignore[attr-defined]
+
+        said, client = self.ended_after(stop)
+        self.assertEqual(len(client.named("slash.exec")), 1)  # type: ignore[attr-defined]
+        self.assertIn(INTERRUPTED_NOTICE, said)
+        self.assertNotIn(HERMES_INTERRUPTED_NOTICE, said)
+
+    def test_the_stop_asked_is_for_one_turn_only(self) -> None:
+        app, _client = make_app()
+        streaming(app)
+        app.stop_asked = True
+        app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        streaming(app)
+        app._on_event(Event("message.complete", SID, {"text": "", "status": "interrupted"}))
+        self.assertEqual(notices(app), [INTERRUPTED_NOTICE, HERMES_INTERRUPTED_NOTICE])
+
+
+class GatewaySilenceTests(unittest.TestCase):
+    """Finding 1's other half: with no keepalive, a gateway that says nothing during a turn is named, never closed."""
+
+    def test_the_working_row_says_how_long_the_gateway_has_been_silent(self) -> None:
+        rows = "\n".join(self.rows(GATEWAY_SILENCE_SECONDS + 5))
+        self.assertIn("no word from Hermes' gateway for 50 s", rows)
+
+    def test_a_shorter_silence_says_nothing(self) -> None:
+        rows = "\n".join(self.rows(GATEWAY_SILENCE_SECONDS - 5))
+        self.assertNotIn("no word from Hermes' gateway", rows)
+
+    def test_anything_from_the_gateway_restarts_the_count(self) -> None:
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        streaming(app)
+        now[0] += GATEWAY_SILENCE_SECONDS + 5
+        client.inbox.append(Event("message.delta", SID, {"text": " more"}))
+        app._drain_gateway()
+        self.assertNotIn("no word from", "\n".join(line_text(line) for line in app._tail(120)))
+        self.assertIsNone(app.exit_code)
+
+    def rows(self, quiet: float) -> list[str]:
+        now = [100.0]
+        app, _client = make_app(clock=lambda: now[0])
+        streaming(app)
+        app.inbound_at = now[0]
+        now[0] += quiet
+        rows = [line_text(line) for line in app._tail(120)]
+        self.assertIsNone(app.exit_code)  # said, never acted on
+        return rows
 
 
 if __name__ == "__main__":

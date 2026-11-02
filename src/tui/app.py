@@ -603,6 +603,7 @@ BACKGROUND_DARK = "dark"
 BACKGROUND_MODES = (BACKGROUND_AUTO, BACKGROUND_LIGHT, BACKGROUND_DARK)
 
 BUSY_QUEUE = "queue"
+BUSY_INTERRUPT = "interrupt"  # a prompt sent during a turn replaces it: Hermes interrupts the turn for it
 BUSY_MODES = frozenset({"queue", "steer", "interrupt"})
 
 STATE_IDLE = "idle"
@@ -673,10 +674,28 @@ REPLAY_GAP_REFUSED_NOTICE = (
     "Hermes stopped sending this session's events to this screen and did not resume it ({reason}); "
     "what it does next does not show here."
 )
+REPLAY_GAP_WHY = "Hermes stopped sending this session's events"
+REPLAY_GAP_UNANSWERED = "no answer in {seconds:g} s"
+# The admissions a resume's `pending` rows list that are still Hermes' to run: the turn is live although `running`
+# (only a started admission) says no (Hermes' own client reads them, `hermes_cli/gateway_agent.py` `_recover`).
+LIVE_ADMISSIONS = frozenset({"queued", "started"})
+# During a turn, the working row says how long nothing has come from the gateway, past this long: Hermes' own TUI
+# counts any inbound frame as liveness with this deadline (ui-tui `gatewayClient.ts`). Only said, never acted on: a busy
+# gateway can be silent that long and still finish the turn.
+GATEWAY_SILENCE_SECONDS = 45.0
+GATEWAY_SILENCE = "no word from Hermes' gateway for {seconds} s"
 # A launch's `--resume` that Hermes refused as itself (not drift): said, and no other TUI opens a new session instead.
 RESUME_REFUSED_AT_LAUNCH = (
     "omh: Hermes refused to resume session {session} ({code}: {message}).{sentence} Nothing was opened in its place."
 )
+# What a launch says for a refusal whose in-session sentence would send the person to `hermes --tui`, which answers
+# the same refusal by opening a new session (Hermes #143907).
+LAUNCH_RESUME_SENTENCES = {
+    "permission_denied": (
+        "Hermes does not let this connection open that session: open it where it was started "
+        "(Hermes Desktop or the WebUI)."
+    ),
+}
 QUESTION_LOST_NOTICE = "Hermes' {method} request closed unanswered: the gateway that asked has exited."
 # Between the interrupt key and the end of the turn, the working row says so in place of the spinner.
 INTERRUPTING = "interrupting…"
@@ -1105,6 +1124,16 @@ def plain_sentence(message: str) -> str:
     text = message.strip() or "refused"
     text = text[:1].upper() + text[1:]
     return text if text.endswith((".", "!", "?")) else f"{text}."
+
+
+def resumed_running(result: Mapping[str, Any]) -> bool:
+    """Whether a create or resume answer has a turn still Hermes' to run: `running`, or a `pending` admission still
+    queued or started (`LIVE_ADMISSIONS`)."""
+    pending = result.get("pending")
+    rows = pending if isinstance(pending, list) else []
+    return bool(result.get("running")) or any(
+        isinstance(row, Mapping) and row.get("status") in LIVE_ADMISSIONS for row in rows
+    )
 
 
 def refusal_reason(error: Mapping[str, Any]) -> str:
@@ -1780,6 +1809,12 @@ class App(ModesMixin, AgentViewMixin):
         self.turns_ended = 0  # turns of this TUI that ended: a steer remembers which turn it was meant for
         self.queue_held = False  # the queue waits for the person after an interrupt (`_hold_queue`)
         self.interrupting = False  # the person interrupted the running turn and Hermes has not ended it yet
+        # The person asked for the running turn to stop another way (`/stop`, a prompt in busy mode `interrupt`):
+        # an `interrupted` end is theirs, not Hermes' own (`Transcript.hermes_interrupted`).
+        self.stop_asked = False
+        self.lifecycle_seen = 0  # the live session's `message.start` and `message.complete` events, counted
+        self.inbound_at = 0.0  # when the gateway last sent anything (`GATEWAY_SILENCE_SECONDS`)
+        self.authority_epoch: object = None  # the shared gateway's epoch the last create or resume answered
         self.sticky = ""
         self.flushed_since_prompt = 0  # rows printed above the region from the last prompt's first row on
         self.turn_pending = False  # a prompt went out and its turn has not started (or ended) yet
@@ -2161,8 +2196,9 @@ class App(ModesMixin, AgentViewMixin):
         self.turn_streamed, self.turn_shown = 0.0, 0
         cwd = as_text(info.get("cwd")) if isinstance(info, dict) else ""
         self.transcript.cwd = cwd or str(self._create_params().get("cwd", ""))
-        self.turn_pending = bool(result.get("running"))
-        self.interrupting = self.queue_held = False  # both were about the session being left
+        self.turn_pending = resumed_running(result)
+        self.authority_epoch = result.get("authority_epoch")
+        self.interrupting = self.queue_held = self.stop_asked = False  # all were about the session being left
         self.sent_now = []  # steers into the session being left: theirs to settle
         self._settle_unread_steers(STEER_TAKEN)
         self.turn_unknown = None  # the drift watch was for a turn of the session being left
@@ -2647,6 +2683,9 @@ class App(ModesMixin, AgentViewMixin):
         busy = self._busy()
         # On a shared gateway the turn may run on without this child: it stays open until the resume says (`running`).
         kept = busy and self.shared_gateway
+        # What the kept turn carries over a reconnect: its clock, and a stop the person already asked for.
+        epoch, since, waited, stopping = self.authority_epoch, self.busy_since, self.turn_waited, (
+            self.interrupting, self.stop_asked)
 
         def lose(why: str) -> None:
             if kept:  # the live block goes to the scrollback as it stands
@@ -2717,13 +2756,23 @@ class App(ModesMixin, AgentViewMixin):
                 return
             break
         self.wake = self.client.wake_fd()
+        self.inbound_at = self.clock()
         self._adopt_session(result, fallback_stored=stored)
-        if kept and not self.turn_pending:  # the resume says it no longer runs: it ended while this screen was away
+        # A different authority epoch is a gateway that started again, whatever the child's exit said: the turn went
+        # with the old one. The same epoch (or none said) is the same gateway over a new connection.
+        restarted = epoch is not None and self.authority_epoch is not None and epoch != self.authority_epoch
+        reconnected = self.shared_gateway and not restarted
+        if kept and restarted:
+            self.transcript.fail_turn(TURN_LOST_NOTICE)
+        elif kept and not self.turn_pending:  # the resume says it no longer runs: it ended while this screen was away
             self.transcript.fail_turn(TURN_ENDED_UNSEEN_NOTICE)
-        shared = self.shared_gateway  # the same gateway, over a new connection
-        self.transcript.add_notice((RECONNECTED_NOTICE if shared else RESPAWNED_NOTICE).format(session=self.stored_id),
-                                   NOTICE_OK)
-        self._hold_queue(RECONNECTED_WHY if shared else RESPAWNED_WHY)
+        elif kept:  # it runs on: the same turn, so the same clock and the stop the person asked for
+            self.busy_since, self.turn_waited = since, waited
+            self.interrupting, self.stop_asked = stopping
+        self.transcript.add_notice(
+            (RECONNECTED_NOTICE if reconnected else RESPAWNED_NOTICE).format(session=self.stored_id), NOTICE_OK
+        )
+        self._hold_queue(RECONNECTED_WHY if reconnected else RESPAWNED_WHY)
         self._request("config.get", {"key": "full"}, self._take_settings, self._on_settings_refused)
         self._refresh_catalog()
         self._redeliver(result.get("open_requests"))
@@ -2731,20 +2780,34 @@ class App(ModesMixin, AgentViewMixin):
     def _resume_after_gap(self) -> None:
         """`session.replay_gap`: the shared gateway dropped this screen's subscription for falling behind, and sends
         nothing more for the session until it is resumed. Resume it again, as Hermes' own TUI does (`resumeById`): the
-        resume subscribes anew, and its `running` says whether the turn the screen shows is still going."""
-        sid = self.sid
+        resume subscribes anew, and its `running` says whether the turn the screen shows is still going.
+
+        Hermes subscribes the new view before it answers, so the turn's own events can arrive ahead of the answer:
+        the answer's `running` is then older than they are, and they decide (`lifecycle_seen`)."""
+        sid, seen = self.sid, self.lifecycle_seen
         self._request(
             "session.resume",
             {"session_id": self.stored_id or sid, "cols": self.size[0]},
-            lambda result: self._on_gap_resumed(sid, result),
+            lambda result: self._on_gap_resumed(sid, seen, result),
             lambda error: self._on_gap_resume_refused(sid, error),
+            lambda seconds: self._on_gap_resume_refused(sid, {"message": REPLAY_GAP_UNANSWERED.format(seconds=seconds)}),
         )
 
-    def _on_gap_resumed(self, sid: str, result: dict[str, Any]) -> None:
-        """The turn shown runs on while the answer says it runs; one that ended unseen closes, and the queue goes on."""
+    def _on_gap_resumed(self, sid: str, seen: int, result: dict[str, Any]) -> None:
+        """The turn shown runs on while the answer says it runs; one that ended unseen closes, and the queue goes on.
+
+        An answer for a session since left leaves the view it opened (`session.close`, a detach on the shared
+        gateway). One that names a newer id for the session (a compression's tip) moves the screen to that id."""
+        answered = as_text(result.get("session_id"))
         if sid != self.sid:
+            if answered and answered != self.sid:
+                self._request("session.close", {"session_id": answered}, lambda _result: None, lambda _error: True)
             return
-        running = bool(result.get("running"))
+        if answered and answered != self.sid:
+            self.sid = answered  # the live session's events now carry this id
+        if self.lifecycle_seen != seen:  # the turn's own events came after the resume went out: they are newer
+            return
+        running = resumed_running(result)
         if self._busy() and not running:
             if self.transcript.running:
                 self.transcript.fail_turn(TURN_ENDED_UNSEEN_NOTICE)
@@ -2757,9 +2820,19 @@ class App(ModesMixin, AgentViewMixin):
             self.busy_since = self.clock()
 
     def _on_gap_resume_refused(self, sid: str, error: dict[str, Any]) -> bool:
-        if sid == self.sid:
-            reason = as_text(error.get("message")).strip() or "refused"
-            self.transcript.add_notice(REPLAY_GAP_REFUSED_NOTICE.format(reason=reason), NOTICE_WARN)
+        """No new view, so nothing more of the session comes: its turn closes as one this screen lost, and the queue
+        waits for the person, as when a respawn gives up."""
+        if sid != self.sid:
+            return True
+        reason = as_text(error.get("message")).strip() or "refused"
+        self.transcript.add_notice(REPLAY_GAP_REFUSED_NOTICE.format(reason=reason), NOTICE_WARN)
+        if self._busy():
+            if self.transcript.running:
+                self.transcript.fail_turn(TURN_LEFT_RUNNING_NOTICE)
+            else:
+                self.transcript.add_notice(TURN_LEFT_RUNNING_NOTICE, NOTICE_WARN)
+            self.turn_pending = self.interrupting = self.stop_asked = False
+            self._hold_queue(REPLAY_GAP_WHY)
         return True
 
     def _settle_lost_calls(self) -> None:
@@ -2844,6 +2917,7 @@ class App(ModesMixin, AgentViewMixin):
     def _drain_gateway(self) -> None:
         for item in self.client.poll():
             self.dirty = True
+            self.inbound_at = self.clock()
             if isinstance(item, Event):
                 self._on_event(item)
             elif isinstance(item, ServerRequest):
@@ -2903,7 +2977,8 @@ class App(ModesMixin, AgentViewMixin):
             self._side_answer(event.type, payload, event.session_id)  # a /bg started before a switch: never dropped
             return
         if event.type == "skills.changed":  # gateway-wide (no session): a skill was installed or removed elsewhere
-            if self.sid:
+            # A burst asks once: a catalog still unanswered is read after the change that was broadcast before it.
+            if self.sid and not any(call.method == "commands.catalog" for call in self.pending.values()):
                 self._refresh_catalog()
             return
         if not event.type.startswith(contract.GATEWAY_SCOPED_EVENT_PREFIX) and event.session_id != self.sid:
@@ -2949,9 +3024,13 @@ class App(ModesMixin, AgentViewMixin):
             if isinstance(payload, Mapping):  # a new frame for an agent: its tail is asked for again
                 self.tail_misses.pop(as_text(payload.get("subagent_id")), None)
         else:
+            if event.type in ("message.start", "message.complete"):
+                self.lifecycle_seen += 1
             if event.type == "message.complete":  # before the reply closes: a steer row goes where it went before
                 self._settle_steers_at_turn_end()
-                self.transcript.hermes_interrupted = not self.interrupting  # a stop this TUI did not ask for
+                # A stop the person asked for in no way (Esc, `/stop`, a prompt in busy mode `interrupt`) is Hermes' own.
+                self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)
+                self.stop_asked = False
             self.transcript.apply(event)
             self._track_sent_now(event.type)
             self._count_streamed(event.type, payload)
@@ -4439,6 +4518,7 @@ class App(ModesMixin, AgentViewMixin):
             self.queued.append(QueuedLine(text, shown, typed, chips=chips, notice=notice, images=images))
             return
         if self._busy():  # the busy mode sends it into the running turn: no turn starts
+            self.stop_asked = self.stop_asked or self.busy_mode == BUSY_INTERRUPT
             self._submit_prompt(text, shown, notice=notice, images=images)
         else:
             self._start_turn(typed or text, lambda: self._submit_prompt(text, shown, notice=notice, images=images),
@@ -5184,6 +5264,8 @@ class App(ModesMixin, AgentViewMixin):
             if held and self.shared_gateway:  # the stdio entry refuses a turn-back as busy instead
                 self.transcript.add_notice(COMPRESSION_HELD_NOTICE.format(name=invocation.name))
             echo = self.transcript.command
+            if invocation.name.lower() == "stop" and self._busy():
+                self.stop_asked = True  # the turn it interrupts ends `interrupted`: the person's stop
             self._request(
                 "slash.exec",
                 {"command": invocation.text, "session_id": self.sid},
@@ -7076,6 +7158,9 @@ class App(ModesMixin, AgentViewMixin):
             # tokens, the time, and the interrupt last; only a verb too long for the row alone is cut at the edge.
             row: Line = lead
             status = (Span(f" · {said}", self.theme.faint),) if said else ()
+            silent = now - max(self.inbound_at, self.busy_since or now)
+            if silent >= GATEWAY_SILENCE_SECONDS:  # in place of the status: the gateway has said nothing at all
+                status = (Span(f" · {GATEWAY_SILENCE.format(seconds=int(silent))}", self.theme.warn),)
             for facts, tail in (((elapsed, written, effort, interrupt), status), ((elapsed, written, effort, interrupt), ()),
                                 ((elapsed, written, interrupt), ()), ((elapsed, interrupt), ()), ((interrupt,), ())):
                 joined = " · ".join(fact for fact in facts if fact)
@@ -7389,7 +7474,8 @@ def _run(
         if resume and isinstance(error, GatewayCallError) and not error.drift:
             # Hermes refused this session as itself (not_found, permission_denied, ...): its own TUI, the fallback,
             # would print the code and open a new session in its place without a word (Hermes #143907).
-            sentence = refusal_sentence({"code": error.code, "message": error.message})
+            refusal = {"code": error.code, "message": error.message}
+            sentence = LAUNCH_RESUME_SENTENCES.get(refusal_reason(refusal)) or refusal_sentence(refusal)
             _say(stderr, RESUME_REFUSED_AT_LAUNCH.format(
                 session=resume, code=error.code, message=error.message.strip() or "refused",
                 sentence=f" {sentence}" if sentence else "",
