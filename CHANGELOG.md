@@ -7,13 +7,8 @@ All notable changes will be documented here.
 - **Reports on OMH's routing reach workflow learning, and tasks that only
   name OMH do not.** "OMH가 왜 내 메시지를 code-review로 보냈어?" dispatched
   the code-review it names, because the fold reads the past tense 보냈 as the
-  request cue 보내; a Korean execution cue now matches whole syllables. "OMH가
-  ..." never counted as naming OMH, because the particle stays on the word;
-  it now does, but only in a narrow report shape: one clause with a
-  complaint word (왜, 잘못, 엉뚱, 이상한, ...) and a routing target (스킬,
-  워크플로, 레인, a workflow name, or the user's message routed somewhere),
-  every other clause only asking to look at it. Anything else reads as
-  before. Three English report shapes are fixed too: an adverb between OMH
+  request cue 보내; a Korean execution cue now matches whole syllables.
+  Three English report shapes reach workflow learning: an adverb between OMH
   and its verb ("OMH apparently chose ..."), a why-question about what OMH
   did ("Show me why OMH picked them"), and OMH ignoring the request. The
   other way round, "OMH picked the config. Find out which keys are unused"
@@ -23,9 +18,13 @@ All notable changes will be documented here.
   "find out why", a question about the choice itself, or a choice made for
   the user's own message still reads as a report. Nor does a code edit led
   by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
-  module. The 12 router misses #2455 listed are fixed on the route hint.
-  Measured offline on the earlier held-out sets and nine fresh sets frozen
-  for this change (1,054 scored messages, hint and chat route), no message
+  module. 9 of the 12 router misses #2455 listed are fixed on the route
+  hint. The other 3 are Korean reports that name OMH with a particle
+  ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"); reading that form as OMH was
+  tried for seven review rounds and dropped, because each closed list it
+  needed let coding requests through, so "OMH가 / OMH는" reads as before.
+  Measured offline on the earlier held-out sets and ten fresh sets frozen
+  for this change (1,069 scored messages, hint and chat route), no message
   the previous router answered right is answered wrong.
 
 - **An answer Hermes sends late no longer acts on what the person moved on

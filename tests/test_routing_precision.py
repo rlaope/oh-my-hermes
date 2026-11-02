@@ -251,11 +251,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Three reports the classifier missed (a Korean 보냈어, OMH ignoring the
         # request, OMH "apparently" choosing) reach workflow-learning, and a
         # Korean casual "고쳐줘?" after what OMH picked keeps the coding lane,
-        # a Korean "정리해 둬" keeps toolbelt-readiness, and a Korean report on
-        # OMH's routing reaches workflow-learning, and OMH missing a test before
-        # an add-tests request keeps ultrawork, and a Korean report that OMH sent
-        # a greeting to an odd workflow reaches workflow-learning.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1227)
+        # a Korean "정리해 둬" keeps toolbelt-readiness, and OMH missing a test
+        # before an add-tests request keeps ultrawork.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1225)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

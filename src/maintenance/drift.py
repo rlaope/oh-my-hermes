@@ -1545,12 +1545,11 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # workflow-learning (+3). Its second review: a Korean casual edit
             # request ending in "?" after a setting sentence keeps ultrawork (+1).
             # Its fourth review: a Korean 정리해 둬 after a setting sentence keeps
-            # toolbelt-readiness, and a Korean report on OMH's routing reaches
-            # workflow-learning (+2). Its fifth review: OMH missing a test, then
-            # a request to add tests, keeps ultrawork (+1). Its sixth review: a
-            # Korean report that OMH sent a greeting to an odd workflow reaches
-            # workflow-learning (+1).
-            expected=1227,
+            # toolbelt-readiness (+1). Its fifth review: OMH missing a test, then
+            # a request to add tests, keeps ultrawork (+1). The Korean
+            # particle-only report path was dropped after its seventh review,
+            # and the two interventions that pinned it with it.
+            expected=1225,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

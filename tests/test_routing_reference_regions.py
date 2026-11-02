@@ -172,23 +172,6 @@ class RoutingReferenceRegionTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertFalse(leads_with_code_edit(message))
 
-    def test_korean_code_edit_lead_reads_each_sentence(self) -> None:
-        # #2485 review: an edit request after a period or a line break is a
-        # lead, and so is the casual "해줘?"; a question about what happened,
-        # or a past-tense question about an edit, is not.
-        for message in (
-            "omh가 파일을 골랐어. 수정해줘",
-            "omh가 파일을 골랐어.\n리팩터링해줘",
-            "omh는 모듈을 골랐어! 마이그레이션해줘",
-            "omh가 파일을 골랐어. 수정해줘?",
-            "omh가 모듈을 골랐어. 테스트 추가해 줄래?",
-        ):
-            with self.subTest(message=message):
-                self.assertTrue(leads_with_code_edit(message))
-        for message in ("omh가 파일을 골랐어. 왜 그랬어?", "omh가 왜 이 파일을 수정했어?", "omh가 고친 거 맞아?"):
-            with self.subTest(message=message):
-                self.assertFalse(leads_with_code_edit(message))
-
     def test_direct_invocation_keeps_precedence_and_apostrophes(self) -> None:
         for message in (
             'Use $ulw-work to fix the build.',

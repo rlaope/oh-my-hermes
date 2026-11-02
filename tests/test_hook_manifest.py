@@ -829,8 +829,6 @@ class HookManifestTests(unittest.TestCase):
             "OMH가 왜 내 메시지를 code-review로 보냈어?",
             "OMH는 왜 내 질문을 ultrawork로 보냈어?",
             "OMH 라우터가 내 로그 질문을 잘못 보냈어",
-            "OMH가 라우팅을 잘못했어, 원인을 같이 보자",
-            "OMH를 썼는데 라우팅이 잘못됐어",
         )
         for message in reports:
             with self.subTest(message=message):
@@ -925,12 +923,12 @@ class HookManifestTests(unittest.TestCase):
                 self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
 
-    def test_a_particle_product_name_names_omh_only_in_a_clause_that_reports_on_it(self) -> None:
-        # #2485 third to fifth reviews: closed lists of Korean edit verbs, then
-        # of request endings, leaked in turn. "OMH가" / "OMH는" now gives
-        # routing context only where its own clause reports on OMH's routing
-        # (a complaint leg and a routing leg) and no other clause asks for
-        # other work, so a setting sentence leaves the message as on main.
+    def test_a_particle_product_name_gives_no_routing_context(self) -> None:
+        # #2485: a grant of routing context to "OMH가" / "OMH는" was tried for
+        # seven review rounds and leaked through each closed list; it was
+        # dropped, and the particle form reads as on origin/main. These
+        # coding requests and statements, which the grant once read as meta,
+        # pin that.
         coding = (
             "OMH는 업데이트 끝났어. 라우터 핸들러 다듬어 줘",
             "OMH가 저장소를 골랐어. 라우팅 규칙 손 좀 봐줘?",
@@ -966,17 +964,6 @@ class HookManifestTests(unittest.TestCase):
 
                 self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
-        for message in (
-            "OMH가 라우팅을 잘못했어. 원인 좀 같이 보자",
-            "OMH가 왜 내 인사를 다른 스킬로 보냈어?",
-            "OMH가 내 인사를 잘못 라우팅했어",
-            "OMH가 picked the wrong skill again",
-            # What OMH routes to, then a clause that only asks about it.
-            "OMH가 이상한 레인을 띄웠어. 이유가 뭘까?",
-            "OMH가 엉뚱한 스킬을 골랐어. 왜 그런지 봐 줘",
-        ):
-            with self.subTest(message=message):
-                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
 
     def test_find_out_about_omhs_own_choice_refers_back_whatever_the_object(self) -> None:
         # #2485 third review: "find out what made it pick that" asks about the
@@ -1029,10 +1016,8 @@ class HookManifestTests(unittest.TestCase):
         self.assertIs(skill_shortlist.catalog_skill_names(), skill_shortlist.catalog_skill_names())
 
     def test_korean_edit_request_after_a_setting_sentence_gets_no_workflow_learning_hint(self) -> None:
-        # #2485 review: the Korean code-edit lead split clauses only on commas,
-        # so an edit after a period or a line break was no lead, and 리팩터링 /
-        # 마이그레이션 were no edit predicates; with "OMH가" naming OMH, 라우터 and
-        # 테스트 then read as meta cues.
+        # #2485 review: with "OMH가" naming OMH, these read as meta on an
+        # earlier head of the PR; the particle form now reads as on main.
         cases = (
             "OMH가 설정 파일을 골랐어. 재시도 횟수 수정해줘",
             "OMH는 파서 모듈을 골랐어.\n테스트 코드 리팩터링해줘",

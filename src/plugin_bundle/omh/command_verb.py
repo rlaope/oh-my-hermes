@@ -10,7 +10,6 @@ host without the `omh` package can load. Stdlib only.
 from __future__ import annotations
 
 import re
-import unicodedata
 
 from .korean_request import korean_request
 from .request_lead import after_courtesy, courtesy_opener_length
@@ -32,11 +31,6 @@ _TOOL_NAMES = frozenset({"omh", "oh-my-hermes", "hermes"})
 # with 작성 (write) added: "테스트 작성해줘" asks for code.
 KOREAN_CODE_EDIT_PREDICATES = frozenset(
     {"고쳐", "수정", "추가", "작성", "구현", "개선", "삭제", "제거", "변경", "바꿔", "넣어", "만들어"}
-)
-# The Korean side of `_CODE_EDIT_LEAD_VERBS`: "리팩터링해줘", "마이그레이션해줘".
-# Only `leads_with_code_edit` reads them.
-_KOREAN_CODE_EDIT_LEAD_PREDICATES = KOREAN_CODE_EDIT_PREDICATES | frozenset(
-    {"리팩터링", "리팩토링", "마이그레이션", "재작성"}
 )
 
 # The verbs a clause opens with when it gives the user's own command ("now run
@@ -69,11 +63,9 @@ _COMMAND_INTRODUCERS = frozenset({"to", "me", "and", "then"})
 # who, then the verb: "use OMH to fix", "have Hermes add", "ask OMH to update".
 _DELEGATING_LEADS = frozenset({"use", "have", "let", "ask", "get", "tell"})
 _WORD = re.compile(r"[a-z0-9#][a-z0-9#+.-]*")
-# Where a Korean message's clauses part: a comma, an aside in parentheses
-# ("코드 고쳐줘 (OMH 세션)", "테스트 작성해줘, OMH 환경이야"), a line break, or
-# the end of a sentence ("OMH가 설정 파일을 골랐어. 타임아웃 수정해줘"). A
-# sentence keeps its own mark for `korean_request` to read.
-_KOREAN_CLAUSE_BREAK = re.compile(r"[,，(（)）\n]|(?<=[.!?。])")
+# Where a Korean message's clauses part: a comma, or an aside in parentheses
+# ("코드 고쳐줘 (OMH 세션)", "테스트 작성해줘, OMH 환경이야").
+_KOREAN_CLAUSE_BREAK = re.compile(r"[,，(（)）]")
 
 
 def ordered_words(text: str) -> list[str]:
@@ -168,35 +160,6 @@ def find_out_asks_about_choice(clause: str) -> bool:
     return False
 
 
-# How a Korean clause ends when it asks or tells someone to do something,
-# whatever the verb: "정리해 줘", "손봐줘", "다듬어 주세요", "바꿔볼래?", "갈아엎자",
-# "고쳐라", "업데이트 좀 해", "해 줄 수 있어?". Read on the clause's last words,
-# composed, after the closing marks. A statement in the casual 해 form ("이상해")
-# reads as a request too; where this is read, that only gives up a reading.
-_KOREAN_REQUEST_ENDINGS = (
-    "줘", "줘요", "주세요", "주라", "줄래", "줄래요", "주실래요", "주시겠어요", "봐", "봐요", "볼래", "볼래요",
-    "해", "해요", "해라", "하자", "자", "라", "세요", "십시오", "부탁해", "부탁해요", "부탁드려요", "부탁드립니다",
-)
-_KOREAN_ASKING_TAILS = ("줄 수 있어", "줄 수 있어요", "줄 수 있나요", "주실 수 있나요", "주실 수 있어요")
-_CLOSING_MARKS = " \t?!.~。！？"
-
-
-def korean_clauses(text: str) -> list[str]:
-    """The Korean clauses of folded `text`, split as the code-edit lead splits them."""
-    return [clause for clause in _KOREAN_CLAUSE_BREAK.split(text) if clause.strip()]
-
-
-def ends_in_korean_request(clause: str) -> bool:
-    """`clause` ends in a Korean request or imperative ending (`_KOREAN_REQUEST_ENDINGS`), whatever its verb."""
-    composed = unicodedata.normalize("NFC", clause).rstrip(_CLOSING_MARKS)
-    words = composed.split()
-    if not words or not any("\uac00" <= char <= "\ud7a3" for char in words[-1]):
-        return False
-    if any(composed.endswith(tail) for tail in _KOREAN_ASKING_TAILS):
-        return True
-    return words[-1].endswith(_KOREAN_REQUEST_ENDINGS)
-
-
 def find_out_refers_back(clause: str) -> bool:
     """`clause` is "find out" with only a bare cause question, about the clause before it ("find out why").
 
@@ -289,18 +252,7 @@ def leads_with_code_edit(normalized_query: str) -> bool:
                 if word in _CODE_EDIT_LEAD_VERBS:
                     return True
     return any(
-        _korean_code_edit_request(clause) for clause in _KOREAN_CLAUSE_BREAK.split(normalized_query) if clause.strip()
+        (request := korean_request(clause)) is not None and request.predicate in KOREAN_CODE_EDIT_PREDICATES
+        for clause in _KOREAN_CLAUSE_BREAK.split(normalized_query)
+        if clause.strip()
     )
-
-
-def _korean_code_edit_request(clause: str) -> bool:
-    """`clause` ends on a Korean code-edit request; "수정해줘?" counts too.
-
-    `korean_request` reads "해줘?" as an echoed request, which matters to the
-    spend and data-share gates. For a code edit it is the ordinary casual way
-    to ask (#2485 review), so this reading alone retries without the "?".
-    """
-    request = korean_request(clause)
-    if request is None and clause.rstrip().endswith("?"):
-        request = korean_request(clause.rstrip().rstrip("?"))
-    return request is not None and request.predicate in _KOREAN_CODE_EDIT_LEAD_PREDICATES

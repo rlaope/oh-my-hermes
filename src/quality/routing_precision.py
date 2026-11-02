@@ -12420,23 +12420,11 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # after a setting sentence it keeps the coding lane (a2d8bf6c2 dispatched
     # workflow-learning).
     # #2485 fourth review: a request with an ending no list holds ("해 둬")
-    # after a setting sentence keeps origin/main's lane, and a Korean report
-    # whose OMH clause carries the feedback cue reaches workflow-learning
-    # (origin/main asked a question).
-    # #2485 fifth review: OMH missing a test is its coding work, so the code
-    # request keeps its lane (d4fdeeb56 dispatched workflow-learning).
-    # #2485 sixth review: a Korean report with a complaint word and a routing
-    # target reaches workflow-learning (origin/main asked a question).
-    RoutingInterventionCase(
-        "korean-omh-sent-my-greeting-to-an-odd-workflow-reaches-workflow-learning",
-        "A Korean report that OMH sent a greeting to an odd workflow reaches workflow learning",
-        "OMH가 내 인사를 이상한 워크플로로 보냈어",
-        "dispatch",
-        "workflow-learning",
-        "audit_learning_readiness",
-        "workflow_learning",
-        "workflow-learning",
-    ),
+    # after a setting sentence keeps origin/main's lane. #2485 fifth review:
+    # OMH missing a test is its coding work, so the code request keeps its
+    # lane (d4fdeeb56 dispatched workflow-learning). The Korean particle-only
+    # report path these reviews tuned was dropped after the seventh review;
+    # these pin that "OMH가 / OMH는" before a request reads as on origin/main.
     RoutingInterventionCase(
         "korean-omh-missed-a-test-then-add-tests-keeps-coding-lane",
         "A Korean note that OMH missed a test, then a request to add tests, keeps the coding lane",
@@ -12456,16 +12444,6 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_toolbelt_readiness",
         "toolbelt_readiness",
         "toolbelt-readiness",
-    ),
-    RoutingInterventionCase(
-        "korean-omh-routing-went-wrong-lets-look-reaches-workflow-learning",
-        "A Korean report that OMH's routing went wrong, then let's look at the cause, reaches workflow learning",
-        "OMH가 라우팅을 잘못했어, 원인을 같이 보자",
-        "dispatch",
-        "workflow-learning",
-        "audit_learning_readiness",
-        "workflow_learning",
-        "workflow-learning",
     ),
     RoutingInterventionCase(
         "korean-casual-edit-question-after-setting-keeps-coding-lane",
