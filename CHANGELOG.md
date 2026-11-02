@@ -411,6 +411,17 @@ All notable changes will be documented here.
     longer lists npm's extensionless shell shim, which logged
     `[WinError 193]` before falling back to `codex.CMD`.
 
+- **The Desktop pane says when a delegated lane failed, keeps a narrow pane
+  readable, and darkens the text you read.** A failed lane or route used to
+  be counted as `blocked`; the header and the status bar now say
+  `1 running · 1 failed` with failed in red, apart from `blocked` (stuck or
+  interrupted lanes, blocked rows) in yellow, and a red dot when nothing
+  runs. At the default 320 px pane a delegation row puts its model on a
+  second line under the title, so neither is cut to a few letters. The scope
+  line, plan notes, the subagent summary and backend notices use a text tone
+  between Desktop's secondary and tertiary roles, readable in the light
+  theme where tertiary alone was faint. In Korean the count reads `1개 실패`.
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write
