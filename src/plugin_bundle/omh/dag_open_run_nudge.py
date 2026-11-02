@@ -23,10 +23,11 @@ is one of its nodes whose child is running. With none, the first of:
   node gets its fresh attempt);
 * a node out with no child that ``ready`` offers again (a restart ended its
   child, or none took it past ``dag_stale_after_s``): ``omh_dag action=ready``;
-* ready nodes: ``omh_dag action=ready``. When other work holds every
-  `delegate_task` slot of this process (`dag_tool.free_slots`), ``ready``
-  would hand out nothing now, so the line says to call it at a later turn
-  instead;
+* ready nodes: ``omh_dag action=ready``. When every `delegate_task` slot
+  of this process is taken (`dag_tool.free_slots`), ``ready`` would hand out
+  nothing now, so the line says to call it at a later turn instead. The line
+  does not say who holds the slots: between a dispatch and its child's start
+  the holder can be this run's own node;
 * a failed or blocked node with a repair cycle left, so the run is
   ``needs_repair`` and nothing else moves it: ``omh_dag action=repair``, or
   report what is open and cancel.
@@ -153,7 +154,7 @@ def open_run_text(reason: str, run: str, nodes: list[str], mark: str) -> str:
         return (f"{head} {named} ready and {idle}. Call omh_dag action=ready run={run} and dispatch the calls it "
                 "returns.")
     if reason == "ready_held":
-        return (f"{head} {named} ready and {idle}, but other work holds every delegate_task slot of this process, so "
+        return (f"{head} {named} ready and {idle}, but every delegate_task slot of this process is taken, so "
                 f"ready would hand out nothing now. Call omh_dag action=ready run={run} at a later turn, once a slot "
                 "is free.")
     if reason == "needs_repair":
