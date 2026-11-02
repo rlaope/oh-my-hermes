@@ -6,11 +6,13 @@ settled before the first byte is drawn, and each such failure exits through
 `request_fallback` (the file `omh` named, then `FALLBACK_EXIT`), so `omh`
 opens Hermes' own terminal instead: a terminal that cannot run the TUI, a
 gateway that does not start, and a session call (create or resume) this
-Hermes refuses or no longer understands. The busy mode and the command
-catalog are asked for without waiting; drift in either is met in the loop,
-as drift in any call is. An attach hand-off is refused with exit 1 and a
-line naming `hermes --tui --resume <id>` (0 would make `omh` print a resume
-hint for a session this TUI never opened). SIGTERM and SIGHUP leave through
+Hermes refuses or no longer understands. A resume Hermes refuses as itself
+(not_found, permission_denied, ...) is said and exits 1 instead: Hermes'
+own TUI would open a new session in its place without a word. The busy
+mode and the command catalog are asked for without waiting; drift in either
+is met in the loop, as drift in any call is. An attach hand-off is refused
+with exit 1 and a line naming `hermes --tui --resume <id>` (0 would make
+`omh` print a resume hint for a session this TUI never opened). SIGTERM and SIGHUP leave through
 `SystemExit(128 + signum)`, so the terminal is restored and the gateway reaped
 as on any other exit.
 
@@ -172,7 +174,7 @@ from .keys import (
     Mouse,
     Paste,
 )
-from .launch import CLOSED_EXIT, SESSION_FILE_ENV, request_fallback
+from .launch import CLOSED_EXIT, PICK_SESSION_ENV, SESSION_FILE_ENV, request_fallback
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
 from .aura import aura_ranges
 from .layout import Budget, choice_cap, is_tiny, slot_cap
@@ -224,7 +226,7 @@ from .screen import (
     cursor_up,
 )
 from .session_picker import KEYS as SESSION_PICKER_KEYS
-from .session_picker import PICK, SessionPicker, pointer, session_rows
+from .session_picker import PICK, SessionPicker, SessionRow, pointer, session_rows
 from .rewind_picker import KEYS as REWIND_PICKER_KEYS
 from .rewind_picker import PICK as REWIND_PICK
 from .rewind_picker import RewindPicker, rewind_rows
@@ -564,8 +566,6 @@ LAUNCH_MIN_TRY_SECONDS = 5.0
 # How many times a session call the gateway dropped as not ready is sent again on a new gateway, whatever time is left:
 # each try may have opened a session on the gateway that went away.
 SESSION_RETRY_LIMIT = 2
-# Floor of the session call's deadline, the one it always had: a long gateway start never shortens it.
-SESSION_CALL_SECONDS = 30.0
 LAUNCH_CONNECTING = "omh: connecting to the Hermes gateway… ({seconds}s)"
 LAUNCH_RESTARTING = "omh: the Hermes gateway is restarting; waiting… ({seconds}s)"
 LAUNCH_OPENING = "omh: waiting for the Hermes gateway to open a session… ({seconds}s)"
@@ -649,6 +649,7 @@ BACKGROUND_DARK = "dark"
 BACKGROUND_MODES = (BACKGROUND_AUTO, BACKGROUND_LIGHT, BACKGROUND_DARK)
 
 BUSY_QUEUE = "queue"
+BUSY_INTERRUPT = "interrupt"  # a prompt sent during a turn replaces it: Hermes interrupts the turn for it
 BUSY_MODES = frozenset({"queue", "steer", "interrupt"})
 
 STATE_IDLE = "idle"
@@ -703,6 +704,47 @@ RESPAWNED_NOTICE = "Resumed session {session} on a new Hermes gateway."
 RESPAWN_LEFT_REASON = "you left while the Hermes gateway was starting again"
 LEAVE_CHARS = ("c", "d")  # with Ctrl, read while a respawn waits: the person leaves (`App._respawn_cancel`)
 TURN_LOST_NOTICE = "The running turn was lost when the Hermes gateway exited; it was not sent again."
+# The attach child's connection to Hermes' shared gateway ended (`gateway_attach.relay` exits 1): the gateway may still
+# be running the session's turn, so a respawn resumes the session and reads whether it still runs before saying more.
+CONNECTION_DROPPED_REASON = "the connection to Hermes' gateway dropped"
+TURN_MAY_RUN = "; the turn may still be running"
+RECONNECTED_NOTICE = "Reconnected to Hermes' gateway and resumed session {session}."
+RECONNECTED_WHY = "The connection to Hermes' gateway dropped"
+# The turn on a shared gateway that this screen stopped hearing from: the resume says it is over, or the TUI leaves.
+TURN_ENDED_UNSEEN_NOTICE = (
+    "The running turn ended while this screen was not receiving Hermes' events, so how it ended is not shown here."
+)
+TURN_LEFT_RUNNING_NOTICE = "This screen lost the running turn; Hermes may still be running it."
+# `session.replay_gap`: the shared gateway dropped this screen's subscription for falling behind and resumed nothing.
+REPLAY_GAP_REFUSED_NOTICE = (
+    "Hermes stopped sending this session's events to this screen and did not resume it ({reason}); "
+    "what it does next does not show here."
+)
+REPLAY_GAP_WHY = "Hermes stopped sending this session's events"
+TURN_MOVED_NOTICE = "Hermes moved this session to {session}; what the running turn did before that does not show here."
+REPLAY_GAP_UNANSWERED = "no answer in {seconds:g} s"
+# The admission a resume's `pending` rows list that makes the turn live besides `running`: a started one, as Hermes'
+# own TUI reads busy (ui-tui `submissionCore.ts`). Never a queued one: Hermes holds a queue behind an `unknown` head
+# (a turn it lost) until someone settles that head (`gateway/session_authority.py`), so a queued row may never start.
+LIVE_ADMISSIONS = frozenset({"started"})
+# During a turn, the working row says how long nothing has come from the gateway, past this long, except while a tool
+# runs: Hermes sends nothing between a terminal tool's start and its end, however long it takes. Only said, never acted
+# on. Unlike Hermes' own TUI, which pings the gateway and counts from the last answer (`json-rpc-channel.ts`), this
+# counts from the last thing the gateway sent, so it can only say how long it has been quiet, not that it is gone.
+GATEWAY_SILENCE_SECONDS = 45.0
+GATEWAY_SILENCE = "no word from Hermes' gateway for {seconds} s"
+# A launch's `--resume` that Hermes refused as itself (not drift): said, and no other TUI opens a new session instead.
+RESUME_REFUSED_AT_LAUNCH = (
+    "omh: Hermes refused to resume session {session} ({code}: {message}).{sentence} Nothing was opened in its place."
+)
+# What a launch says for a refusal whose in-session sentence would send the person to `hermes --tui`, which answers
+# the same refusal by opening a new session (Hermes #143907).
+LAUNCH_RESUME_SENTENCES = {
+    "permission_denied": (
+        "Hermes does not let this connection open that session: open it where it was started "
+        "(Hermes Desktop or the WebUI)."
+    ),
+}
 QUESTION_LOST_NOTICE = "Hermes' {method} request closed unanswered: the gateway that asked has exited."
 # Between the interrupt key and the end of the turn, the working row says so in place of the spinner.
 INTERRUPTING = "interrupting…"
@@ -826,6 +868,31 @@ OSC52_IN_TMUX = "tmux passes it on only with set-clipboard on"
 # `omh-*` and `ulw-*` slugs) up to half the terminal; a name longer than that pushes only its own summary.
 MENU_NAME_CELLS = 16
 SESSION_LIST_LIMIT = 50
+# Bare `/sessions` (`/resume`, Ctrl+X) has no echo, so until Hermes answers the list this row stands where the
+# picker will open, under the queued prompts; keys still go to the composer, and the picker opens with an empty filter.
+SESSIONS_LOADING_LINE = "Loading sessions…"
+# Hermes lists the gateway profile's own store, newest first, and leaves archived, hidden (Bot Mode) and internal
+# (kanban, one-shot, tool) sessions out (`tui_gateway/methods_session.py` `_listing_rows`).
+SESSIONS_EMPTY_NOTICE = (
+    "Hermes has no stored sessions to switch to; its list leaves out archived, hidden and kanban, one-shot or tool "
+    "sessions."
+)
+SESSIONS_REFUSED_NOTICE = "Hermes did not list the stored sessions: {reason}."
+SESSIONS_UNANSWERED_NOTICE = "Hermes did not answer the session list in {seconds:g} s; /resume asks again."
+# While a switch (`/sessions <id>`, a pick, `/new`) waits on Hermes, under the queued prompts: a prompt sent then
+# waits for the session it goes to (`App.switch_held`) and is sent there once it is live.
+SWITCHING_LINE = "switching to {target}…"
+# The loading row for one kind of list (`App._ask_list`); the others say `LIST_WAIT_LINE`.
+LIST_WAIT_LINES = {"sessions": SESSIONS_LOADING_LINE}
+NEW_SESSION_LINE = "starting a new session…"
+SWITCH_HELD_SUFFIX = " · {count} prompt{s} wait{verb} for it"
+# The prompts queued behind the old session's turn when the switch lands, and those held for a switch that did not.
+QUEUE_BACK_SWITCH_NOTICE = (
+    "{count} prompt{s} queued in the session you left went back to the composer; none was sent."
+)
+SWITCH_HELD_BACK_NOTICE = "The switch did not happen, so {count} prompt{s} held for it went back to the composer."
+# A switch answered after a newer one: the session it opened is closed again.
+STALE_SWITCH_NOTICE = "Closed session {session}, which opened after a newer switch."
 # The owner's own refusal code (`attach/gateway_attach.py` REFUSED). Hermes' shared gateway answers it to a
 # `session.resume` of a title, which it does not resolve, so `/sessions <title>` looks the title up after it.
 RESUME_REFUSED = 4001
@@ -967,6 +1034,9 @@ class _Pending:
     # A `/compress` call: Hermes' shared gateway serves this connection's calls one at a time, so every call sent
     # while it is out waits until the compression ends.
     compressing: bool = False
+    # A session switch's call (`_switching`): what the row under the queue says while it is out, and which switch.
+    switch: str = ""
+    switch_seq: int = 0
 
 
 @dataclass
@@ -975,6 +1045,17 @@ class SentNow:
 
     line: QueuedLine
     block: SteerBlock
+
+
+class SwitchHeld(NamedTuple):
+    """What the person sent while a session switch was out (`App.switch_held`): submitted again, as sent, in the
+    session the switch opens, or given back to the composer."""
+
+    text: str
+    shown: str = ""
+    chips: tuple[tuple[str, str], ...] = ()
+    hold: bool = False
+    images: tuple[Attachment, ...] = ()
 
 
 class QueuedLine(NamedTuple):
@@ -1133,6 +1214,16 @@ def plain_sentence(message: str) -> str:
     text = message.strip() or "refused"
     text = text[:1].upper() + text[1:]
     return text if text.endswith((".", "!", "?")) else f"{text}."
+
+
+def resumed_running(result: Mapping[str, Any]) -> bool:
+    """Whether a create or resume answer has a turn running: `running`, or a `pending` admission Hermes has started
+    (`LIVE_ADMISSIONS`); a queued one is not, until it starts."""
+    pending = result.get("pending")
+    rows = pending if isinstance(pending, list) else []
+    return bool(result.get("running")) or any(
+        isinstance(row, Mapping) and row.get("status") in LIVE_ADMISSIONS for row in rows
+    )
 
 
 def refusal_reason(error: Mapping[str, Any]) -> str:
@@ -1815,11 +1906,26 @@ class App(ModesMixin, AgentViewMixin):
         self.tell_turn_runs = False  # the turn whose approval the open tell field denied has not ended (`_tell`)
         self.waiting_requests: deque[ServerRequest] = deque()
         self.queued: deque[QueuedLine] = deque()
+        # Prompts sent while a session switch waits (`_switching`): sent in the session it opens, or given back.
+        self.switch_held: list[SwitchHeld] = []
+        self.switch_seq = 0  # the newest switch asked for; an older one's answer is stale
+        self.switch_counter = 0  # hands out switch numbers, only ever up: `switch_seq` may go back to one still out
+        self.switch_targets: dict[int, str] = {}  # each switch's target (a stored id or a title), by its seq
+        self.switch_notices: list[str] = []  # said once no switch is out, in the transcript the last one left
+        self.switch_drain_due = False  # the queue held still while a switch was out (`_drain_queue`)
+        # The composer's text as `/sessions` asked for its list: what differs when the picker opens was typed meanwhile.
+        self.list_asked_draft: str | None = None
         self.sent_now: list[SentNow] = []  # sent-now steers Hermes took and the turn has not read yet
         self.unread_steers: list[SteerBlock] = []  # every steer into the main turn Hermes took and it has not read
         self.turns_ended = 0  # turns of this TUI that ended: a steer remembers which turn it was meant for
         self.queue_held = False  # the queue waits for the person after an interrupt (`_hold_queue`)
         self.interrupting = False  # the person interrupted the running turn and Hermes has not ended it yet
+        # The person asked for the running turn to stop another way (`/stop`, a prompt in busy mode `interrupt`):
+        # an `interrupted` end is theirs, not Hermes' own (`Transcript.hermes_interrupted`).
+        self.stop_asked = False
+        self.lifecycle_seen = 0  # the live session's `message.start` and `message.complete` events, counted
+        self.inbound_at = 0.0  # when the gateway last sent anything (`GATEWAY_SILENCE_SECONDS`)
+        self.authority_epoch: object = None  # the shared gateway's epoch the last create or resume answered
         self.sticky = ""
         self.flushed_since_prompt = 0  # rows printed above the region from the last prompt's first row on
         self.turn_pending = False  # a prompt went out and its turn has not started (or ended) yet
@@ -1984,23 +2090,25 @@ class App(ModesMixin, AgentViewMixin):
 
     # ── startup ──
 
-    def startup(self, wait: Callable[[], bool] | None = None, timeout: float = SESSION_CALL_SECONDS) -> None:
+    def startup(self, wait: Callable[[], bool] | None = None, timeout: float = CALL_ANSWER_SECONDS) -> None:
         """Open or resume the session, then ask for the busy mode and for the session's command catalog.
 
-        `wait` and `timeout` are the session call's `cancel` and deadline, used only when `wait` is given (`_run`
-        passes its `_LaunchWait`, which says on the shell's terminal what the launch waits for and never cancels).
+        `wait` and `timeout` are the session call's `cancel` and deadline (`_run` passes its `_LaunchWait`, which
+        says on the shell's terminal what the launch waits for and never cancels).
 
         Only the session call is awaited: the first frame needs nothing else.
         The busy mode (`config.get`) and the catalog (asked for after the
         session and naming it, because Hermes discovers project-local skills
         for the session's workspace) are answered in the loop like any call
         made during the session; until the busy mode arrives it is
-        `BUSY_QUEUE`, Hermes' own default. Raises `GatewayCallError`,
-        `GatewayTimeout` or `GatewayUnavailable` from the session call; the
-        caller turns each into `FALLBACK_EXIT`.
+        `BUSY_QUEUE`, Hermes' own default. The session call waits
+        `CALL_ANSWER_SECONDS`, as Hermes' own TUI waits for its calls. Raises
+        `GatewayCallError`, `GatewayTimeout` or `GatewayUnavailable` from the
+        session call; the caller turns each into `FALLBACK_EXIT`, except a
+        resume Hermes refused as itself (`RESUME_REFUSED_AT_LAUNCH`).
         """
         resume = self.environ.get("HERMES_TUI_RESUME", "")
-        waiting: dict[str, Any] = {} if wait is None else {"timeout": timeout, "cancel": wait}
+        waiting: dict[str, Any] = {"timeout": timeout} if wait is None else {"timeout": timeout, "cancel": wait}
         if resume:
             result = self.client.call("session.resume", {"session_id": resume, "cols": self.size[0]}, **waiting)
         else:
@@ -2014,7 +2122,8 @@ class App(ModesMixin, AgentViewMixin):
         self._adopt_session(result, fallback_stored=resume)
         self._request("config.get", {"key": "full"}, self._take_settings, self._on_settings_refused)
         self._refresh_catalog()
-        if not resume:
+        pick = not resume and self.environ.get(PICK_SESSION_ENV) == "1"  # a bare `omh --resume`: pick one at once
+        if not resume and not pick:
             self._ask_last_session()
             self._whats_new_on_launch()
         self._read_default()
@@ -2026,6 +2135,8 @@ class App(ModesMixin, AgentViewMixin):
         if resume:
             self._draw_history(result.get("messages"))
         self._redeliver(result.get("open_requests"))
+        if pick:
+            self._sessions("")
 
     def _snapshot_home(self) -> Path | None:
         """Where the launch card's skills snapshot is kept; None without an OMH home, or when `session.create` named
@@ -2243,8 +2354,9 @@ class App(ModesMixin, AgentViewMixin):
         self.turn_streamed, self.turn_shown = 0.0, 0
         cwd = as_text(info.get("cwd")) if isinstance(info, dict) else ""
         self.transcript.cwd = cwd or str(self._create_params().get("cwd", ""))
-        self.turn_pending = bool(result.get("running"))
-        self.interrupting = self.queue_held = False  # both were about the session being left
+        self.turn_pending = resumed_running(result)
+        self.authority_epoch = result.get("authority_epoch")
+        self.interrupting = self.queue_held = self.stop_asked = False  # all were about the session being left
         self.sent_now = []  # steers into the session being left: theirs to settle
         self._settle_unread_steers(STEER_TAKEN)
         self.turn_unknown = None  # the drift watch was for a turn of the session being left
@@ -2616,8 +2728,11 @@ class App(ModesMixin, AgentViewMixin):
         steer: SteerBlock | None = None,
         seconds: float | None = None,
         compressing: bool = False,
+        switch: str = "",
+        switch_seq: int = 0,
     ) -> int | None:
-        """Send `method`; the request id it went as, None when nothing went out."""
+        """Send `method`; the request id it went as, None when nothing went out. `switch` and `switch_seq` mark a
+        session switch's call (`_switching`)."""
         try:
             request_id = self.client.request(method, params)
         except GatewayUnavailable as error:
@@ -2632,7 +2747,7 @@ class App(ModesMixin, AgentViewMixin):
             seconds = min(held + seconds, HELD_ANSWER_SECONDS)
         self.pending[request_id] = _Pending(
             method, on_result, on_error, self.clock() + seconds, self.transcript.command, on_expiry, steer, seconds,
-            compressing,
+            compressing, switch, switch_seq,
         )
         return request_id
 
@@ -2649,7 +2764,15 @@ class App(ModesMixin, AgentViewMixin):
         now = self.clock()
         for request_id, call in [(rid, call) for rid, call in self.pending.items() if now >= call.expires_at]:
             del self.pending[request_id]
-            self.client.forget(request_id)
+            if call.switch and call.method in ("session.resume", "session.create"):
+                self.switch_targets.pop(call.switch_seq, None)  # it is over: what it opens late is nobody's target
+                # Still listened for, quietly, one more wait: a session it opens late is closed again (`_stale_switch`).
+                self.pending[request_id] = _Pending(
+                    call.method, lambda result: self._stale_switch(-1, result), lambda error: True,
+                    now + call.seconds, None, lambda seconds: None, seconds=call.seconds,
+                )
+            else:
+                self.client.forget(request_id)
             if call.on_expiry is not None:
                 call.on_expiry(call.seconds)
             elif call.method not in QUIET_EXPIRY_METHODS:
@@ -2660,6 +2783,7 @@ class App(ModesMixin, AgentViewMixin):
                     with self._for_command(call.command):  # under the echo of the command it was made for
                         self.transcript.add_notice(notice, NOTICE_WARN)
             self._command_call_done(call)
+        self._settle_switch_held()
 
     @contextmanager
     def _for_command(self, command: CommandBlock | None) -> Iterator[None]:
@@ -2706,7 +2830,9 @@ class App(ModesMixin, AgentViewMixin):
 
         The open question and the ones waiting behind it close unanswered,
         since the gateway that asked is gone; a running turn is reported lost
-        and never sent again; the queue is held as after an interrupt
+        and never sent again, except on a shared gateway, where it may still
+        run: it stays open while the resume's `running` says so, and is said
+        over otherwise; the queue is held as after an interrupt
         (`_hold_queue`). At most `RESPAWN_LIMIT` respawns in
         `RESPAWN_WINDOW_SECONDS`, each saying so; a gateway that does not start
         again, or exits before it resumed the session, uses one and the next is
@@ -2728,8 +2854,20 @@ class App(ModesMixin, AgentViewMixin):
         """
         reason, self.respawn_reason = self.respawn_reason, ""
         stored = self.stored_id
+        busy = self._busy()
+        # On a shared gateway the turn may run on without this child: it stays open until the resume says (`running`).
+        kept = busy and self.shared_gateway
+        # What the kept turn carries over a reconnect: its clock, and a stop the person already asked for.
+        epoch, since, waited, stopping = self.authority_epoch, self.busy_since, self.turn_waited, (
+            self.interrupting, self.stop_asked)
+
+        def lose(why: str) -> None:
+            if kept:  # the live block goes to the scrollback as it stands
+                self.transcript.fail_turn(TURN_LEFT_RUNNING_NOTICE)
+            self._lose_gateway(why)
+
         self._close_questions_unanswered()
-        if self._busy():
+        if busy and not kept:
             self.transcript.fail_turn(TURN_LOST_NOTICE)
         self.turn_pending = self.interrupting = False
         self._lose_roster()  # they stay in the agent view, so the HUD's agents block does not take them up instead
@@ -2749,7 +2887,7 @@ class App(ModesMixin, AgentViewMixin):
             now = self.clock()
             self.respawned_at = [at for at in self.respawned_at if now - at < RESPAWN_WINDOW_SECONDS]
             if not stored or len(self.respawned_at) >= RESPAWN_LIMIT:
-                self._lose_gateway(reason)
+                lose(reason)
                 return
             self.respawned_at.append(now)
             self.transcript.add_notice(RESPAWN_NOTICE.format(
@@ -2768,18 +2906,19 @@ class App(ModesMixin, AgentViewMixin):
                 self.client = self.make_client(gateway_spawn(self.environ), first_id=first_id)
                 self.client.start(ready_timeout=respawn_ready_seconds(self.environ), cancel=self._respawn_cancel)
             except GatewayCancelled:  # `start` reaped its child
-                self._lose_gateway(RESPAWN_LEFT_REASON)
+                lose(RESPAWN_LEFT_REASON)
                 return
             except (GatewayUnavailable, GatewayCallError) as error:
                 reason = f"the new Hermes gateway did not start ({error})"
                 continue
             try:
                 result = self.client.call(
-                    "session.resume", {"session_id": stored, "cols": self.size[0]}, cancel=self._respawn_cancel
+                    "session.resume", {"session_id": stored, "cols": self.size[0]}, timeout=CALL_ANSWER_SECONDS,
+                    cancel=self._respawn_cancel,
                 )
             except GatewayCancelled:
                 self.client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
-                self._lose_gateway(RESPAWN_LEFT_REASON)
+                lose(RESPAWN_LEFT_REASON)
                 return
             except GatewayUnavailable as error:  # it exited too: the next attempt resumes the same session
                 self.client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
@@ -2787,16 +2926,101 @@ class App(ModesMixin, AgentViewMixin):
                 continue
             except (GatewayCallError, GatewayTimeout) as error:
                 self.client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
-                self._lose_gateway(f"the new Hermes gateway did not resume session {stored} ({error})")
+                lose(f"the new Hermes gateway did not resume session {stored} ({error})")
                 return
             break
         self.wake = self.client.wake_fd()
+        self.inbound_at = self.clock()
         self._adopt_session(result, fallback_stored=stored)
-        self.transcript.add_notice(RESPAWNED_NOTICE.format(session=self.stored_id), NOTICE_OK)
-        self._hold_queue(RESPAWNED_WHY)
+        # A different authority epoch is a gateway that started again, whatever the child's exit said: the turn went
+        # with the old one. The same epoch (or none said) is the same gateway over a new connection.
+        restarted = epoch is not None and self.authority_epoch is not None and epoch != self.authority_epoch
+        reconnected = self.shared_gateway and not restarted
+        if kept and restarted:
+            self.transcript.fail_turn(TURN_LOST_NOTICE)
+        elif kept and not self.turn_pending:  # the resume says it no longer runs: it ended while this screen was away
+            self.transcript.fail_turn(TURN_ENDED_UNSEEN_NOTICE)
+        elif kept:  # it runs on: the same turn, so the same clock and the stop the person asked for
+            self.busy_since, self.turn_waited = since, waited
+            self.interrupting, self.stop_asked = stopping
+        self.transcript.add_notice(
+            (RECONNECTED_NOTICE if reconnected else RESPAWNED_NOTICE).format(session=self.stored_id), NOTICE_OK
+        )
+        self._hold_queue(RECONNECTED_WHY if reconnected else RESPAWNED_WHY)
         self._request("config.get", {"key": "full"}, self._take_settings, self._on_settings_refused)
         self._refresh_catalog()
         self._redeliver(result.get("open_requests"))
+
+    def _resume_after_gap(self) -> None:
+        """`session.replay_gap`: the shared gateway dropped this screen's subscription for falling behind, and sends
+        nothing more for the session until it is resumed. Resume it again, as Hermes' own TUI does (`resumeById`): the
+        resume subscribes anew, and its `running` says whether the turn the screen shows is still going.
+
+        Hermes subscribes the new view before it answers, so the turn's own events can arrive ahead of the answer:
+        the answer's `running` is then older than they are, and they decide (`lifecycle_seen`)."""
+        sid, seen = self.sid, self.lifecycle_seen
+        self._request(
+            "session.resume",
+            {"session_id": self.stored_id or sid, "cols": self.size[0]},
+            lambda result: self._on_gap_resumed(sid, seen, result),
+            lambda error: self._on_gap_resume_refused(sid, error),
+            lambda seconds: self._on_gap_resume_refused(sid, {"message": REPLAY_GAP_UNANSWERED.format(seconds=seconds)}),
+        )
+
+    def _on_gap_resumed(self, sid: str, seen: int, result: dict[str, Any]) -> None:
+        """The turn shown runs on while the answer says it runs; one that ended unseen closes, and the queue goes on.
+
+        An answer for a session since left leaves the view it opened (`session.close`, a detach on the shared
+        gateway). One that names a newer id for the session (a compression's tip) moves the screen to that id."""
+        answered = as_text(result.get("session_id"))
+        if sid != self.sid:
+            if answered and answered != self.sid:
+                self._request("session.close", {"session_id": answered}, lambda _result: None, lambda _error: True)
+            return
+        if answered and answered != self.sid:
+            # Hermes moved the session to a newer id (a compression's tip). Its events under that id were dropped until
+            # now, so neither `seen` nor `running` says what the shown turn did: it closes, and its later events show.
+            self.sid = answered
+            if self._busy():
+                if self.transcript.running:
+                    self.transcript.fail_turn(TURN_MOVED_NOTICE.format(session=answered))
+                else:
+                    self.transcript.add_notice(TURN_MOVED_NOTICE.format(session=answered), NOTICE_WARN)
+                self.turn_pending = False
+                if not resumed_running(result):
+                    self._turn_ended()
+            return
+        if self.lifecycle_seen != seen:  # the turn's own events came after the resume went out: they are newer
+            return
+        running = resumed_running(result)
+        if self._busy() and not running:
+            if self.transcript.running:
+                self.transcript.fail_turn(TURN_ENDED_UNSEEN_NOTICE)
+            else:
+                self.transcript.add_notice(TURN_ENDED_UNSEEN_NOTICE, NOTICE_WARN)
+            self.turn_pending = False
+            self._turn_ended()
+        elif running and not self._busy():  # a turn started while the events did not arrive
+            self.turn_pending = True
+            self.busy_since = self.clock()
+        elif running:  # it runs on, but a tool's end may have been lost with the events
+            self.transcript.lose_running_tools()
+
+    def _on_gap_resume_refused(self, sid: str, error: dict[str, Any]) -> bool:
+        """No new view, so nothing more of the session comes: its turn closes as one this screen lost, and the queue
+        waits for the person, as when a respawn gives up."""
+        if sid != self.sid:
+            return True
+        reason = as_text(error.get("message")).strip() or "refused"
+        self.transcript.add_notice(REPLAY_GAP_REFUSED_NOTICE.format(reason=reason), NOTICE_WARN)
+        if self._busy():
+            if self.transcript.running:
+                self.transcript.fail_turn(TURN_LEFT_RUNNING_NOTICE)
+            else:
+                self.transcript.add_notice(TURN_LEFT_RUNNING_NOTICE, NOTICE_WARN)
+            self.turn_pending = self.interrupting = self.stop_asked = False
+            self._hold_queue(REPLAY_GAP_WHY)
+        return True
 
     def _settle_lost_calls(self) -> None:
         """The calls the exited gateway never answered, settled now rather than when their wait runs out.
@@ -2818,6 +3042,7 @@ class App(ModesMixin, AgentViewMixin):
                 self.transcript.close_command(call.command)
         if steers:
             self.transcript.add_notice(STEER_LOST_NOTICE.format(count=steers, s="" if steers == 1 else "s"), NOTICE_WARN)
+        self._settle_switch_held()
 
     def _respawn_cancel(self) -> bool:
         """Asked while a respawn waits on the new gateway: True once the person pressed Ctrl+C or Ctrl+D, or the
@@ -2880,6 +3105,7 @@ class App(ModesMixin, AgentViewMixin):
     def _drain_gateway(self) -> None:
         for item in self.client.poll():
             self.dirty = True
+            self.inbound_at = self.clock()
             if isinstance(item, Event):
                 self._on_event(item)
             elif isinstance(item, ServerRequest):
@@ -2887,7 +3113,11 @@ class App(ModesMixin, AgentViewMixin):
             elif isinstance(item, Response):
                 self._on_response(item)
             elif isinstance(item, GatewayExited):
-                self._gateway_gone(f"the Hermes gateway exited (code {item.returncode})", item.returncode)
+                if self.shared_gateway and item.returncode == 1:  # the attach child's connection ended, not the gateway
+                    reason = CONNECTION_DROPPED_REASON + (TURN_MAY_RUN if self._busy() else "")
+                else:
+                    reason = f"the Hermes gateway exited (code {item.returncode})"
+                self._gateway_gone(reason, item.returncode)
             if self.exit_code is not None or self.respawn_reason:
                 return
 
@@ -2900,6 +3130,7 @@ class App(ModesMixin, AgentViewMixin):
                 self._answer_call(pending, response)
         finally:
             self._command_call_done(pending)
+            self._settle_switch_held()
 
     def _answer_call(self, pending: _Pending, response: Response) -> None:
         if response.error is None:
@@ -2934,11 +3165,18 @@ class App(ModesMixin, AgentViewMixin):
         if event.type in contract.SIDE_ANSWER_EVENTS and event.session_id != self.sid:
             self._side_answer(event.type, payload, event.session_id)  # a /bg started before a switch: never dropped
             return
+        if event.type == "skills.changed":  # gateway-wide (no session): a skill was installed or removed elsewhere
+            # A burst asks once: a catalog still unanswered is read after the change that was broadcast before it.
+            if self.sid and not any(call.method == "commands.catalog" for call in self.pending.values()):
+                self._refresh_catalog()
+            return
         if not event.type.startswith(contract.GATEWAY_SCOPED_EVENT_PREFIX) and event.session_id != self.sid:
             return
         self._watch_turn(event.type)
         if event.type == "session.info":
             self._on_session_info(payload)
+        elif event.type == "session.replay_gap":
+            self._resume_after_gap()
         elif event.type == "session.usage":
             self._take_usage(payload.get("usage"))
         elif event.type == "connection.request":
@@ -2975,8 +3213,12 @@ class App(ModesMixin, AgentViewMixin):
             if isinstance(payload, Mapping):  # a new frame for an agent: its tail is asked for again
                 self.tail_misses.pop(as_text(payload.get("subagent_id")), None)
         else:
+            if event.type in ("message.start", "message.complete"):
+                self.lifecycle_seen += 1
             if event.type == "message.complete":  # before the reply closes: a steer row goes where it went before
                 self._settle_steers_at_turn_end()
+                # A stop the person asked for in no way (Esc, `/stop`, a prompt in busy mode `interrupt`) is Hermes' own.
+                self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
             self.transcript.apply(event)
             self._track_sent_now(event.type)
             self._count_streamed(event.type, payload)
@@ -3408,6 +3650,9 @@ class App(ModesMixin, AgentViewMixin):
                 self._next_question(question)
             return
         front = self._front_picker() if self.slot is None else None
+        if front is None and self.slot is None and self.picker is not None and self._picker_arms(event):
+            self._picker_key(event)
+            return
         if front is not None:  # the one drawn (`_slot_lines`) has the keys
             if front is self.launch_picker:
                 self._launch_picker_key(event)
@@ -3469,20 +3714,22 @@ class App(ModesMixin, AgentViewMixin):
     def _front_picker(self) -> object | None:
         """The picker (or the history search) that is drawn and has the keys: one order for both, so a key never goes
         to a picker the screen does not show."""
-        for picker in (self.launch_picker, self.picker, self.search, self.rewind_picker, self.model_picker):
+        session = self.picker if self.picker is not None and not self.picker.waiting else None  # one waiting has none
+        for picker in (self.launch_picker, session, self.search, self.rewind_picker, self.model_picker):
             if picker is not None:
                 return picker
         return None
 
     def _picker_taken(self, command: str) -> bool:
         """Whether a list `command` asked for came while another picker is open: it then does not open, and says so."""
-        if self._front_picker() is None:
+        if self._front_picker() is None and self.picker is None:  # a session picker waiting for typing is open too
             return False
         self.transcript.add_aside(NoticeBlock(LIST_TAKEN_NOTICE.format(command=command), NOTICE_WARN))
         return True
 
     def _ask_list(
         self, kind: str, command: str, method: str, params: dict[str, Any], on_result: Callable[[dict[str, Any]], None],
+        on_error: Callable[[dict[str, Any]], bool] | None = None, on_expiry: Callable[[float], None] | None = None,
     ) -> None:
         """Ask Hermes for `/model`'s or `/rewind`'s list (`kind`) for this session, once: while one is on its way,
         asking again with the same params sends nothing, asking with others says it is loading (`command` names it),
@@ -3495,10 +3742,14 @@ class App(ModesMixin, AgentViewMixin):
             if asked[0] != params:
                 self.transcript.add_aside(NoticeBlock(LIST_LOADING_NOTICE.format(command=command), NOTICE_WARN))
             return
-        request_id = self._request(method, params, on_result)
+        request_id = self._request(method, params, on_result, on_error, on_expiry)
         call = self.pending.get(request_id) if request_id is not None else None
         if call is not None:
             self.list_asked[(kind, self.sid)] = (params, call)
+
+    def _list_waiting_kind(self) -> str:
+        """The kind of the list `_ask_list` made for this session that is still out (`LIST_WAIT_LINES`); "" for none."""
+        return next((kind for kind in ("sessions", "model", "rewind") if self._list_waiting(kind)), "")
 
     def _list_waiting(self, kind: str = "") -> bool:
         """Whether a list call `_ask_list` made for this session (of `kind`, or of either) is still out."""
@@ -4490,6 +4741,12 @@ class App(ModesMixin, AgentViewMixin):
         if not text.strip():
             return
         seen = shown or text
+        if self._switching():  # never into the session being left: what goes to a session goes where the switch lands
+            invocation = None if seen.startswith(SHELL_PREFIX) else parse_slash(seen)
+            local = invocation is not None and invocation.command is not None and invocation.command.route == LOCAL
+            if not local:
+                self.switch_held.append(SwitchHeld(text, shown, tuple(chips), hold, tuple(images)))
+                return
         if seen.startswith(SHELL_PREFIX):
             self._keep_images(images, SHELL_PREFIX + " line")
             self._shell_line(text, seen)  # a chip holds no `!` of its own, so the sent text starts with it too
@@ -4550,6 +4807,7 @@ class App(ModesMixin, AgentViewMixin):
             self.queued.append(QueuedLine(text, shown, typed, chips=chips, notice=notice, images=images))
             return
         if self._busy():  # the busy mode sends it into the running turn: no turn starts
+            self.stop_asked = self.stop_asked or self.busy_mode == BUSY_INTERRUPT
             self._submit_prompt(text, shown, notice=notice, images=images)
         else:
             self._start_turn(typed or text, lambda: self._submit_prompt(text, shown, notice=notice, images=images),
@@ -4851,6 +5109,7 @@ class App(ModesMixin, AgentViewMixin):
         prompt that goes waits for that check before its turn starts (`_start_turn`).
         """
         self.tell_turn_runs = False  # an open tell field now says what to do after this turn, not in it
+        self.stop_asked = False  # whichever way the turn ended, a stop asked for it is spent
         self.turns_ended += 1
         # A turn ended before Hermes admitted it (refused, cancelled while the agent built) left what was staged for
         # it: detached. After `message.start` nothing is left (`_claimed` emptied `staged`).
@@ -4895,6 +5154,9 @@ class App(ModesMixin, AgentViewMixin):
         Which it is comes from the entry's `shell`, never from its text. A held queue waits (`_hold_queue`), and so
         does one behind a prompt held for the default-model check (`starting`): that prompt starts the next turn.
         """
+        if self.queued and self._switching():  # the session it was queued in is being left
+            self.switch_drain_due = True
+            return
         if self.queued and self.sid and not self.queue_held and self.starting is None:
             line = self.queued.popleft()
             if line.shell:
@@ -5295,6 +5557,8 @@ class App(ModesMixin, AgentViewMixin):
             if held and self.shared_gateway:  # the stdio entry refuses a turn-back as busy instead
                 self.transcript.add_notice(COMPRESSION_HELD_NOTICE.format(name=invocation.name))
             echo = self.transcript.command
+            if invocation.name.lower() == "stop" and self._busy():
+                self.stop_asked = True  # the turn it interrupts ends `interrupted`: the person's stop
             sid = self.sid
             self._request(
                 "slash.exec",
@@ -5610,16 +5874,26 @@ class App(ModesMixin, AgentViewMixin):
         if not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             return
-        self._request("session.create", self._create_params(), self._on_new_session, self._on_create_refused)
+        self.switch_counter += 1
+        seq = self.switch_seq = self.switch_counter
+        self._request(
+            "session.create", self._create_params(), lambda result: self._on_new_session(result, seq),
+            lambda error: self._on_create_refused(error, seq), switch=NEW_SESSION_LINE, switch_seq=seq,
+        )
 
-    def _on_new_session(self, result: dict[str, Any]) -> None:
+    def _on_new_session(self, result: dict[str, Any], seq: int | None = None) -> None:
+        if seq is not None and self._stale_switch(seq, result):
+            return
         declined = self._enter_session(result)
         self.banner_record = self._banner_record(result, resumed="")  # a later full redraw names this session
         self.transcript.add_notice(f"New session {self.stored_id}.")
         self._notice_declined(declined)
         self._refresh_catalog()
+        self._carry_switch_held()
 
-    def _on_create_refused(self, error: dict[str, Any]) -> bool:
+    def _on_create_refused(self, error: dict[str, Any], seq: int | None = None) -> bool:
+        if seq is not None and seq != self.switch_seq:
+            return True
         message = as_text(error.get("message")) or "refused"
         self.transcript.add_notice(
             f"Could not start a new session ({error.get('code')}): {message}. Still in {self.stored_id}.", NOTICE_WARN
@@ -5649,7 +5923,14 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(SIDE_ANSWERS_LEFT_NOTICE.format(tasks=", ".join(left), session=old), NOTICE_WARN)
             for task in left:
                 del self.side_tasks[task]
-        self.queued.clear()
+        if self.queued:  # what waited for the old session's turn is not sent into the new one
+            back = list(self.queued)
+            self.queued.clear()
+            for line in back:
+                self._give_back(line.typed or line.text, line.images)
+            self.transcript.add_notice(
+                QUEUE_BACK_SWITCH_NOTICE.format(count=len(back), s="" if len(back) == 1 else "s"), NOTICE_WARN
+            )
         self.sticky = ""
         self.flushed_since_prompt = 0  # rows printed above the region from the last prompt's first row on
         # Hermes held nothing of a draft's or the queue's images; what it staged for a prompt went with that session.
@@ -5672,20 +5953,122 @@ class App(ModesMixin, AgentViewMixin):
     # ── switching sessions ──
 
     def _sessions(self, arg: str) -> None:
+        self.list_asked_draft = self.composer.text
         if not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
         elif arg:
             self._switch_session(arg, by_title=True)
-        else:
-            self._request("session.list", {"limit": SESSION_LIST_LIMIT}, self._open_session_picker)
+        else:  # once per session while it is out (`_ask_list`)
+            self._ask_list("sessions", "/resume", "session.list", {"limit": SESSION_LIST_LIMIT},
+                           self._open_session_picker, self._session_list_refused, self._session_list_unanswered)
+
+    def _sessions_loading(self) -> bool:
+        """Whether a bare `/sessions` list call is out (`SESSIONS_LOADING_LINE`)."""
+        return self._list_waiting("sessions")
 
     def _open_session_picker(self, result: dict[str, Any]) -> None:
+        """The picker over the listed sessions, its filter empty: what was typed while the list was out stays in the
+        composer, which comes back as it was when the picker closes. With none listed, a notice; bare /sessions has
+        no echo, so during a turn it is drawn under what runs."""
+        if self.picker is not None:  # one already open keeps its highlight and filter
+            return
         rows = session_rows(result)
-        if rows:
-            self.picker = SessionPicker(rows, current=self.stored_id)
-            self._settle_list()
-        else:  # bare /sessions has no echo: during a turn this waits under what runs
-            self.transcript.add_aside(NoticeBlock("Hermes has no stored sessions to switch to."))
+        if not rows:
+            self.transcript.add_aside(NoticeBlock(SESSIONS_EMPTY_NOTICE))
+        elif not self._picker_taken("/resume"):
+            self._open_picker(rows)
+
+    def _open_picker(self, rows: list[SessionRow], query: str = "") -> None:
+        """Open the session picker over `rows`. When the person typed into the composer while its list was out, it
+        waits (`SessionPicker.waiting`): typing stays in the composer, and only a key of the picker's own, or an
+        empty composer, hands it the keys (`_picker_arms`)."""
+        draft = self.composer.text
+        typed = bool(draft) and self.list_asked_draft is not None and draft != self.list_asked_draft
+        self.list_asked_draft = None
+        self.picker = SessionPicker(rows, current=self.stored_id, query=query, waiting=typed)
+        self._settle_list()
+
+    def _picker_arms(self, event: Key | Paste) -> bool:
+        """Whether `event` hands a waiting session picker the keys: Up, Down, Esc or Ctrl+C. Anything else stays the
+        composer's, Enter included (it sends what was typed), and so does the next prompt typed after it: a prompt
+        being typed never becomes the filter, as its filter row says."""
+        picker = self.picker
+        if picker is None:
+            return False
+        own = isinstance(event, Key) and (
+            event.name in (UP, DOWN, ESCAPE) or (event.name == CHAR and event.ctrl and event.char == "c")
+        )
+        if own:
+            picker.waiting = False
+            return True
+        return False
+
+    def _switching(self) -> str:
+        """What the newest session switch still out says (`SWITCHING_LINE`, `NEW_SESSION_LINE`); "" with none out.
+        Read from the open calls, so it ends with the switch's last call however that ends."""
+        return next((call.switch for call in reversed(self.pending.values())
+                     if call.switch and call.switch_seq == self.switch_seq), "")
+
+    def _switch_line(self, cols: int) -> Line | None:
+        said = self._switching()
+        if not said:
+            return None
+        count = len(self.switch_held)
+        if count:
+            said += SWITCH_HELD_SUFFIX.format(count=count, s="" if count == 1 else "s", verb="s" if count == 1 else "")
+        return truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(said, self.theme.muted)), cols)
+
+    def _settle_switch_held(self) -> None:
+        """Once no switch is out: what was sent for a switch that opened nothing goes back to the composer, with a
+        notice; what older switches said is said, in the transcript the last one left; the queue held still while
+        it was out goes on."""
+        if self._switching():
+            return
+        out = {call.switch_seq for call in self.pending.values() if call.switch}
+        self.switch_targets = {seq: target for seq, target in self.switch_targets.items() if seq in out}
+        held, self.switch_held = self.switch_held, []
+        for line in held:
+            self._give_back(line.text, line.images)
+        if held:
+            self.transcript.add_notice(
+                SWITCH_HELD_BACK_NOTICE.format(count=len(held), s="" if len(held) == 1 else "s"), NOTICE_WARN
+            )
+        said, self.switch_notices = self.switch_notices, []
+        for notice in said:
+            self.transcript.add_notice(notice, NOTICE_WARN)
+        if self.switch_drain_due:
+            self.switch_drain_due = False
+            if not self._busy():
+                self._drain_queue()
+
+    def _carry_switch_held(self) -> None:
+        """What was sent while the switch waited, submitted again in order in the session it opened (a prompt, a plan
+        mode prompt, a slash or skill command, a `!` line), as if sent there."""
+        held, self.switch_held = self.switch_held, []
+        for line in held:
+            self._submit(line.text, line.shown, line.chips, line.hold, line.images)
+
+    def _stale_switch(self, seq: int, result: Mapping[str, Any]) -> bool:
+        """Whether `seq` is an older switch than the newest; a session its answer opened is closed again, saying so."""
+        if seq == self.switch_seq:
+            return False
+        opened = as_text(result.get("session_id"))
+        stored = as_text(result.get("stored_session_id")) or opened
+        # Never the session the TUI is in, nor the one the newest switch goes to: on Hermes' shared gateway a
+        # session's live id is its stored id, so a close there would detach the view the newest switch opens.
+        newest = self.switch_targets.get(self.switch_seq, "")
+        if opened and opened != self.sid and newest not in (opened, stored):
+            self._request("session.close", {"session_id": opened}, lambda result: None, lambda error: True)
+            self.switch_notices.append(STALE_SWITCH_NOTICE.format(session=stored))
+        return True
+
+    def _session_list_refused(self, error: dict[str, Any]) -> bool:
+        reason = (as_text(error.get("message")) or "refused").strip().rstrip(".")
+        self.transcript.add_aside(NoticeBlock(SESSIONS_REFUSED_NOTICE.format(reason=reason), NOTICE_WARN))
+        return True
+
+    def _session_list_unanswered(self, seconds: float) -> None:
+        self.transcript.add_aside(NoticeBlock(SESSIONS_UNANSWERED_NOTICE.format(seconds=seconds), NOTICE_WARN))
 
     def _picker_key(self, event: Key | Paste) -> None:
         if self.picker is None:
@@ -5693,25 +6076,42 @@ class App(ModesMixin, AgentViewMixin):
         action = self.picker.handle_key(event)
         if action is None:
             return
-        self.picker = None
+        rows, self.picker = self.picker.rows, None
         if action.kind == PICK:
-            self._switch_session(action.session_id)
+            label = next((row.label for row in rows if row.id == action.session_id), "")
+            self._switch_session(action.session_id, label=label)
 
-    def _switch_session(self, target: str, notice: str = "", by_title: bool = False) -> None:
+    def _switch_session(
+        self, target: str, notice: str = "", by_title: bool = False, label: str = "", seq: int | None = None,
+    ) -> None:
         """Resume `target` (a stored id or an exact title); the current session closes once that worked, and `notice`
         is said on the redrawn screen. `by_title`: the person typed `target`, so a refusal may be a title the gateway
-        does not resolve (`_on_resume_refused`)."""
-        if target == self.stored_id:
+        does not resolve (`_on_resume_refused`). `label` names it on the switching row. `seq` continues the switch
+        it numbers (a title lookup's, whose callers drop it once a newer one was asked for); None asks for a new one,
+        or makes one already out to the same target the newest again."""
+        if seq is None:
+            out = {call.switch_seq for call in self.pending.values() if call.switch}
+            again = next((number for number in sorted(out, reverse=True) if self.switch_targets.get(number) == target),
+                         None)
+            if again is not None:  # that switch is out already: it is the newest again, and nothing more is sent
+                self.switch_seq = again
+                return
+            self.switch_counter += 1
+            seq = self.switch_seq = self.switch_counter
+        self.switch_targets[seq] = target  # a title lookup's resolved id replaces the title it was asked by
+        if target == self.stored_id:  # a switch back: any other still out is stale, and what it held goes here
             self.transcript.add_notice(f"Already in session {target}.")
+            self._carry_switch_held()
             return
         self._request(
             "session.resume",
             {"session_id": target, "cols": self.size[0]},
-            lambda result: self._on_session_resumed(target, result, notice),
-            lambda error: self._on_resume_refused(target, error, notice, by_title),
+            lambda result: self._on_session_resumed(target, result, notice, seq),
+            lambda error: self._on_resume_refused(target, error, notice, by_title, seq),
+            switch=SWITCHING_LINE.format(target=label or target), switch_seq=seq,
         )
 
-    def _on_session_resumed(self, target: str, result: dict[str, Any], notice: str = "") -> None:
+    def _on_session_resumed(self, target: str, result: dict[str, Any], notice: str = "", seq: int = 0) -> None:
         """Leave the old session and redraw the screen as the resumed one.
 
         Hermes resolves a title or a compressed ancestor to the session
@@ -5719,8 +6119,11 @@ class App(ModesMixin, AgentViewMixin):
         nothing is left, declined or reset, so the yolo the TUI set there is
         still the TUI's to turn off.
         """
+        if self._stale_switch(seq, result):
+            return
         if as_text(result.get("session_id")) == self.sid:
             self.transcript.add_notice(f"Already in session {self.stored_id}.")
+            self._carry_switch_held()  # what was sent meanwhile goes in the session it is in
             return
         declined = self._enter_session(result, fallback_stored=target)
         self._draw_history(result.get("messages"))
@@ -5731,16 +6134,23 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(notice)
         self._redeliver(result.get("open_requests"))
         self._refresh_catalog()  # its workspace may hold project-local skills the last one did not
+        self._carry_switch_held()
 
-    def _on_resume_refused(self, target: str, error: dict[str, Any], notice: str = "", by_title: bool = False) -> bool:
+    def _on_resume_refused(
+        self, target: str, error: dict[str, Any], notice: str = "", by_title: bool = False, seq: int | None = None,
+    ) -> bool:
         """Say the refusal, and stay. A typed target the owner refused (`RESUME_REFUSED`) is looked up as a title
         first (`_resume_looked_up`): Hermes' shared gateway resumes ids only, where its stdio entry also took an exact
-        title."""
+        title. A refusal of a switch older than the newest (`seq`) says nothing."""
+        if seq is not None and seq != self.switch_seq:
+            return True
         if by_title and error.get("code") == RESUME_REFUSED:
+            seq = self.switch_seq
             self._request(
                 "session.list", {"title": target},
-                lambda result: self._resume_looked_up(target, error, result, notice),
-                lambda _lookup: self._scan_titles(target, error, notice),
+                lambda result: self._resume_looked_up(target, error, result, notice, seq),
+                lambda _lookup: self._scan_titles(target, error, notice, seq),
+                switch=SWITCHING_LINE.format(target=target), switch_seq=seq,
             )
             return True
         message = as_text(error.get("message")) or "refused"
@@ -5749,7 +6159,9 @@ class App(ModesMixin, AgentViewMixin):
         )
         return True
 
-    def _resume_looked_up(self, target: str, error: dict[str, Any], result: dict[str, Any], notice: str) -> None:
+    def _resume_looked_up(
+        self, target: str, error: dict[str, Any], result: dict[str, Any], notice: str, seq: int = 0,
+    ) -> None:
         """The owner's exact-title lookup (`session.list` `title`, over its whole store), after it refused `target`
         as an id.
 
@@ -5759,6 +6171,8 @@ class App(ModesMixin, AgentViewMixin):
         a gateway that ignored `title` and listed as usual included, goes to
         the listing's scan (`_scan_titles`).
         """
+        if seq != self.switch_seq:
+            return
         rows = [row for row in result.get("sessions") or [] if isinstance(row, dict)]
         if any(target in (row.get("id"), row.get("resolved_id")) for row in rows):
             self._on_resume_refused(target, error)
@@ -5766,19 +6180,24 @@ class App(ModesMixin, AgentViewMixin):
         titled = [row for row in rows if target in (row.get("title"), row.get("root_title"))]
         found = as_text(titled[0].get("resolved_id")) or as_text(titled[0].get("id")) if len(titled) == 1 else ""
         if found:
-            self._switch_session(found, notice)
+            self._switch_session(found, notice, label=target, seq=seq)
         else:
-            self._scan_titles(target, error, notice)
+            self._scan_titles(target, error, notice, seq)
 
-    def _scan_titles(self, target: str, error: dict[str, Any], notice: str) -> None:
+    def _scan_titles(self, target: str, error: dict[str, Any], notice: str, seq: int = 0) -> None:
         """Look `target` up among the listed sessions (`_resume_titled`); a listing that fails says the refusal."""
+        if seq != self.switch_seq:
+            return
         self._request(
             "session.list", {"limit": SESSION_LIST_LIMIT},
-            lambda result: self._resume_titled(target, error, result, notice),
-            lambda _listing: self._on_resume_refused(target, error),
+            lambda result: self._resume_titled(target, error, result, notice, seq),
+            lambda _listing: self._on_resume_refused(target, error, seq=seq),
+            switch=SWITCHING_LINE.format(target=target), switch_seq=seq,
         )
 
-    def _resume_titled(self, title: str, error: dict[str, Any], result: dict[str, Any], notice: str) -> None:
+    def _resume_titled(
+        self, title: str, error: dict[str, Any], result: dict[str, Any], notice: str, seq: int = 0,
+    ) -> None:
         """`title` against the listed sessions, after the owner refused it as an id and found no one session with it.
 
         A listed session with that id was refused as itself, so the refusal
@@ -5789,6 +6208,8 @@ class App(ModesMixin, AgentViewMixin):
         session listed at all, or none matching a target shaped as a session id
         (`SESSION_ID_SHAPE`), the refusal is said.
         """
+        if seq != self.switch_seq:
+            return
         rows = session_rows(result)
         if not rows or any(row.id == title for row in rows):
             self._on_resume_refused(title, error)
@@ -5797,15 +6218,14 @@ class App(ModesMixin, AgentViewMixin):
             row for row in rows if row.title.casefold() == title.casefold()
         ]
         if len(matched) == 1:
-            self._switch_session(matched[0].id, notice)
+            self._switch_session(matched[0].id, notice, label=matched[0].label, seq=seq)
             return
         if not matched and SESSION_ID_SHAPE.fullmatch(title):
             self._on_resume_refused(title, error)
             return
         said = TITLE_SHARED_NOTICE if matched else TITLE_UNKNOWN_NOTICE
         self.transcript.add_notice(said.format(count=len(matched), title=title), NOTICE_WARN)
-        self.picker = SessionPicker(rows, current=self.stored_id, query=title)
-        self._settle_list()
+        self._open_picker(rows, query=title)
 
     # ── attachments ──
 
@@ -7025,7 +7445,8 @@ class App(ModesMixin, AgentViewMixin):
         if self.slot is not None:
             return self.slot.picking
         return (
-            self.picker is not None or self.rewind_picker is not None or self.model_picker is not None
+            (self.picker is not None and not self.picker.waiting) or self.rewind_picker is not None
+            or self.model_picker is not None
             or self.search is not None or self.launch_picker is not None
         )
 
@@ -7240,6 +7661,9 @@ class App(ModesMixin, AgentViewMixin):
             # tokens, the time, and the interrupt last; only a verb too long for the row alone is cut at the edge.
             row: Line = lead
             status = (Span(f" · {said}", self.theme.faint),) if said else ()
+            silent = now - max(self.inbound_at, self.busy_since or now)
+            if silent >= GATEWAY_SILENCE_SECONDS and not self.transcript.tool_running():  # in place of the status
+                status = (Span(f" · {GATEWAY_SILENCE.format(seconds=int(silent))}", self.theme.warn),)
             for facts, tail in (((elapsed, written, effort, interrupt), status), ((elapsed, written, effort, interrupt), ()),
                                 ((elapsed, written, interrupt), ()), ((elapsed, interrupt), ()), ((interrupt,), ())):
                 joined = " · ".join(fact for fact in facts if fact)
@@ -7304,7 +7728,7 @@ class App(ModesMixin, AgentViewMixin):
         if front is not None and front is self.launch_picker:
             shown = [] if self.card_state == CARD_LIVE else self._launch_preview(cols)
             return self.launch_picker.lines(cols, self.theme, cap, self._launch_swatches(), shown)
-        if front is not None and front is self.picker:
+        if self.picker is not None and (front is self.picker or front is None):  # one waiting is drawn too
             return self.picker.lines(cols, self.theme, cap, self.wall_clock())
         if front is not None and front is self.search:
             return self.search.lines(cols, self.theme, cap)
@@ -7323,8 +7747,13 @@ class App(ModesMixin, AgentViewMixin):
         below = SEND_NOW_HINT.format(key=SEND_NOW_KEYS[self.keyboard_protocol]) if send_now else ""
         found = self._image_wait_line(cols)
         waiting = [found] if found is not None else []
-        if self._list_waiting():  # `/model`'s or `/rewind`'s list is on its way
-            waiting.append(truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(LIST_WAIT_LINE, self.theme.muted)), cols))
+        switching = self._switch_line(cols)
+        if switching is not None:
+            waiting.append(switching)
+        loading = self._list_waiting_kind()
+        if loading:  # `/resume`'s, `/model`'s or `/rewind`'s list is on its way
+            line = LIST_WAIT_LINES.get(loading, LIST_WAIT_LINE)
+            waiting.append(truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(line, self.theme.muted)), cols))
         queue = queue_lines([line.shown or line.text for line in self.queued], cols, cap - len(waiting), self.theme,
                             hint, below)
         taken = len(waiting) + len(queue)
@@ -7681,12 +8110,23 @@ def _run(
             app.client = client
             wait.phase = LAUNCH_OPENING
             try:
-                app.startup(wait=wait, timeout=max(wait.left(), SESSION_CALL_SECONDS))
+                app.startup(wait=wait, timeout=max(wait.left(), CALL_ANSWER_SECONDS))
                 break
             except GatewayUnavailable as error:
                 failure: GatewayUnavailable = error
             except (GatewayCallError, GatewayTimeout) as error:
                 wait.done()
+                resume = environ.get("HERMES_TUI_RESUME", "")
+                if resume and isinstance(error, GatewayCallError) and not error.drift:
+                    # Hermes refused this session as itself (not_found, permission_denied, ...): its own TUI, the
+                    # fallback, would print the code and open a new session in its place without a word (#143907).
+                    refusal = {"code": error.code, "message": error.message}
+                    sentence = LAUNCH_RESUME_SENTENCES.get(refusal_reason(refusal)) or refusal_sentence(refusal)
+                    _say(stderr, RESUME_REFUSED_AT_LAUNCH.format(
+                        session=resume, code=error.code, message=error.message.strip() or "refused",
+                        sentence=f" {sentence}" if sentence else "",
+                    ))
+                    return 1
                 if isinstance(error, GatewayTimeout):
                     _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
                 _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {error}")
