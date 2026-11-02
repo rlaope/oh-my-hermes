@@ -858,6 +858,50 @@ class HookManifestTests(unittest.TestCase):
         # stays a meta cue under the edit request, as on origin/main.
         self.assertEqual(awareness_route_hint("OMH 라우팅이 이상해, 고쳐줘")["intent_class"], "meta_discussion")
 
+    def test_find_out_reads_its_own_object_and_any_unlisted_choice_stays_a_complaint(self) -> None:
+        # #2485 review: deciding by closed lists of workflows and message words
+        # before "find out" lost complaints. A bare cause question refers back
+        # to the clause before it (as on origin/main), and only a concrete
+        # artifact as what OMH chose makes "find out <clause>" the user's task.
+        reports = (
+            "OMH picked the staging config. Find out why",
+            "OMH chose the quarterly-okr skill for a smiley; find out what it matched on",
+            "OMH picked the slide-maker for my 'brb', find out what it keyed on",
+            "OMH clearly picked ralplan for a typo",
+            "OMH obviously misrouted my thank-you",
+        )
+        for message in reports:
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+
+        tasks = (
+            "OMH clearly selected the old lockfile. Find out which packages it pins",
+            "OMH obviously picked the right config file; now deploy it",
+        )
+        for message in tasks:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_korean_edit_request_after_a_setting_sentence_gets_no_workflow_learning_hint(self) -> None:
+        # #2485 review: the Korean code-edit lead split clauses only on commas,
+        # so an edit after a period or a line break was no lead, and 리팩터링 /
+        # 마이그레이션 were no edit predicates; with "OMH가" naming OMH, 라우터 and
+        # 테스트 then read as meta cues.
+        cases = (
+            "OMH가 설정 파일을 골랐어. 재시도 횟수 수정해줘",
+            "OMH는 파서 모듈을 골랐어.\n테스트 코드 리팩터링해줘",
+            "OMH가 라우터 파일을 골랐어. 라우터 테스트 마이그레이션해줘",
+        )
+        for message in cases:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
     def test_coding_request_on_omh_vocabulary_words_gets_no_workflow_learning_hint(self) -> None:
         # #2455 follow-up: under a code-edit lead ("OMH: migrate", "using OMH,
         # rename"), vocabulary / terminology are what the edit acts on.

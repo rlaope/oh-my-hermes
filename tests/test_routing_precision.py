@@ -91,8 +91,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # two tasks on what OMH selected or picked, and a Korean test request,
         # and eight messages where a command follows what OMH chose.
         # A find-out task after what OMH picked, an OMH terminology loader
-        # migration and a Korean task after what OMH picked stay off it too.
-        self.assertEqual(payload["summary"]["case_count"], 1325)
+        # migration and a Korean task after what OMH picked stay off it too,
+        # and so does a Korean edit request after a setting sentence.
+        self.assertEqual(payload["summary"]["case_count"], 1326)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])

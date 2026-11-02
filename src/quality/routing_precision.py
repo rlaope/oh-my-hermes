@@ -9473,6 +9473,17 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "file_or_text",
         "workflow-learning",
     ),
+    # #2485 review: a Korean edit request after a setting sentence (a period
+    # between them) leads with a code edit, so 라우터 is the user's code. The
+    # PR's first head dispatched workflow-learning here.
+    RoutingPrecisionCase(
+        "korean-edit-request-after-setting-sentence-is-a-coding-request",
+        "A Korean migration request after what OMH picked is a coding request, not workflow meta discussion",
+        "OMH가 라우터 파일을 골랐어. 라우터 테스트 마이그레이션해줘",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
 )
 
 

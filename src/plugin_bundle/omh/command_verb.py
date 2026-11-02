@@ -32,6 +32,11 @@ _TOOL_NAMES = frozenset({"omh", "oh-my-hermes", "hermes"})
 KOREAN_CODE_EDIT_PREDICATES = frozenset(
     {"고쳐", "수정", "추가", "작성", "구현", "개선", "삭제", "제거", "변경", "바꿔", "넣어", "만들어"}
 )
+# The Korean side of `_CODE_EDIT_LEAD_VERBS`: "리팩터링해줘", "마이그레이션해줘".
+# Only `leads_with_code_edit` reads them.
+_KOREAN_CODE_EDIT_LEAD_PREDICATES = KOREAN_CODE_EDIT_PREDICATES | frozenset(
+    {"리팩터링", "리팩토링", "마이그레이션", "재작성"}
+)
 
 # The verbs a clause opens with when it gives the user's own command ("now run
 # it on staging", "copy them to the backup folder"), after the courtesy openers
@@ -63,9 +68,11 @@ _COMMAND_INTRODUCERS = frozenset({"to", "me", "and", "then"})
 # who, then the verb: "use OMH to fix", "have Hermes add", "ask OMH to update".
 _DELEGATING_LEADS = frozenset({"use", "have", "let", "ask", "get", "tell"})
 _WORD = re.compile(r"[a-z0-9#][a-z0-9#+.-]*")
-# Where a Korean message's clauses part: a comma, or an aside in parentheses
-# ("코드 고쳐줘 (OMH 세션)", "테스트 작성해줘, OMH 환경이야").
-_KOREAN_CLAUSE_BREAK = re.compile(r"[,，(（)）]")
+# Where a Korean message's clauses part: a comma, an aside in parentheses
+# ("코드 고쳐줘 (OMH 세션)", "테스트 작성해줘, OMH 환경이야"), a line break, or
+# the end of a sentence ("OMH가 설정 파일을 골랐어. 타임아웃 수정해줘"). A
+# sentence keeps its own mark, so "결제해줘?" stays a question, not a request.
+_KOREAN_CLAUSE_BREAK = re.compile(r"[,，(（)）\n]|(?<=[.!?。])")
 
 
 def ordered_words(text: str) -> list[str]:
@@ -105,6 +112,45 @@ def gives_command(clause: str) -> bool:
     return bool(words) and words[0] in REQUEST_COMMAND_VERBS or leads_with_code_edit(clause)
 
 
+# What "find out" asks when it has no clause of its own and so refers to the
+# clause before it: "find out why", "find out the reason", "find out what
+# happened (there)", "find out what caused it", "find out how that happened".
+_FIND_OUT_BARE_QUESTIONS = frozenset(
+    {
+        ("why",), ("reason",), ("reasons",), ("the", "reason"), ("the", "reasons"),
+        ("what", "happened"), ("what", "went", "wrong"),
+        ("what", "caused", "it"), ("what", "caused", "that"), ("what", "caused", "this"),
+        ("how", "it", "happened"), ("how", "that", "happened"), ("how", "this", "happened"),
+    }
+)
+_FIND_OUT_BARE_TAILS = frozenset({"there", "here", "again", "for", "me", "us"})
+
+
+def find_out_refers_back(clause: str) -> bool:
+    """`clause` is "find out" with only a bare cause question, about the clause before it ("find out why").
+
+    False for "find out" with its own content clause ("find out which keys
+    are unused", "find out whether it retries"), and for a clause that is not
+    "find out" at all.
+    """
+    rest = _after_find_out(clause)
+    if rest is None:
+        return False
+    while rest and rest[-1] in _FIND_OUT_BARE_TAILS:
+        rest = rest[:-1]
+    return tuple(rest) in _FIND_OUT_BARE_QUESTIONS
+
+
+def _after_find_out(clause: str) -> list[str] | None:
+    words = command_words(clause)
+    if words[:1] != ["find"]:
+        return None
+    rest = words[1:]
+    while rest[:1] and rest[0] in _INQUIRY_SKIPPED:
+        rest = rest[1:]
+    return rest[1:] if rest[:1] == ["out"] else None
+
+
 def asks_to_find_out(clause: str) -> bool:
     """`clause` (folded) opens with "find out" ("find out which keys are unused", "can you find me out why").
 
@@ -112,13 +158,7 @@ def asks_to_find_out(clause: str) -> bool:
     did or gives the user's own task depends on the clause before it, which the
     workflow-intent classifier reads.
     """
-    words = command_words(clause)
-    if words[:1] != ["find"]:
-        return False
-    rest = words[1:]
-    while rest[:1] and rest[0] in _INQUIRY_SKIPPED:
-        rest = rest[1:]
-    return rest[:1] == ["out"]
+    return _after_find_out(clause) is not None
 
 
 def inquiry_why_lead_length(words: list[str]) -> int:
@@ -178,7 +218,7 @@ def leads_with_code_edit(normalized_query: str) -> bool:
                 if word in _CODE_EDIT_LEAD_VERBS:
                     return True
     return any(
-        (request := korean_request(clause)) is not None and request.predicate in KOREAN_CODE_EDIT_PREDICATES
+        (request := korean_request(clause)) is not None and request.predicate in _KOREAN_CODE_EDIT_LEAD_PREDICATES
         for clause in _KOREAN_CLAUSE_BREAK.split(normalized_query)
         if clause.strip()
     )

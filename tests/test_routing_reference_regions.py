@@ -5,6 +5,7 @@ from typing import ClassVar
 import unittest
 
 from omh.plugin_bundle.omh.awareness import awareness_route_hint
+from omh.plugin_bundle.omh.command_verb import leads_with_code_edit
 from omh.routing.chat import explicit_skill_invocation, public_chat_route_payload, route_chat_message
 from omh.routing.intent import classify_workflow_intent
 from omh.routing.policy import explicit_skill_invocation as policy_invocation
@@ -160,6 +161,26 @@ class RoutingReferenceRegionTests(unittest.TestCase):
         for message in ("OMH가 내 메시지를 code-review로 보냈어", "어제 보낸 메시지를 찾아줘"):
             with self.subTest(message=message):
                 self.assertNotIn("보내", classify_workflow_intent(message).execution_cues)
+
+    def test_tool_lead_counts_as_a_code_edit_only_before_an_edit_verb(self) -> None:
+        # "using OMH, <edit>" opens with a code edit (#2455 follow-up); with any
+        # other verb it does not, so the message keeps its own reading.
+        for message in ("using omh, refactor the parser", "with omh, rename the loader", "omh: migrate the cache"):
+            with self.subTest(message=message):
+                self.assertTrue(leads_with_code_edit(message))
+        for message in ("using omh, explain the parser", "with omh, summarize the module", "with the omh router, fix it"):
+            with self.subTest(message=message):
+                self.assertFalse(leads_with_code_edit(message))
+
+    def test_korean_code_edit_lead_reads_each_sentence(self) -> None:
+        # #2485 review: an edit request after a period or a line break is a
+        # lead; a question mark keeps an echoed request a question.
+        for message in ("omh가 파일을 골랐어. 수정해줘", "omh가 파일을 골랐어.\n리팩터링해줘", "omh는 모듈을 골랐어! 마이그레이션해줘"):
+            with self.subTest(message=message):
+                self.assertTrue(leads_with_code_edit(message))
+        for message in ("omh가 파일을 골랐어. 수정해줘?", "omh가 파일을 골랐어. 왜 그랬어?"):
+            with self.subTest(message=message):
+                self.assertFalse(leads_with_code_edit(message))
 
     def test_direct_invocation_keeps_precedence_and_apostrophes(self) -> None:
         for message in (

@@ -18,10 +18,17 @@ import re
 from types import MappingProxyType
 import unicodedata
 
-from .command_verb import asks_to_find_out, gives_command, inquiry_why_lead_length, leads_with_code_edit, ordered_words
+from .command_verb import (
+    asks_to_find_out,
+    find_out_refers_back,
+    gives_command,
+    inquiry_why_lead_length,
+    leads_with_code_edit,
+    ordered_words,
+)
 from .display_names import canonical_display_mentions
 from .reference_regions import executable_routing_text, reference_regions
-from .text_fold import contains_cue_phrase, normalized_phrase, routing_terms, routing_tokens
+from .text_fold import TOKEN_RE, contains_cue_phrase, normalized_phrase, routing_terms, routing_tokens
 
 
 WORKFLOW_VOCABULARY = (
@@ -183,17 +190,36 @@ _OMH_BEHAVIOUR_FILLERS = frozenset(
 )
 # Who did it, before the product name: "Hermes with OMH chose the wrong skill".
 _OMH_BEHAVIOUR_HOST_LEAD = ("hermes", "with")
-# A behaviour clause is a complaint about routing, not a setting for the
-# user's own task, when it says so: a routing verb ("OMH routed my typo"), a
-# word that judges the choice ("the wrong skill", "again", "instead"), what
-# OMH routes to (a workflow name, a skill, a lane), or the user's own message
-# as the object ("OMH ignored my request"). "OMH picked the config" says none
-# of these: the config is the setting, and "find out which keys are unused" is
-# the task (#2454).
+# A behaviour clause is a setting for the user's own task, not a complaint,
+# only when what OMH picked, chose, selected or ignored is a concrete artifact
+# of the user's work: "OMH picked the config. Find out which keys are unused"
+# (#2454). Anything else OMH chose -- a workflow or skill under any name, the
+# user's message in any words -- keeps the complaint, as does a routing verb
+# ("OMH routed my typo") or a word that judges the choice ("wrong", "again").
+# The list names artifacts, so a word it lacks reads as on origin/main.
+_OMH_CHOICE_VERBS = frozenset({"picked", "chose", "chosen", "selected", "ignored"})
 _OMH_COMPLAINT_WORDS = frozenset({"wrong", "wrongly", "again", "instead"})
-_OMH_ROUTING_TARGET_NOUNS = frozenset({"skill", "skills", "workflow", "workflows", "lane", "lanes"})
-_USER_MESSAGE_NOUNS = frozenset(
-    {"message", "messages", "question", "questions", "request", "requests", "typo", "greeting", "note", "reply", "prompt", "thanks"}
+_CONCRETE_ARTIFACT_NOUNS = frozenset(
+    {
+        "file", "files", "folder", "folders", "directory", "directories", "dir", "path", "paths", "repo",
+        "repository", "config", "configs", "configuration", "module", "modules", "package", "packages",
+        "library", "libraries", "dependency", "dependencies", "function", "functions", "method", "methods",
+        "class", "classes", "script", "scripts", "test", "tests", "suite", "fixture", "fixtures", "schema",
+        "schemas", "table", "tables", "column", "columns", "index", "query", "queries", "database", "db",
+        "migration", "migrations", "endpoint", "endpoints", "api", "client", "clients", "server", "servers",
+        "service", "services", "handler", "handlers", "middleware", "helper", "helpers", "util", "utils",
+        "parser", "parsers", "lexer", "loader", "loaders", "layer", "layers", "cache", "logger", "port",
+        "ports", "image", "images", "container", "containers", "dockerfile", "runner", "runners", "job",
+        "jobs", "pipeline", "pipelines", "branch", "branches", "commit", "commits", "version", "versions",
+        "level", "levels", "key", "keys", "variable", "variables", "field", "fields", "line", "lines",
+        "template", "templates", "yaml", "yml", "json", "toml", "manifest", "lockfile", "binary", "build",
+        "worker", "workers", "queue", "queues", "bucket", "buckets", "region", "env",
+    }
+)
+# Where the object of a choice verb ends: "OMH picked the config for staging".
+_OBJECT_ENDS = frozenset(
+    {"for", "when", "while", "after", "before", "because", "since", "instead", "over", "to", "into", "in", "on",
+     "at", "with", "without", "from", "as", "though", "although", "even", "despite"}
 )
 _OMH_BEHAVIOUR_OPINION_LEADS = (
     ("i", "think"), ("i", "feel", "like"), ("i", "guess"), ("i", "noticed"),
@@ -732,12 +758,15 @@ def _reports_omh_behaviour(normalized: str) -> bool:
     reports = [clause for clause in clauses if _clause_reports_omh_behaviour(ordered_words(clause))]
     if not reports or any(gives_command(clause) for clause in clauses):
         return False
-    # "find out ..." asks about a complaint ("OMH routed my typo to ultrawork,
-    # find out what bug made it do that") and gives the task after a setting
-    # ("OMH picked the config. Find out which keys are unused"). The clause
-    # before it decides, not the words after it: two word lists after "find
-    # out" each lost reports on a fresh held-out set (#2454).
-    if any(asks_to_find_out(clause) for clause in clauses):
+    # "find out" with only a bare cause question ("find out why", "find out
+    # what happened") is about the clause before it, as on origin/main. With a
+    # clause of its own, it asks about a complaint ("OMH routed my typo to
+    # ultrawork, find out what bug made it do that") and gives the task after
+    # a setting ("OMH picked the config. Find out which keys are unused"); the
+    # clause before it decides. Two word lists after "find out" each lost
+    # reports on a fresh held-out set (#2454).
+    own_clause = [clause for clause in clauses if asks_to_find_out(clause) and not find_out_refers_back(clause)]
+    if own_clause:
         return any(_clause_complains(clause) for clause in reports)
     return True
 
@@ -745,18 +774,23 @@ def _reports_omh_behaviour(normalized: str) -> bool:
 def _clause_complains(clause: str) -> bool:
     """A behaviour clause that complains about OMH's routing rather than setting up the user's task.
 
-    A why-question about it, a routing verb, a judging word, a routing target
-    (a skill, lane or workflow, or a workflow by name), or the user's own
-    message as the object.
+    A why-question about it, a routing verb, a judging word, or a chosen
+    object that is not a concrete artifact (`_CONCRETE_ARTIFACT_NOUNS`).
     """
     words = ordered_words(clause)
-    if inquiry_why_lead_length(words):
+    if inquiry_why_lead_length(words) or set(words) & (_OMH_ROUTING_VERBS | _OMH_COMPLAINT_WORDS):
         return True
-    if set(words) & (_OMH_ROUTING_VERBS | _OMH_COMPLAINT_WORDS | _OMH_ROUTING_TARGET_NOUNS):
-        return True
-    if any(words[i] == "my" and words[i + 1] in _USER_MESSAGE_NOUNS for i in range(len(words) - 1)):
-        return True
-    return bool(_mentioned_workflows(clause, set(routing_tokens(clause, stopwords=set()))))
+    return not set(_chosen_object(words)) & _CONCRETE_ARTIFACT_NOUNS
+
+
+def _chosen_object(words: list[str]) -> list[str]:
+    """The words after the clause's first choice verb, up to a preposition or the clause's end."""
+    for index, word in enumerate(words):
+        if word in _OMH_CHOICE_VERBS:
+            rest = words[index + 1 :]
+            end = next((i for i, w in enumerate(rest) if w in _OBJECT_ENDS), len(rest))
+            return rest[:end]
+    return []
 
 
 def _clause_reports_omh_behaviour(words: list[str]) -> bool:
@@ -994,7 +1028,7 @@ def _korean_omh_surface_cues(normalized: str) -> tuple[str, ...]:
     A word in between, or a particle on the name ("OMH가 라우터 파일을"), makes
     the cue the user's own code.
     """
-    words = re.findall(r"[^\W_]+", unicodedata.normalize("NFC", normalized))
+    words = TOKEN_RE.findall(unicodedata.normalize("NFC", normalized))
     return tuple(
         cue
         for cue in _KOREAN_OMH_SURFACE_CUES

@@ -961,8 +961,9 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # after what OMH chose are requests too (+4).
             # #2455 follow-up: "find out" after a neutral setting, an OMH
             # terminology loader migration and a Korean task after what OMH
-            # picked stay off workflow-learning (+3).
-            expected=1325,
+            # picked stay off workflow-learning (+3). Its review: a Korean
+            # edit request after a setting sentence stays off it too (+1).
+            expected=1326,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

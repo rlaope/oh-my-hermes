@@ -13,10 +13,12 @@ All notable changes will be documented here.
   why-question about what OMH did ("Show me why OMH picked them"), and OMH
   ignoring the request. The other way round, "OMH picked the config. Find out
   which keys are unused" no longer gets the ~1.1k-char workflow-learning hint:
-  the clause before "find out" decides, a complaint ("OMH routed my typo to
-  ultrawork") or a setting ("OMH picked the config"). Nor does a code edit
-  led by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
-  module. The 12 router misses #2455 listed are fixed on the route hint; no
+  "find out" with a question of its own is the user's task when what OMH
+  picked is a concrete artifact (a config, a file, a module), while a bare
+  "find out why" still asks about what OMH did. Nor does a code edit led by
+  "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
+  module, or a Korean edit request after a period or a line break
+  ("OMH가 설정 파일을 골랐어. 리팩터링해줘"). The 12 router misses #2455 listed are fixed on the route hint; no
   message in the earlier held-out sets that passed before fails now.
 
 - **The info line's badge carries the version.** It reads
