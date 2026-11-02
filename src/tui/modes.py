@@ -206,18 +206,25 @@ def info_line(
     background: Sequence[Line] = (),
     right_spare: int = 0,
     editing: str = "",
+    notice: Sequence[Line] = (),
 ) -> Line:
     """The one line under the composer. Its left side is `badge` (`[⚚ OMH Native]`), `branch` (the git branch),
     `background` (the background-process row: `background.running_forms`), the mode's label (accept, plan, a shell
     line), the agent count and the keys that matter now, `BADGE_GAP` cells between the first four; its right side is
     the first of `right` (the title, the model, the context, the effort) that leaves room for the left side whole.
-    `badge`, `branch`, `background` and `right` are forms, longest first.
+    `badge`, `branch`, `background` and `right` are forms, longest first. `notice` is the update notice's forms,
+    longest first (`v4.0.5 available · omh update`, then `↑ v4.0.5`), said `BADGE_GAP` cells after the badge's first
+    form, the one with the version: the longest only while the rest of the line is whole, the shortest for as long as
+    the version is shown.
 
-    What gives way, in order: the first `right_spare` of the right
-    side's forms (the session's title), then the background-process row
-    (through its forms, then whole), then the rest of the right side
-    (through its forms, then whole), then the badge's version (`badge`'s
-    second form), then the branch's name (`branch`'s shorter forms), then
+    What gives way, in order: the update notice's long form, first, since
+    it is the least live of it all (owner, 2026-11-02), leaving its short
+    form; then the first `right_spare` of the right side's forms (the
+    session's title), then the background-process row (through its forms,
+    then whole), then the rest of the right side (through its forms, then
+    whole), then the badge's version and the notice's short form together
+    (`badge`'s second form), then the branch's name (`branch`'s shorter
+    forms), then
     the badge (to `[⚚ OMH]`, then `⚚`, then none),
     then the branch; the label, the agent count and what the next key
     does (a question's or a picker's way out) keep their words until all
@@ -282,9 +289,15 @@ def info_line(
     badges, branches, rows = list(badge) or [()], list(branch) or [()], list(background) or [()]
     sides = [*(form for form in right if form), ()]
     spare = min(right_spare, len(sides) - 1)
-    tries = [(badges[0], branches[0], rows[0], side) for side in sides[: spare + 1]]
-    tries += [(badges[0], branches[0], form, sides[spare]) for form in [*rows[1:], ()]]
-    tries += [(badges[0], branches[0], (), side) for side in sides[spare + 1 :]]
+    # The notice's long form only while everything else is whole: it is the first thing to go. Its short form stays
+    # beside the version, and goes with it.
+    said = [form for form in notice if form] if badges[0] else []
+    noticed = (*badges[0], Span(" " * BADGE_GAP), *said[0]) if said else ()
+    versioned = (*badges[0], Span(" " * BADGE_GAP), *said[-1]) if len(said) > 1 else badges[0]
+    tries = [(noticed, branches[0], rows[0], sides[0])] if noticed else []
+    tries += [(versioned, branches[0], rows[0], side) for side in sides[: spare + 1]]
+    tries += [(versioned, branches[0], form, sides[spare]) for form in [*rows[1:], ()]]
+    tries += [(versioned, branches[0], (), side) for side in sides[spare + 1 :]]
     unversioned = badges[1] if len(badges) > 1 else badges[0]  # the version goes before the branch name is cut
     tries += [(unversioned, form, (), ()) for form in branches]
     tries += [(form, branches[-1], (), ()) for form in [*badges[2:], ()]]

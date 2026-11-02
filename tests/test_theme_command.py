@@ -133,6 +133,52 @@ class ThemeCommandTests(unittest.TestCase):
             self.assertEqual(json.loads(run_cli([*homes, "theme", "glow", "on"])[1])["glow"], "on")
             self.assertEqual(self._hermes_home_entries(tmp), [])
 
+    def test_update_check_off_is_saved_beside_the_theme_and_the_tui_reads_it(self) -> None:
+        from omh.tui.update_notice_switch import update_check_off
+
+        with TemporaryDirectory() as tmp:
+            homes = self._homes(tmp)
+            payload = json.loads(run_cli([*homes, "theme", "update-check"])[1])
+            self.assertEqual((payload["update-check"], payload["source"]), ("on", "default"))
+            run_cli([*homes, "theme", "use", "amber"])
+            payload = json.loads(run_cli([*homes, "theme", "update-check", "off"])[1])
+            self.assertEqual(payload["schema_version"], "omh_theme_update_check/v1")
+            self.assertEqual((payload["update-check"], payload["previous"], payload["changed"]), ("off", "on", True))
+            self.assertEqual(
+                json.loads(self._store(tmp).read_text(encoding="utf-8")),
+                {"schema_version": THEME_STORE_SCHEMA, "theme": "amber", "update_check": "off"},
+            )
+            self.assertTrue(update_check_off({}, (Path(tmp) / "omh").resolve()))
+            self.assertEqual(json.loads(run_cli([*homes, "theme", "update-check", "on"])[1])["update-check"], "on")
+            self.assertFalse(update_check_off({}, (Path(tmp) / "omh").resolve()))
+            self.assertEqual(self._hermes_home_entries(tmp), [])
+
+    def test_update_check_reports_what_is_in_effect_and_what_holds_it_off(self) -> None:
+        from unittest import mock
+
+        from omh.maintenance.update_check import write_update_check_policy
+        from omh.system.paths import OmhPaths
+
+        with TemporaryDirectory() as tmp:
+            homes = self._homes(tmp)
+            omh_home = (Path(tmp) / "omh").resolve()
+            with mock.patch.dict("os.environ", {"OMH_TUI_UPDATE_CHECK": "1"}):
+                payload = json.loads(run_cli([*homes, "theme", "update-check"])[1])
+                self.assertEqual((payload["update-check"], payload["effective"], payload["held_off_by"]),
+                                 ("on", "on", None))
+                write_update_check_policy(OmhPaths(omh_home=omh_home, hermes_home=Path(tmp) / "hermes"), mode="off")
+                payload = json.loads(run_cli([*homes, "theme", "update-check", "on"])[1])
+                self.assertEqual((payload["update-check"], payload["effective"], payload["held_off_by"]),
+                                 ("on", "off", "omh update-check off"))
+                _status, out, _err = run_cli([*homes, "theme", "update-check"], output_json=False)
+                self.assertIn("In effect: off, held off by `omh update-check off` although on is saved.", out)
+                payload = json.loads(run_cli([*homes, "theme", "update-check", "off"])[1])
+                self.assertEqual((payload["effective"], payload["held_off_by"]), ("off", None))  # its own choice
+            with mock.patch.dict("os.environ", {"OMH_TUI_UPDATE_CHECK": "0"}):
+                payload = json.loads(run_cli([*homes, "theme", "update-check", "on"])[1])
+                self.assertEqual((payload["update-check"], payload["effective"], payload["held_off_by"]),
+                                 ("on", "off", "OMH_TUI_UPDATE_CHECK=0"))
+
     def test_glow_takes_only_on_or_off(self) -> None:
         with TemporaryDirectory() as tmp:
             status, _out, _err = run_cli([*self._homes(tmp), "theme", "glow", "maybe"])

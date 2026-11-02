@@ -883,10 +883,11 @@ PARSING_ONLY_URLLIB_REQUEST_FILES: dict[str, str] = {
 }
 
 
-# The one opt-in network client in `src/`. Its whole surface is these names:
-# a request object, an opener, the HTTPS handler, and the redirect handler it
-# subclasses to refuse every 3xx. Each entry must still import from
-# `urllib.request` (stale check), and only its named importer may import it.
+# The scoped network clients in `src/`. Their whole surface is these names:
+# a request object, an opener, the HTTPS handler, and the redirect handler each
+# subclasses to refuse a 3xx (every one for Jev; any off the registry's host for
+# the update notice). Each entry must still import from `urllib.request` (stale
+# check), and only its named importer may import it.
 NETWORK_CLIENT_BRIDGES: dict[str, str] = {
     "src/plugin_bundle/omh/jev_ask_client.py": (
         "omh_jev_ask -- the one opt-in bridge that POSTs typed questions to Jev with the user's own "
@@ -896,10 +897,19 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "redirects refused, bounded both ways; "
         "documented as a scoped exception in CLAUDE.md and AGENTS.md."
     ),
+    "src/tui/update_notice.py": (
+        "the OMH TUI's update notice -- GETs npm's `latest` oh-my-hermes version from the one fixed host "
+        "registry.npmjs.org, on a background thread, at most once a day per OMH home (cached under "
+        "`<omh_home>/tui/update-check.json`); HTTPS only, a 3 s socket timeout, redirects off that host refused, the "
+        "reply bounded and only its version kept; sends nothing about the person; off with "
+        "OMH_TUI_UPDATE_CHECK=0, `omh theme update-check off`, or `omh update-check` stored as off; documented "
+        "as a scoped exception in CLAUDE.md and AGENTS.md."
+    ),
 }
 NETWORK_CLIENT_BRIDGE_URLLIB_NAMES = frozenset({"Request", "build_opener", "HTTPSHandler", "HTTPRedirectHandler"})
 NETWORK_CLIENT_BRIDGE_IMPORTERS: dict[str, frozenset[str]] = {
     "src/plugin_bundle/omh/jev_ask_client.py": frozenset({"src/plugin_bundle/omh/tools/jev_ask_tool.py"}),
+    "src/tui/update_notice.py": frozenset({"src/tui/app.py"}),
 }
 
 

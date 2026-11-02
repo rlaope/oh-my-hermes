@@ -13,7 +13,8 @@ the report only, because the TUI falls back to an OMH palette it names
 `omh theme use <name>` is the one writer of the theme, and running it is the
 consent; `omh theme glow on|off` writes the OMH TUI's working glow choice in
 the same record, as `/glow` inside the TUI does, and `omh theme wallpaper
-on|off` its living wallpaper choice, as `/wallpaper` does.
+on|off` its living wallpaper choice, as `/wallpaper` does, and `omh theme
+update-check on|off` whether the TUI asks npm once a day for a newer release.
 The TUI reads the choice when it opens, so a change lands on the next
 `omh`; `/theme` inside the TUI switches the open session only.
 
@@ -25,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import os
 from pathlib import Path
 import sys
 from typing import NamedTuple
@@ -39,12 +41,14 @@ from ..skin_pack import (
     effective_theme,
     read_glow_choice,
     read_theme_choice,
+    read_update_check_choice,
     read_wallpaper_choice,
     theme_for_name,
     theme_names,
     theme_store_path,
     write_glow_choice,
     write_theme_choice,
+    write_update_check_choice,
     write_wallpaper_choice,
 )
 from .common import _paths, _print_json, _wants_json
@@ -61,6 +65,7 @@ THEME_STATUS_SCHEMA_VERSION = "omh_theme_status/v2"
 THEME_REPAIR_SCHEMA_VERSION = "omh_theme_repair/v2"
 THEME_GLOW_SCHEMA_VERSION = "omh_theme_glow/v1"
 THEME_WALLPAPER_SCHEMA_VERSION = "omh_theme_wallpaper/v1"
+THEME_UPDATE_CHECK_SCHEMA_VERSION = "omh_theme_update_check/v1"
 
 
 def _language(args: argparse.Namespace) -> str:
@@ -205,6 +210,11 @@ def cmd_theme_wallpaper(args: argparse.Namespace) -> int:
     return _theme_switch(args, WALLPAPER_SWITCH)
 
 
+def cmd_theme_update_check(args: argparse.Namespace) -> int:
+    """`omh theme update-check on|off` saves whether the OMH TUI asks npm for a newer release; alone, reports it."""
+    return _theme_switch(args, UPDATE_CHECK_SWITCH)
+
+
 class _Switch(NamedTuple):
     """An on/off choice of the OMH TUI kept in the theme record: its key, schema, words, and store functions."""
 
@@ -215,6 +225,8 @@ class _Switch(NamedTuple):
     read: Callable[[Path], bool | None]
     write: Callable[[Path, bool], Path]
     next_line: str
+    # What holds it off whatever is saved, for this home and terminal ("" when nothing does); None: nothing can.
+    held_off: Callable[[Path], str] | None = None
 
 
 GLOW_SWITCH = _Switch(
@@ -230,6 +242,25 @@ WALLPAPER_SWITCH = _Switch(
     "sets the terminal's background to the launch look's colour and puts the terminal's own back when it exits. "
     "OMH_TUI_WALLPAPER=0 holds it off in one terminal.",
 )
+
+
+def _update_notice_held_off(omh_home: Path) -> str:
+    """What holds the update notice off beyond its own saved choice: the terminal or `omh update-check` off."""
+    from ..tui.update_notice_switch import HELD_BY_THEME, held_off_by
+
+    held = held_off_by(os.environ, omh_home)
+    return "" if held == HELD_BY_THEME else held  # the saved choice itself is the `update-check` field
+
+
+UPDATE_CHECK_SWITCH = _Switch(
+    "update-check", THEME_UPDATE_CHECK_SCHEMA_VERSION, "OMH TUI update notice", "the update notice",
+    read_update_check_choice, write_update_check_choice,
+    "The OMH TUI reads it when it opens: while it is on, the TUI asks registry.npmjs.org at most once a day for "
+    "the latest oh-my-hermes version and names a newer one on the info line. OMH_TUI_UPDATE_CHECK=0 holds it off "
+    "in one terminal, and `omh update-check` set to off holds it off too.",
+    _update_notice_held_off,
+)
+
 
 
 def _theme_switch(args: argparse.Namespace, switch: _Switch) -> int:
@@ -258,6 +289,9 @@ def _theme_switch(args: argparse.Namespace, switch: _Switch) -> int:
                 raise OmhError(
                     f"could not save {switch.noun} to {theme_store_path(paths.omh_home)}: {exc}") from exc
             payload["changed"] = True
+    if switch.held_off is not None:
+        held = switch.held_off(paths.omh_home)
+        payload.update({"effective": "off" if held else payload[switch.key], "held_off_by": held or None})
     if _wants_json(args):
         _print_json(payload)
     else:
@@ -276,6 +310,9 @@ def _print_switch(payload: dict[str, object], requested: str, switch: _Switch) -
         print(f"  Saved {state} in {payload.get('store_path', '')}.")
     else:
         print(f"  No change: {state} is already saved.")
+    if payload.get("held_off_by"):
+        print(f"  In effect: off, held off by `{payload['held_off_by']}`"
+              f"{' although on is saved' if state == 'on' else ''}.")
     print(_color("Next", "1;32", use_color))
     print(f"  {switch.next_line}")
 
@@ -397,6 +434,15 @@ def _add_theme_commands(sub) -> None:
     theme_wallpaper.add_argument("state", nargs="?", help="on or off; omit to show the saved choice.")
     _add_shared_theme_arguments(theme_wallpaper, "Print the machine-readable wallpaper payload.")
     theme_wallpaper.set_defaults(func=cmd_theme_wallpaper)
+
+    theme_update_check = theme_sub.add_parser(
+        "update-check",
+        help="Turn the OMH TUI's update notice (a once-a-day read of the latest version on npm) on or off; alone, "
+             "show it.",
+    )
+    theme_update_check.add_argument("state", nargs="?", help="on or off; omit to show the saved choice.")
+    _add_shared_theme_arguments(theme_update_check, "Print the machine-readable update-check payload.")
+    theme_update_check.set_defaults(func=cmd_theme_update_check)
 
     theme_repair = theme_sub.add_parser("repair", help="Retired: OMH installs no skin files into Hermes. Does nothing.")
     theme_repair.add_argument("name", nargs="?", help="Accepted for compatibility and ignored.")

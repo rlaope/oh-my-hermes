@@ -80,6 +80,8 @@ COMMANDS: tuple[SlashCommand, ...] = (
     # The terminal's own commands.
     SlashCommand("help", LOCAL, "Show commands"),
     SlashCommand("keys", LOCAL, "List every key (also ? on an empty composer)", echo_bare=False),
+    SlashCommand("whats-new", LOCAL, "Show what changed in this version of OMH (also said once after an update)",
+                 ("whatsnew",)),
     SlashCommand("quit", LOCAL, "Leave the OMH TUI", ("exit",)),
     SlashCommand("new", LOCAL, "Start a new session", ("clear", "reset")),
     SlashCommand("sessions", LOCAL, "Switch to a stored session (a picker; an id or exact title after it switches)",

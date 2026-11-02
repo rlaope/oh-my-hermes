@@ -4,6 +4,35 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`/resume` always answers, and `omh --resume` opens the picker.** A bare
+  `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
+  list, which during a turn can take a while. Now `Loading sessions…` stands
+  where the picker opens, keys typed meanwhile stay in the composer (the
+  picker opens with an empty filter and the draft is there when it closes),
+  and no stored session, a refusal in Hermes' words, or no answer within the
+  call's wait each say so. A list that arrives after you typed into the
+  composer shows its rows but leaves your typing in the composer, pauses
+  included, and the next prompt too after Enter sends one; ↑, ↓ or Esc hands
+  it the keys, and its filter row says so. `omh --resume` with no id (short form `-r`) starts
+  the TUI on that picker; `omh --resume <id>` and `omh --continue` are
+  unchanged.
+
+- **A prompt sent while a session switch waits goes to the session it opens.**
+  While `/new`, `/resume <id>` or a pick waits on Hermes, `switching to
+  <title>…` (or `starting a new session…`) shows under the queue, and a prompt
+  sent then is held and sent in the new session once it is live; before, it
+  went into the session being left, which was then closed. That holds for
+  plan-mode prompts, slash and skill commands and `!` lines too. Prompts still
+  queued behind the old session's turn come back to the composer with a
+  notice instead of vanishing, and so do prompts held for a switch that
+  failed. Of two switches out at once only the newer lands: a session the
+  older one opened late is closed again, with a notice on the new screen,
+  but never the session the newest switch goes to. Asking again for a switch
+  already out sends nothing, and a switch answered after its wait ran out
+  has the session it opened closed again. A second `/resume`
+  while the list is out sends no second call, and an answer that comes while
+  the picker is open no longer resets its highlight or filter.
+
 - **Reports on OMH's routing reach workflow learning, and tasks that only
   name OMH do not.** "OMH가 왜 내 메시지를 code-review로 보냈어?" dispatched
   the code-review it names, because the fold reads the past tense 보냈 as the
@@ -120,6 +149,27 @@ All notable changes will be documented here.
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
   the branch name is cut and before the badge shortens.
+
+- **The OMH TUI says when a newer OMH is out.** At most once a day, on a
+  thread the screen never waits for, the TUI asks
+  `https://registry.npmjs.org/oh-my-hermes/latest` for the latest published
+  version and keeps only that and the time of the ask in
+  `<omh_home>/tui/update-check.json`. While it is newer than the one running,
+  the info line says so beside the badge:
+  `[⚚ OMH Native v4.0.4]  v4.0.5 available · omh update`. On a narrower
+  line it is the first thing to shorten, to `↑ v4.0.5`, which stays beside
+  the version until the version itself goes. Offline, a timeout or a bad reply
+  says nothing. `OMH_TUI_UPDATE_CHECK=0` holds it off in one terminal,
+  `omh theme update-check off` in every later session, and so does an
+  `omh update-check` you set to `off` (in `omh setup` or with
+  `omh update-check set --mode off`).
+
+- **What's new, once, after an update.** The first fresh OMH TUI session on a
+  new version shows `What's new in v<version>` and a few one-line items under
+  the launch card, and once they are drawn records the version in
+  `<omh_home>/tui/whats-new.json` so they are not shown again. An install
+  that ran the OMH TUI before this release is told too; a new install shows
+  nothing. `/whats-new` shows them whenever you ask.
 
 - **A plan's done check for a code task is a command.** `plan` accepted a
   done check such as "an exact signature and its file", which a converter to

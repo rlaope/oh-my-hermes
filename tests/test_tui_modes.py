@@ -116,9 +116,10 @@ class RecordingClient:
 
 def make_app(*, busy: bool = False, rows: int = 24, cols: int = 80, **options: object) -> tuple[App, RecordingClient]:
     client = RecordingClient()
-    # The working glow's margin moves every row and the living wallpaper paints the blank cells; their own tests
-    # turn them on.
-    environ = {"OMH_TUI_GLOW": "0", "OMH_TUI_WALLPAPER": "0", **options.pop("environ", {})}  # type: ignore[dict-item]
+    # The working glow's margin moves every row, the living wallpaper paints the blank cells, and the update notice
+    # asks npm; their own tests turn them on (the update notice's with its fetch injected).
+    environ = {"OMH_TUI_GLOW": "0", "OMH_TUI_WALLPAPER": "0", "OMH_TUI_UPDATE_CHECK": "0",
+               **options.pop("environ", {})}  # type: ignore[dict-item]
     app = App(ScriptedTerminal(rows, cols), client, environ, poller=FakePoller(), **options)  # type: ignore[arg-type]
     app.sid = SID
     app.turn_pending = busy
