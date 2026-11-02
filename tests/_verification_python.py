@@ -46,11 +46,16 @@ def _short_link() -> str | None:
     return str(link)
 
 
-def verification_python() -> str:
-    """The quoted interpreter for a verification command, short whatever the checkout path."""
+def verification_python_path() -> str:
+    """The interpreter path a verification command spells, unquoted (argv[0] as a runner sees it)."""
     if len(sys.executable) <= SHORT_INTERPRETER_CHARS:
-        return shlex.quote(sys.executable)
+        return sys.executable
     link = _short_link()
     if link is None or len(link) > SHORT_INTERPRETER_CHARS:
-        return shlex.quote(sys.executable)
-    return shlex.quote(link)
+        return sys.executable
+    return link
+
+
+def verification_python() -> str:
+    """The quoted interpreter for a verification command, short whatever the checkout path."""
+    return shlex.quote(verification_python_path())

@@ -21,7 +21,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from _cli_harness import run_cli  # noqa: E402
-from _verification_python import verification_python  # noqa: E402
+from _verification_python import verification_python, verification_python_path  # noqa: E402
 from _fanout_interrupt_flag import InterruptFlagIsolatedTestCase  # noqa: E402
 
 from omh.coding.executor_readiness import (  # noqa: E402
@@ -4450,7 +4450,7 @@ class FanoutDispatchPlannedVerificationTests(unittest.TestCase):
 
             def runner(argv, **kwargs):
                 completed = original_runner(argv, **kwargs)
-                if argv[:2] == [sys.executable, "-c"]:
+                if argv[:2] == [verification_python_path(), "-c"]:
                     verification_envs.append(dict(kwargs.get("env") or {}))
                 return completed
 
