@@ -28,10 +28,47 @@ All notable changes will be documented here.
   computes none). Local files only, read in bounded reads; OMH stops and
   restarts nothing.
 
+- **`omh` says what it waits for while the Hermes gateway restarts.** The
+  launch waited for the gateway and for the session before drawing
+  anything, so a busy or restarting gateway left the shell silent for up to a
+  minute, and a gateway mid-restart sent the launch straight to Hermes' own
+  terminal. Now, after a second and a half of quiet, one line on the shell
+  says `connecting to the Hermes gateway… (Ns)`,
+  `the Hermes gateway is restarting; waiting… (Ns)` or
+  `waiting for the Hermes gateway to open a session… (Ns)`. A gateway that
+  is starting or draining, whose control socket is missing, refuses or
+  closes without answering, or whose WebSocket connection is refused or
+  times out is tried again for up to about a minute; so, at most twice, is
+  one that closes the connection as going away (a restart) while the session
+  opens. A gateway that crashes while it opens the session, refuses this
+  client, or denies its socket falls back at once, as before. Once the
+  minute is spent the launch says how long it waited, that the gateway did
+  not answer, and to check `hermes gateway status`, then falls back. The
+  line is erased however the launch ends, Ctrl+C included. A normal launch
+  prints nothing new. The attach child exits 69 for a gateway that is not
+  answering yet; every other failure still exits 1.
+
+- **Show-reel judges the hero frame before the full render.** A product film
+  that passes every lint and contact-sheet check can still read as cheap on
+  sight, so `show-reel` now asks for a launch-frame verdict on the first frame:
+  a 3D product is a lit model rather than stacked CSS layers, light surfaces
+  are judged by measured luminance, and the title uses the brand's own live
+  typeface and colour. Brand looks are gathered from the brand's site and repo
+  with provenance, a film pairing two products names both from frame 0, and a
+  model's critique of a downscaled sheet is checked on a full-resolution crop
+  before anything changes. `design-quality-gate`'s rubric gains a matching
+  material-credibility axis.
+
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
   the branch name is cut and before the badge shortens.
+
+- **A plan's done check for a code task is a command.** `plan` accepted a
+  done check such as "an exact signature and its file", which a converter to
+  `dag-ulw` had to turn into a command by guesswork. For a code task the done
+  check is now a command with the result that counts as passing (the
+  test's run command, a gate, a grep for the signature); a task that is not code may keep an observable check.
 
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
@@ -47,8 +84,8 @@ All notable changes will be documented here.
   node past the stuck mark, which was named only on an `omh_dag` call. The
   next turn's context now carries one `[OMH dag]` line naming the run and the
   call to make (`omh_dag action=ready`, `settle`, `repair` or `status`), once
-  per situation; when other work holds every `delegate_task` slot, it says to
-  call `ready` at a later turn. Not named: a node out within
+  per situation; when every `delegate_task` slot of the process is taken, it
+  says to call `ready` at a later turn. Not named: a node out within
   `dag_stale_after_s` (its child may still be starting), a parked node whose
   `wake_at` is ahead, and a node exported to a coding owner or left to the
   parent, which its fanout result or the parent's own work settles.
@@ -126,6 +163,21 @@ All notable changes will be documented here.
   summary, the messenger end block and the TUI end view all show it, and an
   unverified done run is told to add a verify node through `extend`. Runs
   stored before this update keep reading their nodes as before.
+
+- **A dag-ulw writer sent with no role that reads like a check stays native.**
+  A node with no `role` and a `write_scope` whose label reads like a check
+  past its first word ("Re-verify the fix", "Final verification pass",
+  "Re-review the diff", "Double-check the migration") ran as a build node and
+  could go to the external coding owner, where the builder approves itself.
+  It still runs as a build node and still counts as a producer, but it now
+  stays on `delegate_task`; the lint names the role it reads like, and
+  `role=build` sends it to the owner. Build work that reads the same way
+  ("Add input validation to the API") stays native too until the parent
+  names its role. When such a node reads like a verify node and fails, it
+  runs again after its repair, the way a verify node does. A new advisory
+  lint, `no_review_node`, names a run whose build nodes write more than docs
+  with no `review` node; it never refuses a run or moves its state or goal
+  verdict.
 
 - **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
   `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an
