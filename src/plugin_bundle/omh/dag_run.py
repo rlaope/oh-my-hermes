@@ -41,8 +41,8 @@ dependents and nothing else. ``repair`` adds a group
 of repair nodes for a failed or blocked node, at most `MAX_REPAIR_CYCLES` per
 original node. Once its latest group is all accepted the original counts as
 satisfied and the nodes after it read the group's handoff files, except a
-verification node: it runs again, and only its own accepted re-run satisfies
-it. Nodes of an earlier group that never got accepted are superseded. ``extend`` adds a round of nodes to a run whose every node passed
+verification node (or a role-less writer guessed as one, ``role_guess``): it
+runs again, and only its own accepted re-run satisfies it. Nodes of an earlier group that never got accepted are superseded. ``extend`` adds a round of nodes to a run whose every node passed
 when the goal check finds work missing, at most `MAX_EXTEND_ROUNDS` per run.
 Each node records where it came from (``origin``): ``define``,
 ``repair:<root>`` or ``extend:<round>``.
@@ -138,6 +138,12 @@ _CONTROL: Final = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 _BASELINE_WORD: Final = re.compile(r"(?<![a-z])baseline(?![a-z])")
 _VERIFY_WORDS: Final = re.compile(r"(?<![a-z])(verif|audit|validat|qa(?![a-z]))")
 _REVIEW_WORDS: Final = re.compile(r"(?<![a-z])review")
+# Read only for a new node's guess (``role_guess``), not for a node stored before nodes carried a role (`node_role`).
+_DOUBLE_CHECK: Final = re.compile(r"(?<![a-z])double[- ]check")
+# A write scope entry with one of these suffixes is docs, not code (`writes_code`).
+DOC_SUFFIXES: Final = frozenset({".md", ".markdown", ".rst", ".adoc", ".txt"})
+# A write scope entry named exactly one of these (casefolded, no suffix) is docs, not code (`writes_code`).
+DOC_NAMES: Final = frozenset({"readme", "changelog", "license", "notice", "authors", "contributing", "copying"})
 _MARKER_PATTERNS: Final = {
     marker: re.compile(r"(?<![A-Za-z])" + r"\s+".join(marker.split()) + r"\s*:", re.IGNORECASE)
     for marker in PROMPT_MARKERS
@@ -369,8 +375,11 @@ def _validated_node(raw: object) -> dict[str, Any]:
         "attempts": [],
     }
     guess = guessed_role(validated) if "role" not in raw else DEFAULT_ROLE
+    if guess == DEFAULT_ROLE and "role" not in raw and _DOUBLE_CHECK.search(label.casefold()):
+        guess = "verify"
     if guess != DEFAULT_ROLE:
-        # Advice only (`lint`): the node runs as a build node, and the role its label reads like is named.
+        # The node runs as a build node and stays a producer; the lint names the role its label reads like, and the
+        # guess keeps it native (`is_coding`). Not in the digest (`NODE_FIELDS`).
         validated["role_guess"] = guess
     return validated
 
@@ -507,6 +516,10 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
     verifiers = [node for node in nodes if is_verification(node)]
     if len(nodes) > 1 and not verifiers:
         findings.append("no_verification_node")
+    # A role-less node guessed as review ("Review the diff") counts as the review here, and its guess is named above.
+    if (len(nodes) > 1 and not any(node_role(node) == "review" or node.get("role_guess") == "review" for node in nodes)
+            and any(node_role(node) == DEFAULT_ROLE and writes_code(node) for node in nodes)):
+        findings.append("no_review_node")
     if verifiers:
         parents = {str(node["id"]): node["depends_on"] for node in nodes}
         baselines = {str(node["id"]) for node in nodes if is_baseline(node)}
@@ -522,6 +535,29 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
     if sum(1 for node in nodes if node["category"] == "ultrabrain") > 1:
         findings.append("ultrabrain_more_than_once")
     return findings
+
+
+def writes_code(node: Mapping[str, Any]) -> bool:
+    """Whether a node's write scope may touch code (`no_review_node`): any entry that is not docs.
+
+    An entry is docs when it ends in a docs suffix (``DOC_SUFFIXES``), sits
+    under a ``docs`` directory anywhere in its path, or is named one of ``DOC_NAMES``
+    (README, CHANGELOG, LICENSE, ...). Any other directory, glob or file
+    counts as code. Advice only, so it errs toward naming the missing review.
+    """
+    return not all(_is_docs_entry(str(entry)) for entry in node["write_scope"])
+
+
+def _is_docs_entry(entry: str) -> bool:
+    """Docs: a docs suffix or name, or a ``docs`` directory anywhere in the path (``/repo/docs/``, ``../wt/docs/x``).
+    An entry ending in ``/`` is all directories, and so is a bare ``docs``; otherwise its last segment is the file, so
+    ``src/docs`` is code."""
+    segments = [segment for segment in entry.casefold().split("/") if segment not in ("", ".")]
+    if not segments:
+        return False
+    directories = segments if entry.endswith("/") or segments == ["docs"] else segments[:-1]
+    return (posixpath.splitext(segments[-1])[1] in DOC_SUFFIXES or "docs" in directories
+            or segments[-1] in DOC_NAMES)
 
 
 def guessed_role(node: Mapping[str, Any]) -> str:
@@ -554,11 +590,14 @@ def is_verification(node: Mapping[str, Any]) -> bool:
 
 
 def is_coding(node: Mapping[str, Any]) -> bool:
-    """A node an external coding owner may take, and the work a verify node follows: a build node that writes files.
+    """A node an external coding owner may take: a build node that writes files.
 
-    Baselines, verification and review stay native whoever builds: the builder never approves itself.
+    Baselines, verification and review stay native whoever builds: the builder never approves itself. So does a build
+    node defined with no role whose label reads like another role (``role_guess``, as in "Re-verify the fix" or
+    "independent verification vs baseline"): it is not refused, since "Add input validation" reads the same way,
+    but it never leaves for an external owner. A node the parent named ``build`` carries no guess and goes.
     """
-    return bool(node["write_scope"]) and node_role(node) == DEFAULT_ROLE
+    return bool(node["write_scope"]) and node_role(node) == DEFAULT_ROLE and not node.get("role_guess")
 
 
 def is_producer(node: Mapping[str, Any]) -> bool:
@@ -727,7 +766,10 @@ def derive(record: Mapping[str, Any], children: Sequence[Mapping[str, Any]], now
             base.get(member, {}).get("state") == "accepted" for member in latest
         ):
             failures = sum(1 for attempt in nodes[root].get("attempts") or [] if attempt.get("outcome") in ("failed", "blocked"))
-            if not is_verification(nodes[root]):
+            # A role-less writer guessed as verify ("Re-verify the fix") re-runs too, though it covers nothing, but only
+            # after a group `repair` stamped ``reruns_root``: a group stored before that rule keeps the root repaired.
+            reruns = any(nodes.get(member, {}).get("reruns_root") for member in latest)
+            if not (is_verification(nodes[root]) or reruns):
                 base[root]["state"] = "repaired"
             elif failures <= len(root_groups):
                 base[root].update(state="pending", child=None)
@@ -1317,6 +1359,8 @@ def repair(
                 f"Repair node {node['id']} may depend only on accepted nodes or its own group, not {', '.join(outside)}.",
             )
         node.update(repairs=root, cycle=len(groups) + 1, origin=f"repair:{root}")
+        if nodes[root].get("role_guess") == "verify":
+            node["reruns_root"] = True  # `derive` runs the root again once this group is accepted; not in the digest
     runnable = {key for key, info in derived.items() if info["state"] in LIVE | {"ready", "waiting", "held"}}
     # The group runs before every node that waits on the root (they wait on the root, the root on the group), so a
     # dependent writing what the group writes is ordered, not an overlap.
