@@ -31,8 +31,8 @@ that reads as template or cheap, with the change that fixes it:
 - Materials are measured, not eyeballed: crop the product region from a
   rendered frame and read its mean luminance and clipped share. A light-coloured
   surface whose bulk sits near white with a radial hotspot reads as a glowing
-  panel, so lower roughness-driven specular or key light until its tonal range
-  opens.
+  panel, so raise roughness, lower clearcoat or dim the key light until its
+  tonal range opens.
 - The title is set in the brand's own face and colour (see
   `references/storyboard-and-evidence.md`), the background carries the brand's
   own art or a deliberate material, and on-screen product UI reads as a

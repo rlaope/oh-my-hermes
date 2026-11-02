@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "883137a644e1024d8bcbbd1878cc1384a5808c6f5bc72f68d1e1fa1507bb5a32",
+  "catalog_revision": "21a87821d6a15a3f7b3ce684825429b153179f71404730dd622bd795f4741589",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -214,7 +214,7 @@
     "omh-security-safety-review/SKILL.md": "8b889e6fd8f50b20456c7ef75f26ead3030b0b6315ec9b448155362eaa1f542d",
     "omh-security-safety-review/references/credential-rotation.md": "2a4e1cacc2c10141a1aaff437353150696c397f5fec0b41536eb5d946ebff065",
     "omh-show-reel/SKILL.md": "e1920ebbd1d5fa09b3ced07449c5f6303941e8ed670974c2f6ca057c623e3a7d",
-    "omh-show-reel/references/art-direction.md": "f4698e4c29069fcb4aacff52cd1cc9ba5eff0d7f61cb51eccdbef4d99860c32b",
+    "omh-show-reel/references/art-direction.md": "f44fba01c1fe58320ca90ee3fba3be5b740b647d6fbc49ad4454066018756f19",
     "omh-show-reel/references/assets-and-rights.md": "102fd2f6cee563a9bc03aaf7be302120564acf47705cf688af4e5a5b77bec3b7",
     "omh-show-reel/references/audio-production.md": "d5504ceb633c75b6620aafce6758748e190af05fd35d7c2b07f4d632d1a82ffa",
     "omh-show-reel/references/brief-and-locales.md": "f64de4a3c72810d7ad781f7ac7419068c01c060a254c4ee0ad574806cca99712",
