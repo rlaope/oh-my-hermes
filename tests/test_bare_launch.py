@@ -29,6 +29,8 @@ BARE = (
     ["--pretty"],
     ["-r", "sess-1"],
     ["--resume", "sess-1", "-p", "work"],
+    ["--resume"],  # no id: the TUI opens on its session picker
+    ["-r", "-p", "work"],
     ["-c"],
     ["--continue", "doctor"],  # continue's optional value swallows the token, as the full parser reads it
     ["-c", "-p", "work"],
@@ -70,6 +72,18 @@ class BareArgvTests(unittest.TestCase):
                 self.assertIsNone(full.command)
                 self.assertEqual({dest: getattr(light, dest) for dest in TOP_LEVEL_DESTS},
                                  {dest: getattr(full, dest) for dest in TOP_LEVEL_DESTS})
+
+    def test_a_bare_resume_forwards_no_id_and_asks_the_tui_for_its_picker(self) -> None:
+        from omh.commands.bare_launch import _hermes_passthrough_argv
+
+        for argv, forwarded in ((["--resume"], ["--tui"]), (["-r"], ["--tui"]),
+                                (["--resume", "sess-1"], ["--tui", "--resume", "sess-1"]),
+                                (["-c", "notes"], ["--tui", "--continue", "notes"])):
+            with self.subTest(argv=argv):
+                args = bare_launch_args(argv)
+                self.assertEqual(_hermes_passthrough_argv(args, tui=True), forwarded)
+        self.assertEqual(bare_launch_args(["--resume"]).tui_resume, "")
+        self.assertIsNone(bare_launch_args([]).tui_resume)
 
     def test_anything_else_goes_to_the_full_parser(self) -> None:
         for argv in NOT_BARE:
@@ -115,6 +129,33 @@ class LaunchHomeTests(unittest.TestCase):
                         patch.object(bare_launch, "_node_available", return_value=False):
                     self.assertEqual(bare_launch._run_terminal(str(hermes), args, paths), 0)
                     self.assertEqual(json.loads(record.read_text()), str(paths.hermes_home))
+
+
+    def test_only_a_bare_resume_asks_the_omh_tui_for_its_picker(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        import json
+        from omh.commands import bare_launch
+        from omh.paths import resolve_paths
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / "child-env.json"
+            hermes = root / "hermes"
+            hermes.write_text(
+                f"#!{sys.executable}\nimport json, os, sys\n"
+                f"with open({str(record)!r}, 'w') as out: "
+                "json.dump([os.environ.get('OMH_TUI_PICK_SESSION'), sys.argv[1:]], out)\n",
+                encoding="utf-8",
+            )
+            hermes.chmod(0o755)
+            paths = resolve_paths(str(root / "omh"), str(root / "selected"))
+            for argv, expected in ((["--resume"], ["1", ["--tui"]]), (["-r", "s-1"], [None, ["--tui", "--resume", "s-1"]]),
+                                   ([], [None, ["--tui"]])):
+                with self.subTest(argv=argv), patch.dict(os.environ, {"OMH_TUI_PICK_SESSION": "1"}), \
+                        patch.object(bare_launch, "_omh_tui_blocker", return_value=""):
+                    bare_launch._run_terminal(str(hermes), bare_launch_args(argv), paths)
+                    self.assertEqual(json.loads(record.read_text()), expected)
 
 
 class BareImportTests(unittest.TestCase):

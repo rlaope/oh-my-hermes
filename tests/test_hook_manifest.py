@@ -786,6 +786,293 @@ class HookManifestTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
 
+    def test_find_out_after_a_complaint_is_a_report_and_after_a_setting_is_the_task(self) -> None:
+        # #2455 follow-up, on the #2454 reviewer's design: the clause before
+        # "find out" decides. A complaint about what OMH routed keeps the
+        # report; a neutral setting ("OMH picked the config") makes "find out"
+        # the user's own task. Two word lists after "find out" leaked (#2454).
+        reports = (
+            "OMH routed my typo to ultrawork, find out what bug made it do that",
+            "OMH picked the docs workflow for my question; find out what triggered it",
+            "OMH ignored my question; find out what happened",
+            "Hermes with OMH chose the wrong skill again; let's find out why",
+        )
+        for message in reports:
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+
+        tasks = (
+            "OMH picked the config. Find out which keys are unused",
+            "OMH apparently picked the staging config. Find out which keys are unused",
+            "Hermes with OMH picked the staging config; find out which keys are unused",
+            "OMH picked my config file; find out which keys are unused",
+            "OMH ignored the vendor folder. Find out which files it skipped",
+            "OMH ignored the vendor folder; add it to the index",
+        )
+        for message in tasks:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_report_shapes_the_classifier_missed_reach_workflow_learning(self) -> None:
+        # #2455 follow-up: an adverb between OMH and its verb, a why-question
+        # about what OMH did, OMH ignoring the request, and Korean reports with
+        # the particle on the product name or a past-tense 보냈어.
+        reports = (
+            "OMH apparently chose ultrawork for a typo, can we look at why",
+            "OMH somehow chose ralplan for a greeting, can we look at why",
+            "Show me why OMH picked them",
+            "Explain why OMH picked deep-interview there",
+            "OMH ignored my request and didn't use any workflow; why?",
+            "OMH가 왜 내 메시지를 code-review로 보냈어?",
+            "OMH는 왜 내 질문을 ultrawork로 보냈어?",
+            "OMH 라우터가 내 로그 질문을 잘못 보냈어",
+        )
+        for message in reports:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertEqual(payload["selected_workflow"], "workflow-learning")
+                self.assertEqual(payload["intent_class"], "feedback_signal")
+
+        not_reports = (
+            # A why-question about something that is not OMH.
+            "Show me why the parser picked the wrong encoding",
+            # OMH as the instrument (OMH로) is the tool lead, not the subject.
+            "OMH로 라우팅 테이블 로더 리팩터링해줘",
+            "OMH가 설정 파일을 골랐어. 안 쓰는 키가 뭔지 찾아줘",
+            # 라우터 is the user's file here, under a code-edit request.
+            "OMH가 라우터 파일을 골랐어, 테스트 없는 함수 찾아서 테스트 작성해줘",
+        )
+        for message in not_reports:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+        # Right after the bare product name, 라우팅 names OMH's own routing and
+        # stays a meta cue under the edit request, as on origin/main.
+        self.assertEqual(awareness_route_hint("OMH 라우팅이 이상해, 고쳐줘")["intent_class"], "meta_discussion")
+
+    def test_find_out_reads_its_own_object_and_any_unlisted_choice_stays_a_complaint(self) -> None:
+        # #2485 review: deciding by closed lists of workflows and message words
+        # before "find out" lost complaints. A bare cause question refers back
+        # to the clause before it (as on origin/main), and only a concrete
+        # artifact as what OMH chose makes "find out <clause>" the user's task.
+        reports = (
+            "OMH picked the staging config. Find out why",
+            "OMH chose the quarterly-okr skill for a smiley; find out what it matched on",
+            "OMH picked the slide-maker for my 'brb', find out what it keyed on",
+            "OMH clearly picked ralplan for a typo",
+            "OMH obviously misrouted my thank-you",
+        )
+        for message in reports:
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+
+        tasks = (
+            "OMH clearly selected the old lockfile. Find out which packages it pins",
+            "OMH obviously picked the right config file; now deploy it",
+        )
+        for message in tasks:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_a_catalog_skill_with_an_artifact_word_in_its_name_stays_a_complaint(self) -> None:
+        # #2485 second review: any artifact word in the chosen object made it a
+        # setting, so "OMH picked data-pipelines ...; find out ..." lost main's
+        # report. Only the head noun counts, never a skill/workflow/lane head,
+        # and never a catalog skill name. Derived from the bundle's catalog.
+        from omh.plugin_bundle.omh.skill_shortlist import catalog_skill_names
+        from omh.plugin_bundle.omh.workflow_intent import _CONCRETE_ARTIFACT_NOUNS
+
+        names = sorted(
+            name
+            for name in {label.removeprefix("omh-") for label in catalog_skill_names() or ()}
+            # A one-word label ("omh-files" -> "files") is the artifact itself
+            # too often to veto; the veto reads runs of two words or more.
+            if "-" in name and name.split("-")[-1] in _CONCRETE_ARTIFACT_NOUNS
+        )
+        self.assertTrue(names, "the catalog no longer has a skill named like an artifact; pick another probe")
+        for name in names:
+            for message in (
+                f"OMH picked {name} for my greeting; find out which rule fired",
+                f"OMH chose {name.replace('-', ' ')} for a hello. Find out what it matched",
+            ):
+                with self.subTest(message=message):
+                    self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+        for message in (
+            "OMH picked the cache skill for my hello; find out what it noticed",
+            "OMH chose the parser workflow for a typo; find out which trigger fired",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+        for message in (
+            "OMH picked the packaging script; find out which files it copies",
+            "OMH chose the CI workflow file, find out which jobs it skips",
+            "OMH picked the report template config; find out which keys it sets",
+        ):
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_a_particle_product_name_gives_no_routing_context(self) -> None:
+        # #2485: a grant of routing context to "OMH가" / "OMH는" was tried for
+        # seven review rounds and leaked through each closed list; it was
+        # dropped, and the particle form reads as on origin/main. These
+        # coding requests and statements, which the grant once read as meta,
+        # pin that.
+        coding = (
+            "OMH는 업데이트 끝났어. 라우터 핸들러 다듬어 줘",
+            "OMH가 저장소를 골랐어. 라우팅 규칙 손 좀 봐줘?",
+            "OMH를 방금 깔았어. 용어 목록 정리하자",
+            "OMH가 브랜치를 열었어.\n라우터 코드 손봐 주세요",
+            "OMH는 준비됐어. 라우팅 테이블 업데이트 좀 해",
+            "OMH는 붙여 놨어. 라우터 설정 정리해 둬",
+            "OMH가 레포를 열었어. 라우팅 규칙 다듬어야 돼",
+            "OMH를 켰어. 용어 목록 업데이트 바람",
+            "OMH가 저장소를 열었어. 라우팅 테이블 나눠 주면 좋겠어",
+            # Fifth review: a complaint about OMH's coding work, a routing
+            # complaint put off before other work, 원인 inside another word,
+            # and an English choice before a Korean request.
+            "OMH가 쿼리를 잘못 짰어. 라우터 테스트 다시 써 줘",
+            "OMH가 레인을 잘못 고른 건 나중에 보고, 지금은 장바구니 API 테스트 짜줘",
+            "OMH가 회원인증 라우터 파일을 열었어",
+            "OMH가 chose the parser module. 라우팅 규칙 정리해줘",
+            # Sixth review: a routing word as a code noun, 모드, a routing verb
+            # in a coding sense, 결과 / 이유 statements, 왠지, praise.
+            "OMH가 스킬 레지스트리 코드를 잘못 고쳤어",
+            "OMH가 디버그 모드를 이상하게 켰어",
+            "OMH가 함수에 엉뚱한 인자를 넘겼어",
+            "OMH가 측정 결과를 엉뚱한 파일에 저장했어",
+            "OMH가 이 버전을 고른 이유를 적어 뒀어",
+            "OMH가 왠지 잘해",
+            "OMH가 picked a tidy layout, thanks",
+            # A statement in the casual 해 form is no report clause either.
+            "OMH가 고른 건 라우터 브랜치야",
+        )
+        for message in coding:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_find_out_about_omhs_own_choice_refers_back_whatever_the_object(self) -> None:
+        # #2485 third review: "find out what made it pick that" asks about the
+        # choice, like a bare "find out why", so an artifact head ("the nightly
+        # job") keeps main's report.
+        for message in (
+            "OMH chose the nightly job for my hi. Find out what made it pick that",
+            "OMH picked the deploy pipeline for a thank-you; find out why OMH routed it there",
+            "OMH selected the cache layer for my joke, find out what led it to do that",
+            # The user's own message as the occasion is the complaint, whatever
+            # OMH chose, a one-word catalog skill included (fourth review).
+            "OMH chose files for my 'brb'; find out what it keyed on",
+            "OMH picked docs when I typed hey, find out what it matched",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+        for message in (
+            "OMH picked the port number; find out which daemon holds it",
+            "OMH chose the report package template file. Find out who edits it",
+            "OMH picked the config file. Find out which keys are unused please",
+            # "it" is the artifact here, with an object of its own (fourth review).
+            "OMH picked the cron runner. Find out which host it selected last week",
+        ):
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_chosen_object_is_judged_by_its_head_and_the_catalog_veto_turns_off_without_a_sidecar(self) -> None:
+        from unittest import mock
+
+        from omh.plugin_bundle.omh import skill_shortlist
+        from omh.plugin_bundle.omh.workflow_intent import _names_concrete_artifact, classify_workflow_intent
+
+        self.assertFalse(_names_concrete_artifact(["data-pipelines"]))
+        self.assertTrue(_names_concrete_artifact(["data", "pipelines", "folder"]))
+        self.assertTrue(_names_concrete_artifact(["files"]))
+        self.assertTrue(_names_concrete_artifact(["port", "number"]))
+        self.assertFalse(_names_concrete_artifact(["test", "message"], compound=False))
+        self.assertFalse(_names_concrete_artifact(["cache", "skill"]))
+        message = "OMH picked relational-db for my hi; find out what it matched there"
+        with mock.patch.object(skill_shortlist, "catalog_skill_names", return_value=None):
+            classify_workflow_intent.cache_clear()
+            try:
+                self.assertTrue(_names_concrete_artifact(["report", "package"]))
+                self.assertEqual(classify_workflow_intent(message).intent_class, "feedback_signal")
+            finally:
+                classify_workflow_intent.cache_clear()
+        self.assertIs(skill_shortlist.catalog_skill_names(), skill_shortlist.catalog_skill_names())
+
+    def test_korean_edit_request_after_a_setting_sentence_gets_no_workflow_learning_hint(self) -> None:
+        # #2485 review: with "OMH가" naming OMH, these read as meta on an
+        # earlier head of the PR; the particle form now reads as on main.
+        cases = (
+            "OMH가 설정 파일을 골랐어. 재시도 횟수 수정해줘",
+            "OMH는 파서 모듈을 골랐어.\n테스트 코드 리팩터링해줘",
+            "OMH가 라우터 파일을 골랐어. 라우터 테스트 마이그레이션해줘",
+            # "해줘?" is the casual way to ask, not a question (second review).
+            "OMH가 설정 파일을 골랐어. 타임아웃 기본값 수정해줘?",
+            "OMH는 파서 모듈을 골랐어.\n이 함수 리팩터링해줘?",
+        )
+        for message in cases:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_ignored_and_quoted_asks_follow_what_omh_did_with_the_users_message(self) -> None:
+        # #2485 final review: "ignored" is a routing report only when OMH
+        # ignored the user's own ask or a routing target, and a report that
+        # quotes the user's ask, opened by migrate or rewrite, stays a report.
+        for message in (
+            "OMH ignored what I typed and started a plan",
+            "OMH ignored the ultraqa skill I asked for",
+            "Migrate the cache was all I asked, but OMH chose ralplan. why",
+            "Rewrite my cover letter was all I wanted, and OMH routed it to code-review, why?",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+        for message in (
+            "OMH ignored the .eslintignore file",
+            "OMH ignored my tsconfig path aliases",
+            "OMH ignored the max_retries setting in app.toml",
+        ):
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_coding_request_on_omh_vocabulary_words_gets_no_workflow_learning_hint(self) -> None:
+        # #2455 follow-up: under a code-edit lead ("OMH: migrate", "using OMH,
+        # rename"), vocabulary / terminology are what the edit acts on.
+        cases = (
+            "OMH: migrate the terminology glossary JSON loader to use pathlib",
+            "Using OMH, rename the vocabulary module to lexicon and update imports",
+            "OMH: refactor the vocabulary loader into a class",
+            "Using OMH, rewrite the terminology importer with csv",
+            "With OMH, migrate the glossary vocabulary cache to redis",
+        )
+        for message in cases:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotEqual(payload.get("intent_class"), "meta_discussion")
+
     def test_report_on_omh_routing_keeps_workflow_learning_but_throwaway_tests_do_not(self) -> None:
         # Owner decision on #2440: OMH or its router choosing or reading wrong
         # is talk about OMH; a throwaway test message, or the user's own router,

@@ -47,4 +47,4 @@ Per test: the contract row it proves, the seam, the stand-ins, and the command t
 
 ## Attribution
 
-One test per contract row, reading writes back through the interface, and stand-ins chosen by dependency category adapt ideas from Matt Pocock's `tdd` and `codebase-design` skills at `mattpocock/skills@d1478fcb140db0b93c0c8df17bcfd311844749d0`, MIT License, Copyright 2026 Matt Pocock. No upstream text is reproduced; the contract-row mapping and the `prepared_not_observed` boundary are OMH's own.
+One test per contract row, reading writes back through the interface, and stand-ins chosen by dependency category adapt ideas from Matt Pocock's `tdd` and `codebase-design` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. No upstream text is reproduced; the contract-row mapping and the `prepared_not_observed` boundary are OMH's own.
