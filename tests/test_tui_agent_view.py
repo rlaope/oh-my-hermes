@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import re
 import unittest
+from unittest import mock
 
-from _tui_lines import line_text, RULE_ROW, without_badge
+from _tui_lines import badge_text, line_text, RULE_ROW, without_badge
 from test_tui_app import info_index
 from test_tui_modes import SID, RecordingClient, answer, drawn, make_app, show_mode, type_text
 from test_tui_subagents import FIRST, FRAMES, SECOND, cells, payload
@@ -281,8 +282,11 @@ class ViewTests(unittest.TestCase):
         self.assertEqual([row[:4] for row in rows], ["  ● ", "  ○ ", "  ✗ "])
 
     def test_a_narrow_row_drops_the_right_side_and_keeps_the_count_whole(self) -> None:
+        patched = mock.patch("omh.tui.app.__version__", "9.9.9")  # the badge's version, fixed: the gap is a width
+        patched.start()
+        self.addCleanup(patched.stop)
         app, _client = agent_app()
-        self.assertEqual(info_text(app).rstrip(), CHIP + " " * 30 + "ctrl+t effort")
+        self.assertEqual(info_text(app).rstrip(), CHIP + " " * 23 + "ctrl+t effort")
         narrow, _client = agent_app(cols=30)
         self.assertEqual(info_text(narrow), CHIP)
 
@@ -953,7 +957,7 @@ class RoomTests(unittest.TestCase):
         emptied = drawn(app)
         self.assertEqual(app.frame_budget.agents, 0)
         self.assertEqual(app.region.last_row(12), 11)
-        self.assertIn("[⚚ OMH Native]", emptied[11], "the info line is the screen's last row")
+        self.assertIn(badge_text(), emptied[11], "the info line is the screen's last row")
         # An agent of the new turn wants rows again, and gets them: no hold of an emptied view is kept.
         agent_event(app, "start", "sb-0", goal="task b0")
         self.assertEqual([row[:12] for row in view_text(app)], ["  ● main", "  ⠋ task b0 "])

@@ -2827,9 +2827,13 @@ quietly widening what the sentence covers.
 
 The plugin tool `omh_jev_ask` is the second place, and the only network client
 core omh has in `src/`: `plugin_bundle/omh/jev_ask_client.py` POSTs typed questions to Jev
-over one of two fixed HTTPS hosts (`api.typesafe.ai` with `TYPESAFE_API_KEY`,
-or `openrouter.ai` only when the operator also set `openrouter_route` in
-`<omh_home>/jev/settings.json`), refuses every redirect, bounds both bodies and
+over two route identities: TypeSafe defaults to `api.typesafe.ai` with
+`TYPESAFE_API_KEY` and may use `TYPESAFE_BASE_URL`, the API-root variable
+TypeSafe's SDKs read, as an HTTPS root with a host and no credentials, query, or
+fragment; OMH appends `/v1/systemone` (`/systemone` to a root already ending in
+`/v1`). OpenRouter
+uses `openrouter.ai` only when the operator also set `openrouter_route` in
+`<omh_home>/jev/settings.json`. It refuses every redirect, bounds both bodies and
 the whole call by a deadline, and retries only 429, 503, and 529. It opens no
 socket unless the person's own message for that turn names Jev: `pre_llm_call`
 records a consent marker bound to the turn's id (`jev_consent.py`), only an
