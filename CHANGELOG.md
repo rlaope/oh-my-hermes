@@ -22,6 +22,17 @@ All notable changes will be documented here.
     longer lists npm's extensionless shell shim, which logged
     `[WinError 193]` before falling back to `codex.CMD`.
 
+- **Show-reel judges the hero frame before the full render.** A product film
+  that passes every lint and contact-sheet check can still read as cheap on
+  sight, so `show-reel` now asks for a launch-frame verdict on the first frame:
+  a 3D product is a lit model rather than stacked CSS layers, light surfaces
+  are judged by measured luminance, and the title uses the brand's own live
+  typeface and colour. Brand looks are gathered from the brand's site and repo
+  with provenance, a film pairing two products names both from frame 0, and a
+  model's critique of a downscaled sheet is checked on a full-resolution crop
+  before anything changes. `design-quality-gate`'s rubric gains a matching
+  material-credibility axis.
+
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
@@ -87,6 +98,11 @@ All notable changes will be documented here.
   using the existing admission and session-lens gates. Discord threads Hermes
   auto-created from channel messages use their parent channel's memory scope;
   other threads keep their own.
+- **Hermes saves a stated preference or decision in the same turn, even when
+  the message also asks for other work.** The `omh_remember` description and
+  its one-line prompt now ask for the save before other tools, limit it to the
+  user's own words, and exclude pasted text and facts that only matter for the
+  current task.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
