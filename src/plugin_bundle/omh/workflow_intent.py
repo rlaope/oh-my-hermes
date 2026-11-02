@@ -452,10 +452,9 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     particle_report_clauses: tuple[str, ...] = ()
     particle_only_context = False
     if particle_names and not (matching_tokens & _PRODUCT_NAME_CONTEXT):
-        particle_report_clauses = _korean_omh_report_clauses(matching_normalized)
-        if not particle_report_clauses and _reports_omh_behaviour(matching_normalized):
-            # An English report after the particle ("OMH가 picked the wrong skill").
-            particle_report_clauses = (matching_normalized,)
+        particle_report_clauses = _korean_omh_report_clauses(matching_normalized) or _english_report_after_particle(
+            matching_normalized
+        )
         if particle_report_clauses:
             particle_only_context = not _routing_context(matching_normalized, matching_tokens)
             matching_tokens.update(particle_names)
@@ -485,6 +484,9 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
         report_feedback = set(_matched_cues(_FEEDBACK_CUES, report_text, report_compact))
         meta_cues = tuple(cue for cue in meta_cues if cue in report_meta)
         feedback_cues = tuple(cue for cue in feedback_cues if cue in report_feedback or cue == "omh_behaviour_report")
+    if particle_report_clauses:
+        # The clauses read as a report on OMH's routing, both legs present.
+        feedback_cues = _compact_tuple((*feedback_cues, "omh_behaviour_report"))
     planning_cues = _matched_cues(_PLANNING_CUES, matching_normalized, matching_compact)
     negated_execution_cues = _compact_tuple(
         (*_matched_cues(_NEGATED_EXECUTION_CUES, matching_normalized, matching_compact), *_structural_negated_execution_cues(matching_normalized))
@@ -1092,24 +1094,90 @@ def _matched_execution_cues(normalized: str, compact: str) -> tuple[str, ...]:
     return tuple(matches)
 
 
-_KOREAN_CAUSE_WORD = normalized_phrase("원인")
+# A Korean report on OMH's routing has two legs in the clause that names OMH:
+# a complaint (a feedback cue, 왜, or the word 원인) and a routing leg (a
+# routing verb, or what OMH routes to). "OMH가 테스트를 잘못 짰어" complains
+# about OMH's coding work, not its routing, and gives no context. Read as
+# word stems on the composed text (#2485 review).
+_KOREAN_ROUTING_VERB_STEMS = ("보냈", "골랐", "라우팅", "넘겼", "띄웠", "분류", "선택")
+_KOREAN_ROUTING_OBJECTS = ("스킬", "워크플로", "레인", "라우팅", "모드")
+_KOREAN_CAUSE_WORDS = ("왜", "원인", "이유", "결과")
+# A clause that only asks about the report has nothing but these besides a
+# cause word and its closing predicate: "왜 그런지 봐 줘", "원인 좀 알려줘",
+# "결과 보고해 줘", "왜?".
+_KOREAN_BARE_REPORT_WORDS = frozenset(
+    {"그런지", "그랬는지", "그런", "건지", "그래", "그랬어", "그럴까", "뭔지", "뭘까", "뭐야", "어디서", "잘못됐는지",
+     "좀", "같이", "한번", "다시", "그거", "그건"}
+)
+_KOREAN_AUXILIARIES = frozenset({"줘", "줘요", "주세요", "주라", "줄래", "봐", "봐요", "봐줘"})
+
+
+def _korean_words(text: str) -> list[str]:
+    return TOKEN_RE.findall(unicodedata.normalize("NFC", text))
+
+
+def _korean_request(clause: str) -> bool:
+    return leads_with_code_edit(clause) or ends_in_korean_request(clause)
+
+
+def _korean_cause_word(word: str) -> bool:
+    return any(_korean_word_is_cue(word, cue) for cue in _KOREAN_CAUSE_WORDS)
+
+
+def _bare_korean_report_question(clause: str) -> bool:
+    """`clause` only asks about the report before it ("왜 그런지 봐 줘", "원인 좀 알려줘", "왜?"), with no work of its own."""
+    words = _korean_words(clause)
+    if not any(_korean_cause_word(word) for word in words):
+        return False
+    content = words[:-1]
+    if words and words[-1] in _KOREAN_AUXILIARIES:
+        content = words[:-2]
+    return all(_korean_cause_word(word) or word in _KOREAN_BARE_REPORT_WORDS for word in content)
 
 
 def _korean_omh_report_clauses(normalized: str) -> tuple[str, ...]:
-    """The Korean clauses that name OMH with a particle and report on it.
+    """The clauses that report on OMH's routing, for a particle-only product mention; () when none.
 
-    A report carries a feedback cue (왜, 잘못, 오해, ...) or 원인, and is not
-    itself a request: a code-edit lead or a request ending withholds the
-    reading, never grants it, so a request form either list misses only
-    reads as on origin/main.
+    The clause that names OMH is no request, has a routing leg, and has a
+    complaint leg of its own, or names what OMH routes to and is followed by
+    a bare cause question ("OMH가 엉뚱한 스킬을 골랐어! 왜 그래?"). Any other
+    clause that asks for work of its own ("그건 나중에 보고, 지금은 API 테스트
+    짜줘") withholds the reading: the user reported and then asked for other
+    work, which reads as on origin/main. The lists here only grant from a
+    clause that already names OMH, so a form they miss reads as on main.
     """
+    clauses = korean_clauses(normalized)
+    if any(_korean_request(clause) and not _bare_korean_report_question(clause) for clause in clauses):
+        return ()
+    for index, clause in enumerate(clauses):
+        if not _product_names_before_particle(clause) or _korean_request(clause):
+            continue
+        words = _korean_words(clause)
+        names_target = any(word.startswith(_KOREAN_ROUTING_OBJECTS) for word in words) or bool(
+            _mentioned_workflows(clause, set(routing_tokens(clause, stopwords=set())))
+        )
+        routing = names_target or any(word.startswith(_KOREAN_ROUTING_VERB_STEMS) for word in words)
+        if not routing:
+            continue
+        complaint = bool(_matched_cues(_FEEDBACK_CUES, clause, clause.replace(" ", ""))) or any(
+            _korean_cause_word(word) for word in words
+        )
+        bare_after = tuple(later for later in clauses[index + 1 :] if _bare_korean_report_question(later))
+        if complaint or (names_target and bare_after):
+            return (clause, *bare_after)
+    return ()
+
+
+def _english_report_after_particle(normalized: str) -> tuple[str, ...]:
+    """An English complaint after the particle ("OMH가 picked the wrong skill again"), with no Korean request for other work."""
+    if any(_korean_request(clause) and not _bare_korean_report_question(clause) for clause in korean_clauses(normalized)):
+        return ()
+    if not _reports_omh_behaviour(normalized):
+        return ()
     return tuple(
         clause
-        for clause in korean_clauses(normalized)
-        if _product_names_before_particle(clause)
-        and (_matched_cues(_FEEDBACK_CUES, clause, clause.replace(" ", "")) or _KOREAN_CAUSE_WORD in clause)
-        and not leads_with_code_edit(clause)
-        and not ends_in_korean_request(clause)
+        for clause in _CLAUSE_BREAK.split(normalized)
+        if _clause_reports_omh_behaviour(ordered_words(clause)) and _clause_complains(clause)
     )
 
 

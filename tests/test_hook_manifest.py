@@ -926,11 +926,11 @@ class HookManifestTests(unittest.TestCase):
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
 
     def test_a_particle_product_name_names_omh_only_in_a_clause_that_reports_on_it(self) -> None:
-        # #2485 third and fourth reviews: closed lists of Korean edit verbs,
-        # then of request endings, leaked in turn. "OMH가" / "OMH는" now gives
-        # routing context only where its own clause reports on OMH (a feedback
-        # cue, 왜 or 원인, in a clause that is not a request), so a setting
-        # sentence leaves whatever follows as it reads on origin/main.
+        # #2485 third to fifth reviews: closed lists of Korean edit verbs, then
+        # of request endings, leaked in turn. "OMH가" / "OMH는" now gives
+        # routing context only where its own clause reports on OMH's routing
+        # (a complaint leg and a routing leg) and no other clause asks for
+        # other work, so a setting sentence leaves the message as on main.
         coding = (
             "OMH는 업데이트 끝났어. 라우터 핸들러 다듬어 줘",
             "OMH가 저장소를 골랐어. 라우팅 규칙 손 좀 봐줘?",
@@ -941,6 +941,13 @@ class HookManifestTests(unittest.TestCase):
             "OMH가 레포를 열었어. 라우팅 규칙 다듬어야 돼",
             "OMH를 켰어. 용어 목록 업데이트 바람",
             "OMH가 저장소를 열었어. 라우팅 테이블 나눠 주면 좋겠어",
+            # Fifth review: a complaint about OMH's coding work, a routing
+            # complaint put off before other work, 원인 inside another word,
+            # and an English choice before a Korean request.
+            "OMH가 쿼리를 잘못 짰어. 라우터 테스트 다시 써 줘",
+            "OMH가 레인을 잘못 고른 건 나중에 보고, 지금은 장바구니 API 테스트 짜줘",
+            "OMH가 회원인증 라우터 파일을 열었어",
+            "OMH가 chose the parser module. 라우팅 규칙 정리해줘",
             # A statement in the casual 해 form is no report clause either.
             "OMH가 고른 건 라우터 브랜치야",
         )
@@ -952,9 +959,11 @@ class HookManifestTests(unittest.TestCase):
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
         for message in (
             "OMH가 라우팅을 잘못했어. 원인 좀 같이 보자",
-            "OMH가 왜 라우터를 그렇게 썼어?",
+            "OMH가 왜 내 인사를 다른 스킬로 보냈어?",
             "OMH가 내 인사를 잘못 라우팅했어",
             "OMH가 picked the wrong skill again",
+            # What OMH routes to, then a bare cause question of its own.
+            "OMH가 이상한 모드를 띄웠어. 이유가 뭘까?",
         ):
             with self.subTest(message=message):
                 self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")

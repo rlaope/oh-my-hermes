@@ -94,8 +94,10 @@ class RoutingPrecisionTests(unittest.TestCase):
         # migration and a Korean task after what OMH picked stay off it too,
         # and so does a Korean edit request after a setting sentence, three
         # Korean requests read by their ending, and a find-out task with a
-        # courtesy tail, and two Korean requests with unlisted endings.
-        self.assertEqual(payload["summary"]["case_count"], 1332)
+        # courtesy tail, and two Korean requests with unlisted endings; then a
+        # coding-work complaint, a deferred complaint, 회원인증, and an English
+        # choice before a Korean request.
+        self.assertEqual(payload["summary"]["case_count"], 1336)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -249,8 +251,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # request, OMH "apparently" choosing) reach workflow-learning, and a
         # Korean casual "고쳐줘?" after what OMH picked keeps the coding lane,
         # a Korean "정리해 둬" keeps toolbelt-readiness, and a Korean report on
-        # OMH's routing reaches workflow-learning.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1225)
+        # OMH's routing reaches workflow-learning, and OMH missing a test before
+        # an add-tests request keeps ultrawork.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1226)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

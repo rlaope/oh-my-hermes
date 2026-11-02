@@ -9473,6 +9473,44 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "file_or_text",
         "workflow-learning",
     ),
+    # #2485 fifth review: a Korean report needs a routing leg beside the
+    # complaint in the OMH clause, a later request for other work withholds
+    # it, 원인 is a word and not a substring, and an English clause after the
+    # particle is withheld beside a Korean request. d4fdeeb56 dispatched
+    # workflow-learning on the first, third and fourth.
+    RoutingPrecisionCase(
+        "korean-omh-coding-work-complaint-then-code-request-is-a-task",
+        "A Korean complaint about OMH's coding work, then a code request, is a task",
+        "OMH가 쿼리를 잘못 짰어. 라우터 테스트 다시 써 줘",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "korean-deferred-routing-complaint-then-other-work-is-a-task",
+        "A Korean routing complaint put off for later, then other work, is a task",
+        "OMH가 레인을 잘못 고른 건 나중에 보고, 지금은 장바구니 API 테스트 짜줘",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "korean-word-containing-cause-syllables-is-not-a-report",
+        "회원인증 is not 원인: OMH opening a member-auth router file is not a report",
+        "OMH가 회원인증 라우터 파일을 열었어",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "english-choice-after-particle-then-korean-request-is-a-task",
+        "An English choice after the particle, then a Korean request, is a task",
+        "OMH가 chose the parser module. 라우팅 규칙 정리해줘",
+        "answer_clarification",
+        "",
+        # The shortlist names workflow-learning as a candidate on origin/main
+        # too; the pin is that the route asks instead of dispatching it.
+    ),
     # #2485 fourth review: "OMH가" names OMH only in a clause that reports on
     # it, so a request after a setting sentence reads as on origin/main, with
     # any ending (76adc3fd9 dispatched workflow-learning on both).
@@ -12332,6 +12370,18 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # after a setting sentence keeps origin/main's lane, and a Korean report
     # whose OMH clause carries the feedback cue reaches workflow-learning
     # (origin/main asked a question).
+    # #2485 fifth review: OMH missing a test is its coding work, so the code
+    # request keeps its lane (d4fdeeb56 dispatched workflow-learning).
+    RoutingInterventionCase(
+        "korean-omh-missed-a-test-then-add-tests-keeps-coding-lane",
+        "A Korean note that OMH missed a test, then a request to add tests, keeps the coding lane",
+        "OMH가 테스트를 누락했어. 라우팅 핸들러 테스트 추가해줘",
+        "dispatch",
+        "ultrawork",
+        "present_plan",
+        "plan",
+        "ultrawork",
+    ),
     RoutingInterventionCase(
         "korean-leave-it-tidied-router-config-after-setting-keeps-toolbelt",
         "A Korean 정리해 둬 request on router settings after a setting sentence keeps its lane",
