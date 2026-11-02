@@ -23,6 +23,22 @@ All notable changes will be documented here.
   temporary worktree, with writes stubbed; and prototype code the receipt
   lets later work reference is kept on a named throwaway ref the receipt
   cites.
+
+- **The frontend skill now covers data, forms, and input, not only the look.**
+  A page that reads or writes remote data loads the state rules that until now
+  only a refactor loaded (server state in a query cache, each mutation naming
+  what it invalidates, an optimistic write with its rollback), and the route
+  state matrix gains submitting, submit-failed, optimistic-pending, stale, and
+  conflict rows. A new `forms-and-input` reference, loaded for a form, a text
+  composer, or a dialog, covers labels, when errors appear, mapping server
+  field errors onto fields, one submit in flight, dialog focus, and an
+  Enter-to-send that waits for IME composition, so a Korean, Japanese, or
+  Chinese user no longer sends half-composed text. The brief names a
+  browser-support target before newer platform features are used, the taste
+  reference gains interface-copy rules, and the component inventory records
+  each primitive's interface. `frontend-refactor` now requires a before/after
+  capture when a change alters DOM nesting or class composition, and inlines
+  only abstractions whose deletion makes their complexity vanish.
 - **A running gateway keeps working through `omh update`.** Three causes
   are fixed. GC could delete the generation an older gateway still served:
   the first activation it recorded had no time, and GC read that as earlier
@@ -405,6 +421,17 @@ All notable changes will be documented here.
     set, before a dispatch spends a run finding out. Its PATH report no
     longer lists npm's extensionless shell shim, which logged
     `[WinError 193]` before falling back to `codex.CMD`.
+
+- **The Desktop pane says when a delegated lane failed, keeps a narrow pane
+  readable, and darkens the text you read.** A failed lane or route used to
+  be counted as `blocked`; the header and the status bar now say
+  `1 running · 1 failed` with failed in red, apart from `blocked` (stuck or
+  interrupted lanes, blocked rows) in yellow, and a red dot when nothing
+  runs. At the default 320 px pane a delegation row puts its model on a
+  second line under the title, so neither is cut to a few letters. The scope
+  line, plan notes, the subagent summary and backend notices use a text tone
+  between Desktop's secondary and tertiary roles, readable in the light
+  theme where tertiary alone was faint. In Korean the count reads `1개 실패`.
 
 ## 4.0.4 - 2026-11-01
 

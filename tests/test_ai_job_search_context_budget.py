@@ -228,6 +228,15 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # #2488 adds the short-promo line to show-reel's idea lane (only
         # show-reel moves); main's pin before it is
         # 52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c.
+        # #2502 adds frontend's state-discipline, forms-and-input and
+        # browser-support lines and frontend-refactor's visual-parity clause;
+        # only frontend and frontend-refactor move, and main's producer gives
+        # the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # Its second review round (dialog Escape under closedby="none", the
+        # close-watcher wording, the support-target wording) moves frontend
+        # only; the round before gives
+        # 99bdb5f2edb3a7fd2f2f79dd3b2f9fb96c9a8ee5b560b05f837fbc6b27fc0f84.
         # Then plan's vertical-slice line and checklist item, and
         # decision-prototype's artifact-shapes pointer (body and quality bar);
         # only plan and decision-prototype move, and main's producer gives the
@@ -237,7 +246,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # append-only file task, and the checklist matching the bar) moves
         # plan only; the round's first commit gives the previous pin
         # f0f941b8604a5e4680dad6819edb593cf59048d03d84c4567279dfad8908bf42.
-        self.assertEqual(_digest(legacy_hashes), 'bd65a5ebdc2a486afcdab7b20436b6474d86720203ddc0f0eee0fa921e023196')
+        # Merged with main after #2502: both sides' bodies; main's pin before the
+        # merge was e498851bd607d40942631386858a10c1ed1ea5ea8e3a17a033b866d2c1bbe956.
+        self.assertEqual(_digest(legacy_hashes), 'e352ad0c1c3d64e7f0fa179df5e11f9637816c2f628a2dd2d6434efb2566b230')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
