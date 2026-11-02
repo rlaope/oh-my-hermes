@@ -197,12 +197,13 @@ class LogoPalette:
 
 LAUNCH_PALETTES: dict[str, tuple[LogoPalette, LogoPalette]] = {
     "spectrum": (
-        LogoPalette("#F778BA", "#F8A87E", "#4A4F66",
+        # Its edge, the composer's rules and the card's frames: a muted violet (owner, 2026-11-02), not grey.
+        LogoPalette("#F778BA", "#F8A87E", "#6E5A9E",
                     sweep=tuple(KIND_HUES[kind][0] for kind in ("skill", "dag", "file", "shell", "web")),
                     ground="#18162B"),
         # The kind hues' light column ends in an olive lime (#687C00); the sweep's own light stops keep each hue's
         # chroma instead, the lime at OKLCH 132 degrees.
-        LogoPalette("#B53C80", "#BF4306", "#8C93A8", sweep=("#974BB2", "#B53C80", "#BF4306", "#986600", "#4E8302"),
+        LogoPalette("#B53C80", "#BF4306", "#9A8BC4", sweep=("#974BB2", "#B53C80", "#BF4306", "#986600", "#4E8302"),
                     ground="#F4F1FB"),
     ),
     "violet": (
