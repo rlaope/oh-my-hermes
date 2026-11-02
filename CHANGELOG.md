@@ -24,6 +24,11 @@ All notable changes will be documented here.
   prints nothing new. The attach child exits 69 for a gateway that is not
   answering yet; every other failure still exits 1.
 
+- **The info line's badge carries the version.** It reads
+  `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
+  narrow line the version is the first part of the left side to go, before
+  the branch name is cut and before the badge shortens.
+
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
   grey edge (`#4A4F66`); they are now a muted violet (`#6E5A9E`), lifted for
@@ -84,6 +89,11 @@ All notable changes will be documented here.
   using the existing admission and session-lens gates. Discord threads Hermes
   auto-created from channel messages use their parent channel's memory scope;
   other threads keep their own.
+- **Hermes saves a stated preference or decision in the same turn, even when
+  the message also asks for other work.** The `omh_remember` description and
+  its one-line prompt now ask for the save before other tools, limit it to the
+  user's own words, and exclude pasted text and facts that only matter for the
+  current task.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
@@ -112,6 +122,16 @@ All notable changes will be documented here.
   summary, the messenger end block and the TUI end view all show it, and an
   unverified done run is told to add a verify node through `extend`. Runs
   stored before this update keep reading their nodes as before.
+
+- **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
+  `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an
+  HTTPS root gets `/v1/systemone` appended (`/systemone` when it already ends
+  in `/v1`). A value with plain HTTP, no host, credentials, a query or a
+  fragment is refused before any connection opens, redirects stay refused,
+  and the OpenRouter route and its opt-in are unchanged. `omh doctor` says a
+  custom root is configured without printing it, and a custom endpoint that
+  reports no cost is shown as unpriced instead of at TypeSafe's list price.
+  Contributed by @yqm-307 (#2473; requested in #2468).
 
 ## 4.0.4 - 2026-11-01
 
