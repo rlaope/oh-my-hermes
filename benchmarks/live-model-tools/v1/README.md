@@ -745,12 +745,14 @@ the retry rule above does not cover them.
 
 The amendment:
 - The original records stay as recorded and are the **strict reading**, scored as registered.
-- After the lanes finish, each instance whose last record in an arm is a `process_crash` is
-  run once more, in that arm only, on the same route, into a separate `runs-rerun/` folder.
+- After the lanes finish, each instance with a `process_crash` as its last record in either arm
+  is run once more in **both** arms, back to back in alternating order, on the same route, into a
+  separate `runs-rerun/` folder. So each re-run pair compares two runs made under the same load.
   Nothing else is re-run.
-- The **re-run reading** replaces those records with their re-runs.
-- `gate.py` reports every clause under both readings, with the crash count per arm. If the
-  readings disagree, the result says so, and the branch asks to merge only with that stated.
+- The **re-run reading** replaces both records of those instances with their re-runs.
+- `gate.py` reports every clause under both readings, with the crash count per arm and per
+  model. If the readings disagree, the result says so, and the branch asks to merge only with
+  that stated.
 
 ### 2026-10-31 compact `omh_context` result: base vs branch
 
