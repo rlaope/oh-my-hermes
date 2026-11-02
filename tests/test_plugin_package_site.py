@@ -91,6 +91,84 @@ print(json.dumps({
 """
 
 
+# A gateway that stays up through `omh update`: its finder was installed on one
+# generation's site, the update recorded the next, and GC later removed the
+# first. Only `package_site` is loaded, under the foreign package name.
+_FALL_FORWARD_HOST = r"""
+import json
+import shutil
+import sys
+import types
+
+bundle, old, new, loaded_version, next_version = sys.argv[1:6]
+package = types.ModuleType("hermes_plugin_omh")
+package.__path__ = [bundle]
+sys.modules["hermes_plugin_omh"] = package
+from hermes_plugin_omh import package_site
+
+manifest_path = bundle + "/.omh-plugin-manifest.json"
+
+
+def record(site):
+    with open(manifest_path, encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    manifest["package_site"]["path"] = site
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle)
+
+
+first = package_site.ensure_recorded_package_site()
+import omh
+import omh.sub
+
+record(new)
+kept = package_site.ensure_recorded_package_site()
+kept_site = package_site.active_site()
+import omh.early
+
+shutil.rmtree(old)
+if next_version != loaded_version:
+    # A release update: the bundle it copied declares the next version.
+    plugin_yaml = bundle + "/plugin.yaml"
+    with open(plugin_yaml, encoding="utf-8") as handle:
+        text = handle.read()
+    with open(plugin_yaml, "w", encoding="utf-8") as handle:
+        handle.write(text.replace(f'version: "{loaded_version}"', f'version: "{next_version}"'))
+moved = package_site.ensure_recorded_package_site()
+state = package_site.package_site_state()
+try:
+    import omh.late
+    import omh.sub.leaf
+
+    late, leaf = omh.late.__file__, omh.sub.leaf.__file__
+except ImportError as error:
+    late, leaf = type(error).__name__, ""
+
+print(json.dumps({
+    "first": first,
+    "kept": kept,
+    "kept_site": kept_site,
+    "early": omh.early.__file__,
+    "moved": moved,
+    "state": state,
+    "moved_site": package_site.active_site(),
+    "late": late,
+    "leaf": leaf,
+}))
+"""
+
+
+def _fake_site(site: Path, version: str) -> None:
+    """An installed-looking `omh` in `site`: the metadata the finder checks, and a few modules."""
+    for relative in ("omh/__init__.py", "omh/early.py", "omh/late.py", "omh/sub/__init__.py", "omh/sub/leaf.py"):
+        (site / relative).parent.mkdir(parents=True, exist_ok=True)
+        (site / relative).write_text("", encoding="utf-8")
+    info = site / f"oh_my_hermes-{version}.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(f"Metadata-Version: 2.1\nName: oh-my-hermes\nVersion: {version}\n", encoding="utf-8")
+    (info / "RECORD").write_text("omh/__init__.py,,\n", encoding="utf-8")
+
+
 def _venv_python(venv: Path) -> Path:
     return venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
@@ -238,6 +316,48 @@ class RecordedPackageSiteTests(unittest.TestCase):
         self.assertEqual(observed["site"]["installed_version"], "")
         self.assertIsNone(observed["omh_file"])
 
+
+    def fall_forward(self, next_version: str) -> dict:
+        old, new = self.root / "generations" / "a" / "site", self.root / "generations" / "b" / "site"
+        _fake_site(old, __version__)
+        _fake_site(new, next_version)
+        self.record(old)
+        env = {"PATH": os.environ.get("PATH", ""), "HOME": str(self.root / "home"), "TMPDIR": str(self.root)}
+        result = subprocess.run(
+            [sys.executable, "-I", "-S", "-B", "-c", _FALL_FORWARD_HOST, str(self.bundle), str(old), str(new),
+             __version__, next_version],
+            env=env, cwd=str(self.root), capture_output=True, text=True, timeout=120, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_a_finder_keeps_its_site_until_it_is_gone_then_falls_forward(self) -> None:
+        old, new = self.root / "generations" / "a" / "site", self.root / "generations" / "b" / "site"
+        observed = self.fall_forward(__version__)
+        self.assertEqual(observed["first"], "added")
+        # While the first site is there the process keeps importing from it.
+        self.assertEqual(observed["kept"], "added")
+        self.assertEqual(observed["kept_site"], str(old))
+        self.assertTrue(observed["early"].startswith(str(old)), observed["early"])
+        # Once it is gone, the recorded site serves the next import, and a
+        # subpackage loaded from the old site finds its submodules there too.
+        # Reported as a move, not as a clean first install, so a restart can be named.
+        self.assertEqual(observed["moved"], "moved")
+        self.assertEqual(observed["state"]["former"], [str(old)])
+        self.assertEqual(observed["state"]["loaded_version"], __version__)
+        self.assertEqual(observed["moved_site"], str(new))
+        self.assertTrue(observed["late"].startswith(str(new)), observed["late"])
+        self.assertTrue(observed["leaf"].startswith(str(new)), observed["leaf"])
+
+    def test_a_finder_never_falls_forward_onto_another_version(self) -> None:
+        # A release update removed the loaded 4.x directory and recorded the
+        # next release: mixing the two in one process is refused, and named.
+        observed = self.fall_forward("999.0.0")
+        self.assertEqual(observed["moved"], "stale_until_restart")
+        self.assertEqual(observed["state"]["loaded_version"], __version__)
+        self.assertEqual(observed["state"]["installed_version"], "999.0.0")
+        self.assertEqual(observed["moved_site"], str(self.root / "generations" / "a" / "site"))
+        self.assertEqual(observed["late"], "ModuleNotFoundError")
 
 class PackageSiteRecordTests(unittest.TestCase):
     """What `omh setup` writes beside the bundle."""

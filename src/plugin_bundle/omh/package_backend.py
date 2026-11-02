@@ -219,7 +219,7 @@ def package_backend_detail(backend: dict[str, Any], *, feature: str, cli_route: 
     site_path = str(site.get("path") or "")
     if status == PACKAGE_BACKEND_AVAILABLE:
         source = (
-            f", from the package OMH's installer put in {site_path}" if site_status == "added" and site_path else ""
+            f", from the package OMH's installer put in {site_path}" if site_status in {"added", "moved"} and site_path else ""
         )
         return f"The Python interpreter running this plugin imports the oh-my-hermes backend for {feature}{source}."
     bundle_version = str(backend.get("bundle_version") or "")
@@ -240,6 +240,15 @@ def package_backend_detail(backend: dict[str, Any], *, feature: str, cli_route: 
             "The OMH plugin is registered, and OMH's installer recorded its package in "
             f"{site_path}, but that package is {installed} while this plugin is{at_version}, so "
             f"{feature} does not run against it. {repair}"
+        )
+    elif status == PACKAGE_BACKEND_ABSENT and site_status == "stale_until_restart":
+        loaded = str(site.get("loaded_version") or "an earlier version")
+        installed = str(site.get("installed_version") or "another version")
+        lead = (
+            f"This Hermes process loaded the oh-my-hermes package {loaded} at start, and an update has "
+            f"since removed it and recorded {installed} in {site_path}; one process does not mix the "
+            f"two, so {feature} has no backend until Hermes restarts. Restart Hermes (for a gateway, "
+            "`hermes gateway restart`)."
         )
     elif status == PACKAGE_BACKEND_ABSENT and site_status == "missing":
         lead = (

@@ -23,6 +23,25 @@ All notable changes will be documented here.
   temporary worktree, with writes stubbed; and prototype code the receipt
   lets later work reference is kept on a named throwaway ref the receipt
   cites.
+- **A running gateway keeps working through `omh update`.** Three causes
+  are fixed. GC could delete the generation an older gateway still served:
+  the first activation it recorded had no time, and GC read that as earlier
+  than every gateway start, so it held the wrong generation. When the
+  history cannot say which generation a gateway started on, GC now keeps
+  every generation created before that start and prints a `note:` saying
+  so. An open OMH TUI holds its own generation the same way, through an OS
+  lock under `generation-holds/`. Every update also rewrote the plugin bundle
+  and restamped `installed_at` even when no bundle file changed, so the
+  gateway restart hint fired after every update; a moved package directory
+  now updates only the manifest's `package_site`, and the hint fires only
+  when the bundle's files change. Last, a gateway's `omh` finder never looked
+  at the manifest again. It now keeps its directory while that exists. Once
+  an update removes it, the finder moves to the recorded directory when that
+  holds the version already loaded (`package_site` status `moved`), so later
+  `omh.*` imports keep working; code that reads files through an old
+  module's `__file__` still points at the removed directory until a restart.
+  The recorded directory holding another version is reported as
+  `stale_until_restart`, and nothing is loaded from it.
 
 - **The OMH TUI rides out a slow or busy Hermes gateway.** Its connection to
   the shared gateway sent websockets' default keepalive ping, so a gateway
@@ -298,6 +317,12 @@ All notable changes will be documented here.
   its one-line prompt now ask for the save before other tools, limit it to the
   user's own words, and exclude pasted text and facts that only matter for the
   current task.
+- **A rule the user restates in other words updates the saved record instead
+  of adding a second one.** `omh_remember(action="save")` takes `replaces`,
+  the id of a record already shown to the conversation; the merged summary
+  goes through the correction path, the old record moves to history, and only
+  the merged record recalls. An id outside the session's lens still saves the
+  fact as a new record.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
