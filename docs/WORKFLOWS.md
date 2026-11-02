@@ -5194,8 +5194,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If the import graph is unavailable, build the codegraph first or reduce the plan's confidence and say which files are unverified.
   - If a phase cannot be made independently green, split it further; two half-phases beat one unabortable one.
   - If reconnaissance finds the direction itself is unsettled, route back to `ralplan` before ordering phases.
+  - If the module to deepen is chosen but its interface is not, shape it under contrasting constraints and recommend one design before phase 1; that is not a contested direction.
 - Required inputs:
-  - the decided target shape (what moves where), or a pointer to the accepted plan that decided it
+  - the decided target shape (what moves where), or a pointer to the accepted plan that decided it; for a chosen deepening candidate whose interface is still open, shape it first per `omh-refactor-plan/references/interface-shaping.md`
   - the affected-file evidence: import graph, codegraph handoff, or an observed file inventory
   - the regression gates that exist today (test suite, typecheck, generated-artifact checks)
 - Expected outputs:
@@ -5215,7 +5216,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 
 ### tech-debt-audit
 
-[omh] Accumulated tech debt to rank: build the severity-by-effort debt ledger from observed repo evidence - orient, audit the named dimensions with file:line citations, rank fixes and quick wins - and reconcile RESOLVED/NEW/CARRIED against the previous ledger on rerun.
+[omh] Accumulated tech debt or architecture deepening to rank: build the severity-by-effort debt ledger from observed repo evidence - orient, audit the named dimensions with file:line citations, rank fixes and quick wins - and reconcile RESOLVED/NEW/CARRIED on rerun.
 
 - Category: `maintenance`
 - Phase: `tech-debt-audit`
@@ -5236,7 +5237,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The user wants the debt removed now, behavior preserved; use `ai-slop-cleaner` for deletion-first cleanup.
   - A boundary-changing fix from the ledger needs its execution shaped into phases; use `refactor-plan`.
   - The question is release risk for a specific deploy rather than source quality; use `production-audit`.
-- Strong routing signals: `tech-debt-audit`, `tech debt`, `tech debt audit`, `technical debt`, `technical debt audit`, `tech debt ledger`, `debt ledger`, `audit our tech debt`, `tech debt report`, `code debt audit`, `where is our tech debt`, `기술부채`, `기술 부채`, `기술부채 감사`, `기술부채 감사해줘`, `기술부채 점검`, `기술부채 장부`, `부채 원장`, `техдолг`, `технический долг`, `аудит техдолга`, `аудит технического долга`
+- Strong routing signals: `tech-debt-audit`, `tech debt`, `tech debt audit`, `technical debt`, `technical debt audit`, `tech debt ledger`, `debt ledger`, `audit our tech debt`, `tech debt report`, `code debt audit`, `where is our tech debt`, `improve the codebase architecture`, `improve the architecture of this repo`, `deepening opportunities in this codebase`, `shallow modules in this codebase`, `기술부채`, `기술 부채`, `기술부채 감사`, `기술부채 감사해줘`, `기술부채 점검`, `기술부채 장부`, `부채 원장`, `코드베이스 아키텍처 개선해줘`, `코드 아키텍처 개선해줘`, `техдолг`, `технический долг`, `аудит техдолга`, `аудит технического долга`
 - Good example:
   - Prompt: Audit our tech debt and tell me what to fix first - we have maybe two weeks of cleanup budget.
   - Expected behavior: Orientation from manifests and churn, dimension-by-dimension findings with file:line citations, the severity-by-effort ledger with top fixes and quick wins sized to the budget, and the looks-bad-but-fine list.
@@ -5250,6 +5251,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Audit dimension by dimension from the named list - architectural decay, consistency rot, type and contract gaps, test debt, dependency and configuration debt, performance and resource debt, error-handling and observability debt, security hygiene, documentation drift; the full contract is `omh-tech-debt-audit/references/debt-dimensions.md`.
   - Every finding row carries a stable id, its dimension, a file:line citation, a severity, an effort class (S/M/L), and a bounded recommendation - never a rewrite.
   - Close with the mandatory looks-bad-but-is-actually-fine section: deliberate patterns that pattern-match to debt stay off the ledger, with the reason recorded.
+  - For an architecture-improvement or deepening request, load `omh-tech-debt-audit/references/architecture-deepening.md`: candidates are architectural-decay ledger rows proven shallow by the deletion test, never by size, and the audit stops at ranked candidates with one named top pick - it proposes no interface.
   - On rerun, reconcile against the previous ledger before writing a new one: every prior finding is marked RESOLVED with the evidence gone, CARRIED with its age, or superseded by a NEW finding - a rerun that restarts from zero loses the ledger's point.
 - Completion checklist:
   - Orientation evidence is observed: manifests, churn ranking, and largest files are named, not assumed.

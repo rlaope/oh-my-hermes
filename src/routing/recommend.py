@@ -215,6 +215,25 @@ _GENERIC_TRIGGER_TOKENS = frozenset(
 _RISKY_REFACTOR_GUARD_ID = "risky_refactor_before_cleanup"
 _RISKY_REFACTOR_FOLLOWUP_ONLY_SKILLS = frozenset({"ai-slop-cleaner"})
 _RISKY_REFACTOR_FOLLOWUP_SCORE_CAP = 7
+# The architecture-deepening phrases name `tech-debt-audit` in a clarifying
+# question but never dispatch it on their own (#2501 review). Each phrase
+# holds the very words the skill's metadata credit reads ("architecture",
+# "codebase", "repo", "deepening"), so a sentence that only quotes one -- a
+# job post, a README line, a contract -- reached the dispatch bar from the
+# phrase alone. Without evidence outside these phrases (another trigger, the
+# name, a direct or path match) the score stops below that bar.
+_TECH_DEBT_AUDIT_CLARIFY_ONLY_SCORE_CAP = 7
+_TECH_DEBT_AUDIT_CLARIFY_ONLY_TRIGGERS = frozenset(
+    f"trigger:{normalized_phrase(phrase)}"
+    for phrase in (
+        "improve the codebase architecture",
+        "improve the architecture of this repo",
+        "deepening opportunities in this codebase",
+        "shallow modules in this codebase",
+        "코드베이스 아키텍처 개선해줘",
+        "코드 아키텍처 개선해줘",
+    )
+)
 _RISKY_REFACTOR_FOLLOWUP_MATCHED = "guard:risky_refactor_followup_after_plan"
 _RISKY_REFACTOR_FOLLOWUP_WHY = (
     "Follow-up only: use cleanup after a reviewed plan locks scope, risks, and verification."
@@ -3795,8 +3814,39 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # they claimed finance chat and every review request. Complete phrases
     # ("tech debt", "debt ledger", ...) carry the intent; no single token is
     # unambiguous alone.
+    # The architecture-deepening phrases are held the same way, and each one
+    # names the code it is about ("... this codebase", "... this repo"); they
+    # are clarify-only too (`_TECH_DEBT_AUDIT_CLARIFY_ONLY_TRIGGERS`):
+    # "architecture" is ML models, cloud and network infra, buildings, org
+    # charts and system design; "improve" is everyday;
+    # "shallow modules" and "deepening opportunities" are courses and client
+    # accounts. Without the code noun inside the phrase nothing scores, and
+    # the message routes exactly as it did before these phrases existed.
     "tech-debt-audit": frozenset(
-        {"audit", "code", "debt", "is", "ledger", "our", "report", "tech", "technical", "where"}
+        {
+            "architecture",
+            "audit",
+            "code",
+            "codebase",
+            "debt",
+            "deepening",
+            "improve",
+            "in",
+            "is",
+            "ledger",
+            "modules",
+            "of",
+            "opportunities",
+            "our",
+            "repo",
+            "report",
+            "shallow",
+            "tech",
+            "technical",
+            "the",
+            "this",
+            "where",
+        }
     ),
     # `award-bar-score` names its work with words every other lane owns --
     # "design" is the whole materials lane, "review" is code-review, "site",
@@ -4799,6 +4849,14 @@ def _score_definition(
         if glob and query_tokens & _tokens(" ".join(definition.triggers)):
             score += PATH_GLOB_SCORE
             matched.add(f"path:{glob}")
+
+    if (
+        definition.name == "tech-debt-audit"
+        and matched & _TECH_DEBT_AUDIT_CLARIFY_ONLY_TRIGGERS
+        and not {label for label in matched if not label.startswith("metadata:")}
+        - _TECH_DEBT_AUDIT_CLARIFY_ONLY_TRIGGERS
+    ):
+        score = min(score, _TECH_DEBT_AUDIT_CLARIFY_ONLY_SCORE_CAP)
 
     if score <= 0:
         return None

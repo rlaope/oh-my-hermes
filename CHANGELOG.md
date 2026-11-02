@@ -4,6 +4,25 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
+  architecture-deepening reading: it looks for shallow modules (an interface
+  nearly as large as what it hides), proves each one with the deletion test
+  rather than its size, classifies its dependencies to say how the deepened
+  module will be tested, and ranks the candidates as ledger rows with one top
+  pick, proposing no interface. `refactor-plan` then shapes the chosen
+  module's interface: at least three designs under contrasting constraints,
+  compared on depth, locality and seam placement, one recommendation, and the
+  approval gate unchanged. Its tests phase now deletes tests that reach past
+  the new interface once an interface-level test covers them, and
+  `ai-slop-cleaner` keeps a single-caller module that hides real complexity
+  instead of inlining it. Requests that name the code ("improve the codebase
+  architecture", "improve the architecture of this repo", "find deepening
+  opportunities in this codebase", "shallow modules in this codebase",
+  "코드베이스 아키텍처 개선해줘") now name the audit in the clarifying
+  question, where main named codebase onboarding or unrelated lanes; they
+  dispatch it only beside its own words, such as "tech debt". An
+  architecture that is not code (a model, cloud infra, an org chart, a
+  building) routes exactly as before.
 - **LSP navigation works on Windows.** `lsp_definition`, `lsp_references`
   and `lsp_rename` answered `no_result` on Windows while the language server
   was active: OMH named the file `file://C:%5CUsers%5C...` while Hermes had
@@ -169,6 +188,7 @@ All notable changes will be documented here.
   each primitive's interface. `frontend-refactor` now requires a before/after
   capture when a change alters DOM nesting or class composition, and inlines
   only abstractions whose deletion makes their complexity vanish.
+
 - **A running gateway keeps working through `omh update`.** Three causes
   are fixed. GC could delete the generation an older gateway still served:
   the first activation it recorded had no time, and GC read that as earlier

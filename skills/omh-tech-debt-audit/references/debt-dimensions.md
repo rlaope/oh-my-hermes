@@ -23,7 +23,7 @@ High-churn plus high-size plus low-test is the audit's priority corner.
 
 | Dimension | What to look for |
 | --- | --- |
-| Architectural decay | cyclic imports, god modules, layers bypassed, boundary leaks between packages |
+| Architectural decay | cyclic imports, god modules, layers bypassed, boundary leaks between packages, shallow modules (deletion test, see `references/architecture-deepening.md`) |
 | Consistency rot | competing patterns for the same job - two HTTP clients, three error styles, mixed naming |
 | Type and contract gaps | untyped public surfaces, `any`-equivalents, implicit schemas parsed in many places |
 | Test debt | untested high-churn paths, skipped or stub tests, assertions that cannot fail |

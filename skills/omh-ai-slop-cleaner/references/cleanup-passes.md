@@ -11,7 +11,7 @@ one mistake reverts all three.
 | --- | --- | --- |
 | Duplication | The same decision encoded twice; near-identical helpers with drifted edges. | Keep one owner, delete the copies; lookalikes encoding different decisions stay. |
 | Dead code | Unused symbols and imports; unreachable branches; commented-out blocks (version control preserves history); feature flags nothing reads. | Delete outright; no deprecation shims for code with zero callers. |
-| Needless abstraction | Single-use helpers, single-implementation interfaces, layers that only forward, config for values that never vary. | Inline and delete; re-extract only when a real second caller exists. |
+| Needless abstraction | Layers and wrappers that only forward, rename, or re-wrap; single-implementation interfaces; config for values that never vary. | Run the deletion test first: inline only when deleting the module makes its complexity vanish. When the same complexity would reappear at the call sites, the module stays, whatever its caller count. A single-implementation interface stays only when the tests use a second adapter. |
 | Boundary violation | Reaching into another module's internals; circular imports; logic in the wrong layer. | Repair the boundary with the existing surface; a boundary-CHANGING fix routes to `ralplan` first. |
 | Missing tests | Behavior with no lock; tests asserting implementation details or nothing at all. | Add the behavior lock in the test-reinforcement pass; delete assert-nothing tests as dead code. |
 | Templated defaults | Boilerplate comments restating the code, placeholder docstrings, copy-pasted config blocks nothing uses. | Delete; a comment survives only when it states what the code cannot. |
@@ -94,3 +94,9 @@ behavior preservation is claimed only from the observed before/after
 verification, and a cleanup diff is never review, CI, or merge evidence.
 A review-mode verdict is a model's judgement of the evidence it was shown,
 not a run of the checks.
+
+## Attribution
+
+The deletion test for needless abstraction adapts an idea from Matt Pocock's
+`codebase-design` skill at `mattpocock/skills@7739eaed7f8f3915437a8def198a6d0d7206dbc7`,
+MIT License, Copyright 2026 Matt Pocock.

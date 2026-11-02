@@ -58,7 +58,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # now opens "Video to make from an idea..." at the same 57-character
         # cut, so the length stays 13326; restoring that one line reproduces
         # 7086c90b...06cd3.
-        self.assertEqual(_digest(legacy), '4c6beb2acd99dc18299bdede1b94152ab846757057e8307bbe1c7bbb787e076e')
+        # Digest re-derived for architecture deepening: tech-debt-audit's index
+        # line now opens "Accumulated tech debt or architecture deepening..."
+        # at the same cut, so the length stays; restoring that one line
+        # reproduces 4c6beb2a...076e.
+        self.assertEqual(_digest(legacy), '61fb09020952f57a382da73e315a41ae7a38b50ae7a2e3d43626c4664c4f7f9b')
         self.assertEqual(len('\n'.join(legacy)), 13326)
         delta = len('\n'.join(lines)) - 13326
         self.assertGreater(delta, 0)
@@ -111,8 +115,15 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT). Merged with #2499 and #2497: both sides'
             # rows; the base and digest are re-derived from the producer (#2498's pin before the
             # merge was c409741a...73ca at 530006, #2497's 2f644f53...ec43 at 529956).
-            (skill_capabilities, 530293, FULL_ROW_DELTA_CAP,
-             '83828030e37750008d5b608c20402c31693a0a17d583c14fae8e763579a4e82a',
+            # Architecture deepening (#2501) widens the refactor-plan row (+136) and the
+            # tech-debt-audit row (-2), itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; its
+            # review moves the tech-debt-audit "+N more triggers" count (same length). Merged with
+            # main: base and digest re-derived from the producer (#2501's pin before the merge was
+            # b073f4fb...eda7 at 529803, main's 83828030...e82a at 530293).
+            # #2501's second review moves only tech-debt-audit's "+N more triggers"
+            # count (same length); the digest before it was 3a45e62c...32d7.
+            (skill_capabilities, 530427, FULL_ROW_DELTA_CAP,
+             '93de88ace8292b9aa1aadae79a64f518df2720597a1815f4b7a2c0b478c881c0',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -295,12 +306,18 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # app-debugging's fix_handoff line and checklist, and names frontend's
         # fakes by the shared page's boundaries; only app-debugging and
         # frontend move again.
-        # Merged with #2507's branch (carrying #2503, #2499, #2497, #2498): both sides' bodies; the pin before the merge was
-        # aac1f1091ee9cbfbc266663a3bcccd7274a7b3fd4b61e98ab127395004763289.
-        # Merged with main: show-reel's launch-film lane pointer moves show-reel
-        # only; main's pin before the merge was
+        # Then architecture deepening (#2501): only tech-debt-audit and
+        # refactor-plan move, and main's producer gives the previous pin
+        # e498851bd607d40942631386858a10c1ed1ea5ea8e3a17a033b866d2c1bbe956.
+        # Merged with main after #2506 (the whole chain): both sides' bodies; main's pin before the merge was
         # 491fb471be66fac6154ef944b02563994a1ed46fbc59a89b79243c24d941fdff.
-        self.assertEqual(_digest(legacy_hashes), '8f5163156f133106895decf6e2a78fccd53eccc614e2e1025c86cfc0e3dee37a')
+        # #2501's second review cuts tech-debt-audit's phrases to four and the
+        # Korean ones to their request forms; only that body's routing-signal
+        # line moves, and the pin before it was 81f862a9...97f5.
+        # Merged with main after #2509: show-reel's launch-film lane pointer moves show-reel
+        # only; main's pin before the merge was 8f5163156f133106895decf6e2a78fccd53eccc614e2e1025c86cfc0e3dee37a
+        # and #2501's was 7a5aacd754cae58c4ef6c53739768abc1f4a323f0f53aaebd9e704b3b0d9ba1e.
+        self.assertEqual(_digest(legacy_hashes), 'fac0aeb1db64b01df8b9c2ed35c1e15c97d0ef4bcff316586c1f8d1b04e88048')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

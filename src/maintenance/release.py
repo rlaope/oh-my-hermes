@@ -927,7 +927,14 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # Merged with #2499 and #2497 after #2498: 533028 (#2499's tree: +287 app-debugging) and
 # 533078 (#2498: +307 llm-app-dev, +30 rust) each grew a different row over 532741, so the
 # merged value is re-derived from the producer: 533365 (532741 + 287 + 307 + 30); no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533365
+# Architecture deepening (#2501) adds: the `refactor-plan` row's first
+# required input admits a chosen deepening candidate whose interface is shaped
+# first by `references/interface-shaping.md` (+136); the `tech-debt-audit`
+# row's description names architecture deepening and drops "against the
+# previous ledger" from its rerun clause (-2). No other row moved.
+# Merged with main after #2506: 533365 (main) + 136 - 2 = 533499, measured from the producer
+# on the merged tree; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533499
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three
