@@ -10,9 +10,11 @@ least.
 - Every control has a visible label tied to it in markup (`<label for>`, a
   wrapping label, or `aria-labelledby`). A placeholder is an example value,
   never the label: it disappears on the first keystroke.
-- Help text is linked with `aria-describedby`; the error message with
-  `aria-errormessage` or `aria-describedby`. A format hint sits above the
-  field, where the browser's autofill list cannot cover it.
+- Help text and the error message are linked with `aria-describedby`, which
+  every screen reader reads. Add `aria-errormessage` only on top of
+  `aria-invalid="true"`, and only when the screen readers the product targets
+  are known to honor it. A format hint sits above the field, where the
+  browser's autofill list cannot cover it.
 - Required fields say so in text, and no state is carried by color alone.
 - A personal-data field declares its autofill purpose (`autocomplete` such as
   `email`, `name`, `tel`, `street-address`, `one-time-code`,
@@ -22,9 +24,10 @@ least.
 ## When an error appears
 
 - Validate when the user commits a value (blur) or submits, not on each
-  keystroke of a value still being typed: `user@gm` is not an error yet.
-  CSS `:user-invalid` has this timing built in; JavaScript validation keeps a
-  per-field touched flag for the same effect.
+  keystroke of a value still being typed: a postcode with three of its five
+  digits entered is unfinished, not wrong. CSS `:user-invalid` has this
+  timing built in; JavaScript validation keeps a per-field touched flag for
+  the same effect.
 - Once a field shows an error, re-check it on input, so the error clears the
   moment the value becomes valid.
 - `aria-invalid` turns on at the same moment the visual error appears. Set
@@ -40,9 +43,12 @@ least.
   skill's error envelope carries field paths:
   `omh-backend/references/service-contract.md`). A path with no matching
   field, and an error with no field, goes to one form-level summary.
-- After a failed submit, move focus to the first invalid field, or to the
-  summary when no field is at fault, and announce the summary once through a
-  live region.
+- After a failed submit, use one announcement channel, not two. Either move
+  focus to the first invalid field and put only a short count ("2 fields
+  need attention") into a live region that was already in the page before
+  the error, or, when no field is at fault, move focus to the summary itself
+  (`tabindex="-1"`, not a live region). Focusing an element and announcing
+  the same content reads it twice.
 - A failed submit keeps everything the user typed. Clearing the form on an
   error is data loss.
 - A conflict (409: the record changed since it was loaded) is its own state,
@@ -51,10 +57,13 @@ least.
 
 ## One submit in flight
 
-- While a submit is pending, the control shows it ("Saving…") and a second
-  submit is refused, whether it comes from a double click, Enter, or a
-  shortcut. Keep the button focusable while pending (`aria-disabled` plus an
-  early return) so focus does not fall back to the page.
+- The guard lives in the form's `submit` handler, not on the button's click:
+  Enter in a field submits the form without going through the button, even
+  an `aria-disabled` one. While a submit is pending, that handler returns
+  early, so a double click, Enter, and a shortcut are all refused.
+- The submit control shows the pending state ("Saving…") and stays
+  focusable (`aria-disabled`, not `disabled`), so focus does not drop to the
+  page.
 - When the endpoint is not naturally idempotent, the request carries an
   idempotency key created once per user intent and reused on retry, so a
   retry after a timeout does not create the record twice.
@@ -73,13 +82,21 @@ these languages.
   Enter submission already waits for composition. Do not add one.
 - A multiline field with a custom Enter-to-send checks composition first:
   when the key event reports `isComposing`, the Enter belongs to the IME, so
-  return without sending. Some Safari versions deliver `compositionend`
-  before the confirming Enter, so the flag already reads false; also treat
-  `keyCode === 229` as composing, or ignore an Enter that arrives within a few
-  milliseconds of `compositionend`. In a framework that wraps events, read
-  the flag from the native event.
-- Shift+Enter inserts a newline. Ctrl/Cmd+Enter shortcuts do not collide
-  with IME confirmation.
+  return without sending. Some Safari versions hand the confirming Enter to
+  script after `compositionend`, when the flag already reads false, so the
+  recommended check inside the Enter branch is
+  `event.isComposing || event.keyCode === 229`. In a framework that wraps
+  events, read both from the native event.
+- Only a codebase that refuses `keyCode` uses the timing fallback, and it
+  has to be exact: record `event.timeStamp` of the last `compositionend`,
+  and skip an Enter whose own `event.timeStamp` is within about 50 ms of it
+  in absolute value (Safari can stamp the keydown earlier than the
+  `compositionend`). Compare the two events' timestamps; a clock read inside
+  the handler (`Date.now()`, `performance.now()`) drifts whenever the main
+  thread is busy.
+- Shift+Enter inserts a newline. A send shortcut that needs a modifier
+  (Ctrl+Enter, Cmd+Enter) needs no composition check, because an IME confirms
+  its candidate with a bare Enter.
 - A visible submit button always remains; the key is an accelerator, not the
   only path.
 - Verify it by typing Korean or Japanese with a real IME and pressing Enter
@@ -94,20 +111,35 @@ these languages.
 - On open, focus moves into the dialog: its first field, or its heading when
   it has no field. Escape closes it, and on close focus returns to the
   control that opened it.
-- The page behind a modal does not scroll: `overscroll-behavior: contain` on
-  the dialog, and on its `::backdrop` together with `overflow: hidden`, or
-  the project's existing scroll lock.
 - A dialog holding unsaved input asks before discarding it on an accidental
-  close.
+  close. Chromium honors `preventDefault()` on a modal's `cancel` event only
+  once per user activation, so a second Escape closes it anyway: ask on the
+  first Escape, or open it with `closedby="none"` and give it an explicit
+  close control that runs the check.
+- Keeping the page behind a modal still is partly an enhancement.
+  `overscroll-behavior: contain` on the dialog stops scroll chaining when the
+  dialog's own content overflows. Stopping scroll over the backdrop, or
+  inside a dialog whose content does not overflow, relies on
+  `overscroll-behavior` applying to a non-scrolling container (`overflow:
+  hidden` plus `overscroll-behavior: contain` on `::backdrop`). That works
+  in Chrome and Edge 144+ and Firefox 150+, not in Safari, and cannot be
+  feature-detected: `@supports` and `CSS.supports()` answer true everywhere.
+  Ship it as a progressive enhancement and say which browsers get it; when
+  the support target needs a hard lock in every browser, use the project's
+  scroll lock.
 - A destructive confirmation names the action on its button ("Delete
   project"), never "OK".
 
 ## Check the support target
 
-`:user-invalid`, `popover`, and the newest dialog behaviors arrived in
-engines at different times. Check each against the browser-support target
-named in the brief; one newer than the target ships behind feature detection
-with a fallback.
+`:user-invalid`, `popover`, `closedby`, and the newest dialog behaviors
+arrived in engines at different times. Check each against the
+browser-support target named in the brief. A feature that is only Baseline
+Newly available, or newer than the target, ships behind feature detection
+with a fallback, or the target changes on purpose. A behavior that cannot be
+detected (the backdrop scroll above) cannot take that path: it ships only as
+an enhancement whose absence the page tolerates, or a different technique
+covers the target.
 
 ## Boundary
 

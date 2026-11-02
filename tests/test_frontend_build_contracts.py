@@ -98,7 +98,11 @@ class FormsAndInputTests(unittest.TestCase):
         content = _packaged(FORMS)
         self.assertIn("when the key event reports `isComposing`, the Enter belongs to the IME", content)
         # The Safari ordering is why the flag alone is not enough.
-        self.assertIn("`keyCode === 229`", content)
+        self.assertIn("`event.isComposing || event.keyCode === 229`", content)
+        # The timing fallback is only correct with event timestamps compared in absolute value.
+        self.assertIn("record `event.timeStamp` of the last `compositionend`", content)
+        self.assertIn("within about 50 ms of it in absolute value", content)
+        self.assertIn("a clock read inside the handler (`Date.now()`, `performance.now()`) drifts", content)
         self.assertIn("A single-line input inside a `<form>` needs no handler", content)
         self.assertIn("A visible submit button always remains", content)
         self.assertIn("typing Korean or Japanese with a real IME", content)
@@ -109,13 +113,26 @@ class FormsAndInputTests(unittest.TestCase):
         self.assertIn("`aria-invalid` turns on at the same moment the visual error appears", content)
         self.assertIn("Map each field path in the error response onto its field", content)
         self.assertIn("A failed submit keeps everything the user typed", content)
+        self.assertIn("use one announcement channel, not two", content)
+        self.assertIn("(`tabindex=\"-1\"`, not a live region)", content)
+        self.assertIn("Help text and the error message are linked with `aria-describedby`", content)
+        self.assertIn("Add `aria-errormessage` only on top of `aria-invalid=\"true\"`", content)
         self.assertIn("Never overwrite silently", content)
 
     def test_one_submit_in_flight_and_dialog_focus(self) -> None:
         content = _packaged(FORMS)
-        self.assertIn("a second submit is refused", content)
+        self.assertIn("The guard lives in the form's `submit` handler, not on the button's click", content)
         self.assertIn("idempotency key created once per user intent and reused on retry", content)
         self.assertIn("on close focus returns to the control that opened it", content)
+        self.assertIn("only once per user activation", content)
+        self.assertIn("`closedby=\"none\"`", content)
+
+    def test_undetectable_behavior_is_an_enhancement_not_a_detected_fallback(self) -> None:
+        content = _packaged(FORMS)
+        self.assertIn("cannot be feature-detected: `@supports` and `CSS.supports()` answer true everywhere", content)
+        self.assertIn("Ship it as a progressive enhancement and say which browsers get it", content)
+        self.assertIn("use the project's scroll lock", content)
+        self.assertIn("A behavior that cannot be detected (the backdrop scroll above) cannot take that path", content)
         self.assertIn("A placeholder is an example value, never the label", content)
 
     def test_every_skill_reference_it_names_exists(self) -> None:
@@ -131,9 +148,13 @@ class FormsAndInputTests(unittest.TestCase):
 class BrowserSupportTests(unittest.TestCase):
     def test_the_target_is_a_required_input_with_a_default(self) -> None:
         body = _body("frontend")
-        self.assertIn("browser-support target (default: features widely available across current engines)", body)
         self.assertIn(
-            "a feature newer than the target ships with feature detection and a fallback, or the target changes on purpose",
+            "browser-support target (default: Baseline Widely available, in every core browser for 30+ months)",
+            body,
+        )
+        self.assertIn(
+            "a Baseline Newly available feature, or one newer than the target, needs feature detection plus a "
+            "fallback, or a deliberate target change",
             body,
         )
         self.assertIn("`omh-agent-instructions` owns that file", body)
@@ -142,9 +163,10 @@ class BrowserSupportTests(unittest.TestCase):
 class InterfaceCopyTests(unittest.TestCase):
     def test_copy_rules_live_in_the_always_loaded_taste_reference(self) -> None:
         taste = _packaged(TASTE)
-        self.assertIn("One action, one name, end to end", taste)
-        self.assertIn("\"Something went wrong\" is a placeholder, not copy", taste)
-        self.assertIn("An empty state offers the first action", taste)
+        self.assertIn("Name things the way the reader already does", taste)
+        self.assertIn("One action keeps one verb everywhere it shows up", taste)
+        self.assertIn("An error message gives the cause, then the way out", taste)
+        self.assertIn("An empty list carries the control that fills it", taste)
         self.assertIn("Load `references/taste-foundations.md`", _body("frontend"))
 
 
@@ -170,6 +192,16 @@ class RefactorVisualParityTests(unittest.TestCase):
         )
         self.assertIn("`omh-frontend/references/screenshot-loop.md`", passes)
         self.assertIn("needs a before/after capture at one viewport", _body("frontend-refactor"))
+
+
+class OwnWordingTests(unittest.TestCase):
+    def test_upstream_examples_are_not_reused(self) -> None:
+        # Reconstruction, not paraphrase: the upstream guides' own examples stay out.
+        taste = _packaged(TASTE)
+        for phrase in ("webhook", "Published", "invitation", "interface's voice"):
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, taste)
+        self.assertNotIn("user@gm", _packaged(FORMS))
 
 
 if __name__ == "__main__":
