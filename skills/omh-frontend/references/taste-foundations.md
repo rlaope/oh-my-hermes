@@ -173,6 +173,30 @@ sections in the order a visitor actually decides; visual symmetry never
 outranks that sequence. Review content accuracy and hierarchy before any
 polish — a beautiful wrong page fails first on content.
 
+## Interface copy
+
+Words on a working surface are controls, so they get the same review as
+spacing and color. Four rules, checked on every button, toast, error, and
+empty state:
+
+- Use the reader's vocabulary, not the implementation's: a person changes
+  "email alerts", not "notification webhook settings". A label the user
+  would not say out loud is a finding.
+- One action, one name, end to end: the button, its pending state, its
+  confirmation, and its undo all use the same verb ("Publish", "Publishing…",
+  "Published"). "Submit" and "OK" name nothing; a "Save" button whose toast
+  says "Updated" makes the reader wonder whether two things happened.
+- An error states what happened and what to do next, in the interface's
+  voice: "Card declined. Try another card or contact your bank." It does not
+  apologize, and "Something went wrong" is a placeholder, not copy.
+- An empty state offers the first action instead of describing the void:
+  "No projects yet" plus a "Create project" control, not an illustration
+  alone.
+
+Korean, Japanese, and Chinese copy follows the same rules in its own
+register; translate the meaning of an action name, and keep it identical
+across the flow in every locale.
+
 ## Boundary
 
 Taste guidance shapes the prepared direction and contract. It never
@@ -191,3 +215,7 @@ No upstream text is reproduced; the wording here is OMH's own, and OMH keeps
 its deterministic no-render boundary. Product names appear as quality
 analogies only; OMH is not affiliated with, endorsed by, or sponsored by any
 named company.
+
+The interface-copy rules adapt ideas from the `frontend-design` skill in
+`anthropics/claude-plugins-official` (Apache-2.0); no text from it is
+reproduced, and the wording here is OMH's own.

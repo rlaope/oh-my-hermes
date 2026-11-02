@@ -81,7 +81,7 @@ Quality bar:
 - Make impossible states unrepresentable before memoizing anything: flag clusters become one discriminated union or reducer, and a state machine only when transitions carry retries, resets, or races.
 - Treat effects as synchronization with external systems: deriving, event responses, prop-change resets, parent notification, and effect chains each have a non-effect form named in `omh-frontend-refactor/references/state-discipline.md`.
 - Run the micro pass in fixed order - dead code, naming, simplification, modernization - finishing one category before the next; the full contract is `omh-frontend-refactor/references/refactor-passes.md`.
-- Gate macro changes on characterization tests written before the refactor; snapshot tests lock markup, not behavior, and do not count.
+- Gate macro changes on characterization tests written before the refactor; snapshot tests lock markup, not behavior, and do not count. A change that alters DOM nesting, element type, or class composition also needs a before/after capture at one viewport, because green tests do not prove the render is unchanged.
 - The scroll test picks the decomposition entry point, and extraction follows independent change reasons completely - a half-extracted component is two coupled ones.
 
 Handoff policy:
