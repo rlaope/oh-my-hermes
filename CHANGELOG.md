@@ -69,6 +69,33 @@ All notable changes will be documented here.
   while the list is out sends no second call, and an answer that comes while
   the picker is open no longer resets its highlight or filter.
 
+- **Reports on OMH's routing reach workflow learning, and tasks that only
+  name OMH do not.** "OMH가 왜 내 메시지를 code-review로 보냈어?" dispatched
+  the code-review it names, because the fold reads the past tense 보냈 as the
+  request cue 보내; a Korean execution cue now matches whole syllables.
+  Three English report shapes reach workflow learning: an adverb between OMH
+  and its verb ("OMH apparently chose ..."), a why-question about what OMH
+  did ("Show me why OMH picked them"), and OMH ignoring the request. The
+  other way round, "OMH picked the config. Find out which keys are unused"
+  no longer gets the ~1.1k-char workflow-learning hint: "find out" with a
+  question of its own is the user's task when what OMH picked is a concrete
+  artifact (by its head noun, never a catalog skill name), while a bare
+  "find out why", a question about the choice itself, or a choice made for
+  the user's own message still reads as a report. Nor does a code edit led
+  by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
+  module; a report that quotes such an ask ("Migrate the cache was all I
+  asked, but OMH chose ...") stays a report. 9 of the 12 router misses #2455 listed are fixed on the route
+  hint. The other 3 are Korean reports that name OMH with a particle
+  ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"); reading that form as OMH was
+  tried for seven review rounds and dropped, because each closed list it
+  needed let coding requests through. The particle mention itself gives no
+  routing context, as before; the 보내 fix still changes Korean reports that
+  use 보냈. "OMH ignored ..." is a report only when OMH ignored the user's
+  own ask or a routing target, not a file or a setting. Measured offline on
+  the earlier held-out sets and eleven fresh sets frozen for this change
+  (1,083 scored messages, hint and chat route), no message the previous
+  router answered right is answered wrong.
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`
