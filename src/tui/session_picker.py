@@ -39,6 +39,8 @@ CURRENT_MARK = "●"
 KEYS = ("↑↓ move · enter switches · esc closes", "↑↓ enter switches · esc closes", "esc closes")
 FILTER_PROMPT = PROMPT  # the composer's mark, on the row that stands where the composer was
 FILTER_PLACEHOLDER = "type to filter"
+# The filter row while the picker waits for typing to stop before it takes keys (`SessionPicker.waiting`).
+WAITING_PLACEHOLDER = "↑↓ to pick · keep typing to stay in your prompt"
 # The sessions' day groups, by the local calendar day a session started: today, yesterday, the five days before
 # (the past week), and everything older or of no known start.
 DAY_GROUPS = ("Today", "Yesterday", "Previous 7 days", "Earlier")
@@ -140,9 +142,9 @@ def age_text(started_at: float, now: float) -> str:
     return "just now"
 
 
-def filter_line(query: str, width: int, theme: Theme) -> Line:
+def filter_line(query: str, width: int, theme: Theme, placeholder: str = FILTER_PLACEHOLDER) -> Line:
     """A picker's last row: what typing filters it by, or how to start, after the composer's prompt glyph."""
-    typed = Span(query, theme.text) if query else Span(FILTER_PLACEHOLDER, theme.hint)
+    typed = Span(query, theme.text) if query else Span(placeholder, theme.hint)
     return truncate_line((Span(FILTER_PROMPT, theme.prompt), typed), width)
 
 
@@ -190,6 +192,7 @@ def picker_frame(
     theme: Theme,
     max_rows: int,
     heading: Callable[[int], bool] | None = None,
+    placeholder: str = FILTER_PLACEHOLDER,
 ) -> PickerFrame:
     """A picker's rows within `max_rows`, the same for every picker.
 
@@ -210,7 +213,7 @@ def picker_frame(
     current = (lambda number: truncate_line(row(number), width)) if count else (lambda number: (Span(empty, theme.muted),))
     caret = min(cell_width(FILTER_PROMPT) + cell_width(query), max(width - 1, 0))
     if max_rows <= 2:
-        lines = [current(index), filter_line(query, width, theme)][:max_rows]
+        lines = [current(index), filter_line(query, width, theme, placeholder)][:max_rows]
         return PickerFrame(lines, (1, caret) if max_rows == 2 else None, 1)
     header = truncate_line(head, width)
     rule = picker_rule(width, theme)
@@ -222,7 +225,7 @@ def picker_frame(
     rows = [current(number) for number in range(start, end)] if count else [current(0)]
     if heading is not None and end < count and end - 1 != index and heading(end - 1):
         rows[-1] = ()
-    lines = [header, *above, *rows, *below, filter_line(query, width, theme)]
+    lines = [header, *above, *rows, *below, filter_line(query, width, theme, placeholder)]
     return PickerFrame(lines, (len(lines) - 1, caret), body)
 
 
@@ -240,6 +243,8 @@ class SessionPicker:
     page: int = 1  # rows the last render showed; PageUp/PageDown move by this many
     caret: tuple[int, int] | None = None  # the last render's caret, at the end of its filter row
     now: float = 0.0  # the last render's clock, which the day groups count from; 0 keeps the list order
+    # Opened while the person was typing: keys go on to the composer until typing stops (`App._picker_takes`).
+    waiting: bool = False
 
     def visible(self) -> list[SessionRow]:
         """The rows the filter keeps: the current session first, then a day group after another (`day_group`), in
@@ -296,8 +301,10 @@ class SessionPicker:
         frame = picker_frame(
             (Span(title, theme.heading),), len(entries), highlighted,
             lambda number: self._entry(entries[number], number == highlighted, width, theme, now, ages, digits),
-            " no session matches the filter", self.query, width, theme, max_rows,
+            " no session matches the filter" if self.rows else " Hermes listed no stored sessions", self.query, width,
+            theme, max_rows,
             lambda number: isinstance(entries[number], str),
+            WAITING_PLACEHOLDER if self.waiting else FILTER_PLACEHOLDER,
         )
         self.page, self.caret = frame.page, frame.caret
         return frame.lines
