@@ -367,7 +367,9 @@ class NamedFileSnapshotTest(_Workspace):
     def test_a_file_changed_before_the_call_that_names_it_is_still_opaque(self):
         self.write("src/app/a.py", "def other():\n    return 1\n")
         self.command("true")
-        self.write("src/app/a.py", "def other():\n    return 2\n")  # an unnamed change first
+        # An unnamed change first. It changes the size: the index is (mtime, size), and a coarse mtime
+        # clock (the Windows runner) can leave a same-size rewrite looking untouched.
+        self.write("src/app/a.py", "def other():\n    return 22\n")
         self.command("cat src/app/a.py")
         self.assertEqual(self.verdict(), ct.Verdict(True, "opaque_edit", "src/app/a.py"))
 
