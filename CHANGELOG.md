@@ -106,6 +106,16 @@ All notable changes will be documented here.
   build nodes write more than docs files with no `review` node; it never
   refuses a run or moves its state or goal verdict.
 
+- **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
+  `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an
+  HTTPS root gets `/v1/systemone` appended (`/systemone` when it already ends
+  in `/v1`). A value with plain HTTP, no host, credentials, a query or a
+  fragment is refused before any connection opens, redirects stay refused,
+  and the OpenRouter route and its opt-in are unchanged. `omh doctor` says a
+  custom root is configured without printing it, and a custom endpoint that
+  reports no cost is shown as unpriced instead of at TypeSafe's list price.
+  Contributed by @yqm-307 (#2473; requested in #2468).
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write
