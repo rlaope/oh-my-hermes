@@ -16,7 +16,7 @@ import re
 import unittest
 
 from _tui_gateway_replay import Scenario, recorded_answer, spans
-from _tui_lines import INFO_INSET, lines_text, RULE_ROW, without_badge
+from _tui_lines import INFO_INSET, badge_text, lines_text, RULE_ROW, without_badge
 from test_tui_agent_view import STARTS, VIEW, agent_app, agent_event, mode_row, relay, screen_info_index, view_rows
 from test_tui_app import LIVE_ID, NO_TERMIOS, AppTestCase, Step, startup_answers, info_index
 from test_tui_modes import SID, RecordingClient, answer, composer_index, drawn, make_app, notices, queue, steers, type_text
@@ -1280,7 +1280,7 @@ class AgentReplayTests(AppTestCase):
         self.assertTrue(rows[status + 2].startswith("❯ ") and "find usages of old_api" in rows[status + 2], rows)
         # The list's keys, whole: at 80 columns the right side (the effort) gives way to them and to the badge.
         self.assertEqual(info_left(rows[status]), AGENT_LIST_HINT)
-        self.assertTrue(rows[status].startswith(INFO_INSET + "[⚚ OMH Native]  "), rows[status])
+        self.assertTrue(rows[status].startswith(INFO_INSET + badge_text() + "  "), rows[status])
         # While the list has the keys the composer's rules stay and its row says how to browse: no prompt to type in.
         self.assertEqual([row for row in rows if row.startswith("❯ ") and "old_api" not in row], [], rows)
         self.assertEqual([row.strip() for row in rows if BROWSING_HINT in row], [BROWSING_HINT])

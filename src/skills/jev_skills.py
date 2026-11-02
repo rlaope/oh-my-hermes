@@ -570,11 +570,16 @@ non-generative: it answers typed questions about a `state` with probabilities an
 
 ## Routes
 
-- `TYPESAFE_API_KEY` enables the TypeSafe route. An `OPENROUTER_API_KEY` alone enables nothing: the
-  OpenRouter route needs `{"openrouter_route": true}` in `<omh_home>/jev/settings.json`, which OMH
-  never writes. `omh doctor` reports the route in its `plugin_jev_sidekick` line. The file is a
-  local opt-in, not a guard: anything that can write `<omh_home>` can set it. It picks which of the
-  user's keys an ask may use and never sends one by itself.
+- `TYPESAFE_API_KEY` enables the TypeSafe route. OMH also honors `TYPESAFE_BASE_URL`, the
+  API-root variable TypeSafe's own SDKs read, for that route: an HTTPS root gets `/v1/systemone`
+  appended, a root already ending in `/v1` gets `/systemone`, and one already ending in
+  `/systemone` is used as is. The OpenRouter route remains an explicit local opt-in: an
+  `OPENROUTER_API_KEY` alone enables nothing; it needs
+  `{"openrouter_route": true}` in `<omh_home>/jev/settings.json`, which OMH
+  never writes. `omh doctor` reports the route in its `plugin_jev_sidekick`
+  line. The file is a local opt-in, not a guard: anything that can write
+  `<omh_home>` can set it. It picks which of the user's own keys an ask may use
+  and never sends one by itself.
 - Costs: TypeSafe lists $0.042 per million input tokens and $0 output (read 2026-09-21), so the
   TypeSafe cost is an estimate from that list; OpenRouter reports its own cost per reply.
 

@@ -77,6 +77,10 @@ ACCEPT_REFUSED_NOTICE = (
     "Hermes did not turn approvals off for this session alone ({}). "
     "Accept all stays off, and the OMH TUI asked Hermes to switch it back off."
 )
+YOLO_UNANSWERED_NOTICE = (
+    "Hermes has not answered the approvals switch in {seconds:g} s, so approvals may be off: accept is shown, "
+    "and Shift+Tab asks Hermes to turn them back on."
+)
 ACCEPT_STUCK_NOTICE = "Hermes did not confirm that this session asks for approvals again ({}). Accept all may still be on."
 # Said once per session, the first time Shift+Tab meets approvals Hermes turned off on its own.
 HERMES_APPROVALS_NOTICE = (
@@ -212,8 +216,9 @@ def info_line(
     What gives way, in order: the first `right_spare` of the right
     side's forms (the session's title), then the background-process row
     (through its forms, then whole), then the rest of the right side
-    (through its forms, then whole), then the branch's name (`branch`'s
-    shorter forms), then the badge (to `[⚚ OMH]`, then `⚚`, then none),
+    (through its forms, then whole), then the badge's version (`badge`'s
+    second form), then the branch's name (`branch`'s shorter forms), then
+    the badge (to `[⚚ OMH]`, then `⚚`, then none),
     then the branch; the label, the agent count and what the next key
     does (a question's or a picker's way out) keep their words until all
     of those are gone, and only then shorten. So the row goes before the
@@ -280,8 +285,9 @@ def info_line(
     tries = [(badges[0], branches[0], rows[0], side) for side in sides[: spare + 1]]
     tries += [(badges[0], branches[0], form, sides[spare]) for form in [*rows[1:], ()]]
     tries += [(badges[0], branches[0], (), side) for side in sides[spare + 1 :]]
-    tries += [(badges[0], form, (), ()) for form in branches[1:]]
-    tries += [(form, branches[-1], (), ()) for form in [*badges[1:], ()]]
+    unversioned = badges[1] if len(badges) > 1 else badges[0]  # the version goes before the branch name is cut
+    tries += [(unversioned, form, (), ()) for form in branches]
+    tries += [(form, branches[-1], (), ()) for form in [*badges[2:], ()]]
     tries += [((), (), (), ())]
     shown_badge, shown_branch, shown_row, shown_right = next(
         (tried for tried in tries if fits(line_width(lead(*tried[:3])) + whole, tried[3])), tries[-1]
@@ -443,6 +449,7 @@ class ModesMixin:
             lambda error: self._on_yolo_answer(
                 sid, on, f"{error.get('code')}: {as_text(error.get('message')) or 'refused'}"
             ),
+            on_expiry=lambda seconds: self._on_yolo_unanswered(sid, seconds),
         )
 
     def _on_yolo_answer(self, sid: str, on: bool, problem: str) -> bool:
@@ -466,6 +473,7 @@ class ModesMixin:
                 lambda error: self._on_switched_back(
                     sid, f"{error.get('code')}: {as_text(error.get('message')) or 'refused'}"
                 ),
+                on_expiry=lambda seconds: self._on_yolo_unanswered(sid, seconds),
             )
         elif problem:
             self.transcript.add_notice(ACCEPT_STUCK_NOTICE.format(problem), NOTICE_ERROR)  # accept stays shown
@@ -496,6 +504,20 @@ class ModesMixin:
             self.transcript.add_notice(SWITCH_BACK_FAILED_NOTICE.format(problem), NOTICE_ERROR)
             self.approvals_off = self.yolo_by_tui = True
         return True
+
+    def _on_yolo_unanswered(self, sid: str, seconds: float) -> None:
+        """A yolo call (on, off or the switch-back) Hermes did not answer in `seconds`; its late answer is not read.
+
+        As for a switch-back that confirms nothing (`_on_switched_back`),
+        approvals may be off, so accept is shown as the TUI's own: Shift+Tab
+        then sends an explicit off, and leaving the session sends one. For a
+        session already left nothing changes: leaving it sent an off of its own.
+        """
+        if sid != self.sid:
+            return
+        self.mode_request_open = False
+        self.approvals_off = self.yolo_by_tui = True
+        self.transcript.add_notice(YOLO_UNANSWERED_NOTICE.format(seconds=seconds), NOTICE_WARN)
 
     # ── reasoning effort ──
 

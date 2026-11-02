@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 import unittest
 
-from _tui_lines import info_row_index, INFO_INSET, composer_text, line_text, without_badge
+from _tui_lines import badge_text, info_row_index, INFO_INSET, composer_text, line_text, without_badge
 from test_tui_choice_ui import armed, drawn, press
 from test_tui_app import FakePoller, ScriptedTerminal
 from test_tui_modes import RecordingClient, make_app, type_text
@@ -355,7 +355,7 @@ class WaitingTimeTests(unittest.TestCase):
         self.assertIn("1 tool · 9s", status())
         app._on_event(Event("message.complete", SID, {"text": "done"}))
         self.assertNotIn("tool", status())  # the snapshot still says live; the turn is over
-        self.assertTrue(status().startswith(INFO_INSET + "[⚚ OMH Native]   "), status())  # the badge alone on the left
+        self.assertTrue(status().startswith(INFO_INSET + badge_text() + "   "), status())  # the badge alone on the left
 
     def test_back_to_back_questions_are_one_wait(self) -> None:
         app, _client, now = self.clocked()

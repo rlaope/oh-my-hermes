@@ -28,6 +28,38 @@ All notable changes will be documented here.
   while the list is out sends no second call, and an answer that comes while
   the picker is open no longer resets its highlight or filter.
 
+- **An answer Hermes sends late no longer acts on what the person moved on
+  to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s
+  draft, an alias) that arrives after a session switch is dropped with a
+  notice instead of running in the new session, and its `command.dispatch`
+  fallback is not sent there. Output it prints is still shown, a `/branch` it
+  made is not switched to, a side task stays the left session's, and images
+  typed with it come back to the composer. A prefill or a rewind pick that
+  lands on a draft typed meanwhile puts that draft in the session's history
+  first and says Up brings it back. The `/model` and `/rewind` lists do not
+  open during a turn that started while they were on their way (the busy
+  notice is said instead), nor over another open picker. Asking for the same
+  list twice in a session sends one call, a list still out for a session left
+  never holds up the new one, `/model --refresh` while a bare `/model`'s list
+  is out says one is on its way, and a second answer never resets the open
+  picker. While a list is on its way the slot says `waiting for Hermes…`. A
+  late `/model <name>` answer for a session already left says nothing in the
+  new one. Keys always go to the picker the screen draws. An approval or
+  question arms only after a quiet gap with no key, so a person still typing
+  when it opens answers nothing. What they type, and their edits to it
+  (Backspace, Delete, Left, Right, Home, End, Ctrl+A/E/U/K/W), go on into the
+  field they were typing in, the tell field too, and a path-shaped paste is
+  still a drop. A key that would send, interrupt, complete or walk history
+  does nothing then, and nothing is typed while a mouse report may still
+  arrive. A Shift+Tab approvals switch Hermes never answered no longer leaves
+  Shift+Tab dead: accept is shown as possibly on, and the next Shift+Tab
+  sends an explicit off.
+
+- **The info line's badge carries the version.** It reads
+  `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
+  narrow line the version is the first part of the left side to go, before
+  the branch name is cut and before the badge shortens.
+
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
   grey edge (`#4A4F66`); they are now a muted violet (`#6E5A9E`), lifted for
@@ -88,6 +120,11 @@ All notable changes will be documented here.
   using the existing admission and session-lens gates. Discord threads Hermes
   auto-created from channel messages use their parent channel's memory scope;
   other threads keep their own.
+- **Hermes saves a stated preference or decision in the same turn, even when
+  the message also asks for other work.** The `omh_remember` description and
+  its one-line prompt now ask for the save before other tools, limit it to the
+  user's own words, and exclude pasted text and facts that only matter for the
+  current task.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
@@ -116,6 +153,16 @@ All notable changes will be documented here.
   summary, the messenger end block and the TUI end view all show it, and an
   unverified done run is told to add a verify node through `extend`. Runs
   stored before this update keep reading their nodes as before.
+
+- **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
+  `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an
+  HTTPS root gets `/v1/systemone` appended (`/systemone` when it already ends
+  in `/v1`). A value with plain HTTP, no host, credentials, a query or a
+  fragment is refused before any connection opens, redirects stay refused,
+  and the OpenRouter route and its opt-in are unchanged. `omh doctor` says a
+  custom root is configured without printing it, and a custom endpoint that
+  reports no cost is shown as unpriced instead of at TypeSafe's list price.
+  Contributed by @yqm-307 (#2473; requested in #2468).
 
 ## 4.0.4 - 2026-11-01
 

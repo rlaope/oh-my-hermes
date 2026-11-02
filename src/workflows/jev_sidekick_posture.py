@@ -67,6 +67,8 @@ from .plugin_manifest_yaml import (
 )
 
 JEV_SIDEKICK_POSTURE_SCHEMA_VERSION: Final = "jev_sidekick_posture/v1"
+TYPESAFE_BASE_URL_ENV_NAME: Final = "TYPESAFE_BASE_URL"
+JEV_ENV_NAMES: Final = JEV_CREDENTIAL_ENV_NAMES | {TYPESAFE_BASE_URL_ENV_NAME}
 
 # Monotonic, lowest first. `credential_name_present` sits above `enabled`
 # because a credential name matters only for a plugin Hermes will load.
@@ -128,10 +130,12 @@ def omh_jev_ask_posture(
     not a plugin was detected, while an OpenRouter key counts only when the
     operator setting turned that route on. No value is read.
     """
-    names = set(env_key_names(Path(hermes_home), environ, allowed=JEV_CREDENTIAL_ENV_NAMES))
-    route = route_available_by_names(Path(omh_home), names)
+    names = set(env_key_names(Path(hermes_home), environ, allowed=JEV_ENV_NAMES))
+    credential_names = names & JEV_CREDENTIAL_ENV_NAMES
+    route = route_available_by_names(Path(omh_home), credential_names)
     return {
         "route_available": route,
+        "typesafe_base_url_configured": TYPESAFE_BASE_URL_ENV_NAME in names,
         "openrouter_setting": openrouter_route_enabled(Path(omh_home)),
         "setting_path": str(settings_path(Path(omh_home))),
         "setting_key": OPENROUTER_SETTING_KEY,
@@ -149,7 +153,9 @@ def omh_jev_ask_sentence(block: dict[str, Any]) -> str:
             f"{{\"{OPENROUTER_SETTING_KEY}\": true}} in {block.get('setting_path', '')})"
         )
     else:
-        head = f"omh_jev_ask: route {route} by variable name"
+        custom_base = route == "typesafe" and bool(block.get("typesafe_base_url_configured"))
+        suffix = " (custom base URL configured)" if custom_base else ""
+        head = f"omh_jev_ask: route {route}{suffix} by variable name"
     calls = int(block.get("ledger_calls", 0) or 0)
     tier = f"{calls} ask(s) recorded, last status {block.get('last_status')}" if calls else "no ask recorded"
     return f"{head}; {tier}; {OMH_JEV_ASK_DISCLOSURE.rstrip('.')}"
