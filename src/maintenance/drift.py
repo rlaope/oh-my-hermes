@@ -959,20 +959,20 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # own command (copy, open, set, run) is not a report (+4).
             # #2440 re-review 3: bump, ship, check into git and find the bug
             # after what OMH chose are requests too (+4).
-            # #2455 follow-up: "find out" after a neutral setting, an OMH
-            # terminology loader migration and a Korean task after what OMH
-            # picked stay off workflow-learning (+3). Its review: a Korean
-            # edit request after a setting sentence stays off it too (+1). Its
-            # third review: three Korean requests read by their ending, and a
-            # find-out task with a courtesy tail, stay off it (+4). Its fourth
-            # review: two Korean requests with unlisted endings after a
-            # setting sentence stay off it too (+2). Its fifth review: a
-            # coding-work complaint, a deferred complaint, 회원인증, and an
-            # English choice before a Korean request stay off it (+4). Its
-            # sixth review: seven request-free controls, one per grant rule
-            # (code noun, coding verb, 결과, 이유, 왠지, an unlisted later request,
-            # English praise after the particle) (+7).
-            expected=1343,
+            # #2455 follow-up (#2485): "find out" after a neutral setting, an
+            # OMH terminology loader migration and a Korean task after what
+            # OMH picked stay off workflow-learning (+3); a find-out task with
+            # a courtesy tail (+1); Korean messages with "OMH가 / OMH는" that
+            # an earlier head of the PR read as reports, each as on main: an
+            # edit after a setting sentence, three requests in other endings,
+            # two in unlisted endings, a coding-work complaint, a deferred
+            # complaint, 회원인증, an English choice before a Korean request,
+            # and seven statements (code noun, coding verb, 결과, 이유, 왠지, a
+            # later request, English praise) (+17); OMH ignoring an ignore
+            # file and the user's path aliases (+2); and a filler adverb, a
+            # why-question about a parser, and "Hermes with OMH" before a
+            # find-out task (+3).
+            expected=1348,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1546,10 +1546,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # request ending in "?" after a setting sentence keeps ultrawork (+1).
             # Its fourth review: a Korean 정리해 둬 after a setting sentence keeps
             # toolbelt-readiness (+1). Its fifth review: OMH missing a test, then
-            # a request to add tests, keeps ultrawork (+1). The Korean
-            # particle-only report path was dropped after its seventh review,
-            # and the two interventions that pinned it with it.
-            expected=1225,
+            # a request to add tests, keeps ultrawork (+1). Its final review:
+            # two reports that quote the user's own ask, opened by migrate or
+            # rewrite, reach workflow-learning (+2).
+            expected=1227,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

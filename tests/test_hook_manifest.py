@@ -1033,6 +1033,29 @@ class HookManifestTests(unittest.TestCase):
                 self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
 
+    def test_ignored_and_quoted_asks_follow_what_omh_did_with_the_users_message(self) -> None:
+        # #2485 final review: "ignored" is a routing report only when OMH
+        # ignored the user's own ask or a routing target, and a report that
+        # quotes the user's ask, opened by migrate or rewrite, stays a report.
+        for message in (
+            "OMH ignored what I typed and started a plan",
+            "OMH ignored the ultraqa skill I asked for",
+            "Migrate the cache was all I asked, but OMH chose ralplan. why",
+            "Rewrite my cover letter was all I wanted, and OMH routed it to code-review, why?",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+        for message in (
+            "OMH ignored the .eslintignore file",
+            "OMH ignored my tsconfig path aliases",
+            "OMH ignored the max_retries setting in app.toml",
+        ):
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
     def test_coding_request_on_omh_vocabulary_words_gets_no_workflow_learning_hint(self) -> None:
         # #2455 follow-up: under a code-edit lead ("OMH: migrate", "using OMH,
         # rename"), vocabulary / terminology are what the edit acts on.

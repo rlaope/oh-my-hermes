@@ -90,15 +90,11 @@ class RoutingPrecisionTests(unittest.TestCase):
         # and so do two throwaway OMH test messages and the user's own router,
         # two tasks on what OMH selected or picked, and a Korean test request,
         # and eight messages where a command follows what OMH chose.
-        # A find-out task after what OMH picked, an OMH terminology loader
-        # migration and a Korean task after what OMH picked stay off it too,
-        # and so does a Korean edit request after a setting sentence, three
-        # Korean requests read by their ending, and a find-out task with a
-        # courtesy tail, and two Korean requests with unlisted endings; then a
-        # coding-work complaint, a deferred complaint, 회원인증, and an English
-        # choice before a Korean request; then seven request-free controls, one
-        # per Korean grant rule.
-        self.assertEqual(payload["summary"]["case_count"], 1343)
+        # #2485: find-out tasks after what OMH picked, an OMH terminology
+        # loader migration, Korean messages with "OMH가" that read as on main,
+        # OMH ignoring files, and a filler adverb, a why-question about a
+        # parser and "Hermes with OMH" before a task stay off it too.
+        self.assertEqual(payload["summary"]["case_count"], 1348)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -251,9 +247,10 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Three reports the classifier missed (a Korean 보냈어, OMH ignoring the
         # request, OMH "apparently" choosing) reach workflow-learning, and a
         # Korean casual "고쳐줘?" after what OMH picked keeps the coding lane,
-        # a Korean "정리해 둬" keeps toolbelt-readiness, and OMH missing a test
-        # before an add-tests request keeps ultrawork.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1225)
+        # a Korean "정리해 둬" keeps toolbelt-readiness, OMH missing a test
+        # before an add-tests request keeps ultrawork, and two reports quoting
+        # the user's own migrate / rewrite ask reach workflow-learning.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1227)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

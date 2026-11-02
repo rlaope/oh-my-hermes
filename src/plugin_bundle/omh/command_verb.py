@@ -19,7 +19,10 @@ DIRECT_CODING_EDIT_VERBS = frozenset(
 )
 # A request also opens with a code edit on these verbs, which the direct
 # code-edit guard in `policy` does not read: "OMH: migrate the loader to
-# pathlib", "refactor the parser". Only `leads_with_code_edit` reads them.
+# pathlib", "refactor the parser". Read only where a caller asks for the wide
+# lead (`leads_with_code_edit(..., wide=True)`): a report that quotes the
+# user's own ask ("Migrate the DB was all I asked, but OMH chose ...") opens
+# with the same verb, so the report reader keeps the narrow set (#2485).
 _CODE_EDIT_LEAD_VERBS = DIRECT_CODING_EDIT_VERBS | frozenset({"migrate", "refactor", "rewrite"})
 # A request that names the tool before the edit: "using OMH, rename ...",
 # "with Hermes, add ...". The tool is one of these names, then the verb.
@@ -216,7 +219,7 @@ def inquiry_why_lead_length(words: list[str]) -> int:
     return 0
 
 
-def leads_with_code_edit(normalized_query: str) -> bool:
+def leads_with_code_edit(normalized_query: str, *, wide: bool = False) -> bool:
     """The request OPENS with a code edit, in English or Korean.
 
     English: the first command word is an edit verb ("fix ...", "OMH, add
@@ -225,22 +228,24 @@ def leads_with_code_edit(normalized_query: str) -> bool:
     An edit verb later in the sentence ("I asked OMH to fix a test and it
     ...") is not the request's lead.
     Korean: a clause ends on a code-edit request ("테스트 고쳐줘", "코드 수정해
-    주세요"), read by `korean_request`.
+    주세요"), read by `korean_request`. `wide` adds `_CODE_EDIT_LEAD_VERBS`
+    and the tool lead ("using OMH, rename").
     """
+    verbs = _CODE_EDIT_LEAD_VERBS if wide else DIRECT_CODING_EDIT_VERBS
     words = command_words(normalized_query)
     if words:
-        if words[0] in _CODE_EDIT_LEAD_VERBS:
+        if words[0] in verbs:
             return True
         if words[0] == "help":
             rest = words[1:]
             rest = rest[1:] if rest[:1] == ["me"] else rest
             rest = rest[1:] if rest[:1] == ["to"] else rest
-            if rest[:1] and rest[0] in _CODE_EDIT_LEAD_VERBS:
+            if rest[:1] and rest[0] in verbs:
                 return True
-        if words[0] in _TOOL_LEADS and words[1:2] and words[1] in _TOOL_NAMES:
+        if wide and words[0] in _TOOL_LEADS and words[1:2] and words[1] in _TOOL_NAMES:
             rest = words[2:]
             rest = rest[1:] if rest[:1] == ["to"] else rest
-            if rest[:1] and rest[0] in _CODE_EDIT_LEAD_VERBS:
+            if rest[:1] and rest[0] in verbs:
                 return True
         if words[0] in _DELEGATING_LEADS:
             # Who the task goes to is at most three words ("OMH", "the OMH
@@ -248,8 +253,8 @@ def leads_with_code_edit(normalized_query: str) -> bool:
             for index in range(1, min(len(words), 5)):
                 word = words[index]
                 if word in {"to", "and"}:
-                    return words[index + 1 : index + 2] != [] and words[index + 1] in _CODE_EDIT_LEAD_VERBS
-                if word in _CODE_EDIT_LEAD_VERBS:
+                    return words[index + 1 : index + 2] != [] and words[index + 1] in verbs
+                if word in verbs:
                     return True
     return any(
         (request := korean_request(clause)) is not None and request.predicate in KOREAN_CODE_EDIT_PREDICATES

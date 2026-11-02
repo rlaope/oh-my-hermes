@@ -18,14 +18,18 @@ All notable changes will be documented here.
   "find out why", a question about the choice itself, or a choice made for
   the user's own message still reads as a report. Nor does a code edit led
   by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
-  module. 9 of the 12 router misses #2455 listed are fixed on the route
+  module; a report that quotes such an ask ("Migrate the cache was all I
+  asked, but OMH chose ...") stays a report. 9 of the 12 router misses #2455 listed are fixed on the route
   hint. The other 3 are Korean reports that name OMH with a particle
   ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"); reading that form as OMH was
   tried for seven review rounds and dropped, because each closed list it
-  needed let coding requests through, so "OMH가 / OMH는" reads as before.
-  Measured offline on the earlier held-out sets and ten fresh sets frozen
-  for this change (1,069 scored messages, hint and chat route), no message
-  the previous router answered right is answered wrong.
+  needed let coding requests through. The particle mention itself gives no
+  routing context, as before; the 보내 fix still changes Korean reports that
+  use 보냈. "OMH ignored ..." is a report only when OMH ignored the user's
+  own ask or a routing target, not a file or a setting. Measured offline on
+  the earlier held-out sets and eleven fresh sets frozen for this change
+  (1,083 scored messages, hint and chat route), no message the previous
+  router answered right is answered wrong.
 
 - **An answer Hermes sends late no longer acts on what the person moved on
   to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s

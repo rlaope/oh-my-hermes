@@ -460,7 +460,7 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     # negation ("not asking to implement") keeps all.
     if (
         not negated_execution_cues
-        and leads_with_code_edit(matching_normalized)
+        and leads_with_code_edit(matching_normalized, wide=True)
         and not _names_omh_surface_after_lead(matching_normalized)
     ):
         meta_cues = tuple(cue for cue in meta_cues if cue not in _CODE_EDIT_OBJECT_META_CUES)
@@ -868,12 +868,32 @@ def _clause_reports_omh_behaviour(words: list[str]) -> bool:
         index += 1
     else:
         return False
-    following = words[index : index + 1]
-    if following and following[0] in _OMH_BEHAVIOUR_FILLERS:
-        return words[index + 1 : index + 2] != [] and (
-            words[index + 1] in _OMH_BEHAVIOUR_PAST_VERBS | _OMH_BEHAVIOUR_PROGRESSIVE_VERBS
-        )
-    return bool(following) and following[0] in _OMH_BEHAVIOUR_PAST_VERBS
+    if words[index : index + 1] and words[index] in _OMH_BEHAVIOUR_FILLERS:
+        index += 1
+        verbs = _OMH_BEHAVIOUR_PAST_VERBS | _OMH_BEHAVIOUR_PROGRESSIVE_VERBS
+    else:
+        verbs = _OMH_BEHAVIOUR_PAST_VERBS
+    if not (words[index : index + 1] and words[index] in verbs):
+        return False
+    # "OMH ignored the .gitignore file" says what OMH did with a file; only
+    # ignoring the user's own ask, or a routing target, is about routing.
+    return words[index] != "ignored" or _ignored_routing_object(words[index + 1 :])
+
+
+# What OMH ignoring is a routing report about: the user's own ask ("my
+# request", "what I asked") or a routing target ("the code-review skill").
+_USER_ASK_NOUNS = frozenset({"request", "requests", "question", "questions", "message", "messages", "ask", "prompt"})
+_USER_ASK_VERBS = frozenset({"asked", "said", "typed", "wrote", "named", "wanted"})
+
+
+def _ignored_routing_object(rest: list[str]) -> bool:
+    if rest[:1] == ["my"] and rest[1:2] and rest[1] in _USER_ASK_NOUNS:
+        return True
+    if rest[:2] == ["what", "i"] and rest[2:3] and rest[2] in _USER_ASK_VERBS:
+        return True
+    end = next((i for i, word in enumerate(rest) if word in _OBJECT_ENDS), len(rest))
+    span = rest[:end]
+    return bool(set(span) & _OMH_ROUTING_TARGET_HEADS) or bool(_mentioned_workflows(" ".join(span), set(span)))
 
 
 def is_workflow_meta_or_feedback(message: str) -> bool:
@@ -1049,9 +1069,15 @@ def _matched_execution_cues(normalized: str, compact: str) -> tuple[str, ...]:
         else:
             composed_cue = unicodedata.normalize("NFC", normalized_cue)
             found = composed_cue in composed or composed_cue.replace(" ", "") in composed_compact
+            found = found or any(form in composed for form in _KOREAN_EXECUTION_REQUEST_FORMS.get(cue, ()))
         if found:
             matches.append(cue)
     return tuple(matches)
+
+
+# Request forms whose last syllable fuses with the ending, so whole-syllable
+# matching misses them: "보낼 수 있을까요?", "보낼래?" still ask to send.
+_KOREAN_EXECUTION_REQUEST_FORMS = MappingProxyType({"보내": ("보낼래", "보낼 수")})
 
 
 def _matched_cues(cues: tuple[str, ...], normalized: str, compact: str) -> tuple[str, ...]:
