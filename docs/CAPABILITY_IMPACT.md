@@ -95,7 +95,11 @@ when it can pay off (`consistency_trigger.py`).
 - At the turn's first tool call, `pre_tool_call` records the size and
   modification time of the workspace's Python files.
 - Before each `patch` or `write_file`, it keeps the pre-edit text of each
-  Python file that call edits.
+  Python file that call edits. Before each `terminal` or `execute_code` call,
+  it does the same for every Python file the call's arguments name, so a
+  `printf ... >> tests/test_x.py` is diffed like a patch. Those snapshots have
+  a budget of their own (16 files, 512 KB), and the ones the command left
+  unchanged are dropped at the next tool call.
 - At the first stop, the workspace is indexed again, so every Python file the
   turn changed is found, whatever tool changed it.
 - The definitions the changed lines touch are compared with the other files,
@@ -104,7 +108,10 @@ when it can pay off (`consistency_trigger.py`).
 
 The check fires when one of these is true:
 
-- a touched top-level definition is also defined in another file;
+- a touched top-level definition is also defined in another file. No text in
+  that file suppresses this: a note saying the look-alike differs on purpose
+  was tried (`declared_divergent`) and dropped after four review rounds,
+  because every wording rule it grew still let some note hide a real copy;
 - a definition the edit removed or renamed is still named in another Python
   file, or in a `.toml`, `.cfg`, `.ini`, `.yaml`, `.yml` or `.json` file;
 - a touched function's signature changed, or a class's `__init__`, `__new__`
@@ -117,9 +124,9 @@ or a reference out:
 
 - a changed source file that is not Python;
 - a Python file changed without a pre-edit text of its own (`opaque_edit`,
-  or `no_snapshot` when the session kept none): a `sed`, an `execute_code`
-  write, a delegated child's edit, or a file over the 32-file or 4 MB snapshot
-  cap;
+  or `no_snapshot` when the session kept none): a command or an
+  `execute_code` write that did not name the file, a delegated child's edit,
+  or a file over the 32-file or 4 MB snapshot cap;
 - a changed file that does not parse or is over 512 KB;
 - a non-trivial change that touches no definition, import or docstring
   (`unattributed`);
@@ -177,6 +184,46 @@ line it names is the work. A line the impact note already names, an edited
 importer's stale `from module import name` that the language server also
 reports, is not named twice. The consistency trigger never names a line: its
 verdict only decides whether the check fires.
+
+The test check is also always on at the first stop. It names an existing test
+that lost an expected value this turn: a literal constant in an `assert` or a
+`self.assert*` call is gone from the file. Subscript keys are not counted:
+`quote["total_cents"]` becoming `quote.total_cents` reaches the same value. It
+speaks only when all of these hold:
+
+- the turn's request asked for behaviour to stay the same, as a whole: the
+  subject is the behaviour, the output, the result, the return value, "what
+  `fetch` returns", the tests or an unscoped "everything", and it stays /
+  remains the same, is unchanged, or must not change; or the request says
+  "without changing" the behaviour, the output or the tests, or "do not change
+  the tests". The keep must end its clause (only "exactly", "as before", "as
+  today" or "as it is now" may follow), so "the output stays the same shape"
+  and "the result stays the same, just a different container" keep nothing,
+  nor does one narrowed by a comma or semicolon clause with no verb, or one
+  ending in a `-wise` / `-ly` word ("..., format-wise", "..., structurally",
+  "...; I mean the format"). A
+  clause with a scope word (`else`, `other`, `otherwise`, `for`, `when`,
+  `only`) keeps nothing, and neither does a keep of a named part: "the
+  signature stays the same", "the public API is unchanged" and "the return
+  type stays the same" draw no note;
+- the request does not name the test file or the test, does not ask to update
+  a test ("update its docstring and tests", "refresh the kib test", "the test
+  is outdated", "bring it up to date"), and states no result the code must
+  now give (`must return`, `to return`). A negated ask ("don't update any
+  tests") asks for nothing;
+- the turn also changed a Python file that is not a test;
+- the test file existed at the turn's start and has its pre-edit text.
+
+Expected values are compared by presence, pooled over every test file the
+turn changed, so an assertion moved between test files, folded into a
+`@pytest.mark.parametrize` table, or folded into a module constant
+(`RETRIES = 1`) loses nothing, and a unittest message (`msg=`, or a trailing
+string) is not an expected value.
+
+`pre_llm_call` keeps those three facts about the request, never its text. The
+note continues the turn like the export note, and asks for the expected value
+back and the code changed until the original test passes.
+`src/plugin_bundle/omh/test_expectation_check.py` lists the rules.
 
 Hermes keeps the answer the model stopped with only as an interim message, and
 returns whatever follows the nudge as the turn's final response. So when no

@@ -111,6 +111,17 @@ All notable changes will be documented here.
   lets later work reference is kept on a named throwaway ref the receipt
   cites.
 
+- **The round-end check names a test whose expectation a keep-behaviour turn
+  rewrote, and diffs a Python file a command names.** A new always-on test
+  check names an existing test that lost an expected value when the request
+  asked for the behaviour, the output or the result to stay the same as a
+  whole, and did not name that test, ask to update a test, or state a new
+  result. A test a command appends to (`printf >> tests/...`) is now diffed
+  instead of firing as an unseen edit. The copy check is unchanged: a
+  look-alike that says it differs on purpose still fires it, because four
+  review rounds showed a note can hide a real copy. The bench gains the
+  `C-TEST-UPDATE` control.
+
 - **The frontend skill now covers data, forms, and input, not only the look.**
   A page that reads or writes remote data loads the state rules that until now
   only a refactor loaded (server state in a query cache, each mutation naming

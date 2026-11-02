@@ -257,7 +257,26 @@ def _decoy_failures(workspace: Path, golden: dict[str, Any]) -> list[str]:
     return failures
 
 
-_CONSISTENCY_AB_VALIDATORS = {"DUPLICATE": _duplicate_failures, "SCOPE-TRAP": _scope_trap_failures, "DECOY": _decoy_failures}
+def _test_update_failures(workspace: Path, golden: dict[str, Any]) -> list[str]:
+    """A kib is 1024 bytes, every other unit is unchanged, and the existing test now expects the new
+    value: its tests pass and the old expectation is gone from it."""
+    count = golden["count"]
+    checks = (
+        "from benchapp.sizes import parse_size\n"
+        f"assert parse_size('{count}kib') == {count * 1024}\n"
+        "assert parse_size('4kb') == 4000 and parse_size(' 7B ') == 7\n"
+        "assert parse_size('3mb') == 3 * 1000**2 and parse_size('1mib') == 1024**2\n"
+    )
+    if not _behaviour_ok(workspace, "tests/test_sizes.py", checks, golden["min_tests"]):
+        return ["semantic_validator_failed"]
+    tree = ast.parse((workspace / "tests/test_sizes.py").read_text(encoding="utf-8"))
+    if any(isinstance(node, ast.Constant) and node.value == count * 1000 for node in ast.walk(tree)):
+        return ["test_not_updated"]
+    return []
+
+
+_CONSISTENCY_AB_VALIDATORS = {"DUPLICATE": _duplicate_failures, "SCOPE-TRAP": _scope_trap_failures, "DECOY": _decoy_failures,
+                              "TEST-UPDATE": _test_update_failures}
 # impact-ab: the definition and every caller module are exercised in a fresh interpreter. The
 # workspace's own tests are the model's to change; they are not run here, because a bare runpy cannot
 # run what pytest can (fixtures, parametrize, `import pytest` in this interpreter): measured on a

@@ -39,7 +39,8 @@ class ConsistencyAbTemplateTests(unittest.TestCase):
 
     def test_specs(self) -> None:
         self.assertEqual(corpus.all_specs(SPLIT), [
-            (f"C-{name}", "edit", seed) for name in ("DUPLICATE", "SCOPE-TRAP", "DECOY") for seed in corpus.EVALUATION_SEEDS
+            (f"C-{name}", "edit", seed) for name in ("DUPLICATE", "SCOPE-TRAP", "DECOY", "TEST-UPDATE")
+            for seed in corpus.EVALUATION_SEEDS
         ])
 
     def test_duplicate_needs_both_copies(self) -> None:
@@ -120,8 +121,38 @@ class ConsistencyAbTemplateTests(unittest.TestCase):
                 # A comment-only edit leaves the AST alone: the decoy check is about behaviour-bearing code.
                 self.assertTrue(self._grade("C-DECOY", seed, first_and_decoy_comment)["pass"])
 
+    def test_test_update_needs_the_new_kib_and_the_updated_test(self) -> None:
+        def code_only(workspace, golden):
+            _replace(workspace, "src/benchapp/sizes.py", '"kib": 1000', '"kib": 1024')
+
+        def code_and_test(workspace, golden):
+            code_only(workspace, golden)
+            count = golden["count"]
+            _replace(workspace, "tests/test_sizes.py", f"== {count * 1000}", f"== {count * 1024}")
+
+        def test_by_arithmetic(workspace, golden):
+            code_only(workspace, golden)
+            count = golden["count"]
+            _replace(workspace, "tests/test_sizes.py", f"== {count * 1000}", f"== {count} * 1024")
+
+        def every_binary_unit(workspace, golden):
+            code_and_test(workspace, golden)
+            _replace(workspace, "src/benchapp/sizes.py", '"mib": 1024**2', '"mib": 1000**2')
+
+        for seed in corpus.EVALUATION_SEEDS:
+            with self.subTest(seed=seed):
+                self.assertEqual(self._grade("C-TEST-UPDATE", seed, lambda w, g: None)["failure_codes"],
+                                 ["mutation_outside_scope", "semantic_validator_failed"])
+                self.assertEqual(self._grade("C-TEST-UPDATE", seed, code_only)["failure_codes"],
+                                 ["semantic_validator_failed"])
+                for mutate in (code_and_test, test_by_arithmetic):
+                    good = self._grade("C-TEST-UPDATE", seed, mutate)
+                    self.assertTrue(good["pass"], good["failure_codes"])
+                self.assertEqual(self._grade("C-TEST-UPDATE", seed, every_binary_unit)["failure_codes"],
+                                 ["semantic_validator_failed"])
+
     def test_seeds_vary_fixture(self) -> None:
-        for template_id in ("C-DUPLICATE", "C-SCOPE-TRAP", "C-DECOY"):
+        for template_id in ("C-DUPLICATE", "C-SCOPE-TRAP", "C-DECOY", "C-TEST-UPDATE"):
             digests = set()
             for seed in corpus.EVALUATION_SEEDS:
                 with TemporaryDirectory() as root:
@@ -133,7 +164,7 @@ class ConsistencyAbTemplateTests(unittest.TestCase):
         with TemporaryDirectory() as root:
             receipt = run_matrix(BASE, json.loads((BASE / "manifest.json").read_text()), SPLIT,
                                  "baseline", Path(root) / "runs.jsonl")
-        self.assertEqual((receipt["scheduled"], receipt["passed"]), (9, 9))
+        self.assertEqual((receipt["scheduled"], receipt["passed"]), (12, 12))
 
 
 if __name__ == "__main__":
