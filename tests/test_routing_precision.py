@@ -92,8 +92,10 @@ class RoutingPrecisionTests(unittest.TestCase):
         # and eight messages where a command follows what OMH chose.
         # A find-out task after what OMH picked, an OMH terminology loader
         # migration and a Korean task after what OMH picked stay off it too,
-        # and so does a Korean edit request after a setting sentence.
-        self.assertEqual(payload["summary"]["case_count"], 1326)
+        # and so does a Korean edit request after a setting sentence, three
+        # Korean requests read by their ending, and a find-out task with a
+        # courtesy tail.
+        self.assertEqual(payload["summary"]["case_count"], 1330)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -173,8 +175,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # Copying the skills OMH selected and summarizing the files it picked
         # are file tasks (+2), and so is opening the files OMH selected (+1).
         # Finding the unused keys of the config OMH picked, asked in Korean, is
-        # a file lookup (+1).
-        self.assertEqual(payload["summary"]["file_lookup_count"], 16)
+        # a file lookup (+1), and so is the English one with a courtesy tail (+1).
+        self.assertEqual(payload["summary"]["file_lookup_count"], 17)
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)

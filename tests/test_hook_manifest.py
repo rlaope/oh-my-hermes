@@ -896,7 +896,9 @@ class HookManifestTests(unittest.TestCase):
         names = sorted(
             name
             for name in {label.removeprefix("omh-") for label in catalog_skill_names() or ()}
-            if name.split("-")[-1] in _CONCRETE_ARTIFACT_NOUNS
+            # A one-word label ("omh-files" -> "files") is the artifact itself
+            # too often to veto; the veto reads runs of two words or more.
+            if "-" in name and name.split("-")[-1] in _CONCRETE_ARTIFACT_NOUNS
         )
         self.assertTrue(names, "the catalog no longer has a skill named like an artifact; pick another probe")
         for name in names:
@@ -922,6 +924,73 @@ class HookManifestTests(unittest.TestCase):
 
                 self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_a_korean_request_is_read_by_its_ending_beside_a_particle_product_name(self) -> None:
+        # #2485 third review: a closed list of Korean edit predicates leaked
+        # again ("다듬어 줘", "손 좀 봐줘?", "정리하자", "업데이트 좀 해"). Beside a
+        # clause that ends in a request, "OMH가" / "OMH는" is the setting, and
+        # 라우터 / 라우팅 / 용어 are the user's code; a clause that reports on OMH
+        # with a feedback cue keeps the report.
+        coding = (
+            "OMH는 업데이트 끝났어. 라우터 핸들러 다듬어 줘",
+            "OMH가 저장소를 골랐어. 라우팅 규칙 손 좀 봐줘?",
+            "OMH를 방금 깔았어. 용어 목록 정리하자",
+            "OMH가 브랜치를 열었어.\n라우터 코드 손봐 주세요",
+            "OMH는 준비됐어. 라우팅 테이블 업데이트 좀 해",
+        )
+        for message in coding:
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+        for message in ("OMH가 라우팅을 잘못했어. 원인 좀 같이 보자", "OMH가 왜 라우터를 그렇게 썼어?"):
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+
+    def test_find_out_about_omhs_own_choice_refers_back_whatever_the_object(self) -> None:
+        # #2485 third review: "find out what made it pick that" asks about the
+        # choice, like a bare "find out why", so an artifact head ("the nightly
+        # job") keeps main's report.
+        for message in (
+            "OMH chose the nightly job for my hi. Find out what made it pick that",
+            "OMH picked the deploy pipeline for a thank-you; find out why OMH routed it there",
+            "OMH selected the cache layer for my joke, find out what led it to do that",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
+        for message in (
+            "OMH picked the port number; find out which daemon holds it",
+            "OMH chose the report package template file. Find out who edits it",
+            "OMH picked the config file. Find out which keys are unused please",
+        ):
+            with self.subTest(message=message):
+                payload = awareness_route_hint(message)
+
+                self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
+                self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
+
+    def test_chosen_object_is_judged_by_its_head_and_the_catalog_veto_turns_off_without_a_sidecar(self) -> None:
+        from unittest import mock
+
+        from omh.plugin_bundle.omh import skill_shortlist
+        from omh.plugin_bundle.omh.workflow_intent import _names_concrete_artifact, classify_workflow_intent
+
+        self.assertFalse(_names_concrete_artifact(["data-pipelines"]))
+        self.assertTrue(_names_concrete_artifact(["data", "pipelines", "folder"]))
+        self.assertTrue(_names_concrete_artifact(["files"]))
+        self.assertTrue(_names_concrete_artifact(["port", "number"]))
+        self.assertFalse(_names_concrete_artifact(["test", "message"], compound=False))
+        self.assertFalse(_names_concrete_artifact(["cache", "skill"]))
+        message = "OMH picked relational-db for my hi; find out what it matched there"
+        with mock.patch.object(skill_shortlist, "catalog_skill_names", return_value=None):
+            classify_workflow_intent.cache_clear()
+            try:
+                self.assertTrue(_names_concrete_artifact(["report", "package"]))
+                self.assertEqual(classify_workflow_intent(message).intent_class, "feedback_signal")
+            finally:
+                classify_workflow_intent.cache_clear()
+        self.assertIs(skill_shortlist.catalog_skill_names(), skill_shortlist.catalog_skill_names())
 
     def test_korean_edit_request_after_a_setting_sentence_gets_no_workflow_learning_hint(self) -> None:
         # #2485 review: the Korean code-edit lead split clauses only on commas,

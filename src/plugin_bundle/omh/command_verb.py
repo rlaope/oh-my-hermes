@@ -10,6 +10,7 @@ host without the `omh` package can load. Stdlib only.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from .korean_request import korean_request
 from .request_lead import after_courtesy, courtesy_opener_length
@@ -124,6 +125,60 @@ _FIND_OUT_BARE_QUESTIONS = frozenset(
     }
 )
 _FIND_OUT_BARE_TAILS = frozenset({"there", "here", "again", "for", "me", "us", "please", "pls", "thanks"})
+
+
+# A find-out clause that asks about OMH's own choice: "find out what made it
+# pick that", "find out why OMH routed it there", "find out what led it to do
+# that". Its subject is OMH or a pronoun for it, then a choice verb.
+_CHOICE_SUBJECTS = frozenset({"it", "omh", "they", "that"})
+_CHOICE_VERB_FORMS = frozenset(
+    {
+        "pick", "picks", "picked", "picking", "choose", "chooses", "chose", "chosen", "choosing",
+        "select", "selects", "selected", "selecting", "route", "routes", "routed", "routing",
+        "decide", "decides", "decided",
+    }
+)
+_DO_THAT = frozenset({("do", "that"), ("did", "that"), ("does", "that"), ("do", "this"), ("did", "this"), ("do", "so")})
+
+
+def find_out_asks_about_choice(clause: str) -> bool:
+    """`clause` is "find out" with a clause of its own about OMH's choice ("find out what made it pick that")."""
+    rest = _after_find_out(clause)
+    if not rest:
+        return False
+    pairs = list(zip(rest, rest[1:]))
+    return any(subject in _CHOICE_SUBJECTS and verb in _CHOICE_VERB_FORMS for subject, verb in pairs) or any(
+        pair in _DO_THAT for pair in pairs
+    )
+
+
+# How a Korean clause ends when it asks or tells someone to do something,
+# whatever the verb: "정리해 줘", "손봐줘", "다듬어 주세요", "바꿔볼래?", "갈아엎자",
+# "고쳐라", "업데이트 좀 해", "해 줄 수 있어?". Read on the clause's last words,
+# composed, after the closing marks. A statement in the casual 해 form ("이상해")
+# reads as a request too; where this is read, that only gives up a reading.
+_KOREAN_REQUEST_ENDINGS = (
+    "줘", "줘요", "주세요", "주라", "줄래", "줄래요", "주실래요", "주시겠어요", "봐", "봐요", "볼래", "볼래요",
+    "해", "해요", "해라", "하자", "자", "라", "세요", "십시오", "부탁해", "부탁해요", "부탁드려요", "부탁드립니다",
+)
+_KOREAN_ASKING_TAILS = ("줄 수 있어", "줄 수 있어요", "줄 수 있나요", "주실 수 있나요", "주실 수 있어요")
+_CLOSING_MARKS = " \t?!.~。！？"
+
+
+def korean_clauses(text: str) -> list[str]:
+    """The Korean clauses of folded `text`, split as the code-edit lead splits them."""
+    return [clause for clause in _KOREAN_CLAUSE_BREAK.split(text) if clause.strip()]
+
+
+def ends_in_korean_request(clause: str) -> bool:
+    """`clause` ends in a Korean request or imperative ending (`_KOREAN_REQUEST_ENDINGS`), whatever its verb."""
+    composed = unicodedata.normalize("NFC", clause).rstrip(_CLOSING_MARKS)
+    words = composed.split()
+    if not words or not any("\uac00" <= char <= "\ud7a3" for char in words[-1]):
+        return False
+    if any(composed.endswith(tail) for tail in _KOREAN_ASKING_TAILS):
+        return True
+    return words[-1].endswith(_KOREAN_REQUEST_ENDINGS)
 
 
 def find_out_refers_back(clause: str) -> bool:

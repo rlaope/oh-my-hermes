@@ -9473,6 +9473,44 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "file_or_text",
         "workflow-learning",
     ),
+    # #2485 third review: beside a Korean request, read by its ending and not
+    # by its verb, "OMH가" / "OMH는" is the setting, so 라우터 / 라우팅 is the
+    # user's code. 666f778bb dispatched workflow-learning on each of these.
+    RoutingPrecisionCase(
+        "korean-casual-look-at-routing-rules-after-setting-is-a-task",
+        "A Korean 손 좀 봐줘? request on routing rules after what OMH picked is a task",
+        "OMH가 저장소를 골랐어. 라우팅 규칙 손 좀 봐줘?",
+        "answer_clarification",
+        "",
+        # The shortlist names workflow-learning as a candidate on origin/main
+        # too; the pin is that the route asks instead of dispatching it.
+    ),
+    RoutingPrecisionCase(
+        "korean-polite-touch-up-router-code-after-newline-is-a-task",
+        "A Korean polite 손봐 주세요 request on router code after a line break is a task",
+        "OMH가 브랜치를 열었어.\n라우터 코드 손봐 주세요",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "korean-plain-update-routing-table-after-setting-is-a-task",
+        "A Korean plain 업데이트 좀 해 request on a routing table after a setting is a task",
+        "OMH는 준비됐어. 라우팅 테이블 업데이트 좀 해",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    # A courtesy word after a find-out with its own question keeps it the
+    # user's task; only a bare question takes it as a tail.
+    RoutingPrecisionCase(
+        "find-out-task-with-courtesy-tail-is-a-task",
+        "Find out which keys are unused, please, after what OMH picked is a task",
+        "OMH picked the config file. Find out which keys are unused please",
+        "answer_file_lookup",
+        "file_or_text",
+        "workflow-learning",
+    ),
     # #2485 review: a Korean edit request after a setting sentence (a period
     # between them) leads with a code edit, so 라우터 is the user's code. The
     # PR's first head dispatched workflow-learning here.

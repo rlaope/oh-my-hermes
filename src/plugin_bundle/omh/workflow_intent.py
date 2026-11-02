@@ -20,7 +20,10 @@ import unicodedata
 
 from .command_verb import (
     asks_to_find_out,
+    ends_in_korean_request,
+    find_out_asks_about_choice,
     find_out_refers_back,
+    korean_clauses,
     gives_command,
     inquiry_why_lead_length,
     leads_with_code_edit,
@@ -438,7 +441,18 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     matching_compact = matching_normalized.replace(" ", "")
     matching_tokens = set(routing_tokens(matching_normalized, stopwords=set()))
     matching_tokens.update(matching_normalized.split())
-    matching_tokens.update(_product_names_before_particle(matching_normalized))
+    # "OMH가" / "OMH는" names OMH as what the sentence is about. Beside a
+    # Korean request ("OMH는 설치 끝났어. 라우터 핸들러 정리해 줘") OMH is the
+    # setting and the request is the user's own task, so the name gives no
+    # routing context, unless another clause reports on OMH with a feedback
+    # cue ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"); OMH's Korean vocabulary
+    # (라우터 / 라우팅 / 용어) is then not a meta cue either (#2485 review).
+    particle_names = _product_names_before_particle(matching_normalized)
+    beside_request = bool(particle_names) and not (matching_tokens & _PRODUCT_NAME_CONTEXT) and any(
+        ends_in_korean_request(clause) for clause in korean_clauses(matching_normalized)
+    )
+    if particle_names and (not beside_request or _korean_report_beside_request(matching_normalized)):
+        matching_tokens.update(particle_names)
 
     mentioned_workflows = _mentioned_workflows(matching_normalized, matching_tokens)
     mentioned_runtime_terms = _mentioned_runtime_terms(matching_normalized)
@@ -475,6 +489,8 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     ):
         kept = _korean_omh_surface_cues(matching_normalized)
         meta_cues = tuple(cue for cue in meta_cues if cue not in _CODE_EDIT_OBJECT_META_CUES or cue in kept)
+    if beside_request:
+        meta_cues = tuple(cue for cue in meta_cues if cue not in _KOREAN_OMH_SURFACE_CUES)
     execution_cues = _suppress_negated_execution_cues(
         _matched_execution_cues(matching_normalized, matching_compact),
         negated_execution_cues,
@@ -768,9 +784,14 @@ def _reports_omh_behaviour(normalized: str) -> bool:
     # clause of its own, it asks about a complaint ("OMH routed my typo to
     # ultrawork, find out what bug made it do that") and gives the task after
     # a setting ("OMH picked the config. Find out which keys are unused"); the
-    # clause before it decides. Two word lists after "find out" each lost
+    # clause before it decides. A find-out about OMH's own choice ("find out
+    # what made it pick that") refers back too. Two word lists after "find out" each lost
     # reports on a fresh held-out set (#2454).
-    own_clause = [clause for clause in clauses if asks_to_find_out(clause) and not find_out_refers_back(clause)]
+    own_clause = [
+        clause
+        for clause in clauses
+        if asks_to_find_out(clause) and not find_out_refers_back(clause) and not find_out_asks_about_choice(clause)
+    ]
     if own_clause:
         return any(_clause_complains(clause) for clause in reports)
     return True
@@ -785,31 +806,45 @@ def _clause_complains(clause: str) -> bool:
     words = ordered_words(clause)
     if inquiry_why_lead_length(words) or set(words) & (_OMH_ROUTING_VERBS | _OMH_COMPLAINT_WORDS):
         return True
-    return not _names_concrete_artifact(_chosen_object(words))
+    span, users_own = _chosen_object(words)
+    return not _names_concrete_artifact(span, compound=not users_own)
 
 
-def _chosen_object(words: list[str]) -> list[str]:
-    """The words after the clause's first choice verb, up to a preposition or the clause's end, without determiners."""
+def _chosen_object(words: list[str]) -> tuple[list[str], bool]:
+    """The words after the clause's first choice verb, up to a preposition or the clause's end, without determiners.
+
+    The flag says the object opened with "my": the user's own thing ("my
+    test message"), which a compound head does not make an artifact.
+    """
     for index, word in enumerate(words):
         if word in _OMH_CHOICE_VERBS:
             rest = words[index + 1 :]
             end = next((i for i, w in enumerate(rest) if w in _OBJECT_ENDS), len(rest))
             span = rest[:end]
+            users_own = False
             while span[:1] and span[0] in _OBJECT_DETERMINERS:
+                users_own = users_own or span[0] == "my"
                 span = span[1:]
-            return span
-    return []
+            return span, users_own
+    return [], False
 
 
-def _names_concrete_artifact(span: list[str]) -> bool:
-    """`span`'s head (last) noun is a concrete artifact, and the span names no OMH skill or workflow.
+def _names_concrete_artifact(span: list[str], *, compound: bool = True) -> bool:
+    """`span` is a concrete artifact by its head (last) noun, and names no OMH skill or workflow.
 
-    "the nginx config" is an artifact. "data-pipelines", "the report package
-    skill" and "the cache skill" are skills: a routing-target head, or the
-    span (or two or more of its words) spelling a catalog skill name, which
-    the bundle's skill-shortlist sidecar lists (#2485 review).
+    "the nginx config" is an artifact; so is a compound whose head the list
+    lacks, by the nearest listed noun before it within two words ("the port
+    number", "the db connection string"). "data-pipelines", "the report
+    package skill" and "the cache skill" are skills: a routing-target head, or
+    a run ending at the head that spells a catalog skill name, which the
+    bundle's skill-shortlist sidecar lists (#2485 review).
     """
-    if not span or span[-1] not in _CONCRETE_ARTIFACT_NOUNS or span[-1] in _OMH_ROUTING_TARGET_HEADS:
+    if not span or span[-1] in _OMH_ROUTING_TARGET_HEADS:
+        return False
+    head_is_artifact = span[-1] in _CONCRETE_ARTIFACT_NOUNS or (
+        compound and any(word in _CONCRETE_ARTIFACT_NOUNS for word in span[-3:-1])
+    )
+    if not head_is_artifact:
         return False
     if _mentioned_workflows(" ".join(span), set(span)):
         return False
@@ -817,11 +852,15 @@ def _names_concrete_artifact(span: list[str]) -> bool:
 
 
 def _spells_catalog_skill(span: list[str]) -> bool:
-    """The whole span, or a run of two or more of its words, joined by "-", is a catalog skill name or label."""
+    """A run of the span that ends at its head, joined by "-", is a catalog skill name or label.
+
+    The run is two words or more, or one hyphenated word ("data-pipelines"):
+    a single plain word ("files") is too often the artifact itself. Without a
+    sidecar there are no names, and nothing is vetoed.
+    """
     names = _skill_shortlist.catalog_skill_names() or frozenset()
-    candidates = {"-".join(span)}
-    candidates.update("-".join(span[i:j]) for i in range(len(span)) for j in range(i + 2, len(span) + 1))
-    return any(candidate in names or f"omh-{candidate}" in names for candidate in candidates)
+    runs = ["-".join(span[i:]) for i in range(len(span)) if len(span) - i >= 2 or "-" in span[i]]
+    return any(run in names or f"omh-{run}" in names for run in runs)
 
 
 def _clause_reports_omh_behaviour(words: list[str]) -> bool:
@@ -1035,6 +1074,16 @@ def _matched_execution_cues(normalized: str, compact: str) -> tuple[str, ...]:
         if found:
             matches.append(cue)
     return tuple(matches)
+
+
+def _korean_report_beside_request(normalized: str) -> bool:
+    """A Korean clause that is not itself a request carries a feedback cue: a report on OMH ("OMH가 라우팅을 잘못했어")."""
+    for clause in korean_clauses(normalized):
+        if ends_in_korean_request(clause):
+            continue
+        if _matched_cues(_FEEDBACK_CUES, clause, clause.replace(" ", "")):
+            return True
+    return False
 
 
 def _product_names_before_particle(normalized: str) -> tuple[str, ...]:
