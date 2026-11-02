@@ -33,7 +33,7 @@ NODES = [
     {"id": "api", "label": "Export API", "category": "quick", "prompt": PROMPT, "write_scope": ["src/api.py"]},
     {"id": "ui", "label": "Export button", "category": "unspecified-low", "prompt": PROMPT,
      "write_scope": ["src/ui.py"]},
-    {"id": "verify", "label": "Verify export", "category": "unspecified-high", "prompt": PROMPT,
+    {"id": "verify", "label": "Verify export", "category": "unspecified-high", "prompt": PROMPT, "role": "verify",
      "depends_on": ["api", "ui"]},
 ]
 
@@ -202,7 +202,7 @@ class GraphTests(unittest.TestCase):
                 {"id": "csv", "label": "Add CSV export", "category": "quick", "prompt": PROMPT, "depends_on": ["api"],
                  "write_scope": ["src/api.py"]},
                 {"id": "verify2", "label": "Verify CSV", "category": "unspecified-high", "prompt": PROMPT,
-                 "depends_on": ["csv"]}])
+                 "role": "verify", "depends_on": ["csv"]}])
             graph = build_delegation_graph(home.omh, home.hermes, PARENT)
         by_id = {node["id"]: node for node in graph["nodes"]}
         self.assertEqual({key: by_id[f"d:export:{key}"]["dag_origin"] for key in ("api", "fix-ui", "csv", "verify2")},

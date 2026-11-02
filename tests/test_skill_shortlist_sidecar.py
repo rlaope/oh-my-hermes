@@ -305,7 +305,8 @@ class AdmissionTests(unittest.TestCase):
         over = "What is the difference between an SLO and an error budget in a postmortem review?"
         self.assertEqual(len(at_limit.split()), bundle._FACTUAL_MAX_WORDS)
         self.assertEqual(_candidates(at_limit), ())
-        self.assertTrue(_candidates(over))
+        # plain_question now silences this 15-word question in the turn path; the ranking's own limit is pinned here.
+        self.assertTrue(bundle.skill_candidates(over))
 
     def test_no_jev_skill_is_ever_listed(self) -> None:
         message = "flag auth and migration risk on this diff under review before I approve it"

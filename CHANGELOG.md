@@ -9,6 +9,90 @@ All notable changes will be documented here.
   grey edge (`#4A4F66`); they are now a muted violet (`#6E5A9E`), lifted for
   contrast on a light terminal. The other looks keep their own edges.
 
+- **A dag-ulw run with no node running is named at the next turn.** A
+  parent re-enters a run only when a child completes, so a run with no child
+  running sat open: a parked node past its `wake_at`, ready nodes never
+  handed out, a node out with no child (a restart ended it, or none took
+  it), a node a restart ended past the re-offer bound, a node that came back
+  and was never settled, or a failed node with a repair cycle left; so did a
+  node past the stuck mark, which was named only on an `omh_dag` call. The
+  next turn's context now carries one `[OMH dag]` line naming the run and the
+  call to make (`omh_dag action=ready`, `settle`, `repair` or `status`), once
+  per situation; when other work holds every `delegate_task` slot, it says to
+  call `ready` at a later turn. Not named: a node out within
+  `dag_stale_after_s` (its child may still be starting), a parked node whose
+  `wake_at` is ahead, and a node exported to a coding owner or left to the
+  parent, which its fanout result or the parent's own work settles.
+  It blocks nothing, OMH still starts no timer, and delegated children,
+  finished runs and conversations without a run get nothing.
+
+- **A plain knowledge question no longer pulls in an OMH skill.** "Explain
+  TCP vs UDP briefly", "What's the difference between git merge and
+  rebase?" or "클로저가 뭐야?" used to get a route hint or a "Skills that may
+  fit" line from one shared word (`explain` -> paper-learning, `merge` ->
+  ulw-work, `explain` + `vs` -> finance-analysis), and the model then spent
+  an extra call loading a skill it did not need. A one-sentence concept
+  question with no work object (no my/our, no file, PR, CI or agent word, no
+  URL or code) now gets neither a token-only hint nor a candidate line;
+  phrase matches such as "explain this paper" keep theirs. On a 55-question
+  English and Korean probe, suggestions went from 13 to 1, and none of the
+  1,098 dispatch cases in the routing corpus lost a hint (#2472).
+
+- **A fanout check that could never pass is refused before dispatch, and
+  finished work that nobody verified is `unverified`, not `failed` (#2460,
+  #2461, reported by @vince2930).** The dispatcher runs every
+  `verification_commands` entry without a shell, so `test -f X && grep -q Y
+  X` handed `&&` to `test` as an argument: it exited 2 on correct work and
+  the unit landed `verification_failed`, yet `fanout validate` had accepted
+  it. Freeze, `validate` and `prepare` now refuse an unquoted `&&`, `||`, `|`,
+  `;`, `&`, `>`, `<`, `$(` or backtick in a verification command,
+  `reproduction_command` or `task_linked_test_runner`, and name both fixes:
+  one command per step, or `sh -c "..."`. Quoted text such as `grep -E 'a|b'`
+  is unaffected. A unit that exited 0 with a valid result and no observed
+  check now ends `unit_state: unverified` (reason unchanged,
+  `verification_not_observed`) instead of `failed`, so failure counts and
+  retry automation stop treating finished work as broken; `failed` is kept
+  for a check that ran and failed. `omh coding run` gains a repeatable
+  `--verification-command`, which implies `--run-verification`, so the
+  shorthand can reach `verified`.
+
+- **In a chat with many loaded tools, Hermes can save a stated preference or
+  decision to OMH memory without searching for a tool first. On Discord, a
+  fact saved in one conversation thread can be recalled in the next thread
+  Hermes starts in the same channel.** The memory provider exposes the small
+  `omh_remember` save/recall tool outside Hermes' deferred plugin-tool catalog,
+  using the existing admission and session-lens gates. Discord threads Hermes
+  auto-created from channel messages use their parent channel's memory scope;
+  other threads keep their own.
+- **omher.app pages carry X's full share-card tag set.** Every indexable site page now
+  carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
+  `og:image:type` beside the existing share card, and `test_site_seo` pins
+  them so a home-page redesign cannot drop the share block unnoticed.
+
+- **A code-change plan from `plan` carries its execution order.** Each task
+  now has an id, the tasks it depends on, the files it may write and its done
+  check: the dependency and write-scope fields a `dag-ulw` node takes, and the
+  check its VERIFY and STOP WHEN come from. Of two tasks that write the same
+  file, one lists the other directly as a dependency, as `dag-ulw` requires.
+  Converting a plan to a graph still adds each node's label, category and full
+  prompt. The last task is a closing gate, named as the verification task:
+  real verification commands run by someone other than the builder, then a
+  review, and an unclean review adds a fix task (at most two rounds) instead
+  of ending the plan. After acceptance, `plan` and `ulw-plan` now offer
+  `dag-ulw` for a plan whose tasks form a graph.
+
+- **A dag-ulw run that finished without a passing check no longer reads as a
+  verified goal.** Each node now declares a `role` (`build` by default,
+  `baseline`, `verify`, `review`) instead of OMH guessing it from the label,
+  which misread checks such as "independent verification vs baseline" and
+  producers such as "visual-qa motion reference". A finished run carries a
+  goal verdict apart from its state: `verified` only when every producer sits
+  under a verify node that was accepted with its handoff checked, otherwise
+  `unverified` (with the reason) or `verify_failed`. `omh_dag`, the run
+  summary, the messenger end block and the TUI end view all show it, and an
+  unverified done run is told to add a verify node through `extend`. Runs
+  stored before this update keep reading their nodes as before.
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write

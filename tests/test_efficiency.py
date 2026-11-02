@@ -15,6 +15,7 @@ from omh.routing import chat as chat_module
 from omh.routing import catalog_questions as catalog_questions_module
 from omh.routing import intent as intent_module
 from omh.routing import localization as localization_module
+from omh.plugin_bundle.omh import text_fold as text_fold_module
 from omh.routing import missed_route as missed_route_module
 from omh.routing import recommend as recommend_module
 from omh.routing import policy as policy_module
@@ -236,7 +237,12 @@ class EfficiencyContractTests(unittest.TestCase):
         # ~1.6k headroom this gate carried. The pack's review (#2301) drops
         # its everyday phrases and the tree measures 83,092, still over the old
         # ceiling, so this one stands.
-        self.assertLess(core["skill_body"]["bytes"], 85_000)
+        # 85,000 -> 88,000: `plan` (core) now gives each code-change task an id,
+        # dependencies, write scope and done check, ends with a closing gate,
+        # and offers `dag-ulw` after acceptance. Main measures 84,762 and this
+        # tree 86,249 (+1,487); the ceiling leaves ~1.75k headroom, about the
+        # ~1.6k the earlier entries recorded.
+        self.assertLess(core["skill_body"]["bytes"], 88_000)
         # 815,000 -> 825,000: one new installable body (`web-research`) plus the
         # sentence that split `best-practice-research`'s boundary in two. Set to
         # restore the ~10k headroom this gate is meant to carry rather than to
@@ -1405,8 +1411,10 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertGreaterEqual(cache_info.hits, 1)
 
     def test_routing_token_cache_reuses_terms_without_payload_poisoning(self) -> None:
-        localization_module._routing_terms_cached.cache_clear()
-        localization_module._routing_tokens_cached.cache_clear()
+        # The caches live with the tokenizer in the bundle's `text_fold`;
+        # `localization` re-exports the functions that fill them.
+        text_fold_module._routing_terms_cached.cache_clear()
+        text_fold_module._routing_tokens_cached.cache_clear()
 
         first_terms = localization_module.routing_terms("Risky refactor with code-review")
         first_terms.add("mutated")
@@ -1415,14 +1423,14 @@ class EfficiencyContractTests(unittest.TestCase):
         self.assertIn("risky", second_terms)
         self.assertIn("code-review", second_terms)
         self.assertNotIn("mutated", second_terms)
-        terms_cache = localization_module._routing_terms_cached.cache_info()
+        terms_cache = text_fold_module._routing_terms_cached.cache_info()
         self.assertEqual(terms_cache.misses, 1)
         self.assertGreaterEqual(terms_cache.hits, 1)
 
         first_tokens = localization_module.routing_tokens("Risky refactor with code-review", stopwords=set())
         first_tokens.add("mutated")
         second_tokens = localization_module.routing_tokens("Risky refactor with code-review", stopwords=set())
-        tokens_cache = localization_module._routing_tokens_cached.cache_info()
+        tokens_cache = text_fold_module._routing_tokens_cached.cache_info()
 
         self.assertIn("risky", second_tokens)
         self.assertIn("code-review", second_tokens)

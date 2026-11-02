@@ -20,6 +20,7 @@ load_local_package()
 from omh.plugin_bundle.omh import awareness as awareness_module
 from omh.plugin_bundle.omh.awareness import awareness_route_hint
 from omh.plugin_bundle.omh.degradation import DEGRADATION_CHAT_NOTE
+from omh.plugin_bundle.omh.workflow_intent import WORKFLOW_DISPLAY_NAMES, WORKFLOW_VOCABULARY
 from omh.routing.chat import route_chat_message
 from omh.routing.display_names import canonical_display_mentions
 from omh.skills.catalog import (
@@ -274,6 +275,16 @@ class DisplayNameEchoBackRoutingTests(unittest.TestCase):
                 continue
             with self.subTest(alias=display):
                 self.assertIn(omh_skill_display_name(canonical), mapping)
+
+    def test_workflow_intent_display_table_is_the_catalog_rule_over_its_vocabulary(self) -> None:
+        # The classifier lives in the bundle, which has no catalog, so it
+        # carries its labels written out; this keeps them the catalog's.
+        expected = {
+            display: workflow
+            for workflow in WORKFLOW_VOCABULARY
+            for display in (omh_skill_display_name(workflow), *historical_skill_display_names(workflow))
+        }
+        self.assertEqual(WORKFLOW_DISPLAY_NAMES, expected)
 
 
 class HistoricalLabelAliasTests(unittest.TestCase):

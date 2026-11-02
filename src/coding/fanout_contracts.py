@@ -166,6 +166,78 @@ class FanoutContractError(ValueError):
     """Raised when a proposed fanout unit list cannot be frozen into a contract."""
 
 
+# Unquoted shell syntax in a command that no shell will ever read. Ordered so
+# a two-character operator is named before its one-character prefix.
+_UNQUOTED_SHELL_OPERATORS = ("&&", "||", "$(", "|", ";", "&", ">", "<", "`")
+
+
+def unquoted_shell_operator(command: str) -> str:
+    """The first shell operator outside quotes in `command`, or "".
+
+    Quote state is tracked the way POSIX `sh` does: nothing is special inside
+    single quotes, a backslash escapes the next character outside them, and
+    inside double quotes `$(` and backticks still substitute. `grep -E 'a|b'`
+    therefore carries no operator, while `test -f x && grep y x` does.
+    """
+    quote = ""
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if quote == "'":
+            if char == "'":
+                quote = ""
+            index += 1
+            continue
+        if char == "\\":
+            index += 2
+            continue
+        if quote == '"':
+            if char == '"':
+                quote = ""
+            elif char == "`" or command.startswith("$(", index):
+                return "`" if char == "`" else "$("
+            index += 1
+            continue
+        if char in ("'", '"'):
+            quote = char
+            index += 1
+            continue
+        for operator in _UNQUOTED_SHELL_OPERATORS:
+            if command.startswith(operator, index):
+                return operator
+        index += 1
+    return ""
+
+
+def require_shell_free_command(command: str, *, field: str = "verification command") -> None:
+    """Refuse a command the dispatcher would run with `shell=False` that needs a shell.
+
+    The fanout dispatcher runs `verification_commands`, `reproduction_command`
+    and `task_linked_test_runner` without a shell, so an unquoted `&&`, `||`,
+    `|`, `;`, `&`, `>`, `<`, `$(` or backtick reaches the program as a literal
+    argument. `test -f x && grep -q y x` then runs `test` with five arguments
+    and exits 2 however correct the work is: a check that can never pass
+    (#2460). The refusal names both ways to write the check.
+
+    Separate from `verification_command_argv` on purpose: that parser also
+    compiles `handoff_contract` postconditions, which the executor runs itself.
+    """
+    operator = unquoted_shell_operator(command)
+    if not operator:
+        return
+    wrapped = (
+        f'sh -c "{command}"'
+        if not any(char in command for char in '"\\$`')
+        else f"sh -c {shlex.quote(command)}"
+    )
+    raise FanoutContractError(
+        f"{field} uses the shell operator {operator!r} outside quotes, but the dispatcher runs it "
+        "without a shell, so the operator would reach the program as a literal argument and the check "
+        "could never pass; declare each step as its own command, or wrap it in a shell explicitly: "
+        f"{wrapped}"
+    )
+
+
 def verification_command_argv(command: str) -> tuple[dict[str, str], list[str]]:
     """Split one verification command into env overrides and an argv.
 
@@ -174,7 +246,8 @@ def verification_command_argv(command: str) -> tuple[dict[str, str], list[str]]:
     ordinary argument text rather than operators. Leading `NAME=VALUE` tokens
     are the single exception, kept because `PYTHONPATH=tests uv run ...` is how
     this repo's own gate commands are written and refusing them would make the
-    field unusable for exactly the commands it exists to carry.
+    field unusable for exactly the commands it exists to carry. The fanout
+    freeze path refuses such operators first, with `require_shell_free_command`.
 
     Raises `FanoutContractError` so the freeze path rejects an unrunnable
     command where the operator can still fix it.

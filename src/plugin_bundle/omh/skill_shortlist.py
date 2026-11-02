@@ -43,6 +43,7 @@ import unicodedata
 
 from .hermes_session_commands import NATIVE_LOOP_CADENCE_HINT_KEY
 from .pi_family_names import SCORING_ONLY_LEXICAL_TERMS
+from .plain_question_cues import plain_question
 from .reference_regions import executable_routing_text
 
 SIDECAR_PATH = Path(__file__).resolve().parent / "tools" / "skill_shortlist.json"
@@ -538,6 +539,8 @@ def skill_candidates_for_turn(
     if isinstance(hints, list) and any(
         isinstance(hint, dict) and hint.get("id") == _DIRECT_INVOCATION_HINT_ID for hint in hints
     ):
+        return ()
+    if plain_question(message):
         return ()
     text = executable_routing_text(message)
     candidates = () if _conversational(text) else skill_candidates(text, installed=installed)

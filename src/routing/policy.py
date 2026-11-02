@@ -34,9 +34,9 @@ from ..plugin_bundle.omh.dag_ulw_cues import DAG_ULW, asks_about_dag_ulw, dag_ul
 from ..plugin_bundle.omh.invocation_cues import invoked_instruction
 from ..coding.pi_family_interop import PI_DISTRIBUTION_HOST, RUNTIME_SHORT_NAME
 from ..plugin_bundle.omh.name_report_cues import about_the_skill
-from .command_verb import DIRECT_CODING_EDIT_VERBS as _DIRECT_CODING_EDIT_VERBS
-from .command_verb import command_words as _command_words
-from .command_verb import commanded_words
+from ..plugin_bundle.omh.command_verb import DIRECT_CODING_EDIT_VERBS as _DIRECT_CODING_EDIT_VERBS
+from ..plugin_bundle.omh.command_verb import command_words as _command_words
+from ..plugin_bundle.omh.command_verb import commanded_words
 from ..plugin_bundle.omh.show_reel_cues import show_reel_request_admitted
 from ..plugin_bundle.omh.spend_signals import (
     SPEND_EVERYDAY_SENSE_ANCHORS,

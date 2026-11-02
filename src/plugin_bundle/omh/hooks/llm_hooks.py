@@ -34,6 +34,7 @@ from ..awareness_delivery import claim_route_guidance_delivery, record_awareness
 from ..context_budget_plan import context_budget_continuation, render_context_budget
 from ..dag_define_gate import note_turn as note_dag_define_turn
 from ..dag_define_gate import starts_dag_run
+from ..dag_open_run_nudge import open_run_line
 from ..hermes_session_commands import host_command_turn, host_context_removed, person_request_text
 from ..host_context import record_active_main_agent_model
 from ..host_observation import observe_plugin_hook_call
@@ -968,6 +969,15 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     )
     if failed_wait:
         context_parts.append(failed_wait)
+    # A dag-ulw run of this conversation that no running child will re-open,
+    # named once with the one `omh_dag` call that moves it
+    # (`dag_open_run_nudge`). Outside the awareness opt-out for the same
+    # reason as the line above: it is about this session's run stalling.
+    open_run = open_run_line(
+        session_id=session_id, omh_home=omh_home, hermes_home=hermes_home, delegated=delegated
+    )
+    if open_run:
+        context_parts.append(open_run)
 
     try:
         try:
