@@ -3163,7 +3163,7 @@ Category: `{definition.category}`. Phase: `{definition.phase}`. Hermes role: `{d
         return _progressive_method_body(definition, name)
     title = name.replace("-", " ").title()
     compact_contracts = {
-        "decision-prototype": "Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`.",
+        "decision-prototype": "Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`. For a logic, state, or layout question, or prototype code a later plan may reference, load `references/artifact-shapes.md`.",
         "lifecycle-growth": "Required: lifecycle objective, audience/events, consent, budget, and owner. Output: a brief, audience/safety policy, experiment, readout, and handoff.",
         "product-discovery-validation": "Required: problem, segment/evidence, owner, learning budget, and criteria. Output: a decision frame, evidence and customer plan, test portfolio, receipt, and GTM hypothesis.",
         "sales-pipeline-review": "Required: supplied snapshot and as-of time, definitions, prior outcomes, and owner. Output: scope, health, forecast, supported annexes, and follow-up handoff.",
@@ -9389,7 +9389,10 @@ Take these in impact order; stop at the first tier the diff budget allows.
 4. **Decomposition** - the scroll test: a component you must scroll to read is
    the entry point; extract along independent change reasons, completely - a
    half-extracted component is two coupled ones; inline a premature abstraction
-   before re-extracting it properly.
+   before re-extracting it properly. Premature means the deletion test passes:
+   removing the component or hook makes its complexity vanish because it only
+   forwarded, renamed, or re-wrapped. One that hides a parser, a policy, or a
+   formatting rule behind a small interface stays, whatever its caller count.
 5. **Coupling** - break circular imports with an intermediate module; import
    from public surfaces, not sibling internals.
 
@@ -9400,6 +9403,15 @@ it renders for known props/state, what it calls when interacted with. Snapshot
 tests do not count; they lock markup, not behavior. Prefer behavior-level
 integration tests over implementation-detail unit tests, and write them BEFORE
 the refactor, not after.
+
+Green tests do not prove the render is unchanged. Extraction adds wrapper
+elements that break child-combinator, flex-child, and grid-child selectors,
+and reordering merged class names changes which style wins. So when a change
+alters DOM nesting, element type, or class composition, capture the affected
+component before and after apply at one viewport and compare the two (capture
+mechanics: `omh-frontend/references/screenshot-loop.md`). A visible
+difference is a behavior change under the invariants above: revert it or
+record it as a finding.
 
 ## Boundary
 
@@ -11492,7 +11504,176 @@ def _frontend_design_reference_templates_cached() -> tuple[SkillReferenceTemplat
             "references/chart-styling.md",
             _chart_styling_reference(),
         ),
+        SkillReferenceTemplate(
+            "frontend",
+            "references/forms-and-input.md",
+            _forms_and_input_reference(),
+        ),
     )
+
+
+def _forms_and_input_reference() -> str:
+    return """# Forms and Input
+
+Load this before writing a form, a text composer (chat box, comment field),
+or a dialog. The accessibility-audit skill's FORM rules check the same ground
+after the code exists; these rules put it in the first draft, where it costs
+least.
+
+## Labels and descriptions
+
+- Every control has a visible label tied to it in markup (`<label for>`, a
+  wrapping label, or `aria-labelledby`). A placeholder is an example value,
+  never the label: it disappears on the first keystroke.
+- Help text and the error message are linked with `aria-describedby`, which
+  every screen reader reads. Add `aria-errormessage` only on top of
+  `aria-invalid="true"`, and only when the screen readers the product targets
+  are known to honor it. A format hint sits above the field, where the
+  browser's autofill list cannot cover it.
+- Required fields say so in text, and no state is carried by color alone.
+- A personal-data field declares its autofill purpose (`autocomplete` such as
+  `email`, `name`, `tel`, `street-address`, `one-time-code`,
+  `current-password`, `new-password`) and the matching `type` / `inputmode`,
+  so the right keyboard and the password manager both appear.
+
+## When an error appears
+
+- Validate when the user commits a value (blur) or submits, not on each
+  keystroke of a value still being typed: a postcode with three of its five
+  digits entered is unfinished, not wrong. CSS `:user-invalid` has this
+  timing built in; JavaScript validation keeps a per-field touched flag for
+  the same effect.
+- Once a field shows an error, re-check it on input, so the error clears the
+  moment the value becomes valid.
+- `aria-invalid` turns on at the same moment the visual error appears. Set
+  earlier, a screen reader announces "invalid" when a user first tabs into an
+  empty required field.
+- Error text names the problem and the next step (copy rules:
+  `taste-foundations.md`, section `Interface copy`).
+
+## Server errors land on fields
+
+- Client validation is a convenience; the server's answer is the authority.
+  Map each field path in the error response onto its field (the backend
+  skill's error envelope carries field paths:
+  `omh-backend/references/service-contract.md`). A path with no matching
+  field, and an error with no field, goes to one form-level summary.
+- After a failed submit, use one announcement channel, not two. Either move
+  focus to the first invalid field and put only a short count ("2 fields
+  need attention") into a live region that was already in the page before
+  the error, or, when no field is at fault, move focus to the summary itself
+  (`tabindex="-1"`, not a live region). Focusing an element and announcing
+  the same content reads it twice.
+- A failed submit keeps everything the user typed. Clearing the form on an
+  error is data loss.
+- A conflict (409: the record changed since it was loaded) is its own state,
+  not a generic error: say that someone else changed it, keep the user's
+  edit, and offer reload or overwrite. Never overwrite silently.
+
+## One submit in flight
+
+- The guard lives in the form's `submit` handler, not on the button's click:
+  Enter in a field submits the form without going through the button, even
+  an `aria-disabled` one. While a submit is pending, that handler returns
+  early, so a double click, Enter, and a shortcut are all refused.
+- The submit control shows the pending state ("Saving…") and stays
+  focusable (`aria-disabled`, not `disabled`), so focus does not drop to the
+  page.
+- When the endpoint is not naturally idempotent, the request carries an
+  idempotency key created once per user intent and reused on retry, so a
+  retry after a timeout does not create the record twice.
+- An optimistic submit follows the cancel / snapshot / apply, restore on
+  error, invalidate on settle triple in the frontend-refactor skill's
+  `omh-frontend-refactor/references/state-discipline.md`, section 6.
+
+## Enter to submit, and IME composition
+
+Korean, Japanese, and Chinese input goes through an input method editor (IME),
+and Enter confirms the candidate being composed. A handler that sends on
+every Enter sends half-composed text: the most common defect in chat UIs for
+these languages.
+
+- A single-line input inside a `<form>` needs no handler: the browser's own
+  Enter submission already waits for composition. Do not add one.
+- A multiline field with a custom Enter-to-send checks composition first:
+  when the key event reports `isComposing`, the Enter belongs to the IME, so
+  return without sending. Some Safari versions hand the confirming Enter to
+  script after `compositionend`, when the flag already reads false, so the
+  recommended check inside the Enter branch is
+  `event.isComposing || event.keyCode === 229`. In a framework that wraps
+  events, read both from the native event.
+- Only a codebase that refuses `keyCode` uses the timing fallback, and it
+  has to be exact: record `event.timeStamp` of the last `compositionend`,
+  and skip an Enter whose own `event.timeStamp` is within about 50 ms of it
+  in absolute value (Safari can stamp the keydown earlier than the
+  `compositionend`). Compare the two events' timestamps; a clock read inside
+  the handler (`Date.now()`, `performance.now()`) drifts whenever the main
+  thread is busy.
+- Shift+Enter inserts a newline. Run the composition check before any
+  Enter branch, modified or not (Ctrl+Enter, Cmd+Enter included): it costs
+  nothing, and not every IME is known to leave modified Enter alone.
+- A visible submit button always remains; the key is an accelerator, not the
+  only path.
+- Verify it by typing Korean or Japanese with a real IME and pressing Enter
+  to confirm a candidate: nothing is sent until the next Enter. Reading the
+  handler is not that check.
+
+## Dialogs
+
+- Prefer the platform `<dialog>` opened with `showModal()` (top layer, inert
+  background, Escape to close) and the `popover` attribute for non-modal
+  overlays over hand-built focus traps.
+- On open, focus moves into the dialog: its first field, or its heading when
+  it has no field. Escape closes it, and on close focus returns to the
+  control that opened it.
+- A dialog holding unsaved input asks before discarding it on an accidental
+  close. Under the HTML close-watcher rules (shipped in Chromium; check
+  other engines), a modal's `cancel` can be prevented only once per user
+  activation, so a second Escape closes it anyway: ask on the first Escape,
+  or open it with `closedby="none"`, give it an explicit close control that
+  runs the check, and handle Escape yourself (keydown on the dialog) so it
+  runs the same check; `closedby="none"` turns close requests off entirely,
+  and keyboard users would otherwise lose Escape.
+- Keeping the page behind a modal still is partly an enhancement.
+  `overscroll-behavior: contain` on the dialog stops scroll chaining when the
+  dialog's own content overflows. Stopping scroll over the backdrop, or
+  inside a dialog whose content does not overflow, relies on
+  `overscroll-behavior` applying to a non-scrolling container (`overflow:
+  hidden` plus `overscroll-behavior: contain` on `::backdrop`). That works
+  in Chrome and Edge 144+ and Firefox 150+, not in Safari, and cannot be
+  feature-detected: `@supports` and `CSS.supports()` answer true everywhere.
+  Ship it as a progressive enhancement and say which browsers get it; when
+  the support target needs a hard lock in every browser, use the project's
+  scroll lock.
+- A destructive confirmation names the action on its button ("Delete
+  project"), never "OK".
+
+## Check the support target
+
+`:user-invalid`, `popover`, `closedby`, and the newest dialog behaviors
+arrived in engines at different times. Check each against the
+browser-support target named in the brief. A feature newer than the target
+(by default, anything only Baseline Newly available) ships behind feature
+detection with a fallback, or the target changes on purpose. A behavior that cannot be
+detected (the backdrop scroll above) cannot take that path: it ships only as
+an enhancement whose absence the page tolerates, or a different technique
+covers the target.
+
+## Boundary
+
+These rules shape the prepared contract and the first draft. Whether a form
+behaves is observed in a browser: a keyboard-only pass, a screen-reader
+announcement, a real IME test, a double-click on submit. A rule listed here is
+not evidence that it holds.
+
+## Attribution
+
+The validation timing, error announcement, IME-safe Enter, and dialog scroll
+rules adapt ideas from the `modern-web-guidance` skill guides in
+`GoogleChrome/modern-web-guidance` (Apache-2.0). No text from them is
+reproduced, the wording here is OMH's own, and OMH requires neither that
+package's command-line tool nor any network fetch.
+"""
 
 
 def _component_registry_adoption_reference() -> str:
@@ -12937,6 +13118,30 @@ sections in the order a visitor actually decides; visual symmetry never
 outranks that sequence. Review content accuracy and hierarchy before any
 polish — a beautiful wrong page fails first on content.
 
+## Interface copy
+
+Labels, toasts, errors, and empty states steer the reader as much as layout
+does, so read them in the same review. Four checks:
+
+- Name things the way the reader already does. A clinic receptionist books
+  "appointments", not "calendar slot reservations". A label lifted from the
+  schema, the API, or the code is a finding.
+- One action keeps one verb everywhere it shows up: the button, its
+  in-progress label, the result message, and any undo. A button that says
+  "Archive" is followed by a message that the item was archived, not
+  "Moved". Generic verbs such as "Submit", "Confirm", or "OK" tell the
+  reader nothing about the result.
+- An error message gives the cause, then the way out: "That date is fully
+  booked. Pick another day or join the waitlist." Drop the "Oops" and the
+  "Sorry"; "An error occurred" leaves the reader with nothing to do.
+- An empty list carries the control that fills it: "No appointments today"
+  sits beside "Book appointment". An illustration without that control is
+  decoration.
+
+Korean, Japanese, and Chinese copy takes the same checks in its own
+register; translate the meaning of an action name, and keep it identical
+across the flow in every locale.
+
 ## Boundary
 
 Taste guidance shapes the prepared direction and contract. It never
@@ -12944,6 +13149,10 @@ substitutes for observed rendered evidence: the visual-QA owner judges what
 actually shipped.
 
 {_DESIGN_CRAFT_ATTRIBUTION}
+
+The interface-copy checks adapt ideas from the `frontend-design` skill in
+`anthropics/claude-plugins-official` (Apache-2.0); no text from it is
+reproduced, and the examples and wording here are OMH's own.
 """
 
 
@@ -14353,8 +14562,49 @@ What stays with `ask`:
 
 def decision_prototype_reference_templates() -> list[SkillReferenceTemplate]:
     return [
-        SkillReferenceTemplate("decision-prototype", "references/spike-composition.md", _spike_composition_reference())
+        SkillReferenceTemplate("decision-prototype", "references/spike-composition.md", _spike_composition_reference()),
+        SkillReferenceTemplate("decision-prototype", "references/artifact-shapes.md", _decision_prototype_artifact_shapes_reference()),
     ]
+
+
+def _decision_prototype_artifact_shapes_reference() -> str:
+    """What a good artifact looks like for a logic question, a layout question, and kept prototype code."""
+    return """# Artifact shapes
+
+Load this when the decision question is about logic or state, about an interaction or layout, or when the receipt may let later work reference the prototype code. The question picks the shape, and the wrong shape spends the budget on an artifact that cannot answer it. A question that fits neither shape keeps the artifact kinds `prototype_smallest_artifact_check` lists.
+
+Every shape below is built inside the declared scratch boundary. When the artifact belongs inside the real application, that boundary is a temporary worktree of the repository, never the working tree the user is editing.
+
+## Logic or state question
+
+The question sounds like "does this state model refuse that sequence" or "can this data shape represent that case".
+
+- Put the decision-bearing logic in one pure module: no I/O, no UI, and no clock, randomness, or network it was not handed as an argument. A thin driver (a script, a CLI loop, a page) calls into the module and nothing calls out of it. The module is the part a later accepted plan may lift; the driver is discarded.
+- Pick the module's form from the question: a reducer over discrete actions, an explicit state machine when which actions are legal right now is part of the question, or plain functions over a data type when there is no current state.
+- After every action, the driver prints the full relevant state, labelled in the domain's own words, and marks what changed, so the observation ledger quotes state instead of narrating it.
+- Keep state in memory. Persistence enters only when persistence is the question, and then as a scratch store inside the boundary whose name says it is a prototype.
+- Start it with one command, written into the prepared handoff.
+- Script the runs the hypothesis turns on: the expected path, the awkward edge case, and one sequence that should be refused. Each run starts from a reset to the same initial state, so a rerun observes the same thing.
+
+## Interaction or layout question
+
+- Build at least two variants and at most five, differing in structure: layout, information hierarchy, or primary action. Variants that differ only in colour, spacing, or copy cannot settle a layout question; when two come out alike, rebuild one with the shared structure ruled out.
+- Mount the variants in the real host page or route, with its navigation, density, and data loading in place. A blank route makes every variant look acceptable. Use a new route only when no existing page could host the thing, follow the project's own routing convention, and name the route as a prototype.
+- Only the rendered part differs per variant; the data loading and access checks above it stay as they are. Switching needs no rebuild (a query parameter or a development-only switch), and the switch never reaches a production build.
+- Stub every write: a variant never performs a real mutation, because the question is how the surface is read and used, not whether the backend works. The data shown follows the skill's fixture rule: synthetic or development data unless the user approved real data for this run.
+- The measurement names the target task and what counts as better (completion, errors, the variant the user picks and why). Record picks per variant; a mixed answer, such as one variant's header with another's list, is recorded as that, not rounded to one variant.
+
+## Keeping the code
+
+- When the receipt lets later work reference the prototype code, commit it on a named throwaway ref: the temporary worktree's own branch, named for the decision id (for example `prototype/<decision_id>`) and declared with the scratch boundary. The receipt cites the ref and the commit.
+- The ref is never merged and never becomes the default branch. Pushing it to a remote is external publication and goes through the existing approval gate.
+- Removing the worktree directory is the cleanup to observe. Record `keep_discard_decision` as kept on the ref and `cleanup_status` as worktree removed, ref retained, never `discarded`, since the code still exists. Without reference permission, the branch is deleted with the worktree, the cleanup observes both, and only then is the result `discarded`.
+- A later accepted plan lifts the pure module or rebuilds the chosen variant to production standard; it never merges the prototype branch.
+
+## Attribution
+
+The three shapes adapt ideas from Matt Pocock's `prototype` skill (`SKILL.md`, `LOGIC.md`, `UI.md`) at `mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888`, MIT License, Copyright 2026 Matt Pocock. OMH keeps its own scratch boundary, observation ledger, and receipt, and does not take the upstream single-file demo page or variant switcher bar.
+"""
 
 
 def _spike_composition_reference() -> str:

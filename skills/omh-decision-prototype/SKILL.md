@@ -15,7 +15,7 @@ metadata:
 
 # Decision Prototype
 
-Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`.
+Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`. For a logic, state, or layout question, or prototype code a later plan may reference, load `references/artifact-shapes.md`.
 
 **Do Not Use When:** The user wants an idea's feasibility probed across several questions with throwaway spikes, with no single decision for a plan to consume; load Hermes' bundled `spike` skill instead of this one.
 

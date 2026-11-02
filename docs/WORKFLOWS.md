@@ -2885,6 +2885,9 @@ These surfaces are generated command references, not installed Hermes workflow s
   - A 3D or canvas scene (WebGL, a three.js-style engine, a voxel world) is judged on its first frame: load `references/rendered-scene-craft.md`, boot on the view the scene's own title and copy promise, light it with a warm-or-cool key, a sky fill, explicit tone mapping, shadows, and fog, and make every small animated object read as what it is. A clean console is not a finished scene.
   - For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.
   - Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.
+  - When the surface reads or writes remote data, load the frontend-refactor skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.
+  - When the surface has a form, a text composer, or a dialog, load `references/forms-and-input.md` before writing it: labelled controls, errors shown after the user commits a value, server field errors mapped onto their fields, one submit in flight, an Enter-to-send that waits for IME composition, and focus returned when a dialog closes.
+  - Check the browser-support target before using a newer platform feature: a feature newer than the target (by default, anything only Baseline Newly available) needs feature detection plus a fallback, or a deliberate target change; suggest recording the target in the repository's agent instruction file (`omh-agent-instructions` owns that file).
   - State performance as a budget, not an adjective: load `references/web-vitals-budgets.md`, name one metric with its published bar (LCP, INP, CLS), the device and network class it is judged on, the route and load shape, and the baseline captured under that same profile - before the change. A budget chosen after seeing the result describes what happened instead of gating it.
   - Attribute before optimizing: name the LCP element and its dominant phase, the interaction that produced the worst INP and where the time went, or the node that shifted and what moved above it. A list of optimizations with no attribution is folklore, and a change that improved a different element than the one attributed did not fix the metric.
   - Keep field and lab apart: a p75 claim needs field data, a lab audit is a diagnostic sample on one device profile, and a lab pass is never a statement about real users.
@@ -2896,7 +2899,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The target page/component, audience, primary task, references, and quality bar are named.
   - Greenfield work includes frontend_initial_generation_contract/v1 before implementation handoff.
   - The design_system_contract/v1 covers typography, spacing, palette, components, layout, motion, and responsive rules.
-  - The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks.
+  - The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict rows for remote writes.
   - The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.
   - The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.
   - The next action is prepare_frontend_handoff, route to visual-qa, or report the missing evidence blocker.
@@ -2912,6 +2915,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - DESIGN.md or design-system source of truth when available
   - framework/stack when known
   - routes, states, breakpoints, and locale/CJK risks
+  - browser-support target (default: Baseline Widely available, in every core browser for 30+ months)
   - accessibility and performance constraints
   - observed browser evidence for completion claims
 - Expected outputs:
@@ -2931,8 +2935,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - frontend_initial_generation_contract/v1 declares DESIGN.md/design-system work, reference lane, token extraction, reusable primitives, and visual QA path before new UI code
   - design_system_contract/v1 with layout, spacing, typography, color, component, motion, and responsive rules
   - design_reference_selection/v1 names supplied references or the domain-fit style direction and explicitly avoids copying third-party logos, assets, or brand copy
-  - frontend_route_state_matrix/v1 with pages, states, viewports, CJK/locale, empty/loading/error, and interaction states
-  - frontend_component_state_inventory/v1 with default, hover, focus, active, disabled, loading, empty, and error states for reusable primitives
+  - frontend_route_state_matrix/v1 with pages, states, viewports, CJK/locale, empty/loading/error, and interaction states, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict (409) rows wherever the surface writes remote data
+  - frontend_component_state_inventory/v1 with default, hover, focus, active, disabled, loading, empty, and error states for reusable primitives, and each primitive's interface: props, events, slots, and the invariants a caller must know; a wrapper earns a row only when deleting it would push its complexity into its callers
   - frontend_implementation_handoff/v1 for the selected executor/runtime
   - browser screenshots, accessibility reports, Lighthouse/Core Web Vitals, and visual QA only when observed
 - Safety rules:
@@ -2984,7 +2988,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Make impossible states unrepresentable before memoizing anything: flag clusters become one discriminated union or reducer, and a state machine only when transitions carry retries, resets, or races.
   - Treat effects as synchronization with external systems: deriving, event responses, prop-change resets, parent notification, and effect chains each have a non-effect form named in `omh-frontend-refactor/references/state-discipline.md`.
   - Run the micro pass in fixed order - dead code, naming, simplification, modernization - finishing one category before the next; the full contract is `omh-frontend-refactor/references/refactor-passes.md`.
-  - Gate macro changes on characterization tests written before the refactor; snapshot tests lock markup, not behavior, and do not count.
+  - Gate macro changes on characterization tests written before the refactor; snapshot tests lock markup, not behavior, and do not count. A change that alters DOM nesting, element type, or class composition also needs a before/after capture at one viewport, because green tests do not prove the render is unchanged.
   - The scroll test picks the decomposition entry point, and extraction follows independent change reasons completely - a half-extracted component is two coupled ones.
 - Completion checklist:
   - The preview plan was emitted before any file changed, and the apply step was an explicit second decision.
@@ -4770,6 +4774,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the id of the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.
   - When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.
   - When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above; for a code task, a command with the result that counts as passing - the test's run command, a gate, or a grep for the signature - while a task that is not code may keep an observable check); when two tasks write the same file, one lists the other directly among its dependencies, since an order through a third task does not count. These carry a `dag-ulw` node's id, depends_on and write_scope, and the done check feeds its VERIFY and STOP WHEN; converting still adds each node's label, category and full prompt, and a baseline node before a full-suite check.
+  - When the plan describes code changes, cut the code tasks as vertical slices: each delivers one behavior through every layer it needs, and its done check drives that behavior through the surface a user or caller reaches, so an integration failure shows in the task that caused it rather than first in the closing gate. Do not split by layer to keep write scopes apart: slices that write the same file are ordered, each later slice listing every earlier slice that writes it directly among its dependencies, since an order through a slice between them does not count; a file every slice only appends to (a changelog, a generated index) may instead be written by one task after the slices. A layer-only task is either a prefactor that makes the later slices easy and comes before them, or a wide mechanical change across many callers, handed to `refactor-plan` (the new form beside the old, callers moved in groups while both stay green, the old form deleted last) instead of a split by layer.
   - When the plan describes code changes, its last task is the closing gate, named as the verification task (in `dag-ulw`, a node with `role: verify`): it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or fewer when the engine running the plan stops sooner, after which the open findings are reported.
   - When the plan describes code changes, run a proportion check before acceptance: if the plan text outgrows the code it leads to, or is mostly function bodies, implementation has leaked into it; reduce bodies to test names, assertions, and signatures.
   - When the plan describes code changes, name the goal beyond the request before splitting tasks: one sentence on what should happen once the requested result exists, and whether the plan aims at that outcome or at the request as asked; when the two are the same, say so in one line. A plan aimed at the outcome adds, as its own tasks, the access the executor needs to work at that level unattended - failure logs, a reproduction environment, the raw data, the mapping from a released version to its commit.
@@ -4784,6 +4789,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Rejected options or unresolved tradeoffs are recorded before handoff.
   - When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.
   - When the plan describes code changes, every task has an id, its dependencies, the files it may write, and a done check, and the last task is the closing gate.
+  - When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.
   - When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
 - Recovery notes:
   - If acceptance criteria or verification are missing, route back to clarification before handoff.
@@ -7873,6 +7879,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared handoff, observed outputs, interpretation, confidence, and cleanup state as distinct evidence states.
   - Preserve the declared task, fixture, environment, and sample limits so the result is not generalized beyond them.
   - End with a decision receipt that `ralplan` can consume: supported option, rejected option, residual risk, evidence limits, and prototype-code reference permission.
+  - When the question is about logic or state, or about an interaction or layout, or the receipt may let later work reference the prototype code, load `references/artifact-shapes.md`: a pure module a plan can lift with the full state shown after each action, structurally different variants mounted in the real host page, and kept code on a named throwaway ref.
 - Completion checklist:
   - Exactly one decision question with a stable decision id, alternatives, and a falsifiable hypothesis is recorded, or the request was refused with the missing question named.
   - Time, tool, file, and command budgets carry units, and the scratch directory or temporary worktree identity matches the observed workspace.

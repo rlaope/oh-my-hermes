@@ -23,6 +23,42 @@ All notable changes will be documented here.
   The confirmed hypothesis and its eliminated rivals go into the fix's commit
   or PR body. `omh-native-debugging`'s fault statement takes the symptom
   match, the minimise step and the probe tag too.
+
+- **`plan` cuts code tasks as vertical slices, and `decision-prototype` says
+  what a good prototype looks like.** A plan's code tasks each deliver one
+  behavior through every layer it needs, with a done check that drives it
+  through the surface a user or caller reaches, so an integration failure
+  shows in the task that caused it instead of first in the closing gate.
+  Slices that write the same file are ordered rather than re-cut by layer,
+  each later slice listing every earlier one that writes it as a direct
+  dependency; a file every slice only appends to (a changelog, a generated
+  index) may instead be written by one task after them. A layer-only task is
+  a prefactor placed first, or a wide mechanical change handed to
+  `refactor-plan` (the new form beside the old, callers moved in groups while
+  both stay green, the old form deleted last). `decision-prototype` gains
+  `references/artifact-shapes.md`:
+  a logic or state question gets a pure module a later plan can lift, with the
+  full state shown after each action; an interaction or layout question gets
+  structurally different variants mounted in the real host page inside a
+  temporary worktree, with writes stubbed; and prototype code the receipt
+  lets later work reference is kept on a named throwaway ref the receipt
+  cites.
+
+- **The frontend skill now covers data, forms, and input, not only the look.**
+  A page that reads or writes remote data loads the state rules that until now
+  only a refactor loaded (server state in a query cache, each mutation naming
+  what it invalidates, an optimistic write with its rollback), and the route
+  state matrix gains submitting, submit-failed, optimistic-pending, stale, and
+  conflict rows. A new `forms-and-input` reference, loaded for a form, a text
+  composer, or a dialog, covers labels, when errors appear, mapping server
+  field errors onto fields, one submit in flight, dialog focus, and an
+  Enter-to-send that waits for IME composition, so a Korean, Japanese, or
+  Chinese user no longer sends half-composed text. The brief names a
+  browser-support target before newer platform features are used, the taste
+  reference gains interface-copy rules, and the component inventory records
+  each primitive's interface. `frontend-refactor` now requires a before/after
+  capture when a change alters DOM nesting or class composition, and inlines
+  only abstractions whose deletion makes their complexity vanish.
 - **A running gateway keeps working through `omh update`.** Three causes
   are fixed. GC could delete the generation an older gateway still served:
   the first activation it recorded had no time, and GC read that as earlier

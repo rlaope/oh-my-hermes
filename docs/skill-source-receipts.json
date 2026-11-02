@@ -727,6 +727,50 @@
       "reviewed_on": "2026-11-02",
       "rationale": "Adopted the pre-fix red witness with a forced-red diff as a HOLD reason, and the test-shape ideas behind the shared test-authoring reference; tracker publishing and approval checkpoints rejected.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-decision-prototype-mattpocock-prototype",
+      "candidate_key": "decision-prototype@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "24fe0ef7737efae15c87225755e9f6f5965e4888",
+      "disposition": "adopted",
+      "decision_ref": "#2503",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the logic, layout, and keep shapes as an on-demand reference inside the scratch boundary and receipt; the single-file demo page and switcher bar were rejected.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-plan-mattpocock-to-tickets",
+      "candidate_key": "plan@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "24fe0ef7737efae15c87225755e9f6f5965e4888",
+      "disposition": "adopted",
+      "decision_ref": "#2503",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted vertical slices with prefactor first and the wide-change exception routed to refactor-plan; tracker publishing and the user quiz were rejected.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-frontend-modern-web-guidance",
+      "candidate_key": "frontend@github.com/googlechrome/modern-web-guidance",
+      "prior_checkpoint": null,
+      "next_checkpoint": "4f2b13e25c5815b3f080ca0d983e828d96561a0f",
+      "disposition": "adopted",
+      "decision_ref": "#2502",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the form, validation-timing, IME-safe Enter, dialog and browser-support ideas as an OMH forms reference and one required input; the CLI and its network retrieval are not used.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-frontend-claude-plugins-official",
+      "candidate_key": "frontend@github.com/anthropics/claude-plugins-official",
+      "prior_checkpoint": null,
+      "next_checkpoint": "44490cccaf6d9f82fdeec9416fbf7c9bd72575dc",
+      "disposition": "adopted",
+      "decision_ref": "#2502",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the interface-copy ideas as an OMH taste-foundations section; the studio persona and calibration hex values are rejected.",
+      "supersedes": null
     }
   ]
 }
