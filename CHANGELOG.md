@@ -278,6 +278,12 @@ All notable changes will be documented here.
   its one-line prompt now ask for the save before other tools, limit it to the
   user's own words, and exclude pasted text and facts that only matter for the
   current task.
+- **A rule the user restates in other words updates the saved record instead
+  of adding a second one.** `omh_remember(action="save")` takes `replaces`,
+  the id of a record already shown to the conversation; the merged summary
+  goes through the correction path, the old record moves to history, and only
+  the merged record recalls. An id outside the session's lens still saves the
+  fact as a new record.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
