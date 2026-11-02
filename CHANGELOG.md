@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`omh-llm-app-dev` and `omh-rust` cover the code around the model and the
+  command line.** The LLM provider boundary now has a deterministic fake
+  adapter beside the real one, so parsing, repair, retry classification,
+  tool handling and budget termination get offline unit tests while evals
+  stay a separate suite against the pinned model. A response cut off at the
+  output cap is classified as truncation and never re-asked under the same
+  cap; tool-call arguments are validated before the tool runs, and invalid
+  calls and tool failures return to the model as tool results; a streamed
+  call is cancelled upstream when its client goes away and is validated only
+  once complete. The Rust gate list now lints every target with all features,
+  tests both feature extremes, checks the declared MSRV, adds `--locked` in
+  CI-shaped runs and no longer claims `cargo doc` runs doc tests; new
+  sections cover binary and CLI contracts (stdout for data, named exit codes,
+  no panic on user input, binary integration tests) and adding a dependency
+  (license, MSRV, default features, `cargo tree -d`).
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`

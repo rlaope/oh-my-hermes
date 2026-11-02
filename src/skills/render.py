@@ -6926,31 +6926,57 @@ Escalation ladder when the checker refuses: restructure ownership, then narrow t
 - Cancellation is part of the contract: state what happens when a future is dropped mid-operation.
 - A hand-written lock-free structure is not ordinary Rust. It escalates.
 
-## 4. The gate list
+## 4. Binaries and CLIs
 
-Name the exact commands, in this order, and treat each as its own observed state:
+Apply this section when the change adds or alters a binary target, a subcommand, or a flag. The command line is a public interface in the same sense as a library's public API.
+
+- **Follow the crate's argument-parser style.** Use the parser the crate already uses, in the style it already uses; one crate does not mix a derive-style and a builder-style definition of the same parser.
+- **Data to stdout, diagnostics to stderr.** Output another program may consume goes to stdout; progress, warnings, and logs go to stderr, so a pipe never carries a log line.
+- **Exit codes are named.** `main` returns `std::process::ExitCode` or a `Result`, and each non-zero code is a named constant with a documented meaning. A usage error and a runtime failure exit differently when the crate's convention distinguishes them.
+- **User input never reaches a panic.** A bad argument, a missing file, or malformed input ends in an error message and a non-zero exit, never in an `unwrap`, an `expect`, or an out-of-bounds index with a backtrace.
+- **Help text and flag names are interface.** Renaming or removing a flag, or changing an exit code, is a breaking change with the same semver weight as a public function.
+- **Test through the interface.** Integration tests under `tests/` either call the public library API or run the built binary through `std::process::Command::new(env!("CARGO_BIN_EXE_<name>"))` and assert stdout, stderr, and the exit code together; this needs no new dev-dependency. A `#[cfg(test)]` unit test is for logic the public interface cannot reach. Put I/O behind a trait only when a test actually supplies a second implementation: a trait with one implementation is indirection, not a seam.
+
+## 5. Dependencies
+
+Apply this section when `Cargo.toml` or `Cargo.lock` changes.
+
+- **Prefer what is already there.** The standard library or a crate already in the dependency tree beats a new one.
+- **A new dependency names three things:** its license against the project's allowed set (run `cargo deny check licenses` when the repository already uses cargo-deny), its own `rust-version` against this crate's MSRV, and its features -- `default-features = false` plus the features actually used, unless a default is needed and the handoff says which.
+- **No silent duplicates.** Run `cargo tree -d` after the change. A new second major version of a crate already in the tree is a finding to resolve or justify.
+- **The lockfile is part of the diff.** A `Cargo.lock` change is reviewed like code, and it never rides along unexplained in an unrelated change.
+
+## 6. The gate list
+
+The repository's own gates come first: its CI workflow, its task-runner targets, and its documented check commands decide the flags, and this table fills only what they leave out. Name the exact commands, in this order, and treat each as its own observed state:
 
 | Gate | What it proves | What it does not prove |
 | --- | --- | --- |
-| `cargo fmt --check` | formatting | nothing about behavior |
-| `cargo clippy -- -D warnings` | lint cleanliness at the crate's configured level | nothing about runtime behavior |
-| `cargo test` | the tests that exist pass | nothing about paths without tests |
+| `cargo fmt --all --check` | formatting | nothing about behavior |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | lint cleanliness of library, binaries, tests, examples, and benches with every feature on | runtime behavior; feature combinations other than all-on |
+| `cargo test --workspace --all-features` | the tests that exist pass, doc tests included, with every feature on | paths without tests |
+| `cargo test --workspace --no-default-features` when the crate has features | the crate builds and passes with its features off | the combinations between the two extremes |
 | `cargo test --release` | behavior under optimization | debug-only assertions no longer run |
-| `cargo doc` | doc links resolve, doc tests compile | nothing about API quality |
+| `cargo +<msrv> check --workspace --all-features` when an MSRV is declared | the change builds on the oldest toolchain the crate promises | behavior on that toolchain |
+| `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS="-D warnings"` | doc links and intra-doc paths resolve | nothing about API quality; it does not run doc tests |
 
-Add the repository's own gates rather than assuming this list is complete. When the change is escalated, the Miri and sanitizer gates from `references/ub-escalation.md` are appended and are blocking.
+Plain `cargo test` runs doc tests and `cargo test --all-targets` does not, so a test run that adds `--all-targets` needs its own `cargo test --doc`. Several independent features need more than the two extremes: use the repository's feature-powerset tool when it already has one, or name the combinations that ship. In CI-shaped runs add `--locked`, so the committed lockfile, not a fresh resolution, decides the build. When the change is escalated, the Miri and sanitizer gates from `references/ub-escalation.md` are appended and are blocking.
 
-## 5. Failure modes
+## 7. Failure modes
 
 | Symptom | What actually went wrong | Correction |
 | --- | --- | --- |
 | Clones added until it compiled | Ownership was never designed | Name the owner, then re-derive the borrows |
 | `Rc<RefCell<_>>` everywhere | A compile-time problem was moved to runtime | State the decision, or restructure |
 | `unwrap` in a library path | A contract was assumed rather than encoded | Encode it in the type or return the error |
-| "It compiles" reported as done | Compilation is one gate of five | Report each gate separately |
+| "It compiles" reported as done | Compilation is one gate of several | Report each gate separately |
+| Green locally, red in CI or for a user | The gates ran with default features on the newest toolchain, or clippy skipped the tests | Run the all-targets lint, the feature extremes, and the MSRV check |
+| A CLI panics on bad input or logs into its stdout | The command line was treated as private | Apply §4: error and exit code, stdout for data only |
 | `unsafe` used to end a borrow argument | The change silently became a UB-risk change | Escalate; the compiler stopped checking |
 
 {_DOMAIN_ENGINEERING_ATTRIBUTION}
+
+The binary test shape and the rule that a trait with one implementation is not a seam adapt ideas from Matt Pocock's `codebase-design` and `tdd` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock.
 """
 
 
@@ -7146,9 +7172,11 @@ One module owns the provider client. It holds the model ID, the credential looku
 
 - **Model ID is exact.** `claude-opus-4-1-20250805`, not `claude-opus-latest`. A floating alias silently re-points under a benchmark, and the run that "regressed" was measuring a different model. Keep the ID in one named constant or config value, and record it beside any result meant to be compared with another result.
 - **Credentials come from the environment or a secret store.** Never a literal in source, a prompt file, a test fixture, or an example. A key committed once is a key rotated forever.
-- **Failures are classified, not swallowed.** Timeout, rate limit, transient 5xx, invalid request, and content refusal are five different outcomes, and only the first three are safe to retry. A single broad `except` around the call turns a schema bug into an infinite retry loop and a quota exhaustion into a silent empty answer.
+- **Failures are classified, not swallowed.** Timeout, rate limit, transient 5xx, invalid request, content refusal, and truncation at the output cap are six different outcomes, and only the first three are safe to retry as sent. A single broad `except` around the call turns a schema bug into an infinite retry loop and a quota exhaustion into a silent empty answer.
 - **Retries are bounded and idempotent.** Cap the attempts, back off exponentially with jitter, honor the provider's retry-after header when it sends one, and never retry a request the caller cannot afford to have executed twice.
 - **Timeouts are explicit at both levels.** A per-request timeout and a total budget for the operation; a streaming call that stalls mid-response is not covered by a connect timeout alone.
+- **A stream has a cancel path.** When the client disconnects or the user stops, the boundary cancels the upstream request instead of letting the generation run, and bill, to the end; the call is recorded as `cancelled`, neither a failure nor a success. Structured output is validated once, on the complete stream. Partial text is shown only as a provisional preview, under the provisional-render rule in `{LLM_APP_DEV_STATEFUL_CONTRACTS_REFERENCE_PATH}`.
+- **The boundary has two adapters.** The production adapter and a deterministic fake sit behind the same interface. The fake replays responses in the provider's wire shape, one fixture per operation rather than one generic responder that branches inside: a valid response, a schema-invalid one, a refusal, a rate limit carrying retry-after, a stream that times out midway, and a response cut off at the output cap. Unit tests of parsing, repair, retry classification, tool handling, cancellation, and budget termination run against the fake and never reach the network. Evals run against the pinned real model, and the two never share a suite: a unit test that calls the provider is slow, flaky, and billed, and an eval scored against the fake measures the fixture.
 
 Deferring this rail means every later call site invents its own model pin, timeout, and retry policy, and they diverge without anyone deciding that they should.
 
@@ -7157,8 +7185,10 @@ Deferring this rail means every later call site invents its own model pin, timeo
 Decide the output contract before the prompt. The caller consumes a shape, so declare the shape.
 
 - **Schema first.** A JSON schema, a typed model, or the provider's structured-output/tool-call mode. The schema is the contract; the prompt is the attempt to satisfy it.
+- **Read the stop reason before validating.** A response that stopped at the output-token cap is truncated, not schema-invalid. A repair re-ask under the same cap hits the same wall and fails again at twice the cost. Raise the cap, shrink the requested output, or split the task, and record truncation as its own failure class in the comparison record (`references/eval-harness.md` §6), apart from validation failures.
 - **Validate every response.** Parse and validate before the value reaches any caller. An unvalidated response is an unvalidated input from an external system that happens to be fluent.
 - **Repair once, then fail loudly.** On a validation error, re-ask once with the specific error text included, then fail. An unbounded repair loop is a token bill with no exit condition, and a silent fallback to a default value is the false-green that makes a broken extractor look healthy for a month.
+- **Tool-call arguments are model output too.** Validate them against the tool's declared schema before the tool runs. An invalid call goes back to the model as a tool result carrying the validation error, and it counts against the tool-call budget. A tool that fails returns an error result the model can see: never thrown past the loop, never swallowed into an empty success. A write tool that fails after a partial effect reports what it applied.
 - **Never regex-scrape prose.** Pulling a field out of a paragraph with a regular expression works until the model rephrases, and then it fails without an error. If the output is worth parsing, it is worth declaring.
 
 Deferring this rail means the parsing lives at the call sites, and every prompt edit becomes a parser edit nobody remembers to make.
@@ -7207,6 +7237,10 @@ A feature with none of these properties records that fact in the handoff and mov
 ## Evidence Boundary
 
 A rail decision, a schema, a prompt layout, or an eval design is prepared work. It is not implementation, an observed eval run, review, CI, or merge evidence. Token counts, latency, and cost belong to runs; a figure no run reported stays null and is never estimated from a pricing table.
+
+## Attribution
+
+The two-adapter rule and the one-fixture-per-operation fake adapt ideas from Matt Pocock's `codebase-design` and `tdd` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. The failure classes, the fixture list, and the unit-versus-eval split are OMH's own.
 """
 
 
@@ -7296,7 +7330,7 @@ Run the regression **before** the swap, not after it.
 - **Capture tokens and cost per run.** Prompt tokens, completion tokens, and cost belong in the record, because a candidate that is two points better and four times more expensive is a decision, not a win.
 - **Cost is per successful task.** When comparing models or effort settings, divide total cost including failed attempts by tasks that passed; a cheaper call that fails more often is not cheaper. Report time to first useful rendered output and full-task latency separately, with tail percentiles beside the median, and report difficult-task failures on their own line instead of averaging them away.
 - **Configuration first, then calibrated prompts.** Hold the harness and prompt fixed to isolate a model or effort change; only afterward allow comparable prompt tuning per candidate on separate tuning cases, and report the held-out result with each prompt version. Keeping the two comparisons distinct stops a prompt fitted to one model from settling the selection.
-- **Report per-case movement.** Which cases newly pass, which newly fail. A net-positive run that broke a case someone reported last month is not an improvement.
+- **Report per-case movement.** Which cases newly pass, which newly fail. A net-positive run that broke a case someone reported last month is not an improvement. A failing case names its class -- validation failure, truncation at the output cap, refusal, timeout -- so a candidate that only truncates more is not read as one that reasons worse.
 - **Missing telemetry stays null.** If the harness did not report tokens, latency, or cost, the field is null and the report says the harness did not report it. Never reconstruct a token count from a pricing table or a character count; an estimate presented beside observed numbers reads as observed.
 
 ## 7. What A Result Is Not
