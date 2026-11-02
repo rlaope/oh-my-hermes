@@ -14,6 +14,10 @@ delivery-size (including actual mobile/chat thumbnail scale when applicable),
 not only full-resolution screenshots. Read essential text and brand names there;
 reduce copy or simplify hierarchy before shrinking type. No tiny crowded labels.
 A contact sheet checks composition/order, never pacing, flicker or audio sync.
+A model's critique of a downscaled sheet is a lead, not a finding: before
+changing geometry or materials, crop the flagged region from the full-resolution
+frame and ask one precise question about it, and before acting on "element
+missing" compare the sampled time with that element's entrance.
 
 For each segment record keep/fix/rebuild, evidence refs, reason, owner and cost;
 identify the weakest scene and spend the declared revision budget there first.
