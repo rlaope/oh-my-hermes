@@ -58,7 +58,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # now opens "Video to make from an idea..." at the same 57-character
         # cut, so the length stays 13326; restoring that one line reproduces
         # 7086c90b...06cd3.
-        self.assertEqual(_digest(legacy), '4c6beb2acd99dc18299bdede1b94152ab846757057e8307bbe1c7bbb787e076e')
+        # Digest re-derived for architecture deepening: tech-debt-audit's index
+        # line now opens "Accumulated tech debt or architecture deepening..."
+        # at the same cut, so the length stays; restoring that one line
+        # reproduces 4c6beb2a...076e.
+        self.assertEqual(_digest(legacy), '61fb09020952f57a382da73e315a41ae7a38b50ae7a2e3d43626c4664c4f7f9b')
         self.assertEqual(len('\n'.join(legacy)), 13326)
         delta = len('\n'.join(lines)) - 13326
         self.assertGreater(delta, 0)
@@ -97,8 +101,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 529429 -> 529669 and the digest re-derived: show-reel's idea-video
             # scope widens its row (+240, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved.
-            (skill_capabilities, 529669, FULL_ROW_DELTA_CAP,
-             'd946e521363bf140d24edb97f2a769f4e0a2bc46f3921f45c67a386afc972173',
+            # 529669 -> 529803 and the digest re-derived: architecture
+            # deepening widens the refactor-plan row (+136) and the
+            # tech-debt-audit row (-2), itemized at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; no other row moved.
+            (skill_capabilities, 529803, FULL_ROW_DELTA_CAP,
+             'bb1ffc80341f0f8d0ea9658aa9d5e9d46ef5565a7146c32c4653c0e052bab4d2',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -228,7 +236,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # #2488 adds the short-promo line to show-reel's idea lane (only
         # show-reel moves); main's pin before it is
         # 52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c.
-        self.assertEqual(_digest(legacy_hashes), 'ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b')
+        # Then architecture deepening: only tech-debt-audit and refactor-plan
+        # move, and main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        self.assertEqual(_digest(legacy_hashes), 'f87957e1c2dc4dc2aa3d5f6ddba622fac3a6189a4906a922332004e3ad68cc19')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
