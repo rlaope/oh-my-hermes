@@ -218,14 +218,27 @@ def omh_dag_handler(args: Mapping[str, object], **kwargs: object) -> str:
             if action == "status":
                 return _result(action, record, derived, shown, now=now, limits=limits, ignored=ignored)
             if action == "cancel":
+                # Read the live children before the cancelled mark lands:
+                # derive reports them cancelled afterwards by design.
+                live = dag_run.running_children(record, dag_run.derive(record, children, now), now)
                 if record.get("cancelled_at") is None:
                     record["cancelled_at"] = now
                     record["updated_at"] = now
                     dag_run.write_run(path, record)
                 derived = dag_run.derive(record, children, now)
-                return _result(action, record, derived, shown, say=(
-                    "The run is cancelled. Children already running keep running; stop them with "
-                    "delegate_task action=stop if they should not finish."), now=now, limits=limits, ignored=ignored)
+                if live:
+                    named = ", ".join(
+                        f"{row['id']} as subagent {row['subagent_id']} ({dag_run.age_text(row['open_for_s'])} open)"
+                        for row in live)
+                    say = (
+                        f"The run is cancelled. {len(live)} {'child is' if len(live) == 1 else 'children are'} "
+                        f"still running ({named}) and finish on their own unless stopped; stop each with "
+                        "delegate_task action=stop if it should not finish. The cancelled run never settles them.")
+                else:
+                    say = ("The run is cancelled. No child is still running.")
+                return _result(action, record, derived, shown, say=say,
+                               extra={"still_running": live} if live else None,
+                               now=now, limits=limits, ignored=ignored)
             if action == "ready":
                 return _ready(action, record, path, derived, children, omh_home, hermes_home, now, shown, task=task,
                               budget=budget, limits=limits, ignored=ignored)
