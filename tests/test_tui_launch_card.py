@@ -166,6 +166,16 @@ class PaletteTests(unittest.TestCase):
                     self.assertGreaterEqual(contrast(styles.label.fg, background), 4.5)
                     self.assertGreaterEqual(contrast(styles.edge.fg, background), 3.0)
 
+    def test_spectrum_draws_the_composer_rules_in_a_muted_violet(self) -> None:
+        # Owner, 2026-11-02: the rules above and below the composer in violet, not grey.
+        skin = default_theme()
+        theme = with_launch_look(build_theme(skin, "#0A0E14"), skin, "#0A0E14", "spectrum")
+        self.assertEqual(theme.rule.fg, "#6E5A9E")
+        light = with_launch_look(build_theme(skin, "#FFFFFF"), skin, "#FFFFFF", "spectrum")
+        red, green, blue = (int(light.rule.fg[at:at + 2], 16) for at in (1, 3, 5))
+        self.assertGreater(blue, green)  # still a violet once lifted for a light ground
+        self.assertGreater(red, green)
+
     def test_spectrum_is_the_default_and_the_first_look(self) -> None:
         self.assertEqual(DEFAULT_LAUNCH, "spectrum")
         self.assertEqual(LAUNCH_PRESETS,

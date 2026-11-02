@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The composer's rules are violet in the default look.** The lines above
+  and below the composer, and the launch card's frames, were spectrum's
+  grey edge (`#4A4F66`); they are now a muted violet (`#6E5A9E`), lifted for
+  contrast on a light terminal. The other looks keep their own edges.
+
 - **A dag-ulw run with no node running is named at the next turn.** A
   parent re-enters a run only when a child completes, so a run with no child
   running sat open: a parked node past its `wake_at`, ready nodes never
