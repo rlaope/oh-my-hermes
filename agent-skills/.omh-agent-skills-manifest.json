@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "21a87821d6a15a3f7b3ce684825429b153179f71404730dd622bd795f4741589",
+  "catalog_revision": "3295ebb7f9315598162b56ed7f56139eec49c4c080a29a78f44d476169860367",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -86,7 +86,7 @@
     "omh-deploy-and-monitor/SKILL.md": "815ad6dc0fe1e506bd60fdf39b742cbfbb14ab7e9921b8ab4855060aa4c0c936",
     "omh-design-orchestration/SKILL.md": "5da8331163d2485a4810014218595a428c5003c8d530fbdf6c42d2f076080fe4",
     "omh-design-quality-gate/SKILL.md": "57083bf4d1fc90c72d3589cd09620f445ce34d9afafc1e6a0708b98ddb795d81",
-    "omh-design-quality-gate/references/design-critique-rubric.md": "c13e4bda923fc1b2b5f89109066bb2edf05153f92c250a9a6b0d89f07d05a849",
+    "omh-design-quality-gate/references/design-critique-rubric.md": "58e4993ac7aee88801d54436b6956c1bdcc6f416587752b14fbd6aa455985cfe",
     "omh-docs/SKILL.md": "6b1b2db3af086b033047044f73c0342aaf88b3874116ed2945f5852d00a1f1f0",
     "omh-external-connector-readiness/SKILL.md": "bacd25341c7777f4cde468d25b650564c00cd5632b0ab7236aa6537f2f770d02",
     "omh-external-connector-readiness/references/memory-provider-trial.md": "b6eda7efc3307d8bd6540bec47b2564f3e565da5ad8133bd998b2ebcabdf29a3",
@@ -220,7 +220,7 @@
     "omh-show-reel/references/brief-and-locales.md": "f64de4a3c72810d7ad781f7ac7419068c01c060a254c4ee0ad574806cca99712",
     "omh-show-reel/references/craft-audio.md": "04dd5e44fbe11594d35145961fcb44b83112dd763392f6e63b28a5c7ee181f07",
     "omh-show-reel/references/craft-brief.md": "01314c971bafa1469ff06726346aab025352075ade947c7ba56bbb73107f5dc2",
-    "omh-show-reel/references/craft-design.md": "3111f4f97d95be7d3019e21a08050236f59b1f843bb7acb6d8830039a4e14008",
+    "omh-show-reel/references/craft-design.md": "2789bc33b122efc1b00d8b21835016e60c814535143268d0739f444441e62ad2",
     "omh-show-reel/references/craft-engine.md": "5f5fd73173f3a5f175f4909621f3473d1cfe0d70df801f02e5494235f70d1e05",
     "omh-show-reel/references/craft-images.md": "9eeae5ef572a03222b75f305109ce83317c74db2db8503201a9b77a0706d15a6",
     "omh-show-reel/references/craft-qa.md": "63ae66050e23217c4fabca1750b705ce83ae93d42be299f0f16a23f93598b4a8",
@@ -264,7 +264,7 @@
     "omh-show-reel/toolkit/scripts/synth_music.py": "4b277e282d2324ad256a75c79db823781b2611e5d02731eac34921260a0f2929",
     "omh-show-reel/toolkit/scripts/timeline.py": "595ba11069d52668c04ca17e85c7a5aa1e80b9d0c338aa7c58896ac1ab667313",
     "omh-show-reel/toolkit/scripts/tools/cutout.swift": "7050d5764aa724691c9982c51dc73fc10cc0b70483c9df77092614b195bda837",
-    "omh-show-reel/toolkit/upstream-manifest.json": "762f37629ad701c734156eec3255d8cf975653b728db781d70c7b6e83999f730",
+    "omh-show-reel/toolkit/upstream-manifest.json": "5ebef937b62d992ab6655cbd722a8a1daf3565c6222182ea4c2d7f9a0a944504",
     "omh-skill-health/SKILL.md": "4b7d70f00dd63e164ee3d3186bd61e1512dd59f2e04894a9c01ec755503be63f",
     "omh-skill-scout/SKILL.md": "17032ae95438a94ef7a536927e2160802e94836d69945d544d5c72d157375f26",
     "omh-source-finder/SKILL.md": "5945540d8aaa0430b009de0bb8a1a351ba13d7754c3997fd51ba4e4085b06076",

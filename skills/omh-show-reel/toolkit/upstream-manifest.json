@@ -330,7 +330,7 @@
     "references/craft-design.md": {
       "classification": "translated_derivative",
       "license": "MIT",
-      "local_sha256": "61f3d00ba1dfadccb2b969ceb0a9668bdbd37f1a3d270a21a49bbb39581e04c3",
+      "local_sha256": "8992514a6ffcdaacaf358653e4e07ed7db64ed2e37484077971dc520d5e85a77",
       "modification_notice": "Translated from upstream references/design.md@64521220a: complete English translation; cross-references renamed to references/craft-*.md; host install paths made placeholders; the default narration voice named by role; inline OMH notes where the locale/brief policy overrides an upstream default; OMH header",
       "upstream": [
         {
