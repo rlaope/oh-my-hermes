@@ -651,7 +651,10 @@ The setup, fixed before the first live run:
 - **Arms.** Each arm links its OMH plugin bundle from a source snapshot. The bundles differ
   only in the four files above.
   - `base`: origin/main `76fa9c615`.
-  - `new`: this branch at `bec5cb80e`.
+  - `new`: this branch at `c071c591f`. (Amended before the first counted run: two uncounted smokes on
+    `bec5cb80e` showed that a stop the test check exempts left no log line, so a missing note could not be
+    told from a bundle that never loaded the check. `c071c591f` logs one line with its reason at every
+    stop and changes nothing else.)
 - **Load path.** The bench profiles symlink the bundle into the profile, and the shared
   gateway has no `omh` package. So both arms run the standalone path, which since #2455 runs
   the router's code. The meter's per-call `omh_pkg` field records this, and the result
@@ -698,7 +701,8 @@ Definitions:
 - **Model calls** are `sessions.api_call_count`.
 - **Tokens** are the run record's `observation.tokens`.
 - A **test note** is a `test_expectation_check session=<id> fire=True` line in the new arm's
-  profile log.
+  profile log. Every new-arm stop logs such a line with its reason; a counted new-arm run with no line is
+  reported as missing.
 
 The gate. Must improve, `new` against `base`:
 
