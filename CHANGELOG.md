@@ -69,6 +69,11 @@ All notable changes will be documented here.
   using the existing admission and session-lens gates. Discord threads Hermes
   auto-created from channel messages use their parent channel's memory scope;
   other threads keep their own.
+- **Hermes saves a stated preference or decision in the same turn, even when
+  the message also asks for other work.** The `omh_remember` description and
+  its one-line prompt now ask for the save before other tools, limit it to the
+  user's own words, and exclude pasted text and facts that only matter for the
+  current task.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
