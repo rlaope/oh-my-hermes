@@ -40,6 +40,42 @@ All notable changes will be documented here.
     asked for (Esc, `/stop`, a prompt in busy mode `interrupt`) still says
     "Interrupted.".
 
+- **A same-size rewrite in one clock tick no longer hides from the round-end
+  check.** The workspace index kept each Python file's modification time and
+  size. A `sed`, `execute_code` or delegated child that rewrote a file at the
+  same size within one tick of the filesystem's clock (about 16 ms on
+  Windows) left both unchanged, so the edit went unseen and the check was
+  skipped. A file modified within two seconds of the index is now also indexed
+  by a digest of its bytes and compared by content. This was also why two
+  `test_consistency_trigger` tests failed now and then on Windows CI.
+
+- **An answer Hermes sends late no longer acts on what the person moved on
+  to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s
+  draft, an alias) that arrives after a session switch is dropped with a
+  notice instead of running in the new session, and its `command.dispatch`
+  fallback is not sent there. Output it prints is still shown, a `/branch` it
+  made is not switched to, a side task stays the left session's, and images
+  typed with it come back to the composer. A prefill or a rewind pick that
+  lands on a draft typed meanwhile puts that draft in the session's history
+  first and says Up brings it back. The `/model` and `/rewind` lists do not
+  open during a turn that started while they were on their way (the busy
+  notice is said instead), nor over another open picker. Asking for the same
+  list twice in a session sends one call, a list still out for a session left
+  never holds up the new one, `/model --refresh` while a bare `/model`'s list
+  is out says one is on its way, and a second answer never resets the open
+  picker. While a list is on its way the slot says `waiting for Hermes…`. A
+  late `/model <name>` answer for a session already left says nothing in the
+  new one. Keys always go to the picker the screen draws. An approval or
+  question arms only after a quiet gap with no key, so a person still typing
+  when it opens answers nothing. What they type, and their edits to it
+  (Backspace, Delete, Left, Right, Home, End, Ctrl+A/E/U/K/W), go on into the
+  field they were typing in, the tell field too, and a path-shaped paste is
+  still a drop. A key that would send, interrupt, complete or walk history
+  does nothing then, and nothing is typed while a mouse report may still
+  arrive. A Shift+Tab approvals switch Hermes never answered no longer leaves
+  Shift+Tab dead: accept is shown as possibly on, and the next Shift+Tab
+  sends an explicit off.
+
 - **`omh` says what it waits for while the Hermes gateway restarts.** The
   launch waited for the gateway and for the session before drawing
   anything, so a busy or restarting gateway left the shell silent for up to a
@@ -96,8 +132,8 @@ All notable changes will be documented here.
   node past the stuck mark, which was named only on an `omh_dag` call. The
   next turn's context now carries one `[OMH dag]` line naming the run and the
   call to make (`omh_dag action=ready`, `settle`, `repair` or `status`), once
-  per situation; when other work holds every `delegate_task` slot, it says to
-  call `ready` at a later turn. Not named: a node out within
+  per situation; when every `delegate_task` slot of the process is taken, it
+  says to call `ready` at a later turn. Not named: a node out within
   `dag_stale_after_s` (its child may still be starting), a parked node whose
   `wake_at` is ahead, and a node exported to a coding owner or left to the
   parent, which its fanout result or the parent's own work settles.
@@ -175,6 +211,21 @@ All notable changes will be documented here.
   summary, the messenger end block and the TUI end view all show it, and an
   unverified done run is told to add a verify node through `extend`. Runs
   stored before this update keep reading their nodes as before.
+
+- **A dag-ulw writer sent with no role that reads like a check stays native.**
+  A node with no `role` and a `write_scope` whose label reads like a check
+  past its first word ("Re-verify the fix", "Final verification pass",
+  "Re-review the diff", "Double-check the migration") ran as a build node and
+  could go to the external coding owner, where the builder approves itself.
+  It still runs as a build node and still counts as a producer, but it now
+  stays on `delegate_task`; the lint names the role it reads like, and
+  `role=build` sends it to the owner. Build work that reads the same way
+  ("Add input validation to the API") stays native too until the parent
+  names its role. When such a node reads like a verify node and fails, it
+  runs again after its repair, the way a verify node does. A new advisory
+  lint, `no_review_node`, names a run whose build nodes write more than docs
+  with no `review` node; it never refuses a run or moves its state or goal
+  verdict.
 
 - **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
   `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an
