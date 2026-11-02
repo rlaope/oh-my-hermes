@@ -4,6 +4,21 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Reports on OMH's routing reach workflow learning, and tasks that only
+  name OMH do not.** "OMH가 왜 내 메시지를 code-review로 보냈어?" dispatched
+  the code-review it names, because the fold reads the past tense 보냈 as the
+  request cue 보내; and "OMH가 ..." never counted as naming OMH, because the
+  particle stays on the word. Both are fixed, as are three English report
+  shapes: an adverb between OMH and its verb ("OMH apparently chose ..."), a
+  why-question about what OMH did ("Show me why OMH picked them"), and OMH
+  ignoring the request. The other way round, "OMH picked the config. Find out
+  which keys are unused" no longer gets the ~1.1k-char workflow-learning hint:
+  the clause before "find out" decides, a complaint ("OMH routed my typo to
+  ultrawork") or a setting ("OMH picked the config"). Nor does a code edit
+  led by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
+  module. The 12 router misses #2455 listed are fixed on the route hint; no
+  message in the earlier held-out sets that passed before fails now.
+
 - **A dag-ulw run with no node running is named at the next turn.** A
   parent re-enters a run only when a child completes, so a run with no child
   running sat open: a parked node past its `wake_at`, ready nodes never

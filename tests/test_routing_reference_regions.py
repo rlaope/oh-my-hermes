@@ -151,6 +151,16 @@ class RoutingReferenceRegionTests(unittest.TestCase):
                 self.assertEqual(intent.execution_cues, ())
                 self.assertNotIn("workflow_marker", intent.structural_cues)
 
+    def test_korean_execution_cue_matches_whole_syllables_only(self) -> None:
+        # The fold splits Hangul into jamo, where 보내 is a prefix of the past
+        # tense 보냈: "OMH가 ... 보냈어" reports what OMH did (#2455 follow-up).
+        for message in ("이 PR codex로 보내줘", "요약해서 팀 채널로 보내", "결과를 보내서 공유해줘"):
+            with self.subTest(message=message):
+                self.assertIn("보내", classify_workflow_intent(message).execution_cues)
+        for message in ("OMH가 내 메시지를 code-review로 보냈어", "어제 보낸 메시지를 찾아줘"):
+            with self.subTest(message=message):
+                self.assertNotIn("보내", classify_workflow_intent(message).execution_cues)
+
     def test_direct_invocation_keeps_precedence_and_apostrophes(self) -> None:
         for message in (
             'Use $ulw-work to fix the build.',

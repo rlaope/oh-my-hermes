@@ -9443,6 +9443,36 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "workflow-learning",
     ),
+    # #2455 follow-up: "find out" after a neutral setting is the user's task,
+    # decided by the clause before it (the #2454 reviewer's design); OMH
+    # vocabulary under a code-edit lead is what the edit acts on; and the
+    # Korean particle on the product name does not make a setting a report.
+    # The route hint gave each of these workflow-learning on origin/main; the
+    # chat route never named it, and these pin that it still does not.
+    RoutingPrecisionCase(
+        "omh-picked-config-then-find-out-is-a-task",
+        "OMH picked the config, find out which keys are unused, is a task, not a report",
+        "OMH picked the config. Find out which keys are unused",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "omh-migrate-terminology-loader-is-a-coding-request",
+        "OMH: migrate the terminology loader is a coding request, not workflow meta discussion",
+        "OMH: migrate the terminology glossary JSON loader to use pathlib",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "korean-omh-picked-config-then-find-keys-is-a-task",
+        "A Korean request after what OMH picked is a task, not a report on OMH's routing",
+        "OMH가 설정 파일을 골랐어. 안 쓰는 키가 뭔지 찾아줘",
+        "answer_file_lookup",
+        "file_or_text",
+        "workflow-learning",
+    ),
 )
 
 
@@ -12220,6 +12250,39 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "omh-picked-code-review-for-a-question-reaches-workflow-learning",
         "OMH picking code-review when the user only asked a question is a report on OMH's routing",
         "OMH picked code-review, and I only asked a question",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    # #2455 follow-up: reports the classifier missed. On origin/main the
+    # Korean one dispatched the code-review it names (보냈어, "sent", read as
+    # the execution cue 보내), and the other two asked a clarifying question.
+    RoutingInterventionCase(
+        "korean-omh-sent-my-message-to-code-review-reaches-workflow-learning",
+        "A Korean question on why OMH sent a message to code-review is a report on OMH's routing",
+        "OMH가 왜 내 메시지를 code-review로 보냈어?",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    RoutingInterventionCase(
+        "omh-ignored-my-request-reaches-workflow-learning",
+        "OMH ignoring the request and using no workflow is a report on OMH's routing",
+        "OMH ignored my request and didn't use any workflow; why?",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    RoutingInterventionCase(
+        "omh-apparently-chose-ultrawork-reaches-workflow-learning",
+        "OMH apparently choosing ultrawork for a typo is a report on OMH's routing",
+        "OMH apparently chose ultrawork for a typo, can we look at why",
         "dispatch",
         "workflow-learning",
         "audit_learning_readiness",

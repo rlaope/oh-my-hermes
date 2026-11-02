@@ -18,7 +18,7 @@ import re
 from types import MappingProxyType
 import unicodedata
 
-from .command_verb import gives_command, leads_with_code_edit, ordered_words
+from .command_verb import asks_to_find_out, gives_command, inquiry_why_lead_length, leads_with_code_edit, ordered_words
 from .display_names import canonical_display_mentions
 from .reference_regions import executable_routing_text, reference_regions
 from .text_fold import contains_cue_phrase, normalized_phrase, routing_terms, routing_tokens
@@ -106,6 +106,15 @@ _EVERYDAY_META_CUES = frozenset(
         "테스트", "픽스처", "개발자", "운영자", "로그", "트리거", "설명",
     }
 )
+# Under a code-edit lead these OMH vocabulary cues are what the edit acts on
+# too ("OMH: migrate the terminology glossary loader to pathlib", "using OMH,
+# rename the vocabulary module", "OMH가 라우터 파일을 골랐어, 테스트 작성해줘"),
+# so they go with the everyday words. English never read "router" or
+# "routing" as a meta cue; Korean 라우터 / 라우팅 now match that under an edit.
+# Right after the product name they name OMH's own surface and stay: "OMH
+# 라우팅이 이상해, 고쳐줘" asks to fix OMH's routing.
+_KOREAN_OMH_SURFACE_CUES = ("용어", "라우터", "라우팅")
+_CODE_EDIT_OBJECT_META_CUES = _EVERYDAY_META_CUES | frozenset({"vocabulary", "terminology", *_KOREAN_OMH_SURFACE_CUES})
 # OMH's own surfaces: a request that opens with an edit but names one in a
 # later clause ("ask OMH to fix a test and watch it open workflow learning")
 # is about OMH, so its everyday words keep their meta reading. Named in the
@@ -113,6 +122,12 @@ _EVERYDAY_META_CUES = frozenset(
 # workflow learning test"). Matched as whole words, with a space, hyphen or
 # underscore between them.
 _OMH_SURFACE_PHRASES = ("workflow learning", "route hint", "route hints")
+# The particles that make the product name what a Korean sentence is about:
+# subject, topic, object, possessive, place, recipient ("OMH가 ... 보냈어",
+# "OMH는 왜", "OMH를 썼는데", "OMH한테 물었는데"). Not the instrument or the
+# companion ("OMH로 ... 리팩터링해줘", "OMH와 같이"): that is the tool lead,
+# "using OMH".
+_PRODUCT_NAME_PARTICLES = frozenset({"가", "이", "는", "은", "를", "을", "도", "의", "에서", "에게", "한테"})
 _KOREAN_CUE_TAILS = frozenset(
     {
         "이", "가", "을", "를", "은", "는", "에", "에서", "로", "으로", "도", "만", "와", "과", "의", "랑", "이랑",
@@ -160,11 +175,26 @@ _FEEDBACK_CUES = (
 # phrase. "router" is OMH's only in a message that names OMH: "our router
 # picked the cheapest shipping option" is the user's own router.
 _OMH_BEHAVIOUR_SUBJECTS = frozenset({"omh", "oh-my-hermes", "router"})
-_OMH_BEHAVIOUR_PAST_VERBS = frozenset(
-    {"picked", "chose", "chosen", "selected", "routed", "misrouted", "misread", "misunderstood", "misclassified", "mistook"}
-)
+_OMH_ROUTING_VERBS = frozenset({"routed", "misrouted", "misread", "misunderstood", "misclassified", "mistook"})
+_OMH_BEHAVIOUR_PAST_VERBS = _OMH_ROUTING_VERBS | frozenset({"picked", "chose", "chosen", "selected", "ignored"})
 _OMH_BEHAVIOUR_PROGRESSIVE_VERBS = frozenset({"picking", "choosing", "selecting", "routing", "misreading"})
-_OMH_BEHAVIOUR_FILLERS = frozenset({"just", "again", "has", "had", "always", "keeps", "kept", "still", "wrongly"})
+_OMH_BEHAVIOUR_FILLERS = frozenset(
+    {"just", "again", "has", "had", "always", "keeps", "kept", "still", "wrongly", "apparently", "somehow", "clearly", "obviously"}
+)
+# Who did it, before the product name: "Hermes with OMH chose the wrong skill".
+_OMH_BEHAVIOUR_HOST_LEAD = ("hermes", "with")
+# A behaviour clause is a complaint about routing, not a setting for the
+# user's own task, when it says so: a routing verb ("OMH routed my typo"), a
+# word that judges the choice ("the wrong skill", "again", "instead"), what
+# OMH routes to (a workflow name, a skill, a lane), or the user's own message
+# as the object ("OMH ignored my request"). "OMH picked the config" says none
+# of these: the config is the setting, and "find out which keys are unused" is
+# the task (#2454).
+_OMH_COMPLAINT_WORDS = frozenset({"wrong", "wrongly", "again", "instead"})
+_OMH_ROUTING_TARGET_NOUNS = frozenset({"skill", "skills", "workflow", "workflows", "lane", "lanes"})
+_USER_MESSAGE_NOUNS = frozenset(
+    {"message", "messages", "question", "questions", "request", "requests", "typo", "greeting", "note", "reply", "prompt", "thanks"}
+)
 _OMH_BEHAVIOUR_OPINION_LEADS = (
     ("i", "think"), ("i", "feel", "like"), ("i", "guess"), ("i", "noticed"),
     ("it", "seems"), ("seems", "like"), ("looks", "like"), ("apparently",),
@@ -377,6 +407,7 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     matching_compact = matching_normalized.replace(" ", "")
     matching_tokens = set(routing_tokens(matching_normalized, stopwords=set()))
     matching_tokens.update(matching_normalized.split())
+    matching_tokens.update(_product_names_before_particle(matching_normalized))
 
     mentioned_workflows = _mentioned_workflows(matching_normalized, matching_tokens)
     mentioned_runtime_terms = _mentioned_runtime_terms(matching_normalized)
@@ -411,9 +442,10 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
         and leads_with_code_edit(matching_normalized)
         and not _names_omh_surface_after_lead(matching_normalized)
     ):
-        meta_cues = tuple(cue for cue in meta_cues if cue not in _EVERYDAY_META_CUES)
+        kept = _korean_omh_surface_cues(matching_normalized)
+        meta_cues = tuple(cue for cue in meta_cues if cue not in _CODE_EDIT_OBJECT_META_CUES or cue in kept)
     execution_cues = _suppress_negated_execution_cues(
-        _matched_cues(_EXECUTION_CUES, matching_normalized, matching_compact),
+        _matched_execution_cues(matching_normalized, matching_compact),
         negated_execution_cues,
     )
     if diagnostic_evaluation_context:
@@ -697,9 +729,34 @@ def _reports_omh_behaviour(normalized: str) -> bool:
     if not names_omh or leads_with_code_edit(normalized):
         return False
     clauses = _CLAUSE_BREAK.split(normalized)
-    if not any(_clause_reports_omh_behaviour(ordered_words(clause)) for clause in clauses):
+    reports = [clause for clause in clauses if _clause_reports_omh_behaviour(ordered_words(clause))]
+    if not reports or any(gives_command(clause) for clause in clauses):
         return False
-    return not any(gives_command(clause) for clause in clauses)
+    # "find out ..." asks about a complaint ("OMH routed my typo to ultrawork,
+    # find out what bug made it do that") and gives the task after a setting
+    # ("OMH picked the config. Find out which keys are unused"). The clause
+    # before it decides, not the words after it: two word lists after "find
+    # out" each lost reports on a fresh held-out set (#2454).
+    if any(asks_to_find_out(clause) for clause in clauses):
+        return any(_clause_complains(clause) for clause in reports)
+    return True
+
+
+def _clause_complains(clause: str) -> bool:
+    """A behaviour clause that complains about OMH's routing rather than setting up the user's task.
+
+    A why-question about it, a routing verb, a judging word, a routing target
+    (a skill, lane or workflow, or a workflow by name), or the user's own
+    message as the object.
+    """
+    words = ordered_words(clause)
+    if inquiry_why_lead_length(words):
+        return True
+    if set(words) & (_OMH_ROUTING_VERBS | _OMH_COMPLAINT_WORDS | _OMH_ROUTING_TARGET_NOUNS):
+        return True
+    if any(words[i] == "my" and words[i + 1] in _USER_MESSAGE_NOUNS for i in range(len(words) - 1)):
+        return True
+    return bool(_mentioned_workflows(clause, set(routing_tokens(clause, stopwords=set()))))
 
 
 def _clause_reports_omh_behaviour(words: list[str]) -> bool:
@@ -708,10 +765,17 @@ def _clause_reports_omh_behaviour(words: list[str]) -> bool:
         if tuple(words[: len(lead)]) == lead:
             index = len(lead)
             break
+    else:
+        # A question about what OMH did: "show me why OMH picked them".
+        index = inquiry_why_lead_length(words)
     if words[index : index + 1] == ["that"]:
         index += 1
     if words[index : index + 1] == ["the"]:
         index += 1
+    if tuple(words[index : index + 2]) == _OMH_BEHAVIOUR_HOST_LEAD and words[index + 2 : index + 3] and (
+        words[index + 2] in _PRODUCT_NAME_CONTEXT
+    ):
+        index += 2
     if words[index : index + 1] and words[index] in _PRODUCT_NAME_CONTEXT:
         index += 1
         if words[index : index + 1] == ["s"]:  # "OMH's", split at the apostrophe
@@ -884,6 +948,60 @@ def _korean_word_is_cue(word: str, cue: str) -> bool:
         return False
     tail = word[len(cue):]
     return not tail or tail in _KOREAN_CUE_TAILS or tail.startswith(("하", "해", "했"))
+
+
+def _matched_execution_cues(normalized: str, compact: str) -> tuple[str, ...]:
+    """`_EXECUTION_CUES` in the message; a Korean cue only as whole syllables.
+
+    The fold splits Hangul into jamo, where "보내" (send) is a prefix of the
+    past tense "보냈" (sent): "OMH가 내 메시지를 code-review로 보냈어" reports
+    what OMH did and asks for nothing. Compared composed (NFC), a cue matches
+    "보내줘" and "보내서" but not "보냈어" or "보낸".
+    """
+    composed = unicodedata.normalize("NFC", normalized)
+    composed_compact = composed.replace(" ", "")
+    matches: list[str] = []
+    for cue, normalized_cue in _normalized_cues(_EXECUTION_CUES):
+        if cue.isascii():
+            found = normalized_cue in normalized or normalized_cue.replace(" ", "") in compact
+        else:
+            composed_cue = unicodedata.normalize("NFC", normalized_cue)
+            found = composed_cue in composed or composed_cue.replace(" ", "") in composed_compact
+        if found:
+            matches.append(cue)
+    return tuple(matches)
+
+
+def _product_names_before_particle(normalized: str) -> tuple[str, ...]:
+    """The product name written with a Korean particle, as one word ("OMH가", "OMH는", "OMH를").
+
+    The tokenizer keeps the particle on the word, so "omh가" never read as the
+    product name, and a Korean report on OMH had no routing context. Only the
+    particles of `_PRODUCT_NAME_PARTICLES` count.
+    """
+    names: list[str] = []
+    for term in routing_terms(normalized):
+        word = unicodedata.normalize("NFC", term)
+        for name in _PRODUCT_NAME_CONTEXT:
+            if word.startswith(name) and word[len(name):] in _PRODUCT_NAME_PARTICLES and name not in names:
+                names.append(name)
+    return tuple(names)
+
+
+def _korean_omh_surface_cues(normalized: str) -> tuple[str, ...]:
+    """The `_KOREAN_OMH_SURFACE_CUES` written right after the bare product name: "OMH 라우팅이", "omh 라우터".
+
+    A word in between, or a particle on the name ("OMH가 라우터 파일을"), makes
+    the cue the user's own code.
+    """
+    words = re.findall(r"[^\W_]+", unicodedata.normalize("NFC", normalized))
+    return tuple(
+        cue
+        for cue in _KOREAN_OMH_SURFACE_CUES
+        if any(
+            words[i] in _PRODUCT_NAME_CONTEXT and _korean_word_is_cue(words[i + 1], cue) for i in range(len(words) - 1)
+        )
+    )
 
 
 def _matched_cues(cues: tuple[str, ...], normalized: str, compact: str) -> tuple[str, ...]:
