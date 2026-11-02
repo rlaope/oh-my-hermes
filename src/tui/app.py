@@ -139,6 +139,7 @@ from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, bran
 from .git_status import GitWatcher
 from .history import SEARCH_ACCEPT, SEARCH_CANCEL, SEARCH_HINTS, HistorySearch, append_entry, history_path, load_history
 from .gateway import (
+    CANCEL_POLL_SECONDS,
     Event,
     GatewayCallError,
     GatewayCancelled,
@@ -530,6 +531,28 @@ SLOT_ARM_SECONDS = 0.4
 REPORTING_SLOT_ARM_SECONDS = max(SLOT_ARM_SECONDS, MOUSE_REPORT_SECONDS)
 STARTUP_TAIL_LINES = 10
 INTERRUPTED_EXIT = 130
+# How long a launch waits for the Hermes gateway before the TUI draws (`_LaunchWait`): for it to come up, and for it
+# to open the session. A gateway that is not answering yet (`GatewayUnavailable.not_ready`: a restart, a refused
+# socket) or that drops the launch's connection while the session opens is tried again within it, while the shell's
+# terminal says what the launch waits for. Past it the launch says what to do, then falls back as before.
+LAUNCH_WAIT_SECONDS = 60.0
+# A normal launch says nothing: the first waiting line comes only after this much quiet.
+LAUNCH_WAIT_QUIET_SECONDS = 1.5
+# The pause before a gateway that was not answering is tried again, and the least time left worth another try.
+LAUNCH_RETRY_SECONDS = 1.0
+LAUNCH_MIN_TRY_SECONDS = 5.0
+# How many times a session call the gateway dropped as not ready is sent again on a new gateway, whatever time is left:
+# each try may have opened a session on the gateway that went away.
+SESSION_RETRY_LIMIT = 2
+# Floor of the session call's deadline, the one it always had: a long gateway start never shortens it.
+SESSION_CALL_SECONDS = 30.0
+LAUNCH_CONNECTING = "omh: connecting to the Hermes gateway… ({seconds}s)"
+LAUNCH_RESTARTING = "omh: the Hermes gateway is restarting; waiting… ({seconds}s)"
+LAUNCH_OPENING = "omh: waiting for the Hermes gateway to open a session… ({seconds}s)"
+LAUNCH_GAVE_UP = (
+    "omh: the Hermes gateway did not answer within {seconds}s; it may still be restarting. "
+    "Check it with `hermes gateway status`, then run `omh` again."
+)
 # Closing the gateway on exit: stdin EOF, then terminate, then kill. The live
 # region is already cleared and the terminal restored before this wait starts.
 CLOSE_GRACE_SECONDS = 0.5
@@ -1916,8 +1939,11 @@ class App(ModesMixin, AgentViewMixin):
 
     # ── startup ──
 
-    def startup(self) -> None:
+    def startup(self, wait: Callable[[], bool] | None = None, timeout: float = SESSION_CALL_SECONDS) -> None:
         """Open or resume the session, then ask for the busy mode and for the session's command catalog.
+
+        `wait` and `timeout` are the session call's `cancel` and deadline, used only when `wait` is given (`_run`
+        passes its `_LaunchWait`, which says on the shell's terminal what the launch waits for and never cancels).
 
         Only the session call is awaited: the first frame needs nothing else.
         The busy mode (`config.get`) and the catalog (asked for after the
@@ -1929,10 +1955,11 @@ class App(ModesMixin, AgentViewMixin):
         caller turns each into `FALLBACK_EXIT`.
         """
         resume = self.environ.get("HERMES_TUI_RESUME", "")
+        waiting: dict[str, Any] = {} if wait is None else {"timeout": timeout, "cancel": wait}
         if resume:
-            result = self.client.call("session.resume", {"session_id": resume, "cols": self.size[0]})
+            result = self.client.call("session.resume", {"session_id": resume, "cols": self.size[0]}, **waiting)
         else:
-            result = self.client.call("session.create", self._create_params())
+            result = self.client.call("session.create", self._create_params(), **waiting)
         info = result.get("info")
         self.launch_profile = as_text(info.get("profile_name")) if isinstance(info, dict) else ""
         home = self._snapshot_home()
@@ -7251,17 +7278,127 @@ class _Told:
         return "".join(self.lines)
 
 
-def _start_gateway(client: GatewayClient, stderr: TextIO) -> Event | None:
-    """The gateway's ready event, or None after saying why it did not start."""
+class _LaunchWait:
+    """What a launch says on the shell's terminal while it waits for the Hermes gateway, before the TUI draws.
+
+    Called as the `cancel` of the gateway start and of the session call, which ask it every `CANCEL_POLL_SECONDS`;
+    it never cancels. Quiet for `LAUNCH_WAIT_QUIET_SECONDS`, so a normal launch says nothing; then one line, the
+    phase and the seconds waited, rewritten in place on a terminal (written once per phase anywhere else).
+    It writes to the stream itself, not through `_Told`: a fallback says again why the TUI did not start, never
+    the countdown. `done` erases the line before anything else is said or drawn.
+    """
+
+    def __init__(
+        self, stream: TextIO, clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep
+    ) -> None:
+        self.stream = stream
+        self.clock = clock
+        self.sleep = sleep
+        self.started = clock()
+        self.phase = LAUNCH_CONNECTING
+        self.shown = ""  # the line on the terminal now; "" when none is
+        self.said: list[str] = []  # each phase's first line, in order
+        self.broken = False  # a write failed: nothing more is shown
+
+    def waited(self) -> float:
+        return self.clock() - self.started
+
+    def left(self) -> float:
+        return max(LAUNCH_WAIT_SECONDS - self.waited(), 0.0)
+
+    def can_retry(self) -> bool:
+        return self.left() >= LAUNCH_MIN_TRY_SECONDS
+
+    def __call__(self) -> bool:
+        waited = self.waited()
+        if waited < LAUNCH_WAIT_QUIET_SECONDS or self.broken:
+            return False
+        line = self.phase.format(seconds=int(waited))
+        tty = _is_tty(self.stream)
+        if not self.said or self.said[-1] != self.phase:
+            self.said.append(self.phase)
+        elif not tty or line == self.shown:
+            return False
+        self._write(f"\r\x1b[2K{line}" if tty else line + "\n")
+        self.shown = line if tty and not self.broken else ""
+        return False
+
+    def _write(self, text: str) -> None:
+        """Best effort: a stream that fails once (closed, or its terminal gone) is not written to again."""
+        try:
+            self.stream.write(text)
+            self.stream.flush()
+        except (OSError, ValueError):
+            self.broken = True
+
+    def pause(self) -> None:
+        """The wait before trying again, saying that the gateway is restarting."""
+        self.phase = LAUNCH_RESTARTING
+        until = self.clock() + LAUNCH_RETRY_SECONDS
+        while (remaining := until - self.clock()) > 0:
+            self()
+            self.sleep(min(remaining, CANCEL_POLL_SECONDS))
+        self()
+
+    def done(self) -> None:
+        if self.shown and not self.broken:
+            self._write("\r\x1b[2K")
+        self.shown = ""
+
+
+def _is_tty(stream: TextIO) -> bool:
     try:
-        return client.start()
+        return stream.isatty()
+    except (AttributeError, ValueError):  # no isatty, or a closed stream
+        return False
+
+
+def _start_gateway(
+    client: GatewayClient, stderr: TextIO, wait: _LaunchWait | None = None, retry: bool = False
+) -> Event | GatewayUnavailable | None:
+    """The gateway's ready event; the error when it is not answering yet, `retry` is asked for and `wait` leaves
+    time to try again; None after saying why it did not start."""
+    try:
+        if wait is None:
+            return client.start()
+        return client.start(ready_timeout=max(wait.left(), CANCEL_POLL_SECONDS), cancel=wait)
     except GatewayUnavailable as error:
+        if wait is not None and retry and error.not_ready and wait.can_retry():
+            return error
+        if wait is not None:
+            wait.done()
+            if error.not_ready or not wait.left():
+                _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
         _say(stderr, f"omh: the Hermes gateway did not start: {error}")
         for line in error.stderr_tail[-STARTUP_TAIL_LINES:]:
             _say(stderr, f"  {clean_text(line)}")  # the gateway's own text: no escape reaches the shell
     except GatewayCallError as error:
+        if wait is not None:
+            wait.done()
         _say(stderr, f"omh: the Hermes gateway refused the OMH TUI: {error}")
     return None
+
+
+def _open_session(
+    client: GatewayClient,
+    stderr: _Told,
+    wait: _LaunchWait,
+    respawn: Callable[[], GatewayClient] | None,
+) -> tuple[GatewayClient, Event] | GatewayClient:
+    """The client whose gateway sent `gateway.ready`, with that event; the last client tried, alone, after saying why
+    none did. A gateway that is not answering yet is closed and a new one spawned (`respawn`) while `wait` allows."""
+    while True:
+        ready = _start_gateway(client, stderr, wait, retry=respawn is not None)
+        if not isinstance(ready, GatewayUnavailable):
+            return client if ready is None else (client, ready)
+        assert respawn is not None  # `_start_gateway` returns the error only when asked to retry
+        wait.pause()
+        try:
+            client = respawn()
+        except GatewayUnavailable as error:
+            wait.done()
+            _say(stderr, f"omh: the Hermes gateway did not start: {error}")
+            return client
 
 
 def _run(
@@ -7275,33 +7412,74 @@ def _run(
 ) -> int:
     """Start the gateway, open the session, then run the loop on the raw terminal; the exit code.
 
-    `make_client` spawns a gateway again after a crash (`App._respawn_gateway`).
-    A session the person closed exits `CLOSED_EXIT` rather than 0 when `omh`
-    launched the TUI (`SESSION_FILE_ENV` set): `omh` prints the exit card,
-    Hermes' launcher prints nothing, and the shell still sees 0.
+    `make_client` spawns a gateway again after a crash (`App._respawn_gateway`), and, before the TUI draws, in
+    place of one that was not answering yet (`_LaunchWait`). A session the person closed exits `CLOSED_EXIT`
+    rather than 0 when `omh` launched the TUI (`SESSION_FILE_ENV` set): `omh` prints the exit card, Hermes'
+    launcher prints nothing, and the shell still sees 0.
     """
-    ready = _start_gateway(client, stderr)
-    if ready is None:
-        return request_fallback(environ, stderr.said())
-    terminal = open_terminal()
-    app = App(
-        terminal,
-        client,
-        environ,
-        poller=make_poller(environ.get("OMH_HOME") or None, environ.get("HERMES_HOME") or None),
-        theme=initial_theme(ready.payload, environ.get("OMH_HOME") or None),
-        make_client=make_client,
-        # The session's directory as the launcher names it; with none named, no branch (never the TUI's own cwd).
-        # TERMINAL_CWD is the attach entry's own fallback for the session directory (`gateway_attach`).
-        git=make_git(cwd) if (cwd := environ.get("HERMES_TUI_CWD") or environ.get("HERMES_CWD")
-                              or environ.get("TERMINAL_CWD")) else None,
-    )
+    first = client
+    wait = _LaunchWait(getattr(stderr, "stream", stderr))  # past `_Told`: the countdown is not re-said
+    spawned: list[GatewayClient] = []  # the clients spawned here in place of one that was not answering
+
+    def spawn_again() -> GatewayClient:
+        assert make_client is not None
+        spawned.append(make_client(gateway_spawn(environ)))
+        return spawned[-1]
+
+    respawn = spawn_again if make_client is not None else None
+    app: App | None = None
+    session_retries = 0
     try:
-        app.startup()
-    except (GatewayCallError, GatewayTimeout, GatewayUnavailable) as error:
-        _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {error}")
-        return request_fallback(environ, stderr.said())
-    try:
+        while True:
+            opened = _open_session(client, stderr, wait, respawn)
+            if not isinstance(opened, tuple):
+                client = opened
+                return request_fallback(environ, stderr.said())
+            client, ready = opened
+            if app is None:
+                app = App(
+                    open_terminal(),
+                    client,
+                    environ,
+                    poller=make_poller(environ.get("OMH_HOME") or None, environ.get("HERMES_HOME") or None),
+                    theme=initial_theme(ready.payload, environ.get("OMH_HOME") or None),
+                    make_client=make_client,
+                    # The session's directory as the launcher names it; with none named, no branch (never the TUI's
+                    # own cwd). TERMINAL_CWD is the attach entry's own fallback for the session directory
+                    # (`gateway_attach`).
+                    git=make_git(cwd) if (cwd := environ.get("HERMES_TUI_CWD") or environ.get("HERMES_CWD")
+                                          or environ.get("TERMINAL_CWD")) else None,
+                )
+            app.client = client
+            wait.phase = LAUNCH_OPENING
+            try:
+                app.startup(wait=wait, timeout=max(wait.left(), SESSION_CALL_SECONDS))
+                break
+            except GatewayUnavailable as error:
+                failure: GatewayUnavailable = error
+            except (GatewayCallError, GatewayTimeout) as error:
+                wait.done()
+                if isinstance(error, GatewayTimeout):
+                    _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
+                _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {error}")
+                return request_fallback(environ, stderr.said())
+            # The gateway went away as not ready while the session opened (a restart's going-away close): another
+            # try, at most `SESSION_RETRY_LIMIT`. Any other exit (a crash answering the call) falls back at once.
+            if respawn is not None and failure.not_ready and wait.can_retry() and session_retries < SESSION_RETRY_LIMIT:
+                session_retries += 1
+                client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=CLOSE_GRACE_SECONDS)
+                wait.pause()
+                wait.phase = LAUNCH_CONNECTING
+                try:
+                    client = respawn()
+                    continue
+                except GatewayUnavailable as error:
+                    failure = error
+            wait.done()
+            _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {failure}")
+            return request_fallback(environ, stderr.said())
+        wait.done()
+        terminal = app.terminal
         with terminal:
             background, typed, row = terminal.query_background()
             app.adopt_background(background, environ)
@@ -7309,8 +7487,11 @@ def _run(
             app.clear_launch_screen(row)
             code = app.run(typed)
     finally:
-        if app.client is not client:  # a gateway spawned after a crash; the caller reaps the first one
-            app.client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
+        wait.done()  # however the launch ends (Ctrl+C, a signal, an error), the waiting line does not stay on the shell
+        # The gateways spawned here or after a crash; the caller reaps the first one. A closed one returns at once.
+        for spawned_client in dict.fromkeys([*spawned, *([app.client] if app is not None else [])]):
+            if spawned_client is not first:
+                spawned_client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
     if app.farewell:
         _say(stderr, app.farewell)
     return CLOSED_EXIT if code == 0 and environ.get(SESSION_FILE_ENV) else code
