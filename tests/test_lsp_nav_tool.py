@@ -13,7 +13,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _module_patch import patch_modules  # noqa: E402
 
-from omh.plugin_bundle.omh import lsp_bridge  # noqa: E402
+import ntpath  # noqa: E402
+import posixpath  # noqa: E402
+
+from omh.plugin_bundle.omh import lsp_bridge, lsp_nav  # noqa: E402
 from omh.plugin_bundle.omh.lsp_nav import (  # noqa: E402
     OverlapError,
     ScopeMismatch,
@@ -98,6 +101,50 @@ class LocationTests(unittest.TestCase):
         self.assertEqual(normalize_locations(None), [])
         self.assertEqual(normalize_locations(loc), [("file:///a.py", 1, 2)])
         self.assertEqual(normalize_locations([loc, link]), [("file:///a.py", 1, 2), ("file:///b.py", 4, 5)])
+
+
+class WindowsUriTests(unittest.TestCase):
+    """#2470: on Windows the request URI must equal the one Hermes opened the document under, `file:///C:/x`."""
+
+    def test_a_windows_path_becomes_hermes_file_uri(self):
+        cases = {
+            r"C:\Users\me\repo\calc.py": "file:///C:/Users/me/repo/calc.py",
+            r"C:\Users\me\my repo\calc.py": "file:///C:/Users/me/my%20repo/calc.py",
+            r"D:\한글\a.py": "file:///D:/%ED%95%9C%EA%B8%80/a.py",
+        }
+        for path, uri in cases.items():
+            with self.subTest(path=path):
+                self.assertEqual(lsp_nav._path_to_uri(path, ntpath), uri)
+                self.assertEqual(lsp_nav._uri_to_path(uri, ntpath), path)
+
+    def test_the_server_forms_of_a_drive_come_back_as_the_path(self):
+        for uri in ("file:///c%3A/Users/me/calc.py", "file:///c:/Users/me/calc.py", "file:///C%3a/Users/me/calc.py"):
+            with self.subTest(uri=uri):
+                self.assertEqual(lsp_nav._uri_to_path(uri, ntpath).lower(), r"c:\users\me\calc.py")
+
+    def test_a_unc_path_reads_back_from_either_form(self):
+        # Hermes opens a UNC file as `file:////server/...`; a server may name it with the host as authority.
+        path = r"\\fs\home\repo\calc.py"
+        self.assertEqual(lsp_nav._path_to_uri(path, ntpath), "file:////fs/home/repo/calc.py")
+        for uri in ("file:////fs/home/repo/calc.py", "file://fs/home/repo/calc.py"):
+            with self.subTest(uri=uri):
+                self.assertEqual(lsp_nav._uri_to_path(uri, ntpath), path)
+
+    def test_older_and_localhost_forms_still_read_back(self):
+        self.assertEqual(lsp_nav._uri_to_path("file://C:%5Cx%5Ca.py", ntpath), r"C:\x\a.py")
+        self.assertEqual(lsp_nav._uri_to_path("file://localhost/C:/x/a.py", ntpath), r"C:\x\a.py")
+
+    def test_posix_paths_are_unchanged(self):
+        self.assertEqual(lsp_nav._path_to_uri("/srv/my repo/a.py", posixpath), "file:///srv/my%20repo/a.py")
+        self.assertEqual(lsp_nav._uri_to_path("file:///srv/my%20repo/a.py", posixpath), "/srv/my repo/a.py")
+        self.assertEqual(lsp_nav._uri_to_path("untitled:x", ntpath), "untitled:x")
+
+    @unittest.skipUnless(os.name == "nt", "the live path flavour is Windows only there")
+    def test_the_live_functions_use_the_windows_form_on_windows(self):
+        path = os.path.abspath("calc.py")
+        uri = path_to_uri(path)
+        self.assertTrue(uri.startswith("file:///") and "\\" not in uri and "%5C" not in uri, uri)
+        self.assertEqual(lsp_nav.uri_to_path(uri), path)
 
 
 class TextEditTests(unittest.TestCase):
