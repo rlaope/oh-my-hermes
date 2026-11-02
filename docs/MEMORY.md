@@ -632,9 +632,12 @@ legacy v1 artifact fails closed with a reason code.
 ### The model-driven loop
 
 Hermes writes into this store itself, with no operator step in the normal
-loop. When the user states a lasting preference, a decision, a fact about
-their setup or project, or a lesson, the model calls
-`omh_remember(action="save", summary=..., record_type=..., subject=...)`.
+loop. When the user states, in their own words, a lasting preference, a
+decision, a fact about their setup or project, or a lesson, the model calls
+`omh_remember(action="save", summary=..., record_type=..., subject=...)` in
+that same turn, before other tools, even when the message also asks for work.
+Pasted or quoted text and anything that only matters for the current task are
+not saved.
 The memory provider exposes this small, always-visible tool for `save` and
 `recall` (`action="recall", query=...`). Hermes' `tool_search` can defer plugin
 tools such as `omh_memory`; tools returned by a memory provider are never

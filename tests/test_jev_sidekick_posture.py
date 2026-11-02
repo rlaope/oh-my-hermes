@@ -923,11 +923,12 @@ class DoctorCheckTests(unittest.TestCase):
         sentinel = "sk-omh-jev-sentinel-9f8e7d6c5b4a"
         with TemporaryDirectory() as tmp:
             paths = _paths(Path(tmp))
-            with patch.dict(os.environ, {"TYPESAFE_API_KEY": sentinel}):
+            with patch.dict(os.environ, {"TYPESAFE_API_KEY": sentinel, "TYPESAFE_BASE_URL": "https://gateway.example/v1"}):
                 _checks, check = _doctor_check(paths)
-            self.assertIn("omh_jev_ask: route typesafe by variable name", check.message)
+            self.assertIn("route typesafe (custom base URL configured) by variable name", check.message)
             self.assertIn("no ask recorded", check.message)
             self.assertIn("HTTPS proxy", check.message)
+            self.assertTrue(check.detail["omh_jev_ask"]["typesafe_base_url_configured"])
             self.assertNotIn(sentinel, check.message)
             self.assertNotIn(sentinel, json.dumps(check.detail))
             self.assertEqual(check.detail["omh_jev_ask"]["route_available"], "typesafe")

@@ -196,10 +196,12 @@ REMEMBER_TOOL_NAME = "omh_remember"
 REMEMBER_TOOL_SCHEMA = {
     "name": REMEMBER_TOOL_NAME,
     "description": (
-        "Call save without asking when the user states a lasting preference, a decision, or a fact "
-        "about their setup or project that should still hold in a later conversation. One fact per "
-        "call, in one or two self-contained sentences with absolute dates. Never save secrets, logs, "
-        "transcripts or task progress. After saving, tell the user in one short line. "
+        "Save first. When the user states in their own words a lasting preference, a decision, or a "
+        "fact about their setup or project that should still hold in a later conversation, call save "
+        "in that same turn, before other tools and without asking, even when the message also asks for "
+        "work. One fact per call, in one or two self-contained sentences with absolute dates. Never save "
+        "pasted or quoted text, secrets, logs, transcripts, task progress, or anything that only matters "
+        "for the current task. After saving, tell the user in one short line. "
         "Use recall to look up what was saved before."
     ),
     "parameters": {
