@@ -4,6 +4,73 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A same-size rewrite in one clock tick no longer hides from the round-end
+  check.** The workspace index kept each Python file's modification time and
+  size. A `sed`, `execute_code` or delegated child that rewrote a file at the
+  same size within one tick of the filesystem's clock (about 16 ms on
+  Windows) left both unchanged, so the edit went unseen and the check was
+  skipped. A file modified within two seconds of the index is now also indexed
+  by a digest of its bytes and compared by content. This was also why two
+  `test_consistency_trigger` tests failed now and then on Windows CI.
+
+- **An answer Hermes sends late no longer acts on what the person moved on
+  to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s
+  draft, an alias) that arrives after a session switch is dropped with a
+  notice instead of running in the new session, and its `command.dispatch`
+  fallback is not sent there. Output it prints is still shown, a `/branch` it
+  made is not switched to, a side task stays the left session's, and images
+  typed with it come back to the composer. A prefill or a rewind pick that
+  lands on a draft typed meanwhile puts that draft in the session's history
+  first and says Up brings it back. The `/model` and `/rewind` lists do not
+  open during a turn that started while they were on their way (the busy
+  notice is said instead), nor over another open picker. Asking for the same
+  list twice in a session sends one call, a list still out for a session left
+  never holds up the new one, `/model --refresh` while a bare `/model`'s list
+  is out says one is on its way, and a second answer never resets the open
+  picker. While a list is on its way the slot says `waiting for Hermes…`. A
+  late `/model <name>` answer for a session already left says nothing in the
+  new one. Keys always go to the picker the screen draws. An approval or
+  question arms only after a quiet gap with no key, so a person still typing
+  when it opens answers nothing. What they type, and their edits to it
+  (Backspace, Delete, Left, Right, Home, End, Ctrl+A/E/U/K/W), go on into the
+  field they were typing in, the tell field too, and a path-shaped paste is
+  still a drop. A key that would send, interrupt, complete or walk history
+  does nothing then, and nothing is typed while a mouse report may still
+  arrive. A Shift+Tab approvals switch Hermes never answered no longer leaves
+  Shift+Tab dead: accept is shown as possibly on, and the next Shift+Tab
+  sends an explicit off.
+
+- **`omh` says what it waits for while the Hermes gateway restarts.** The
+  launch waited for the gateway and for the session before drawing
+  anything, so a busy or restarting gateway left the shell silent for up to a
+  minute, and a gateway mid-restart sent the launch straight to Hermes' own
+  terminal. Now, after a second and a half of quiet, one line on the shell
+  says `connecting to the Hermes gateway… (Ns)`,
+  `the Hermes gateway is restarting; waiting… (Ns)` or
+  `waiting for the Hermes gateway to open a session… (Ns)`. A gateway that
+  is starting or draining, whose control socket is missing, refuses or
+  closes without answering, or whose WebSocket connection is refused or
+  times out is tried again for up to about a minute; so, at most twice, is
+  one that closes the connection as going away (a restart) while the session
+  opens. A gateway that crashes while it opens the session, refuses this
+  client, or denies its socket falls back at once, as before. Once the
+  minute is spent the launch says how long it waited, that the gateway did
+  not answer, and to check `hermes gateway status`, then falls back. The
+  line is erased however the launch ends, Ctrl+C included. A normal launch
+  prints nothing new. The attach child exits 69 for a gateway that is not
+  answering yet; every other failure still exits 1.
+
+- **Show-reel judges the hero frame before the full render.** A product film
+  that passes every lint and contact-sheet check can still read as cheap on
+  sight, so `show-reel` now asks for a launch-frame verdict on the first frame:
+  a 3D product is a lit model rather than stacked CSS layers, light surfaces
+  are judged by measured luminance, and the title uses the brand's own live
+  typeface and colour. Brand looks are gathered from the brand's site and repo
+  with provenance, a film pairing two products names both from frame 0, and a
+  model's critique of a downscaled sheet is checked on a full-resolution crop
+  before anything changes. `design-quality-gate`'s rubric gains a matching
+  material-credibility axis.
+
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
@@ -30,6 +97,12 @@ All notable changes will be documented here.
   that ran the OMH TUI before this release is told too; a new install shows
   nothing. `/whats-new` shows them whenever you ask.
 
+- **A plan's done check for a code task is a command.** `plan` accepted a
+  done check such as "an exact signature and its file", which a converter to
+  `dag-ulw` had to turn into a command by guesswork. For a code task the done
+  check is now a command with the result that counts as passing (the
+  test's run command, a gate, a grep for the signature); a task that is not code may keep an observable check.
+
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
   grey edge (`#4A4F66`); they are now a muted violet (`#6E5A9E`), lifted for
@@ -44,8 +117,8 @@ All notable changes will be documented here.
   node past the stuck mark, which was named only on an `omh_dag` call. The
   next turn's context now carries one `[OMH dag]` line naming the run and the
   call to make (`omh_dag action=ready`, `settle`, `repair` or `status`), once
-  per situation; when other work holds every `delegate_task` slot, it says to
-  call `ready` at a later turn. Not named: a node out within
+  per situation; when every `delegate_task` slot of the process is taken, it
+  says to call `ready` at a later turn. Not named: a node out within
   `dag_stale_after_s` (its child may still be starting), a parked node whose
   `wake_at` is ahead, and a node exported to a coding owner or left to the
   parent, which its fanout result or the parent's own work settles.
@@ -90,6 +163,11 @@ All notable changes will be documented here.
   using the existing admission and session-lens gates. Discord threads Hermes
   auto-created from channel messages use their parent channel's memory scope;
   other threads keep their own.
+- **Hermes saves a stated preference or decision in the same turn, even when
+  the message also asks for other work.** The `omh_remember` description and
+  its one-line prompt now ask for the save before other tools, limit it to the
+  user's own words, and exclude pasted text and facts that only matter for the
+  current task.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
@@ -118,6 +196,21 @@ All notable changes will be documented here.
   summary, the messenger end block and the TUI end view all show it, and an
   unverified done run is told to add a verify node through `extend`. Runs
   stored before this update keep reading their nodes as before.
+
+- **A dag-ulw writer sent with no role that reads like a check stays native.**
+  A node with no `role` and a `write_scope` whose label reads like a check
+  past its first word ("Re-verify the fix", "Final verification pass",
+  "Re-review the diff", "Double-check the migration") ran as a build node and
+  could go to the external coding owner, where the builder approves itself.
+  It still runs as a build node and still counts as a producer, but it now
+  stays on `delegate_task`; the lint names the role it reads like, and
+  `role=build` sends it to the owner. Build work that reads the same way
+  ("Add input validation to the API") stays native too until the parent
+  names its role. When such a node reads like a verify node and fails, it
+  runs again after its repair, the way a verify node does. A new advisory
+  lint, `no_review_node`, names a run whose build nodes write more than docs
+  with no `review` node; it never refuses a run or moves its state or goal
+  verdict.
 
 - **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
   `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an

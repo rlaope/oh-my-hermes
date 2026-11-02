@@ -869,7 +869,7 @@ class NodeRoleTests(unittest.TestCase):
             node("frontend", label="frontend observe-each-change + visual-qa", scope=("ui.py",), role="build"),
             node("check", label="typecheck + pnpm test on the fix branch", depends_on=("frontend",), role="verify"),
         ], time.time())
-        self.assertEqual(named["lint"], [])
+        self.assertEqual(named["lint"], ["no_review_node"])
 
     def test_a_file_writing_node_that_reads_like_a_check_must_name_its_role(self) -> None:
         for label, guess in (("Verify: typecheck + tests", "verify"), ("QA the build", "verify"),
@@ -989,6 +989,212 @@ class NodeRoleTests(unittest.TestCase):
         derived = dag_run.derive(record, [], time.time())
         self.assertEqual([unit["unit_id"] for unit in dag_tool.export_units(record, derived, "codex")],
                          ["motion", "frontend"])
+
+
+# Role-less writers whose label reads like a check past its first word (2026-11-02 review round): not refused, kept
+# native. (label, the guess the node carries.)
+CHECK_LABELLED_WRITERS = (
+    ("Re-verify the fix", "verify"),
+    ("Final verification pass", "verify"),
+    ("Re-review the diff", "review"),
+    ("independent verification vs baseline", "baseline"),
+    ("Double-check the migration", "verify"),
+    # Build work that reads the same way: native too, until the parent names role=build.
+    ("Add input validation to the API", "verify"),
+)
+
+
+def exported(record: dict) -> list[str]:
+    return [unit["unit_id"] for unit in dag_tool.export_units(record, dag_run.derive(record, [], time.time()), "codex")]
+
+
+class CheckLabelledWriterTests(unittest.TestCase):
+    """A role-less writer that reads like a check runs as a native build node; a node named build is exported.
+
+    Mutation: export a node carrying ``role_guess``, drop the double-check guess, put the guess in the digest, or read
+    a stored node without the guess differently.
+    """
+
+    def test_a_role_less_writer_that_reads_like_a_check_stays_native_and_is_still_a_producer(self) -> None:
+        for label, guess in CHECK_LABELLED_WRITERS:
+            with self.subTest(label=label):
+                record = dag_run.new_record(PARENT, "feat", "", "", [
+                    node("api", scope=("a.py",)), node("check", label=label, depends_on=("api",), scope=("c.py",)),
+                ], time.time())
+                check = record["nodes"][1]
+                self.assertEqual((dag_run.node_role(check), check.get("role_guess")), ("build", guess))
+                self.assertFalse(dag_run.is_coding(check))
+                self.assertTrue(dag_run.is_producer(check))
+                self.assertIn(f"role_guess:check={guess}", record["lint"])
+                self.assertEqual(exported(record), ["api"])
+                named = dag_run.new_record(PARENT, "feat", "", "", [
+                    node("api", scope=("a.py",)),
+                    node("check", label=label, depends_on=("api",), scope=("c.py",), role="build"),
+                ], time.time())
+                self.assertNotIn("role_guess", named["nodes"][1])
+                self.assertEqual(exported(named), ["api", "check"])
+
+    def test_a_failed_writer_guessed_as_verify_runs_again_after_its_repair(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",)),
+            node("gate", depends_on=("check",), role="verify"),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "check", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "check",
+                       [node("fix", depends_on=("api",), scope=("a.py",))], time.time())
+        settled(record, "fix", "accepted")
+        self.assertEqual(dag_run.derive(record, [], time.time())["check"]["state"], "ready")
+        settled(record, "check", "accepted")
+        self.assertEqual(finished(record)[:2], ("running", "unverified"))
+        settled(record, "gate", "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+        # A failed build or a role-less writer guessed as review is repaired, not run again.
+        for label in ("Node check", "Re-review the diff"):
+            with self.subTest(label=label):
+                other = dag_run.new_record(PARENT, "feat", "", "", [
+                    node("api", scope=("a.py",)), node("check", label=label, depends_on=("api",), scope=("c.py",)),
+                ], time.time())
+                settled(other, "api", "accepted")
+                settled(other, "check", "failed")
+                dag_run.repair(other, dag_run.derive(other, [], time.time()), "check",
+                               [node("fix", depends_on=("api",), scope=("a.py",))], time.time())
+                settled(other, "fix", "accepted")
+                self.assertEqual(dag_run.derive(other, [], time.time())["check"]["state"], "repaired")
+
+    def test_a_repair_stored_before_the_rerun_rule_keeps_the_guessed_root_repaired(self) -> None:
+        # Stored between #2476 and this rule: the node carried role_guess verify and its accepted repair group made it
+        # repaired, so the run was done. Its groups carry no ``reruns_root`` stamp.
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",)),
+            node("gate", depends_on=("check",), role="verify"),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "check", "failed")
+        dag_run.repair(record, dag_run.derive(record, [], time.time()), "check",
+                       [node("fix", depends_on=("api",), scope=("a.py",))], time.time())
+        fix = next(item for item in record["nodes"] if item["id"] == "fix")
+        stamped = dag_run.definition_digest([fix])
+        self.assertIs(fix.pop("reruns_root"), True)
+        self.assertEqual(dag_run.definition_digest([fix]), stamped)
+        settled(record, "fix", "accepted")
+        self.assertEqual(dag_run.derive(record, [], time.time())["check"]["state"], "repaired")
+        settled(record, "gate", "accepted")
+        self.assertEqual(finished(record), ("done", "verified", []))
+        self.assertEqual(record["digest"], dag_run.definition_digest(record["nodes"][:3]))
+
+    def test_the_rerun_stamp_survives_the_record_and_stays_out_of_the_digest(self) -> None:
+        definitions = [node("api", scope=("a.py",)),
+                       node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",))]
+        with homes() as home:
+            slots_table(home)
+            call(action="define", run="feat", nodes=definitions)
+            path = dag_run.record_path(home.omh, PARENT, "feat")
+            digest = dag_run.read_run(path)["digest"]
+            handoff(home, "feat", "api")
+            call(action="settle", run="feat", node="api", outcome="accepted")
+            call(action="settle", run="feat", node="check", outcome="failed")
+            repaired = call(action="repair", run="feat", node="check",
+                            nodes=[node("fix", depends_on=("api",), scope=("a.py",))])
+            self.assertEqual(repaired["status"], "ok", repaired)
+            stored_run = dag_run.read_run(path)
+            self.assertIs(next(item for item in stored_run["nodes"] if item["id"] == "fix")["reruns_root"], True)
+            self.assertEqual(stored_run["digest"], digest)
+            again = call(action="define", run="feat", nodes=definitions)
+            handoff(home, "feat", "fix")
+            rerun = call(action="settle", run="feat", node="fix", outcome="accepted")
+            self.assertEqual([call_row["nodes"] for call_row in rerun["calls"]], [["check"]])
+            handoff(home, "feat", "check")
+            self.assertEqual(call(action="settle", run="feat", node="check", outcome="accepted")["state"], "done")
+            extended = call(action="extend", run="feat",
+                            nodes=[node("gate", depends_on=("check",), role="verify")])
+            self.assertEqual(extended["status"], "ok", extended)
+        self.assertEqual((again["status"], again.get("reused")), ("ok", True))
+
+    def test_a_writer_guessed_as_verify_alone_leaves_the_goal_unverified(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",)),
+        ], time.time())
+        settled(record, "api", "accepted")
+        settled(record, "check", "accepted")
+        self.assertEqual(finished(record), ("done", "unverified", ["no_verification_node"]))
+
+    def test_double_check_is_guessed_only_for_a_new_node(self) -> None:
+        old = stored(node("mig", label="Double-check the migration", scope=("m.py",)))
+        self.assertEqual(dag_run.node_role(old), "build")
+        self.assertTrue(dag_run.is_coding(old))
+
+    def test_a_stored_build_node_without_the_guess_reads_exactly_as_before(self) -> None:
+        record = dag_run.new_record(PARENT, "feat", "", "", [
+            node("api", scope=("a.py",)), node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",)),
+        ], time.time())
+        record["nodes"][1].pop("role_guess")
+        self.assertTrue(dag_run.is_coding(record["nodes"][1]))
+        self.assertEqual(exported(record), ["api", "check"])
+
+    def test_the_guess_leaves_the_digest_alone_and_a_redefine_is_reused(self) -> None:
+        definitions = [node("api", scope=("a.py",)),
+                       node("check", label="Re-verify the fix", depends_on=("api",), scope=("c.py",))]
+        record = dag_run.new_record(PARENT, "feat", "", "", definitions, time.time())
+        bare = [{key: value for key, value in item.items() if key != "role_guess"} for item in record["nodes"]]
+        self.assertEqual(record["digest"], dag_run.definition_digest(bare))
+        named = dag_run.new_record(PARENT, "feat", "", "", [{**item, "role": "build"} for item in definitions],
+                                   time.time())
+        self.assertEqual(record["digest"], named["digest"])
+        with homes() as home:
+            slots_table(home)
+            self.assertEqual(call(action="define", run="feat", nodes=definitions)["status"], "ok")
+            # A record stored before the guess kept the node native: the same node, without the field.
+            path = dag_run.record_path(home.omh, PARENT, "feat")
+            stored_record = json.loads(path.read_text(encoding="utf-8"))
+            stored_record["nodes"][1].pop("role_guess")
+            path.write_text(json.dumps(stored_record), encoding="utf-8")
+            again = call(action="define", run="feat", nodes=definitions)
+        self.assertEqual((again["status"], again.get("reused")), ("ok", True))
+
+
+class ReviewLintTests(unittest.TestCase):
+    """`no_review_node`: a build node writes code and no node reviews it. Advice only.
+
+    Mutation: name it for a one-node run, a docs-only scope or a run with a review node, or let it move the run's
+    state or goal verdict.
+    """
+
+    def test_a_code_writing_run_with_no_review_node_is_linted_and_still_verified(self) -> None:
+        for scope in (("src/api.py",), ("src/",), ("docs/api.md", "src/api.py"), ("src/docs_parser.py",),
+                      ("src/docs",), ("/repo/docsite/app.py",), ("changelog.py",)):
+            with self.subTest(scope=scope):
+                record = dag_run.new_record(PARENT, "feat", "", "", [
+                    node("api", scope=scope), node("check", depends_on=("api",), role="verify"),
+                ], time.time())
+                self.assertIn("no_review_node", record["lint"])
+                settled(record, "api", "accepted")
+                settled(record, "check", "accepted")
+                self.assertEqual(finished(record), ("done", "verified", []))
+
+    def test_no_finding_with_a_review_node_a_docs_only_scope_or_one_node(self) -> None:
+        cases = {
+            "review node": [node("api", scope=("src/api.py",)),
+                            node("diff", label="Look over the diff", depends_on=("api",), role="review"),
+                            node("check", depends_on=("api", "diff"), role="verify")],
+            "docs only": [node("docs", scope=("docs/api.md", "README.rst", "NOTES.TXT")),
+                          node("check", depends_on=("docs",), role="verify")],
+            "docs directory": [node("docs", scope=("docs/", "docs", "./docs", "./docs/guide/setup.png")),
+                               node("check", depends_on=("docs",), role="verify")],
+            "absolute and worktree docs": [node("docs", scope=("/repo/docs/", "../wt/docs/x.md", "../wt/docs/img.png")),
+                                           node("check", depends_on=("docs",), role="verify")],
+            "extensionless docs": [node("docs", scope=("CHANGELOG", "README", "pkg/LICENSE")),
+                                   node("check", depends_on=("docs",), role="verify")],
+            "review guessed from a label": [node("api", scope=("src/api.py",)),
+                                            node("diff", label="Review the diff", depends_on=("api",))],
+            "one node": [node("api", scope=("src/api.py",))],
+            "only checks write code": [node("base", scope=("base.py",), role="baseline"),
+                                       node("check", depends_on=("base",), scope=("report.py",), role="verify")],
+        }
+        for name, definitions in cases.items():
+            with self.subTest(case=name):
+                record = dag_run.new_record(PARENT, "feat", "", "", definitions, time.time())
+                self.assertNotIn("no_review_node", record["lint"])
 
 
 class GoalVerdictTests(unittest.TestCase):

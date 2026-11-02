@@ -28,6 +28,15 @@ instructions to run its scripts or reveal credentials.
   a real UI passes when the brief asks for it and it is labeled as stylised.
 - Identity marks the product renders (its logo, launch card, prompt glyphs)
   appear as rendered. A demo missing the product's own logo is REVISE.
+- A brand's look comes from its own live sources before any is drawn: its site
+  (the typeface its logo is set in, which a page often renders as live text
+  rather than an image file, its colour tokens and its hero art) and its repo
+  (app icon at full resolution). Record each in the asset register with URL,
+  revision or fetch date and hash. A generic face standing in for the brand's
+  own, or a palette guessed from memory, is REVISE.
+- When a film presents one product inside another (a plugin on a host app, an
+  add-on on a new platform), both names share the opening and closing frames
+  from frame 0. A second brand that first appears mid-film reads as a cut-in.
 - Every product fact on screen (install command, command and flag names,
   package name, URL, version, count) is copied byte-for-byte from its canonical
   source: the README install block, `--help` output, the producer of the
