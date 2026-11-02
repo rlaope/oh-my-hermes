@@ -167,6 +167,17 @@ TEXT_PARTS = frozenset({"input_text", "output_text", "text"})
 # Ink's `/reload-mcp now`: the words that confirm a reload of every chat of the profile.
 RELOAD_MCP_CONFIRM_WORDS = frozenset({"always", "approve", "now", "once", "yes"})
 ENSURE_TIMEOUT_SECONDS = 30
+# What this child exits with when the gateway is there but not answering yet, so the TUI waits and tries again
+# instead of falling back (`omh.tui.gateway.GATEWAY_NOT_READY_EXIT`, the same number): Hermes' verdict that the
+# gateway is starting or draining (a restart), or a control socket or WebSocket that is missing, refuses, or is
+# silent. EX_UNAVAILABLE. A refusal of this client (a bad ticket, an upgrade turned down) stays 1.
+NOT_READY_EXIT = 69
+# The socket failures that mean the gateway is not answering yet: refused or reset, silent, or its socket not there
+# (a restart removes and recreates it). A denied socket (PermissionError) and any other OSError stay 1.
+NOT_READY_OS_ERRORS = (ConnectionError, TimeoutError, FileNotFoundError)
+GOING_AWAY = 1001  # the WebSocket close code of a server going down (RFC 6455): a gateway that restarts
+NOT_READY_STATES = frozenset({"starting", "draining"})
+NOT_READY_REASONS = frozenset({"control_timeout", "runtime_exited"})
 OPEN_TIMEOUT_SECONDS = 10
 STDIN_READ_BYTES = 64 * 1024
 # After the TUI closes its input: how long the answers to calls already sent (the last session's detach) may take.
@@ -1431,6 +1442,9 @@ def attach_api() -> AttachApi | None:
         home = get_hermes_home().resolve()
         receipt = ensure_gateway_runtime(home, timeout=ENSURE_TIMEOUT_SECONDS, idle_exit=True)
         if not attachable(receipt):
+            if (getattr(receipt, "state", None) in NOT_READY_STATES
+                    or getattr(receipt, "reason_code", None) in NOT_READY_REASONS):
+                raise GatewayNotReady(failure_message(receipt))
             raise RuntimeError(failure_message(receipt))
         endpoint = receipt.endpoint
         request = json.dumps({"protocol": 1, "id": 1, "verb": "session-ticket", "params": {
@@ -1441,6 +1455,8 @@ def attach_api() -> AttachApi | None:
             peer.sendall(request)
             with peer.makefile("rb") as stream:
                 raw = stream.readline(65537)
+        if not raw:  # the control socket closed without an answer: a gateway going down or not up yet
+            raise GatewayNotReady("Hermes' gateway closed its control socket without answering")
         answer = json.loads(raw)
         granted = answer.get("result") if isinstance(answer, dict) else None
         if (not isinstance(granted, dict) or answer.get("ok") is not True or answer.get("id") != 1
@@ -1452,6 +1468,10 @@ def attach_api() -> AttachApi | None:
         return url, list(protocols)
 
     return AttachApi(grant=grant, dial=connect, protocol=GATEWAY_WS_PROTOCOL, errors=(WebSocketException,))
+
+
+class GatewayNotReady(RuntimeError):
+    """Hermes says the gateway is starting or draining, or cannot be asked yet: worth waiting for."""
 
 
 def failure_message(receipt: object) -> str:
@@ -1579,7 +1599,8 @@ async def relay(api: AttachApi, url: str, protocols: list[str], adapter: Adapter
                 task.cancel()
         error = next((task.exception() for task in done if task.exception() is not None), None)
         _say(f"the connection to Hermes' gateway ended ({error or f'close code {socket.close_code}'})")
-        return 1
+        # A gateway going down closes with going-away: the TUI may wait for it to come back. Any other end stays 1.
+        return NOT_READY_EXIT if error is None and socket.close_code == GOING_AWAY else 1
 
 
 def _say(text: str) -> None:
@@ -1620,13 +1641,19 @@ def main() -> int:
         os.environ.pop(name, None)
     try:
         url, protocols = api.grant()
+    except (GatewayNotReady, *NOT_READY_OS_ERRORS) as error:  # a restart's verdict; a socket missing, refused, silent
+        _say(str(error))
+        return NOT_READY_EXIT
     except (OSError, RuntimeError, ValueError, LookupError, AttributeError, TypeError) as error:
-        # The failures Hermes' own bootstrap reports: discovery, socket I/O and timeouts, bad JSON, a refused grant.
+        # The failures Hermes' own bootstrap reports: discovery, socket I/O, bad JSON, a refused grant.
         _say(str(error))
         return 1
     try:
         return asyncio.run(relay(api, url, protocols, Adapter(options, tool_progress, cwd=cwd)))
-    except (OSError, TimeoutError, *api.errors) as error:  # a refused upgrade or ticket is the client's own error
+    except NOT_READY_OS_ERRORS as error:  # refused, reset or silent: a gateway that is not answering yet
+        _say(f"could not reach Hermes' gateway: {error}")
+        return NOT_READY_EXIT
+    except (OSError, *api.errors) as error:  # a refused upgrade or ticket is the client's own error
         _say(f"could not reach Hermes' gateway: {error}")
         return 1
 

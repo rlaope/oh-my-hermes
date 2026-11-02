@@ -1076,6 +1076,9 @@ class _Socket:
         return self
 
     async def __anext__(self):
+        if os.environ.get("FAKE_OWNER_GOES_AWAY"):  # a restart: the owner closes with going-away (1001)
+            self.close_code = 1001
+            raise StopAsyncIteration
         if os.environ.get("FAKE_OWNER_HANGS_UP"):  # the owner's side ends before it is ready
             raise StopAsyncIteration
         return json.dumps(await self.inbox.get())
@@ -1087,6 +1090,11 @@ class connect:
               "ping_interval": options.get("ping_interval", "unset")})
 
     async def __aenter__(self):
+        if os.environ.get("FAKE_OWNER_DOWN"):
+            raise ConnectionRefusedError(61, "Connect call failed")
+        if os.environ.get("FAKE_OWNER_GARBLED"):
+            from websockets.exceptions import InvalidMessage
+            raise InvalidMessage("did not receive a valid HTTP response")
         if os.environ.get("FAKE_OWNER_REFUSES"):
             from websockets.exceptions import WebSocketException
             raise WebSocketException("server rejected WebSocket connection: HTTP 403")
@@ -1106,7 +1114,8 @@ def ensure_gateway_runtime(home, timeout, idle_exit):
     left = sorted(name for name in ("HERMES_MODEL", "HERMES_CWD", "HERMES_TUI_CLIENT_ENV") if name in os.environ)
     with (Path(os.environ["HERMES_HOME"]) / "owner.jsonl").open("a") as log:
         log.write(json.dumps({"ensure": str(home), "idle_exit": idle_exit, "launch_env_left": left}) + "\\n")
-    return SimpleNamespace(state="ready", reason_code=None, detail=None,
+    state, _, reason = os.environ.get("FAKE_RUNTIME_STATE", "ready").partition(":")
+    return SimpleNamespace(state=state, reason_code=reason or None, detail=None,
                            endpoint=SimpleNamespace(profile_id="p", instance_id="i", api_origin="http://127.0.0.1:1"))
 
 
@@ -1133,11 +1142,19 @@ class _Peer:
         self.request = json.loads(data)
 
     def makefile(self, mode):
+        import os
+        if os.environ.get("FAKE_CONTROL_SILENT"):  # the socket closes without an answer
+            return io.BytesIO(b"")
         grant = {"ok": True, "id": 1, "result": {"profile_id": "p", "instance_id": "i", "ticket": "t0k"}}
         return io.BytesIO(json.dumps(grant).encode() + b"\\n")
 
 
 def connect_private(control, timeout):
+    import os
+    if os.environ.get("FAKE_CONTROL_REFUSES"):
+        raise ConnectionRefusedError(61, "Connection refused")
+    if os.environ.get("FAKE_CONTROL_DENIED"):
+        raise PermissionError(13, "Permission denied")
     return _Peer()
 '''
 
@@ -1232,7 +1249,8 @@ class ScriptTests(unittest.TestCase):
                                "    return Path(os.environ['HERMES_HOME'])\n",
         "websockets/__init__.py": "", "websockets/asyncio/__init__.py": "",
         "websockets/asyncio/client.py": FAKE_OWNER,
-        "websockets/exceptions.py": "class WebSocketException(Exception):\n    pass\n",
+        "websockets/exceptions.py": "class WebSocketException(Exception):\n    pass\n\n\n"
+                                    "class InvalidMessage(WebSocketException):\n    pass\n",
     }
 
     def test_a_refused_upgrade_ends_with_the_childs_own_line_and_no_traceback(self) -> None:
@@ -1244,6 +1262,38 @@ class ScriptTests(unittest.TestCase):
         self.assertIn("omh-attach: could not reach Hermes' gateway: server rejected WebSocket connection: HTTP 403",
                       tail)
         self.assertFalse([line for line in tail if "Traceback" in line], tail)
+
+    def test_a_gateway_that_is_not_answering_yet_exits_not_ready_so_the_tui_waits(self) -> None:
+        # A restart: Hermes' verdict says starting or draining, or the control socket or the WebSocket refuses.
+        for env, said in (
+            ({"FAKE_RUNTIME_STATE": "starting:deadline"}, "omh-attach: gateway starting: deadline"),
+            ({"FAKE_RUNTIME_STATE": "draining:replaced"}, "omh-attach: gateway draining: replaced"),
+            ({"FAKE_RUNTIME_STATE": "inaccessible:control_timeout"}, "omh-attach: gateway inaccessible: control_timeout"),
+            ({"FAKE_CONTROL_REFUSES": "1"}, "omh-attach: [Errno 61] Connection refused"),
+            ({"FAKE_OWNER_DOWN": "1"}, "omh-attach: could not reach Hermes' gateway: [Errno 61] Connect call failed"),
+            ({"FAKE_CONTROL_SILENT": "1"}, "omh-attach: Hermes' gateway closed its control socket without answering"),
+            ({"FAKE_OWNER_GOES_AWAY": "1"}, "omh-attach: the connection to Hermes' gateway ended (close code 1001)"),
+        ):
+            with self.subTest(env=env):
+                _home, environ = self.hermes(self.ATTACH_API, env=env)
+                with self.assertRaises(GatewayUnavailable) as raised:
+                    self.client(environ).start(ready_timeout=10)
+                self.assertTrue(raised.exception.not_ready, raised.exception)
+                self.assertEqual(raised.exception.returncode, attach.NOT_READY_EXIT)
+                self.assertIn(said, raised.exception.stderr_tail)
+
+    def test_a_gateway_that_refuses_this_client_is_not_waited_for(self) -> None:
+        # A verdict that will not change by waiting, a refused upgrade and a denied socket stay the child's ordinary
+        # failure. So does any other WebSocket client error, a garbled handshake included: telling `InvalidMessage`
+        # apart needs a name INVARIANT 2's closed list for this script does not hold.
+        for env in ({"FAKE_RUNTIME_STATE": "incompatible:runtime_protocol"}, {"FAKE_OWNER_REFUSES": "1"},
+                    {"FAKE_CONTROL_DENIED": "1"}, {"FAKE_OWNER_GARBLED": "1"}):
+            with self.subTest(env=env):
+                _home, environ = self.hermes(self.ATTACH_API, env=env)
+                with self.assertRaises(GatewayUnavailable) as raised:
+                    self.client(environ).start(ready_timeout=10)
+                self.assertFalse(raised.exception.not_ready)
+                self.assertEqual(raised.exception.returncode, 1)
 
     def test_an_owner_that_hangs_up_while_stdin_is_still_open_ends_the_child_with_its_own_code(self) -> None:
         # The TUI holds the child's stdin open, so the stdin reader is still blocked in its read when the relay ends.
