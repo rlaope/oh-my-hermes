@@ -7,20 +7,26 @@ All notable changes will be documented here.
 - **Reports on OMH's routing reach workflow learning, and tasks that only
   name OMH do not.** "OMH가 왜 내 메시지를 code-review로 보냈어?" dispatched
   the code-review it names, because the fold reads the past tense 보냈 as the
-  request cue 보내; and "OMH가 ..." never counted as naming OMH, because the
-  particle stays on the word. Both are fixed, as are three English report
-  shapes: an adverb between OMH and its verb ("OMH apparently chose ..."), a
-  why-question about what OMH did ("Show me why OMH picked them"), and OMH
-  ignoring the request. The other way round, "OMH picked the config. Find out
-  which keys are unused" no longer gets the ~1.1k-char workflow-learning hint:
-  "find out" with a question of its own is the user's task when what OMH
-  picked is a concrete artifact (a config, a file, a module), while a bare
-  "find out why" still asks about what OMH did. Nor does a code edit led by
-  "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
-  module, or a Korean edit request after a period or a line break
-  ("OMH가 설정 파일을 골랐어. 리팩터링해줘"). The 12 router misses #2455
-  listed are fixed on the route hint; no message in the earlier held-out sets
-  that passed before fails now.
+  request cue 보내; a Korean execution cue now matches whole syllables. "OMH가
+  ..." never counted as naming OMH, because the particle stays on the word;
+  it now does, but only in a narrow report shape: one clause with a
+  complaint word (왜, 잘못, 엉뚱, 이상한, ...) and a routing target (스킬,
+  워크플로, 레인, a workflow name, or the user's message routed somewhere),
+  every other clause only asking to look at it. Anything else reads as
+  before. Three English report shapes are fixed too: an adverb between OMH
+  and its verb ("OMH apparently chose ..."), a why-question about what OMH
+  did ("Show me why OMH picked them"), and OMH ignoring the request. The
+  other way round, "OMH picked the config. Find out which keys are unused"
+  no longer gets the ~1.1k-char workflow-learning hint: "find out" with a
+  question of its own is the user's task when what OMH picked is a concrete
+  artifact (by its head noun, never a catalog skill name), while a bare
+  "find out why", a question about the choice itself, or a choice made for
+  the user's own message still reads as a report. Nor does a code edit led
+  by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
+  module. The 12 router misses #2455 listed are fixed on the route hint.
+  Measured offline on the earlier held-out sets and nine fresh sets frozen
+  for this change (1,054 scored messages, hint and chat route), no message
+  the previous router answered right is answered wrong.
 
 - **An answer Hermes sends late no longer acts on what the person moved on
   to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s

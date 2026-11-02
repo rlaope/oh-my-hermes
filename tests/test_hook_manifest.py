@@ -948,6 +948,15 @@ class HookManifestTests(unittest.TestCase):
             "OMH가 레인을 잘못 고른 건 나중에 보고, 지금은 장바구니 API 테스트 짜줘",
             "OMH가 회원인증 라우터 파일을 열었어",
             "OMH가 chose the parser module. 라우팅 규칙 정리해줘",
+            # Sixth review: a routing word as a code noun, 모드, a routing verb
+            # in a coding sense, 결과 / 이유 statements, 왠지, praise.
+            "OMH가 스킬 레지스트리 코드를 잘못 고쳤어",
+            "OMH가 디버그 모드를 이상하게 켰어",
+            "OMH가 함수에 엉뚱한 인자를 넘겼어",
+            "OMH가 측정 결과를 엉뚱한 파일에 저장했어",
+            "OMH가 이 버전을 고른 이유를 적어 뒀어",
+            "OMH가 왠지 잘해",
+            "OMH가 picked a tidy layout, thanks",
             # A statement in the casual 해 form is no report clause either.
             "OMH가 고른 건 라우터 브랜치야",
         )
@@ -962,8 +971,9 @@ class HookManifestTests(unittest.TestCase):
             "OMH가 왜 내 인사를 다른 스킬로 보냈어?",
             "OMH가 내 인사를 잘못 라우팅했어",
             "OMH가 picked the wrong skill again",
-            # What OMH routes to, then a bare cause question of its own.
-            "OMH가 이상한 모드를 띄웠어. 이유가 뭘까?",
+            # What OMH routes to, then a clause that only asks about it.
+            "OMH가 이상한 레인을 띄웠어. 이유가 뭘까?",
+            "OMH가 엉뚱한 스킬을 골랐어. 왜 그런지 봐 줘",
         ):
             with self.subTest(message=message):
                 self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")

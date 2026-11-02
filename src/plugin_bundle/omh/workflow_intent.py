@@ -1094,91 +1094,155 @@ def _matched_execution_cues(normalized: str, compact: str) -> tuple[str, ...]:
     return tuple(matches)
 
 
-# A Korean report on OMH's routing has two legs in the clause that names OMH:
-# a complaint (a feedback cue, 왜, or the word 원인) and a routing leg (a
-# routing verb, or what OMH routes to). "OMH가 테스트를 잘못 짰어" complains
-# about OMH's coding work, not its routing, and gives no context. Read as
-# word stems on the composed text (#2485 review).
-_KOREAN_ROUTING_VERB_STEMS = ("보냈", "골랐", "라우팅", "넘겼", "띄웠", "분류", "선택")
-_KOREAN_ROUTING_OBJECTS = ("스킬", "워크플로", "레인", "라우팅", "모드")
-_KOREAN_CAUSE_WORDS = ("왜", "원인", "이유", "결과")
-# A clause that only asks about the report has nothing but these besides a
-# cause word and its closing predicate: "왜 그런지 봐 줘", "원인 좀 알려줘",
-# "결과 보고해 줘", "왜?".
-_KOREAN_BARE_REPORT_WORDS = frozenset(
-    {"그런지", "그랬는지", "그런", "건지", "그래", "그랬어", "그럴까", "뭔지", "뭘까", "뭐야", "어디서", "잘못됐는지",
-     "좀", "같이", "한번", "다시", "그거", "그건"}
+# A Korean report on OMH's routing, for a particle-only product mention, is
+# a narrow whitelist (#2485 review): one clause that names OMH carries a
+# complaint word and a routing target, and every other clause only asks to
+# look at it. Anything else reads exactly as on origin/main, so a form these
+# lists miss costs a report, never a regression. Read as whole words on the
+# composed text.
+#
+# What OMH routes to, as a whole word carrying a case particle ("스킬을",
+# "워크플로로"); a bare word before another noun is a compound and the user's
+# code ("스킬 로더", "워크플로 엔진").
+_KOREAN_ROUTING_TARGETS = ("스킬", "워크플로", "워크플로우", "레인")
+_KOREAN_CASE_PARTICLES = frozenset({"이", "가", "을", "를", "은", "는", "로", "으로", "에", "도"})
+# Routing done to the user's own message: "내 질문을 ... 로 보냈어".
+_KOREAN_USER_MESSAGES = frozenset({"질문", "메시지", "요청", "인사", "말", "대답", "답"})
+_KOREAN_ROUTING_VERB_STEMS = (
+    "보냈", "보낸", "보내는", "넘겼", "넘긴", "넘기는", "골랐", "고른", "골라", "고르는",
+    "선택했", "선택한", "분류했", "분류한", "라우팅했", "라우팅한",
 )
-_KOREAN_AUXILIARIES = frozenset({"줘", "줘요", "주세요", "주라", "줄래", "봐", "봐요", "봐줘"})
+# The complaint word, whole: 왜 alone (not 왠지), and words that start with
+# the rest; 이상 only in its "odd" forms.
+_KOREAN_COMPLAINT_WORDS = frozenset({"왜", "또"})
+_KOREAN_COMPLAINT_STEMS = ("잘못", "엉뚱", "이상한", "이상하", "이상해", "오해", "누락")
+# The words that may follow 라우팅 when it is the routing itself that went
+# wrong ("라우팅을 잘못했어", "라우팅이 이상해"), not a routing component.
+_KOREAN_ROUTING_ACTIVITY_TAIL = ("잘못", "이상", "엉망", "했", "해", "한", "됐", "돼", "좀", "자꾸", "계속", "또")
+# A clause that only asks to look at the report: an optional cause part, an
+# optional look verb, an optional auxiliary, and fillers.
+_KOREAN_LOOK_FILLERS = frozenset({"좀", "같이", "한번", "다시", "혹시"})
+_KOREAN_WHY_ANAPHORS = frozenset({"그런지", "그랬는지", "그런", "건지", "그래", "그랬어", "그럴까", "그랬어요", "그래요"})
+_KOREAN_CAUSE_ASKS = frozenset({"뭐야", "뭘까", "뭔지", "뭐였는지", "뭐예요"})
+_KOREAN_LOOK_VERB_STEMS = ("봐", "보자", "볼래", "알려", "확인해", "설명해", "보고해", "말해")
+_KOREAN_AUXILIARY_STEMS = ("줘", "주", "줄")
 
 
 def _korean_words(text: str) -> list[str]:
     return TOKEN_RE.findall(unicodedata.normalize("NFC", text))
 
 
-def _korean_request(clause: str) -> bool:
-    return leads_with_code_edit(clause) or ends_in_korean_request(clause)
+def _with_case_particle(word: str, stem: str) -> bool:
+    return word.startswith(stem) and word[len(stem):] in _KOREAN_CASE_PARTICLES
 
 
-def _korean_cause_word(word: str) -> bool:
-    return any(_korean_word_is_cue(word, cue) for cue in _KOREAN_CAUSE_WORDS)
+def _korean_complaint(words: list[str]) -> bool:
+    if any(word in _KOREAN_COMPLAINT_WORDS or word.startswith(_KOREAN_COMPLAINT_STEMS) for word in words):
+        return True
+    if any(_korean_word_is_cue(word, "원인") for word in words):
+        return True
+    # 이유 only as a question: "이유가 뭐야", "이유 알려줘", "이유는?".
+    return any(
+        _korean_word_is_cue(word, "이유")
+        and (index + 1 == len(words) or words[index + 1] in _KOREAN_CAUSE_ASKS or words[index + 1].startswith("알려"))
+        for index, word in enumerate(words)
+    )
 
 
-def _bare_korean_report_question(clause: str) -> bool:
-    """`clause` only asks about the report before it ("왜 그런지 봐 줘", "원인 좀 알려줘", "왜?"), with no work of its own."""
-    words = _korean_words(clause)
-    if not any(_korean_cause_word(word) for word in words):
+def _korean_routing_target(words: list[str]) -> bool:
+    names = _skill_shortlist.catalog_skill_names() or frozenset()
+    for index, word in enumerate(words):
+        if any(_with_case_particle(word, stem) for stem in _KOREAN_ROUTING_TARGETS):
+            return True
+        if any(_with_case_particle(word, name) for name in (*WORKFLOW_VOCABULARY, *names) if word.startswith(name)):
+            return True
+        if _with_case_particle(word, "라우팅") and all(
+            later.startswith(_KOREAN_ROUTING_ACTIVITY_TAIL) for later in words[index + 1 :]
+        ):
+            return True
+    return False
+
+
+def _korean_message_routed(words: list[str]) -> bool:
+    """The user's own message routed somewhere: "내 질문을 ultrawork로 보냈어"."""
+    if not any(word.startswith(_KOREAN_ROUTING_VERB_STEMS) for word in words):
         return False
-    content = words[:-1]
-    if words and words[-1] in _KOREAN_AUXILIARIES:
-        content = words[:-2]
-    return all(_korean_cause_word(word) or word in _KOREAN_BARE_REPORT_WORDS for word in content)
+    return any(
+        word == "내" and any(
+            any(_with_case_particle(later, noun) for noun in _KOREAN_USER_MESSAGES) for later in words[index + 1 : index + 4]
+        )
+        for index, word in enumerate(words)
+    )
+
+
+def _korean_look_question(clause: str) -> bool:
+    """`clause` only asks to look at the report before it ("왜 그런지 봐 줘", "원인 알려줘", "확인해 줘", "왜?")."""
+    words = [word for word in _korean_words(clause) if word not in _KOREAN_LOOK_FILLERS]
+    if not words:
+        return False
+    index, asked = 0, False
+    if words[index : index + 1] == ["왜"]:
+        index, asked = index + 1, True
+        while words[index : index + 1] and words[index] in _KOREAN_WHY_ANAPHORS:
+            index += 1
+    elif words[index : index + 1] and (_korean_word_is_cue(words[index], "원인") or _korean_word_is_cue(words[index], "이유")):
+        index, asked = index + 1, True
+        while words[index : index + 1] and words[index] in _KOREAN_CAUSE_ASKS:
+            index += 1
+    elif words[index : index + 3] == ["어떻게", "된", "건지"]:
+        index, asked = index + 3, True
+    if words[index : index + 1] and words[index].startswith(_KOREAN_LOOK_VERB_STEMS):
+        index, asked = index + 1, True
+    if words[index : index + 1] and words[index].startswith(_KOREAN_AUXILIARY_STEMS):
+        index += 1
+    return asked and index == len(words)
 
 
 def _korean_omh_report_clauses(normalized: str) -> tuple[str, ...]:
-    """The clauses that report on OMH's routing, for a particle-only product mention; () when none.
+    """The clauses of a report on OMH's routing, for a particle-only product mention; () when none.
 
-    The clause that names OMH is no request, has a routing leg, and has a
-    complaint leg of its own, or names what OMH routes to and is followed by
-    a bare cause question ("OMH가 엉뚱한 스킬을 골랐어! 왜 그래?"). Any other
-    clause that asks for work of its own ("그건 나중에 보고, 지금은 API 테스트
-    짜줘") withholds the reading: the user reported and then asked for other
-    work, which reads as on origin/main. The lists here only grant from a
-    clause that already names OMH, so a form they miss reads as on main.
+    One clause names OMH with a particle, is no request, and carries a
+    complaint word and a routing target (or the user's message routed
+    somewhere); every other clause only asks to look at it.
     """
     clauses = korean_clauses(normalized)
-    if any(_korean_request(clause) and not _bare_korean_report_question(clause) for clause in clauses):
-        return ()
     for index, clause in enumerate(clauses):
-        if not _product_names_before_particle(clause) or _korean_request(clause):
+        if not _product_names_before_particle(clause) or leads_with_code_edit(clause) or ends_in_korean_request(clause):
             continue
         words = _korean_words(clause)
-        names_target = any(word.startswith(_KOREAN_ROUTING_OBJECTS) for word in words) or bool(
-            _mentioned_workflows(clause, set(routing_tokens(clause, stopwords=set())))
-        )
-        routing = names_target or any(word.startswith(_KOREAN_ROUTING_VERB_STEMS) for word in words)
-        if not routing:
+        if not _korean_complaint(words) or not (_korean_routing_target(words) or _korean_message_routed(words)):
             continue
-        complaint = bool(_matched_cues(_FEEDBACK_CUES, clause, clause.replace(" ", ""))) or any(
-            _korean_cause_word(word) for word in words
-        )
-        bare_after = tuple(later for later in clauses[index + 1 :] if _bare_korean_report_question(later))
-        if complaint or (names_target and bare_after):
-            return (clause, *bare_after)
+        others = clauses[:index] + clauses[index + 1 :]
+        if all(_korean_look_question(other) for other in others):
+            return (clause, *others)
+        return ()
     return ()
 
 
+# A complaint word in the English clause after the particle ("OMH가 picked
+# the wrong skill again"): not the choice alone, which may be praise.
+_ENGLISH_COMPLAINT_WORDS = frozenset({"wrong", "wrongly", "weird", "again", "why", "instead"})
+
+
 def _english_report_after_particle(normalized: str) -> tuple[str, ...]:
-    """An English complaint after the particle ("OMH가 picked the wrong skill again"), with no Korean request for other work."""
-    if any(_korean_request(clause) and not _bare_korean_report_question(clause) for clause in korean_clauses(normalized)):
-        return ()
+    """An English complaint after the particle, every Korean clause beside it only asking to look at it."""
     if not _reports_omh_behaviour(normalized):
         return ()
-    return tuple(
-        clause
-        for clause in _CLAUSE_BREAK.split(normalized)
-        if _clause_reports_omh_behaviour(ordered_words(clause)) and _clause_complains(clause)
-    )
+    reports = []
+    for clause in _CLAUSE_BREAK.split(normalized):
+        words = ordered_words(clause)
+        if not _clause_reports_omh_behaviour(words):
+            continue
+        if set(words) & _ENGLISH_COMPLAINT_WORDS or any(pair in _USER_OCCASION_PAIRS for pair in zip(words, words[1:])):
+            reports.append(clause)
+    if not reports:
+        return ()
+    for clause in korean_clauses(normalized):
+        if _product_names_before_particle(clause) or all(word.isascii() for word in _korean_words(clause)):
+            continue
+        if not _korean_look_question(clause):
+            return ()
+    return tuple(reports)
 
 
 def _product_names_before_particle(normalized: str) -> tuple[str, ...]:

@@ -9473,6 +9473,59 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "file_or_text",
         "workflow-learning",
     ),
+    # #2485 sixth review: each grant rule on its own, with no request:
+    # a routing word as a code noun, a routing verb in a coding sense, 결과 /
+    # 이유 statements, 왠지, a later request in an unlisted ending, and English
+    # praise after the particle.
+    RoutingPrecisionCase(
+        "korean-routing-word-as-code-noun-is-not-a-report",
+        "A routing word inside a code noun (레인 감지 코드) is not a report on OMH's routing",
+        "OMH가 레인 감지 코드를 이상하게 바꿨어",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-routing-verb-in-a-coding-sense-is-not-a-report",
+        "OMH starting a server on an odd port (띄웠어) is not a report on OMH's routing",
+        "OMH가 테스트 서버를 엉뚱한 포트로 띄웠어",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-result-statement-is-not-a-report",
+        "OMH tabulating benchmark results (결과) is not a report on OMH's routing",
+        "OMH가 성능 측정 결과를 표로 정리했어",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-reason-statement-is-not-a-report",
+        "OMH writing down why it chose a design (이유) is not a report on OMH's routing",
+        "OMH가 이 설계를 고른 이유를 문서에 남겼어",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-somehow-praise-is-not-a-report",
+        "왠지 is not 왜: praise for OMH's review is not a report on OMH's routing",
+        "OMH가 왠지 오늘따라 리뷰를 잘해",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-report-then-unlisted-request-for-other-work-is-a-task",
+        "A routing report, then other work in an unlisted request ending, is a task",
+        "OMH가 엉뚱한 스킬을 골랐어. 그건 됐고 결제 폼 검증 로직 짜 주실 수 있을까요?",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "english-praise-after-particle-is-not-a-report",
+        "English praise after the particle is not a report on OMH's routing",
+        "OMH가 picked a clean module layout, nice",
+        "answer_clarification",
+        "",
+    ),
     # #2485 fifth review: a Korean report needs a routing leg beside the
     # complaint in the OMH clause, a later request for other work withholds
     # it, 원인 is a word and not a substring, and an English clause after the
@@ -12372,6 +12425,18 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # (origin/main asked a question).
     # #2485 fifth review: OMH missing a test is its coding work, so the code
     # request keeps its lane (d4fdeeb56 dispatched workflow-learning).
+    # #2485 sixth review: a Korean report with a complaint word and a routing
+    # target reaches workflow-learning (origin/main asked a question).
+    RoutingInterventionCase(
+        "korean-omh-sent-my-greeting-to-an-odd-workflow-reaches-workflow-learning",
+        "A Korean report that OMH sent a greeting to an odd workflow reaches workflow learning",
+        "OMH가 내 인사를 이상한 워크플로로 보냈어",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
     RoutingInterventionCase(
         "korean-omh-missed-a-test-then-add-tests-keeps-coding-lane",
         "A Korean note that OMH missed a test, then a request to add tests, keeps the coding lane",

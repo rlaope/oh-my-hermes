@@ -968,8 +968,11 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # review: two Korean requests with unlisted endings after a
             # setting sentence stay off it too (+2). Its fifth review: a
             # coding-work complaint, a deferred complaint, 회원인증, and an
-            # English choice before a Korean request stay off it (+4).
-            expected=1336,
+            # English choice before a Korean request stay off it (+4). Its
+            # sixth review: seven request-free controls, one per grant rule
+            # (code noun, coding verb, 결과, 이유, 왠지, an unlisted later request,
+            # English praise after the particle) (+7).
+            expected=1343,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1544,8 +1547,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # Its fourth review: a Korean 정리해 둬 after a setting sentence keeps
             # toolbelt-readiness, and a Korean report on OMH's routing reaches
             # workflow-learning (+2). Its fifth review: OMH missing a test, then
-            # a request to add tests, keeps ultrawork (+1).
-            expected=1226,
+            # a request to add tests, keeps ultrawork (+1). Its sixth review: a
+            # Korean report that OMH sent a greeting to an odd workflow reaches
+            # workflow-learning (+1).
+            expected=1227,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
