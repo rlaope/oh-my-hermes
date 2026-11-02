@@ -16,6 +16,7 @@ try:
     from ..install.config_adapter import ConfigChange, ensure_external_dir, remove_external_dir, update_config
     from ..system.local_store import atomic_write_json, read_json_object_result
     from ..system.paths import managed_command_bin_dir
+    from .generation_hold import held_generations
     from .self_update_platform import SelfUpdatePlatform
     from .self_update_state_validation import parse_gc_entries, parse_generation_entry, parse_marker, parse_state, require_generation_path, same_existing_path
 except ImportError:  # pragma: no cover - direct-source installer smoke.
@@ -23,6 +24,7 @@ except ImportError:  # pragma: no cover - direct-source installer smoke.
     from install.config_adapter import ConfigChange, ensure_external_dir, remove_external_dir, update_config
     from system.local_store import atomic_write_json, read_json_object_result
     from system.paths import managed_command_bin_dir
+    from install.generation_hold import held_generations
     from install.self_update_platform import SelfUpdatePlatform
     from install.self_update_state_validation import parse_gc_entries, parse_generation_entry, parse_marker, parse_state, require_generation_path, same_existing_path
 
@@ -36,7 +38,11 @@ class GenerationEntry(TypedDict):
     version: str
 
 
-class CleanupResult(TypedDict):
+class _CleanupFields(TypedDict, total=False):
+    reason: str
+
+
+class CleanupResult(_CleanupFields):
     collected: list[str]
 
 
@@ -153,7 +159,8 @@ def _record_activation(state: dict[str, Any], identifier: str) -> None:
     # must know which generation was current at a recorded gateway start.
     history = [entry for entry in state.get("activations") or () if isinstance(entry, dict)]
     if not history:
-        # Activated before this record existed: earlier than every later entry.
+        # Activated before this record existed, at a time nobody wrote down.
+        # `None` is that unknown time, never "before every gateway start".
         history.append({"id": str(state["active"].get("id", "")), "activated_at": None})
     marker = state.get("activation_in_progress")
     switched = marker.get("marker_written_at") if isinstance(marker, dict) else None
@@ -161,24 +168,40 @@ def _record_activation(state: dict[str, Any], identifier: str) -> None:
     state["activations"] = history
 
 
-def _held_by_gateways(state: dict[str, Any], gateway_starts: Iterable[float]) -> set[str]:
-    """The newest generation activated at or before each recorded gateway start."""
+def _held_by_gateways(state: dict[str, Any], gateway_starts: Iterable[float]) -> tuple[set[str], list[float]]:
+    """The newest generation activated at or before each recorded gateway start.
+
+    Also returns the starts no stamped activation precedes: the generation
+    current then was activated before the history began (its row, if any,
+    has no time) or its row is gone, so the history cannot name it.
+    """
     activations: list[tuple[str, float]] = []
     for entry in state.get("activations") or ():
-        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str):
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or entry.get("activated_at") is None:
             continue
-        stamp = entry.get("activated_at")
         try:
-            activated = float("-inf") if stamp is None else datetime.fromisoformat(str(stamp)).timestamp()
+            activated = datetime.fromisoformat(str(entry["activated_at"])).timestamp()
         except (ValueError, OverflowError, OSError):
             continue
         activations.append((entry["id"], activated))
     held: set[str] = set()
+    unresolved: list[float] = []
     for start in gateway_starts:
         current = [identifier for identifier, activated in activations if activated <= start]
         if current:
             held.add(current[-1])
-    return held
+        else:
+            unresolved.append(start)
+    return held, unresolved
+
+
+def _created_after(name: str, moment: float) -> bool:
+    """Whether a generation id's creation stamp proves it was made after `moment`."""
+    try:
+        created = datetime.strptime(name[:20], "%Y%m%d%H%M%S%f").replace(tzinfo=UTC).timestamp()
+    except ValueError:
+        return False
+    return created > moment
 
 
 def commit_activation(root: Path, state: dict[str, Any], candidate: Path) -> None:
@@ -224,12 +247,27 @@ def collect_garbage(
     keep = parse_gc_entries(root, state)
     if running_generation is not None:
         keep.add(running_generation.name)
+    # An open OMH TUI (and the gateway attach under it) imports from the
+    # generation it started on for as long as it runs.
+    keep |= held_generations(root)
     # A gateway still serves the generation current at its last recorded
     # start; deleting it leaves Hermes with zero OMH skills until a restart.
-    keep |= _held_by_gateways(state, gateway_starts)
+    held, unresolved = _held_by_gateways(state, gateway_starts)
+    keep |= held
+    # When the history cannot say which generation a gateway started on, only
+    # a generation created after that start is provably not it.
+    latest_unresolved = max(unresolved) if unresolved else None
     generations = root / "generations"
     for item in generations.iterdir() if generations.exists() else ():
         junction = getattr(item, "is_junction", None)
+        if latest_unresolved is not None and item.name not in keep and not _created_after(item.name, latest_unresolved):
+            keep.add(item.name)
+            stamp = datetime.fromtimestamp(latest_unresolved, UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            result["cleanup"]["reason"] = (
+                f"kept generations created before the Hermes gateway start recorded at {stamp}: "
+                "no recorded activation says which one that gateway serves; "
+                "an update collects them once that gateway has restarted, or once its gateway.pid record is gone"
+            )
         if item.name not in keep and not item.is_symlink() and not (junction and junction()):
             shutil.rmtree(item, ignore_errors=True)
             result["cleanup"]["collected"].append(str(item))

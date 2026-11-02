@@ -1543,6 +1543,9 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
         _print_json(result)
     elif result.get("ok"):
         print("OMH update complete: command and workflow pack activated together.")
+        kept = str((result.get("cleanup") or {}).get("reason") or "")
+        if kept:
+            print(f"  note: {kept}")
     else:
         for line in _self_update_stop_lines(result):
             print(line)
