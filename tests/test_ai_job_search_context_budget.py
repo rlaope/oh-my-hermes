@@ -101,8 +101,13 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # input names a check (same 85 characters) and its candidate-set
             # expectation names the class (past the preview cut); only that row
             # moves, and main's producer gives the previous pin d946e521...2173.
-            (skill_capabilities, 529669, FULL_ROW_DELTA_CAP,
-             '2c6ea588105f6b347b0df78d198688dc1256bd14cdcffb1e660f0a09d59bdfd3',
+            # 529669 -> 529956 and the digest re-derived: the app-debugging row
+            # gains its record and redaction lines (+287, #2499); no other row
+            # moved, and main's producer gives the previous digest d946e521...2173.
+            # Merged with #2499 after #2497: both rows' changes; the digest is re-derived from
+            # the producer (#2497's pin before the merge was 2c6ea588...fdd3, #2499's 509aec41...ecd8).
+            (skill_capabilities, 529956, FULL_ROW_DELTA_CAP,
+             '2f644f532db7605d99bd3a10c129be6fede9dacc8d8bc5b36e5c2a8a140fec43',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -232,11 +237,39 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # #2488 adds the short-promo line to show-reel's idea lane (only
         # show-reel moves); main's pin before it is
         # 52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c.
+        # #2502 adds frontend's state-discipline, forms-and-input and
+        # browser-support lines and frontend-refactor's visual-parity clause;
+        # only frontend and frontend-refactor move, and main's producer gives
+        # the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # Its second review round (dialog Escape under closedby="none", the
+        # close-watcher wording, the support-target wording) moves frontend
+        # only; the round before gives
+        # 99bdb5f2edb3a7fd2f2f79dd3b2f9fb96c9a8ee5b560b05f837fbc6b27fc0f84.
+        # Then plan's vertical-slice line and checklist item, and
+        # decision-prototype's artifact-shapes pointer (body and quality bar);
+        # only plan and decision-prototype move, and main's producer gives the
+        # previous pin ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # The #2503 review round (the refactor-plan handoff named by its real
+        # shape, every earlier same-file slice as a direct dependency, the
+        # append-only file task, and the checklist matching the bar) moves
+        # plan only; the round's first commit gives the previous pin
+        # f0f941b8604a5e4680dad6819edb593cf59048d03d84c4567279dfad8908bf42.
+        # Merged with main after #2502: both sides' bodies; main's pin before the
+        # merge was e498851bd607d40942631386858a10c1ed1ea5ea8e3a17a033b866d2c1bbe956.
+        # #2499 adds the debugging-record and regression-witness lines; only
+        # app-debugging, native-debugging and verification-gate move, and
+        # main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # Merged with #2503's branch: both sides' bodies; #2503's pin before the merge was
+        # e352ad0c1c3d64e7f0fa179df5e11f9637816c2f628a2dd2d6434efb2566b230.
         # Then code-review's standards-discovery loader line and the own-output
         # checklists of codebase-onboarding and rules-distill; only those three
         # move, and main's producer gives the previous pin
         # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
-        self.assertEqual(_digest(legacy_hashes), '0336fdd748d41bc3a44d8382d6a5a50830a11cc8337aba694fc3e9d2ca21fdd3')
+        # Merged with #2499's branch (carrying #2503): both sides' bodies; the pin before the merge was
+        # 48c0ed82d69ebd2b692ed81fd74666257858f4e86a7ac384dabe8c685605f242.
+        self.assertEqual(_digest(legacy_hashes), '18d2ace67bd082ee6a0acef68039dec1aafb0b3dc9f7590a08c26118436755db')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
