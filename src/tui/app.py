@@ -2134,6 +2134,7 @@ class App(ModesMixin, AgentViewMixin):
         self.card_state = CARD_NONE if resume else CARD_LIVE
         if resume:
             self._draw_history(result.get("messages"))
+        self._say_gateway_health()  # under a resumed session's history, where the launch's screen ends
         self._redeliver(result.get("open_requests"))
         if pick:
             self._sessions("")
@@ -2162,6 +2163,27 @@ class App(ModesMixin, AgentViewMixin):
             self.theme = self._themed()
         elif home is not None:
             self.transcript.add_notice(LAUNCH_UNKNOWN_NOTICE.format(name=saved, path=theme_store_path(home)), NOTICE_WARN)
+
+    def _say_gateway_health(self) -> None:
+        """Say once, at launch, why Hermes' gateway needs a restart and the command, read from its files alone.
+
+        The shared gateway's files are in the root home; a profile running its
+        own gateway has them in its own. Nothing is restarted, and nothing
+        is said when the files show nothing (`gateway_notices`).
+        """
+        from ..maintenance.hermes_gateway import gateway_notice_home, gateway_notices
+
+        history = history_path(self.environ)
+        if history is None:
+            return
+        current = history.parent
+        root = current.parent.parent if current.parent.name == "profiles" else current
+        homes = [gateway_notice_home(root)]
+        if current != root:
+            homes.append(gateway_notice_home(current, current.name))
+        for home, label, command in homes:
+            for notice in gateway_notices(home, label=label, restart_command=command):
+                self.transcript.add_notice(notice.text, NOTICE_WARN)
 
     def _whats_new_on_launch(self) -> None:
         """Put this version's What's new under the launch card when it is due (`whats_new.is_due`), to be recorded as
