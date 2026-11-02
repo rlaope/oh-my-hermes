@@ -590,7 +590,7 @@ FAILED_GRAPH = {
         *NATIVE_GRAPH["nodes"],
         {"id": "broke", "kind": "lane", "title": "Failed child", "state": "failed", "model": "openai/gpt-5.6", "session_tail": "broke01"},
     ],
-    "edges": [*NATIVE_GRAPH["edges"], {"from": "root", "to": "broke"}],
+    "edges": [*NATIVE_GRAPH["edges"], {"from": "drawn", "to": "broke"}],
 }
 STUCK_AND_FAILED_GRAPH = {
     **NATIVE_GRAPH,
@@ -1319,11 +1319,17 @@ class DesktopPluginNodeTests(unittest.TestCase):
         narrow = css[css.index("@container (max-width: 420px)") :]
         narrow = narrow[: narrow.index("}}") + 2]
         self.assertIn(".omh-pane-lane{grid-template-columns:14px minmax(0,1fr) 64px}", narrow)
-        self.assertIn(".omh-pane-lane-model{grid-column:2/-1;grid-row:2;max-width:none}", narrow)
+        self.assertIn(".omh-pane-lane-model{grid-column:2/-1;grid-row:2;max-width:none;padding-left:var(--omh-lane-indent,0)}", narrow)
         self.assertIn(".omh-pane-lane-state{grid-column:3;grid-row:1}", narrow)
-        # Both cells of a lane carry the lane's indent, so the model stays under its own title.
+        # The lane's indent rides a variable: the title always takes it, the model only on its own
+        # line in a narrow pane, so a wide row's model cell is not narrowed by it.
+        self.assertIn(".omh-pane-lane-title{min-width:0;padding-left:var(--omh-lane-indent,0);", css)
+        wide_model = css[css.index(".omh-pane-lane-model{") : css.index("}", css.index(".omh-pane-lane-model{"))]
+        self.assertNotIn("omh-lane-indent", wide_model)
         lanes = [node for node in report["renders"]["failed_lane"]["structure"] if node["className"] == "omh-pane-lane"]
         self.assertEqual(len(lanes), 2)
+        # `broke` runs after `drawn`, one step in: its row carries the indent, the top lane none.
+        self.assertEqual([node.get("style") for node in lanes], [None, {"--omh-lane-indent": "12px"}])
         model = next(node for node in report["renders"]["failed_lane"]["structure"] if "omh-pane-lane-model" in node["className"])
         self.assertEqual(model["text"], "gpt-5.6")
 

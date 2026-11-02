@@ -1359,10 +1359,10 @@ export const PANE_CSS = `
 .omh-pane-run{padding:0 0 3px;color:var(--ui-text-secondary);overflow-wrap:anywhere}
 .omh-pane-lane{display:grid;grid-template-columns:14px minmax(0,1fr) auto 64px;gap:0 6px;align-items:baseline;min-width:0;padding:1px 0}
 .omh-pane-lane-glyph{text-align:center}
-.omh-pane-lane-title{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.omh-pane-lane-title{min-width:0;padding-left:var(--omh-lane-indent,0);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .omh-pane-lane-model{max-width:96px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:var(--ui-text-quaternary)}
 .omh-pane-lane-state{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;text-align:right}
-@container (max-width: 420px){.omh-pane-lane{grid-template-columns:14px minmax(0,1fr) 64px}.omh-pane-lane-glyph{grid-row:1}.omh-pane-lane-title{grid-column:2;grid-row:1}.omh-pane-lane-state{grid-column:3;grid-row:1}.omh-pane-lane-model{grid-column:2/-1;grid-row:2;max-width:none}}
+@container (max-width: 420px){.omh-pane-lane{grid-template-columns:14px minmax(0,1fr) 64px}.omh-pane-lane-glyph{grid-row:1}.omh-pane-lane-title{grid-column:2;grid-row:1}.omh-pane-lane-state{grid-column:3;grid-row:1}.omh-pane-lane-model{grid-column:2/-1;grid-row:2;max-width:none;padding-left:var(--omh-lane-indent,0)}}
 .omh-pane-more{padding:2px 0 0 20px;font-size:11px;color:var(--ui-text-quaternary)}
 .omh-agent{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:1px 6px;align-items:baseline;min-width:0;padding:3px 0}
 .omh-agent-glyph{text-align:center}
@@ -1689,14 +1689,14 @@ function DelegationSection({ payload }) {
     : view.lanes.map(function (lane, index) {
         return node(
           'div',
-          { className: 'omh-pane-lane' },
+          { className: 'omh-pane-lane', style: lane.depth ? { '--omh-lane-indent': `${lane.depth * 12}px` } : undefined },
           [
             span(`omh-pane-lane-glyph ${toneClass(lane.tone)}`, lane.glyph),
             jsx(Tip, {
               label: [lane.title, lane.model].filter(Boolean).join(' · '),
-              children: node('span', { className: 'omh-pane-lane-title', style: lane.depth ? { paddingLeft: `${lane.depth * 12}px` } : undefined }, lane.title)
+              children: span('omh-pane-lane-title', lane.title)
             }),
-            node('span', { className: 'omh-pane-lane-model omh-pane-mono', style: lane.depth ? { paddingLeft: `${lane.depth * 12}px` } : undefined }, lane.model),
+            span('omh-pane-lane-model omh-pane-mono', lane.model),
             span(`omh-pane-lane-state ${toneClass(lane.tone)}`, lane.state)
           ],
           `lane-${index}`
