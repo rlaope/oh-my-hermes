@@ -25,7 +25,7 @@ import unittest
 from unittest.mock import patch
 
 from _hermes_session_rows import compacted, row as session_row, write_sessions
-from _tui_lines import line_text
+from _tui_lines import badge_text, line_text
 from test_tui_modes import SID, drawn, make_app, type_text
 
 from omh.tui.app import IDLE_READ_SECONDS, WORKING_GLYPHS
@@ -897,7 +897,7 @@ class RowTests(unittest.TestCase):
         self.deliver(process())
         screen = drawn(self.app)
         info = info_row(screen)
-        self.assertTrue(info.startswith(f"  [⚚ OMH Native]  {self.shown()}"), info)
+        self.assertTrue(info.startswith(f"  {badge_text()}  {self.shown()}"), info)
         self.assertTrue(info.endswith("ctrl+t effort"), info)
         rule = next(index for index, line in enumerate(screen) if line.startswith("─") and index > 0)
         self.assertNotIn("background", screen[rule - 1])
@@ -913,7 +913,7 @@ class RowTests(unittest.TestCase):
         self.app.git = SimpleNamespace(state=GitState("main", 0, 0), refresh=lambda: None, stop=lambda: None)
         self.deliver(process(notify=True))
         info = info_row(drawn(self.app))
-        self.assertTrue(info.startswith(f"  [⚚ OMH Native]  branch:main  {GLYPH} background  terminal("), info)
+        self.assertTrue(info.startswith(f"  {badge_text()}  branch:main  {GLYPH} background  terminal("), info)
         self.assertIn("  🔔 will ping you when done", info)
 
     def test_the_finished_row_offers_enter_on_the_info_line(self) -> None:

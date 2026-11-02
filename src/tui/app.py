@@ -6010,7 +6010,7 @@ class App(ModesMixin, AgentViewMixin):
         name = Style(fg=lifted_colour(OMH_SILVER, surface, TEXT_CONTRAST, ink), depth=self.color_depth)
         if self.color_depth == NO_COLOR:
             native = tuple(Span(span.text, replace(span.style, depth=NO_COLOR)) for span in native)
-        forms = badge_forms(self.theme, self._launch_paint().look.brand, native, name)
+        forms = badge_forms(self.theme, self._launch_paint().look.brand, native, name, __version__)
         self.badge_cache = (key, forms)
         return forms
 
