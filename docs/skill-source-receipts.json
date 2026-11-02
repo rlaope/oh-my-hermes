@@ -694,6 +694,39 @@
       "reviewed_on": "2026-10-27",
       "rationale": "Adopted the AI-tell account as an on-demand human-voice reference, a reply-rule sentence and a high-precision reply-lint finding; the persona keeps the voice.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-tech-debt-audit-mattpocock-skills",
+      "candidate_key": "tech-debt-audit@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "7739eaed7f8f3915437a8def198a6d0d7206dbc7",
+      "disposition": "adopted",
+      "decision_ref": "#2501",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the deep-module terms, deletion test, dependency categories and candidate fields as ledger rows; rejected the CDN HTML report, drawn after-diagrams, and the ban on the word boundary.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-refactor-plan-mattpocock-skills",
+      "candidate_key": "refactor-plan@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "7739eaed7f8f3915437a8def198a6d0d7206dbc7",
+      "disposition": "adopted",
+      "decision_ref": "#2501",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted contrasting-constraint interface designs with one recommendation and replace-don't-layer tests; kept the one approval gate instead of the grilling loop.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-ai-slop-cleaner-mattpocock-skills",
+      "candidate_key": "ai-slop-cleaner@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "7739eaed7f8f3915437a8def198a6d0d7206dbc7",
+      "disposition": "adopted",
+      "decision_ref": "#2501",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the deletion test in place of inlining every single-use helper; a module that hides complexity stays whatever its caller count.",
+      "supersedes": null
     }
   ]
 }
