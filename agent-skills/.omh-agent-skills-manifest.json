@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "3115aab841e0678542d1cc9ca03b371df0f188227d2cf53571f3177061ee9d7b",
+  "catalog_revision": "63d5a371e11f2d61d5ce873169916337ed4da608ca50c05445bf6182db53136f",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -145,7 +145,7 @@
     "omh-live-incident-response/references/incident-command-method.md": "8d5ad3bb15d401cf45300ec3d7df126072fcd20bee40e3bc702bd35027b754b7",
     "omh-live-info/SKILL.md": "4e2b9d22572702d42ce437c03ed9ddbb5f6dfeec90e5943e80208ba5c85f24a5",
     "omh-llm-app-dev/SKILL.md": "42b212f44a534f9255ae52cadadd053db7c70ba16f9bacd78596063691a019aa",
-    "omh-llm-app-dev/references/build-rails.md": "2979c3fd501874980aaae20e1cfbbe7b26e9d6b8a4f3fbf29d110dcb5e2e9b52",
+    "omh-llm-app-dev/references/build-rails.md": "d632e0fd790e7afa59cc341e0e31dc290c25212063d13aef9ab76a06687218b0",
     "omh-llm-app-dev/references/eval-harness.md": "cb8788d2b084fde63147d58ef6fddd68750301af07f754a31dac862152b8d27c",
     "omh-llm-app-dev/references/public-board.md": "e69b890be7da4d91ce612722b180b229821db714bd72aa28a55db013364e7cca",
     "omh-llm-app-dev/references/stateful-contracts.md": "7bda4e79b8c60f406d3a4e7ea9d3e4f7c69d6ee80a23416678be678d6dd95816",
@@ -203,7 +203,7 @@
     "omh-run-efficiency/SKILL.md": "cd9b28c343aa07310ddc0bc93360658089df1d7b1f0e9716ece8621f5630d98f",
     "omh-running-work-board/SKILL.md": "76267c0cc095f044e658b95c3befbd7b5f3f3d55f357aa6066f9332179038286",
     "omh-rust/SKILL.md": "99e16f52e40aac40d23d606e1816aa299d89482399a89031a34bb2482e3c73de",
-    "omh-rust/references/rust-discipline.md": "8c70bad69bcc6907aedbe79ba95e2c1bd393a81cce2d2ec9f318e37aaa44fe41",
+    "omh-rust/references/rust-discipline.md": "86a71f0ff670d31e588297a8ae13744f7ec31856f4bfe86b6060f4013a2d4f57",
     "omh-rust/references/ub-escalation.md": "5c6a8c4584c03c6ebdeb03b1300652246326dd425f1cd1e146a588220a470be5",
     "omh-sales-development/SKILL.md": "bb37f7982f460cc096ad9f414cc35639aac99a68f929c565b88151543cdd8a49",
     "omh-sales-development/references/procedure.md": "0ed747dc7a21bee8931023e4f7d78f65a7a9845ccf40cd6b754eeecc2a6aea70",
