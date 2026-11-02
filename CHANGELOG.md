@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Hermes picks up the new OMH skills after an update without a restart.**
+  A running Hermes resolves `skills.external_dirs` once and keeps the path
+  until `config.yaml` changes, so after `omh update` moved the `current`
+  pointer, chats kept the previous generation's OMH skills, or lost them all
+  once that generation was collected, until `hermes gateway restart`. The
+  update now moves the modification time of every Hermes `config.yaml` (the
+  primary home and each bot profile) that names `current/skills`, without
+  rewriting it, and says `Hermes skills refreshed in <N> homes`; a rollback
+  and a `--recover-known-good` do the same after their last pointer switch.
+  New conversations and every skill load use the new pack; a conversation
+  that is already open keeps the skill list it started with until `/new`. A
+  home it could not touch is a warning and a `failed` row under
+  `hermes_skill_refresh`, and does not fail the update. The gateway hint now
+  says what a restart is still for: skills reload on their own, the new OMH
+  plugin code loads only after `hermes gateway restart` (and, for a home
+  whose touch failed, the skills too). The bot-profile line no longer asks
+  for a Hermes Desktop restart to reload skills.
+
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
