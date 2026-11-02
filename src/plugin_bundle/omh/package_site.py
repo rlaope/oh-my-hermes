@@ -137,11 +137,21 @@ def ensure_recorded_package_site() -> str:
 
     Called at `register()` and again before every backend import, so an
     install that finishes after Hermes started is picked up by the next call.
+
+    Once a finder is in place it keeps its directory for as long as that
+    directory is there, even after `omh update` records another: the modules
+    this process already imported came from it, and one process should not
+    mix two installs while it can avoid it. When the directory is gone (an
+    update collected the generation it belonged to), the finder falls forward
+    to the directory the manifest records now, under the same checks a first
+    install passes, because the alternative is that every later `omh.*`
+    import fails until Hermes restarts.
     """
     finder = _installed_finder()
     if finder is not None:
-        return _record(SITE_ADDED, finder.site, finder.version, finder.version)
-    if _omh_importable():
+        if os.path.isfile(os.path.join(finder.site, "omh", "__init__.py")):
+            return _record(SITE_ADDED, finder.site, finder.version, finder.version)
+    elif _omh_importable():
         return _record(SITE_ALREADY_IMPORTABLE)
     if sys.version_info < (3, 11):
         return _record(SITE_UNSUPPORTED_PYTHON)
@@ -165,14 +175,18 @@ def ensure_recorded_package_site() -> str:
         return _record(SITE_UNREADABLE, path, bundle_version=bundle_version)
     if not bundle_version or installed_version != bundle_version:
         return _record(SITE_VERSION_MISMATCH, path, installed_version, bundle_version)
+    import importlib
+
+    if finder is not None:
+        finder.move_to(path, installed_version)
+        importlib.invalidate_caches()
+        return _record(SITE_ADDED, path, installed_version, bundle_version)
     # First on `sys.meta_path`, so `omh.*` submodules are loaded by this
     # finder's read-only loader rather than by the default path finder, which
     # would write `.pyc` files into the installer's tree. It answers for
     # nothing outside `omh`, and only after `_omh_importable` found no `omh`
     # of the interpreter's own, so it shadows nothing.
     sys.meta_path.insert(0, _OmhSiteFinder(path, installed_version))
-    import importlib
-
     importlib.invalidate_caches()
     return _record(SITE_ADDED, path, installed_version, bundle_version)
 
@@ -193,13 +207,20 @@ class _OmhSiteFinder:
     def __init__(self, site: str, version: str) -> None:
         self.site = site
         self.version = version
+        self.former: list[str] = []
+
+    def move_to(self, site: str, version: str) -> None:
+        """Answer from `site` from now on, for packages loaded from the old directory too."""
+        self.former.append(self.site)
+        self.site = site
+        self.version = version
 
     def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> Any:
         if fullname != "omh" and not fullname.startswith("omh."):
             return None
         import importlib.machinery
 
-        search = [self.site] if fullname == "omh" else list(path or ())
+        search = [self.site] if fullname == "omh" else [_moved(entry, self.former, self.site) for entry in path or ()]
         # A submodule is ours only when its parent package came from this
         # directory; any other `omh` is left to the finders after this one.
         if fullname != "omh" and not all(_under(entry, self.site) for entry in search):
@@ -213,6 +234,20 @@ class _OmhSiteFinder:
 
     def invalidate_caches(self) -> None:
         return None
+
+
+def _moved(entry: Any, former: list[str], site: str) -> Any:
+    """`entry` under a directory the finder moved away from, as the same path under `site`."""
+    if not isinstance(entry, str) or not entry or _under(entry, site):
+        return entry
+    child = os.path.normcase(os.path.realpath(entry))
+    for old in former:
+        parent = os.path.normcase(os.path.realpath(old)).rstrip(os.sep)
+        if child == parent:
+            return site
+        if child.startswith(parent + os.sep):
+            return os.path.join(site, child[len(parent) + 1 :])
+    return entry
 
 
 def _under(entry: Any, root: str) -> bool:

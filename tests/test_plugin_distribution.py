@@ -42,6 +42,7 @@ from omh.install.plugin_pack import (
 from omh.plugin_bundle.omh.tools import evidence_tool
 from omh.plugin_bundle.omh.metadata import PROVIDED_HOOKS, PROVIDED_TOOLS, TOOL_FILE_STEMS
 from omh.release_smoke_core import CommandResult
+from omh.version import __version__
 from _module_patch import patch_modules
 
 
@@ -1957,6 +1958,40 @@ class PluginReinstallSafetyTests(unittest.TestCase):
                     self.assertEqual(extra.read_bytes(), b"user-owned content\n")
                     extra.unlink()
 
+    def _age_manifest(self) -> str:
+        manifest_path = self.target / PLUGIN_MANAGED_MANIFEST
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["installed_at"] = "2026-10-30T02:00:00Z"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        return manifest["installed_at"]
+
+    def test_an_unchanged_bundle_is_neither_rewritten_nor_restamped(self) -> None:
+        # Every update used to rewrite the bundle and restamp `installed_at`,
+        # so the gateway restart hint fired after updates that changed nothing.
+        installed_at = self._age_manifest()
+        before = (self.target / "__init__.py").stat()
+        result = install_plugin_bundle(self.paths)
+        self.assertFalse(result["changed"])
+        self.assertFalse(result["files_changed"])
+        manifest = json.loads((self.target / PLUGIN_MANAGED_MANIFEST).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["installed_at"], installed_at)
+        self.assertEqual((self.target / "__init__.py").stat().st_ino, before.st_ino)
+
+    def test_a_moved_package_site_rewrites_only_the_manifest(self) -> None:
+        installed_at = self._age_manifest()
+        before = (self.target / "__init__.py").stat()
+        site = {"path": str(self.root / "generations" / "next" / "venv" / "site-packages"), "version": __version__}
+        with mock.patch("omh.install.plugin_pack.package_site_record", return_value=site):
+            result = install_plugin_bundle(self.paths)
+            current = inspect_plugin_bundle(self.paths)["plugin_manifest_current"]
+        self.assertTrue(result["changed"])
+        self.assertFalse(result["files_changed"])
+        manifest = json.loads((self.target / PLUGIN_MANAGED_MANIFEST).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["package_site"], site)
+        self.assertEqual(manifest["installed_at"], installed_at)
+        self.assertEqual((self.target / "__init__.py").stat().st_ino, before.st_ino)
+        self.assertTrue(current)
+
     def test_a_new_bundled_path_is_not_owned_by_the_old_manifest(self) -> None:
         manifest_path = self.target / PLUGIN_MANAGED_MANIFEST
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -2181,7 +2216,19 @@ class PluginReinstallSafetyTests(unittest.TestCase):
         self.assertFalse((self.target / PLUGIN_MANAGED_MANIFEST).exists())
         self.assertEqual({entry.name for entry in self.target.parent.iterdir()}, {"omh", ".install-metadata.json"})
 
+    def _bundle_change_pending(self) -> None:
+        # An unchanged bundle is no longer staged at all, so the staging guards
+        # below need a refresh that really writes: a managed file the new
+        # bundle no longer ships.
+        obsolete = self.target / "obsolete.py"
+        obsolete.write_bytes(b"# previously shipped\n")
+        manifest_path = self.target / PLUGIN_MANAGED_MANIFEST
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["files"].append({"path": obsolete.name, "sha256": hashlib.sha256(obsolete.read_bytes()).hexdigest()})
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
     def test_addition_during_staging_is_restored_without_replacing_bundle(self) -> None:
+        self._bundle_change_pending()
         from omh.install import plugin_pack as plugin_pack_module
 
         original_copy = plugin_pack_module._copy_resource_tree
@@ -2202,6 +2249,7 @@ class PluginReinstallSafetyTests(unittest.TestCase):
         self.assertEqual({entry.name for entry in self.target.parent.iterdir()}, {"omh"})
 
     def test_managed_edit_during_staging_is_restored_without_replacing_bundle(self) -> None:
+        self._bundle_change_pending()
         from omh.install import plugin_pack as plugin_pack_module
 
         original_copy = plugin_pack_module._copy_resource_tree
@@ -2244,6 +2292,7 @@ class PluginReinstallSafetyTests(unittest.TestCase):
                     )
 
     def test_failed_rollback_keeps_original_in_private_transaction(self) -> None:
+        self._bundle_change_pending()
         original = (self.target / PLUGIN_MANAGED_MANIFEST).read_bytes()
         real_rename = Path.rename
         backups = []

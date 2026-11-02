@@ -242,30 +242,47 @@ def install_plugin_bundle(paths: OmhPaths, *, force: bool = False, dry_run: bool
                 "move these entries outside the plugin directory, or use --force to replace them"
             )
 
-    # A package that moved (an upgrade's new generation, a reinstall through
-    # another channel) changes no bundle file, but the recorded `package_site`
-    # the bundle imports from has to follow it, so it is a change too (#2166).
-    changed = (
+    # A bundle reached through a directory link (an older layout) is
+    # replaced by a real directory even when its files already match.
+    files_changed = (
         force
         or unmanaged
         or existing_manifest is None
+        or is_directory_link(target)
         or _manifest_file_map(existing_manifest) != _record_file_map(source_records)
-        or existing_manifest.get(PACKAGE_SITE_KEY) != package_site_record()
+    )
+    # A package that moved (an upgrade's new generation, a reinstall through
+    # another channel) changes no bundle file, but the recorded `package_site`
+    # the bundle imports from has to follow it (#2166). Only the manifest is
+    # rewritten for that, and it keeps its `installed_at`: a running gateway
+    # already runs these exact bundle bytes, and the restart hint reads that
+    # stamp, so a move alone must not ask anyone to restart.
+    site = package_site_record()
+    site_moved = existing_manifest is not None and not files_changed and (
+        existing_manifest.get(PACKAGE_SITE_KEY) != site or existing_manifest.get("version") != __version__
     )
     result = _plugin_distribution_payload(
         paths,
         dry_run=dry_run,
         observed=False if dry_run else True,
-        changed=changed,
+        changed=files_changed or site_moved,
         file_records=source_records,
         dirty_files=dirty,
     )
+    result["files_changed"] = files_changed
     if dry_run:
         result["observed_scope"] = "dry run only; no plugin files were written"
         return result
-    _copy_plugin_bundle(
-        target, source_records, existing_manifest=existing_manifest, initially_occupied=bool(unmanaged), force=force
-    )
+    if files_changed:
+        _copy_plugin_bundle(
+            target, source_records, existing_manifest=existing_manifest, initially_occupied=bool(unmanaged), force=force
+        )
+    elif site_moved and existing_manifest is not None:
+        moved = {key: value for key, value in existing_manifest.items() if key != PACKAGE_SITE_KEY}
+        moved["version"] = __version__
+        if site is not None:
+            moved[PACKAGE_SITE_KEY] = site
+        atomic_write_json(target / PLUGIN_MANAGED_MANIFEST, moved)
     smoke = inspect_plugin_bundle(paths)
     result.update(
         {

@@ -19,7 +19,7 @@ from omh.commands import setup as setup_commands
 from omh.config_adapter import external_dirs
 from omh.core.errors import OmhError
 from omh.install import installer as installer_commands
-from omh.install import self_update, self_update_state
+from omh.install import generation_hold, self_update, self_update_state
 from omh.install.self_update import Runner, SelfUpdateResult, run_installer_self_update
 from omh.install.self_update_platform import SelfUpdatePlatform, remove_directory_link
 from omh.install.self_update_state import GarbageCollectionResult, STATE_SCHEMA_VERSION, collect_garbage, pointer_target, record_pointer, switch_current
@@ -922,6 +922,97 @@ class StagedSelfUpdateTests(unittest.TestCase):
             _ = (hermes_home / "gateway-starts.log").write_text(f"{datetime(2099, 1, 2, tzinfo=UTC).timestamp()!r}\n")
             self.assertTrue(self._run(root, args, plan, self._runner())["ok"])
             self.assertFalse(held.exists())
+
+    def test_gc_never_reads_an_unstamped_first_activation_as_covering_an_older_gateway(self):
+        # The owner machine on 2026-11-02: the first update that kept a history
+        # recorded the then-active generation with no time. A gateway started
+        # on 10-30 still served the 10-27 generation; reading the unstamped row
+        # as "before every start" held the 10-31 one and deleted 10-27.
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _legacy, _args, _plan = self._fixture(root, pointer=True)
+            names = {
+                "served": "20261027024653159707-aaaaaaaaaa",
+                "after_start": "20261030120000000000-cccccccccc",
+                "unstamped": "20261031021314000000-bbbbbbbbbb",
+                "active": "20261102020057175032-edfca25300",
+            }
+            generations = {key: root / "generations" / name for key, name in names.items()}
+            for generation in generations.values():
+                generation.mkdir(parents=True, exist_ok=True)
+            state: dict[str, JsonValue] = {
+                "active": self._entry(generations["active"]),
+                "previous_known_good": self._entry(generations["unstamped"]),
+                "activations": [
+                    {"id": names["unstamped"], "activated_at": None},
+                    {"id": names["active"], "activated_at": "2026-11-02T02:01:00Z"},
+                ],
+            }
+            start = datetime.fromisoformat("2026-10-29T17:00:50+00:00").timestamp()
+            result: GarbageCollectionResult = {"cleanup": {"collected": []}}
+            collect_garbage(root, state, result, running_generation=None, gateway_starts=[start])
+            self.assertTrue(generations["served"].exists(), "GC deleted the generation an older gateway serves")
+            self.assertTrue(generations["unstamped"].exists())
+            self.assertTrue(generations["active"].exists())
+            # Created after that start, so provably not the one it serves.
+            self.assertFalse(generations["after_start"].exists())
+            self.assertIn("2026-10-29T17:00:50Z", result["cleanup"].get("reason", ""))
+            self.assertIn("no recorded activation says which one that gateway serves", result["cleanup"].get("reason", ""))
+
+    def test_gc_keeps_by_creation_time_only_for_a_start_the_history_cannot_name(self):
+        # Before every stamped activation (g0 at 10-29 12:00): only generations
+        # created after the start are provably not the one it serves. The
+        # fixture's ids carry no creation stamp, so all of them stay.
+        with TemporaryDirectory() as temporary:
+            early = datetime.fromisoformat("2026-10-29T11:00:00+00:00").timestamp()
+            generations = self._gateway_gc(Path(temporary), [early])
+            self.assertTrue(all(generation.exists() for generation in generations.values()))
+
+    def test_human_update_says_why_generations_were_kept(self):
+        kept = {"ok": True, "phase": "cleanup", "cleanup": {"collected": [], "reason": "kept generations created before the Hermes gateway start recorded at 2026-10-29T17:00:50Z"}}
+        output = io.StringIO()
+        with (
+            patch("omh.commands.setup._command_package_self_update_plan", return_value={"should_update": True, "method": "installer"}),
+            patch("omh.install.self_update.run_installer_self_update", return_value=kept),
+            contextlib.redirect_stdout(output),
+        ):
+            status = setup_commands.cmd_update(Namespace(json=False))
+        self.assertEqual(status, 0)
+        self.assertIn("  note: kept generations created before the Hermes gateway start recorded at 2026-10-29T17:00:50Z", output.getvalue())
+
+    def test_gc_keeps_a_generation_an_open_omh_process_holds(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _legacy, _args, _plan = self._fixture(root, pointer=True)
+            active = root / "generations" / "active"
+            tui = root / "generations" / "tui"
+            for generation in (active, tui):
+                (generation / "venv").mkdir(parents=True, exist_ok=True)
+            state: dict[str, JsonValue] = {"active": self._entry(active), "previous_known_good": None}
+            with generation_hold.hold_running_generation(str(tui / "venv")) as held:
+                self.assertEqual(held, "tui")
+                result: GarbageCollectionResult = {"cleanup": {"collected": []}}
+                collect_garbage(root, dict(state), result, running_generation=None)
+                self.assertTrue(tui.exists(), "GC deleted the generation an open OMH TUI imports from")
+            self.assertEqual(list((root / generation_hold.HOLDS_DIRNAME).iterdir()), [])
+            result = {"cleanup": {"collected": []}}
+            collect_garbage(root, dict(state), result, running_generation=None)
+            self.assertFalse(tui.exists())
+
+    def test_a_hold_left_by_a_process_that_died_holds_nothing(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            holds = root / generation_hold.HOLDS_DIRNAME
+            holds.mkdir()
+            stale = holds / ".20261027024653159707-aaaaaaaaaa.4242.lock"
+            stale.touch()
+            self.assertEqual(generation_hold.held_generations(root), set())
+            self.assertFalse(stale.exists())
+
+    def test_a_process_outside_a_generation_takes_no_hold(self):
+        with TemporaryDirectory() as temporary, generation_hold.hold_running_generation(temporary) as held:
+            self.assertEqual(held, "")
+            self.assertFalse((Path(temporary) / generation_hold.HOLDS_DIRNAME).exists())
 
     def test_no_launcher_and_platform_link_failure_are_fail_closed(self):
         with TemporaryDirectory() as temporary:

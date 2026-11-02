@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A running gateway keeps working through `omh update`.** Three causes
+  are fixed. GC could delete the generation an older gateway still served:
+  the first activation it recorded had no time, and GC read that as earlier
+  than every gateway start, so it held the wrong generation. When the
+  history cannot say which generation a gateway started on, GC now keeps
+  every generation created before that start and prints a `note:` saying
+  so. An open OMH TUI holds its own generation the same way, through an OS
+  lock under `generation-holds/`. Every update also rewrote the plugin bundle
+  and restamped `installed_at` even when no bundle file changed, so the
+  gateway restart hint fired after every update; a moved package directory
+  now updates only the manifest's `package_site`, and the hint fires only
+  when the bundle's files change. Last, a gateway's `omh` finder never looked
+  at the manifest again; it now keeps its directory while that exists and
+  falls forward to the recorded one once an update removes it, so later
+  `omh.*` imports keep working.
+
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before

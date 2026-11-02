@@ -229,8 +229,7 @@ class UpdatePrintsRestartHintsTests(unittest.TestCase):
             (miku / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
             status, _, stderr = run_cli(self._base(root) + ["setup"])
             self.assertEqual(status, 0, stderr)
-            # Started well before any bundle this test installs; the update
-            # below rewrites the bundle, so its `installed_at` is later still.
+            # Started well before the bundle setup installed above.
             stale_start = datetime.now(UTC).timestamp() - 86400
             _write_home(hermes_home, starts=[stale_start], pid_record=_record(hermes_home), installed_at=None)
             fresh_start = (datetime.now(UTC) + timedelta(days=1)).timestamp()
@@ -246,6 +245,30 @@ class UpdatePrintsRestartHintsTests(unittest.TestCase):
             self.assertIn("Restart Hermes Desktop for bot chats to reload skills.", stdout)
             self.assertLess(stdout.index("Bot profiles:"), stdout.index("Hermes gateway for"))
 
+
+    def test_an_update_that_changes_no_bundle_file_asks_for_no_restart(self) -> None:
+        # Every update used to restamp `installed_at`, so a gateway started
+        # after the last real bundle change was told to restart anyway.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hermes_home = root / ".hermes"
+            status, _, stderr = run_cli(self._base(root) + ["setup"])
+            self.assertEqual(status, 0, stderr)
+            manifest_path = hermes_home / "plugins" / "omh" / ".omh-plugin-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            installed = datetime.now(UTC) - timedelta(hours=1)
+            manifest["installed_at"] = installed.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            # Started after that install and before this update.
+            _write_home(
+                hermes_home, starts=[installed.timestamp() + 60], pid_record=_record(hermes_home), installed_at=None
+            )
+
+            status, stdout, stderr = run_cli(self._base(root) + ["update"], output_json=False)
+
+            self.assertEqual(status, 0, stderr)
+            self.assertNotIn("Hermes gateway for", stdout)
+            self.assertEqual(json.loads(manifest_path.read_text(encoding="utf-8"))["installed_at"], manifest["installed_at"])
 
 if __name__ == "__main__":
     unittest.main()

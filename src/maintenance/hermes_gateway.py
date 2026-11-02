@@ -17,10 +17,11 @@ and is never read as one here: Hermes' ``_get_process_start_time`` is
 ``create_time() * 100`` (centiseconds) elsewhere -- a per-host PID-reuse
 fingerprint. The starts ledger carries the wall clock, so the comparison
 reads that: the LAST RECORDED START for the home against the bundle
-manifest's ``installed_at``. The stamp is rewritten by every non-dry-run
-update, so the hint names a gateway whose last recorded start precedes this
-update, which is the restart the update's own restart line is about; it
-does not prove the running process is the one that start recorded.
+manifest's ``installed_at``. The stamp is rewritten only when an update
+changes the bundle's files (a moved ``package_site`` alone keeps it), so the
+hint names a gateway whose last recorded start precedes the bundle bytes it
+would now load; it does not prove the running process is the one that start
+recorded.
 
 No signal, no process listing, no subprocess, and nothing here raises: a
 successful update must not end in a traceback over a ledger line that is
