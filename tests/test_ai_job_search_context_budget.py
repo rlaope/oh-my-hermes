@@ -97,8 +97,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 529429 -> 529669 and the digest re-derived: show-reel's idea-video
             # scope widens its row (+240, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved.
+            # Digest re-derived, length unchanged: rules-distill's destination
+            # input names a check (same 85 characters) and its candidate-set
+            # expectation names the class (past the preview cut); only that row
+            # moves, and main's producer gives the previous pin d946e521...2173.
             (skill_capabilities, 529669, FULL_ROW_DELTA_CAP,
-             'd946e521363bf140d24edb97f2a769f4e0a2bc46f3921f45c67a386afc972173',
+             '2c6ea588105f6b347b0df78d198688dc1256bd14cdcffb1e660f0a09d59bdfd3',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -228,7 +232,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # #2488 adds the short-promo line to show-reel's idea lane (only
         # show-reel moves); main's pin before it is
         # 52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c.
-        self.assertEqual(_digest(legacy_hashes), 'ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b')
+        # Then code-review's standards-discovery loader line and the own-output
+        # checklists of codebase-onboarding and rules-distill; only those three
+        # move, and main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        self.assertEqual(_digest(legacy_hashes), '0336fdd748d41bc3a44d8382d6a5a50830a11cc8337aba694fc3e9d2ca21fdd3')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -236,7 +244,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # mandatory Workflow Lane (519) + Runtime Evidence (1446) = 1965, plus
         # 42 bytes of sibling reinforcement rails (+2007).
         # Merged with main: 126593 + 2007 = 128600, re-derived from the producer.
-        self.assertEqual(legacy['repeated']['bytes'], 128600)
+        # 128600 -> 128099: codebase-onboarding's own Completion Checklist and
+        # Recovery Notes replace the planning-category defaults it repeated
+        # (-501); swapping only that body back to main's restores 128600.
+        self.assertEqual(legacy['repeated']['bytes'], 128099)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)
