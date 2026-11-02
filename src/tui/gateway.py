@@ -64,14 +64,25 @@ READER_JOIN_SECONDS = 1.0
 UNREADY_CLOSE_GRACE_SECONDS = 0.5
 # How often a blocking wait given a `cancel` asks it.
 CANCEL_POLL_SECONDS = 0.1
+# What the attach child exits with when the gateway is not answering yet: one restarting or starting (Hermes'
+# `starting` / `draining` verdicts), or a refused, missing or silent control socket or WebSocket. EX_UNAVAILABLE.
+# `gateway_attach.NOT_READY_EXIT` is the same number: that file imports nothing of `omh`.
+GATEWAY_NOT_READY_EXIT = 69
 
 
 class GatewayUnavailable(RuntimeError):
-    """The gateway could not be started, or is gone. `stderr_tail` is what it printed last."""
+    """The gateway could not be started, or is gone. `stderr_tail` is what it printed last; `returncode` is the
+    child's exit code when it exited before `gateway.ready`, else None."""
 
-    def __init__(self, message: str, stderr_tail: tuple[str, ...] = ()) -> None:
+    def __init__(self, message: str, stderr_tail: tuple[str, ...] = (), returncode: int | None = None) -> None:
         super().__init__(message)
         self.stderr_tail = stderr_tail
+        self.returncode = returncode
+
+    @property
+    def not_ready(self) -> bool:
+        """Whether the attach child said the gateway is there but not answering yet (`GATEWAY_NOT_READY_EXIT`)."""
+        return self.returncode == GATEWAY_NOT_READY_EXIT
 
 
 class GatewayCallError(RuntimeError):
@@ -277,7 +288,8 @@ class GatewayClient:
         except (GatewayUnavailable, GatewayTimeout) as error:
             self.close(grace=UNREADY_CLOSE_GRACE_SECONDS, terminate_grace=UNREADY_CLOSE_GRACE_SECONDS)
             # Read the tail after reaping: only then has the drain thread seen every line.
-            raise GatewayUnavailable(str(error), tuple(self.stderr_tail())) from None
+            returncode = error.returncode if isinstance(error, GatewayUnavailable) else None
+            raise GatewayUnavailable(str(error), tuple(self.stderr_tail()), returncode) from None
         except (GatewayCallError, GatewayCancelled):
             self.close(grace=UNREADY_CLOSE_GRACE_SECONDS, terminate_grace=UNREADY_CLOSE_GRACE_SECONDS)
             raise
@@ -421,7 +433,10 @@ class GatewayClient:
                     return ready
                 exited = next((item for item in self._inbox if isinstance(item, GatewayExited)), None)
                 if exited is not None:
-                    raise GatewayUnavailable(f"the gateway exited with code {exited.returncode} before {READY_EVENT}")
+                    raise GatewayUnavailable(
+                        f"the gateway exited with code {exited.returncode} before {READY_EVENT}",
+                        returncode=exited.returncode,
+                    )
                 remaining = deadline - self._clock()
                 if remaining <= 0:
                     raise GatewayUnavailable(f"the gateway sent no {READY_EVENT} within {ready_timeout:g}s")
@@ -457,7 +472,10 @@ class GatewayClient:
             raise self._unavailable(f"the gateway stopped reading its input ({error})") from error
 
     def _unavailable(self, message: str) -> GatewayUnavailable:
-        return GatewayUnavailable(message, tuple(self.stderr_tail()))
+        """The error for a gateway that is gone, with its exit code once its exit has been seen."""
+        with self._inbox_ready:  # reentrant: a caller may already hold it
+            exited = next((item for item in self._inbox if isinstance(item, GatewayExited)), None)
+        return GatewayUnavailable(message, tuple(self.stderr_tail()), exited.returncode if exited else None)
 
     def _read_stdout(self, stream: IO[bytes]) -> None:
         try:
