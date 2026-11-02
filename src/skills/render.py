@@ -4060,6 +4060,10 @@ State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refus
 
 Every step carries its statement, the lock it takes and for how long, its timeout, and its rollback. A plan with any step missing lock behaviour or rollback is not ready.
 
+- **Non-transactional DDL gets its own migration.** Most migration tools wrap each migration in a transaction, and `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY`) refuses to run inside one. Mark that migration non-transactional in the project's tool and keep the statement alone in it. Removing `CONCURRENTLY` to get past the error turns an online build into a write lock.
+- **Each backfill batch runs under a `statement_timeout`** sized to the batch, beside the `lock_timeout`, so a batch that hits a slow plan fails fast and resumes instead of holding locks.
+- **Read the SQL that will run.** When an ORM or migration tool generates the statement, plan against the SQL it emits (its statement log or its to-SQL output), not against the call that produced it.
+
 ## 4. Index selection and sizing
 
 | Need | Index type |
@@ -4070,6 +4074,7 @@ Every step carries its statement, the lock it takes and for how long, its timeou
 | Huge append-only table ordered by time | BRIN |
 | Query touches a known subset | partial index with that `WHERE` |
 | Query reads few columns | covering index (`INCLUDE`) for an index-only scan |
+| Keyset (cursor) pagination: `WHERE (sort_col, id) > ($1, $2) ORDER BY sort_col, id LIMIT n` | B-tree on the equality-filter columns first, then the sort columns in sort direction, then the unique tie-breaker; the plan shows an index scan with no sort step. Mixed sort directions need the index to match them and the predicate written as `OR` terms, because a row comparison assumes one direction |
 
 Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build.
 
@@ -4080,6 +4085,25 @@ The symptom is one query for the list and one more per row, and the count scales
 ## 6. When to partition or shard
 
 Project rows, bytes, and write rate for 12 to 24 months. Partition when one table's maintenance (vacuum, index builds, retention deletes) outgrows its window; partitioning keeps one node. Shard only when a single primary cannot hold the write rate or the working set after vertical scaling, read replicas, and partitioning; name the shard key, the cross-shard queries it breaks, and the rebalancing plan.
+
+## 7. Concurrency
+
+Sections 1 and 2 cover the locks DDL takes. These rules cover two transactions writing the same rows.
+
+| | PostgreSQL | MySQL (InnoDB) |
+| --- | --- | --- |
+| Default isolation | `READ COMMITTED` | `REPEATABLE READ` |
+| Serialization failure | SQLSTATE `40001`, at `REPEATABLE READ` and `SERIALIZABLE` | not raised at the default level; a plain `SELECT` reads an old snapshot while `UPDATE` sees the latest row |
+| Deadlock | SQLSTATE `40P01` | error 1213 (SQLSTATE `40001`); the whole transaction is rolled back |
+| Lock wait timeout | `lock_timeout` raises SQLSTATE `55P03` | error 1205; by default only the statement is rolled back, not the transaction |
+| Upsert | `INSERT ... ON CONFLICT (cols) DO UPDATE` / `DO NOTHING`, with a unique index matching the conflict target | `INSERT ... ON DUPLICATE KEY UPDATE`, which fires on any unique key; with more than one unique key the row it updates is ambiguous |
+| Queue table | `SELECT ... FOR UPDATE SKIP LOCKED` (9.5+) | `SELECT ... FOR UPDATE SKIP LOCKED` (8.0+) |
+
+- **Read-modify-write takes the row lock first.** Read with `SELECT ... FOR UPDATE`, or move the arithmetic into the `UPDATE` itself (`SET qty = qty - $1 WHERE id = $2 AND qty >= $1`) and check the affected row count. A version column compared in the `WHERE` clause works without holding a lock across the read.
+- **A check-then-insert is a race.** Insert under the unique constraint and handle the violation, or use the upsert row above. Never select first and insert if absent.
+- **Lock rows in one order.** Two transactions that lock the same rows in different orders deadlock. Lock in a fixed order, for example `ORDER BY id` in the `FOR UPDATE` query, and lock parents before children everywhere.
+- **Retry the whole transaction, with a bound.** A serialization failure or a deadlock is retried by re-running the transaction from its start, with backoff and a maximum attempt count; retrying the failed statement alone runs it without the locks and effects of the statements before it, which the rollback already undid. Name the error codes that are retried; every other error is not.
+- **Keep the transaction short.** No network call, user wait, or model call happens while a transaction holds row locks.
 """
 
 
@@ -6726,6 +6750,7 @@ def _domain_engineering_reference_templates_cached() -> tuple[SkillReferenceTemp
         SkillReferenceTemplate("backend", "references/service-contract.md", _backend_service_contract_reference()),
         SkillReferenceTemplate("backend", "references/schema-migration.md", _backend_schema_migration_reference()),
         SkillReferenceTemplate("backend", "references/consumer-impact.md", _backend_consumer_impact_reference()),
+        SkillReferenceTemplate("backend", "references/inbound-and-async.md", _backend_inbound_and_async_reference()),
         SkillReferenceTemplate("rust", "references/rust-discipline.md", _rust_discipline_reference()),
         SkillReferenceTemplate("rust", "references/ub-escalation.md", _rust_ub_escalation_reference()),
         SkillReferenceTemplate(
@@ -6747,7 +6772,7 @@ below is something the executor runs, never OMH."""
 
 
 def _backend_service_contract_reference() -> str:
-    return f"""# Backend Service Contract
+    return """# Backend Service Contract
 
 Load this when preparing a server, API, or job surface. The always-loaded skill body states the rules; this is the filling order, the per-stack pointer table, and the failure modes that make a contract look complete while leaving the boundary undefined.
 
@@ -6759,7 +6784,7 @@ Fill in this order, because each step invalidates a guess made earlier out of or
 
 1. **Callers and trust.** List every caller class and mark it public, partner, internal, or machine. An endpoint whose caller class is unnamed cannot have a correct auth check.
 2. **Auth boundary.** Say exactly where an untrusted request becomes a trusted one -- the middleware, the guard, the token exchange -- and which check runs on each path. Authentication (who) and authorization (may they) are two rows, never one.
-3. **Resource and operation shape.** Name each endpoint or job, its operation, and whether it is safe, idempotent, or neither. A non-idempotent operation reachable by a retrying client needs an idempotency key, and that key is part of the contract, not an implementation detail.
+3. **Resource and operation shape.** Name each endpoint or job, its operation, and whether it is safe, idempotent, or neither. A non-idempotent operation reachable by a retrying client needs an idempotency key, and that key is part of the contract, not an implementation detail. Give each one its expected request rate, latency target, and payload bound, or write `unknown` against each: a page cap, a timeout, a cache, or a pool size chosen without them is a guess.
 4. **Response shape.** One success envelope and one error envelope for the whole surface. Per-endpoint improvisation is the most common source of client-side special-casing.
 5. **Error paths.** Every failure mode gets a row before the happy path is called done.
 6. **Storage.** Only now design tables and indexes; the access patterns are known by this point. Migration order goes in `references/schema-migration.md`.
@@ -6784,6 +6809,7 @@ Two rules the table exists to force:
 | unauthorized | 403 | error envelope, no resource hint | no | log subject and object |
 | not found vs not permitted | pick one deliberately | must not leak existence | no | log the real reason |
 | conflict / version mismatch | 409 | current version, expected version | after refetch | log both versions |
+| duplicate create (unique constraint) | 409 | error envelope naming the conflicting field | no; a replay with the same idempotency key gets the stored response | log the constraint name, never the value |
 | upstream dependency failure | 5xx or 503 | error envelope, retry hint | yes, with backoff | log upstream identity |
 | timeout | 504 or 408 | error envelope | yes, bounded | log duration and budget |
 
@@ -6793,11 +6819,30 @@ The two rows that are always argued about and always matter: **not-found versus 
 
 - One envelope shape for success, one for errors, across the surface.
 - Errors carry a stable machine code alongside the human message. Clients branch on the code; the message is for humans and may be localized.
-- Pagination is one style for the whole surface -- cursor or offset, not both -- and the contract names the ordering key. An unstable sort key makes pagination silently lossy.
+- Pagination is one style for the whole surface -- cursor or offset, not both -- and the contract names the ordering key. The key ends in a unique tie-breaker, such as `(created_at, id)` rather than `created_at` alone: a key with ties drops or repeats rows at page boundaries, and nobody sees it happen.
+- A cursor is opaque to the client and encodes the whole ordering tuple plus the filter and sort it was issued for. A cursor sent back with a different filter or sort is rejected as bad input, never reinterpreted.
+- The page size has a server-side maximum, and the contract says whether a larger request is clamped or rejected. A total count is optional and named as its own cost, not computed for every page by default.
+- An offset page reads and discards every row before it, so a surface that pages deep or grows without bound uses a cursor. The index that serves the cursor is a `relational-db` question; name it in the handoff.
 - Time is one representation. Nullability is explicit. An optional field that is sometimes absent and sometimes `null` is two shapes.
 - Versioning: name how a breaking change reaches clients before the first breaking change, not during it.
 
-## 5. Per-stack reference pointers
+## 5. Integrity under concurrency
+
+Every write two requests can reach at the same time names its guard in the contract. A test that sends one request at a time proves none of these.
+
+- **Uniqueness is a constraint.** A rule like "one account per email" is enforced by a unique constraint or index, and the violation maps to the duplicate-create row in section 3. A pre-check that selects and then inserts is only for a friendlier message: two concurrent requests both pass it.
+- **An idempotency key is stored, not just accepted.** Keep the key, scoped to the caller, under a unique constraint, together with a fingerprint of the request and the response it produced. The same key with the same request replays the stored response. The same key with a different request is rejected, with one status chosen for the surface. A second request that arrives while the first is still running gets a defined answer, not a second execution. The contract also says how long keys are kept.
+- **Every update that can race names its lost-update guard.** That is a version column checked in the `WHERE` clause (no row updated means 409), an update computed in SQL (`SET stock = stock - $1 WHERE stock >= $1`), or a row lock taken before the read. A read-modify-write in application code with none of these silently loses one of two concurrent writes.
+- **Side effects leave after the commit.** An email, an outbound event, or a webhook to another system is never sent before the transaction that records it commits; a rollback after the send tells the world about a state that does not exist. Either write the effect to an outbox table in the same transaction and deliver it from there, or send it after commit and accept that a crash in between drops it. The contract names which one. Outbox delivery repeats on retry, so its receiver deduplicates.
+- **Name the transaction and its isolation.** Each write path states its transaction boundary, the isolation level it relies on, and any row lock. The engine rules (default isolation per engine, `FOR UPDATE`, `SKIP LOCKED`, upsert, lock order, and which errors to retry) belong to the `relational-db` workflow and its engine lock tables.
+
+## 6. Budgets, timeouts, and caches
+
+- **Timeouts shrink down the chain.** Every call to a dependency -- database, cache, another service, a model API -- has a timeout shorter than what is left of the caller's own budget, so the service can still answer with the timeout row of section 3 instead of being cut off by its own caller. A call with no timeout runs on a library default nobody chose. Retries spend from the same budget.
+- **A cache names its key, its TTL, and the write that invalidates it.** The key covers every input that changes the answer, including the caller's identity when the answer differs per caller. A cache missing any of the three is not part of the contract yet.
+- Webhooks received, queue consumers, and connection-pool sizing have their own rules in `references/inbound-and-async.md`.
+
+## 7. Per-stack reference pointers
 
 The stack is a routing input. Name it in the contract and tell the executor which material to read first; do not restate framework documentation here.
 
@@ -6811,7 +6856,9 @@ The stack is a routing input. Name it in the contract and tell the executor whic
 
 If the stack is unknown, prepare the contract stack-neutral and name the stack as the one blocking input. A stack-neutral contract is useful; a contract written for the wrong stack is not.
 
-## 6. Failure modes
+On any stack, a handler parses and validates its input, calls one domain function, and maps that function's result or error onto the envelope. Business rules live in the domain function, and its interface is what the tests call. An interface in front of storage or a third-party client earns its place when a second implementation of it exists, such as a fake the test suite actually uses; with one implementation it is indirection that nothing exercises.
+
+## 8. Failure modes
 
 | Symptom | What actually went wrong | Correction |
 | --- | --- | --- |
@@ -6820,8 +6867,9 @@ If the stack is unknown, prepare the contract stack-neutral and name the stack a
 | Every endpoint has its own error body | No response-shape contract existed | One envelope for the surface |
 | Tables designed before access patterns | Storage was step one instead of step six | Re-derive the schema from the finished operation list |
 | "It works" from a local run | A local run is not integration evidence | Keep integration, load, and deployment as separate observed states |
+| Uniqueness or a counter passes every test, then duplicates in production | The tests sent one request at a time | Name the constraint or lost-update guard from section 5 |
 
-## 7. Contract authority across a service boundary
+## 9. Contract authority across a service boundary
 
 When a caller outside this change reads the boundary -- another service, a client in a separate repository, a partner, an event subscriber -- the prepared contract names the one file that defines it. Use the description language the repository already keeps for that boundary (OpenAPI for HTTP, AsyncAPI for events, protobuf for RPC calls and their messages, JSON Schema for a standalone payload); do not start a second format beside an existing one.
 
@@ -6835,12 +6883,59 @@ Generators and validators that read the artifact are something the executor runs
 
 The single-authority rule, contract text treated as data, and the reference allowlist adapt the contract-first skill from `affaan-m/everything-claude-code` (MIT). No upstream text is reproduced; the wording and the `prepared_not_observed` boundary are OMH's own.
 
-{_DOMAIN_ENGINEERING_ATTRIBUTION}
+The thin-handler rule and the second-implementation test for an interface in section 7 adapt ideas from Matt Pocock's `codebase-design` skill (mattpocock-skills plugin 1.3.1), MIT License, Copyright 2026 Matt Pocock. No upstream text is reproduced.
+"""
+
+
+def _backend_inbound_and_async_reference() -> str:
+    return """# Inbound and Asynchronous Work
+
+Load this when the surface receives webhooks, consumes a message queue, or sizes a connection pool. These are the paths where a delivery the code did not expect to see twice becomes a double charge, and where a missing check is a security defect rather than a style issue.
+
+Everything here is prepared guidance. OMH receives no webhook, reads no queue, and opens no connection.
+
+## 1. Receiving a webhook
+
+Each step runs before the next one.
+
+1. **Verify the signature over the raw body.** Compute the provider's signature over the exact bytes received, before any parsing, and compare it in constant time. A body that was parsed and serialised again is not the body that was signed, so a framework that parses before the handler runs needs its raw-body hook named in the contract. A delivery that fails the check is rejected with nothing processed. The signing secret lives in the secret store, never in the contract; during a rotation the handler accepts the old and the new secret for a stated window.
+2. **Reject stale deliveries.** When the provider signs a timestamp, refuse a delivery outside a stated tolerance of a few minutes, so a captured request cannot be replayed later. When it signs none, the event-id record below is the only replay guard; say so in the contract.
+3. **Record the event id once.** Store the provider's event id under a unique constraint, in the same transaction as the state change the event causes (section 5 of `references/service-contract.md`). A second delivery of the same id is acknowledged as a success and changes nothing.
+4. **Acknowledge fast, then process.** Store the event and answer 2xx well inside the provider's timeout; do the work from a queue or a job. A handler that calls slow dependencies before answering times out, the provider retries, and the retry arrives while the first attempt is still running.
+5. **Do not trust order or completeness.** Providers deliver out of order and can drop an event. When the current state matters, treat the event as a notification and read the object from the provider's API instead of applying the event body as a change.
+
+## 2. Consuming a queue
+
+- **Delivery is at least once.** The handler is idempotent: it records the message id under a unique constraint, or its effect is naturally repeatable (setting a value, not adding to one). A broker's exactly-once setting covers the broker, not the database write the handler makes.
+- **Acknowledge after the effect commits.** Acknowledging on receipt loses the message when the handler crashes. Acknowledging after commit redelivers it when the crash lands in between, and idempotency absorbs that.
+- **The lease outlasts the handler.** The visibility timeout or lease is longer than the slowest handler run, or another consumer receives the message while the first is still working on it.
+- **State the ordering assumption.** Name the key that orders messages, such as a partition key or a message group, or state that nothing orders them. A handler that assumes order on a queue that does not keep it applies updates backwards.
+- **Bound the attempts, then dead-letter.** Retries back off and stop at a maximum attempt count; past it the message moves to a dead-letter queue with the failure reason and the attempt count. Name who watches that queue and how a message is replayed from it.
+- **Send a poison message straight to the dead-letter queue.** A message that can never succeed, because it fails validation or points at a row that no longer exists, is not retried. Retrying it blocks the messages behind it.
+
+## 3. Connection pools
+
+- **Size against the database's connection limit.** Pool size times processes per instance times the maximum instance count, plus migrations, admin sessions, and batch jobs, stays under the database's limit with headroom. Autoscaling multiplies the instance count; size for its maximum, or put a connection pooler in front of the database.
+- **Checkout has a timeout inside the request budget.** Waiting for a free connection is part of the request's latency (section 6 of `references/service-contract.md`). A checkout with no timeout turns a saturated pool into hanging requests instead of a fast 503.
+- **No connection is held across a remote call.** A transaction left open while the handler calls another service holds the connection and every row lock it took for the length of that call.
+- **Name the pooler mode.** A pooler that hands out connections per transaction drops session state between transactions: `SET` values, advisory locks, and prepared statements unless the pooler supports them. Name the mode when a pooler is in use.
+
+## 4. Failure modes
+
+| Symptom | What actually went wrong | Correction |
+| --- | --- | --- |
+| Signature checks fail on valid deliveries | The signature was computed over a re-serialised body | Verify over the raw bytes before parsing |
+| A payment or email happens twice | A provider retry or queue redelivery was processed again | Record the event or message id under a unique constraint |
+| Retries pile up during a slow dependency | The handler did the work before acknowledging | Store, acknowledge, process from a job |
+| One bad message stops the queue | It was retried forever at the head of the line | Bound attempts; send poison messages to the dead-letter queue |
+| "Too many connections" after a scale-out | The pool was sized for one instance | Size pool times processes times maximum instances |
+
+Signature checks, delivery counts, and pool saturation are claims about a running system; each stays `not_observed` until the executor reports the observation.
 """
 
 
 def _backend_schema_migration_reference() -> str:
-    return f"""# Schema and Migration Discipline
+    return """# Schema and Migration Discipline
 
 Load this when the prepared backend change touches storage. OMH writes no migration and applies none; this is the order the plan has to have before an executor runs anything.
 
@@ -6865,6 +6960,7 @@ Any of these is a blocker until the plan resolves it explicitly:
 - A new `NOT NULL` column with no default on a populated table.
 - An index creation on a large table without naming whether the engine builds it concurrently.
 - A migration that must run inside the same transaction as a long backfill.
+- A statement that cannot run in a transaction (`CREATE INDEX CONCURRENTLY`) inside a migration the tool wraps in one. Mark that migration non-transactional in the tool and keep the statement alone in it; dropping `CONCURRENTLY` to make the tool accept it turns an online build into a write lock.
 - Two deployments that must land in a specific order with nothing enforcing the order.
 
 ## 3. Compatibility window
@@ -6888,8 +6984,6 @@ A migration plan with no stated compatibility window is a plan that assumes atom
 | The contract step is safe | an observed stable period after the switch, with the duration named |
 
 A prepared plan supports none of these. Every row above stays `not_observed` until the executor reports the observation.
-
-{_DOMAIN_ENGINEERING_ATTRIBUTION}
 """
 
 

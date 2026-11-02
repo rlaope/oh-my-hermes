@@ -465,6 +465,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'backend/references/service-contract.md',
     'backend/references/schema-migration.md',
     'backend/references/consumer-impact.md',
+    'backend/references/inbound-and-async.md',
     'rust/references/rust-discipline.md',
     'rust/references/ub-escalation.md',
     'native-debugging/references/native-debug-loop.md',

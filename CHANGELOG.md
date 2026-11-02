@@ -4,6 +4,27 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`backend` and `relational-db` now cover concurrent writes, cursors, and
+  inbound deliveries.** A backend contract names the guard on every write two
+  requests can reach at once: a unique constraint (mapped to a 409 row), an
+  idempotency key stored with its request fingerprint and response, a
+  lost-update guard, and side effects sent only after commit, through an
+  outbox or after the commit returns. Cursor pagination ends its ordering key
+  in a unique tie-breaker, binds the cursor to its filter, and caps the page
+  size; each endpoint states its expected rate, latency target, and payload
+  bound or `unknown`; dependency timeouts shrink down the chain; and a cache
+  names its key, TTL, and invalidating write. A new
+  `references/inbound-and-async.md` covers webhooks (signature over the raw
+  body, replay window, event-id record), queue consumers (at-least-once,
+  bounded attempts, dead-letter, poison messages), and connection-pool
+  sizing; an unsigned inbound webhook is a blocker. `relational-db` gains a
+  concurrency section (default isolation per engine, `FOR UPDATE`,
+  `SKIP LOCKED`, upsert, lock order, whole-transaction retry by error code),
+  the keyset-pagination index row, and the rule that `CREATE INDEX
+  CONCURRENTLY` gets its own non-transactional migration. The backend
+  references no longer end with an attribution block about Rust `unsafe`
+  and native debugging that did not belong to them.
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`
