@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import shlex
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -15,6 +14,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from _cli_harness import run_cli  # noqa: E402
+from _verification_python import verification_python  # noqa: E402
 
 from omh.coding.dispatch_failure_recovery import (  # noqa: E402
     CHOICE_HERMES,
@@ -804,7 +804,7 @@ class DispatchRecoveryChoiceTests(unittest.TestCase):
             self.assertNotIn("failure_recovery", summary)
 
 
-_PY = shlex.quote(sys.executable)
+_PY = verification_python()
 _CHECK_FIX_COMMITTED = (
     f"{_PY} -c 'import subprocess,sys; "
     "sys.exit(subprocess.run([\"git\", \"cat-file\", \"-e\", \"HEAD:src/core/fix.txt\"]).returncode)'"

@@ -30,6 +30,7 @@ load_local_package()
 
 from _fanout_host_fence import host_cannot_fence_fanout  # noqa: E402
 from _platform_support import requires_posix  # noqa: E402
+from _verification_python import verification_python  # noqa: E402
 from omh.cli import main as cli_main  # noqa: E402
 from omh.coding.fanout import build_fanout_contract  # noqa: E402
 from omh.coding.fanout_artifacts import write_fanout_contract  # noqa: E402
@@ -55,7 +56,7 @@ from omh.plugin_bundle.omh.dispatch_outcomes import (  # noqa: E402
 )
 from omh.system.paths import OmhPaths  # noqa: E402
 
-_PY = shlex.quote(sys.executable)
+_PY = verification_python()
 _GOAL = "Append the B marker to NOTES.md"
 # The reporter's contract, verbatim.
 _REPORTED_CHECK = "test -f NOTES.md && grep -qx 'OMH green B' NOTES.md"
