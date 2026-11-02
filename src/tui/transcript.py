@@ -1592,6 +1592,15 @@ class Transcript:
         group = self._live(ToolGroup)
         return group is not None and any(row.status == TOOL_RUNNING for row in group.tools)
 
+    def lose_running_tools(self) -> None:
+        """The live group's calls still running when events stopped reaching this screen (a replay gap, a dropped
+        connection): their ends may be lost, so they read as interrupted and no longer hold back the silence notice
+        (`tool_running`). The group stays open, so a `tool.complete` that does come still settles its row."""
+        group = self._live(ToolGroup)
+        for row in group.tools if group is not None else ():
+            if row.status == TOOL_RUNNING:
+                row.status = TOOL_INTERRUPTED
+
     def fail_turn(self, message: str) -> None:
         """A turn the gateway ended with a bare `error` event instead of `message.complete`.
 

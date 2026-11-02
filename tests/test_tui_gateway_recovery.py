@@ -429,6 +429,40 @@ class ReplayGapTests(unittest.TestCase):
         self.assertFalse(app._busy())
         self.assertIn(TURN_MOVED_NOTICE.format(session="live-tip"), notices(app))
 
+    def test_a_moved_id_with_a_turn_running_does_not_send_the_queue_yet(self) -> None:
+        app, client = self.gap()
+        app.queued.append(QueuedLine("next one"))
+        self.answer(app, client, {"session_id": "live-tip", "running": True})
+        self.assertEqual(client.named("prompt.submit"), [])
+        self.assertEqual([line.text for line in app.queued], ["next one"])
+
+    def test_a_moved_id_with_no_turn_shown_only_moves(self) -> None:
+        app, client = make_app()
+        app.stored_id = STORED
+        app._on_event(Event("session.replay_gap", SID, {}))
+        self.answer(app, client, {"session_id": "live-tip", "running": False})
+        self.assertEqual(app.sid, "live-tip")
+        self.assertNotIn(TURN_MOVED_NOTICE.format(session="live-tip"), notices(app))
+        self.assertFalse(app._busy())
+
+    def test_a_tool_whose_end_the_gap_may_have_lost_no_longer_holds_back_the_silence(self) -> None:
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        app.stored_id = STORED
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "terminal"}))
+        app._on_event(Event("session.replay_gap", SID, {}))
+        self.answer(app, client, {"session_id": SID, "running": True})
+        self.assertTrue(app._busy())
+        self.assertFalse(app.transcript.tool_running())
+        app.inbound_at = now[0]
+        now[0] += GATEWAY_SILENCE_SECONDS + 15
+        self.assertIn("no word from", "\n".join(line_text(line) for line in app._tail(120)))
+        # A `tool.complete` that does come still settles its row.
+        app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "terminal", "result": "ok"}))
+        rows = [row for block in app.transcript.blocks for row in getattr(block, "tools", [])]
+        self.assertEqual([(row.tool_id, row.status) for row in rows], [("t1", "ok")])  # the same row, not a second
+
     def test_a_started_admission_in_the_answer_keeps_the_turn(self) -> None:
         app, client = self.gap()
         self.answer(app, client, {"session_id": SID, "running": False,
@@ -580,6 +614,29 @@ class GatewaySilenceTests(unittest.TestCase):
         app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "terminal"}))
         now[0] += GATEWAY_SILENCE_SECONDS + 15
         self.assertIn("no word from", "\n".join(line_text(line) for line in app._tail(120)))
+
+    def test_a_tool_running_after_a_finished_one_still_holds_back_the_silence(self) -> None:
+        now = [100.0]
+        app, _client = make_app(clock=lambda: now[0])
+        streaming(app)
+        app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "terminal"}))
+        app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "terminal", "result": "ok"}))
+        app._on_event(Event("tool.start", SID, {"tool_id": "t2", "name": "terminal"}))
+        app.inbound_at = now[0]
+        now[0] += GATEWAY_SILENCE_SECONDS + 15
+        self.assertTrue(app.transcript.tool_running())
+        self.assertNotIn("no word from", "\n".join(line_text(line) for line in app._tail(120)))
+
+    def test_a_tool_kept_across_a_reconnect_does_not_hold_back_the_silence(self) -> None:
+        # The reconnect's notices close the group's place at the end of the transcript, so the row no longer counts.
+        new = RespawnClient(resume={**SHARED_RESUMED, "session_id": SID, "running": True})
+        app, old, _spawner, _now = crashing(spawner=Spawner(new))
+        app.sid, app.shared_gateway = SID, True
+        app._on_event(Event("message.start", SID, {}))
+        app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "terminal"}))
+        crash(app, old, 1)
+        self.assertTrue(app._busy())
+        self.assertFalse(app.transcript.tool_running())
 
     def test_anything_from_the_gateway_restarts_the_count(self) -> None:
         now = [100.0]

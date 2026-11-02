@@ -2832,6 +2832,8 @@ class App(ModesMixin, AgentViewMixin):
         elif running and not self._busy():  # a turn started while the events did not arrive
             self.turn_pending = True
             self.busy_since = self.clock()
+        elif running:  # it runs on, but a tool's end may have been lost with the events
+            self.transcript.lose_running_tools()
 
     def _on_gap_resume_refused(self, sid: str, error: dict[str, Any]) -> bool:
         """No new view, so nothing more of the session comes: its turn closes as one this screen lost, and the queue
