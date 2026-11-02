@@ -172,7 +172,7 @@ from .keys import (
     Mouse,
     Paste,
 )
-from .launch import CLOSED_EXIT, SESSION_FILE_ENV, request_fallback
+from .launch import CLOSED_EXIT, PICK_SESSION_ENV, SESSION_FILE_ENV, request_fallback
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
 from .aura import aura_ranges
 from .layout import Budget, choice_cap, is_tiny, slot_cap
@@ -224,7 +224,7 @@ from .screen import (
     cursor_up,
 )
 from .session_picker import KEYS as SESSION_PICKER_KEYS
-from .session_picker import PICK, SessionPicker, pointer, session_rows
+from .session_picker import PICK, SessionPicker, SessionRow, pointer, session_rows
 from .rewind_picker import KEYS as REWIND_PICKER_KEYS
 from .rewind_picker import PICK as REWIND_PICK
 from .rewind_picker import RewindPicker, rewind_rows
@@ -826,6 +826,31 @@ OSC52_IN_TMUX = "tmux passes it on only with set-clipboard on"
 # `omh-*` and `ulw-*` slugs) up to half the terminal; a name longer than that pushes only its own summary.
 MENU_NAME_CELLS = 16
 SESSION_LIST_LIMIT = 50
+# Bare `/sessions` (`/resume`, Ctrl+X) has no echo, so until Hermes answers the list this row stands where the
+# picker will open, under the queued prompts; keys still go to the composer, and the picker opens with an empty filter.
+SESSIONS_LOADING_LINE = "Loading sessions…"
+# Hermes lists the gateway profile's own store, newest first, and leaves archived, hidden (Bot Mode) and internal
+# (kanban, one-shot, tool) sessions out (`tui_gateway/methods_session.py` `_listing_rows`).
+SESSIONS_EMPTY_NOTICE = (
+    "Hermes has no stored sessions to switch to; its list leaves out archived, hidden and kanban, one-shot or tool "
+    "sessions."
+)
+SESSIONS_REFUSED_NOTICE = "Hermes did not list the stored sessions: {reason}."
+SESSIONS_UNANSWERED_NOTICE = "Hermes did not answer the session list in {seconds:g} s; /resume asks again."
+# While a switch (`/sessions <id>`, a pick, `/new`) waits on Hermes, under the queued prompts: a prompt sent then
+# waits for the session it goes to (`App.switch_held`) and is sent there once it is live.
+SWITCHING_LINE = "switching to {target}…"
+# The loading row for one kind of list (`App._ask_list`); the others say `LIST_WAIT_LINE`.
+LIST_WAIT_LINES = {"sessions": SESSIONS_LOADING_LINE}
+NEW_SESSION_LINE = "starting a new session…"
+SWITCH_HELD_SUFFIX = " · {count} prompt{s} wait{verb} for it"
+# The prompts queued behind the old session's turn when the switch lands, and those held for a switch that did not.
+QUEUE_BACK_SWITCH_NOTICE = (
+    "{count} prompt{s} queued in the session you left went back to the composer; none was sent."
+)
+SWITCH_HELD_BACK_NOTICE = "The switch did not happen, so {count} prompt{s} held for it went back to the composer."
+# A switch answered after a newer one: the session it opened is closed again.
+STALE_SWITCH_NOTICE = "Closed session {session}, which opened after a newer switch."
 # The owner's own refusal code (`attach/gateway_attach.py` REFUSED). Hermes' shared gateway answers it to a
 # `session.resume` of a title, which it does not resolve, so `/sessions <title>` looks the title up after it.
 RESUME_REFUSED = 4001
@@ -967,6 +992,9 @@ class _Pending:
     # A `/compress` call: Hermes' shared gateway serves this connection's calls one at a time, so every call sent
     # while it is out waits until the compression ends.
     compressing: bool = False
+    # A session switch's call (`_switching`): what the row under the queue says while it is out, and which switch.
+    switch: str = ""
+    switch_seq: int = 0
 
 
 @dataclass
@@ -975,6 +1003,17 @@ class SentNow:
 
     line: QueuedLine
     block: SteerBlock
+
+
+class SwitchHeld(NamedTuple):
+    """What the person sent while a session switch was out (`App.switch_held`): submitted again, as sent, in the
+    session the switch opens, or given back to the composer."""
+
+    text: str
+    shown: str = ""
+    chips: tuple[tuple[str, str], ...] = ()
+    hold: bool = False
+    images: tuple[Attachment, ...] = ()
 
 
 class QueuedLine(NamedTuple):
@@ -1815,6 +1854,15 @@ class App(ModesMixin, AgentViewMixin):
         self.tell_turn_runs = False  # the turn whose approval the open tell field denied has not ended (`_tell`)
         self.waiting_requests: deque[ServerRequest] = deque()
         self.queued: deque[QueuedLine] = deque()
+        # Prompts sent while a session switch waits (`_switching`): sent in the session it opens, or given back.
+        self.switch_held: list[SwitchHeld] = []
+        self.switch_seq = 0  # the newest switch asked for; an older one's answer is stale
+        self.switch_counter = 0  # hands out switch numbers, only ever up: `switch_seq` may go back to one still out
+        self.switch_targets: dict[int, str] = {}  # each switch's target (a stored id or a title), by its seq
+        self.switch_notices: list[str] = []  # said once no switch is out, in the transcript the last one left
+        self.switch_drain_due = False  # the queue held still while a switch was out (`_drain_queue`)
+        # The composer's text as `/sessions` asked for its list: what differs when the picker opens was typed meanwhile.
+        self.list_asked_draft: str | None = None
         self.sent_now: list[SentNow] = []  # sent-now steers Hermes took and the turn has not read yet
         self.unread_steers: list[SteerBlock] = []  # every steer into the main turn Hermes took and it has not read
         self.turns_ended = 0  # turns of this TUI that ended: a steer remembers which turn it was meant for
@@ -2014,7 +2062,8 @@ class App(ModesMixin, AgentViewMixin):
         self._adopt_session(result, fallback_stored=resume)
         self._request("config.get", {"key": "full"}, self._take_settings, self._on_settings_refused)
         self._refresh_catalog()
-        if not resume:
+        pick = not resume and self.environ.get(PICK_SESSION_ENV) == "1"  # a bare `omh --resume`: pick one at once
+        if not resume and not pick:
             self._ask_last_session()
             self._whats_new_on_launch()
         self._read_default()
@@ -2026,6 +2075,8 @@ class App(ModesMixin, AgentViewMixin):
         if resume:
             self._draw_history(result.get("messages"))
         self._redeliver(result.get("open_requests"))
+        if pick:
+            self._sessions("")
 
     def _snapshot_home(self) -> Path | None:
         """Where the launch card's skills snapshot is kept; None without an OMH home, or when `session.create` named
@@ -2616,8 +2667,11 @@ class App(ModesMixin, AgentViewMixin):
         steer: SteerBlock | None = None,
         seconds: float | None = None,
         compressing: bool = False,
+        switch: str = "",
+        switch_seq: int = 0,
     ) -> int | None:
-        """Send `method`; the request id it went as, None when nothing went out."""
+        """Send `method`; the request id it went as, None when nothing went out. `switch` and `switch_seq` mark a
+        session switch's call (`_switching`)."""
         try:
             request_id = self.client.request(method, params)
         except GatewayUnavailable as error:
@@ -2632,7 +2686,7 @@ class App(ModesMixin, AgentViewMixin):
             seconds = min(held + seconds, HELD_ANSWER_SECONDS)
         self.pending[request_id] = _Pending(
             method, on_result, on_error, self.clock() + seconds, self.transcript.command, on_expiry, steer, seconds,
-            compressing,
+            compressing, switch, switch_seq,
         )
         return request_id
 
@@ -2649,7 +2703,15 @@ class App(ModesMixin, AgentViewMixin):
         now = self.clock()
         for request_id, call in [(rid, call) for rid, call in self.pending.items() if now >= call.expires_at]:
             del self.pending[request_id]
-            self.client.forget(request_id)
+            if call.switch and call.method in ("session.resume", "session.create"):
+                self.switch_targets.pop(call.switch_seq, None)  # it is over: what it opens late is nobody's target
+                # Still listened for, quietly, one more wait: a session it opens late is closed again (`_stale_switch`).
+                self.pending[request_id] = _Pending(
+                    call.method, lambda result: self._stale_switch(-1, result), lambda error: True,
+                    now + call.seconds, None, lambda seconds: None, seconds=call.seconds,
+                )
+            else:
+                self.client.forget(request_id)
             if call.on_expiry is not None:
                 call.on_expiry(call.seconds)
             elif call.method not in QUIET_EXPIRY_METHODS:
@@ -2660,6 +2722,7 @@ class App(ModesMixin, AgentViewMixin):
                     with self._for_command(call.command):  # under the echo of the command it was made for
                         self.transcript.add_notice(notice, NOTICE_WARN)
             self._command_call_done(call)
+        self._settle_switch_held()
 
     @contextmanager
     def _for_command(self, command: CommandBlock | None) -> Iterator[None]:
@@ -2818,6 +2881,7 @@ class App(ModesMixin, AgentViewMixin):
                 self.transcript.close_command(call.command)
         if steers:
             self.transcript.add_notice(STEER_LOST_NOTICE.format(count=steers, s="" if steers == 1 else "s"), NOTICE_WARN)
+        self._settle_switch_held()
 
     def _respawn_cancel(self) -> bool:
         """Asked while a respawn waits on the new gateway: True once the person pressed Ctrl+C or Ctrl+D, or the
@@ -2900,6 +2964,7 @@ class App(ModesMixin, AgentViewMixin):
                 self._answer_call(pending, response)
         finally:
             self._command_call_done(pending)
+            self._settle_switch_held()
 
     def _answer_call(self, pending: _Pending, response: Response) -> None:
         if response.error is None:
@@ -3408,6 +3473,9 @@ class App(ModesMixin, AgentViewMixin):
                 self._next_question(question)
             return
         front = self._front_picker() if self.slot is None else None
+        if front is None and self.slot is None and self.picker is not None and self._picker_arms(event):
+            self._picker_key(event)
+            return
         if front is not None:  # the one drawn (`_slot_lines`) has the keys
             if front is self.launch_picker:
                 self._launch_picker_key(event)
@@ -3469,20 +3537,22 @@ class App(ModesMixin, AgentViewMixin):
     def _front_picker(self) -> object | None:
         """The picker (or the history search) that is drawn and has the keys: one order for both, so a key never goes
         to a picker the screen does not show."""
-        for picker in (self.launch_picker, self.picker, self.search, self.rewind_picker, self.model_picker):
+        session = self.picker if self.picker is not None and not self.picker.waiting else None  # one waiting has none
+        for picker in (self.launch_picker, session, self.search, self.rewind_picker, self.model_picker):
             if picker is not None:
                 return picker
         return None
 
     def _picker_taken(self, command: str) -> bool:
         """Whether a list `command` asked for came while another picker is open: it then does not open, and says so."""
-        if self._front_picker() is None:
+        if self._front_picker() is None and self.picker is None:  # a session picker waiting for typing is open too
             return False
         self.transcript.add_aside(NoticeBlock(LIST_TAKEN_NOTICE.format(command=command), NOTICE_WARN))
         return True
 
     def _ask_list(
         self, kind: str, command: str, method: str, params: dict[str, Any], on_result: Callable[[dict[str, Any]], None],
+        on_error: Callable[[dict[str, Any]], bool] | None = None, on_expiry: Callable[[float], None] | None = None,
     ) -> None:
         """Ask Hermes for `/model`'s or `/rewind`'s list (`kind`) for this session, once: while one is on its way,
         asking again with the same params sends nothing, asking with others says it is loading (`command` names it),
@@ -3495,10 +3565,14 @@ class App(ModesMixin, AgentViewMixin):
             if asked[0] != params:
                 self.transcript.add_aside(NoticeBlock(LIST_LOADING_NOTICE.format(command=command), NOTICE_WARN))
             return
-        request_id = self._request(method, params, on_result)
+        request_id = self._request(method, params, on_result, on_error, on_expiry)
         call = self.pending.get(request_id) if request_id is not None else None
         if call is not None:
             self.list_asked[(kind, self.sid)] = (params, call)
+
+    def _list_waiting_kind(self) -> str:
+        """The kind of the list `_ask_list` made for this session that is still out (`LIST_WAIT_LINES`); "" for none."""
+        return next((kind for kind in ("sessions", "model", "rewind") if self._list_waiting(kind)), "")
 
     def _list_waiting(self, kind: str = "") -> bool:
         """Whether a list call `_ask_list` made for this session (of `kind`, or of either) is still out."""
@@ -4490,6 +4564,12 @@ class App(ModesMixin, AgentViewMixin):
         if not text.strip():
             return
         seen = shown or text
+        if self._switching():  # never into the session being left: what goes to a session goes where the switch lands
+            invocation = None if seen.startswith(SHELL_PREFIX) else parse_slash(seen)
+            local = invocation is not None and invocation.command is not None and invocation.command.route == LOCAL
+            if not local:
+                self.switch_held.append(SwitchHeld(text, shown, tuple(chips), hold, tuple(images)))
+                return
         if seen.startswith(SHELL_PREFIX):
             self._keep_images(images, SHELL_PREFIX + " line")
             self._shell_line(text, seen)  # a chip holds no `!` of its own, so the sent text starts with it too
@@ -4895,6 +4975,9 @@ class App(ModesMixin, AgentViewMixin):
         Which it is comes from the entry's `shell`, never from its text. A held queue waits (`_hold_queue`), and so
         does one behind a prompt held for the default-model check (`starting`): that prompt starts the next turn.
         """
+        if self.queued and self._switching():  # the session it was queued in is being left
+            self.switch_drain_due = True
+            return
         if self.queued and self.sid and not self.queue_held and self.starting is None:
             line = self.queued.popleft()
             if line.shell:
@@ -5610,16 +5693,26 @@ class App(ModesMixin, AgentViewMixin):
         if not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             return
-        self._request("session.create", self._create_params(), self._on_new_session, self._on_create_refused)
+        self.switch_counter += 1
+        seq = self.switch_seq = self.switch_counter
+        self._request(
+            "session.create", self._create_params(), lambda result: self._on_new_session(result, seq),
+            lambda error: self._on_create_refused(error, seq), switch=NEW_SESSION_LINE, switch_seq=seq,
+        )
 
-    def _on_new_session(self, result: dict[str, Any]) -> None:
+    def _on_new_session(self, result: dict[str, Any], seq: int | None = None) -> None:
+        if seq is not None and self._stale_switch(seq, result):
+            return
         declined = self._enter_session(result)
         self.banner_record = self._banner_record(result, resumed="")  # a later full redraw names this session
         self.transcript.add_notice(f"New session {self.stored_id}.")
         self._notice_declined(declined)
         self._refresh_catalog()
+        self._carry_switch_held()
 
-    def _on_create_refused(self, error: dict[str, Any]) -> bool:
+    def _on_create_refused(self, error: dict[str, Any], seq: int | None = None) -> bool:
+        if seq is not None and seq != self.switch_seq:
+            return True
         message = as_text(error.get("message")) or "refused"
         self.transcript.add_notice(
             f"Could not start a new session ({error.get('code')}): {message}. Still in {self.stored_id}.", NOTICE_WARN
@@ -5649,7 +5742,14 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(SIDE_ANSWERS_LEFT_NOTICE.format(tasks=", ".join(left), session=old), NOTICE_WARN)
             for task in left:
                 del self.side_tasks[task]
-        self.queued.clear()
+        if self.queued:  # what waited for the old session's turn is not sent into the new one
+            back = list(self.queued)
+            self.queued.clear()
+            for line in back:
+                self._give_back(line.typed or line.text, line.images)
+            self.transcript.add_notice(
+                QUEUE_BACK_SWITCH_NOTICE.format(count=len(back), s="" if len(back) == 1 else "s"), NOTICE_WARN
+            )
         self.sticky = ""
         self.flushed_since_prompt = 0  # rows printed above the region from the last prompt's first row on
         # Hermes held nothing of a draft's or the queue's images; what it staged for a prompt went with that session.
@@ -5672,20 +5772,122 @@ class App(ModesMixin, AgentViewMixin):
     # ── switching sessions ──
 
     def _sessions(self, arg: str) -> None:
+        self.list_asked_draft = self.composer.text
         if not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
         elif arg:
             self._switch_session(arg, by_title=True)
-        else:
-            self._request("session.list", {"limit": SESSION_LIST_LIMIT}, self._open_session_picker)
+        else:  # once per session while it is out (`_ask_list`)
+            self._ask_list("sessions", "/resume", "session.list", {"limit": SESSION_LIST_LIMIT},
+                           self._open_session_picker, self._session_list_refused, self._session_list_unanswered)
+
+    def _sessions_loading(self) -> bool:
+        """Whether a bare `/sessions` list call is out (`SESSIONS_LOADING_LINE`)."""
+        return self._list_waiting("sessions")
 
     def _open_session_picker(self, result: dict[str, Any]) -> None:
+        """The picker over the listed sessions, its filter empty: what was typed while the list was out stays in the
+        composer, which comes back as it was when the picker closes. With none listed, a notice; bare /sessions has
+        no echo, so during a turn it is drawn under what runs."""
+        if self.picker is not None:  # one already open keeps its highlight and filter
+            return
         rows = session_rows(result)
-        if rows:
-            self.picker = SessionPicker(rows, current=self.stored_id)
-            self._settle_list()
-        else:  # bare /sessions has no echo: during a turn this waits under what runs
-            self.transcript.add_aside(NoticeBlock("Hermes has no stored sessions to switch to."))
+        if not rows:
+            self.transcript.add_aside(NoticeBlock(SESSIONS_EMPTY_NOTICE))
+        elif not self._picker_taken("/resume"):
+            self._open_picker(rows)
+
+    def _open_picker(self, rows: list[SessionRow], query: str = "") -> None:
+        """Open the session picker over `rows`. When the person typed into the composer while its list was out, it
+        waits (`SessionPicker.waiting`): typing stays in the composer, and only a key of the picker's own, or an
+        empty composer, hands it the keys (`_picker_arms`)."""
+        draft = self.composer.text
+        typed = bool(draft) and self.list_asked_draft is not None and draft != self.list_asked_draft
+        self.list_asked_draft = None
+        self.picker = SessionPicker(rows, current=self.stored_id, query=query, waiting=typed)
+        self._settle_list()
+
+    def _picker_arms(self, event: Key | Paste) -> bool:
+        """Whether `event` hands a waiting session picker the keys: Up, Down, Esc or Ctrl+C. Anything else stays the
+        composer's, Enter included (it sends what was typed), and so does the next prompt typed after it: a prompt
+        being typed never becomes the filter, as its filter row says."""
+        picker = self.picker
+        if picker is None:
+            return False
+        own = isinstance(event, Key) and (
+            event.name in (UP, DOWN, ESCAPE) or (event.name == CHAR and event.ctrl and event.char == "c")
+        )
+        if own:
+            picker.waiting = False
+            return True
+        return False
+
+    def _switching(self) -> str:
+        """What the newest session switch still out says (`SWITCHING_LINE`, `NEW_SESSION_LINE`); "" with none out.
+        Read from the open calls, so it ends with the switch's last call however that ends."""
+        return next((call.switch for call in reversed(self.pending.values())
+                     if call.switch and call.switch_seq == self.switch_seq), "")
+
+    def _switch_line(self, cols: int) -> Line | None:
+        said = self._switching()
+        if not said:
+            return None
+        count = len(self.switch_held)
+        if count:
+            said += SWITCH_HELD_SUFFIX.format(count=count, s="" if count == 1 else "s", verb="s" if count == 1 else "")
+        return truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(said, self.theme.muted)), cols)
+
+    def _settle_switch_held(self) -> None:
+        """Once no switch is out: what was sent for a switch that opened nothing goes back to the composer, with a
+        notice; what older switches said is said, in the transcript the last one left; the queue held still while
+        it was out goes on."""
+        if self._switching():
+            return
+        out = {call.switch_seq for call in self.pending.values() if call.switch}
+        self.switch_targets = {seq: target for seq, target in self.switch_targets.items() if seq in out}
+        held, self.switch_held = self.switch_held, []
+        for line in held:
+            self._give_back(line.text, line.images)
+        if held:
+            self.transcript.add_notice(
+                SWITCH_HELD_BACK_NOTICE.format(count=len(held), s="" if len(held) == 1 else "s"), NOTICE_WARN
+            )
+        said, self.switch_notices = self.switch_notices, []
+        for notice in said:
+            self.transcript.add_notice(notice, NOTICE_WARN)
+        if self.switch_drain_due:
+            self.switch_drain_due = False
+            if not self._busy():
+                self._drain_queue()
+
+    def _carry_switch_held(self) -> None:
+        """What was sent while the switch waited, submitted again in order in the session it opened (a prompt, a plan
+        mode prompt, a slash or skill command, a `!` line), as if sent there."""
+        held, self.switch_held = self.switch_held, []
+        for line in held:
+            self._submit(line.text, line.shown, line.chips, line.hold, line.images)
+
+    def _stale_switch(self, seq: int, result: Mapping[str, Any]) -> bool:
+        """Whether `seq` is an older switch than the newest; a session its answer opened is closed again, saying so."""
+        if seq == self.switch_seq:
+            return False
+        opened = as_text(result.get("session_id"))
+        stored = as_text(result.get("stored_session_id")) or opened
+        # Never the session the TUI is in, nor the one the newest switch goes to: on Hermes' shared gateway a
+        # session's live id is its stored id, so a close there would detach the view the newest switch opens.
+        newest = self.switch_targets.get(self.switch_seq, "")
+        if opened and opened != self.sid and newest not in (opened, stored):
+            self._request("session.close", {"session_id": opened}, lambda result: None, lambda error: True)
+            self.switch_notices.append(STALE_SWITCH_NOTICE.format(session=stored))
+        return True
+
+    def _session_list_refused(self, error: dict[str, Any]) -> bool:
+        reason = (as_text(error.get("message")) or "refused").strip().rstrip(".")
+        self.transcript.add_aside(NoticeBlock(SESSIONS_REFUSED_NOTICE.format(reason=reason), NOTICE_WARN))
+        return True
+
+    def _session_list_unanswered(self, seconds: float) -> None:
+        self.transcript.add_aside(NoticeBlock(SESSIONS_UNANSWERED_NOTICE.format(seconds=seconds), NOTICE_WARN))
 
     def _picker_key(self, event: Key | Paste) -> None:
         if self.picker is None:
@@ -5693,25 +5895,42 @@ class App(ModesMixin, AgentViewMixin):
         action = self.picker.handle_key(event)
         if action is None:
             return
-        self.picker = None
+        rows, self.picker = self.picker.rows, None
         if action.kind == PICK:
-            self._switch_session(action.session_id)
+            label = next((row.label for row in rows if row.id == action.session_id), "")
+            self._switch_session(action.session_id, label=label)
 
-    def _switch_session(self, target: str, notice: str = "", by_title: bool = False) -> None:
+    def _switch_session(
+        self, target: str, notice: str = "", by_title: bool = False, label: str = "", seq: int | None = None,
+    ) -> None:
         """Resume `target` (a stored id or an exact title); the current session closes once that worked, and `notice`
         is said on the redrawn screen. `by_title`: the person typed `target`, so a refusal may be a title the gateway
-        does not resolve (`_on_resume_refused`)."""
-        if target == self.stored_id:
+        does not resolve (`_on_resume_refused`). `label` names it on the switching row. `seq` continues the switch
+        it numbers (a title lookup's, whose callers drop it once a newer one was asked for); None asks for a new one,
+        or makes one already out to the same target the newest again."""
+        if seq is None:
+            out = {call.switch_seq for call in self.pending.values() if call.switch}
+            again = next((number for number in sorted(out, reverse=True) if self.switch_targets.get(number) == target),
+                         None)
+            if again is not None:  # that switch is out already: it is the newest again, and nothing more is sent
+                self.switch_seq = again
+                return
+            self.switch_counter += 1
+            seq = self.switch_seq = self.switch_counter
+        self.switch_targets[seq] = target  # a title lookup's resolved id replaces the title it was asked by
+        if target == self.stored_id:  # a switch back: any other still out is stale, and what it held goes here
             self.transcript.add_notice(f"Already in session {target}.")
+            self._carry_switch_held()
             return
         self._request(
             "session.resume",
             {"session_id": target, "cols": self.size[0]},
-            lambda result: self._on_session_resumed(target, result, notice),
-            lambda error: self._on_resume_refused(target, error, notice, by_title),
+            lambda result: self._on_session_resumed(target, result, notice, seq),
+            lambda error: self._on_resume_refused(target, error, notice, by_title, seq),
+            switch=SWITCHING_LINE.format(target=label or target), switch_seq=seq,
         )
 
-    def _on_session_resumed(self, target: str, result: dict[str, Any], notice: str = "") -> None:
+    def _on_session_resumed(self, target: str, result: dict[str, Any], notice: str = "", seq: int = 0) -> None:
         """Leave the old session and redraw the screen as the resumed one.
 
         Hermes resolves a title or a compressed ancestor to the session
@@ -5719,8 +5938,11 @@ class App(ModesMixin, AgentViewMixin):
         nothing is left, declined or reset, so the yolo the TUI set there is
         still the TUI's to turn off.
         """
+        if self._stale_switch(seq, result):
+            return
         if as_text(result.get("session_id")) == self.sid:
             self.transcript.add_notice(f"Already in session {self.stored_id}.")
+            self._carry_switch_held()  # what was sent meanwhile goes in the session it is in
             return
         declined = self._enter_session(result, fallback_stored=target)
         self._draw_history(result.get("messages"))
@@ -5731,16 +5953,23 @@ class App(ModesMixin, AgentViewMixin):
             self.transcript.add_notice(notice)
         self._redeliver(result.get("open_requests"))
         self._refresh_catalog()  # its workspace may hold project-local skills the last one did not
+        self._carry_switch_held()
 
-    def _on_resume_refused(self, target: str, error: dict[str, Any], notice: str = "", by_title: bool = False) -> bool:
+    def _on_resume_refused(
+        self, target: str, error: dict[str, Any], notice: str = "", by_title: bool = False, seq: int | None = None,
+    ) -> bool:
         """Say the refusal, and stay. A typed target the owner refused (`RESUME_REFUSED`) is looked up as a title
         first (`_resume_looked_up`): Hermes' shared gateway resumes ids only, where its stdio entry also took an exact
-        title."""
+        title. A refusal of a switch older than the newest (`seq`) says nothing."""
+        if seq is not None and seq != self.switch_seq:
+            return True
         if by_title and error.get("code") == RESUME_REFUSED:
+            seq = self.switch_seq
             self._request(
                 "session.list", {"title": target},
-                lambda result: self._resume_looked_up(target, error, result, notice),
-                lambda _lookup: self._scan_titles(target, error, notice),
+                lambda result: self._resume_looked_up(target, error, result, notice, seq),
+                lambda _lookup: self._scan_titles(target, error, notice, seq),
+                switch=SWITCHING_LINE.format(target=target), switch_seq=seq,
             )
             return True
         message = as_text(error.get("message")) or "refused"
@@ -5749,7 +5978,9 @@ class App(ModesMixin, AgentViewMixin):
         )
         return True
 
-    def _resume_looked_up(self, target: str, error: dict[str, Any], result: dict[str, Any], notice: str) -> None:
+    def _resume_looked_up(
+        self, target: str, error: dict[str, Any], result: dict[str, Any], notice: str, seq: int = 0,
+    ) -> None:
         """The owner's exact-title lookup (`session.list` `title`, over its whole store), after it refused `target`
         as an id.
 
@@ -5759,6 +5990,8 @@ class App(ModesMixin, AgentViewMixin):
         a gateway that ignored `title` and listed as usual included, goes to
         the listing's scan (`_scan_titles`).
         """
+        if seq != self.switch_seq:
+            return
         rows = [row for row in result.get("sessions") or [] if isinstance(row, dict)]
         if any(target in (row.get("id"), row.get("resolved_id")) for row in rows):
             self._on_resume_refused(target, error)
@@ -5766,19 +5999,24 @@ class App(ModesMixin, AgentViewMixin):
         titled = [row for row in rows if target in (row.get("title"), row.get("root_title"))]
         found = as_text(titled[0].get("resolved_id")) or as_text(titled[0].get("id")) if len(titled) == 1 else ""
         if found:
-            self._switch_session(found, notice)
+            self._switch_session(found, notice, label=target, seq=seq)
         else:
-            self._scan_titles(target, error, notice)
+            self._scan_titles(target, error, notice, seq)
 
-    def _scan_titles(self, target: str, error: dict[str, Any], notice: str) -> None:
+    def _scan_titles(self, target: str, error: dict[str, Any], notice: str, seq: int = 0) -> None:
         """Look `target` up among the listed sessions (`_resume_titled`); a listing that fails says the refusal."""
+        if seq != self.switch_seq:
+            return
         self._request(
             "session.list", {"limit": SESSION_LIST_LIMIT},
-            lambda result: self._resume_titled(target, error, result, notice),
-            lambda _listing: self._on_resume_refused(target, error),
+            lambda result: self._resume_titled(target, error, result, notice, seq),
+            lambda _listing: self._on_resume_refused(target, error, seq=seq),
+            switch=SWITCHING_LINE.format(target=target), switch_seq=seq,
         )
 
-    def _resume_titled(self, title: str, error: dict[str, Any], result: dict[str, Any], notice: str) -> None:
+    def _resume_titled(
+        self, title: str, error: dict[str, Any], result: dict[str, Any], notice: str, seq: int = 0,
+    ) -> None:
         """`title` against the listed sessions, after the owner refused it as an id and found no one session with it.
 
         A listed session with that id was refused as itself, so the refusal
@@ -5789,6 +6027,8 @@ class App(ModesMixin, AgentViewMixin):
         session listed at all, or none matching a target shaped as a session id
         (`SESSION_ID_SHAPE`), the refusal is said.
         """
+        if seq != self.switch_seq:
+            return
         rows = session_rows(result)
         if not rows or any(row.id == title for row in rows):
             self._on_resume_refused(title, error)
@@ -5797,15 +6037,14 @@ class App(ModesMixin, AgentViewMixin):
             row for row in rows if row.title.casefold() == title.casefold()
         ]
         if len(matched) == 1:
-            self._switch_session(matched[0].id, notice)
+            self._switch_session(matched[0].id, notice, label=matched[0].label, seq=seq)
             return
         if not matched and SESSION_ID_SHAPE.fullmatch(title):
             self._on_resume_refused(title, error)
             return
         said = TITLE_SHARED_NOTICE if matched else TITLE_UNKNOWN_NOTICE
         self.transcript.add_notice(said.format(count=len(matched), title=title), NOTICE_WARN)
-        self.picker = SessionPicker(rows, current=self.stored_id, query=title)
-        self._settle_list()
+        self._open_picker(rows, query=title)
 
     # ── attachments ──
 
@@ -7025,7 +7264,8 @@ class App(ModesMixin, AgentViewMixin):
         if self.slot is not None:
             return self.slot.picking
         return (
-            self.picker is not None or self.rewind_picker is not None or self.model_picker is not None
+            (self.picker is not None and not self.picker.waiting) or self.rewind_picker is not None
+            or self.model_picker is not None
             or self.search is not None or self.launch_picker is not None
         )
 
@@ -7304,7 +7544,7 @@ class App(ModesMixin, AgentViewMixin):
         if front is not None and front is self.launch_picker:
             shown = [] if self.card_state == CARD_LIVE else self._launch_preview(cols)
             return self.launch_picker.lines(cols, self.theme, cap, self._launch_swatches(), shown)
-        if front is not None and front is self.picker:
+        if self.picker is not None and (front is self.picker or front is None):  # one waiting is drawn too
             return self.picker.lines(cols, self.theme, cap, self.wall_clock())
         if front is not None and front is self.search:
             return self.search.lines(cols, self.theme, cap)
@@ -7323,8 +7563,13 @@ class App(ModesMixin, AgentViewMixin):
         below = SEND_NOW_HINT.format(key=SEND_NOW_KEYS[self.keyboard_protocol]) if send_now else ""
         found = self._image_wait_line(cols)
         waiting = [found] if found is not None else []
-        if self._list_waiting():  # `/model`'s or `/rewind`'s list is on its way
-            waiting.append(truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(LIST_WAIT_LINE, self.theme.muted)), cols))
+        switching = self._switch_line(cols)
+        if switching is not None:
+            waiting.append(switching)
+        loading = self._list_waiting_kind()
+        if loading:  # `/resume`'s, `/model`'s or `/rewind`'s list is on its way
+            line = LIST_WAIT_LINES.get(loading, LIST_WAIT_LINE)
+            waiting.append(truncate_line((Span(" " * cell_width(QUEUE_GLYPH)), Span(line, self.theme.muted)), cols))
         queue = queue_lines([line.shown or line.text for line in self.queued], cols, cap - len(waiting), self.theme,
                             hint, below)
         taken = len(waiting) + len(queue)
