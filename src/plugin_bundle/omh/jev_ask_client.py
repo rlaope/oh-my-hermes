@@ -1,4 +1,6 @@
-"""The one network client in `src/`: POST typed questions to Jev and classify the reply.
+"""POST typed questions to Jev and classify the reply: one of the two network clients in `src/`.
+
+The other is the OMH TUI's update notice (`tui/update_notice.py`).
 
 `omh_jev_ask` is the only caller (`tests/test_handoff_safety_contract_enforcement.py`
 pins that no other module imports this one). Everything here exists to keep a

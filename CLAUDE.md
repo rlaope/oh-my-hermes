@@ -24,9 +24,17 @@ held by the invariants in `tests/test_handoff_safety_contract_enforcement.py`:
   when the user named Jev in that turn and a key resolves (TypeSafe, or
   OpenRouter only with the operator setting in `<omh_home>/jev/settings.json`).
   Stdlib, HTTPS only, a fixed two-host route table, redirects refused.
-  `src/plugin_bundle/omh/jev_ask_client.py` is the only in-process network
-  client in `src/`, pinned by INVARIANT 2's `NETWORK_CLIENT_BRIDGES`.
-  Third-party Jev plugins are never called.
+  `src/plugin_bundle/omh/jev_ask_client.py` is one of the two in-process
+  network clients in `src/`, both pinned by INVARIANT 2's
+  `NETWORK_CLIENT_BRIDGES`. Third-party Jev plugins are never called.
+- The OMH TUI's update notice: GETs npm's latest `oh-my-hermes` version, at
+  most once a day per OMH home, on a background thread, and names a newer one
+  on the info line. Stdlib, HTTPS only, one fixed host (`registry.npmjs.org`),
+  redirects off it refused, only the version string kept, nothing about the
+  person sent. Off with `OMH_TUI_UPDATE_CHECK=0`, `omh theme update-check
+  off`, or an explicit `omh update-check` `off` (a stored mode, not the
+  default). `src/tui/update_notice.py` is the other client in
+  `NETWORK_CLIENT_BRIDGES`, and only `src/tui/app.py` may import it.
 - The `show-reel` toolkit scripts `toolkit/scripts/eleven.py`, `narrate.py`
   (ElevenLabs, by spawning `curl` with the key on stdin) and
   `codex_ref_image.sh` (the user's codex CLI): package data the user runs with

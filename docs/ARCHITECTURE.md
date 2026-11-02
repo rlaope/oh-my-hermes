@@ -2823,8 +2823,8 @@ only the operator's own starred list. The contract names that call, and the
 enforcement suite pins its exact argv, so changing it fails a test rather than
 quietly widening what the sentence covers.
 
-The plugin tool `omh_jev_ask` is the second place, and the only network client
-core omh has in `src/`: `plugin_bundle/omh/jev_ask_client.py` POSTs typed questions to Jev
+The plugin tool `omh_jev_ask` is the second place, and one of the two network
+clients core omh has in `src/`: `plugin_bundle/omh/jev_ask_client.py` POSTs typed questions to Jev
 over one of two fixed HTTPS hosts (`api.typesafe.ai` with `TYPESAFE_API_KEY`,
 or `openrouter.ai` only when the operator also set `openrouter_route` in
 `<omh_home>/jev/settings.json`), refuses every redirect, bounds both bodies and
@@ -2838,6 +2838,20 @@ in `tests/test_handoff_safety_contract_enforcement.py` pins the exception to
 that one file through `NETWORK_CLIENT_BRIDGES`, fails on a stale entry, and
 fails when any module other than the tool imports the bridge. The coding
 delegation lane is unchanged by it.
+
+The OMH TUI's update notice is the other network client: `tui/update_notice.py`
+GETs npm's `latest` version of `oh-my-hermes` from one fixed HTTPS host
+(`registry.npmjs.org`), follows a redirect only to that host, reads a bounded
+reply and keeps only its `version` string, and sends nothing about the person.
+It asks at most once a day per OMH home, on a background thread the screen
+never waits for, and keeps the answer and the time of the ask in
+`<omh_home>/tui/update-check.json`; a failure is silent, keeps what the cache
+knew, and counts as the day's ask. `OMH_TUI_UPDATE_CHECK=0`, `omh theme
+update-check off`, or the launch check `omh update-check` stored as `off`
+turns it off (a home that never stored a mode is not off), and without an OMH
+home nothing is asked.
+INVARIANT 2 lists it in `NETWORK_CLIENT_BRIDGES` with `tui/app.py` as its only
+importer. The coding delegation lane is unchanged by it too.
 
 The OMH TUI's gateway child, `tui/attach/gateway_attach.py`, is the third, and
 it is not core omh: nothing in `src/` imports it, and it runs only on Hermes'
