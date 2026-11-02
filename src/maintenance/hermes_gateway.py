@@ -1,10 +1,11 @@
 """Does a recorded Hermes gateway start predate the OMH bundle its home now carries?
 
-A gateway keeps serving the plugin bundle and skills it loaded at start, so
-after `omh update` a bot that was running through the update still answers
-with pre-update code until someone restarts it. Update already says
-"restart Hermes"; this module says which gateways that sentence is about,
-from file evidence alone.
+A gateway keeps serving the plugin code it loaded at start, so after
+`omh update` a bot that was running through the update still answers with
+pre-update plugin code until someone restarts it; this module says which
+gateways that is, from file evidence alone. Skills are not part of it:
+`refresh_skill_dir_caches` makes a running Hermes re-read OMH's skills
+directory after the generation pointer moves, with no restart.
 
 Hermes writes ``<hermes_home>/gateway.pid`` when a gateway starts (a JSON
 record: ``pid``, ``kind``, ``argv``, ``start_time``, ``hermes_home``, created
@@ -38,23 +39,30 @@ from datetime import UTC, datetime
 import math
 import os
 from pathlib import Path
+import time
 
+from ..install.config_adapter import read_config
 from ..install.plugin_pack import read_plugin_manifest
 from ..local_store import read_json_object
 from ..paths import OmhPaths
-from ..install.skill_registration import hermes_profile_dirs
+from ..install.skill_registration import hermes_profile_dirs, managed_candidate_entries, registration_home_label
 
 GATEWAY_PID_FILENAME = "gateway.pid"
 GATEWAY_STARTS_FILENAME = "gateway-starts.log"
 
 
-def gateway_restart_hints(paths: OmhPaths) -> list[str]:
-    """One line per home whose last recorded gateway start precedes its bundle install."""
+def gateway_restart_hints(paths: OmhPaths, *, unrefreshed_configs: frozenset[str] = frozenset()) -> list[str]:
+    """One line per home whose last recorded gateway start precedes its bundle install.
+
+    `unrefreshed_configs` names the config.yaml files `refresh_skill_dir_caches`
+    could not touch; a gateway there also needs the restart for its skills.
+    """
     hints: list[str] = []
     primary = gateway_restart_hint(
         paths.hermes_home,
         label=str(paths.hermes_home),
         restart_command="hermes gateway restart",
+        skills_reloaded=str(paths.hermes_home / "config.yaml") not in unrefreshed_configs,
     )
     if primary:
         hints.append(primary)
@@ -63,6 +71,7 @@ def gateway_restart_hints(paths: OmhPaths) -> list[str]:
             profile_dir,
             label=f"profile {name}",
             restart_command=f"hermes --profile {name} gateway restart",
+            skills_reloaded=str(profile_dir / "config.yaml") not in unrefreshed_configs,
         )
         if hint:
             hints.append(hint)
@@ -83,7 +92,47 @@ def recorded_gateway_starts(hermes_home: Path) -> list[float]:
     return starts
 
 
-def gateway_restart_hint(hermes_home: Path, *, label: str, restart_command: str) -> str | None:
+def refresh_skill_dir_caches(hermes_home: Path, skills_pointer: Path | None) -> list[dict[str, str]]:
+    """Make every Hermes process re-read OMH's skills directory, without a restart.
+
+    Hermes caches the RESOLVED path of each `skills.external_dirs` entry,
+    keyed by config.yaml's file signature (mtime, size, inode, ctime). OMH
+    registers `<root>/current/skills`, and `current` is the symlink update
+    moves to a new generation, so a running gateway kept resolving the old
+    generation -- and lost every OMH skill once that generation was
+    collected -- until `hermes gateway restart`. Moving the mtime of each
+    config that names the pointer changes that signature, and Hermes
+    resolves the pointer again on its next skill lookup.
+
+    Only a home whose config names `skills_pointer` (matched the way the
+    registration writer matches it, `managed_candidate_entries`) is touched;
+    the content is never rewritten, atime is kept, and a missing config is
+    never created. Best effort: a home that could not be touched is a
+    `failed` row with the reason, never an exception.
+    """
+    if skills_pointer is None:
+        return []
+    homes: list[tuple[str | None, Path]] = [(None, hermes_home), *hermes_profile_dirs(hermes_home)]
+    rows: list[dict[str, str]] = []
+    for profile, home in homes:
+        config = home / "config.yaml"
+        label = registration_home_label(config, profile=profile)
+        try:
+            # The pointer check sits inside the try: a pointer that cannot be
+            # stat'ed is a `failed` row for each home, not an exception.
+            if not config.is_file() or not skills_pointer.is_dir():
+                continue
+            if not managed_candidate_entries(read_config(config), [skills_pointer], hermes_home=home):
+                continue
+            os.utime(config, ns=(config.stat().st_atime_ns, time.time_ns()))
+        except (OSError, UnicodeError, ValueError) as exc:
+            rows.append({"home": label, "config": str(config), "status": "failed", "error": str(exc)})
+            continue
+        rows.append({"home": label, "config": str(config), "status": "refreshed"})
+    return rows
+
+
+def gateway_restart_hint(hermes_home: Path, *, label: str, restart_command: str, skills_reloaded: bool = True) -> str | None:
     """The hint for one home, or None when the files do not prove a stale gateway."""
     if not _pid_record_names_home(hermes_home):
         return None
@@ -98,9 +147,14 @@ def gateway_restart_hint(hermes_home: Path, *, label: str, restart_command: str)
     installed_iso = _iso_utc(installed_at)
     if started_iso is None or installed_iso is None:
         return None
+    reload = (
+        "OMH skills reload on their own, but the new OMH plugin code loads"
+        if skills_reloaded
+        else "the new OMH skills and plugin code load"
+    )
     return (
         f"Hermes gateway for {label}: last recorded start {started_iso} precedes this bundle's "
-        f"install ({installed_iso}); run `{restart_command}`"
+        f"install ({installed_iso}); {reload} only after `{restart_command}`"
     )
 
 
