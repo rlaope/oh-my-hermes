@@ -3124,6 +3124,7 @@ An explainer, motion graphics, kinetic type, a logo or title intro, a 3D scene, 
 - Probe the renderer read-only, in the order `references/genres.md` gives: the `hyperframes` CLI only when `command -v hyperframes` finds it (`npx` would download it), then `toolkit/scripts/render.mjs` with a local Chrome, `puppeteer-core` and FFmpeg, then a frame renderer already installed (such as Python with Pillow) piped to FFmpeg. If none runs, HOLD with the exact install command and ask for consent once; never install, download fonts or call a paid API on your own.
 - Render 3 style frames and view them, render a draft, view its contact sheet, and rebuild the weakest beat once. Export, then measure codec, dimensions, fps, duration, size and sha256 with `ffprobe`; deliver the path with those facts. A storyboard or an HTML file alone is HOLD, not delivery.
 - Fill the frame, use one hue family plus at most one accent, add no meta text (window titles, dimension labels, invented paths), draw no rounded "document" cards as a metaphor, and move the camera on one continuous path rather than stopping at every beat.
+- A promo or social clip of 15 s or less holds one hero scene with no meta text, one number smaller than the logo, and the official logo unboxed at 25% or more of the frame height; check a still sheet against `references/craft-design.md` (Short promo clips) before rendering.
 - A product claim, a real UI or a brand asset on screen moves the video to the full method below.
 
 {bundled_boundary}## Production Method
@@ -13242,6 +13243,21 @@ axis explicitly; a PASS with no named evidence per axis is not a review.
   invented paths) each carry a stated reason or are replaced. FAIL: a default present
   with no rationale, checked against the review prompts in
   `omh-frontend/references/taste-foundations.md`.
+- **Material credibility** — for a composed frame that shows a physical
+  product (a device, a package, hardware), the object reads as a lit model
+  with real materials and a measured tonal range. FAIL: an object built from
+  stacked flat layers, a surface whose measured bulk sits near white around a
+  radial hotspot, or a brand title set in a generic face where the brand's own
+  live typeface was available.
+- **Short-clip discipline** — for a promo or social clip of 15 s or less:
+  one hero scene held throughout, the official logo unboxed at 25% or more of
+  the frame height in the opening, one key number smaller than the logo, and
+  smooth dithered gradients with local light on the subject. FAIL: scene
+  cuts or an end-card lockup, meta text (explanatory labels, subheads, IDs,
+  URLs, footnotes), a second number or a giant extruded one, a small or boxed
+  logo, slop UI (glass cards, pill or "LIVE" badges, stat boxes, invented
+  terminal or dashboard UI), visible banding, or no still sheet reviewed before
+  render.
 
 ## Scoring the axes
 

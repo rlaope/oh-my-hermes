@@ -139,6 +139,7 @@ from .frame import INFO_INSET, MODE_NORMAL, MODE_SHELL, Frame, badge_forms, bran
 from .git_status import GitWatcher
 from .history import SEARCH_ACCEPT, SEARCH_CANCEL, SEARCH_HINTS, HistorySearch, append_entry, history_path, load_history
 from .gateway import (
+    CANCEL_POLL_SECONDS,
     Event,
     GatewayCallError,
     GatewayCancelled,
@@ -319,8 +320,11 @@ from .transcript import (
     compact_count,
     review_line,
 )
+from .update_notice import UpdateCheck, fetch_latest
+from .update_notice_switch import update_check_off
 from .wallpaper import TICK_SECONDS as WALLPAPER_TICK_SECONDS
 from .wallpaper import SCENES, Cell, scene
+from .whats_new import is_due as whats_new_due, read_shown, record_shown, whats_new_forms, whats_new_text
 from .width import cell_width, clusters, line_width, truncate, truncate_left, truncate_line
 from ..version import __version__
 
@@ -547,6 +551,28 @@ EARLY_EDIT_KEYS = frozenset({BACKSPACE, DELETE, LEFT, RIGHT, HOME, END})
 EARLY_EDIT_CTRL_CHARS = frozenset("aeukw")
 STARTUP_TAIL_LINES = 10
 INTERRUPTED_EXIT = 130
+# How long a launch waits for the Hermes gateway before the TUI draws (`_LaunchWait`): for it to come up, and for it
+# to open the session. A gateway that is not answering yet (`GatewayUnavailable.not_ready`: a restart, a refused
+# socket) or that drops the launch's connection while the session opens is tried again within it, while the shell's
+# terminal says what the launch waits for. Past it the launch says what to do, then falls back as before.
+LAUNCH_WAIT_SECONDS = 60.0
+# A normal launch says nothing: the first waiting line comes only after this much quiet.
+LAUNCH_WAIT_QUIET_SECONDS = 1.5
+# The pause before a gateway that was not answering is tried again, and the least time left worth another try.
+LAUNCH_RETRY_SECONDS = 1.0
+LAUNCH_MIN_TRY_SECONDS = 5.0
+# How many times a session call the gateway dropped as not ready is sent again on a new gateway, whatever time is left:
+# each try may have opened a session on the gateway that went away.
+SESSION_RETRY_LIMIT = 2
+# Floor of the session call's deadline, the one it always had: a long gateway start never shortens it.
+SESSION_CALL_SECONDS = 30.0
+LAUNCH_CONNECTING = "omh: connecting to the Hermes gateway… ({seconds}s)"
+LAUNCH_RESTARTING = "omh: the Hermes gateway is restarting; waiting… ({seconds}s)"
+LAUNCH_OPENING = "omh: waiting for the Hermes gateway to open a session… ({seconds}s)"
+LAUNCH_GAVE_UP = (
+    "omh: the Hermes gateway did not answer within {seconds}s; it may still be restarting. "
+    "Check it with `hermes gateway status`, then run `omh` again."
+)
 # Closing the gateway on exit: stdin EOF, then terminate, then kill. The live
 # region is already cleared and the terminal restored before this wait starts.
 CLOSE_GRACE_SECONDS = 0.5
@@ -574,6 +600,11 @@ CARD_KEPT = "kept"
 LAUNCH_UNKNOWN_NOTICE = "The launch look {name!r} saved in {path} is not one OMH has; spectrum is used."
 LAUNCH_NO_NAME_NOTICE = "No theme or launch look named {name}. Themes: {themes}. Launch looks: {looks}."
 LAUNCH_KEPT_NOTICE = "Launch look {name}, kept in {path}."
+# The info line's update notice, beside the badge's version, while npm's latest release is newer (`update_notice`).
+UPDATE_NOTICE = "v{latest} available"
+UPDATE_NOTICE_HOW = " · omh update"
+UPDATE_NOTICE_SHORT = "↑ v{latest}"  # what stays beside the version once the line narrows
+WHATS_NEW_NONE_NOTICE = "There is no What's new written for v{version}."
 GLOW_KEPT_NOTICE = "Working glow {state}, kept in {path}."
 GLOW_SESSION_NOTICE = "Working glow {state} for this session; there is no OMH home to keep it in."
 GLOW_SAVE_FAILED_NOTICE = "Working glow {state} for this session; it could not be saved to {path}: {error}"
@@ -1713,6 +1744,7 @@ class App(ModesMixin, AgentViewMixin):
         pick_model_chains: Callable[..., str] = run_model_chain_picker,
         make_client: Callable[..., GatewayClient] | None = None,
         git: GitWatcher | None = None,
+        fetch_latest: Callable[[], str] = fetch_latest,
     ) -> None:
         self.terminal = terminal
         self.git = git  # the session directory's branch for the row under the info line; None draws no branch
@@ -1906,6 +1938,12 @@ class App(ModesMixin, AgentViewMixin):
         self.launch_picker: LaunchPicker | None = None  # /theme's picker, while open; its highlight is previewed
         self.card_state = CARD_NONE
         self.card_room = 0  # the rows the live card was last fitted to: the form it is kept in once the prompt goes
+        self.whats_new = ""  # the version whose What's new goes under the launch card: once, after an update
+        self.whats_new_recorded = False  # it was drawn, and recorded as said (`_card_lines`)
+        # The once-a-day ask for npm's latest release (`run` starts it; None while off or without an OMH home), and
+        # what asks.
+        self.update_check: UpdateCheck | None = None
+        self.fetch_latest = fetch_latest
         # Hermes' skills, regrouped for the card: the last launch's (last-known) from startup, the session's once
         # `session.info` says.
         self.session_skills: Skills | None = None
@@ -1994,8 +2032,11 @@ class App(ModesMixin, AgentViewMixin):
 
     # ── startup ──
 
-    def startup(self) -> None:
+    def startup(self, wait: Callable[[], bool] | None = None, timeout: float = SESSION_CALL_SECONDS) -> None:
         """Open or resume the session, then ask for the busy mode and for the session's command catalog.
+
+        `wait` and `timeout` are the session call's `cancel` and deadline, used only when `wait` is given (`_run`
+        passes its `_LaunchWait`, which says on the shell's terminal what the launch waits for and never cancels).
 
         Only the session call is awaited: the first frame needs nothing else.
         The busy mode (`config.get`) and the catalog (asked for after the
@@ -2007,10 +2048,11 @@ class App(ModesMixin, AgentViewMixin):
         caller turns each into `FALLBACK_EXIT`.
         """
         resume = self.environ.get("HERMES_TUI_RESUME", "")
+        waiting: dict[str, Any] = {} if wait is None else {"timeout": timeout, "cancel": wait}
         if resume:
-            result = self.client.call("session.resume", {"session_id": resume, "cols": self.size[0]})
+            result = self.client.call("session.resume", {"session_id": resume, "cols": self.size[0]}, **waiting)
         else:
-            result = self.client.call("session.create", self._create_params())
+            result = self.client.call("session.create", self._create_params(), **waiting)
         info = result.get("info")
         self.launch_profile = as_text(info.get("profile_name")) if isinstance(info, dict) else ""
         home = self._snapshot_home()
@@ -2023,6 +2065,7 @@ class App(ModesMixin, AgentViewMixin):
         pick = not resume and self.environ.get(PICK_SESSION_ENV) == "1"  # a bare `omh --resume`: pick one at once
         if not resume and not pick:
             self._ask_last_session()
+            self._whats_new_on_launch()
         self._read_default()
         self.banner_record = self._banner_record(result, resumed=self.stored_id if resume else "")
         self.banner_facts = dict(self.banner_record)
@@ -2059,6 +2102,40 @@ class App(ModesMixin, AgentViewMixin):
             self.theme = self._themed()
         elif home is not None:
             self.transcript.add_notice(LAUNCH_UNKNOWN_NOTICE.format(name=saved, path=theme_store_path(home)), NOTICE_WARN)
+
+    def _whats_new_on_launch(self) -> None:
+        """Put this version's What's new under the launch card when it is due (`whats_new.is_due`), to be recorded as
+        said once it is drawn; a new install, or a version with no entry, records the version now and shows nothing."""
+        home = self._omh_home()
+        if home is None:
+            return
+        if whats_new_due(home, __version__):
+            self.whats_new = __version__
+        elif read_shown(home) != __version__:
+            record_shown(home, __version__)
+
+    def _start_update_check(self) -> None:
+        """Name a newer release beside the badge: the one kept under the OMH home at once, and npm's latest, asked on
+        a thread, once its day is up; nothing at all while it is off or without an OMH home to keep the answer in."""
+        home = self._omh_home()
+        if home is None or update_check_off(self.environ, home):
+            return
+        self.update_check = UpdateCheck(home, __version__, fetch=self.fetch_latest, now=self.wall_clock)
+        self.update_check.start(self._wake_loop)
+
+    def _take_update_check(self) -> None:
+        if self.update_check is not None and self.update_check.take():
+            self.dirty = True
+
+    def _update_notice(self) -> tuple[Line, ...]:
+        """While a newer release is known, the info line's update notice, longest first: `v4.0.5 available · omh
+        update` (the warning colour, then the hint's), then `↑ v4.0.5` (the warning colour)."""
+        latest = self.update_check.latest if self.update_check is not None else ""
+        if not latest:
+            return ()
+        warn, hint = self.theme.warn, self.theme.hint
+        return ((Span(UPDATE_NOTICE.format(latest=latest), warn), Span(UPDATE_NOTICE_HOW, hint)),
+                (Span(UPDATE_NOTICE_SHORT.format(latest=latest), warn),))
 
     def _ask_last_session(self) -> None:
         """Ask for the stored sessions, to say under the banner where the last one is; a refusal says nothing."""
@@ -2356,6 +2433,7 @@ class App(ModesMixin, AgentViewMixin):
         self.poller.start(self._wake_loop)  # a new HUD snapshot wakes the loop as gateway news does
         if self.git is not None:
             self.git.start(self._wake_loop)  # so does a branch or a file count that moved
+        self._start_update_check()  # and npm's answer about the latest release
         try:
             if typed:
                 self._take_input(typed)
@@ -2397,6 +2475,7 @@ class App(ModesMixin, AgentViewMixin):
         self._ask_tail_when_due()
         self._take_hud()
         self._take_board()
+        self._take_update_check()
         self._render_when_due()
 
     def _take_input(self, data: bytes) -> None:
@@ -5509,6 +5588,7 @@ class App(ModesMixin, AgentViewMixin):
         return {
             "help": self._help,
             "keys": self._keys,
+            "whats-new": self._whats_new_command,
             "quit": self._quit,
             "new": self._new_session,
             "redraw": self._redraw,
@@ -5558,6 +5638,14 @@ class App(ModesMixin, AgentViewMixin):
         rows.append(HELP_KEYS)
         rows.append(BARE_HERMES_NOTE)
         self._show_output("/help", "\n".join(rows), whole=True)
+
+    def _whats_new_command(self, arg: str) -> None:
+        """`/whats-new`: this version's What's new under the echo, whenever it is asked for."""
+        text = whats_new_text(__version__)
+        if text:
+            self._show_output("/whats-new", text, whole=True)
+        else:
+            self.transcript.add_notice(WHATS_NEW_NONE_NOTICE.format(version=__version__))
 
     def _reload_skills(self, arg: str) -> None:
         """Hermes re-scans its skills for this session, then the catalog is read again, as Ink's /reload-skills does.
@@ -6270,7 +6358,17 @@ class App(ModesMixin, AgentViewMixin):
             last_title=row.label if row is not None else "", last_id=row.id if row is not None else "",
             last_count=row.message_count if row is not None else 0,
         )
-        return launch_card(self._shown_look(), facts, self._launch_paint(), cols, room, self.session_skills)
+        look, paint = self._shown_look(), self._launch_paint()
+        # What's new under the card, a blank row between: its longest form the card still fits beside in some form.
+        for news in whats_new_forms(self.whats_new, self.theme, cols) if self.whats_new else []:
+            card = launch_card(look, facts, paint, cols, room - len(news) - 1, self.session_skills)
+            if card:
+                home = self._omh_home()
+                if not self.whats_new_recorded and home is not None:  # said: drawn, in either form; tried once
+                    record_shown(home, self.whats_new)
+                    self.whats_new_recorded = True
+                return [*card, (), *news]
+        return launch_card(look, facts, paint, cols, room, self.session_skills)
 
     def _launch_swatches(self) -> dict[str, tuple[Style, ...]]:
         """Each launch look's colours for its row in the /theme picker, each lifted to a glyph's 3:1; while the living
@@ -7233,6 +7331,7 @@ class App(ModesMixin, AgentViewMixin):
             background=background,
             right_spare=int(bool(self.session_title)),  # the title goes before the row does (`_compose_info_right`)
             editing=editing,
+            notice=self._update_notice(),
         )
         # Whether the row's form made it onto the line: what keeps its clock ticking (`_background_second`).
         words = "".join(span.text for span in line)
@@ -7650,17 +7749,127 @@ class _Told:
         return "".join(self.lines)
 
 
-def _start_gateway(client: GatewayClient, stderr: TextIO) -> Event | None:
-    """The gateway's ready event, or None after saying why it did not start."""
+class _LaunchWait:
+    """What a launch says on the shell's terminal while it waits for the Hermes gateway, before the TUI draws.
+
+    Called as the `cancel` of the gateway start and of the session call, which ask it every `CANCEL_POLL_SECONDS`;
+    it never cancels. Quiet for `LAUNCH_WAIT_QUIET_SECONDS`, so a normal launch says nothing; then one line, the
+    phase and the seconds waited, rewritten in place on a terminal (written once per phase anywhere else).
+    It writes to the stream itself, not through `_Told`: a fallback says again why the TUI did not start, never
+    the countdown. `done` erases the line before anything else is said or drawn.
+    """
+
+    def __init__(
+        self, stream: TextIO, clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep
+    ) -> None:
+        self.stream = stream
+        self.clock = clock
+        self.sleep = sleep
+        self.started = clock()
+        self.phase = LAUNCH_CONNECTING
+        self.shown = ""  # the line on the terminal now; "" when none is
+        self.said: list[str] = []  # each phase's first line, in order
+        self.broken = False  # a write failed: nothing more is shown
+
+    def waited(self) -> float:
+        return self.clock() - self.started
+
+    def left(self) -> float:
+        return max(LAUNCH_WAIT_SECONDS - self.waited(), 0.0)
+
+    def can_retry(self) -> bool:
+        return self.left() >= LAUNCH_MIN_TRY_SECONDS
+
+    def __call__(self) -> bool:
+        waited = self.waited()
+        if waited < LAUNCH_WAIT_QUIET_SECONDS or self.broken:
+            return False
+        line = self.phase.format(seconds=int(waited))
+        tty = _is_tty(self.stream)
+        if not self.said or self.said[-1] != self.phase:
+            self.said.append(self.phase)
+        elif not tty or line == self.shown:
+            return False
+        self._write(f"\r\x1b[2K{line}" if tty else line + "\n")
+        self.shown = line if tty and not self.broken else ""
+        return False
+
+    def _write(self, text: str) -> None:
+        """Best effort: a stream that fails once (closed, or its terminal gone) is not written to again."""
+        try:
+            self.stream.write(text)
+            self.stream.flush()
+        except (OSError, ValueError):
+            self.broken = True
+
+    def pause(self) -> None:
+        """The wait before trying again, saying that the gateway is restarting."""
+        self.phase = LAUNCH_RESTARTING
+        until = self.clock() + LAUNCH_RETRY_SECONDS
+        while (remaining := until - self.clock()) > 0:
+            self()
+            self.sleep(min(remaining, CANCEL_POLL_SECONDS))
+        self()
+
+    def done(self) -> None:
+        if self.shown and not self.broken:
+            self._write("\r\x1b[2K")
+        self.shown = ""
+
+
+def _is_tty(stream: TextIO) -> bool:
     try:
-        return client.start()
+        return stream.isatty()
+    except (AttributeError, ValueError):  # no isatty, or a closed stream
+        return False
+
+
+def _start_gateway(
+    client: GatewayClient, stderr: TextIO, wait: _LaunchWait | None = None, retry: bool = False
+) -> Event | GatewayUnavailable | None:
+    """The gateway's ready event; the error when it is not answering yet, `retry` is asked for and `wait` leaves
+    time to try again; None after saying why it did not start."""
+    try:
+        if wait is None:
+            return client.start()
+        return client.start(ready_timeout=max(wait.left(), CANCEL_POLL_SECONDS), cancel=wait)
     except GatewayUnavailable as error:
+        if wait is not None and retry and error.not_ready and wait.can_retry():
+            return error
+        if wait is not None:
+            wait.done()
+            if error.not_ready or not wait.left():
+                _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
         _say(stderr, f"omh: the Hermes gateway did not start: {error}")
         for line in error.stderr_tail[-STARTUP_TAIL_LINES:]:
             _say(stderr, f"  {clean_text(line)}")  # the gateway's own text: no escape reaches the shell
     except GatewayCallError as error:
+        if wait is not None:
+            wait.done()
         _say(stderr, f"omh: the Hermes gateway refused the OMH TUI: {error}")
     return None
+
+
+def _open_session(
+    client: GatewayClient,
+    stderr: _Told,
+    wait: _LaunchWait,
+    respawn: Callable[[], GatewayClient] | None,
+) -> tuple[GatewayClient, Event] | GatewayClient:
+    """The client whose gateway sent `gateway.ready`, with that event; the last client tried, alone, after saying why
+    none did. A gateway that is not answering yet is closed and a new one spawned (`respawn`) while `wait` allows."""
+    while True:
+        ready = _start_gateway(client, stderr, wait, retry=respawn is not None)
+        if not isinstance(ready, GatewayUnavailable):
+            return client if ready is None else (client, ready)
+        assert respawn is not None  # `_start_gateway` returns the error only when asked to retry
+        wait.pause()
+        try:
+            client = respawn()
+        except GatewayUnavailable as error:
+            wait.done()
+            _say(stderr, f"omh: the Hermes gateway did not start: {error}")
+            return client
 
 
 def _run(
@@ -7671,36 +7880,79 @@ def _run(
     make_poller: Callable[[str | None, str | None], PollerLike],
     make_client: Callable[..., GatewayClient] | None = None,
     make_git: Callable[[str], GitWatcher] = GitWatcher,
+    fetch_latest: Callable[[], str] = fetch_latest,
 ) -> int:
     """Start the gateway, open the session, then run the loop on the raw terminal; the exit code.
 
-    `make_client` spawns a gateway again after a crash (`App._respawn_gateway`).
-    A session the person closed exits `CLOSED_EXIT` rather than 0 when `omh`
-    launched the TUI (`SESSION_FILE_ENV` set): `omh` prints the exit card,
-    Hermes' launcher prints nothing, and the shell still sees 0.
+    `make_client` spawns a gateway again after a crash (`App._respawn_gateway`), and, before the TUI draws, in
+    place of one that was not answering yet (`_LaunchWait`). A session the person closed exits `CLOSED_EXIT`
+    rather than 0 when `omh` launched the TUI (`SESSION_FILE_ENV` set): `omh` prints the exit card, Hermes'
+    launcher prints nothing, and the shell still sees 0.
     """
-    ready = _start_gateway(client, stderr)
-    if ready is None:
-        return request_fallback(environ, stderr.said())
-    terminal = open_terminal()
-    app = App(
-        terminal,
-        client,
-        environ,
-        poller=make_poller(environ.get("OMH_HOME") or None, environ.get("HERMES_HOME") or None),
-        theme=initial_theme(ready.payload, environ.get("OMH_HOME") or None),
-        make_client=make_client,
-        # The session's directory as the launcher names it; with none named, no branch (never the TUI's own cwd).
-        # TERMINAL_CWD is the attach entry's own fallback for the session directory (`gateway_attach`).
-        git=make_git(cwd) if (cwd := environ.get("HERMES_TUI_CWD") or environ.get("HERMES_CWD")
-                              or environ.get("TERMINAL_CWD")) else None,
-    )
+    first = client
+    wait = _LaunchWait(getattr(stderr, "stream", stderr))  # past `_Told`: the countdown is not re-said
+    spawned: list[GatewayClient] = []  # the clients spawned here in place of one that was not answering
+
+    def spawn_again() -> GatewayClient:
+        assert make_client is not None
+        spawned.append(make_client(gateway_spawn(environ)))
+        return spawned[-1]
+
+    respawn = spawn_again if make_client is not None else None
+    app: App | None = None
+    session_retries = 0
     try:
-        app.startup()
-    except (GatewayCallError, GatewayTimeout, GatewayUnavailable) as error:
-        _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {error}")
-        return request_fallback(environ, stderr.said())
-    try:
+        while True:
+            opened = _open_session(client, stderr, wait, respawn)
+            if not isinstance(opened, tuple):
+                client = opened
+                return request_fallback(environ, stderr.said())
+            client, ready = opened
+            if app is None:
+                app = App(
+                    open_terminal(),
+                    client,
+                    environ,
+                    poller=make_poller(environ.get("OMH_HOME") or None, environ.get("HERMES_HOME") or None),
+                    theme=initial_theme(ready.payload, environ.get("OMH_HOME") or None),
+                    make_client=make_client,
+                    # The session's directory as the launcher names it; with none named, no branch (never the TUI's
+                    # own cwd). TERMINAL_CWD is the attach entry's own fallback for the session directory
+                    # (`gateway_attach`).
+                    git=make_git(cwd) if (cwd := environ.get("HERMES_TUI_CWD") or environ.get("HERMES_CWD")
+                                          or environ.get("TERMINAL_CWD")) else None,
+                    fetch_latest=fetch_latest,
+                )
+            app.client = client
+            wait.phase = LAUNCH_OPENING
+            try:
+                app.startup(wait=wait, timeout=max(wait.left(), SESSION_CALL_SECONDS))
+                break
+            except GatewayUnavailable as error:
+                failure: GatewayUnavailable = error
+            except (GatewayCallError, GatewayTimeout) as error:
+                wait.done()
+                if isinstance(error, GatewayTimeout):
+                    _say(stderr, LAUNCH_GAVE_UP.format(seconds=math.ceil(wait.waited())))
+                _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {error}")
+                return request_fallback(environ, stderr.said())
+            # The gateway went away as not ready while the session opened (a restart's going-away close): another
+            # try, at most `SESSION_RETRY_LIMIT`. Any other exit (a crash answering the call) falls back at once.
+            if respawn is not None and failure.not_ready and wait.can_retry() and session_retries < SESSION_RETRY_LIMIT:
+                session_retries += 1
+                client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=CLOSE_GRACE_SECONDS)
+                wait.pause()
+                wait.phase = LAUNCH_CONNECTING
+                try:
+                    client = respawn()
+                    continue
+                except GatewayUnavailable as error:
+                    failure = error
+            wait.done()
+            _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {failure}")
+            return request_fallback(environ, stderr.said())
+        wait.done()
+        terminal = app.terminal
         with terminal:
             background, typed, row = terminal.query_background()
             app.adopt_background(background, environ)
@@ -7708,8 +7960,11 @@ def _run(
             app.clear_launch_screen(row)
             code = app.run(typed)
     finally:
-        if app.client is not client:  # a gateway spawned after a crash; the caller reaps the first one
-            app.client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
+        wait.done()  # however the launch ends (Ctrl+C, a signal, an error), the waiting line does not stay on the shell
+        # The gateways spawned here or after a crash; the caller reaps the first one. A closed one returns at once.
+        for spawned_client in dict.fromkeys([*spawned, *([app.client] if app is not None else [])]):
+            if spawned_client is not first:
+                spawned_client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
     if app.farewell:
         _say(stderr, app.farewell)
     return CLOSED_EXIT if code == 0 and environ.get(SESSION_FILE_ENV) else code
@@ -7724,8 +7979,10 @@ def main(
     open_terminal: Callable[[], TerminalLike] | None = None,
     make_client: Callable[..., GatewayClient] = GatewayClient,
     make_poller: Callable[[str | None, str | None], PollerLike] = HudPoller,
+    fetch_latest: Callable[[], str] = fetch_latest,
 ) -> int:
-    """Start the OMH TUI and return its exit code (`FALLBACK_EXIT` when it could not start)."""
+    """Start the OMH TUI and return its exit code (`FALLBACK_EXIT` when it could not start). `fetch_latest` is what
+    asks npm for the latest release (`update_notice`)."""
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     stderr = _Told(sys.stderr if stderr is None else stderr)
@@ -7744,7 +8001,8 @@ def main(
     try:
         # The terminal picks its key reports from the environment the TUI was given (TERM_PROGRAM and kin).
         return _run(
-            client, environ, stderr, open_terminal or (lambda: Terminal(environ=environ)), make_poller, make_client
+            client, environ, stderr, open_terminal or (lambda: Terminal(environ=environ)), make_poller, make_client,
+            fetch_latest=fetch_latest,
         )
     except KeyboardInterrupt:
         # Ctrl+C is a signal, not a key, until the terminal goes raw: while the gateway starts

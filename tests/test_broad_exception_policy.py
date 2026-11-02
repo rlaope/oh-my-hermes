@@ -621,6 +621,17 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "and keeps a traceback from being printed over the board.",
     ),
     ClassifiedSite(
+        "src/tui/update_notice.py",
+        "_ask",
+        INTENTIONAL,
+        "The update notice's thread asks npm for the latest version through urllib, which can raise an "
+        "http.client error the bridge may not import as well as OSError and ValueError. Any failure keeps the "
+        "version the cache already had (so the notice neither appears nor goes on a failed ask) and is written "
+        "into `<omh_home>/tui/update-check.json` as `problem`, the exception class, beside `checked_at`, so the "
+        "record says the ask failed rather than that no newer release exists; catching it keeps a traceback from "
+        "being printed over the TUI's screen.",
+    ),
+    ClassifiedSite(
         "src/tui/panels.py",
         "_read",
         INTENTIONAL,
@@ -930,8 +941,11 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 95 -> 96 / 86 -> 87: `export_check.round_end_note`, the always-on round-end
 # read of the turn's edited `.py` files for dangling exports (a failure logs a
 # named warning and adds no note).
-EXPECTED_HANDLER_COUNT = 96
-EXPECTED_ANCHOR_COUNT = 87
+# 96 -> 97 / 87 -> 88: `update_notice.UpdateCheck._ask`, the OMH TUI's update
+# notice thread (a failure keeps the cached version and is recorded as
+# `problem`, never a traceback over the screen).
+EXPECTED_HANDLER_COUNT = 97
+EXPECTED_ANCHOR_COUNT = 88
 
 
 class DerivedSite(NamedTuple):

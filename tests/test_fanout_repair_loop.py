@@ -15,9 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
-import shlex
 import subprocess
-import sys
 import threading
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -29,6 +27,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from _fanout_interrupt_flag import InterruptFlagIsolatedTestCase  # noqa: E402
+from _verification_python import verification_python  # noqa: E402
 from omh.commands.coding import (  # noqa: E402
     FANOUT_DISPATCH_BUSY_EXIT_CODE,
     _brief_repair,
@@ -61,8 +60,8 @@ from omh.workflows.observation_journal import read_observation_events  # noqa: E
 
 _GOAL = "make the value check pass"
 _CHECK_SCRIPT = "check_value.py"
-_CHECK = f"{shlex.quote(sys.executable)} {_CHECK_SCRIPT}"
-_PASSING = f"{shlex.quote(sys.executable)} -c pass"
+_CHECK = f"{verification_python()} {_CHECK_SCRIPT}"
+_PASSING = f"{verification_python()} -c pass"
 # Exits 1 unless the unit has written the fixed value; prints a marker so a
 # test can prove no output text reaches the repair brief.
 _CHECK_SOURCE = (
@@ -283,7 +282,7 @@ class RepairReachesVerifiedTests(unittest.TestCase):
         self.assertNotIn("codex", brief_text)
 
     def test_a_failing_task_linked_test_is_a_repair_trigger(self) -> None:
-        runner = f"{shlex.quote(sys.executable)} -m unittest"
+        runner = f"{verification_python()} -m unittest"
         test_source = (
             "import pathlib, unittest\n\n\n"
             "class ValueTests(unittest.TestCase):\n"
@@ -792,7 +791,7 @@ class RepairTriggerNegativeTests(unittest.TestCase):
         self.assertEqual(_fanout_dispatch_exit_code(summary), 0)
 
     def test_a_reproduction_units_expected_failure_is_not_repaired(self) -> None:
-        repro_command = f"{shlex.quote(sys.executable)} -c \"raise SystemExit(1)\""
+        repro_command = f"{verification_python()} -c \"raise SystemExit(1)\""
         units = [
             {"unit_id": "repro", "title": "Reproduce", "owner": "codex", "file_scope": ["tests/"],
              "kind": "reproduction", "reproduction_command": repro_command,

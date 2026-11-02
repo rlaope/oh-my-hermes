@@ -51,6 +51,21 @@ axis explicitly; a PASS with no named evidence per axis is not a review.
   invented paths) each carry a stated reason or are replaced. FAIL: a default present
   with no rationale, checked against the review prompts in
   `omh-frontend/references/taste-foundations.md`.
+- **Material credibility** — for a composed frame that shows a physical
+  product (a device, a package, hardware), the object reads as a lit model
+  with real materials and a measured tonal range. FAIL: an object built from
+  stacked flat layers, a surface whose measured bulk sits near white around a
+  radial hotspot, or a brand title set in a generic face where the brand's own
+  live typeface was available.
+- **Short-clip discipline** — for a promo or social clip of 15 s or less:
+  one hero scene held throughout, the official logo unboxed at 25% or more of
+  the frame height in the opening, one key number smaller than the logo, and
+  smooth dithered gradients with local light on the subject. FAIL: scene
+  cuts or an end-card lockup, meta text (explanatory labels, subheads, IDs,
+  URLs, footnotes), a second number or a giant extruded one, a small or boxed
+  logo, slop UI (glass cards, pill or "LIVE" badges, stat boxes, invented
+  terminal or dashboard UI), visible banding, or no still sheet reviewed before
+  render.
 
 ## Scoring the axes
 

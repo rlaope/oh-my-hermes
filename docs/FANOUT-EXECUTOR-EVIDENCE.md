@@ -94,7 +94,7 @@ stream:
 | --- | --- |
 | `fanout_id`, `unit_id`, `run_ref`, `owner`, `attempt_id`, `worktree_ref`, `base_sha`, `observed_revision` | Dispatcher-owned identity of the failed attempt. |
 | `phase` | `preflight`, `worktree`, `launch`, `worker`, `timeout`, `unit_result`, `verification`, or `dispatcher`. |
-| `reason` | `denial`, `missing_binary`, `spawn_error`, `nonzero`, `deadline`, `malformed_result`, or `internal_error`. |
+| `reason` | `denial`, `missing_binary`, `spawn_error`, `nonzero`, `deadline`, `malformed_result`, `internal_error`, `executor_sandbox_read_only`, or `executor_sandbox_start_failed` (the executor's own sandbox refused writes or never started; see [child-environment policy](CHILD-ENVIRONMENT-POLICY.md#codex-on-native-windows)). |
 | `returncode`, `exit_code_source` | The observed exit and whether it came from the `process`, was `synthetic`, or was `not_observed` (for example a missing binary). |
 | `streams[]` | One entry per stream: `state`, `reason`, `text`, `limit_bytes` (2000), `limit_lines` (20), `original_bytes`, `original_lines`, `kept_bytes`, `kept_lines`, `truncated`, `truncation_reason`, `digest`, `digest_basis: sanitized_utf8`. |
 
