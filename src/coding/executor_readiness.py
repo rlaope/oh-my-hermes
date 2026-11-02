@@ -22,6 +22,8 @@ from .fanout_executor_sessions import (
 from ..executors import EXECUTOR_PROFILES, canonical_executor_profile, executor_label
 from ..local_store import atomic_write_json, read_json_object_result, utc_now
 from ..paths import OmhPaths, find_project_root
+from .codex_windows_sandbox import CODEX_WINDOWS_SANDBOX_READ_ONLY_NOTE, codex_windows_sandbox_signal
+from .fanout_settings import stored_codex_windows_sandbox
 from .pre_handoff_readiness import (
     build_pre_handoff_repair_card,
     evaluate_pre_handoff_readiness,
@@ -464,6 +466,26 @@ def _with_advisory_signals(paths: OmhPaths, profile: str, result: dict[str, obje
     result["auth_signal"] = auth_signal_for_profile(profile)
     result["last_limit_signal"] = last_limit_signal_for_profile(paths, profile)
     result["last_auth_failure_signal"] = last_auth_failure_signal(paths, profile)
+    if profile == "codex":
+        # Recomputed per call like the markers above: the user edits
+        # config.toml between probes, and a cached read would keep warning.
+        try:
+            override = stored_codex_windows_sandbox(paths.omh_home)
+        except ValueError:
+            # The dispatch itself refuses a broken settings file loudly; the
+            # readiness surface reports the Codex-side answer meanwhile.
+            override = ""
+        signal = codex_windows_sandbox_signal(
+            platform_name=_os_name(),
+            environ=os.environ,
+            home=Path.home(),
+            project_root=find_project_root(),
+            dispatch_override=override,
+        )
+        result["windows_sandbox"] = signal
+        if signal["write_capability"] == "read_only_expected" and result.get("available"):
+            result["summary"] = f"{result.get('summary', '')} {CODEX_WINDOWS_SANDBOX_READ_ONLY_NOTE}".strip()
+            result["next_action"] = "configure_codex_windows_sandbox"
     return result
 
 
@@ -479,18 +501,39 @@ def _path_resolutions(command: str) -> list[str]:
     for directory in os.environ.get("PATH", "").split(os.pathsep):
         if not directory:
             continue
-        candidate = Path(directory) / command
-        try:
-            if not candidate.is_file() or not os.access(candidate, os.X_OK):
+        for name in _executable_names(command):
+            candidate = Path(directory) / name
+            try:
+                if not candidate.is_file() or not os.access(candidate, os.X_OK):
+                    continue
+                real = str(candidate.resolve())
+            except OSError:
                 continue
-            real = str(candidate.resolve())
-        except OSError:
-            continue
-        if real in seen:
-            continue
-        seen.add(real)
-        resolutions.append(str(candidate))
+            if real in seen:
+                continue
+            seen.add(real)
+            resolutions.append(str(candidate))
     return resolutions
+
+
+def _os_name() -> str:
+    """`os.name`, behind a seam: patching `os.name` itself retypes every `Path()`."""
+    return os.name
+
+
+def _executable_names(command: str) -> tuple[str, ...]:
+    """The file names `command` can run as here.
+
+    On Windows a bare name runs only through a PATHEXT extension, which is
+    what `shutil.which` resolves too. npm installs an extensionless POSIX
+    shell shim next to `codex.CMD`; Windows sees `X_OK` on any file, so
+    without this the shim was spawned first and failed with
+    `[WinError 193] %1 is not a valid Win32 application` (#2471).
+    """
+    if _os_name() != "nt" or Path(command).suffix:
+        return (command,)
+    extensions = [ext for ext in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";") if ext]
+    return tuple(command + ext.lower() for ext in extensions)
 
 
 def _observed_version(binary: str, args: list[str]) -> str:

@@ -329,6 +329,19 @@ class FanoutOutput:
                         stream['reason'] = 'not_captured'
             return snapshots
 
+    def sandbox_refusal(self) -> str:
+        """The executor-sandbox failure reason either stream named, or "".
+
+        Start failure outranks read-only: a sandbox that never started explains
+        every refusal after it.
+        """
+        with self._lock:
+            seen = set().union(*(stream.sandbox_refusals for stream in self._streams.values()))
+        for reason in ('executor_sandbox_start_failed', 'executor_sandbox_read_only'):
+            if reason in seen:
+                return reason
+        return ''
+
     def error_window(self, stream: str) -> str:
         """Ephemeral bounded legacy retry/auth classifier input; NEVER persist."""
         if stream not in ('stdout', 'stderr'):
