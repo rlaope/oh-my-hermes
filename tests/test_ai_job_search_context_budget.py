@@ -232,7 +232,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # decision-prototype's artifact-shapes pointer (body and quality bar);
         # only plan and decision-prototype move, and main's producer gives the
         # previous pin ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
-        self.assertEqual(_digest(legacy_hashes), 'f0f941b8604a5e4680dad6819edb593cf59048d03d84c4567279dfad8908bf42')
+        # The #2503 review round (the refactor-plan handoff named by its real
+        # shape, every earlier same-file slice as a direct dependency, the
+        # append-only file task, and the checklist matching the bar) moves
+        # plan only; the round's first commit gives the previous pin
+        # f0f941b8604a5e4680dad6819edb593cf59048d03d84c4567279dfad8908bf42.
+        self.assertEqual(_digest(legacy_hashes), 'bd65a5ebdc2a486afcdab7b20436b6474d86720203ddc0f0eee0fa921e023196')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

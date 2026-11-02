@@ -27,7 +27,7 @@ The question sounds like "does this state model refuse that sequence" or "can th
 
 - When the receipt lets later work reference the prototype code, commit it on a named throwaway ref: the temporary worktree's own branch, named for the decision id (for example `prototype/<decision_id>`) and declared with the scratch boundary. The receipt cites the ref and the commit.
 - The ref is never merged and never becomes the default branch. Pushing it to a remote is external publication and goes through the existing approval gate.
-- Removing the worktree directory is the cleanup to observe; `discarded` then means the scratch boundary was cleaned, while the ref keeps the evidence. Without reference permission, the branch is deleted with the worktree and the cleanup observes both.
+- Removing the worktree directory is the cleanup to observe. Record `keep_discard_decision` as kept on the ref and `cleanup_status` as worktree removed, ref retained, never `discarded`, since the code still exists. Without reference permission, the branch is deleted with the worktree, the cleanup observes both, and only then is the result `discarded`.
 - A later accepted plan lifts the pure module or rebuilds the chosen variant to production standard; it never merges the prototype branch.
 
 ## Attribution
