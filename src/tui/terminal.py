@@ -78,7 +78,7 @@ import time
 from types import FrameType, TracebackType
 from typing import Protocol
 
-from .screen import AUTOWRAP_ON, SHOW_CURSOR
+from .screen import AUTOWRAP_ON, CURSOR_SHAPE_DEFAULT, SHOW_CURSOR
 from .style import CSI, SGR_RESET
 
 try:  # pragma: no cover - exercised by platform, not by a branch test
@@ -111,7 +111,7 @@ MOUSE_REPORTING_OFF = f"{CSI}?1006l{MOUSE_DRAG_OFF}{CSI}?1000l"
 # Hermes' own TUI does on every exit (hermes-ink `ink.tsx`, its signal-exit path
 # too), so no exit path depends on remembering whether they were asked for.
 RESTORE_SEQUENCE = (
-    f"{SGR_RESET}{AUTOWRAP_ON}{SHOW_CURSOR}{MODIFY_OTHER_KEYS_OFF}{KITTY_KEYBOARD_POP}"
+    f"{SGR_RESET}{AUTOWRAP_ON}{SHOW_CURSOR}{CURSOR_SHAPE_DEFAULT}{MODIFY_OTHER_KEYS_OFF}{KITTY_KEYBOARD_POP}"
     f"{MOUSE_REPORTING_OFF}{BRACKETED_PASTE_OFF}"
 )
 

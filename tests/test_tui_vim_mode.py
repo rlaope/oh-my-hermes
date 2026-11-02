@@ -16,6 +16,7 @@ clusters of more than one code point.
 
 from __future__ import annotations
 
+import re
 import string
 import unittest
 
@@ -28,6 +29,7 @@ from test_tui_rewind import Clock
 from omh.tui.app import DOUBLE_ESCAPE_SECONDS, App, PathItem, vim_mode
 from omh.tui.composer import CANCEL, NONE, SUBMIT, VIM_INSERT, VIM_NORMAL, Composer
 from omh.tui.gateway import ServerRequest
+from omh.tui.screen import CURSOR_SHAPE_BEAM, CURSOR_SHAPE_BLOCK, CURSOR_SHAPE_DEFAULT
 from omh.tui.keys import BACKSPACE, CHAR, DELETE, DOWN, ENTER, ESCAPE, LEFT, TAB, UP, Key, KeyDecoder, Paste
 from omh.tui.modes import chip_column, editing_label, info_line, mode_label
 from omh.tui.frame import MODE_ACCEPT, MODE_NORMAL
@@ -986,6 +988,50 @@ class InfoLineTests(unittest.TestCase):
         label = editing_label(VIM_INSERT, MODE_ACCEPT, DEFAULT_THEME)
         self.assertEqual(chip_column(MODE_ACCEPT, DEFAULT_THEME, VIM_INSERT), line_width(label) + 3)
         self.assertEqual(editing_label("", MODE_ACCEPT, DEFAULT_THEME), mode_label(MODE_ACCEPT, DEFAULT_THEME))
+
+
+class CursorShapeTests(unittest.TestCase):
+    """The terminal's cursor follows the editing mode (DECSCUSR): a beam in INSERT, a block in NORMAL."""
+
+    @staticmethod
+    def shapes(app: App) -> list[str]:
+        app.terminal.writes.clear()
+        app._render()
+        return [shape for text in app.terminal.writes for shape in re.findall(r"\x1b\[\d q", text)]
+
+    def test_the_shape_follows_insert_and_normal_and_is_written_only_when_it_changes(self) -> None:
+        app, _client = make_app()
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BEAM])
+        self.assertEqual(self.shapes(app), [])
+        app._on_input(ESC)
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BLOCK])
+        app._on_input(Key(CHAR, "i"))
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_BEAM])
+
+    def test_without_vim_mode_the_terminal_keeps_its_own_shape(self) -> None:
+        app, _client = make_app()
+        self.assertEqual(self.shapes(app), [])
+        self.assertIsNone(app.cursor_shape)
+
+    def test_turning_vim_mode_off_or_leaving_gives_the_terminals_shape_back(self) -> None:
+        app, _client = make_app()
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.shapes(app)
+        app._take_settings({"config": {"display": {"vim_mode": False}}})
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_DEFAULT])
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.shapes(app)
+        app.terminal.writes.clear()
+        app._shutdown()
+        self.assertIn(CURSOR_SHAPE_DEFAULT, app.terminal.writes)
+
+    def test_a_question_that_takes_the_keys_gives_the_terminals_shape_back(self) -> None:
+        app, _client = make_app()
+        app._take_settings({"config": {"display": {"vim_mode": True}}})
+        self.shapes(app)
+        app._on_server_request(ServerRequest("srq-1", "approval", {"command": "rm -rf ./x"}))
+        self.assertEqual(self.shapes(app), [CURSOR_SHAPE_DEFAULT])
 
 
 if __name__ == "__main__":

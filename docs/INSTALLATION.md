@@ -1304,6 +1304,9 @@ a true turns it on (a number other than 0 too, or, written by hand as a
 string, `true`, `yes`, `on` or `1`); off or absent, every key does what the
 rest of this page says.
 
+- The terminal's cursor follows the mode: a steady beam in INSERT, a steady block in NORMAL (DECSCUSR, `CSI Ps SP q`),
+  as `hermes --cli` does. The terminal's own shape is back while a question or picker has the keys, when vim mode
+  goes off, and on exit or Ctrl+Z. A terminal that ignores the sequence keeps its own shape.
 - The composer starts in INSERT, and the info line says `INSERT` or `NORMAL`
   first on its left, before accept or plan. In INSERT every key does what it
   does without vim mode except Esc: it goes to NORMAL, steps the caret back
