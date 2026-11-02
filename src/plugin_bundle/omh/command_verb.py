@@ -12,11 +12,22 @@ from __future__ import annotations
 import re
 
 from .korean_request import korean_request
-from .request_lead import after_courtesy
+from .request_lead import after_courtesy, courtesy_opener_length
 
 DIRECT_CODING_EDIT_VERBS = frozenset(
     {"add", "adjust", "build", "change", "delete", "edit", "fix", "implement", "make", "patch", "remove", "rename", "set", "tweak", "update"}
 )
+# A request also opens with a code edit on these verbs, which the direct
+# code-edit guard in `policy` does not read: "OMH: migrate the loader to
+# pathlib", "refactor the parser". Read only where a caller asks for the wide
+# lead (`leads_with_code_edit(..., wide=True)`): a report that quotes the
+# user's own ask ("Migrate the DB was all I asked, but OMH chose ...") opens
+# with the same verb, so the report reader keeps the narrow set (#2485).
+_CODE_EDIT_LEAD_VERBS = DIRECT_CODING_EDIT_VERBS | frozenset({"migrate", "refactor", "rewrite"})
+# A request that names the tool before the edit: "using OMH, rename ...",
+# "with Hermes, add ...". The tool is one of these names, then the verb.
+_TOOL_LEADS = frozenset({"using", "with"})
+_TOOL_NAMES = frozenset({"omh", "oh-my-hermes", "hermes"})
 # The Korean requested verbs of a code edit, as `korean_request` reads them: a
 # 하다 verb's noun ("수정" from "수정해줘") or the stem before the ending ("고쳐"
 # from "고쳐줘"). The same verbs the direct code-edit guard in `policy` reads,
@@ -97,25 +108,144 @@ def gives_command(clause: str) -> bool:
     return bool(words) and words[0] in REQUEST_COMMAND_VERBS or leads_with_code_edit(clause)
 
 
-def leads_with_code_edit(normalized_query: str) -> bool:
+# What "find out" asks when it has no clause of its own and so refers to the
+# clause before it: "find out why", "find out the reason", "find out what
+# happened (there)", "find out what caused it", "find out how that happened".
+_FIND_OUT_BARE_QUESTIONS = frozenset(
+    {
+        ("why",), ("reason",), ("reasons",), ("the", "reason"), ("the", "reasons"),
+        ("what", "happened"), ("what", "went", "wrong"),
+        ("what", "caused", "it"), ("what", "caused", "that"), ("what", "caused", "this"),
+        ("how", "it", "happened"), ("how", "that", "happened"), ("how", "this", "happened"),
+    }
+)
+_FIND_OUT_BARE_TAILS = frozenset({"there", "here", "again", "for", "me", "us", "please", "pls", "thanks"})
+
+
+# A find-out clause that asks about OMH's own choice: "find out what made it
+# pick that", "find out why OMH routed it there", "find out what led it to do
+# that". Its subject is OMH or a pronoun for it, then a choice verb.
+_CHOICE_SUBJECTS = frozenset({"it", "omh", "they", "that"})
+_CHOICE_VERB_FORMS = frozenset(
+    {
+        "pick", "picks", "picked", "picking", "choose", "chooses", "chose", "chosen", "choosing",
+        "select", "selects", "selected", "selecting", "route", "routes", "routed", "routing",
+        "decide", "decides", "decided",
+    }
+)
+_DO_THAT = frozenset({("do", "that"), ("did", "that"), ("does", "that"), ("do", "this"), ("did", "this"), ("do", "so")})
+
+
+_CHOICE_ANAPHORS = frozenset({"that", "this", "it", "them", "there", "so"})
+
+
+def find_out_asks_about_choice(clause: str) -> bool:
+    """`clause` is "find out" with a clause of its own about OMH's choice ("find out what made it pick that").
+
+    The choice verb's object is the choice itself (that, this, it, there, so)
+    or nothing, as in "why it picked that" or "how it decided to select that".
+    With an object of its own ("which worker it picked last night", "why it
+    chose arm64") the subject is the user's artifact, and it does not refer
+    back.
+    """
+    rest = _after_find_out(clause)
+    if not rest:
+        return False
+    if any(pair in _DO_THAT for pair in zip(rest, rest[1:])):
+        return True
+    for index in range(len(rest) - 1):
+        if rest[index] in _CHOICE_SUBJECTS and rest[index + 1] in _CHOICE_VERB_FORMS:
+            after = index + 2
+            while rest[after : after + 1] == ["to"] and rest[after + 1 : after + 2] and rest[after + 1] in _CHOICE_VERB_FORMS:
+                after += 2
+            if after >= len(rest) or rest[after] in _CHOICE_ANAPHORS:
+                return True
+    return False
+
+
+def find_out_refers_back(clause: str) -> bool:
+    """`clause` is "find out" with only a bare cause question, about the clause before it ("find out why").
+
+    False for "find out" with its own content clause ("find out which keys
+    are unused", "find out whether it retries"), and for a clause that is not
+    "find out" at all.
+    """
+    rest = _after_find_out(clause)
+    if rest is None:
+        return False
+    while rest and rest[-1] in _FIND_OUT_BARE_TAILS:
+        rest = rest[:-1]
+    return tuple(rest) in _FIND_OUT_BARE_QUESTIONS
+
+
+def _after_find_out(clause: str) -> list[str] | None:
+    words = command_words(clause)
+    if words[:1] != ["find"]:
+        return None
+    rest = words[1:]
+    while rest[:1] and rest[0] in _INQUIRY_SKIPPED:
+        rest = rest[1:]
+    return rest[1:] if rest[:1] == ["out"] else None
+
+
+def asks_to_find_out(clause: str) -> bool:
+    """`clause` (folded) opens with "find out" ("find out which keys are unused", "can you find me out why").
+
+    `gives_command` never reads it as a command. Whether it asks about what OMH
+    did or gives the user's own task depends on the clause before it, which the
+    workflow-intent classifier reads.
+    """
+    return _after_find_out(clause) is not None
+
+
+def inquiry_why_lead_length(words: list[str]) -> int:
+    """How many of `words` open a why-question: "why" alone, or an inquiry verb then "why".
+
+    "show me why OMH picked them", "can you tell me why OMH chose ...". 0 when
+    they open with none. Courtesy openers before the inquiry verb are skipped,
+    but not the product name, which is the question's subject.
+    """
+    if words[:1] == ["why"]:
+        return 1
+    index = 0
+    while (step := courtesy_opener_length(words[index:])) and words[index] != "omh":
+        index += step
+    if words[index : index + 1] and words[index] in _INQUIRY_VERBS:
+        index += 1
+        while words[index : index + 1] and words[index] in _INQUIRY_SKIPPED:
+            index += 1
+        if words[index : index + 1] == ["why"]:
+            return index + 1
+    return 0
+
+
+def leads_with_code_edit(normalized_query: str, *, wide: bool = False) -> bool:
     """The request OPENS with a code edit, in English or Korean.
 
     English: the first command word is an edit verb ("fix ...", "OMH, add
-    ..."), or the request hands the edit over at its start ("use OMH to fix",
-    "have Hermes add", "help me fix"). An edit verb later in the sentence ("I
-    asked OMH to fix a test and it ...") is not the request's lead.
+    ...", "OMH: migrate ..."), or the request hands the edit over at its start
+    ("use OMH to fix", "have Hermes add", "help me fix", "using OMH, rename").
+    An edit verb later in the sentence ("I asked OMH to fix a test and it
+    ...") is not the request's lead.
     Korean: a clause ends on a code-edit request ("테스트 고쳐줘", "코드 수정해
-    주세요"), read by `korean_request`.
+    주세요"), read by `korean_request`. `wide` adds `_CODE_EDIT_LEAD_VERBS`
+    and the tool lead ("using OMH, rename").
     """
+    verbs = _CODE_EDIT_LEAD_VERBS if wide else DIRECT_CODING_EDIT_VERBS
     words = command_words(normalized_query)
     if words:
-        if words[0] in DIRECT_CODING_EDIT_VERBS:
+        if words[0] in verbs:
             return True
         if words[0] == "help":
             rest = words[1:]
             rest = rest[1:] if rest[:1] == ["me"] else rest
             rest = rest[1:] if rest[:1] == ["to"] else rest
-            if rest[:1] and rest[0] in DIRECT_CODING_EDIT_VERBS:
+            if rest[:1] and rest[0] in verbs:
+                return True
+        if wide and words[0] in _TOOL_LEADS and words[1:2] and words[1] in _TOOL_NAMES:
+            rest = words[2:]
+            rest = rest[1:] if rest[:1] == ["to"] else rest
+            if rest[:1] and rest[0] in verbs:
                 return True
         if words[0] in _DELEGATING_LEADS:
             # Who the task goes to is at most three words ("OMH", "the OMH
@@ -123,8 +253,8 @@ def leads_with_code_edit(normalized_query: str) -> bool:
             for index in range(1, min(len(words), 5)):
                 word = words[index]
                 if word in {"to", "and"}:
-                    return words[index + 1 : index + 2] != [] and words[index + 1] in DIRECT_CODING_EDIT_VERBS
-                if word in DIRECT_CODING_EDIT_VERBS:
+                    return words[index + 1 : index + 2] != [] and words[index + 1] in verbs
+                if word in verbs:
                     return True
     return any(
         (request := korean_request(clause)) is not None and request.predicate in KOREAN_CODE_EDIT_PREDICATES

@@ -12,6 +12,11 @@ Write three lines before anything else:
 
 If reproduction is not established, that is the first hypothesis and the first observation. Debugging a fault nobody can trigger produces a story, not a cause.
 
+Once it reproduces, check and shrink it before section 2:
+
+- **Symptom match.** Quote the observed failure beside the one reported. A different crash near the same code is a different fault; this one stays unreproduced.
+- **Minimised.** An input, flag, thread, or step leaves the reproduction only when a rerun without it still shows the fault (at the same rate over the same N, if intermittent). Debug what stays.
+
 ## 2. Three hypotheses on distinct axes
 
 One hypothesis makes every reading confirmatory. Three force observations that *distinguish*. Span the axes rather than rephrasing one guess:
@@ -31,7 +36,7 @@ For each hypothesis write: the claim in one sentence; the single observation tha
 
 Prefer a DAP debug adapter -- `lldb-dap`, `codelldb`, or a gdb adapter -- driven by the executor's own debugging surface. It reads state without rebuilding, and it reads state the source never printed.
 
-Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting.
+Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
 
 The plan names, concretely:
 
@@ -77,3 +82,5 @@ first-class debug adapter tooling. No upstream text is reproduced -- the
 wording, the artifact vocabulary, and the `prepared_not_observed` claim
 boundary are OMH's own, and OMH keeps its no-execution boundary: every command
 below is something the executor runs, never OMH.
+
+The symptom match, the minimise step, and the probe tag adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock.

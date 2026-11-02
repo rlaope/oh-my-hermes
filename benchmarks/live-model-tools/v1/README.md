@@ -574,6 +574,394 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-11-02 round-end check: declared look-alikes and rewritten test expectations, base vs new
+
+Pre-registered before its first live run.
+
+The 2026-10-31 head-to-head against oh-my-pi (research folder `H2H2/REPORT.md`) found two gaps
+in the round-end check on origin/main:
+
+- **`C-DECOY` over-fire.** On Sonnet 5.5 the check continued 3 of 3 `C-DECOY` sessions,
+  against 1 of 3 before. That cost 8 model calls against 3 and 96k tokens against 42k.
+  - One continue was a `copy` of the look-alike `_to_cents`, whose module docstring says its
+    rounding is intentionally different from the edited file.
+  - Two were `opaque_edit`: the model appended its regression test with
+    `printf ... >> tests/test_<x>.py`, so the test file had no turn-start text.
+- **`I-KWARG` on Haiku 4.5: 0 of 3 passes.** In every failure Haiku renamed the `timeout` key
+  in the dict `fetch` returns, and rewrote `tests/test_http_client.py` to expect the new key.
+  The task said "What fetch returns stays the same". The round-end check fired and asked only
+  about copies and call sites.
+
+The change, in `consistency_trigger.py`, a new `test_expectation_check.py`, `verify_hooks.py`
+and `llm_hooks.py`:
+
+1. **Declared look-alikes.** A `copy` hit is skipped when the other file says its definition
+   differs on purpose (`declared_divergent`). The trigger reads two places with `ast`:
+   - the definition's docstring, or the comments directly above or on its first line;
+   - the module docstring, but only a sentence there that names the edited file.
+
+   "Differs on purpose" is a closed vocabulary: an intent word (`intentionally`, `deliberately`,
+   `on purpose`, `by design`) and a difference word in one sentence, or
+   "not kept in step / in sync with". Every other signal still fires, and so does a real copy
+   beside a declared one.
+2. **Files a command names.** Before a `terminal` or `execute_code` call, the trigger keeps the
+   turn-start text of every `.py` / `.pyi` file the call's arguments name. A `printf >>` or
+   `sed -i` on a named file is then diffed like a patch. A file a command changes without
+   naming it still fires as `opaque_edit`.
+3. **Test check (always on, `pre_verify` attempt 0).** It names an existing test that lost an
+   expected value: a literal constant in an `assert` or a `self.assert*` call is gone from the
+   file. Subscript keys are not counted. It fires only when all of these hold:
+   - the request asked for behaviour to stay the same (closed phrase list);
+   - the request does not name the test file or the test;
+   - the request does not ask to update a test, and states no result the code "must / should /
+     now / to return";
+   - the turn also changed a non-test Python file.
+
+   Like the export note, it continues the turn by itself. The consistency check rides along in
+   its "beside a re-check" form.
+
+Two candidate signals were measured offline and rejected:
+- **A body-similarity threshold.** The look-alike's `_to_cents` body scores the same against
+  the edited one in `C-DUPLICATE` and `C-DECOY` (`difflib` ratio 0.794 for every seed), so no
+  threshold separates them.
+- **Subscript keys as expected values.** Counting them flagged all 12 `I-RETURN-SHAPE`
+  sessions, where `quote["total_cents"]` correctly became `quote.total_cents`.
+
+**Offline replay, before this registration.** The research folder's
+`OPT/OPT-I/replay_h2h2.py` replayed the 132 H2H2 `omn` sessions on fresh fixtures: their
+`patch` / `write_file` calls and `printf >>` appends, up to the turn's first stop. Results:
+- `C-DECOY`: 12 of 12 continues become 0, every one `declared_divergent`.
+- `C-DUPLICATE`: 8 of 8 still fire `copy`.
+- `I-KWARG`: the test note fires on the 3 failed Haiku runs and on no passing run.
+- No test note anywhere else.
+
+The replay does not model the impact or export notes, or shell edits other than `printf >>`.
+
+**The new control, `C-TEST-UPDATE`** (consistency-ab split). The task asks for a kib to be 1024
+bytes, names `tests/test_sizes.py`, and asks for its existing kib assertion to expect the new
+value. It also says every other unit stays the same, so the request carries a keep-behaviour
+phrase. A correct edit changes the existing expectation. The validator needs:
+- the new kib;
+- every other unit unchanged;
+- the test file's tests passing;
+- the old expected value gone from the test.
+
+The setup, fixed before the first live run:
+
+- **Arms.** Each arm links its OMH plugin bundle from a source snapshot. The bundles differ
+  only in the four files above.
+  - `base`: origin/main `76fa9c615`.
+  - `new`: this branch at `c071c591f`. (Amended before the first counted run: two uncounted smokes on
+    `bec5cb80e` showed that a stop the test check exempts left no log line, so a missing note could not be
+    told from a bundle that never loaded the check. `c071c591f` logs one line with its reason at every
+    stop and changes nothing else.)
+- **Load path.** The bench profiles symlink the bundle into the profile, and the shared
+  gateway has no `omh` package. So both arms run the standalone path, which since #2455 runs
+  the router's code. The meter's per-call `omh_pkg` field records this, and the result
+  reports it.
+- **Profiles.** `opti-<lane>-<arm>`, with H2H2's OMH-arm configuration:
+  - Hermes's default `tools.tool_search`;
+  - plugin settings `omh_home` and `lsp_tools: true`; `impact_check` not set, so off, as shipped;
+  - `pyright` pinned by an absolute `lsp.servers.pyright.command`;
+  - `agent.max_turns: 120` and `agent.run_budget_seconds: 600`;
+  - the observer-only meter plugin.
+
+  Edit surface `lsp` (toolsets `file,terminal,omh-lsp`). The prompt is the `baseline`
+  condition, with no edit directive, `--git-init-workspace`, `--test-env` and effort `medium`.
+- **Panel.** Subscription routes only:
+
+  | Lane | Model | Route | Tier |
+  | --- | --- | --- | --- |
+  | h45 | `claude-haiku-4-5-20251001` | `claude-proxy` (CPA) | weak |
+  | s55 | `claude-sonnet-5-5` | `claude-proxy` (CPA) | strong |
+  | luna | `gpt-6-luna` | `openai-codex` | weak |
+  | sol | `gpt-6.1-sol` | `openai-codex` | strong |
+
+- **Templates.** Seven:
+  - positives: `I-KWARG` (test note) and `C-DUPLICATE` (copy);
+  - negatives and controls: `C-DECOY`, `C-SCOPE-TRAP`, `I-CONTROL`, `E-BUGFIX` and
+    `C-TEST-UPDATE`.
+- **Seeds.** None appears anywhere under `.omc/research` or in the bench.
+  - 409993, 502133 and 524287 for every template.
+  - Also 646619, 715827 and 829601 for `C-DECOY` and `I-KWARG`, so that each must-improve
+    clause has n = 6 per model.
+  - That is 27 instances per lane per arm, 108 per arm.
+- **Order.** Per instance, the two arms run back to back on identical fresh workspaces, and
+  the order alternates. Lanes run in parallel.
+- **Retries.** A run classified `rate_limited`, `provider_error`, `model_unavailable` or
+  `authentication_failed` is retried on the same route. Any other outcome is final. A run with
+  no completed record is a fail.
+- **Ceiling check on the base arm, from H2H2 (origin/main `ffdef9347`, before #2454/#2455).**
+  - Sonnet `C-DECOY`: 3 of 3 continued, so the fire rate has room to drop.
+  - Haiku `I-KWARG`: 0 of 3 passed, so passes have room to rise.
+
+Definitions:
+- A **fire** is a session with at least one assistant row whose `finish_reason` is
+  `verify_hook_continue`, from the session DB.
+- **Model calls** are `sessions.api_call_count`.
+- **Tokens** are the run record's `observation.tokens`.
+- A **test note** is a `test_expectation_check session=<id> fire=True` line in the new arm's
+  profile log. Every new-arm stop logs such a line with its reason; a counted new-arm run with no line is
+  reported as missing.
+
+The gate. Must improve, `new` against `base`:
+
+1. **Sonnet `C-DECOY` fires** (n = 6): new at most 1, and strictly below base.
+2. **`C-DECOY` cost, pooled over the four models** (24 runs per arm):
+   - median model calls: new at most base - 1;
+   - median tokens: new at most 0.90x base.
+3. **Haiku `I-KWARG` passes** (n = 6): new at least base + 2.
+
+Must hold:
+
+4. `C-DUPLICATE` passes (n = 12): new at least base.
+5. Total passes (108 per arm): new at least base - 1.
+6. The test-edit control `C-TEST-UPDATE` (n = 12):
+   - test notes in the new arm: exactly 0;
+   - fires: new at most base.
+7. `mutation_outside_scope` count: new at most base.
+
+Reported, not gated:
+- the per-lane, per-template table: passes, fires, median calls and median tokens;
+- test notes by template;
+- the trigger's verdict reasons per arm, and on `C-DECOY`;
+- median wall time;
+- final answer kept;
+- the load path (`omh_pkg`);
+- tokens and money by route.
+
+Recomputed from the raw run records, the session-DB snapshots and the profile logs, by
+`OPT/OPT-I/gate.py`, not from the driver log. If any clause fails, the failure is recorded here
+and the branch does not ask to merge.
+
+#### Amendment 2 (2026-11-02, during the counted runs, before any result was computed)
+
+From 11:11 KST the host's load average ran at 47 to 75, from other agents' test suites. Runs
+on h45, luna and sol then began to end as `process_crash`, exit 1, after 15 to 230 s, in both
+arms. In each one, the Hermes client's websocket to the gateway dropped
+(`ws response send failed`) while the gateway turn was still running, and the bench then
+removed the workspace under that turn. These are harness failures, not model outcomes, and
+the retry rule above does not cover them.
+
+The amendment:
+- The original records stay as recorded and are the **strict reading**, scored as registered.
+- After the lanes finish, each instance with a `process_crash` as its last record in either arm
+  is run once more in **both** arms, back to back in alternating order, on the same route, into a
+  separate `runs-rerun/` folder. So each re-run pair compares two runs made under the same load.
+  Nothing else is re-run.
+- The **re-run reading** replaces both records of those instances with their re-runs.
+- `gate.py` reports every clause under both readings, with the crash count per arm and per
+  model. If the readings disagree, the result says so, and the branch asks to merge only with
+  that stated.
+
+#### Result: the re-run reading passes every clause; the strict reading fails one, on crash records only
+
+The run setup:
+- **Counted runs:** 2026-11-02 10:28 to 12:15 KST; re-runs 12:15 to 13:33.
+- **Volume:** 216 counted runs, and 64 re-run records for 32 instances.
+- **Arms:** base `76fa9c615`, new `c071c591f`.
+- **Recompute:** the research folder's `OPT/OPT-I/gate.py`, from the raw records, the
+  session-DB snapshots and the profile logs (`gate.txt`, `gate.json`).
+
+**Crashes.** These are `process_crash` records: the client's websocket dropped while the
+gateway turn kept running.
+
+| Model | Strict base | Strict new | Re-run base | Re-run new |
+| --- | --- | --- | --- | --- |
+| Haiku 4.5 | 8 | 10 | 3 | 3 |
+| Sonnet 5.5 | 0 | 0 | 0 | 0 |
+| gpt-6-luna | 7 | 8 | 4 | 3 |
+| gpt-6.1-sol | 13 | 12 | 0 | 0 |
+| All | 28 | 30 | 7 | 6 |
+
+The two arms crashed at about the same rate.
+
+**Gate clauses:**
+
+| Clause | Strict reading | Re-run reading |
+| --- | --- | --- |
+| 1. Sonnet `C-DECOY` fires: new at most 1 and below base | pass: 3/6 to 0/6 | pass: 3/6 to 0/6 |
+| 2a. `C-DECOY` pooled median model calls: new at most base - 1 | pass: 11 to 9 | pass: 11 to 9 |
+| 2b. `C-DECOY` pooled median tokens: new at most 0.90x base | pass: 95,144 to 55,474 (0.58x) | pass: 99,441 to 75,645 (0.76x) |
+| 3. Haiku `I-KWARG` passes: new at least base + 2 | pass: 1/6 to 3/6 | pass: 2/6 to 5/6 |
+| 4. `C-DUPLICATE` passes: new at least base | pass: 12 to 12 | pass: 12 to 12 |
+| 5. Total passes: new at least base - 1 | pass: 79 to 79 | pass: 102 to 101 |
+| 6a. Test notes on `C-TEST-UPDATE`, new arm: 0 | pass: 0 | pass: 0 |
+| 6b. Fires on `C-TEST-UPDATE`: new at most base | pass: 0 to 0 | pass: 0 to 0 |
+| 7. `mutation_outside_scope`: new at most base | **fail: 24 to 25** | pass: 4 to 2 |
+
+**The strict-reading failure is a crash artifact.**
+- Every `mutation_outside_scope` record in either reading is a crash record, scored after the
+  bench removed the workspace: 49 of 49 strict, 6 of 6 re-run.
+- No completed run in either arm edited outside its scope.
+- Among completed runs, the model's own failures are:
+  - base: 2 (Haiku `I-KWARG` 409993 and 502133);
+  - new: 1 (luna `I-KWARG` 502133, which missed the `**CRAWL_OPTIONS` caller in crawler.py
+    that the consistency check named; not a test rewrite).
+
+**Where the change acted:**
+- **`C-DECOY`.**
+  - The new arm continued 0 of 24 sessions (base 19 of 24).
+  - Every new-arm trigger verdict there was `declared_divergent` (22 logged).
+  - Per model, base to new: Sonnet median calls 6 to 4 and tokens 68k to 43k; Haiku 11 to 10
+    and 117k to 95k; luna 12 to 9 and 100k to 74k; sol 11.5 to 9 and 102k to 76k.
+- **`I-KWARG` on Haiku.**
+  - The test note fired in 3 sessions, and all 3 then passed.
+  - It named `tests/test_http_client.py:5`, whose expected `"timeout"` key the model had
+    renamed.
+  - The new arm's completed runs passed 5 of 5; the base arm's passed 2 of 4.
+- **The note was silent everywhere else.** It fired on `I-KWARG` only, with 94 logged stops in
+  the new arm (re-run reading). That includes `C-TEST-UPDATE`: 10 stops logged `test_edit_asked`, and the 2
+  crashed runs logged no stop.
+- **`C-DUPLICATE`.** The `copy` signal still fired (8 logged). Passes held at 12 of 12.
+
+**Reported, re-run reading:**
+- **Medians, base to new:** tokens 81,775 to 74,821; wall 50.1 s to 47.0 s; model calls 9 to
+  9.
+- **Final answer kept:** 76 to 75.
+- **Per model, passes and median tokens:**
+  - Haiku: 23 to 24, 116k to 101k.
+  - Sonnet: 27 to 27, 52k to 44k.
+  - luna: 25 to 23, 90k to 71k. Both lost runs are crashes on `C-TEST-UPDATE`.
+  - sol: 27 to 27, 95k to 79k.
+
+**Load path.** Every call before 13:06 KST ran the standalone path (`omh_pkg` false): all
+counted runs and most re-runs. From 13:06, something outside this bench put an `omh` package
+into the shared gateway's `sys.modules`. The last h45 re-runs and every sol re-run then ran
+with it importable, in both arms alike: 293 of 2,137 metered calls. The round-end code is the
+bundle's own in both cases. The shared gateway itself was relaunched at 12:55:31 KST by an
+`osascript` call to the Hermes launcher. This bench sent it no signal and ran no launcher. The
+re-runs after that time ran on the new gateway process, in both arms.
+
+**Tokens and money.** The run records undercount, because a crashed run records no tokens
+while its gateway turn ran on.
+
+| Route | Counted runs | Re-runs | Smokes | Total |
+| --- | --- | --- | --- | --- |
+| CPA Claude | 7.56M | 1.66M | 0.25M | 9.47M |
+| openai-codex | 6.27M | 3.11M | 0.06M | 9.44M |
+
+Money: $0 (every `cost_usd` is 0). No DeepSeek, GLM, OpenRouter or OpenGateway.
+
+**Verdict.** The two readings disagree on clause 7 only, and only through crash records. In
+the re-run reading every clause passes. The branch asks to merge with that stated.
+
+#### Disclosures added at review (2026-11-02)
+
+- **An unregistered retry.** `run_opti.py` kept H2H2's `gateway_down` rule, which was in the
+  driver before the counted start. It re-runs a `process_exit` record with exit code 130, or
+  exit code 1 within 15 s, on the same route. The registration says any outcome other than
+  the four provider classes is final, so this retry was not registered.
+  - It changed 4 strict instances: h45/new `C-DUPLICATE-409993`, luna/base
+    `C-DUPLICATE-409993`, s55/base `C-SCOPE-TRAP-409993` and sol/new `C-DECOY-524287`. Each
+    exited 130 near 10:41, and each attempt 1 completed.
+  - In the re-runs it took h45/new `I-KWARG-715827` to 5 attempts, and retried h45/base
+    `C-DECOY-646619`, `I-KWARG-646619` and `I-KWARG-715827`, and luna/base `C-DECOY-646619`,
+    `I-KWARG-715827` and `I-KWARG-829601`, and luna/new `I-KWARG-829601`.
+- **First-attempt reading.** Scoring each instance by its first attempt (`gate.py
+  --first-attempt`, and the reviewer's independent re-score), both readings pass every
+  clause:
+  - strict: clause 5, total passes, 77 to 77; clause 7, scope, 26 to 26;
+  - re-run: clause 3, Haiku `I-KWARG`, 2/6 to 4/6; clause 5, 98 to 98; clause 7, 8 to 4.
+- **Missing test-check log lines.** The registration says a counted new-arm run with no line
+  is reported as missing. There are 8 such completed Sonnet runs: all six `I-KWARG`, plus
+  `C-DECOY-409993` and `C-DUPLICATE-524287`. Each edited only through `terminal` commands, so
+  Hermes reported no changed path, and no OMH stop hook ran (no trigger line either).
+- **Test-note count.** 2 in the strict reading, 3 in the re-run reading, all on Haiku
+  `I-KWARG`.
+- **`C-TEST-UPDATE` exercises both suppressors at once.** It names the test file and asks for
+  the assertion to change. It also scopes its keep phrase ("Every other unit stays the
+  same"), which after the review fixes below counts as no keep at all. So the control shows
+  that a requested test edit gets no note. It does not show which suppressor carried it.
+
+#### Review fixes after the result, not re-measured live
+
+These changes are in the branch head after `c071c591f`, the measured new arm.
+- **`declared_divergent`.**
+  - It needs an intent word followed by `differs` / `different` / `diverges`.
+  - A note with a negation or an identity word declares nothing: "Intentionally duplicated
+    from invoice.py, so it must not differ", "By design this mirrors invoice.py".
+  - A module-docstring sentence must name the edited file as a file, and must name the
+    definition whenever it names any definition of its module.
+- **Command-named snapshots.** They get a budget of their own (16 files, 512 KB). The ones a
+  command left unchanged are dropped at the next tool call, and a stop with no edited path
+  keeps none.
+- **The test check.**
+  - A scoped keep ("everything else stays the same") is no keep.
+  - A negated ask ("don't update any tests") asks for nothing, and "must return the same ..."
+    keeps behaviour.
+  - "update its docstring and tests" and "refresh / revise the ... test" are asks.
+  - Expected values are pooled across test files, and unittest messages are not counted.
+
+A second review round turned both rules into whitelists, silent otherwise:
+- **The test check's keep.** It counts only when its subject is the behaviour, the output,
+  the result, the return value, "what `fetch` returns", the tests or an unscoped
+  "everything", and the phrase keeps it whole.
+  - "The signature stays the same", "the public API is unchanged", "the return type stays
+    the same", "values stay the same" and any scoped clause (`for`, `when`, `otherwise`,
+    `only`) are no keep.
+  - "The test is outdated" and "bring it up to date" are asks.
+  - Constants in `@pytest.mark.parametrize` count as gained values.
+- **`declared_divergent`.**
+  - The difference word must come right after the intent word, with at most one word between.
+  - A limiting word (`only`, `match`, `equal`, `equivalent`, `shared`, `track`, `agree`)
+    voids the note.
+  - A module sentence that names no definition speaks only for the one definition its module
+    shares with the edited file. The bench decoy shares only `_to_cents`.
+
+A third review round made both guards structural:
+- **A body gate for `declared_divergent`.** A note can suppress a `copy` only when the
+  look-alike's body already differs from the edited definition's pre-edit body (`ast`
+  comparison, ignoring layout, comments and the docstring).
+  - The bench decoy passes this gate because its `_to_cents` is spelled differently
+    (`decimal.Decimal(...)` with a literal, against `Decimal(...)` with `CENT`), not because
+    the two round differently before the edit. The gate is textual, not semantic.
+  - A definition-level note must also name the edited file.
+  - TODO / FIXME notes and questions declare nothing.
+- **The test check's keep must end its clause,** and a following "just ..." / "only ..."
+  clause voids it.
+- **Expected values are compared by presence,** so a fold into `@pytest.mark.parametrize`
+  over one shared input loses nothing.
+
+The offline replay of the 132 H2H2 `omn` sessions, re-run on the code after all three rounds
+(`OPT/OPT-I/replay-omn-review3.txt`):
+- `C-DECOY`: 12 continues to 0.
+- `C-DUPLICATE`: 8 of 8 fires kept.
+- The `I-KWARG` test note fires on the 3 failed Haiku runs only.
+- No other note.
+
+#### Scope decision after the fourth review: `declared_divergent` is dropped
+
+The fourth review found that the body gate stopped only verbatim copies. A respelled body, a
+renamed local or one added log line let every hedged or limiting note through again, and a
+method copied verbatim into a class with one extra method read as different. Four rounds
+showed that text cannot be trusted to suppress the copy check.
+
+So `declared_divergent` is removed with everything that served it: the vocabulary, the note
+readers, the body gate and `pre_bodies`, with their tests and docs. The copy check is never
+suppressed by text, and it matches main except for the structural named-file snapshot fix.
+
+The fourth review also made two test-check changes:
+- A verbless comma or semicolon clause after a keep narrows it, as does one ending in a
+  `-wise` / `-ly` word or starting "I mean" (", format-wise", ", structurally", "; I mean the
+  format").
+- An expected value folded into a module constant counts as kept.
+
+**What this means for the gate above.** The live gate measured `c071c591f`, which had
+`declared_divergent`. Its `C-DECOY` result (clauses 1 and 2, Sonnet fires 3/6 to 0/6, pooled
+calls 11 to 9, tokens 0.58x / 0.76x) came from that rule. The shipped code drops it, and was
+measured only by this replay. It does not reproduce those clauses.
+
+The offline replay of the 132 H2H2 `omn` sessions on the shipped code
+(`OPT/OPT-I/replay-omn-review4.txt`):
+- `C-DECOY`: 12 continues on base, 12 on new, every one `copy` of the look-alike `_to_cents`.
+  - The named-file snapshot turns the two Sonnet `opaque_edit` fires into judged diffs, and
+    those then find the same look-alike.
+  - So the shipped code does not reduce `C-DECOY` fires at all.
+- `C-DUPLICATE`: 8 of 8 fires kept.
+- `I-KWARG`: the test note fires on the 3 failed Haiku runs only, and no other note fires.
+  Clause 3 (Haiku `I-KWARG` passes) came from the test note, which ships.
+
 ### 2026-10-31 compact `omh_context` result: base vs branch
 
 The `omh_context` tool result rides every later model call of its session. In the 2026-10-30

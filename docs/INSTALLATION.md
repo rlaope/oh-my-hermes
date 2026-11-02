@@ -1857,6 +1857,8 @@ it ready. The pane shows OMH catches, the plan checklist, the active delegation
 graph, board or route summaries, and the active fanout DAG as they become
 available. It reads idle when nothing is running, keeps the plan and status bar
 in agreement, and leaves individual subagent rows to Desktop's Agents panel.
+A failed lane reads as failed (red), apart from blocked (yellow). At the
+default pane width a delegation row stacks its model under the title.
 It uses calmer colours and follows Desktop's language when Korean is selected.
 `omh uninstall --registration-only` does not disable the plugin or
 change `plugins.enabled`. Desktop mounting must be observed separately.
@@ -3394,9 +3396,45 @@ it loaded at start. When Hermes' own records in a home (`gateway.pid` and the
 home's bundle install, the update names it with the command that loads the
 new plugin code: `hermes gateway restart` for the primary home,
 `hermes --profile <name> gateway restart` for a profile. That is file
-evidence only: the bundle stamp is rewritten by every update, so the hint
-covers gateways whose last recorded start precedes this update, and a
-gateway running without a pid record is not named.
+evidence only: the bundle stamp moves only when an update changes the
+bundle's files, so an update that ships the same bundle (only the package
+directory the bundle imports `omh` from moved to the new generation) asks
+for no restart, and a gateway running without a pid record is not named.
+A gateway that keeps running imports `omh` from the generation it started
+on while that directory exists. Once an update collects it, the next import
+comes from the generation the bundle now records if that holds the same
+version; another version is reported as `stale_until_restart` and needs the
+restart.
+`omh update --json` carries the same lines as `gateway_restart_hints`.
+
+The OMH TUI says the same at launch, once, as a transcript warning (under a
+resumed session's history), and `omh doctor` reports it as the
+`hermes_gateway` row (`hermes_gateway:<name>` for a profile's own gateway,
+shown only when it has something to say). Both read Hermes'
+`gateway_state.json` only while it is fresh (re-stamped within Hermes' own
+120 s bound, in a state Hermes reads as running), and say:
+
+- the session store, when the record says `unavailable` and
+  `logs/gateway.error.log` holds a store failure logged after the gateway's
+  last recorded start. The flag alone says nothing, because a restarted
+  gateway keeps the old process's value until it publishes its own. A
+  deleted profile Hermes still references (a cron job, a kanban board or a
+  served profile) is named, with no restart advice, since a restart does
+  not clear it; remove the reference or recreate the profile. A store
+  replaced underneath the gateway gets `hermes gateway restart`, which
+  restarts every bot it serves and first waits for their running turns;
+- a stale plugin bundle, as `omh update` names it above;
+- a drain (`gateway_state: "draining"`). The gateway starts no new turns
+  until it is done, and Hermes holds or refuses new messages as
+  `runtime_draining`. For a restart, the line names the turns it waits for,
+  the seconds left when the restart-wait line in `logs/gateway.log` is
+  fresh, and the knob that caps the wait, `agent.restart_after_turn_timeout`.
+  With a `.drain_request.json` in the home, it is paused by a drain request
+  and keeps running. Anything else is a stop. While it drains, nothing else
+  is said.
+
+All of it is local files only, in bounded reads; OMH stops, kills and
+restarts nothing, and the doctor row warns without failing.
 
 To opt one bot out of managed skill registration, unregister that profile only:
 
@@ -4982,9 +5020,17 @@ place. It runs as a transaction:
    is the only step that makes the new version visible.
 6. Re-enter through the pointer to confirm the activated version actually runs.
 7. On success, keep the previous generation as the known-good fallback and
-   collect the rest. On failure, attempt to move the pointer back and re-enter
-   the previous generation; shared-resource restoration must succeed before
-   recovery is considered complete.
+   collect the rest, except a generation something still runs from: the one
+   current at each running Hermes gateway's last recorded start, and the one
+   an open OMH TUI started on (it holds an OS lock on a file under
+   `generation-holds/` until it exits). When the activation history cannot
+   say which generation a gateway started on, every generation created before
+   that start is kept, and the update prints a `note:` saying so; an update
+   collects them once that gateway has restarted, or once its `gateway.pid`
+   record is gone. A SIGTERM sent to `omh` alone releases the TUI's hold while
+   the TUI itself runs on. On failure, attempt to
+   move the pointer back and re-enter the previous generation; shared-resource
+   restoration must succeed before recovery is considered complete.
 
 The pointer makes the command/workflow-pack selection atomic, not all shared
 resource changes. Both things that consume the
@@ -5007,6 +5053,7 @@ current -> generations/<id>     # the single activation pointer
 generations/<id>/venv           # that generation's command environment
 generations/<id>/skills         # that generation's workflow pack
 self-update.json                # private activation state (self_update_state/v1)
+generation-holds/               # lock files of open OMH TUIs, one per process
 venv/                           # the pre-generation environment, kept as fallback
 ```
 

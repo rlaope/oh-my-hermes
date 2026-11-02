@@ -30,8 +30,8 @@ FANOUT_FILESYSTEM_CONFINEMENT_SCHEMA_VERSION = "fanout_filesystem_confinement/v1
 FANOUT_FILESYSTEM_CONFINEMENT_CLAIM_BOUNDARY = (
     "A confinement receipt is observed only when its same-run sandbox probe wrote inside the unit worktree "
     "and every selected owner state directory, then was refused outside every write root. Owner state may also "
-    "include an exact file literal. On macOS the IPC allowances are the two named credential mach-lookup services "
-    "and the read side of the user preferences daemon (its two named mach-lookup services and read-only access to "
+    "include an exact file literal. On macOS the IPC allowances are the two named credential mach-lookup services, "
+    "the two named TLS trust-evaluation mach-lookup services, and the read side of the user preferences daemon (its two named mach-lookup services and read-only access to "
     "its apple.cfprefs. shared memory); none expands into a directory, a preference write, or broader IPC "
     "permission. Backend availability, preflight, and a prepared command alone are not "
     "confinement evidence. Reads are not part of this boundary: every command this confinement returns runs with "
@@ -55,6 +55,14 @@ _FANOUT_MACOS_CREDENTIAL_MACH_SERVICES = ("com.apple.securityd.xpc", "com.apple.
 # CFPreferencesSetAppValue plus synchronize and `defaults write` both fail
 # inside the fence and leave no domain behind.
 _FANOUT_MACOS_PREFERENCE_MACH_SERVICES = ("com.apple.cfprefsd.daemon", "com.apple.cfprefsd.agent")
+# Codex (and any HTTP client on the Security framework) verifies the server
+# certificate through trustd. Without it the TCP connect succeeds, the TLS
+# handshake fails, and `codex exec` retries until the unit times out with
+# "workspace routing discovery failed" / "waiting for network" (#2456).
+# Measured on macOS 26.6 with codex-cli 0.166: the profile as built fails, and
+# adding `com.apple.trustd.agent` alone returns the model reply; `com.apple.trustd`
+# is the system-side instance of the same lookup. Neither grants a write.
+_FANOUT_MACOS_TLS_TRUST_MACH_SERVICES = ("com.apple.trustd.agent", "com.apple.trustd")
 _FANOUT_MACOS_PREFERENCE_SHM_READ_PREFIXES = ("apple.cfprefs.",)
 _FANOUT_TOOLCHAIN_TEMP_DIRECTORY = Path(".omh") / "confinement-tmp"
 
@@ -261,7 +269,9 @@ class FanoutFilesystemConfinement:
             macos_write_data_literals=_FANOUT_MACOS_TOOLCHAIN_WRITE_DATA_LITERALS,
             write_literals=self.write_literals,
             macos_mach_lookup_names=(
-                *_FANOUT_MACOS_CREDENTIAL_MACH_SERVICES, *_FANOUT_MACOS_PREFERENCE_MACH_SERVICES
+                *_FANOUT_MACOS_CREDENTIAL_MACH_SERVICES,
+                *_FANOUT_MACOS_PREFERENCE_MACH_SERVICES,
+                *_FANOUT_MACOS_TLS_TRUST_MACH_SERVICES,
             ),
             macos_ipc_posix_shm_read_prefixes=_FANOUT_MACOS_PREFERENCE_SHM_READ_PREFIXES,
             allow_broad_file_read=True,

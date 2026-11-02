@@ -438,6 +438,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'frontend/references/scroll-motion-libraries.md',
     'frontend/references/component-registry-adoption.md',
     'frontend/references/chart-styling.md',
+    'frontend/references/forms-and-input.md',
     'frontend/references/rendered-scene-craft.md',
     'design-quality-gate/references/design-critique-rubric.md',
     'visual-qa/references/visual-verdict-contract.md',
@@ -465,6 +466,8 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'backend/references/service-contract.md',
     'backend/references/schema-migration.md',
     'backend/references/consumer-impact.md',
+    'backend/references/contract-tests.md',
+    'backend/references/inbound-and-async.md',
     'rust/references/rust-discipline.md',
     'rust/references/ub-escalation.md',
     'native-debugging/references/native-debug-loop.md',
@@ -488,6 +491,9 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'verification-gate/references/generated-artifact-provenance.md',
     # Shared host-neutral adaptation procedure, loaded only for capability ports.
     'verification-gate/references/adaptation-quality.md',
+    # Shared test-authoring contract, loaded from backend, frontend and
+    # app-debugging bodies and from backend's contract-tests reference.
+    'verification-gate/references/test-authoring.md',
     'security-safety-review/references/credential-rotation.md',
     # Issue #1714. Each of these is named by a body pointer that projects into
     # this target, so omitting it would ship a pointer at a file the portable
@@ -503,6 +509,9 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'code-review/references/review-lenses.md',
     'ai-slop-cleaner/references/prose-lexicon.md',
     'plan/references/project-constitution.md',
+    # Named by a decision-prototype quality_bar pointer that projects into this
+    # target; host-neutral prose with no OMH command or Hermes-only surface.
+    'decision-prototype/references/artifact-shapes.md',
 })
 
 
@@ -573,6 +582,20 @@ PORTABLE_REFERENCE_REWRITES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "Route existing `USER.md`/`MEMORY.md` cleanup to `memory-sync`, new durable project facts to `memory-new`,",
             "Keep existing `USER.md`/`MEMORY.md` cleanup out of the wiki; route new durable project facts to `memory-new`,",
+        ),
+    ),
+    # `ulw-work` ships portably, but its TDD reference ships only in the Hermes projection.
+    'verification-gate/references/test-authoring.md': (
+        (
+            "A tests-first lane also follows `ulw-work`'s `references/tdd-red-green.md`, which adds the red-before-green order and the red-commit checkpoint on top of this page.",
+            "A tests-first lane run through `ulw-work` also runs each new test red before any implementation line, on top of this page.",
+        ),
+    ),
+    # `skill_view` is Hermes' loader; the portable pack reads the file by path.
+    'backend/references/contract-tests.md': (
+        (
+            "load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')`",
+            "read `../../omh-verification-gate/references/test-authoring.md`",
         ),
     ),
 }

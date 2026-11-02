@@ -56,7 +56,10 @@ Take these in impact order; stop at the first tier the diff budget allows.
 4. **Decomposition** - the scroll test: a component you must scroll to read is
    the entry point; extract along independent change reasons, completely - a
    half-extracted component is two coupled ones; inline a premature abstraction
-   before re-extracting it properly.
+   before re-extracting it properly. Premature means the deletion test passes:
+   removing the component or hook makes its complexity vanish because it only
+   forwarded, renamed, or re-wrapped. One that hides a parser, a policy, or a
+   formatting rule behind a small interface stays, whatever its caller count.
 5. **Coupling** - break circular imports with an intermediate module; import
    from public surfaces, not sibling internals.
 
@@ -67,6 +70,15 @@ it renders for known props/state, what it calls when interacted with. Snapshot
 tests do not count; they lock markup, not behavior. Prefer behavior-level
 integration tests over implementation-detail unit tests, and write them BEFORE
 the refactor, not after.
+
+Green tests do not prove the render is unchanged. Extraction adds wrapper
+elements that break child-combinator, flex-child, and grid-child selectors,
+and reordering merged class names changes which style wins. So when a change
+alters DOM nesting, element type, or class composition, capture the affected
+component before and after apply at one viewport and compare the two (capture
+mechanics: `omh-frontend/references/screenshot-loop.md`). A visible
+difference is a behavior change under the invariants above: revert it or
+record it as a finding.
 
 ## Boundary
 

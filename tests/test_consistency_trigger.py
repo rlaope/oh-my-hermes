@@ -89,6 +89,15 @@ class CopySignalTest(_Workspace):
         self.assertEqual((verdict.fire, verdict.reason), (True, "copy"))
         self.assertIn("_to_cents in src/app/receipt.py", verdict.detail)
 
+    def test_a_note_that_the_look_alike_differs_on_purpose_does_not_suppress_the_copy(self):
+        # declared_divergent was dropped after four review rounds of #2494: text never suppresses the
+        # copy check, so a documented look-alike fires exactly as it does on main.
+        self.write("src/app/invoice.py", INVOICE)
+        self.write("src/app/duty.py", RECEIPT.replace(
+            '"""Receipt totals."""', '"""Duty amounts. This rounding is intentionally different from invoice.py."""'))
+        changed = self.edit("src/app/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "copy", "_to_cents in src/app/duty.py"))
+
     def test_both_copies_already_edited_skips(self):
         self.write("src/app/invoice.py", INVOICE)
         self.write("src/app/receipt.py", RECEIPT)
@@ -397,6 +406,78 @@ class OpaqueEditTest(_Workspace):
             first = self.edit("src/app/a.py", "return 1", "return 2")
             second = self.edit("src/app/b.py", "return 1", "return 2")
         self.assertEqual(self.verdict(first, second), ct.Verdict(True, "opaque_edit", "src/app/b.py"))
+
+
+class NamedFileSnapshotTest(_Workspace):
+    """A `terminal` or `execute_code` call keeps the text of the Python files it names before it runs."""
+
+    def command(self, command: str, tool: str = "terminal") -> None:
+        key = "command" if tool == "terminal" else "code"
+        ct.snapshot_before_edit({"tool_name": tool, "session_id": SESSION, "turn_id": self.turn}, {key: command})
+
+    def test_a_test_appended_through_the_shell_is_diffed_not_opaque(self):
+        test = "from app.units import parse_duration\n\n\ndef test_minutes():\n    assert parse_duration('5m') == 300\n"
+        self.write("src/app/units.py", UNITS)
+        self.write("tests/test_units.py", test)
+        changed = self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')
+        self.command("printf '\\n\\ndef test_seconds():\\n    assert parse_duration(\"90s\") == 90\\n' >> tests/test_units.py")
+        self.write("tests/test_units.py", test + "\n\ndef test_seconds():\n    assert parse_duration('90s') == 90\n")
+        self.assertEqual(self.verdict(changed), ct.Verdict(False, "no_copy_or_reference"))
+
+    def test_a_sed_rename_of_a_named_file_is_judged_by_its_diff(self):
+        self.write("src/app/a.py", "def old_name(a):\n    return a\n")
+        self.write("src/app/use.py", "from app.a import old_name\nold_name(1)\n")
+        self.command("sed -i '' 's/old_name/renamed_name/' src/app/a.py")
+        self.write("src/app/a.py", "def renamed_name(a):\n    return a\n")
+        self.assertEqual(self.verdict(), ct.Verdict(True, "renamed", "old_name in src/app/use.py"))
+
+    def test_a_file_execute_code_names_and_creates_is_diffed(self):
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.command("open('src/app/generated.py', 'w').write('def made():\\n    return 1\\n')", tool="execute_code")
+        self.write("src/app/generated.py", "def made() -> int:\n    return 1\n")
+        self.assertEqual(self.verdict(), ct.Verdict(False, "nothing_changed"))
+
+    def test_only_whole_python_paths_are_named_and_the_count_is_bounded(self):
+        self.assertEqual(ct._named_python_files({"command": "cat a.pyc b.py.bak c.pyi 'd/e.py' f.py. x ~/g.py *.py src/*.pyi",
+                                                 "n": 3}), ["c.pyi", "d/e.py"])
+        many = " ".join(f"m{index}.py" for index in range(20))
+        self.assertEqual(len(ct._named_python_files({"command": many})), ct.MAX_NAMED_FILES)
+
+    def test_files_read_only_commands_name_never_take_the_edits_budget(self):
+        # Review of #2494: five `cat` calls naming 40 files filled the 32 slots, and a later patch fired
+        # `opaque_edit` where main said `no_copy_or_reference`.
+        for index in range(40):
+            self.write(f"src/app/m{index}.py", f"def f{index}():\n    return {index}\n")
+        self.write("src/app/units.py", UNITS)
+        for batch in range(5):
+            self.command("cat " + " ".join(f"src/app/m{index}.py" for index in range(batch * 8, batch * 8 + 8)))
+        changed = self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')
+        self.assertEqual(ct._sessions[SESSION]["named"], {})
+        self.assertEqual(self.verdict(changed), ct.Verdict(False, "no_copy_or_reference"))
+
+    def test_the_named_budget_is_its_own_and_bounded(self):
+        for index in range(ct.MAX_NAMED_SNAPSHOTS + 4):
+            self.write(f"src/app/m{index}.py", "x = 1\n")
+        self.command("cat " + " ".join(f"src/app/m{index}.py" for index in range(8)))
+        self.command("cat " + " ".join(f"src/app/m{index}.py" for index in range(8, 16)))
+        self.assertLessEqual(len(ct._sessions[SESSION]["named"]), ct.MAX_NAMED_SNAPSHOTS)
+        self.assertEqual(ct._sessions[SESSION]["before"], {})
+
+    def test_a_stop_with_no_edited_path_keeps_no_snapshot(self):
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.command("cat src/app/a.py")
+        self.assertIn(SESSION, ct._sessions)
+        self.assertIsNone(verify_hooks.pre_verify(session_id=SESSION, coding=True, attempt=0, changed_paths=[]))
+        self.assertNotIn(SESSION, ct._sessions)
+
+    def test_a_file_changed_before_the_call_that_names_it_is_still_opaque(self):
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.command("true")
+        # An unnamed change first, of the same size: the racy-file digest sees it even when the clock
+        # leaves (mtime, size) unmoved.
+        self.write("src/app/a.py", "def other():\n    return 2\n")
+        self.command("cat src/app/a.py")
+        self.assertEqual(self.verdict(), ct.Verdict(True, "opaque_edit", "src/app/a.py"))
 
 
 class IndexCostTest(_Workspace):

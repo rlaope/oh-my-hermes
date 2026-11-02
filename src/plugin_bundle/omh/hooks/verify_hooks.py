@@ -13,6 +13,7 @@ from ..consistency_trigger import discard_snapshots, round_end_trigger, turn_roo
 from ..export_check import round_end_note as export_note
 from ..host_observation import observe_plugin_hook_call
 from ..impact_check import round_end_note
+from ..test_expectation_check import round_end_note as test_note
 from ..todo_reconciliation import plan_continuation_parts
 from .nudge_budget import plan_nudge_allowed
 
@@ -125,6 +126,9 @@ def pre_verify(
     )
     _ = observe_plugin_hook_call("pre_verify", observation)
     if attempt_value is None or not paths:
+        if attempt_value == 0:
+            # A stop with no edited path still ends the turn: its snapshots are not kept to the next one.
+            discard_snapshots(session_id)
         return None
     # The opt-in cross-file impact check (`impact_check`) answers once per
     # turn, at the first stop, and does not depend on the coding posture: it
@@ -139,6 +143,10 @@ def pre_verify(
     # workspace root, the one this turn's tools resolved against.
     export_message = (export_note(session_id, changed_paths, impact_message, turn_root(session_id))
                       if attempt_value == 0 else "")
+    # The test check names an existing test whose expected values this turn changed, when the request
+    # asked for behaviour to stay the same and did not ask for that test to change. Like the export
+    # note it continues the turn on its own: putting the expectation back is the work.
+    test_message = test_note(session_id, turn_root(session_id)) if attempt_value == 0 else ""
     surface_message = checklist_message = plan_message = ""
     open_items = 0
     if valid_coding:
@@ -170,31 +178,32 @@ def pre_verify(
             # out (`consistency_trigger`). Beside another nudge it rides along,
             # the export note included: that note continues the turn on its own
             # whatever the trigger says, because fixing the line it names is the work.
-            alone = not (surface_message or impact_message or export_message or plan_message)
+            alone = not (surface_message or impact_message or export_message or test_message or plan_message)
             if not alone or round_end_trigger(session_id, code_paths).fire:
                 # Beside a request to run or re-check something, the check must
                 # not say "do not re-run": that request stands.
-                checklist_message = (ROUND_END_CHECKLIST_BESIDE_A_RECHECK if surface_message or impact_message
-                                     else ROUND_END_CHECKLIST)
+                checklist_message = (ROUND_END_CHECKLIST_BESIDE_A_RECHECK
+                                     if surface_message or impact_message or test_message else ROUND_END_CHECKLIST)
     if attempt_value == 0:
         # The turn's snapshots are spent at its first stop, read or not.
         discard_snapshots(session_id)
     # One directive, in a fixed order: the served-surface gate, the impact
-    # note, the export note, the round-end check, the plan directive. Each can
+    # note, the export note, the test note, the round-end check, the plan directive. Each can
     # be true of the same turn, and dropping one because another fired would
     # lose exactly the case it was written for. One closing final-answer
     # sentence goes last, for the notes and the check together, and only
     # without a plan directive: an open plan means the turn goes on, so there
     # is no final answer to ask for yet.
     closing = ""
-    if (impact_message or export_message or checklist_message) and not plan_message:
+    if (impact_message or export_message or test_message or checklist_message) and not plan_message:
         # A delegated child's reply is its parent's tool result: it returns
         # its full answer, never a sentinel, so nothing is stashed for it.
         if str(platform) in _NO_CHECKLIST_PLATFORMS or not _stash_answer(session_id, final_response):
             closing = ROUND_END_CLOSING_UNSTASHED
         else:
             closing = ROUND_END_CLOSING
-    messages = [text for text in (surface_message, impact_message, export_message, checklist_message, plan_message, closing) if text]
+    messages = [text for text in (surface_message, impact_message, export_message, test_message, checklist_message,
+                                  plan_message, closing) if text]
     if not messages:
         return None
     # Recorded for the person once per turn. `attempt` is the only turn

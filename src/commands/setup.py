@@ -577,6 +577,15 @@ def cmd_update(args: argparse.Namespace) -> int:
         payload["hermes_skill_refresh"] = refresh_skill_dir_caches(_paths(args).hermes_home, managed_current_workflow_pack_dir())
     code = 1 if failures else 0
     payload.update({"status": "partial" if failures else "ok", "failures": failures, "exit_code": code})
+    unrefreshed = frozenset(
+        row["config"] for row in payload.get("hermes_skill_refresh") or [] if row.get("status") == "failed"
+    )
+    # None: not computed (a dry run installs no bundle to compare), as against [] (no gateway needs a restart).
+    restart_hints = (
+        None if bool(getattr(args, "dry_run", False)) or not hasattr(args, "omh_home")
+        else gateway_restart_hints(_paths(args), unrefreshed_configs=unrefreshed)
+    )
+    payload["gateway_restart_hints"] = restart_hints
     if _wants_json(args):
         _print_json(payload)
     else:
@@ -594,10 +603,7 @@ def cmd_update(args: argparse.Namespace) -> int:
                 print(f"  warning: {line}")
             for line in _skill_refresh_lines(payload.get("hermes_skill_refresh") or []):
                 print(f"  {line}")
-            unrefreshed = frozenset(
-                row["config"] for row in payload.get("hermes_skill_refresh") or [] if row.get("status") == "failed"
-            )
-            for hint in gateway_restart_hints(_paths(args), unrefreshed_configs=unrefreshed):
+            for hint in restart_hints or ():
                 print(f"  {hint}")
     return code
 
@@ -1543,6 +1549,9 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
         _print_json(result)
     elif result.get("ok"):
         print("OMH update complete: command and workflow pack activated together.")
+        kept = str((result.get("cleanup") or {}).get("reason") or "")
+        if kept:
+            print(f"  note: {kept}")
     else:
         for line in _self_update_stop_lines(result):
             print(line)

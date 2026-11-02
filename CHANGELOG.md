@@ -12,6 +12,219 @@ All notable changes will be documented here.
   the server's forms of a drive (`file:///c%3A/...` included) as the local
   path, so the workspace-scope checks see real paths (#2470).
 
+- **The OMH TUI and `omh doctor` say what Hermes' gateway needs, and why.**
+  Three cases used to leave a slow TUI, an empty `/resume`, refused
+  messages or missing skills with no reason given. Each line is said as
+  Hermes', only while its `gateway_state.json` is fresh:
+  - **A session store failure** is said when the record says `unavailable`
+    and Hermes' error log holds a store failure from after the last start.
+    A deleted profile still referenced (a cron job, a kanban board or a
+    served profile) is named, with no restart advice, since a restart does
+    not clear it. A replaced store gets `hermes gateway restart`, with what
+    that restart does to every bot it serves.
+  - **A gateway started before the last OMH update** still runs the old
+    OMH plugin code, and the line says so.
+  - **A draining gateway** starts no new turns, and Hermes holds or refuses
+    new messages as `runtime_draining`. A restart is named with its turns,
+    its seconds left and `agent.restart_after_turn_timeout`; a drain
+    request with the fact that the gateway keeps running; anything else as
+    a stop.
+
+  The TUI shows each once at launch; doctor shows them as the
+  `hermes_gateway` warning row. `omh update --json` now carries the update
+  restart hints as `gateway_restart_hints` (`null` on a dry run, which
+  computes none). Local files only, read in bounded reads; OMH stops and
+  restarts nothing.
+
+- **Code skills tell the executor how to write a test, not only in TDD mode.**
+  The questions before a new test and the shapes of tests that guard nothing
+  loaded only when the user asked for TDD, so a backend or frontend handoff
+  that said "add tests" let an executor mock its own repository class and
+  assert that `save` was called. They now live in one shared page,
+  `omh-verification-gate`'s `references/test-authoring.md`, which adds tests
+  coupled to internals (own-module fakes, call-count assertions, side-channel
+  reads), fakes only at system boundaries chosen by dependency category, and a
+  `regression_seam: none_correct` outcome when no seam can run the pattern
+  that produced a bug. `omh-backend`, `omh-frontend` and `omh-app-debugging`
+  load it when a handoff asks for tests, and `ulw-work`'s TDD page points at it
+  instead of keeping a second copy. `omh-backend` also gains
+  `references/contract-tests.md`: one negative test per auth row and per
+  error-table row, the same database engine in tests, writes read back through
+  the interface, and migrations run on populated data.
+
+- **`backend` and `relational-db` now cover concurrent writes, cursors, and
+  inbound deliveries.** A backend contract names the guard on every write two
+  requests can reach at once: a unique constraint (mapped to a 409 row), an
+  idempotency key stored with its request fingerprint and response, a
+  lost-update guard, and side effects sent only after commit, through an
+  outbox or after the commit returns. Cursor pagination ends its ordering key
+  in a unique tie-breaker, binds the cursor to its filter, and caps the page
+  size; each endpoint states its expected rate, latency target, and payload
+  bound or `unknown`; dependency timeouts shrink down the chain; and a cache
+  names its key, TTL, and invalidating write. A new
+  `references/inbound-and-async.md` covers webhooks (signature over the raw
+  body, replay window, event-id record), queue consumers (at-least-once,
+  bounded attempts, dead-letter, poison messages), and connection-pool
+  sizing; an unsigned inbound webhook is a blocker. `relational-db` gains a
+  concurrency section (default isolation per engine, `FOR UPDATE`,
+  `SKIP LOCKED`, upsert, lock order, whole-transaction retry by error code),
+  the keyset-pagination index row, and the rule that `CREATE INDEX
+  CONCURRENTLY` gets its own non-transactional migration. The backend
+  references no longer end with an attribution block about Rust `unsafe`
+  and native debugging that did not belong to them.
+
+- **`omh-llm-app-dev` and `omh-rust` cover the code around the model and the
+  command line.** The LLM provider boundary now has a deterministic fake
+  adapter beside the real one, so parsing, repair, retry classification,
+  tool handling and budget termination get offline unit tests while evals
+  stay a separate suite against the pinned model. A response cut off at the
+  output cap is classified as truncation and never re-asked under the same
+  cap; tool-call arguments are validated before the tool runs, and invalid
+  calls and tool failures return to the model as tool results; a streamed
+  call is cancelled upstream when its client goes away and is validated only
+  once complete. The Rust gate list now lints every target with all features,
+  tests both feature extremes, checks the declared MSRV, adds `--locked` in
+  CI-shaped runs and no longer claims `cargo doc` runs doc tests; new
+  sections cover binary and CLI contracts (stdout for data, named exit codes,
+  no panic on user input, binary integration tests) and adding a dependency
+  (license, MSRV, default features, `cargo tree -d`).
+
+- **Review, commit, rule and onboarding skills check what they actually
+  rely on.** `omh-code-review` now searches the reviewed repository for its
+  standards files (`REVIEW.md`, `CONTRIBUTING.md`, `AGENTS.md`/`CLAUDE.md`,
+  `*STANDARDS*.md`, linter and formatter configuration) before the smell
+  baseline applies, hands that list to a dispatched reviewer, and skips
+  smells the configured tooling already enforces on the diff.
+  `omh-commit-pr-authoring`'s no-template fallback says whether a revert undoes the change or what it
+  leaves behind, and a structural change shows the smallest file tree, call
+  tree or diff sketch of its new shape. `omh-rules-distill` classes each
+  recurring miss as mechanical (it becomes a check, proven by failing on an
+  injected violation) or judgement (prose). `omh-codebase-onboarding` checks
+  its own repo map, reading path, glossary, risk map and first-task runway
+  instead of a generic planning checklist.
+
+- **A green regression test no longer proves a fix on its own, and a
+  reproduction has to be the reported bug.** `omh-verification-gate` now asks,
+  for a "fixed" claim whose evidence is a new or changed test, for an observed
+  red of that test, for the bug's reason, on the tree before the fix (a
+  worktree run, a CI job, or the debugging session's own pre-fix run, recorded
+  with its source); an intermittent fault or a test-only fix is witnessed by a
+  failure rate beside 0/N at the same N. A fix test only ever seen green holds
+  the claim with `regression_witness_missing`.
+  `omh-app-debugging`'s reproduction record gains `symptom_match` (the
+  observed failure beside the reported one; a nearby failure is another bug),
+  `loop_cost` (time per run and what was pinned), and `minimised` (the
+  reproduction cut down until every element is load-bearing). Its method
+  reference gains a ladder for faults no test reaches, ending in numbered
+  steps for a person with named fields to report, and a session tag on every
+  temporary probe with an observed search for it before handover. Commands
+  read credentials from environment variables and quoted output is redacted.
+  The confirmed hypothesis and its eliminated rivals go into the fix's commit
+  or PR body. `omh-native-debugging`'s fault statement takes the symptom
+  match, the minimise step and the probe tag too.
+
+- **`plan` cuts code tasks as vertical slices, and `decision-prototype` says
+  what a good prototype looks like.** A plan's code tasks each deliver one
+  behavior through every layer it needs, with a done check that drives it
+  through the surface a user or caller reaches, so an integration failure
+  shows in the task that caused it instead of first in the closing gate.
+  Slices that write the same file are ordered rather than re-cut by layer,
+  each later slice listing every earlier one that writes it as a direct
+  dependency; a file every slice only appends to (a changelog, a generated
+  index) may instead be written by one task after them. A layer-only task is
+  a prefactor placed first, or a wide mechanical change handed to
+  `refactor-plan` (the new form beside the old, callers moved in groups while
+  both stay green, the old form deleted last). `decision-prototype` gains
+  `references/artifact-shapes.md`:
+  a logic or state question gets a pure module a later plan can lift, with the
+  full state shown after each action; an interaction or layout question gets
+  structurally different variants mounted in the real host page inside a
+  temporary worktree, with writes stubbed; and prototype code the receipt
+  lets later work reference is kept on a named throwaway ref the receipt
+  cites.
+
+- **The round-end check names a test whose expectation a keep-behaviour turn
+  rewrote, and diffs a Python file a command names.** A new always-on test
+  check names an existing test that lost an expected value when the request
+  asked for the behaviour, the output or the result to stay the same as a
+  whole, and did not name that test, ask to update a test, or state a new
+  result. A test a command appends to (`printf >> tests/...`) is now diffed
+  instead of firing as an unseen edit. The copy check is unchanged: a
+  look-alike that says it differs on purpose still fires it, because four
+  review rounds showed a note can hide a real copy. The bench gains the
+  `C-TEST-UPDATE` control.
+
+- **The frontend skill now covers data, forms, and input, not only the look.**
+  A page that reads or writes remote data loads the state rules that until now
+  only a refactor loaded (server state in a query cache, each mutation naming
+  what it invalidates, an optimistic write with its rollback), and the route
+  state matrix gains submitting, submit-failed, optimistic-pending, stale, and
+  conflict rows. A new `forms-and-input` reference, loaded for a form, a text
+  composer, or a dialog, covers labels, when errors appear, mapping server
+  field errors onto fields, one submit in flight, dialog focus, and an
+  Enter-to-send that waits for IME composition, so a Korean, Japanese, or
+  Chinese user no longer sends half-composed text. The brief names a
+  browser-support target before newer platform features are used, the taste
+  reference gains interface-copy rules, and the component inventory records
+  each primitive's interface. `frontend-refactor` now requires a before/after
+  capture when a change alters DOM nesting or class composition, and inlines
+  only abstractions whose deletion makes their complexity vanish.
+- **A running gateway keeps working through `omh update`.** Three causes
+  are fixed. GC could delete the generation an older gateway still served:
+  the first activation it recorded had no time, and GC read that as earlier
+  than every gateway start, so it held the wrong generation. When the
+  history cannot say which generation a gateway started on, GC now keeps
+  every generation created before that start and prints a `note:` saying
+  so. An open OMH TUI holds its own generation the same way, through an OS
+  lock under `generation-holds/`. Every update also rewrote the plugin bundle
+  and restamped `installed_at` even when no bundle file changed, so the
+  gateway restart hint fired after every update; a moved package directory
+  now updates only the manifest's `package_site`, and the hint fires only
+  when the bundle's files change. Last, a gateway's `omh` finder never looked
+  at the manifest again. It now keeps its directory while that exists. Once
+  an update removes it, the finder moves to the recorded directory when that
+  holds the version already loaded (`package_site` status `moved`), so later
+  `omh.*` imports keep working; code that reads files through an old
+  module's `__file__` still points at the removed directory until a restart.
+  The recorded directory holding another version is reported as
+  `stale_until_restart`, and nothing is loaded from it.
+
+- **The OMH TUI rides out a slow or busy Hermes gateway.** Its connection to
+  the shared gateway sent websockets' default keepalive ping, so a gateway
+  whose event loop was busy for about 40 s (a long `/compress`, a heavy
+  turn) had a healthy connection closed under it. The TUI then said the
+  gateway exited, marked the running turn lost, and gave the resume 30 s
+  before leaving. Now:
+  - The connection sends no keepalive ping, as Hermes' own loopback
+    connections do not. During a turn, once nothing has come from the
+    gateway for 45 s and no tool is running (Hermes sends nothing while a
+    terminal tool runs), the working row says "no word from Hermes' gateway
+    for N s"; the TUI closes nothing.
+  - A connection that does drop says "the connection to Hermes' gateway
+    dropped; the turn may still be running". The resume reads whether the
+    turn still runs (or Hermes has started it): one that
+    does goes on with its clock and any stop already asked, and one that
+    ended meanwhile says so. A gateway that started again (a new authority
+    epoch) says the turn was lost.
+  - The launch's and a respawn's session calls wait 120 s, as Hermes' own
+    TUI and the TUI's in-session calls do, not 30 s.
+  - `omh --resume <id>` that Hermes refuses (`not_found`,
+    `permission_denied`, ...) says why and exits 1; a session Hermes keeps
+    for another app is to be opened where it was started. It used to open
+    Hermes' own TUI, which starts a new session in its place without a word.
+  - `session.replay_gap`, sent when the gateway stops sending this screen a
+    session's events because it fell behind, resumes the session, as
+    Hermes' own TUI does. Before, the turn spun with no end. The turn's own
+    events that arrive before the answer win over it. A resume refused or
+    unanswered closes the turn and holds the queue; one that names a newer
+    id for the session moves the screen to it and closes the turn shown.
+  - `skills.changed` asks for the command catalog again, once per burst, so
+    a skill installed from another terminal reaches completion and `/help`.
+  - A turn Hermes interrupted itself says "Hermes interrupted this turn;
+    send `continue` to go on" instead of "Interrupted.". A stop the person
+    asked for (Esc, `/stop`, a prompt in busy mode `interrupt`) still says
+    "Interrupted.".
+
 - **`/resume` always answers, and `omh --resume` opens the picker.** A bare
   `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
   list, which during a turn can take a while. Now `Loading sessions…` stands
@@ -40,6 +253,33 @@ All notable changes will be documented here.
   has the session it opened closed again. A second `/resume`
   while the list is out sends no second call, and an answer that comes while
   the picker is open no longer resets its highlight or filter.
+
+- **Reports on OMH's routing reach workflow learning, and tasks that only
+  name OMH do not.** "OMH가 왜 내 메시지를 code-review로 보냈어?" dispatched
+  the code-review it names, because the fold reads the past tense 보냈 as the
+  request cue 보내; a Korean execution cue now matches whole syllables.
+  Three English report shapes reach workflow learning: an adverb between OMH
+  and its verb ("OMH apparently chose ..."), a why-question about what OMH
+  did ("Show me why OMH picked them"), and OMH ignoring the request. The
+  other way round, "OMH picked the config. Find out which keys are unused"
+  no longer gets the ~1.1k-char workflow-learning hint: "find out" with a
+  question of its own is the user's task when what OMH picked is a concrete
+  artifact (by its head noun, never a catalog skill name), while a bare
+  "find out why", a question about the choice itself, or a choice made for
+  the user's own message still reads as a report. Nor does a code edit led
+  by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
+  module; a report that quotes such an ask ("Migrate the cache was all I
+  asked, but OMH chose ...") stays a report. 9 of the 12 router misses #2455 listed are fixed on the route
+  hint. The other 3 are Korean reports that name OMH with a particle
+  ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"); reading that form as OMH was
+  tried for seven review rounds and dropped, because each closed list it
+  needed let coding requests through. The particle mention itself gives no
+  routing context, as before; the 보내 fix still changes Korean reports that
+  use 보냈. "OMH ignored ..." is a report only when OMH ignored the user's
+  own ask or a routing target, not a file or a setting. Measured offline on
+  the earlier held-out sets and eleven fresh sets frozen for this change
+  (1,083 scored messages, hint and chat route), no message the previous
+  router answered right is answered wrong.
 
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
@@ -223,6 +463,12 @@ All notable changes will be documented here.
   its one-line prompt now ask for the save before other tools, limit it to the
   user's own words, and exclude pasted text and facts that only matter for the
   current task.
+- **A rule the user restates in other words updates the saved record instead
+  of adding a second one.** `omh_remember(action="save")` takes `replaces`,
+  the id of a record already shown to the conversation; the merged summary
+  goes through the correction path, the old record moves to history, and only
+  the merged record recalls. An id outside the session's lens still saves the
+  fact as a new record.
 - **omher.app pages carry X's full share-card tag set.** Every indexable site page now
   carries `twitter:site`, `twitter:creator`, `twitter:image:alt` and
   `og:image:type` beside the existing share card, and `test_site_seo` pins
@@ -305,6 +551,17 @@ All notable changes will be documented here.
     set, before a dispatch spends a run finding out. Its PATH report no
     longer lists npm's extensionless shell shim, which logged
     `[WinError 193]` before falling back to `codex.CMD`.
+
+- **The Desktop pane says when a delegated lane failed, keeps a narrow pane
+  readable, and darkens the text you read.** A failed lane or route used to
+  be counted as `blocked`; the header and the status bar now say
+  `1 running · 1 failed` with failed in red, apart from `blocked` (stuck or
+  interrupted lanes, blocked rows) in yellow, and a red dot when nothing
+  runs. At the default 320 px pane a delegation row puts its model on a
+  second line under the title, so neither is cut to a few letters. The scope
+  line, plan notes, the subagent summary and backend notices use a text tone
+  between Desktop's secondary and tertiary roles, readable in the light
+  theme where tertiary alone was faint. In Korean the count reads `1개 실패`.
 
 ## 4.0.4 - 2026-11-01
 

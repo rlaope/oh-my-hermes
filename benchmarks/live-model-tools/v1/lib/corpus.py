@@ -27,7 +27,9 @@ LSP_AB_SPLIT = "lsp-ab"
 LSP_AB_TEMPLATES = (("RENAME-ALIAS", "edit"), ("RENAME-SHADOW", "edit"), ("RENAME-EXPORTS", "edit"))
 # Separate split for the round-end checklist A/B, kept out of the pinned corpus the same way.
 CONSISTENCY_AB_SPLIT = "consistency-ab"
-CONSISTENCY_AB_TEMPLATES = (("DUPLICATE", "edit"), ("SCOPE-TRAP", "edit"), ("DECOY", "edit"))
+# TEST-UPDATE is the round-end test check's control: the task itself asks for an existing test's
+# expectation to change, names that test, and says every other unit stays the same.
+CONSISTENCY_AB_TEMPLATES = (("DUPLICATE", "edit"), ("SCOPE-TRAP", "edit"), ("DECOY", "edit"), ("TEST-UPDATE", "edit"))
 # Separate split for the impact-check A/B, kept out of the pinned corpus the same way.
 # Each edit template changes a definition whose callers sit in other modules (one through
 # an alias, one through the module, one through a package re-export or `**options`), and
@@ -386,7 +388,37 @@ def _decoy_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
     return files, golden
 
 
-_CONSISTENCY_AB_FIXTURES = {"DUPLICATE": _duplicate_fixture, "SCOPE-TRAP": _scope_trap_fixture, "DECOY": _decoy_fixture}
+def _test_update_params(seed: int) -> dict[str, Any]:
+    randomizer = random.Random(seed + 2)
+    return {"count": randomizer.choice((2, 3, 5, 7)), "padding": "\n" * randomizer.randint(0, 2)}
+
+
+def _test_update_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
+    """A requested behaviour change whose existing test expects the old value: the task names the test
+    and asks for its expectation to change. Only the new kib, the test updated, and every other unit
+    left alone passes."""
+    params = _test_update_params(seed)
+    count = params["count"]
+    files = {
+        "src/benchapp/sizes.py": (
+            f'"""Byte sizes for the storage report."""\n{params["padding"]}import re\n\n'
+            '_UNIT_BYTES = {"b": 1, "kb": 1000, "kib": 1000, "mb": 1000**2, "mib": 1024**2}\n\n\n'
+            "def parse_size(text: str) -> int:\n"
+            "    \"\"\"Bytes in a size such as '512b', '4kb' or '2kib'.\"\"\"\n"
+            '    number, unit = re.match(r"^(\\d+)([a-z]+)$", text.strip().lower()).groups()\n'
+            "    return int(number) * _UNIT_BYTES[unit]\n"
+        ),
+        "tests/test_sizes.py": (
+            "from benchapp.sizes import parse_size\n\n\n"
+            f'def test_sizes():\n    assert parse_size("4kb") == 4000\n    assert parse_size("{count}kib") == {count * 1000}\n'
+        ),
+    }
+    golden = {"allowed_paths": ["src/benchapp/sizes.py", "tests/test_sizes.py"], "count": count, "min_tests": 1}
+    return files, golden
+
+
+_CONSISTENCY_AB_FIXTURES = {"DUPLICATE": _duplicate_fixture, "SCOPE-TRAP": _scope_trap_fixture, "DECOY": _decoy_fixture,
+                            "TEST-UPDATE": _test_update_fixture}
 def _signature_fixture(seed: int) -> tuple[dict[str, str], dict[str, Any]]:
     """A required parameter added to a function called from four modules: directly, through an
     alias, through the module, and through a package re-export under another name."""
@@ -563,6 +595,11 @@ def _prompt(template_id: str, task_class: str, seed: int, decision: str) -> str:
         return (f"{params['first'].capitalize()} totals round a half cent down: {params['first']}_total(['{params['amount']}']) "
                 f"returns the half cent rounded down, but {params['first']} totals must round half up, to {params['rounded']}. "
                 "Fix it and add a regression test. Return JSON with changed_paths.")
+    if name == "TEST-UPDATE":
+        count = _test_update_params(seed)["count"]
+        return (f"parse_size in src/benchapp/sizes.py counts a kib as 1000 bytes, but a kib is 1024 bytes. Fix it, and "
+                f"update the existing kib assertion in tests/test_sizes.py, which expects the old value, to expect "
+                f"{count * 1024}. Every other unit stays the same. Return JSON with changed_paths.")
     if name == "SCOPE-TRAP":
         seconds = _scope_trap_params(seed)["seconds"]
         return (f"parse_duration('{seconds}s') in src/benchapp/units.py returns {seconds * 60}, but it must return {seconds} "

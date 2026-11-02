@@ -544,6 +544,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_flat_skill_layout_check(paths))
     checks.append(_plugin_ulw_lifecycle_check(paths))
     checks.append(_omh_tui_check(paths))
+    checks.extend(_hermes_gateway_checks(paths))
     checks.append(_delegation_protocol_platform_check(paths))
     checks.append(_hermes_model_routing_check(paths))
     checks.append(_provider_entitlements_check(paths))
@@ -735,6 +736,44 @@ def _omh_tui_check(paths: OmhPaths) -> Check:
         "bare `omh` can open the OMH TUI: shim installed, Hermes launcher hook and gateway present, Node found"
         + versions,
     )
+
+
+def _hermes_gateway_checks(paths: OmhPaths) -> list[Check]:
+    """Does a running Hermes gateway need a restart, by its own files? One row for the primary home, one more per
+    profile only when that profile's gateway has something to say.
+
+    Read-only: `gateway.pid`, `gateway_state.json`, `gateway-starts.log`,
+    bounded tails of `logs/gateway.log` and `logs/gateway.error.log`, and the
+    bundle manifest, never the process. Every finding is Hermes' to clear, so
+    the row stays ok and only warns, with what the person can do as its next
+    action (`gateway_notices`): a session store failure Hermes logged since the
+    last start, a gateway whose last start precedes the OMH plugin bundle it
+    would load now, and a draining gateway, which starts no new turns until
+    it is done.
+    """
+    from .hermes_gateway import GATEWAY_PID_FILENAME, gateway_notice_homes, gateway_notices
+
+    checks: list[Check] = []
+    for index, (home, label, command) in enumerate(gateway_notice_homes(paths.hermes_home)):
+        name = "hermes_gateway" if index == 0 else f"hermes_gateway:{home.name}"
+        notices = gateway_notices(home, label=label, restart_command=command)
+        if notices:
+            actions = list(dict.fromkeys(notice.next_action for notice in notices))
+            commands = [notice.restart_command for notice in notices if notice.restart_command]
+            checks.append(Check(
+                name, True, " ".join(notice.text for notice in notices), severity="warning",
+                next_action="; ".join(actions),
+                detail={"findings": [notice.kind for notice in notices], "restart_command": commands[0] if commands else ""},
+            ))
+        elif index == 0:
+            running = (home / GATEWAY_PID_FILENAME).is_file()
+            checks.append(Check(
+                name, True,
+                f"{label} in {home}: no restart needed by its own records"
+                if running else f"no running Hermes gateway recorded in {home}",
+                observed=running,
+            ))
+    return checks
 
 
 def _delegation_protocol_platform_check(paths: OmhPaths) -> Check:
