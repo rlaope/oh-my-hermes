@@ -192,6 +192,10 @@ APP_EVENTS = (
     "request.cancel", "approval.cancelled", "session.info", "session.usage", "connection.request", "error",
     "notification.show", "notification.clear", "session.title", "todo.updated", "review.summary",
     "session.control.update", "background.complete", "btw.complete",
+    # Newer than 6c61c3e27d: `skills.changed` (a skill root moved; Ink refetches the catalog) and
+    # `session.replay_gap` (`gateway/session_events.py`, sent raw: the gateway dropped this viewer's subscription for
+    # falling behind and sends nothing more for the session until it resumes; Ink resumes it).
+    "skills.changed", "session.replay_gap",
 )
 TRANSCRIPT_EVENTS = (
     "message.start", "message.delta", "message.interim", "message.complete", "thinking.delta", "reasoning.delta",

@@ -65,6 +65,14 @@ PARITY_MESSAGES = (
     "OMH 라우팅 테스트해보자",
     "OMH 라우터가 내 로그 질문을 잘못 보냈어",
     "블로그 글에 OMH 워크플로 설명을 넣어줘",
+    # "find out" decided by the clause before it, a why-question about OMH,
+    # the product name with a Korean particle, and the past tense 보냈어.
+    "OMH picked the config. Find out which keys are unused",
+    "OMH routed my typo to ultrawork, find out what bug made it do that",
+    "Show me why OMH picked them",
+    "OMH가 라우팅을 잘못했어, 원인을 같이 보자",
+    "OMH가 왜 내 메시지를 code-review로 보냈어?",
+    "OMH: migrate the terminology glossary JSON loader to use pathlib",
     # Throwaway test messages (owner decision on #2440: no workflow-learning hint).
     "This is a test message for OMH",
 )

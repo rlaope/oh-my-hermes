@@ -1086,7 +1086,8 @@ class _Socket:
 
 class connect:
     def __init__(self, url, **options):
-        _log({"connect": url, "subprotocols": options.get("subprotocols"), "proxy": options.get("proxy", "unset")})
+        _log({"connect": url, "subprotocols": options.get("subprotocols"), "proxy": options.get("proxy", "unset"),
+              "ping_interval": options.get("ping_interval", "unset")})
 
     async def __aenter__(self):
         if os.environ.get("FAKE_OWNER_DOWN"):
@@ -1357,7 +1358,8 @@ class ScriptTests(unittest.TestCase):
         ensure = next(entry for entry in log if "ensure" in entry)
         self.assertEqual(ensure, {"ensure": str(home.resolve()), "idle_exit": True, "launch_env_left": []})
         connect = next(entry for entry in log if "connect" in entry)
-        self.assertEqual(connect, {"connect": "ws://127.0.0.1:1/api/ws", "proxy": None,
+        # No keepalive ping (Hermes' loopback policy): a gateway busy for 40 s must not drop a turn that still runs.
+        self.assertEqual(connect, {"connect": "ws://127.0.0.1:1/api/ws", "proxy": None, "ping_interval": None,
                                    "subprotocols": ["hermes-gateway-v1", "hermes-gateway-ticket.t0k"]})
         sent = {entry["method"]: entry["params"] for entry in log if "method" in entry}
         self.assertEqual(sent["session.create"], {"cwd": "/tui/cwd", "model": "gpt-x", "source": "tui",
