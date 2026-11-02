@@ -196,14 +196,21 @@ FAILURE_ORIGIN_PROOF_NAMING = (
     "Name the proof beside the origin: a merge-base run is an observation, a diff-line reading is an inference"
 )
 # A regression test written with its fix and only ever run green never saw the
-# bug: it may pass on the broken tree too. The witness is the same test failing
-# on the pre-fix tree, observed with the same merge-base worktree `origin`
-# already requires, so the gate gains a run to ask for and no new procedure.
+# bug: it may pass on the broken tree too. The witness is that test's observed
+# red on the tree before the fix. Its source is whatever observed it -- a
+# worktree run, a CI job, the debugging session's own pre-fix run -- because the
+# gate already weighs a row by its `source`. A test-only fix (a flake or a wrong
+# assertion) has nothing to revert, so its witness is the old test's rate.
 REGRESSION_WITNESS_RULE = (
-    "A fix claim whose evidence is a new or changed test also needs that test observed failing, for the bug's reason, "
-    "on the pre-fix tree: the test applied alone to the merge-base in a clean detached worktree, as for `origin`; "
-    "when the red was forced by editing code or a fixture, the record shows the diff that put the edit in the run tree. "
-    "A test only ever observed green never witnessed the bug, so the claim is HOLD with `regression_witness_missing`."
+    "A fix claim whose evidence is a new or changed test needs a regression witness: an observed red of that test, "
+    "for the bug's reason, on the pre-fix tree (the fix commit's parent, or the merge-base when the fix is the whole "
+    "change), recorded with its source -- a run in a clean detached worktree at that tree, a CI job on a commit that "
+    "adds only the test, or the debugging session's run before the fix. A collection or import error there is not a "
+    "witness. For an intermittent fault the witness is the failure rate over N runs before beside 0/N at the same N "
+    "after. When the test calls a seam the fix added, force the red by reverting only the behavioural lines, keep the "
+    "seam, and show that diff. When the fix changes only test code, the witness is the old test's measured failure "
+    "rate on the pre-fix tree beside the new test's 0/N at the same N. A fix test only ever observed green is HOLD "
+    "with `regression_witness_missing`."
 )
 
 # Hermes' bundled `grounded-citations` skill (`scripts/sources.py`), as
@@ -5768,7 +5775,7 @@ _DEFINITIONS = [
         artifact_expectations=(
             "verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable",
             observed_check_results_expectation(),
-            "claim_verdict/v1 with PASS, HOLD, or BLOCK and exact missing or failed checks, each failed one with its origin",
+            "claim_verdict/v1 with PASS, HOLD, or BLOCK, a HOLD reason of `regression_witness_missing` when a fix test has no observed pre-fix red, and exact missing or failed checks, each failed one with its origin",
             "generated_artifact_provenance/v1 with one row per touched generated path: the source of truth that produces it, the regeneration command, and the drift gate that catches it, or the single state `map_not_declared` when the repository declares no generated-artifact map",
         ),
         safety_rules=(
@@ -9984,7 +9991,7 @@ _DEFINITIONS.append(
             "observed_fix_verification/v1 when observed",
         ),
         artifact_expectations=(
-            "reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs, plus `symptom_match` (the observed failure quoted beside the reported one), `loop_cost` (wall time per run and what was pinned for determinism), and `minimised` (the cuts made and the load-bearing form left); it reads observed or not_observed and nothing between",
+            "reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs, plus `symptom_match` (the observed failure quoted beside the reported one), `loop_cost` (wall time per run, and what was pinned or, for an intermittent fault, how the rate was raised), and `minimised` (the cuts made and the load-bearing form left); it reads observed or not_observed and nothing between",
             "competing_hypotheses/v1 spans distinct axes -- input and state, ordering and timing, environment and build, dependency behaviour -- rather than three phrasings of one guess",
             "discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates",
             "root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival, and the fix's commit or pull-request body states that confirmed hypothesis and the rivals it eliminated, because the next debugger reads history, not this record",
@@ -10003,7 +10010,7 @@ _DEFINITIONS.append(
             "State the symptom and the expected behaviour separately from any suspected cause.",
             "Record the reproduction with its hit rate; an intermittent fault is reproduced when its rate over N runs is measured, not when it happened once.",
             "A reproduction counts for this bug only when its `symptom_match` shows the failure the user reported; a different failure near the same code is another bug, and this record stays not_observed.",
-            "Minimise before hypothesising: cut inputs, callers, config, and steps one at a time, rerunning the loop after each, until every remaining element is load-bearing; the minimised form is what the regression test is built from.",
+            "`minimised` is filled before `competing_hypotheses/v1`: an input, caller, config value, or step leaves the reproduction only when the loop rerun without it still shows the symptom (for an intermittent fault, the same rate at the same N), and the record lists what left and what stayed; `fix_handoff/v1` builds the regression test from what stayed.",
             "Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.",
             "Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.",
             "Keep reproduction, root cause, fix, and verification as separate observed states.",
@@ -10054,7 +10061,7 @@ _DEFINITIONS.append(
             "An observed search for the session's probe tag returns nothing, and every throwaway harness file is deleted or listed.",
         ),
         recovery_notes=(
-            "If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it; when no test reaches the fault, walk the method reference's loop ladder, and when nothing on it can be built, say so, list what was tried, and ask for an environment, a redacted capture, or permission for tagged temporary instrumentation.",
+            "If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it; when no test reaches the fault, choose a loop from the method reference's loop table; if none can be built, the record stays not_observed with each attempt and what stopped it, and the request to the user is for an environment, a redacted capture, or permission for tagged temporary instrumentation.",
             "If every hypothesis is eliminated, record that, widen the axes, and keep root cause unclaimed rather than promoting the last survivor.",
         ),
         situations=(

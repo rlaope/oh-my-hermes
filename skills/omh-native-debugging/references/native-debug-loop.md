@@ -15,7 +15,7 @@ If reproduction is not established, that is the first hypothesis and the first o
 Once it reproduces, check and shrink it before section 2:
 
 - **Symptom match.** Quote the observed failure beside the one reported. A different crash near the same code is a different fault; this one stays unreproduced.
-- **Minimised.** Remove one input, flag, thread, or step at a time, rerunning after each, until every element left is needed for the fault to appear. Debug the minimised form.
+- **Minimised.** An input, flag, thread, or step leaves the reproduction only when a rerun without it still shows the fault (at the same rate over the same N, if intermittent). Debug what stays.
 
 ## 2. Three hypotheses on distinct axes
 

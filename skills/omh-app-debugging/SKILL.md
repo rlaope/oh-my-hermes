@@ -59,7 +59,7 @@ Bad example:
 
 ## Recovery Notes
 
-- If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it; when no test reaches the fault, walk the method reference's loop ladder, and when nothing on it can be built, say so, list what was tried, and ask for an environment, a redacted capture, or permission for tagged temporary instrumentation.
+- If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it; when no test reaches the fault, choose a loop from the method reference's loop table; if none can be built, the record stays not_observed with each attempt and what stopped it, and the request to the user is for an environment, a redacted capture, or permission for tagged temporary instrumentation.
 - If every hypothesis is eliminated, record that, widen the axes, and keep root cause unclaimed rather than promoting the last survivor.
 
 ## Workflow Lane
@@ -87,7 +87,7 @@ Quality bar:
 - State the symptom and the expected behaviour separately from any suspected cause.
 - Record the reproduction with its hit rate; an intermittent fault is reproduced when its rate over N runs is measured, not when it happened once.
 - A reproduction counts for this bug only when its `symptom_match` shows the failure the user reported; a different failure near the same code is another bug, and this record stays not_observed.
-- Minimise before hypothesising: cut inputs, callers, config, and steps one at a time, rerunning the loop after each, until every remaining element is load-bearing; the minimised form is what the regression test is built from.
+- `minimised` is filled before `competing_hypotheses/v1`: an input, caller, config value, or step leaves the reproduction only when the loop rerun without it still shows the symptom (for an intermittent fault, the same rate at the same N), and the record lists what left and what stayed; `fix_handoff/v1` builds the regression test from what stayed.
 - Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.
 - Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.
 - Keep reproduction, root cause, fix, and verification as separate observed states.
@@ -117,7 +117,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs, plus `symptom_match` (the observed failure quoted beside the reported one), `loop_cost` (wall time per run and what was pinned for determinism), and `minimised` (the cuts made and the load-bearing form left); it reads observed or not_observed and nothing between
+- reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs, plus `symptom_match` (the observed failure quoted beside the reported one), `loop_cost` (wall time per run, and what was pinned or, for an intermittent fault, how the rate was raised), and `minimised` (the cuts made and the load-bearing form left); it reads observed or not_observed and nothing between
 - competing_hypotheses/v1 spans distinct axes -- input and state, ordering and timing, environment and build, dependency behaviour -- rather than three phrasings of one guess
 - discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates
 - root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival, and the fix's commit or pull-request body states that confirmed hypothesis and the rivals it eliminated, because the next debugger reads history, not this record

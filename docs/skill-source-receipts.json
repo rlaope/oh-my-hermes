@@ -716,6 +716,17 @@
       "reviewed_on": "2026-11-02",
       "rationale": "Adopted symptom match, the minimise step and the probe tag for the native fault statement and the print-and-rebuild fallback.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-verification-gate-mattpocock-skills",
+      "candidate_key": "verification-gate@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the pre-fix red witness with a forced-red diff as a HOLD reason, and the test-shape ideas behind the shared test-authoring reference; tracker publishing and approval checkpoints rejected.",
+      "supersedes": null
     }
   ]
 }

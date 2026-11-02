@@ -6,10 +6,12 @@ All notable changes will be documented here.
 
 - **A green regression test no longer proves a fix on its own, and a
   reproduction has to be the reported bug.** `omh-verification-gate` now asks,
-  for a "fixed" claim whose evidence is a new or changed test, for a run of
-  that test failing for the bug's reason on the pre-fix tree, in the same
-  clean merge-base worktree the `origin` rule already uses; a test only ever
-  seen green holds the claim with `regression_witness_missing`.
+  for a "fixed" claim whose evidence is a new or changed test, for an observed
+  red of that test, for the bug's reason, on the tree before the fix (a
+  worktree run, a CI job, or the debugging session's own pre-fix run, recorded
+  with its source); an intermittent fault or a test-only fix is witnessed by a
+  failure rate beside 0/N at the same N. A fix test only ever seen green holds
+  the claim with `regression_witness_missing`.
   `omh-app-debugging`'s reproduction record gains `symptom_match` (the
   observed failure beside the reported one; a nearby failure is another bug),
   `loop_cost` (time per run and what was pinned), and `minimised` (the

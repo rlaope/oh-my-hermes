@@ -60,22 +60,34 @@ class ReproductionRecordTests(unittest.TestCase):
         self.assertIn("| Minimised |", table)
 
     def test_minimise_comes_before_hypotheses_and_feeds_the_regression_test(self) -> None:
-        bar = next(line for line in _definition(APP).quality_bar if line.startswith("Minimise before hypothesising"))
-        self.assertIn("one at a time, rerunning the loop after each", bar)
-        self.assertIn("every remaining element is load-bearing", bar)
+        bar = next(line for line in _definition(APP).quality_bar if line.startswith("`minimised` is filled before"))
+        self.assertIn("`competing_hypotheses/v1`", bar)
+        self.assertIn("the loop rerun without it still shows the symptom", bar)
+        self.assertIn("`fix_handoff/v1` builds the regression test from what stayed", bar)
         method = _reference(APP, APP_METHOD)
         self.assertLess(method.index("**Then minimise.**"), method.index("## 2. Hypotheses on distinct axes"))
 
-    def test_the_loop_ladder_ends_in_a_capture_not_an_approval(self) -> None:
+    def test_an_intermittent_fault_is_minimised_and_tightened_by_its_rate(self) -> None:
+        """One green run proves nothing for a flaky fault, and pinning a cause away hides it."""
+        bar = next(line for line in _definition(APP).quality_bar if line.startswith("`minimised` is filled before"))
+        self.assertIn("for an intermittent fault, the same rate at the same N", bar)
+        method = _reference(APP, APP_METHOD)
+        self.assertIn('"still shows" means the same rate at the same N, never one red run', method)
+        self.assertIn("rather than pin the variation away", method)
+        self.assertIn("Pin what varies between runs and no standing hypothesis implicates", method)
+        self.assertIn("**A pin that turns the loop green** is an observation about the cause", method)
+        self.assertNotIn("pin whatever varies between runs", method)
+
+    def test_the_loop_table_ends_in_a_capture_not_an_approval(self) -> None:
         method = _reference(APP, APP_METHOD)
         start = method.index("### When no test reaches the fault")
-        ladder = method[start : method.index("\n## ", start)]
-        self.assertIn("`bisect_plan/v1`", ladder)
-        self.assertIn("record takes them as user-observed", ladder)
-        self.assertIn("it asks no one to approve anything", ladder)
-        self.assertIn("No hypotheses before a loop exists.", ladder)
+        table = method[start : method.index("\n## ", start)]
+        self.assertIn("`bisect_plan/v1`", table)
+        self.assertIn("the record takes them as user-observed", table)
+        self.assertIn("nobody is asked to approve anything", table)
+        self.assertIn("`competing_hypotheses/v1` waits for an observed record.", table)
         recovery = " ".join(_definition(APP).recovery_notes)
-        self.assertIn("loop ladder", recovery)
+        self.assertIn("loop table", recovery)
 
     def test_secrets_never_reach_the_record(self) -> None:
         rule = next(rule for rule in _definition(APP).safety_rules if rule.startswith("Redact before recording"))
@@ -117,13 +129,40 @@ class NativeFaultStatementTests(unittest.TestCase):
 
 class RegressionWitnessTests(unittest.TestCase):
     def test_a_test_only_seen_green_is_a_hold_with_a_named_reason(self) -> None:
-        self.assertIn("observed failing, for the bug's reason, on the pre-fix tree", REGRESSION_WITNESS_RULE)
-        self.assertIn("HOLD with `regression_witness_missing`", REGRESSION_WITNESS_RULE)
-        self.assertIn("the diff that put the edit in the run tree", REGRESSION_WITNESS_RULE)
+        self.assertIn("an observed red of that test, for the bug's reason, on the pre-fix tree", REGRESSION_WITNESS_RULE)
+        self.assertIn("A fix test only ever observed green is HOLD with `regression_witness_missing`", REGRESSION_WITNESS_RULE)
+        verdict = _expectation(GATE, "claim_verdict/v1")
+        self.assertIn("`regression_witness_missing`", verdict)
 
-    def test_the_witness_reuses_the_origin_worktree_and_follows_it(self) -> None:
-        """No second procedure: the same clean detached merge-base worktree `origin` names."""
-        self.assertIn("merge-base in a clean detached worktree, as for `origin`", REGRESSION_WITNESS_RULE)
+    def test_the_pre_fix_tree_is_the_fixs_parent_and_a_collection_error_is_no_witness(self) -> None:
+        self.assertIn(
+            "the fix commit's parent, or the merge-base when the fix is the whole change", REGRESSION_WITNESS_RULE
+        )
+        self.assertIn("A collection or import error there is not a witness", REGRESSION_WITNESS_RULE)
+
+    def test_any_observed_source_counts_when_it_is_recorded(self) -> None:
+        """A worktree run is one source; CI and the debugging session's own pre-fix run are others."""
+        for source in (
+            "recorded with its source",
+            "a run in a clean detached worktree at that tree",
+            "a CI job on a commit that adds only the test",
+            "the debugging session's run before the fix",
+        ):
+            with self.subTest(source=source):
+                self.assertIn(source, REGRESSION_WITNESS_RULE)
+
+    def test_rates_stand_in_for_one_run_where_one_run_proves_nothing(self) -> None:
+        """An intermittent fault and a test-only fix both need a rate at a fixed N."""
+        self.assertIn("the failure rate over N runs before beside 0/N at the same N after", REGRESSION_WITNESS_RULE)
+        self.assertIn(
+            "When the fix changes only test code, the witness is the old test's measured failure rate",
+            REGRESSION_WITNESS_RULE,
+        )
+
+    def test_a_seam_the_fix_added_is_forced_red_by_reverting_behaviour_only(self) -> None:
+        self.assertIn("reverting only the behavioural lines, keep the seam, and show that diff", REGRESSION_WITNESS_RULE)
+
+    def test_the_witness_follows_the_origin_rule(self) -> None:
         bar = list(_definition(GATE).quality_bar)
         origin = next(index for index, line in enumerate(bar) if FAILURE_ORIGIN_PROOF_RULE in line)
         self.assertEqual(bar[origin + 1], REGRESSION_WITNESS_RULE)

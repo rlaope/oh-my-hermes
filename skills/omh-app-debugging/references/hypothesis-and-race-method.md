@@ -13,8 +13,8 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 | Expected | the output that would have been correct, and where that expectation comes from |
 | Symptom match | the observed failure quoted beside the one the user reported; a different failure near the same code is a different bug, and the record stays not_observed for this one |
 | Hit rate | failures over runs, for example `4/20`; one sighting is a report, not a reproduction |
-| Loop cost | wall time per run, and what was pinned so the verdict repeats: clock, seed, temp directory, network |
-| Minimised | the elements cut and the form left, in which removing any remaining element turns the loop green |
+| Loop cost | wall time per run; what was pinned, which is only what no standing hypothesis implicates; for an intermittent fault, how the rate was raised |
+| Minimised | what left the reproduction and what stayed, each element that stayed because the symptom (or the rate) went with it |
 | Environment | interpreter, dependency versions, OS, parallelism, and anything the failing run had that the passing run did not |
 | State | observed or not_observed; nothing between |
 
@@ -22,26 +22,29 @@ An intermittent fault is reproduced when its rate is measured, not when it happe
 
 If a capture is too redacted to diagnose, record that and ask for a narrower one; never record it unredacted.
 
-**Make the loop cheap before trusting it.** A loop that takes minutes per run, or whose verdict flips on its own, is the next thing to fix, ahead of any hypothesis: narrow what it runs, skip setup the fault does not need, assert the reported symptom rather than "it did not crash", and pin whatever varies between runs. Record the result under Loop cost.
+**Make the loop cheap before trusting it.** A loop that takes minutes per run is the next thing to fix, ahead of any hypothesis: narrow what it runs, skip setup the fault does not need, and assert the reported symptom rather than "it did not crash". What to do about variation depends on the fault:
 
-**Then minimise.** Remove one input, caller, config value, data row, or step at a time and rerun the loop after each removal: keep the removal when the loop still goes red, restore it when the loop goes green. Stop when every element left is load-bearing. The minimised form leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test.
+- **Deterministic fault.** Pin what varies between runs and no standing hypothesis implicates -- a clock, a seed, a temp directory, the network -- so the verdict repeats.
+- **Intermittent fault.** The rate is the signal (section 3). Raise it -- more iterations, parallel runs, load, a narrower timing window -- rather than pin the variation away.
+- **A pin that turns the loop green** is an observation about the cause, not a cleaner loop: record it in section 2 against the hypothesis that names what was pinned.
+
+Record time per run and what was pinned or raised under Loop cost.
+
+**Then minimise.** An element of the reproduction -- an input, a caller, a config value, a data row, a step -- leaves it only when the loop rerun without it still shows the symptom; otherwise it goes back. For an intermittent fault, "still shows" means the same rate at the same N, never one red run. The Minimised field lists what left and what stayed. What stayed leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test.
 
 ### When no test reaches the fault
 
-Take the first of these that yields one command going red on the reported symptom:
+Choose the loop by what the fault needs; any row that yields one command going red on the reported symptom will do.
 
-1. A test at whichever seam does reach the code path: unit, integration, or end to end.
-2. A request script against a locally running server.
-3. The CLI on a fixture input, its output diffed against a known-good copy.
-4. A headless browser script that asserts on the page, the console, or the network.
-5. A captured payload or event log, saved to disk and replayed through the code path alone.
-6. A throwaway harness that calls the code path directly, with fakes only where the process leaves the repository's control.
-7. A property or fuzz loop over generated inputs, for output that is only sometimes wrong.
-8. A bisect harness between a known-good and a known-bad state, handed to `git-workflow` as `bisect_plan/v1`.
-9. A differential run: one input through the old and new versions, or through two configurations, with the outputs diffed.
-10. Steps only a person can perform, on a device, a GUI, or a third-party console. Number the steps, and name the fields the person reports after each run: whether it failed, the message as shown, and the time. Every run then returns the same fields, and the record takes them as user-observed. This captures an observation; it asks no one to approve anything.
+| The fault | Loop |
+| --- | --- |
+| shows through an interface the repository serves | a test at whichever seam reaches the path; a request script against a local server; the CLI on a fixture with its output diffed against a known-good copy; a headless browser script asserting on the page, console, or network |
+| needs an input the repository cannot recreate | the captured payload or event log, saved to disk and replayed through the path alone; or a throwaway harness calling the path directly, with fakes only where the process leaves the repository's control |
+| shows only for some inputs | a property or fuzz loop over generated inputs |
+| appeared between two versions or two configurations | a differential run diffing both outputs for one input; or a bisect harness, handed to `git-workflow` as `bisect_plan/v1` |
+| can be triggered only by a person, on a device, a GUI, or a third-party console | numbered steps for the person, and named fields reported after every run -- failed or not, the message as shown, the time -- so each run returns the same fields; the record takes them as user-observed. This is an observation capture: nobody is asked to approve anything |
 
-When none can be built, say so, list what was tried and why each attempt failed, and ask for one of: access to an environment that reproduces the fault, a redacted capture such as a log, a trace, or a timestamped recording, or permission for tagged temporary instrumentation. No hypotheses before a loop exists.
+If no row yields a loop, `reproduction_record/v1` stays not_observed and lists each loop attempted and what stopped it. The request to the user is then for one of: an environment where the fault reproduces, a redacted capture (a log, a trace, a timestamped recording), or permission for tagged temporary instrumentation. `competing_hypotheses/v1` waits for an observed record.
 
 ## 2. Hypotheses on distinct axes
 
@@ -121,4 +124,4 @@ A symptom that stopped after an edit, with no mechanism, is an open fault with a
 
 ## Attribution
 
-The symptom match, the loop-cost and minimised fields, the loop ladder, the probe tag, the redaction rule, and the person-run capture adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. OMH keeps them as record fields under its observed-evidence boundary and executes none of the loops itself.
+The symptom match, the loop-cost and minimised fields, the loop table, the probe tag, the redaction rule, and the person-run capture adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. OMH keeps them as record fields under its observed-evidence boundary and executes none of the loops itself.
