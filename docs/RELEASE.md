@@ -116,6 +116,11 @@ strings quoted in README/docs prose and CLI help examples are illustrative and
 deliberately not parity-gated; a stale example is a docs nit, not a
 diagnostics lie.
 
+In the release prep PR, also add the target version's entry to `WHATS_NEW` in
+`src/tui/whats_new.py`: three to five one-line items from its `CHANGELOG.md`
+section, the changes a person sees; `tests/test_tui_whats_new.py` fails a
+version that has none.
+
 ### Bundled plugin runtime compatibility (maintainer contract)
 
 Treat `src/plugin_bundle/omh/plugin.yaml` `requires_hermes` as a separate

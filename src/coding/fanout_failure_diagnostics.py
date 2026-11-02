@@ -16,7 +16,8 @@ StreamName = Literal['stdout', 'stderr']
 Phase = Literal['preflight', 'worktree', 'launch', 'worker', 'timeout',
                 'unit_result', 'verification', 'dispatcher']
 FailureReason = Literal['denial', 'missing_binary', 'spawn_error', 'nonzero',
-                        'deadline', 'malformed_result', 'internal_error']
+                        'deadline', 'malformed_result', 'internal_error',
+                        'executor_sandbox_read_only', 'executor_sandbox_start_failed']
 ExitCodeSource = Literal['process', 'synthetic', 'not_observed']
 StreamState = Literal['retained', 'redacted', 'withheld', 'empty', 'not_captured']
 LIMIT_BYTES = 2000
@@ -55,7 +56,20 @@ _STREAM_REASONS = frozenset({'safe_template', 'sensitive_output', 'invalid_utf8'
 _PHASES = frozenset({'preflight', 'worktree', 'launch', 'worker', 'timeout',
                      'unit_result', 'verification', 'dispatcher'})
 _REASONS = frozenset({'denial', 'missing_binary', 'spawn_error', 'nonzero',
-                      'deadline', 'malformed_result', 'internal_error'})
+                      'deadline', 'malformed_result', 'internal_error',
+                      'executor_sandbox_read_only', 'executor_sandbox_start_failed'})
+# Fixed phrases the executor's own sandbox prints when it refuses work, mapped
+# to the failure reason they name (#2471). Matched anywhere in the stream, not
+# only in the bounded error window: Codex prints the refusal mid-session and
+# keeps going, so the tail rarely still holds it. Only the reason is kept; the
+# phrase never enters retained diagnostic text. Sources, openai/codex:
+# `core/src/safety.rs` (patch refused under a read-only policy) and
+# `mxc-sandbox/src/transport.rs` (MXC refuses to start without a host variable).
+SANDBOX_REFUSAL_MARKERS: tuple[tuple[bytes, str], ...] = (
+    (b'writing is blocked by read-only sandbox', 'executor_sandbox_read_only'),
+    (b'MXC requires nonempty Unicode host', 'executor_sandbox_start_failed'),
+)
+_SANDBOX_MARKER_OVERLAP = max(len(marker) for marker, _reason in SANDBOX_REFUSAL_MARKERS)
 
 
 class StreamDiagnostic(TypedDict):
@@ -130,11 +144,14 @@ class SanitizedStream:
         self.line_overrun = False
         self.overlap = b''
         self.error_window = b''
+        self.sandbox_overlap = b''
+        self.sandbox_refusals: set[str] = set()
         self.text = ''
 
     @property
     def buffered_bytes(self) -> int:
-        return len(self.line) + len(self.overlap) + len(self.error_window) + len(self.text.encode('utf-8')) + 4
+        return (len(self.line) + len(self.overlap) + len(self.sandbox_overlap) + len(self.error_window)
+                + len(self.text.encode('utf-8')) + 4)
 
     def feed(self, chunk: bytes) -> None:
         self.captured = True
@@ -143,6 +160,11 @@ class SanitizedStream:
         if chunk:
             self.terminal_lf = chunk.endswith(b'\n')
         self.error_window = (self.error_window + chunk)[-LIMIT_BYTES:]
+        sandbox_screen = self.sandbox_overlap + chunk
+        for marker, reason in SANDBOX_REFUSAL_MARKERS:
+            if marker in sandbox_screen:
+                self.sandbox_refusals.add(reason)
+        self.sandbox_overlap = sandbox_screen[-_SANDBOX_MARKER_OVERLAP:]
         screen = self.overlap + chunk
         if _SECRET_MARKERS.search(screen) or any(secret in screen for secret in self.secrets):
             self.sensitive = True
