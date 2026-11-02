@@ -587,6 +587,79 @@ class StagedSelfUpdateTests(unittest.TestCase):
                     self.assertIn("Installed release: 2.0.2", printed)
                     self.assertNotIn("Rollback", printed)
 
+    def _recording_refresh(self, root: Path) -> tuple[list[Path], Callable[..., list[dict[str, str]]]]:
+        """Where `current` pointed at each outer refresh, calling the real refresh through."""
+        seen: list[Path] = []
+        real = self_update.refresh_skill_dir_caches
+
+        def refresh(hermes_home: Path, skills_pointer: Path | None) -> list[dict[str, str]]:
+            seen.append((root / "current").resolve())
+            return real(hermes_home, skills_pointer)
+
+        return seen, refresh
+
+    @staticmethod
+    def _age_config(root: Path) -> int:
+        config = root / "hermes" / "config.yaml"
+        os.utime(config, ns=(1_600_000_000_000_000_000, 1_700_000_000_000_000_000))
+        return config.stat().st_mtime_ns
+
+    def test_rollback_refreshes_hermes_skills_after_the_pointer_is_back(self):
+        # The candidate's re-entry may have refreshed a running Hermes onto the
+        # candidate, which the rollback deletes; the restored generation may
+        # predate that refresh, so the outer transaction refreshes after its switch.
+        for restore_ok in (True, False):
+            with self.subTest(restore_ok=restore_ok), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                _legacy, args, plan = self._fixture(root, pointer=True)
+                previous = (root / "current").resolve()
+                aged = self._age_config(root)
+                seen, refresh = self._recording_refresh(root)
+
+                with patch.object(self_update, "refresh_skill_dir_caches", side_effect=refresh):
+                    result = self._run(root, args, plan, self._runner(failure="post", restore_ok=restore_ok))
+
+                self.assertTrue(result["rollback"]["performed"])
+                self.assertEqual(len(seen), 1)
+                self._assert_same_path(seen[0], previous)
+                self.assertEqual([row["status"] for row in result.get("hermes_skill_refresh", [])], ["refreshed"])
+                self.assertGreater((root / "hermes" / "config.yaml").stat().st_mtime_ns, aged)
+
+    def test_a_successful_update_leaves_the_refresh_to_the_reentered_update(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _legacy, args, plan = self._fixture(root, pointer=True)
+            with patch.object(self_update, "refresh_skill_dir_caches") as refresh:
+                result = self._run(root, args, plan, self._runner())
+            self.assertTrue(result["ok"])
+            refresh.assert_not_called()
+            self.assertNotIn("hermes_skill_refresh", result)
+
+    def test_known_good_recovery_refreshes_hermes_skills_after_its_last_switch(self):
+        for reentry_ok in (True, False):
+            with self.subTest(reentry_ok=reentry_ok), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                _legacy, args, plan = self._fixture(root, pointer=True)
+                self.assertTrue(self._run(root, args, plan, self._runner())["ok"])
+                active = (root / "current").resolve()
+                known_good = _object(
+                    _read_json_object(root / "self-update.json")["previous_known_good"], "previous known good"
+                )
+                known_good_path = Path(_text(known_good["path"], "previous known-good path"))
+                args.recover_known_good = True
+                aged = self._age_config(root)
+                seen, refresh = self._recording_refresh(root)
+
+                with patch.object(self_update, "refresh_skill_dir_caches", side_effect=refresh):
+                    result = self._run(root, args, plan, self._runner(failure="" if reentry_ok else "post"))
+
+                self.assertIs(result["ok"], reentry_ok)
+                self.assertEqual(len(seen), 1)
+                # Success lands on the known-good target; a failed re-entry switches back.
+                self._assert_same_path(seen[0], known_good_path if reentry_ok else active)
+                self.assertEqual([row["status"] for row in result.get("hermes_skill_refresh", [])], ["refreshed"])
+                self.assertGreater((root / "hermes" / "config.yaml").stat().st_mtime_ns, aged)
+
     def test_lock_is_nonblocking_and_does_not_mutate_the_pair(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

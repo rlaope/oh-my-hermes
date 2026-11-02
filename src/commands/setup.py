@@ -90,7 +90,7 @@ from ..install.skill_registration import (
 from ..doctor import DEFAULT_DOCTOR_NEXT_ACTION, doctor_ok, recommended_next_action, run_doctor
 from ..maintenance.build_identity import probe_build_identity
 from ..maintenance.doctor import run_doctor_advisories
-from ..maintenance.hermes_gateway import gateway_restart_hints
+from ..maintenance.hermes_gateway import gateway_restart_hints, refresh_skill_dir_caches
 from ..executors import CODING_EXECUTOR_TARGETS
 from ..hashutil import sha256_file
 from ..installer import (
@@ -571,6 +571,10 @@ def cmd_update(args: argparse.Namespace) -> int:
         {"phase": "profile_sync", "profile": row["profile"], "error": row["error"]}
         for row in profile_results if row.get("status") == "failed"
     )
+    if not bool(getattr(args, "dry_run", False)):
+        # A running Hermes caches where `current/skills` resolved until config.yaml's
+        # signature moves; this runs in the re-entered process, after the pointer switch.
+        payload["hermes_skill_refresh"] = refresh_skill_dir_caches(_paths(args).hermes_home, managed_current_workflow_pack_dir())
     code = 1 if failures else 0
     payload.update({"status": "partial" if failures else "ok", "failures": failures, "exit_code": code})
     if _wants_json(args):
@@ -588,9 +592,32 @@ def cmd_update(args: argparse.Namespace) -> int:
         if not bool(getattr(args, "dry_run", False)) and hasattr(args, "omh_home"):
             for line in _registration_ambiguity_lines(args):
                 print(f"  warning: {line}")
-            for hint in gateway_restart_hints(_paths(args)):
+            for line in _skill_refresh_lines(payload.get("hermes_skill_refresh") or []):
+                print(f"  {line}")
+            unrefreshed = frozenset(
+                row["config"] for row in payload.get("hermes_skill_refresh") or [] if row.get("status") == "failed"
+            )
+            for hint in gateway_restart_hints(_paths(args), unrefreshed_configs=unrefreshed):
                 print(f"  {hint}")
     return code
+
+
+def _skill_refresh_lines(rows: list[dict[str, str]]) -> list[str]:
+    """What `refresh_skill_dir_caches` did, said once for the homes it reached and once per miss."""
+    refreshed = sum(1 for row in rows if row.get("status") == "refreshed")
+    lines = []
+    if refreshed:
+        noun = "home" if refreshed == 1 else "homes"
+        lines.append(
+            f"Hermes skills refreshed in {refreshed} {noun}: new conversations and every skill load use the new "
+            "OMH skills without a restart; an open conversation keeps the skill list it started with until `/new`"
+        )
+    lines.extend(
+        f"warning: {row['home']}: could not mark config.yaml changed ({row.get('error', '')}); "
+        "a running Hermes there keeps the previous OMH skills until it restarts"
+        for row in rows if row.get("status") == "failed"
+    )
+    return lines
 
 
 def _bootstrap_tui_surface(args: argparse.Namespace) -> dict[str, object] | None:
@@ -1522,6 +1549,10 @@ def _run_command_package_self_update(args: argparse.Namespace, plan: dict[str, o
     else:
         for line in _self_update_stop_lines(result):
             print(line)
+    if not _wants_json(args):
+        for line in _skill_refresh_lines(result.get("hermes_skill_refresh") or []):
+            if line.startswith("warning: "):
+                print(f"  {line}")
     return 0 if result.get("ok") else 1
 
 

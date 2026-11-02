@@ -351,9 +351,16 @@ pass straight through on that bare launch:
 
 ```sh
 omh --resume <session-id>    # reopen one session by id (short form: -r)
+omh --resume                 # open the TUI on the session picker, to choose one
 omh --continue               # continue the most recent session (short form: -c)
 omh -p <profile>             # open a bot profile's own home
 ```
+
+A bare `omh --resume` passes no id to Hermes: the OMH TUI starts as plain `omh`
+does and opens its session picker (the one `/resume` opens) at once, so you
+pick a stored session or press Esc to stay in the new one. When the OMH TUI
+cannot start and Hermes' own terminal opens instead, that terminal starts a
+new session, and its own `/resume` picks one.
 
 They are a bare-launch surface only. Passing one together with a subcommand
 is an error naming the flag, never a silent no-op, because dropping `-p`
@@ -476,10 +483,31 @@ run and approval decision stays Hermes'; the screen is OMH's.
   redraw shows it again only on top of the whole session. Until the first
   prompt the start fills the screen: the logo and the banner on top, the
   composer and the info line on the bottom rows, the rows between them empty.
+- The first fresh session after the version changes says under the launch
+  card, a blank row between, `What's new in v4.0.4` and a few one-line
+  items, once: the version is recorded in `<omh_home>/tui/whats-new.json`
+  when the block is drawn, so a launch that cannot draw the card does not
+  use it up. A card that leaves too few rows keeps the heading alone with
+  `· /whats-new lists it`, which counts as said. A home with no record that
+  has run the OMH TUI before (it holds `tui/launch-skills.json`, which only
+  the TUI writes) is told too; a new install, a resumed session, and a
+  version with no notes show nothing; `/whats-new` (also `/whatsnew`) says
+  the current version's notes whenever you ask.
 - The info line under the composer, two cells in so it starts under the
   composer's text (on the edge on a terminal too small for the rules), is the
-  one line under it. On the left it starts with `[⚚ OMH Native]` in the
-  launch look's colours, then the session directory's git branch
+  one line under it. On the left it starts with `[⚚ OMH Native v4.0.4]` in the
+  launch look's colours, the version faint; while npm has published a newer
+  release it says so beside it in the warning colour, `[⚚ OMH Native v4.0.4]
+  v4.0.5 available · omh update`. That check asks
+  `https://registry.npmjs.org/oh-my-hermes/latest` at most once a day, on a
+  thread the screen never waits for, keeps only the version and the time of
+  the ask in `<omh_home>/tui/update-check.json`, and says nothing when it
+  fails; `OMH_TUI_UPDATE_CHECK=0` holds it off in one terminal, `omh theme
+  update-check off` in every later session, and so does choosing `off` for the
+  launch check (`omh update-check set --mode off`, or `off` confirmed in
+  `omh setup`); without an OMH home nothing is asked. The request honours
+  `HTTPS_PROXY`, `no_proxy` and the system's proxy settings, as Python's
+  urllib reads them, so a proxy you set sees `registry.npmjs.org`. Then the session directory's git branch
   (`branch:<name> | !3 ?128`: tracked files changed, then untracked, each
   only when not zero; a detached HEAD by its short sha; nothing outside a
   repository, or on a terminal too small for the rules), read by `git status`
@@ -498,11 +526,15 @@ run and approval decision stays Hermes'; the screen is OMH's.
   (the context as a twelve-cell gauge, its percent, and the tokens it holds of
   the most it can; the filled cells and the percent in the warning colour from
   80 % full and the error colour from 95 %; `ctrl+t effort` while no level is
-  known). As the line narrows, the session's title goes first; then the
+  known). As the line narrows, the update notice shortens first, to
+  `↑ v4.0.5` beside the version, before anything live on the line
+  shortens; then the session's title goes; then the
   background row cuts its command to 8 cells, drops who will be told, drops
   the command, and goes; then the right side's other fields shorten and then
   go, the context last: its token counts, then its gauge, leaving `ctx 37%`;
-  then the branch's name is cut to `…` (24, then 12 cells); then the
+  then the badge's version goes, `↑ v4.0.5` with it (and the room they leave
+  goes back to the right side's short form); then the branch's name is
+  cut to `…` (24, then 12 cells); then the
   badge shortens to `[⚚ OMH]`, then `⚚`, then goes, and then the branch;
   the mode's label, the agent count and what the next key does (a question's
   or a picker's way out) keep their words until all of those are gone. Room
@@ -1442,7 +1474,7 @@ details; it sends nothing anywhere; q or Esc closes it), `/bots` (the bot
 board, also Ctrl+S, described below), `/copy`, `/image`,
 `/paste` (the clipboard
 image), `/theme`, `/glow`, `/wallpaper`, `/omh-model`, `/rewind`, `/todos` (the session's whole
-plan), `/model` (alone, a picker of the models Hermes offers this session,
+plan), `/whats-new` (this version's What's new, also `/whatsnew`), `/model` (alone, a picker of the models Hermes offers this session,
 from Hermes' `model.options`, opened on the session's model, marked `●`, which
 comes first when no provider lists it, and with the highlight's place in the
 header, `Model (12/162)`, once the list scrolls; the one you pick is sent as Hermes' own
@@ -1593,7 +1625,9 @@ is metadata: the launcher's active-session file, which holds the session id,
 what OMH's own HUD reader and model-chain picker write under the OMH home
 (the HUD's fan-out cache, and the chains `/omh-model` saves), the skill
 names and counts the launch card last drew (`<omh_home>/tui/launch-skills.json`),
-and an empty fallback marker at the path `omh` named, which `omh` removes.
+the version whose What's new was last said (`<omh_home>/tui/whats-new.json`),
+the update notice's last answer from npm and when it was asked
+(`<omh_home>/tui/update-check.json`), and an empty fallback marker at the path `omh` named, which `omh` removes.
 
 The OMH TUI opens with the theme `omh theme use` saved under the OMH home
 (see [TUI Themes](#tui-themes)); `/theme <name>` switches the open session only.
@@ -3199,6 +3233,7 @@ omh theme use crimson --dry-run
 omh theme status             # the active theme, which source decided it, and where it is saved
 omh theme glow off           # the working glow off in every later OMH TUI session (on, or alone to show it)
 omh theme wallpaper off      # the living wallpaper off in every later OMH TUI session (on, or alone to show it)
+omh theme update-check off   # no once-a-day ask of npm for a newer release (on, or alone to show it)
 ```
 
 Bare `omh theme` opens a picker: up/down arrows (or `j`/`k`) move the cursor,
@@ -3227,8 +3262,9 @@ Rules worth knowing:
   the open session (see [The OMH TUI](#the-omh-tui)).
 - **The launch look is saved in the same record.** `/theme` in the OMH TUI
   writes `launch` beside `theme` in `<omh_home>/tui/theme.json`, and
-  `/glow` or `omh theme glow` writes `glow` there, and `/wallpaper` or
-  `omh theme wallpaper` writes `wallpaper`; each write keeps the others.
+  `/glow` or `omh theme glow` writes `glow` there, `/wallpaper` or
+  `omh theme wallpaper` writes `wallpaper`, and `omh theme update-check`
+  writes `update_check`; each write keeps the others.
 - **Bare `hermes` keeps its own skin.** `display.skin` is yours; OMH reads it
   only for the fallback above and never writes it.
 
@@ -3329,12 +3365,34 @@ sync reads, so nothing is left behind for the next update to score as still
 registered — while keeping their plugin directories, which is exactly the
 deliberate opt-out state described below.
 
-After a sync, restart Hermes Desktop so bot chats reload their skills.
-A gateway that was running through the update keeps serving the bundle it
-loaded at start. When Hermes' own records in a home (`gateway.pid` and the
+After a sync, new bot conversations pick up the new OMH skills on their own.
+A running Hermes resolves each `skills.external_dirs` entry once and keeps
+the resolved path until that home's `config.yaml` changes, so after the
+`current` pointer moved it kept reading the previous generation's skills, or
+none once that generation was collected. `omh update` therefore moves the
+modification time of every `config.yaml` (the primary home and each bot
+profile) that names the pointer's `current/skills`, after the pointer
+switch. The file's bytes are never rewritten, a missing `config.yaml` is never
+created, and a home that does not name the pointer is left alone. A rollback,
+and a `--recover-known-good` that moves the pointer, refresh the same homes
+after their last switch. Hermes re-reads the pointer on its next skill lookup,
+so new conversations and every skill load use the new OMH skills without a
+restart. A conversation that is already open keeps the skill list it started
+with (Hermes reuses that session's system prompt, and the skills index is
+part of it) until `/new`. The update says
+`Hermes skills refreshed in <N> homes: ...`, and the JSON result lists each
+home under `hermes_skill_refresh`. Only `<hermes_home>` and its
+`profiles/*` are refreshed; another Hermes home that names the same pointer
+keeps its cached path until it restarts. A home whose file could not be
+touched is a warning line and a `failed` row with the reason; the update's
+exit code does not move and the JSON `status` stays `ok`, so a wrapper reads
+the rows, and that home's gateway hint below asks for the restart for its
+skills as well.
+A gateway that was running through the update still runs the OMH plugin code
+it loaded at start. When Hermes' own records in a home (`gateway.pid` and the
 `gateway-starts.log` ledger) show a last recorded start earlier than that
-home's bundle install, the update names it with the command that reloads
-it: `hermes gateway restart` for the primary home,
+home's bundle install, the update names it with the command that loads the
+new plugin code: `hermes gateway restart` for the primary home,
 `hermes --profile <name> gateway restart` for a profile. That is file
 evidence only: the bundle stamp moves only when an update changes the
 bundle's files, so an update that ships the same bundle (only the package
@@ -4114,7 +4172,7 @@ A version-less `stable` install asks GitHub which release is newest by reading
 a single redirect (`releases/latest`), which costs about 0.25s. If that lookup
 fails, the installer says so and tells you to pass `OMH_VERSION` or switch to
 `OMH_CHANNEL=preview`; it never guesses a URL. The installer does this lookup
-itself, because `omh` makes no network calls of its own. A later `omh setup`
+itself; no `omh` command makes it. A later `omh setup`
 records the release from what is installed: pip writes the exact URL it
 installed into the package's PEP 610 `direct_url.json`, and setup reads the
 channel, version, and source ref from that. A release wheel or tag archive
@@ -4950,7 +5008,11 @@ and the workflow pack Hermes reads is registered in `skills.external_dirs` as
 `current/skills`. Because both names stay fixed, the command you run and the
 pack Hermes serves always come from the same generation. There is no observable
 moment, including a crash mid-update, where you get the new command with the old
-pack or the reverse.
+pack or the reverse. A Hermes process that was already running resolved
+`current/skills` when it first read it and keeps that path until its
+`config.yaml` changes; the update moves the modification time of each
+`config.yaml` that names the pointer, so new conversations and skill loads
+resolve the new pack without a restart (see [Bot Profiles](#bot-profiles)).
 
 On disk, under the managed root:
 
@@ -5024,8 +5086,15 @@ Live Windows behavior under real file locking remains **Not-tested**.
 
 ### Startup update check (opt-in)
 
-By default, `omh`/`hermes` never checks for updates on launch -- OMH's core
-promise is no network calls without an explicit opt-in. `omh update-check`
+By default, `omh`/`hermes` never runs this check on launch. It is separate
+from the OMH TUI's update notice (see [The OMH TUI](#the-omh-tui)), which asks
+npm for the latest published version at most once a day unless it is turned
+off. Choosing `off` here (`omh update-check set --mode off`, or `off`
+confirmed in `omh setup`, where it is the preselected answer) turns that
+notice off too: what counts is a mode stored in
+`<omh_home>/setup-profile.json`, so a home that never answered keeps the
+notice on, and `notify` or `auto` leaves it on. `omh theme update-check off`
+turns off only the notice. `omh update-check`
 turns on a bounded, best-effort comparison against `origin/main` that runs
 right before bare `omh` opens the OMH TUI. This is `omh`'s own launch door
 (`commands/bare_launch.py`); bare `hermes` execs your Hermes install directly and
@@ -5041,12 +5110,14 @@ omh update-check set --interval-hours 12          # default is 24, 1-8760 accept
 
 Interactive `omh setup` asks this once, as its last question, and writes
 whichever mode you pick. `off` is the pre-selected answer, so pressing Enter
-through the wizard installs exactly what a non-interactive install installs
-and makes no network request. The question is settled by having been
+through the wizard stores `off`: no launch check, and, because an `off` you
+confirmed is a choice, no OMH TUI update notice either, so that install makes
+no network request on launch. The question is settled by having been
 answered, not by which answer: choosing `off` records `off` and setup never
 asks again. `omh setup --yes`, `--json`, `--no-interactive`, and any run
 without a terminal never ask and write nothing, which leaves the key absent
-so a later interactive run can still ask. Changing your mind afterwards is
+so a later interactive run can still ask; with nothing stored, the launch
+check stays off and the OMH TUI's update notice stays on. Changing your mind afterwards is
 `omh update-check set`.
 
 `notify` prints a single line such as `OMH update available: 3f2a1c9 ->

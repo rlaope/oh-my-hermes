@@ -64,6 +64,8 @@ FALLBACK_SENTINEL_ENV = "OMH_TUI_FALLBACK_SENTINEL"
 # The file the TUI keeps `{"session_id": ..., "hermes_home": ..., "opened": [...]}` in for the
 # session it has open (`write_active_session`), in the same private directory.
 SESSION_FILE_ENV = "OMH_TUI_SESSION_FILE"
+# Set to "1" by a bare `omh --resume` (no session named): the TUI opens the session picker as soon as it starts.
+PICK_SESSION_ENV = "OMH_TUI_PICK_SESSION"
 # How much of that file `closed_session` reads: an id, a path and the launch's earlier ids.
 SESSION_FILE_BYTES = 16384
 # What the TUI exits with, in place of 0, when the person closes a session `omh` launched (`SESSION_FILE_ENV`
@@ -153,7 +155,7 @@ def omh_import_root() -> str:
 
 def omh_tui_environment(
     environ: Mapping[str, str], *, python: str, site: str, omh_home: Path, fallback_sentinel: Path,
-    session_file: Path,
+    session_file: Path, pick_session: bool = False,
 ) -> dict[str, str]:
     """The environment `hermes --tui` runs with when it should start the OMH TUI.
 
@@ -161,6 +163,8 @@ def omh_tui_environment(
     `--scope project`, and for `--profile <name>` the store that profile's
     config names) across the three processes in between, which do not see
     `omh`'s own arguments. `SITE_ENV` is set over any inherited value.
+    `PICK_SESSION_ENV` is set only for `pick_session` (a bare `omh --resume`),
+    and an inherited one is dropped otherwise.
     """
     env = dict(environ)
     env["HERMES_TUI_DIR"] = str(FRONTEND_DIR)
@@ -169,6 +173,9 @@ def omh_tui_environment(
     env["OMH_HOME"] = str(omh_home)
     env[FALLBACK_SENTINEL_ENV] = str(fallback_sentinel)
     env[SESSION_FILE_ENV] = str(session_file)
+    env.pop(PICK_SESSION_ENV, None)
+    if pick_session:
+        env[PICK_SESSION_ENV] = "1"
     return env
 
 

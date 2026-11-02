@@ -365,7 +365,7 @@ class UpdateCheckQuestionTests(_WizardHarness, unittest.TestCase):
         return captured
 
     def test_the_preselected_option_is_the_shipped_default(self) -> None:
-        """Enter lands where a `--yes` install lands, and makes no network request."""
+        """Enter lands on `off`, the shipped default: no launch check, and, stored as a choice, no TUI update notice."""
         with TemporaryDirectory() as tmp:
             paths = self._paths(Path(tmp))
             captured = self._captured_menu(paths)

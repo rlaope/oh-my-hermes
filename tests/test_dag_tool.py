@@ -261,7 +261,8 @@ class DefineTests(unittest.TestCase):
         self.assertEqual(result["topology"]["layers"], [["api", "ui"], ["docs"], ["verify"]])
         self.assertEqual(result["topology"]["critical_path"], ["api", "docs", "verify"])
         self.assertEqual(result["topology"]["bottlenecks"][0], {"node": "api", "blocks": 2})
-        self.assertEqual(result["lint"], [])
+        # api and ui write code and no node reviews them: advice, never a refusal.
+        self.assertEqual(result["lint"], ["no_review_node"])
         self.assertEqual([(c["category"], c["nodes"], c["route"]["action"]) for c in result["calls"]],
                          [("quick", ["api"], "set"), ("unspecified-low", ["ui"], "set")])
         task = result["calls"][0]["tasks"][0]

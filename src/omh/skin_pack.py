@@ -128,7 +128,7 @@ def _theme_store_record(omh_home: Path) -> dict[str, object]:
     """The saved record under the OMH home, or {} when there is none this module wrote (unreadable, another schema)."""
     try:
         record = json.loads(theme_store_path(omh_home).read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError):
         return {}
     if not isinstance(record, dict) or record.get("schema_version") != THEME_STORE_SCHEMA:
         return {}
@@ -190,8 +190,20 @@ def write_wallpaper_choice(omh_home: Path, on: bool) -> Path:
     return _write_theme_store(omh_home, "wallpaper", "on" if on else "off")
 
 
+def read_update_check_choice(omh_home: Path) -> bool | None:
+    """Whether the OMH TUI asks npm once a day for a newer release (`update_check`, beside the theme); None when
+    nothing this module wrote says."""
+    value = _theme_store_record(omh_home).get("update_check")
+    return {"on": True, "off": False}.get(value) if isinstance(value, str) else None
+
+
+def write_update_check_choice(omh_home: Path, on: bool) -> Path:
+    """Save whether the OMH TUI asks npm for a newer release; the path it was written to. The other choices stay."""
+    return _write_theme_store(omh_home, "update_check", "on" if on else "off")
+
+
 # The keys the one writer (`_write_theme_store`) keeps: every write carries the others over.
-THEME_STORE_KEYS = ("theme", "launch", "glow", "wallpaper")
+THEME_STORE_KEYS = ("theme", "launch", "glow", "wallpaper", "update_check")
 
 
 def _write_theme_store(omh_home: Path, key: str, value: str) -> Path:

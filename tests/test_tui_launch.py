@@ -134,6 +134,16 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(env["PATH"], "/bin")
         self.assertEqual(env["HERMES_HOME"], "/h")
 
+    def test_only_a_bare_resume_asks_for_the_picker_and_an_inherited_ask_is_dropped(self) -> None:
+        for pick, expected in ((True, "1"), (False, None)):
+            with self.subTest(pick=pick):
+                env = launch.omh_tui_environment(
+                    {launch.PICK_SESSION_ENV: "1"},
+                    python="/py", site="/site", omh_home=Path("/o"), fallback_sentinel=Path("/t/f"),
+                    session_file=Path("/t/s"), pick_session=pick,
+                )
+                self.assertEqual(env.get(launch.PICK_SESSION_ENV), expected)
+
     def test_a_site_left_in_the_environment_is_replaced(self) -> None:
         env = launch.omh_tui_environment(
             {launch.SITE_ENV: "/another/tree"},
