@@ -135,6 +135,7 @@ export const EN = {
   stateActive: 'active',
   stateRunning: '{count} running',
   stateBlocked: '{count} blocked',
+  stateFailed: '{count} failed',
   stateDone: '{count} done',
   stateQueued: '{count} queued',
   stateGateway: 'gateway {state}',
@@ -278,6 +279,7 @@ export const KO = {
   stateActive: '활성',
   stateRunning: '{count}개 실행 중',
   stateBlocked: '{count}개 막힘',
+  stateFailed: '{count}개 실패',
   stateDone: '{count}개 완료',
   stateQueued: '{count}개 대기열',
   stateGateway: '게이트웨이 {state}',
@@ -585,15 +587,31 @@ export function wordTone(word) {
   return own(WORD_TONES, word) ? WORD_TONES[word] : 'tertiary'
 }
 
-// The header's phrase from the agent counts: one state, the most pressing
-// first.
+// What is live, most pressing first: running, failed, blocked, each with its
+// own colour and at most two of them, the same segments the status bar
+// opens with. A failed lane is its own word, not folded into blocked.
+export function countSegments(agents) {
+  const running = Number(agents.running) || 0
+  const failed = Number(agents.failed) || 0
+  const blocked = Number(agents.blocked) || 0
+  return [
+    running ? { text: t('stateRunning', { count: running }), tone: 'accent' } : null,
+    failed ? { text: t('stateFailed', { count: failed }), tone: 'error' } : null,
+    blocked ? { text: t('stateBlocked', { count: blocked }), tone: 'warn' } : null
+  ]
+    .filter(Boolean)
+    .slice(0, 2)
+}
+
+// The header's phrase from the agent counts: the live counts, else done,
+// else `active` for a live run with nothing counted yet.
 export function hudStateLabel(active, agents) {
   if (!active) return t('stateIdle')
-  const running = Number(agents.running) || 0
-  const blocked = Number(agents.blocked) || 0
+  const live = countSegments(agents)
+  if (live.length) return live.map(function (segment) {
+    return segment.text
+  }).join(' · ')
   const done = Number(agents.completed) || 0
-  if (running) return t('stateRunning', { count: running })
-  if (blocked) return t('stateBlocked', { count: blocked })
   if (done) return t('stateDone', { count: done })
   return t('stateActive')
 }
@@ -729,8 +747,12 @@ export function agentTally(payload) {
     running: countOf(all, isRunningRow) + laneCount(['running', 'dispatched']),
     blocked:
       countOf(all, function (row) {
-        return row.state === 'blocked' || row.state === 'failed'
-      }) + laneCount(['failed', 'stuck', 'interrupted']),
+        return row.state === 'blocked'
+      }) + laneCount(['stuck', 'interrupted']),
+    failed:
+      countOf(all, function (row) {
+        return row.state === 'failed'
+      }) + laneCount(['failed']),
     done:
       countOf(all, function (row) {
         return row.state === 'done'
@@ -740,18 +762,30 @@ export function agentTally(payload) {
   }
 }
 
+function tallyCounts(tally) {
+  return { running: tally.running, failed: tally.failed, blocked: tally.blocked, completed: tally.done }
+}
+
 export function stateSummary(payload) {
-  const tally = agentTally(payload)
-  return hudStateLabel(!!(payload && payload.active), { running: tally.running, blocked: tally.blocked, completed: tally.done })
+  return hudStateLabel(!!(payload && payload.active), tallyCounts(agentTally(payload)))
 }
 
 // Running, or live with nothing counted yet (`active`), is the accent;
-// blocked is yellow; idle and finished stay grey.
+// failed is red; blocked is yellow; idle and finished stay grey.
 export function stateTone(payload) {
   const tally = agentTally(payload)
   if (tally.running) return 'accent'
+  if (tally.failed) return 'error'
   if (tally.blocked) return 'warn'
   return payload && payload.active && !tally.done ? 'accent' : 'tertiary'
+}
+
+// The header's segments, each in its own colour: the live counts while any
+// runs, failed or is blocked, else the one phrase in the state's tone.
+export function headerSegments(payload) {
+  const active = !!(payload && payload.active)
+  const live = active ? countSegments(tallyCounts(agentTally(payload))) : []
+  return live.length ? live : [{ text: stateSummary(payload), tone: stateTone(payload) }]
 }
 
 export function headerLabel(payload) {
@@ -1136,10 +1170,7 @@ export function paneVersion(payload) {
 // header's phrase) when none applies. A plan Hermes' todo_list holds is
 // never counted here: Desktop's composer already counts it.
 export function statusSegments(payload) {
-  const tally = agentTally(payload)
-  const segments = []
-  if (tally.running) segments.push({ text: t('stateRunning', { count: tally.running }), tone: 'accent' })
-  if (tally.blocked) segments.push({ text: t('stateBlocked', { count: tally.blocked }), tone: 'warn' })
+  const segments = countSegments(tallyCounts(agentTally(payload)))
   const todo = payload.todo || {}
   if (omhHeldPlan(todo)) {
     const counts = todo.counts || {}
@@ -1153,6 +1184,7 @@ function statusDetail(payload) {
   const tally = agentTally(payload)
   const counts = [
     tally.running ? t('stateRunning', { count: tally.running }) : '',
+    tally.failed ? t('stateFailed', { count: tally.failed }) : '',
     tally.blocked ? t('stateBlocked', { count: tally.blocked }) : '',
     tally.done ? t('stateDone', { count: tally.done }) : ''
   ].filter(Boolean)
@@ -1286,13 +1318,15 @@ export function graphNodeView(nodeRecord) {
 const MONO = "'JetBrains Mono',var(--font-mono,var(--dt-font-mono,monospace))"
 
 export const PANE_CSS = `
-.omh-pane{display:flex;flex-direction:column;height:100%;min-width:0;font-family:var(--font-sans,var(--dt-font-sans,sans-serif));font-size:12px;line-height:1.4;color:var(--ui-text-primary)}
+.omh-pane{display:flex;flex-direction:column;height:100%;min-width:0;container-type:inline-size;font-family:var(--font-sans,var(--dt-font-sans,sans-serif));font-size:12px;line-height:1.4;color:var(--ui-text-primary)}
+.omh-pane,.omh-bar{--omh-text-readable:color-mix(in srgb,var(--ui-text-secondary),var(--ui-text-tertiary))}
 .omh-pane-mono{font-family:${MONO};font-variant-numeric:tabular-nums}
 .omh-pane-head{display:flex;align-items:center;gap:8px;padding:10px 10px 0;min-width:0}
 .omh-pane-brand{font-weight:600;white-space:nowrap;color:var(--ui-text-primary)}
 .omh-pane-state{display:flex;align-items:center;gap:5px;min-width:0;margin-left:auto;font-size:11px;color:var(--ui-text-tertiary);white-space:nowrap}
 .omh-pane-state-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.omh-pane-scope{padding:2px 10px 6px;font-size:11px;color:var(--ui-text-tertiary)}
+.omh-pane-state-seg+.omh-pane-state-seg::before{content:'·';margin:0 3px;color:var(--ui-text-quaternary)}
+.omh-pane-scope{padding:2px 10px 6px;font-size:11px;color:var(--omh-text-readable)}
 .omh-pane-chips{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px}
 .omh-pane-rule{flex:none;border-top:1px solid var(--ui-stroke-tertiary)}
 .omh-pane-body{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding-bottom:10px}
@@ -1317,17 +1351,18 @@ export const PANE_CSS = `
 .omh-pane-item[data-state=done] .omh-pane-item-label{color:var(--ui-text-quaternary);text-decoration:line-through}
 .omh-pane-item[data-state=skipped] .omh-pane-item-label{color:var(--ui-text-quaternary)}
 .omh-pane-item[data-state=active] .omh-pane-item-label{font-weight:600}
-.omh-pane-item-note{display:block;margin-top:1px;font-size:11px;color:var(--ui-text-tertiary);overflow-wrap:anywhere}
+.omh-pane-item-note{display:block;margin-top:1px;font-size:11px;color:var(--omh-text-readable);overflow-wrap:anywhere}
 .omh-pane-fold{padding:1px 0 1px 18px;font-size:11px;color:var(--ui-text-quaternary)}
 .omh-pane-catch{display:grid;grid-template-columns:20px minmax(0,1fr);gap:0 4px;align-items:baseline;padding:1px 0;color:var(--ui-text-secondary)}
 .omh-pane-catch-text{min-width:0;overflow-wrap:anywhere}
-.omh-pane-summary{display:block;padding:10px 0 0;color:var(--ui-text-tertiary);overflow-wrap:anywhere}
+.omh-pane-summary{display:block;padding:10px 0 0;color:var(--omh-text-readable);overflow-wrap:anywhere}
 .omh-pane-run{padding:0 0 3px;color:var(--ui-text-secondary);overflow-wrap:anywhere}
 .omh-pane-lane{display:grid;grid-template-columns:14px minmax(0,1fr) auto 64px;gap:0 6px;align-items:baseline;min-width:0;padding:1px 0}
 .omh-pane-lane-glyph{text-align:center}
-.omh-pane-lane-title{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.omh-pane-lane-title{min-width:0;padding-left:var(--omh-lane-indent,0);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .omh-pane-lane-model{max-width:96px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:var(--ui-text-quaternary)}
 .omh-pane-lane-state{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;text-align:right}
+@container (max-width: 420px){.omh-pane-lane{grid-template-columns:14px minmax(0,1fr) 64px}.omh-pane-lane-glyph{grid-row:1}.omh-pane-lane-title{grid-column:2;grid-row:1}.omh-pane-lane-state{grid-column:3;grid-row:1}.omh-pane-lane-model{grid-column:2/-1;grid-row:2;max-width:none;padding-left:var(--omh-lane-indent,0)}}
 .omh-pane-more{padding:2px 0 0 20px;font-size:11px;color:var(--ui-text-quaternary)}
 .omh-agent{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:1px 6px;align-items:baseline;min-width:0;padding:3px 0}
 .omh-agent-glyph{text-align:center}
@@ -1340,8 +1375,8 @@ export const PANE_CSS = `
 .omh-pane-graph{display:grid;gap:1px;padding:0 10px;font-size:11px;min-width:0;max-width:640px;box-sizing:border-box}
 .omh-pane-graph-node{display:grid;grid-template-columns:14px auto minmax(0,1fr);gap:0 6px;align-items:baseline;min-width:0}
 .omh-pane-graph-glyph{text-align:center}
-.omh-pane-graph-detail{min-width:0;overflow-wrap:anywhere;color:var(--ui-text-tertiary)}
-.omh-pane-notice{margin:6px 10px 8px;border-radius:6px;background:var(--chrome-action-hover);padding:6px 8px;font-size:11px;color:var(--ui-text-tertiary);overflow-wrap:anywhere}
+.omh-pane-graph-detail{min-width:0;overflow-wrap:anywhere;color:var(--omh-text-readable)}
+.omh-pane-notice{margin:6px 10px 8px;border-radius:6px;background:var(--chrome-action-hover);padding:6px 8px;font-size:11px;color:var(--omh-text-readable);overflow-wrap:anywhere}
 .omh-pane-skeleton{height:10px;margin:6px 10px}
 .omh-bar{display:inline-flex;height:100%;align-items:center;gap:4px;border-radius:0;padding:0 6px;font-size:.6875rem;color:var(--ui-text-tertiary);font-variant-numeric:tabular-nums;white-space:nowrap;transition:background-color .15s,color .15s}
 .omh-bar:hover{background:var(--chrome-action-hover);color:var(--ui-text-primary)}
@@ -1352,7 +1387,7 @@ export const PANE_CSS = `
 .omh-pane-warn{color:var(--ui-yellow)}
 .omh-pane-error{color:var(--ui-red)}
 .omh-pane-muted{color:var(--ui-text-quaternary)}
-.omh-pane-tertiary{color:var(--ui-text-tertiary)}
+.omh-pane-tertiary{color:var(--omh-text-readable)}
 .omh-pane-primary{color:var(--ui-text-primary)}
 `
 
@@ -1454,17 +1489,25 @@ function useClock(running) {
 // `OMH  2 running`: the brand, its version in the tooltip, and one state. An
 // idle pane draws no dot; a running or blocked one draws the dot in that
 // state's colour.
+// The host's StatusDot tones (`good|muted|warn|bad`) for the pane's state tones.
+const DOT_TONES = { accent: 'good', warn: 'warn', error: 'bad' }
+
 function Header({ model }) {
   const payload = model.payload
-  const label = payload ? stateSummary(payload) : model.status
+  const segments = payload ? headerSegments(payload) : model.status ? [{ text: model.status, tone: 'tertiary' }] : []
   const tone = payload ? stateTone(payload) : 'tertiary'
   const brand = span('omh-pane-brand', t('brand'))
   return div('omh-pane-head', [
     payload ? jsx(Tip, { label: t('brandTip', { version: paneVersion(payload) }), children: brand }) : brand,
-    label
+    segments.length
       ? div('omh-pane-state', [
-          tone === 'tertiary' ? null : jsx(StatusDot, { tone: tone === 'warn' ? 'warn' : 'good' }),
-          span(`omh-pane-state-text ${toneClass(tone)}`, label)
+          tone === 'tertiary' ? null : jsx(StatusDot, { tone: DOT_TONES[tone] || 'good' }),
+          span(
+            'omh-pane-state-text',
+            segments.map(function (segment, index) {
+              return span(`omh-pane-state-seg ${toneClass(segment.tone)}`, segment.text, `seg-${index}`)
+            })
+          )
         ])
       : null
   ])
@@ -1646,12 +1689,12 @@ function DelegationSection({ payload }) {
     : view.lanes.map(function (lane, index) {
         return node(
           'div',
-          { className: 'omh-pane-lane' },
+          { className: 'omh-pane-lane', style: lane.depth ? { '--omh-lane-indent': `${lane.depth * 12}px` } : undefined },
           [
             span(`omh-pane-lane-glyph ${toneClass(lane.tone)}`, lane.glyph),
             jsx(Tip, {
               label: [lane.title, lane.model].filter(Boolean).join(' · '),
-              children: node('span', { className: 'omh-pane-lane-title', style: lane.depth ? { paddingLeft: `${lane.depth * 12}px` } : undefined }, lane.title)
+              children: span('omh-pane-lane-title', lane.title)
             }),
             span('omh-pane-lane-model omh-pane-mono', lane.model),
             span(`omh-pane-lane-state ${toneClass(lane.tone)}`, lane.state)

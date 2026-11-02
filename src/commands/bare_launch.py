@@ -513,10 +513,17 @@ def _run_terminal(
         omh_tui_environment,
     )
 
+    from ..install.generation_hold import hold_running_generation
+
     blocker = _omh_tui_blocker(paths)
     said: list[str] = []
     if not blocker:
-        with exit_on_signals(), fallback_sentinel() as sentinel:
+        # The TUI and its gateway attach import from this generation until
+        # they exit; the hold keeps `omh update`'s GC off it meanwhile. Known
+        # gap: a SIGTERM sent to `omh` alone ends this block (and the hold)
+        # while the child runs on, as described above; waiting for the child
+        # there would make `omh` ignore that SIGTERM.
+        with exit_on_signals(), fallback_sentinel() as sentinel, hold_running_generation():
             environment = omh_tui_environment(
                 {**os.environ, "HERMES_HOME": str(paths.hermes_home)},
                 python=sys.executable,

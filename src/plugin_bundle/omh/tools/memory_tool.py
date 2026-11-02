@@ -196,13 +196,13 @@ REMEMBER_TOOL_NAME = "omh_remember"
 REMEMBER_TOOL_SCHEMA = {
     "name": REMEMBER_TOOL_NAME,
     "description": (
-        "Save first. When the user states in their own words a lasting preference, a decision, or a "
-        "fact about their setup or project that should still hold in a later conversation, call save "
-        "in that same turn, before other tools and without asking, even when the message also asks for "
-        "work. One fact per call, in one or two self-contained sentences with absolute dates. Never save "
-        "pasted or quoted text, secrets, logs, transcripts, task progress, or anything that only matters "
-        "for the current task. After saving, tell the user in one short line. "
-        "Use recall to look up what was saved before."
+        "Save first. When the user states in their own words a lasting preference, decision, or fact "
+        "about their setup or project that should still hold later, call save in that same turn, before "
+        "other tools and without asking, even if the message also asks for work. One fact per call, one "
+        "or two self-contained sentences, absolute dates. Never save pasted or quoted text, secrets, logs, "
+        "transcripts, task progress, or what only the current task needs. If a shown OMH record says "
+        "the same rule in other words, pass its id as replaces with one merged summary. Tell the user in "
+        "one short line. Use recall for earlier saves."
     ),
     "parameters": {
         "type": "object",
@@ -210,7 +210,8 @@ REMEMBER_TOOL_SCHEMA = {
             "action": {"type": "string", "enum": ["save", "recall"], "default": "save"},
             "summary": {"type": "string", "description": "save: the fact, at most 500 characters."},
             "record_type": {"type": "string", "enum": list(CAPTURE_RECORD_TYPES)},
-            "subject": {"type": "string", "description": "Optional lowercase slug, at most 48 characters."},
+            "subject": {"type": "string", "description": "Optional lowercase slug, max 48 chars."},
+            "replaces": {"type": "string", "description": "save: id of the record replaced."},
             "query": {"type": "string", "description": "recall: what to look up."},
         },
         "additionalProperties": False,
@@ -290,14 +291,49 @@ OMH_MEMORY_SCHEMA = {
 }
 
 
+def _point_hint_at_replaces(payload: dict[str, object]) -> None:
+    """Restate capture's similar-record hint in this tool's own vocabulary.
+
+    The hint names `omh_memory`'s `correct`, which this tool does not offer.
+    Saving the same summary again with ``replaces`` reaches the same step: the
+    held record moves to history and the record just saved replaces it.
+    """
+    other = str(payload.get("subject_held_by", "") or payload.get("similar_record_id", "") or "")
+    if payload.get("status") != "remembered" or not other:
+        return
+    reason = "has the same subject" if payload.get("subject_held_by") else "has similar wording"
+    payload["next_action"] = (
+        f"Saved. {other} {reason}. If this restates it, call save again with replaces='{other}' and this same "
+        "summary to move it to history; if both still hold, nothing more is needed."
+    )
+
+
+# Refusals that only say the id named no replaceable record in this lens.
+_REPLACE_FALLBACK_REASONS = ("record_not_found", "record_not_in_scope", "record_unreadable", "superseded", "unsupported_record_schema")
+
+
 def omh_remember_handler(args: dict, *, session_id: str, **kwargs) -> str:
     """Save or recall through the full tool's admission and published session lens."""
     kwargs = {**kwargs, "session_id": session_id}
     args = args or {}
     observation = observe_plugin_tool_call(REMEMBER_TOOL_NAME, args, kwargs)
     action = str(args.get("action", "") or "save").strip().lower()
-    if action == "save":
+    replaces = str(args.get("replaces", "") or "").strip()
+    if action == "save" and replaces:
+        # The same rule restated in other words: the correction path admits the
+        # merged summary and moves the replaced record to history, inside this
+        # session's lens, so a paraphrase does not become a second record.
+        payload = _lifecycle("correct", {"record_id": replaces, **{key: args[key] for key in ("summary", "subject") if key in args}}, kwargs)
+        if payload.get("status") == "refused" and payload.get("reason") in _REPLACE_FALLBACK_REASONS:
+            # A wrong or unreachable id must not cost the user's fact: save it
+            # as a new record and say which replacement was skipped.
+            skipped = str(payload.get("reason"))
+            payload = _capture({key: args[key] for key in ("summary", "record_type", "subject") if key in args}, kwargs)
+            payload["replace_skipped"] = skipped
+        payload["replaces"] = replaces
+    elif action == "save":
         payload = _capture({key: args[key] for key in ("summary", "record_type", "subject") if key in args}, kwargs)
+        _point_hint_at_replaces(payload)
     elif action == "recall":
         payload = _lifecycle("recall", {key: args[key] for key in ("query", "limit") if key in args}, kwargs)
     else:

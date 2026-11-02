@@ -638,6 +638,18 @@ decision, a fact about their setup or project, or a lesson, the model calls
 that same turn, before other tools, even when the message also asks for work.
 Pasted or quoted text and anything that only matters for the current task are
 not saved.
+
+When a record already shown to the conversation states the same rule or
+preference in other words, the model passes that record's id as `replaces`
+with one merged summary. The save then goes through the correction path:
+the merged fact is admitted like any capture, the replaced record moves to
+`history/` with `superseded_by` naming its successor, and only the merged
+record recalls afterwards. The replaced record must be reachable through this
+session's lens (on Discord, an auto-thread reaches records its parent channel
+holds), and writes stay disabled on cron and subagent surfaces. An id that
+names no replaceable record in the lens does not lose the fact: it is saved
+as a new record and the result carries `replace_skipped` with the reason.
+
 The memory provider exposes this small, always-visible tool for `save` and
 `recall` (`action="recall", query=...`). Hermes' `tool_search` can defer plugin
 tools such as `omh_memory`; tools returned by a memory provider are never
