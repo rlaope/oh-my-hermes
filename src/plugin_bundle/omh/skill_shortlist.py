@@ -244,12 +244,21 @@ def _index() -> _Index | None:
         return None
 
 
+# The names of the index `_index()` last returned, built once per index: the
+# workflow-intent classifier reads them on every message (#2485 review).
+_CATALOG_NAMES: list[tuple[object, frozenset[str]]] = []
+
+
 def catalog_skill_names() -> frozenset[str] | None:
     """Every catalog skill's canonical name and label, or `None` without a sidecar."""
     index = _index()
     if index is None:
         return None
-    return frozenset(name for skill in index.skills for name in (skill.name, skill.label))
+    if _CATALOG_NAMES and _CATALOG_NAMES[0][0] is index:
+        return _CATALOG_NAMES[0][1]
+    names = frozenset(name for skill in index.skills for name in (skill.name, skill.label))
+    _CATALOG_NAMES[:] = [(index, names)]
+    return names
 
 
 def catalog_skill_labels() -> frozenset[str] | None:

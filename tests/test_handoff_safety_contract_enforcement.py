@@ -1008,7 +1008,10 @@ HERMES_INTERPRETER_SCRIPTS: dict[str, HermesScriptPolicy] = {
         dial=("dial", "grant"),
         # Hermes' own client dials with `proxy=None` (`hermes_cli/gateway_client.py`): without it websockets sends
         # the session-ticket upgrade through HTTP(S)_PROXY.
-        dial_pinned={"proxy": None},
+        # `ping_interval=None`: Hermes keeps no keepalive ping on loopback (`hermes_cli/web_server.py`), since a busy
+        # gateway answers it late and websockets' default then closes a connection whose turn still runs. A liveness
+        # policy rather than a safety one, pinned here because this is where the dial's keywords are held.
+        dial_pinned={"proxy": None, "ping_interval": None},
         private_attributes={},  # it reads no private attribute of anything but itself
         environ_key="TERMINAL_CWD",  # set for Hermes' path helper and restored (`HermesFiles.image`)
         # What Hermes' own bootstrap removes before it may start a gateway (`ui-tui/scripts/gateway_bootstrap.py`).
@@ -1692,6 +1695,11 @@ class NoNetworkClientInSource(unittest.TestCase):
             "def go(api):\n    url, protocols = api.grant()\n    return api.dial(url, proxy='http://evil:8080')":
             "without `proxy=None`",
             "def go(api, how):\n    url, protocols = api.grant()\n    return api.dial(url, proxy=how)": "without `proxy=None`",
+            # and no keepalive ping, as Hermes' loopback policy
+            "def go(api):\n    url, protocols = api.grant()\n    return api.dial(url, proxy=None)":
+            "without `ping_interval=None`",
+            "def go(api):\n    url, protocols = api.grant()\n    return api.dial(url, proxy=None, ping_interval=20)":
+            "without `ping_interval=None`",
             # the launch-policy removal: its constant is the pinned literal, bound once, and its loop name kept
             "LAUNCH_POLICY_ENV = ('PATH', 'HERMES_HOME')": "as the pinned literal tuple",
             "LAUNCH_POLICY_ENV = ('HERMES_MODEL',) + ('HERMES_HOME',)": "as the pinned literal tuple",
@@ -1743,7 +1751,7 @@ class NoNetworkClientInSource(unittest.TestCase):
             "receipt = object()\ngetattr(receipt, 'state', None)\n"
             "os.environ.get('X')\nos.environ['TERMINAL_CWD'] = '/w'\nos.environ.pop('TERMINAL_CWD', None)\n"
             "copy = dict(os.environ)\nfor name in LAUNCH_POLICY_ENV:\n    os.environ.pop(name, None)\n"
-            "def relay(api, url):\n    return api.dial(url, proxy=None)\n"
+            "def relay(api, url):\n    return api.dial(url, proxy=None, ping_interval=None)\n"
             "def main():\n    api = attach_api()\n    url, protocols = api.grant()\n    return relay(api, url)\n"
             "class C:\n    def m(self):\n        self._serial = 1\n        return lambda: self._serial\n"
         )

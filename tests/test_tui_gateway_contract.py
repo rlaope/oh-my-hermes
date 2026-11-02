@@ -257,9 +257,10 @@ class InboundTests(unittest.TestCase):
                 self.assertEqual(folded == [], event_type in contract.APP_EVENTS)
 
     def test_every_event_type_is_declared_once_and_every_recorded_one_is_declared(self) -> None:
-        # 77: `len(tui_gateway.contracts.registry.EVENTS)` in Hermes 6c61c3e27d.
+        # 77: `len(tui_gateway.contracts.registry.EVENTS)` in Hermes 6c61c3e27d, plus the two newer ones the app takes
+        # (`skills.changed`, `session.replay_gap`).
         self.assertEqual(contract.HANDLED_EVENTS & contract.UNREAD_EVENTS, frozenset())
-        self.assertEqual(len(contract.HANDLED_EVENTS | contract.UNREAD_EVENTS), 77)
+        self.assertEqual(len(contract.HANDLED_EVENTS | contract.UNREAD_EVENTS), 77 + 2)
         recorded = {
             kind
             for name in ("session", "approval", "subagent_relay", "notifications", "parity")
