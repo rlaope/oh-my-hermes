@@ -195,6 +195,16 @@ FAILURE_ORIGIN_PRECEDENCE = (
 FAILURE_ORIGIN_PROOF_NAMING = (
     "Name the proof beside the origin: a merge-base run is an observation, a diff-line reading is an inference"
 )
+# A regression test written with its fix and only ever run green never saw the
+# bug: it may pass on the broken tree too. The witness is the same test failing
+# on the pre-fix tree, observed with the same merge-base worktree `origin`
+# already requires, so the gate gains a run to ask for and no new procedure.
+REGRESSION_WITNESS_RULE = (
+    "A fix claim whose evidence is a new or changed test also needs that test observed failing, for the bug's reason, "
+    "on the pre-fix tree: the test applied alone to the merge-base in a clean detached worktree, as for `origin`; "
+    "when the red was forced by editing code or a fixture, the record shows the diff that put the edit in the run tree. "
+    "A test only ever observed green never witnessed the bug, so the claim is HOLD with `regression_witness_missing`."
+)
 
 # Hermes' bundled `grounded-citations` skill (`scripts/sources.py`), as
 # `research`, `web-research`, and `research-brief` use it. One copy of each
@@ -5005,7 +5015,7 @@ _DEFINITIONS = [
             "observed_debugger_evidence/v1 when observed",
         ),
         artifact_expectations=(
-            "native_fault_statement/v1 separates the observed symptom from the assumed cause and names the reproduction command",
+            "native_fault_statement/v1 separates the observed symptom from the assumed cause, names the reproduction command, quotes the observed failure beside the reported one (`symptom_match`), and records the `minimised` reproduction",
             "hypothesis_set/v1 spans distinct axes — caller-side misuse, callee invariant, memory lifetime, concurrency, build/runtime mismatch — not three phrasings of one guess",
             "distinguishing_observation_plan/v1 pairs each hypothesis with the one observation that refutes it, and where to read it",
             "debugger_session_plan/v1 names the adapter (lldb or gdb via DAP), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop",
@@ -5056,6 +5066,7 @@ _DEFINITIONS = [
             "The debugger session plan names the DAP adapter, breakpoints, watchpoints, threads, frames, and values to read.",
             "The handoff says the executor drives the debugger and OMH executes nothing.",
             "Reproduction, debugger output, root cause, and fix are reported as separate observed or not_observed states.",
+            "Any print-and-rebuild probe carried the session's probe tag, and an observed search for that tag returns nothing.",
         ),
         recovery_notes=(
             "If the fault does not reproduce, make reproduction the first hypothesis and plan the observation that would establish it, rather than debugging a fault no one can trigger.",
@@ -5783,6 +5794,7 @@ _DEFINITIONS = [
             ),
             "When the change answers to a written spec, plan, or issue, load `references/requirement-coverage-map.md` and map requirement to task to evidence under stable ids before claiming coverage.",
             f"Give each failing check an `origin`: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}.",
+            REGRESSION_WITNESS_RULE,
             f"Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `{_PRE_EXISTING}` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `{_UNKNOWN_ORIGIN}` is HOLD with the merge-base run named as the missing evidence.",
             "Keep fixes, reruns, review, CI, and merge as separate observed states.",
         ),
@@ -9972,10 +9984,10 @@ _DEFINITIONS.append(
             "observed_fix_verification/v1 when observed",
         ),
         artifact_expectations=(
-            "reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs; it reads observed or not_observed and nothing between",
+            "reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs, plus `symptom_match` (the observed failure quoted beside the reported one), `loop_cost` (wall time per run and what was pinned for determinism), and `minimised` (the cuts made and the load-bearing form left); it reads observed or not_observed and nothing between",
             "competing_hypotheses/v1 spans distinct axes -- input and state, ordering and timing, environment and build, dependency behaviour -- rather than three phrasings of one guess",
             "discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates",
-            "root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival",
+            "root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival, and the fix's commit or pull-request body states that confirmed hypothesis and the rivals it eliminated, because the next debugger reads history, not this record",
             "fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it",
         ),
         safety_rules=(
@@ -9984,11 +9996,14 @@ _DEFINITIONS.append(
             "Require at least three hypotheses on distinct axes before planning observations; one hypothesis makes every reading confirmatory.",
             "Never treat a symptom's disappearance as a root cause; a bug that stops after a print statement, a retry, or a sleep is an open timing fault.",
             "Do not execute tests, debuggers, or commands from OMH core; the executor runs them and the record takes only what it observed.",
+            "Redact before recording: reproduction commands read credentials from environment variables by name, quoted output keeps only the lines that carry the signal with each secret replaced by `<redacted>`, and a capture too redacted to diagnose is reported as such, never recorded unredacted.",
         ),
         quality_tier="root-cause-evidence-gated",
         quality_bar=(
             "State the symptom and the expected behaviour separately from any suspected cause.",
             "Record the reproduction with its hit rate; an intermittent fault is reproduced when its rate over N runs is measured, not when it happened once.",
+            "A reproduction counts for this bug only when its `symptom_match` shows the failure the user reported; a different failure near the same code is another bug, and this record stays not_observed.",
+            "Minimise before hypothesising: cut inputs, callers, config, and steps one at a time, rerunning the loop after each, until every remaining element is load-bearing; the minimised form is what the regression test is built from.",
             "Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.",
             "Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.",
             "Keep reproduction, root cause, fix, and verification as separate observed states.",
@@ -10036,9 +10051,10 @@ _DEFINITIONS.append(
             "Each observation records which hypotheses its result eliminated.",
             "The root cause cites the demonstrating observation and the observation that ruled out each rival.",
             "The fix handoff carries the reproduction as a regression test that fails before and passes after.",
+            "An observed search for the session's probe tag returns nothing, and every throwaway harness file is deleted or listed.",
         ),
         recovery_notes=(
-            "If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it.",
+            "If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it; when no test reaches the fault, walk the method reference's loop ladder, and when nothing on it can be built, say so, list what was tried, and ask for an environment, a redacted capture, or permission for tagged temporary instrumentation.",
             "If every hypothesis is eliminated, record that, widen the axes, and keep root cause unclaimed rather than promoting the last survivor.",
         ),
         situations=(

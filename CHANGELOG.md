@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A green regression test no longer proves a fix on its own, and a
+  reproduction has to be the reported bug.** `omh-verification-gate` now asks,
+  for a "fixed" claim whose evidence is a new or changed test, for a run of
+  that test failing for the bug's reason on the pre-fix tree, in the same
+  clean merge-base worktree the `origin` rule already uses; a test only ever
+  seen green holds the claim with `regression_witness_missing`.
+  `omh-app-debugging`'s reproduction record gains `symptom_match` (the
+  observed failure beside the reported one; a nearby failure is another bug),
+  `loop_cost` (time per run and what was pinned), and `minimised` (the
+  reproduction cut down until every element is load-bearing). Its method
+  reference gains a ladder for faults no test reaches, ending in numbered
+  steps for a person with named fields to report, and a session tag on every
+  temporary probe with an observed search for it before handover. Commands
+  read credentials from environment variables and quoted output is redacted.
+  The confirmed hypothesis and its eliminated rivals go into the fix's commit
+  or PR body. `omh-native-debugging`'s fault statement takes the symptom
+  match, the minimise step and the probe tag too.
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`

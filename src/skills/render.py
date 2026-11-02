@@ -3811,7 +3811,7 @@ Hermes bundles three skills that meet this one: `systematic-debugging` (MIT, ada
 
 | Its phase | What this skill records there |
 | --- | --- |
-| Root cause investigation, around one tight command that goes red on the symptom | `reproduction_record/v1`: the command, its observed output, and the hit rate over N runs |
+| Root cause investigation, around one tight command that goes red on the symptom | `reproduction_record/v1`: the command, its observed output, the hit rate over N runs, `symptom_match`, `loop_cost`, and the `minimised` form |
 | Pattern analysis | nothing of its own; working examples and differences feed the hypotheses |
 | Hypothesis and testing | `competing_hypotheses/v1` with at least three hypotheses on distinct axes, then `discriminating_observation_plan/v1`, then `root_cause_record/v1` citing the observation that decided it |
 | Implementation | `fix_handoff/v1`, still blocked until the reproduction reads observed, then `observed_fix_verification/v1` |
@@ -3841,14 +3841,40 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 
 | Field | What it holds |
 | --- | --- |
-| Command | the exact command, request, or test id, with its inputs |
-| Observed | the output, value, or assertion as it came back |
+| Command | the exact command, request, or test id, with its inputs; a credential is named by its environment variable, never written inline |
+| Observed | the output, value, or assertion as it came back: the lines that carry the signal, each secret in them replaced by `<redacted>` |
 | Expected | the output that would have been correct, and where that expectation comes from |
+| Symptom match | the observed failure quoted beside the one the user reported; a different failure near the same code is a different bug, and the record stays not_observed for this one |
 | Hit rate | failures over runs, for example `4/20`; one sighting is a report, not a reproduction |
+| Loop cost | wall time per run, and what was pinned so the verdict repeats: clock, seed, temp directory, network |
+| Minimised | the elements cut and the form left, in which removing any remaining element turns the loop green |
 | Environment | interpreter, dependency versions, OS, parallelism, and anything the failing run had that the passing run did not |
 | State | observed or not_observed; nothing between |
 
 An intermittent fault is reproduced when its rate is measured, not when it happened once. Run it in a loop first (`for i in $(seq 50); do <cmd> || echo FAIL $i; done`) and record the rate before changing anything; the same loop is what proves the fix later.
+
+If a capture is too redacted to diagnose, record that and ask for a narrower one; never record it unredacted.
+
+**Make the loop cheap before trusting it.** A loop that takes minutes per run, or whose verdict flips on its own, is the next thing to fix, ahead of any hypothesis: narrow what it runs, skip setup the fault does not need, assert the reported symptom rather than "it did not crash", and pin whatever varies between runs. Record the result under Loop cost.
+
+**Then minimise.** Remove one input, caller, config value, data row, or step at a time and rerun the loop after each removal: keep the removal when the loop still goes red, restore it when the loop goes green. Stop when every element left is load-bearing. The minimised form leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test.
+
+### When no test reaches the fault
+
+Take the first of these that yields one command going red on the reported symptom:
+
+1. A test at whichever seam does reach the code path: unit, integration, or end to end.
+2. A request script against a locally running server.
+3. The CLI on a fixture input, its output diffed against a known-good copy.
+4. A headless browser script that asserts on the page, the console, or the network.
+5. A captured payload or event log, saved to disk and replayed through the code path alone.
+6. A throwaway harness that calls the code path directly, with fakes only where the process leaves the repository's control.
+7. A property or fuzz loop over generated inputs, for output that is only sometimes wrong.
+8. A bisect harness between a known-good and a known-bad state, handed to `git-workflow` as `bisect_plan/v1`.
+9. A differential run: one input through the old and new versions, or through two configurations, with the outputs diffed.
+10. Steps only a person can perform, on a device, a GUI, or a third-party console. Number the steps, and name the fields the person reports after each run: whether it failed, the message as shown, and the time. Every run then returns the same fields, and the record takes them as user-observed. This captures an observation; it asks no one to approve anything.
+
+When none can be built, say so, list what was tried and why each attempt failed, and ask for one of: access to an environment that reproduces the fault, a redacted capture such as a log, a trace, or a timestamped recording, or permission for tagged temporary instrumentation. No hypotheses before a loop exists.
 
 ## 2. Hypotheses on distinct axes
 
@@ -3864,6 +3890,8 @@ Write at least three before choosing an observation. Three phrasings of one gues
 | Dependency behaviour | a library, service, or OS call behaves differently than documented | pin or stub it and compare |
 
 For each hypothesis write the claim, the observation that would refute it, and which other hypotheses the same observation also settles. Choose the next observation by cost first, then by how many hypotheses its result eliminates; record the eliminations as they happen.
+
+Every probe added to code -- a print, a log line, an assert, a counter -- carries one tag chosen for the session, such as `[DBG-7f3a]`. Before the fix is handed over, an observed search for that tag returns nothing, and every throwaway harness file is deleted or listed in the handoff. A probe left in the tree lands in the fix diff, where a reviewer has to tell it apart from the change.
 
 ## 3. Flaky tests
 
@@ -3920,8 +3948,13 @@ After the third failed fix, stop fixing. Every fix was tested against a structur
 | A hypothesis is eliminated | the observed value that contradicts it, quoted |
 | The root cause is known | an observation that explains every part of the symptom, including its rate, and one that ruled out each rival |
 | The fix works | the reproduction loop fails before the change and passes at the same run count after it |
+| The tree is free of probes | an observed search for the session's probe tag that returns nothing |
 
 A symptom that stopped after an edit, with no mechanism, is an open fault with a changed schedule.
+
+## Attribution
+
+The symptom match, the loop-cost and minimised fields, the loop ladder, the probe tag, the redaction rule, and the person-run capture adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. OMH keeps them as record fields under its observed-evidence boundary and executes none of the loops itself.
 """
 
 
@@ -7043,6 +7076,11 @@ Write three lines before anything else:
 
 If reproduction is not established, that is the first hypothesis and the first observation. Debugging a fault nobody can trigger produces a story, not a cause.
 
+Once it reproduces, check and shrink it before section 2:
+
+- **Symptom match.** Quote the observed failure beside the one reported. A different crash near the same code is a different fault; this one stays unreproduced.
+- **Minimised.** Remove one input, flag, thread, or step at a time, rerunning after each, until every element left is needed for the fault to appear. Debug the minimised form.
+
 ## 2. Three hypotheses on distinct axes
 
 One hypothesis makes every reading confirmatory. Three force observations that *distinguish*. Span the axes rather than rephrasing one guess:
@@ -7062,7 +7100,7 @@ For each hypothesis write: the claim in one sentence; the single observation tha
 
 Prefer a DAP debug adapter -- `lldb-dap`, `codelldb`, or a gdb adapter -- driven by the executor's own debugging surface. It reads state without rebuilding, and it reads state the source never printed.
 
-Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting.
+Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
 
 The plan names, concretely:
 
@@ -7099,6 +7137,8 @@ A stripped binary changes the evidence available, not the method. The hypotheses
 The last row is the one that gets skipped. A symptom that stopped appearing after an edit, with no mechanism, is an open fault with a changed schedule -- record it as unresolved.
 
 {_DOMAIN_ENGINEERING_ATTRIBUTION}
+
+The symptom match, the minimise step, and the probe tag adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock.
 """
 
 
