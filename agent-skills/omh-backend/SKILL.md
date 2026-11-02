@@ -81,6 +81,7 @@ Quality bar:
 - Hold the `api` product-family expectations — authentication boundary, contract error paths, response consistency — as the standing bar for every prepared endpoint.
 - When an existing contract changes, name who consumes it before designing the change: each identified consumer with what breaks for it, then the compatibility window, migration path, and sunset date — the skill that owns a surface owns its evolution. Load `references/consumer-impact.md` for the enumeration sources and the window rules.
 - Name the per-stack reference the executor must read first; the stack is a routing input, not a detail discovered mid-implementation.
+- When the handoff asks for tests, load `references/contract-tests.md` and derive the test plan in backend_implementation_handoff/v1 from the contract: one negative test per auth_boundary_map/v1 row, one per error_path_table/v1 row, stand-ins chosen by dependency category with the same database engine, and migrations run on populated data.
 - Keep implementation, migration application, integration runs, load testing, and deployment as observed-only evidence.
 
 Required inputs:

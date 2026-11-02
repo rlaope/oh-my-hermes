@@ -89,6 +89,7 @@ Quality bar:
 - Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.
 - Keep reproduction, root cause, fix, and verification as separate observed states.
 - Count a fix as failed when an executed run of the same reproduction command still shows the original symptom or shows a new symptom the fix caused rather than unmasked; planned runs and other commands do not count. After the third failed fix, prepare no fourth; re-examine the architecture assumptions every fix shared, per the method reference, and offer the user the next step as a question.
+- Before the fix handoff names a regression test, load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` for the seam, the shapes of tests that guard nothing, fakes only at system boundaries, and the no-correct-seam outcome.
 - When Hermes' bundled `systematic-debugging` skill is loaded for the same bug, follow its phases and write this skill's records at each; a breakpoint read through `python-debugpy` or `node-inspect-debugger` is one discriminating observation. Load `references/debugging-skill-composition.md` for the mapping.
 
 Handoff policy:
@@ -119,6 +120,7 @@ Artifact expectations:
 - discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates
 - root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival
 - fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it
+- fix_handoff/v1 names the seam the regression test drives and how it runs the pattern that produced the bug (callers, ordering, call chain); when no seam can, it records `regression_seam: none_correct` with the reason, keeps the reproduction loop as the fix's verification, and reports the missing seam as an `omh-refactor-plan` candidate instead of a shallow test that passes before and after the fix
 
 Safety rules:
 

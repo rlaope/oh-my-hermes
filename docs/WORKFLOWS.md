@@ -2891,6 +2891,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - While building, look at each change that affects what renders: after it, capture the affected surface and read the capture before the next change, for a 3D or canvas scene the default camera and each declared preset; a change not looked at is not done (`references/screenshot-loop.md`, section `During implementation`).
   - After implementation lands on a web surface, load `references/screenshot-loop.md` and require the screenshot iteration loop live-environment-first: capture the running UI at 1440/768/375px, compare against the supplied target or DESIGN.md, list every difference triaged Blocker/High/Medium/Nit with its capture attached, fix, and recapture until the difference list is empty.
   - Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.
+  - When the handoff asks for component or interaction tests, load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` and name the seam each test drives: assert through what a user perceives (role, accessible name, visible text) across the frontend_component_state_inventory/v1 states, never class names or component-internal state, and fake only the network boundary.
   - Keep implementation, browser verification, accessibility/performance checks, visual QA, and deployment as observed-only evidence.
 - Completion checklist:
   - The target page/component, audience, primary task, references, and quality bar are named.
@@ -3053,6 +3054,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Hold the `api` product-family expectations — authentication boundary, contract error paths, response consistency — as the standing bar for every prepared endpoint.
   - When an existing contract changes, name who consumes it before designing the change: each identified consumer with what breaks for it, then the compatibility window, migration path, and sunset date — the skill that owns a surface owns its evolution. Load `references/consumer-impact.md` for the enumeration sources and the window rules.
   - Name the per-stack reference the executor must read first; the stack is a routing input, not a detail discovered mid-implementation.
+  - When the handoff asks for tests, load `references/contract-tests.md` and derive the test plan in backend_implementation_handoff/v1 from the contract: one negative test per auth_boundary_map/v1 row, one per error_path_table/v1 row, stand-ins chosen by dependency category with the same database engine, and migrations run on populated data.
   - Keep implementation, migration application, integration runs, load testing, and deployment as observed-only evidence.
 - Completion checklist:
   - The surface, its callers, and each caller's trust level are named.
@@ -6724,6 +6726,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.
   - Keep reproduction, root cause, fix, and verification as separate observed states.
   - Count a fix as failed when an executed run of the same reproduction command still shows the original symptom or shows a new symptom the fix caused rather than unmasked; planned runs and other commands do not count. After the third failed fix, prepare no fourth; re-examine the architecture assumptions every fix shared, per the method reference, and offer the user the next step as a question.
+  - Before the fix handoff names a regression test, load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` for the seam, the shapes of tests that guard nothing, fakes only at system boundaries, and the no-correct-seam outcome.
   - When Hermes' bundled `systematic-debugging` skill is loaded for the same bug, follow its phases and write this skill's records at each; a breakpoint read through `python-debugpy` or `node-inspect-debugger` is one discriminating observation. Load `references/debugging-skill-composition.md` for the mapping.
 - Completion checklist:
   - The reproduction names its command, observed output, expected output, and hit rate, and reads observed before any fix is prepared.
@@ -6753,6 +6756,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates
   - root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival
   - fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it
+  - fix_handoff/v1 names the seam the regression test drives and how it runs the pattern that produced the bug (callers, ordering, call chain); when no seam can, it records `regression_seam: none_correct` with the reason, keeps the reproduction loop as the fix's verification, and reports the missing seam as an `omh-refactor-plan` candidate instead of a shallow test that passes before and after the fix
 - Safety rules:
   - No fix before an observed reproduction: `fix_handoff/v1` stays blocked while `reproduction_record/v1` reads not_observed, and a proposed change without one is a guess, not a fix.
   - Do not claim a reproduction, a probe result, a root cause, or a passing fix from a prepared plan.

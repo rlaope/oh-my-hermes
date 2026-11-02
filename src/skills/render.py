@@ -6453,30 +6453,17 @@ No implementation line before a failing test. Write the test that describes the 
 
 A test that passes on its first run proves nothing: it never witnessed the gap it claims to cover. Treat a first-run pass as a defect in the test - break the behavior deliberately or fix the test's target, watch it fail, then restore - before trusting it.
 
-## Questions Before a New Test
+## Before the Red Commit: Test Authoring
 
-Answer these four in the lane report before writing a new test; each answer either justifies the test or redirects the work.
+Load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` before writing the first test. It holds the authoring contract every lane shares, tests-first or not: the seam named before the test, the four questions a new test answers in the lane report, the shapes of tests that guard nothing, tests coupled to internals, fakes only at system boundaries, and the outcome when no correct seam exists for a regression test. In a tests-first lane those checks bind as follows:
 
-1. Behavior protected: name the observable behavior, invariant, or contract a caller depends on. If none exists, there is nothing for a test to witness: say so in the lane report, as the "Too simple to test" row below allows, and let the reviewer judge.
-2. Plausible regression: name a concrete code change someone could make that this test would turn red. A test no plausible change can break guards nothing.
-3. Why existing coverage misses it: point to the closest existing test and say why that regression slips past it. If that test already catches the regression, add nothing: its red run on the unimplemented code is the witness the Evidence Ledger asks for, and if it is already green the behavior exists and there is nothing to implement. If it owns the same contract but lacks this case, add the case to that test rather than a near-copy beside it.
-4. Production seam: say whether the test needs an export, flag, or hook that no production caller uses. If it does, test through the real entry point instead; if a new seam is unavoidable, name it in the lane report for the reviewer.
-
-## Tests That Guard Nothing
-
-A new test with any of these shapes is not evidence for the lane, red or green. Rewrite it before the red commit so it observes the behavior from question 1. If the shape is found after the red commit, rewrite the test to observe that behavior, run it red again, and explain the test diff in the lane report as the red-commit rule requires:
-
-- No-assertion probe: the test calls the code and passes as long as nothing raises. When not raising is the contract, assert that outcome explicitly and name it.
-- Self-comparison: the assertion compares a value with itself or with a copy of itself, so no change to the code can make it fail.
-- Expected value from the code under test: the test computes its expected value by calling the code it checks, so the assertion agrees with whatever that code returns. Write the expected value down independently; a committed, reviewed artifact or an independent oracle does not count as the code under test.
-- Negative control passing for an unrelated reason: the rejected input fails on a typo, a missing fixture, or a different guard than the one under test. Assert the reason for the rejection, not only that one happened.
-- Name promising more than the inputs: the test name claims a general rule while its inputs exercise one case. Narrow the name or widen the inputs.
-
-These shapes apply to tests a lane adds. An existing test with one of these shapes is a finding for the lane report; the Forbidden Moves below still bar editing or deleting it to get past a red run.
+- A test those checks reject is not evidence for the lane, red or green. Rewrite it before the red commit. If the shape is found after the red commit, rewrite the test to observe the protected behavior, run it red again, and explain the test diff in the lane report as the red-commit rule requires.
+- When the closest existing test already catches the regression, add nothing: its red run on the unimplemented code is the witness the Evidence Ledger asks for, and if it is already green the behavior exists and there is nothing to implement.
+- An existing test with one of those shapes is a finding for the lane report; the Forbidden Moves below still bar editing or deleting it to get past a red run.
 
 ## Regression Tests for a Bug
 
-A test written for a reported bug must fail on the code before the fix, and fail because of that bug: the failure lines name the bug's symptom, not an import error or an unrelated assertion. Run it against the pre-fix code and paste that red run as the Evidence Ledger requires. If a test already in the suite goes red on the unfixed code for that same reason, its red run is the witness, and no second reproduction is written.
+A test written for a reported bug must fail on the code before the fix, and fail because of that bug: the failure lines name the bug's symptom, not an import error or an unrelated assertion. Run it against the pre-fix code and paste that red run as the Evidence Ledger requires. If a test already in the suite goes red on the unfixed code for that same reason, its red run is the witness, and no second reproduction is written. When no seam can run the pattern that produced the bug, record `regression_seam: none_correct` as the test-authoring page describes instead of writing a test that cannot fail for the bug's reason.
 
 ## The Evidence Ledger
 
@@ -6508,7 +6495,7 @@ Commit the failing test as a checkpoint before the first implementation edit. Th
 
 ## Composition
 
-Hermes bundles the superpowers `test-driven-development` skill. When it is loaded, follow its cycle; this reference reinforces it and never overrides it. What OMH adds is the evidence vocabulary - the observed red-before-green rule, the red-commit checkpoint, and the `prepared_not_observed` labeling of unwitnessed cycles - plus authoring checks applied before a test counts: the questions a new test must answer, the shapes of tests that guard nothing, and the pre-fix failure rule for bug regressions.
+Hermes bundles the superpowers `test-driven-development` skill. When it is loaded, follow its cycle; this reference reinforces it and never overrides it. What OMH adds is the evidence vocabulary - the observed red-before-green rule, the red-commit checkpoint, and the `prepared_not_observed` labeling of unwitnessed cycles - plus the pre-fix failure rule for bug regressions and the shared authoring checks from `omh-verification-gate`'s `references/test-authoring.md` that a test passes before it counts.
 
 ## What This Does Not Change
 
@@ -6518,7 +6505,7 @@ Hermes bundles the superpowers `test-driven-development` skill. When it is loade
 
 ## Attribution
 
-This discipline adapts the red/green/refactor practice popularized by Kent Beck and the obra/superpowers `test-driven-development` skill that Hermes bundles. The questions before a new test, the shapes of tests that guard nothing, and the pre-fix failure rule for bug regressions adapt concepts from code-yeongyu/oh-my-openagent (Sustainable Use License 1.0, concepts only). No upstream text is reproduced. OMH maps the mechanisms onto its own lane, evidence, and `prepared_not_observed` vocabulary.
+This discipline adapts the red/green/refactor practice popularized by Kent Beck and the obra/superpowers `test-driven-development` skill that Hermes bundles. The pre-fix failure rule for bug regressions adapts concepts from code-yeongyu/oh-my-openagent (Sustainable Use License 1.0, concepts only). No upstream text is reproduced. OMH maps the mechanisms onto its own lane, evidence, and `prepared_not_observed` vocabulary.
 """
 
 
@@ -6726,6 +6713,7 @@ def _domain_engineering_reference_templates_cached() -> tuple[SkillReferenceTemp
         SkillReferenceTemplate("backend", "references/service-contract.md", _backend_service_contract_reference()),
         SkillReferenceTemplate("backend", "references/schema-migration.md", _backend_schema_migration_reference()),
         SkillReferenceTemplate("backend", "references/consumer-impact.md", _backend_consumer_impact_reference()),
+        SkillReferenceTemplate("backend", "references/contract-tests.md", _backend_contract_tests_reference()),
         SkillReferenceTemplate("rust", "references/rust-discipline.md", _rust_discipline_reference()),
         SkillReferenceTemplate("rust", "references/ub-escalation.md", _rust_ub_escalation_reference()),
         SkillReferenceTemplate(
@@ -9530,6 +9518,60 @@ endpoint and not proof that anybody was told.
 """
 
 
+def _backend_contract_tests_reference() -> str:
+    return """# Backend Contract Tests
+
+Load this when a backend handoff asks for tests. The contract tables say what the surface promises; this page ties each promise to the test that proves it, so the test plan in `backend_implementation_handoff/v1` is derived from the rows rather than improvised after the code exists.
+
+The shapes every test must have -- the seam named first, the questions before a new test, tests that guard nothing, tests coupled to internals, and fakes only at system boundaries -- live in one shared page: load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')`. This page does not repeat them.
+
+OMH writes no test and runs none. The plan is prepared; only an executor's observed run is evidence.
+
+## 1. One test per contract row
+
+| Contract row | The test | Seam |
+| --- | --- | --- |
+| each `auth_boundary_map/v1` row | a negative test: the caller that lacks the identity or the permission is refused with the status the row names | the HTTP or job interface |
+| the object-level authorization row | always written as "caller A requests B's id", asserting the not-found or not-permitted status the error table chose | the HTTP interface |
+| each `error_path_table/v1` row | status, machine code, and envelope shape asserted together, plus the retry hint on a retryable row | the HTTP interface |
+| an idempotency key | the same request sent twice with one key produces one effect, read back through the interface | the HTTP interface |
+
+A status-only assertion lets the envelope drift unseen, and a happy-path test alone proves none of the rows above. A row with no test is listed in the plan as untested with the reason, not left out.
+
+## 2. Logic through its module interface
+
+Logic behind a handler is tested through the interface of the module that owns it, not through private helpers and not only through HTTP. Handler tests then cover parsing, the auth check, and the mapping of results and errors to the envelope.
+
+## 3. Stand-ins by dependency category
+
+| Dependency | Stand-in in the test |
+| --- | --- |
+| Code in this service | none: it runs real |
+| The database | a local instance of the same engine, at the version production runs where behaviour differs; never a different engine whose locking, types, and constraints differ |
+| A service the same team owns | an in-memory adapter that implements the client interface the handler already calls |
+| A third-party API (payments, email, identity) | a fake at the client seam that records what was sent; no test reaches the real vendor |
+| Clock, randomness, generated ids | injected and pinned |
+
+A repository class replaced by a mock, or an assertion that `save` was called, is a test coupled to internals: the shared page says how to rewrite it.
+
+## 4. Writes are read back through the interface
+
+Check a write by reading it back the way a caller would -- the read endpoint, or the module's read function -- not by querying the table. A table read passes while the read path is broken and fails when the storage layout changes without any behaviour change.
+
+## 5. Migrations run on populated data
+
+A migration test applies the migration to a database that already holds rows in the previous shape, including the null, empty, and boundary values the old shape allowed, never only to an empty schema. It asserts that the migration completes, that backfilled values are right, that code still running against the previous shape keeps working during the expand step, and that each step's rollback point (`references/schema-migration.md`) restores a readable state.
+
+## 6. What the plan records
+
+Per test: the contract row it proves, the seam, the stand-ins, and the command the executor runs. A planned test is `prepared_not_observed`; passing tests, applied migrations, and integration runs are recorded only from observed executor output.
+
+## Attribution
+
+One test per contract row, reading writes back through the interface, and stand-ins chosen by dependency category adapt ideas from Matt Pocock's `tdd` and `codebase-design` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. No upstream text is reproduced; the contract-row mapping and the `prepared_not_observed` boundary are OMH's own.
+"""
+
+
 def legal_compliance_reference_templates() -> list[SkillReferenceTemplate]:
     return list(_legal_compliance_reference_templates_cached())
 
@@ -9744,6 +9786,11 @@ def _verification_gate_reference_templates_cached() -> tuple[SkillReferenceTempl
             "references/adaptation-quality.md",
             _adaptation_quality_reference(),
         ),
+        SkillReferenceTemplate(
+            "verification-gate",
+            "references/test-authoring.md",
+            _test_authoring_reference(),
+        ),
     )
 
 
@@ -9853,6 +9900,77 @@ output-quality parity it did not demonstrate.
 Structural native_capability_quality_gate checks are not output-quality evidence.
 Procedure/link contract tests prove delivery of these instructions, not artistic
 validation, live-agent compliance, or that any future adaptation preserves quality.
+"""
+
+
+def _test_authoring_reference() -> str:
+    return """# Test Authoring
+
+Load this before writing or changing a test in any lane, whether or not the run is tests-first. It is the shape a test must have before its result counts as evidence. A tests-first lane also follows `ulw-work`'s `references/tdd-red-green.md`, which adds the red-before-green order and the red-commit checkpoint on top of this page.
+
+This page shapes tests; it runs none. A test that was written but not run is `prepared_not_observed`, and only an observed run is evidence.
+
+## 1. Name the Seam First
+
+The seam is the interface the test drives and reads back through: a public function or module interface, an HTTP route, a CLI command, a rendered component as a user meets it. Name the seam for each planned test in the handoff before the test is written, with one line on what a test there catches and what it cannot see.
+
+Prefer the seam real callers use. A test at a seam no production caller uses checks a path nobody runs.
+
+## 2. Questions Before a New Test
+
+Answer these four in the lane or handoff report before writing a new test; each answer either justifies the test or redirects the work.
+
+1. Behavior protected: name the observable behavior, invariant, or contract a caller depends on. If none exists, there is nothing for a test to witness: say so in the report and let the reviewer judge.
+2. Plausible regression: name a concrete code change someone could make that this test would turn red. A test no plausible change can break guards nothing.
+3. Why existing coverage misses it: point to the closest existing test and say why that regression slips past it. If that test already catches the regression, add nothing. If it owns the same contract but lacks this case, add the case to that test rather than a near-copy beside it.
+4. Production seam: say whether the test needs an export, flag, or hook that no production caller uses. If it does, test through the real entry point instead; if a new seam is unavoidable, name it in the report for the reviewer.
+
+## 3. Tests That Guard Nothing
+
+A new test with any of these shapes is not evidence, whether it passes or fails. Rewrite it so it observes the behavior from question 1:
+
+- No-assertion probe: the test calls the code and passes as long as nothing raises. When not raising is the contract, assert that outcome explicitly and name it.
+- Self-comparison: the assertion compares a value with itself or with a copy of itself, so no change to the code can make it fail.
+- Expected value from the code under test: the test computes its expected value by calling the code it checks, or by repeating the computation the code performs, so the assertion agrees with whatever that code returns. Write the expected value down independently; a committed, reviewed artifact or an independent oracle does not count as the code under test.
+- Negative control passing for an unrelated reason: the rejected input fails on a typo, a missing fixture, or a different guard than the one under test. Assert the reason for the rejection, not only that one happened.
+- Name promising more than the inputs: the test name claims a general rule while its inputs exercise one case. Narrow the name or widen the inputs.
+
+An existing test with one of these shapes is a finding for the report, not something to edit away in passing.
+
+## 4. Tests Coupled to Internals
+
+These tests fail the other way: they go red when the code is restructured without any change in behavior, and they can stay green when behavior breaks. The tell is a refactor that keeps every caller's result the same and still turns the test red.
+
+- Own-module fake: the test replaces a module, class, or function the repository owns with a fake, so the code under test never runs against the real collaborator it ships with.
+- Call-count assertion: the test asserts that an internal collaborator was called, how many times, in what order, or with which arguments, instead of asserting the result a caller sees.
+- Side-channel read: the test checks a write by reading the table row, the private field, or the cache entry directly when the seam itself can read the result back. Read it back through the seam.
+
+Rewrite such a test to drive the seam and assert what the seam returns or exposes. One exception: when crossing a system boundary is itself the contract (a payment is charged exactly once, one message reaches the third party), assert on what the boundary fake recorded as crossing the boundary, not on the internal calls that led there.
+
+## 5. Fakes Only at System Boundaries
+
+A stand-in replaces a dependency only where the process leaves the repository's control. Pick it by dependency category:
+
+| Dependency | Stand-in |
+| --- | --- |
+| Code the repository owns, in process | none: it runs real |
+| A datastore | a local throwaway instance of the same engine; never a different engine whose locking, types, and constraints differ |
+| A service the same team owns, across the network | an in-memory adapter that implements the same interface the production client does |
+| A third-party service | a fake at the client seam: the one module that wraps the vendor client |
+| Clock, randomness, generated ids | injected and pinned to fixed values |
+| Filesystem or local network | a temporary directory or a local server; a fake only when the real one cannot be made deterministic |
+
+When a boundary is hard to fake, the fix belongs in the code, not deeper in the test: pass the external client in instead of constructing it inside the function, and give each external operation its own function so a fake implements a small surface with no branching. That change has a production caller, so it is not the test-only seam question 4 rejects; name it in the handoff.
+
+## 6. When No Correct Seam Exists
+
+A regression test for a bug must drive the pattern that produced it: the two callers of a race, the call chain a fault needs, the real ordering. A correct seam is one where that pattern can run.
+
+When the only reachable seam is shallower -- a single-caller unit test for a race that needs two callers, a unit test that cannot rebuild the chain that triggered the fault -- a test there passes before the fix and after it. Do not write it, and do not bend it until it happens to fail before the fix. Record `regression_seam: none_correct` with the reason, keep the reproduction loop as the fix's verification, and report the missing seam as an architecture finding (an `omh-refactor-plan` candidate). A shallow test that passes on the pre-fix code is a test that guards nothing with a fix attached.
+
+## Attribution
+
+The seam named before the test, the coupled-to-internals shapes, fakes only at system boundaries, and the no-correct-seam outcome adapt ideas from Matt Pocock's `tdd` and `diagnosing-bugs` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. The questions before a new test and the shapes of tests that guard nothing adapt concepts from code-yeongyu/oh-my-openagent (Sustainable Use License 1.0, concepts only). No upstream text is reproduced; the wording and the `prepared_not_observed` boundary are OMH's own.
 """
 
 

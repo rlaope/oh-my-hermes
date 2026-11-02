@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Code skills tell the executor how to write a test, not only in TDD mode.**
+  The questions before a new test and the shapes of tests that guard nothing
+  loaded only when the user asked for TDD, so a backend or frontend handoff
+  that said "add tests" let an executor mock its own repository class and
+  assert that `save` was called. They now live in one shared page,
+  `omh-verification-gate`'s `references/test-authoring.md`, which adds tests
+  coupled to internals (own-module fakes, call-count assertions, side-channel
+  reads), fakes only at system boundaries chosen by dependency category, and a
+  `regression_seam: none_correct` outcome when no seam can run the pattern
+  that produced a bug. `omh-backend`, `omh-frontend` and `omh-app-debugging`
+  load it when a handoff asks for tests, and `ulw-work`'s TDD page points at it
+  instead of keeping a second copy. `omh-backend` also gains
+  `references/contract-tests.md`: one negative test per auth row and per
+  error-table row, the same database engine in tests, writes read back through
+  the interface, and migrations run on populated data.
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`

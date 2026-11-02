@@ -465,6 +465,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'backend/references/service-contract.md',
     'backend/references/schema-migration.md',
     'backend/references/consumer-impact.md',
+    'backend/references/contract-tests.md',
     'rust/references/rust-discipline.md',
     'rust/references/ub-escalation.md',
     'native-debugging/references/native-debug-loop.md',
@@ -488,6 +489,9 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'verification-gate/references/generated-artifact-provenance.md',
     # Shared host-neutral adaptation procedure, loaded only for capability ports.
     'verification-gate/references/adaptation-quality.md',
+    # Shared test-authoring contract, loaded from backend, frontend and
+    # app-debugging bodies and from backend's contract-tests reference.
+    'verification-gate/references/test-authoring.md',
     'security-safety-review/references/credential-rotation.md',
     # Issue #1714. Each of these is named by a body pointer that projects into
     # this target, so omitting it would ship a pointer at a file the portable
@@ -573,6 +577,20 @@ PORTABLE_REFERENCE_REWRITES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "Route existing `USER.md`/`MEMORY.md` cleanup to `memory-sync`, new durable project facts to `memory-new`,",
             "Keep existing `USER.md`/`MEMORY.md` cleanup out of the wiki; route new durable project facts to `memory-new`,",
+        ),
+    ),
+    # The TDD discipline ships only in the Hermes projection of `ulw-work`.
+    'verification-gate/references/test-authoring.md': (
+        (
+            "A tests-first lane also follows `ulw-work`'s `references/tdd-red-green.md`, which adds the red-before-green order and the red-commit checkpoint on top of this page.",
+            "A tests-first lane also runs each new test red before any implementation line, on top of this page.",
+        ),
+    ),
+    # `skill_view` is Hermes' loader; the portable pack reads the file by path.
+    'backend/references/contract-tests.md': (
+        (
+            "load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')`",
+            "read `../../omh-verification-gate/references/test-authoring.md`",
         ),
     ),
 }
