@@ -138,6 +138,10 @@ _CONTROL: Final = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 _BASELINE_WORD: Final = re.compile(r"(?<![a-z])baseline(?![a-z])")
 _VERIFY_WORDS: Final = re.compile(r"(?<![a-z])(verif|audit|validat|qa(?![a-z]))")
 _REVIEW_WORDS: Final = re.compile(r"(?<![a-z])review")
+# Read only for a new node's guess (``role_guess``), not for a node stored before nodes carried a role (`node_role`).
+_DOUBLE_CHECK: Final = re.compile(r"(?<![a-z])double[- ]check")
+# A write scope entry with one of these suffixes is docs, not code (`writes_code`).
+DOC_SUFFIXES: Final = frozenset({".md", ".markdown", ".rst", ".adoc", ".txt"})
 _MARKER_PATTERNS: Final = {
     marker: re.compile(r"(?<![A-Za-z])" + r"\s+".join(marker.split()) + r"\s*:", re.IGNORECASE)
     for marker in PROMPT_MARKERS
@@ -369,8 +373,11 @@ def _validated_node(raw: object) -> dict[str, Any]:
         "attempts": [],
     }
     guess = guessed_role(validated) if "role" not in raw else DEFAULT_ROLE
+    if guess == DEFAULT_ROLE and "role" not in raw and _DOUBLE_CHECK.search(label.casefold()):
+        guess = "verify"
     if guess != DEFAULT_ROLE:
-        # Advice only (`lint`): the node runs as a build node, and the role its label reads like is named.
+        # The node runs as a build node and stays a producer; the lint names the role its label reads like, and the
+        # guess keeps it native (`is_coding`). Not in the digest (`NODE_FIELDS`).
         validated["role_guess"] = guess
     return validated
 
@@ -507,6 +514,9 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
     verifiers = [node for node in nodes if is_verification(node)]
     if len(nodes) > 1 and not verifiers:
         findings.append("no_verification_node")
+    if (len(nodes) > 1 and not any(node_role(node) == "review" for node in nodes)
+            and any(node_role(node) == DEFAULT_ROLE and writes_code(node) for node in nodes)):
+        findings.append("no_review_node")
     if verifiers:
         parents = {str(node["id"]): node["depends_on"] for node in nodes}
         baselines = {str(node["id"]) for node in nodes if is_baseline(node)}
@@ -522,6 +532,16 @@ def lint(nodes: Sequence[Mapping[str, Any]]) -> list[str]:
     if sum(1 for node in nodes if node["category"] == "ultrabrain") > 1:
         findings.append("ultrabrain_more_than_once")
     return findings
+
+
+def writes_code(node: Mapping[str, Any]) -> bool:
+    """Whether a node's write scope may touch code (`no_review_node`): any entry that is not a docs file.
+
+    A directory, a glob or a file of any other kind counts as code; only a
+    scope whose every entry ends in a docs suffix (``DOC_SUFFIXES``) does not.
+    Advice only, so it errs toward naming the missing review.
+    """
+    return any(posixpath.splitext(str(entry).casefold())[1] not in DOC_SUFFIXES for entry in node["write_scope"])
 
 
 def guessed_role(node: Mapping[str, Any]) -> str:
@@ -554,11 +574,14 @@ def is_verification(node: Mapping[str, Any]) -> bool:
 
 
 def is_coding(node: Mapping[str, Any]) -> bool:
-    """A node an external coding owner may take, and the work a verify node follows: a build node that writes files.
+    """A node an external coding owner may take: a build node that writes files.
 
-    Baselines, verification and review stay native whoever builds: the builder never approves itself.
+    Baselines, verification and review stay native whoever builds: the builder never approves itself. So does a build
+    node defined with no role whose label reads like another role (``role_guess``, as in "Re-verify the fix" or
+    "independent verification vs baseline"): it is not refused, since "Add input validation" reads the same way,
+    but it never leaves for an external owner. A node the parent named ``build`` carries no guess and goes.
     """
-    return bool(node["write_scope"]) and node_role(node) == DEFAULT_ROLE
+    return bool(node["write_scope"]) and node_role(node) == DEFAULT_ROLE and not node.get("role_guess")
 
 
 def is_producer(node: Mapping[str, Any]) -> bool:

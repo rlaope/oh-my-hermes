@@ -18,8 +18,10 @@
    `review`), or `role=build` when it builds.
    Lint is advice: a partial prompt-marker set, no verification node, a producer the verification node does
    not depend on, a node with no role whose label reads like another (`role_guess:<id>=verify`: give it
-   the role), every node `deep`, more than one `ultrabrain`, and a graph of 5+ nodes whose critical
-   path is at least 80% of it (`serial_graph`: split it into parallel lanes where the work allows).
+   the role; until then it runs as a native build node), a build node whose `write_scope` holds anything
+   but docs files with no `review` node in the run (`no_review_node`), every node `deep`, more than one
+   `ultrabrain`, and a graph of 5+ nodes whose critical path is at least 80% of it (`serial_graph`: split
+   it into parallel lanes where the work allows).
 2. The result carries `calls`. Each call is one category (and route: a node retried after a provider error
    goes in a call of its own): run its `route` with `omh_delegate_route` (`set`, or `fallback`), then one
    `delegate_task` with its `tasks` unchanged. The goal ends with `[dag:<run>/<node>]`; that marker is how
@@ -123,7 +125,8 @@ With such a choice:
 
 - `ready`, `settle`, `repair` and `extend` keep the ready coding nodes out of `calls` and list them in
   `export`. A coding node is a `build` node that writes files (`write_scope`): baseline, verify and review
-  nodes always run on `delegate_task`, because the builder never approves itself.
+  nodes always run on `delegate_task`, because the builder never approves itself. So does a node sent with
+  no role whose label reads like another (`role_guess`); send `role=build` to export it.
 - `omh_dag action=export owner=<codex|claude-code>` writes those nodes, and the waiting coding nodes
   whose every open parent goes with them, as a `fanout_contract/v2` units file and a goal file, and
   returns the two `omh coding fanout` commands to run (`prepare`, then `dispatch`). More than four units
