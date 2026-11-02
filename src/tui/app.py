@@ -1949,10 +1949,10 @@ class App(ModesMixin, AgentViewMixin):
         self.banner_facts = dict(self.banner_record)
         self.logo_due = True
         self._load_launch_look()
-        self._say_gateway_health()
         self.card_state = CARD_NONE if resume else CARD_LIVE
         if resume:
             self._draw_history(result.get("messages"))
+        self._say_gateway_health()  # under a resumed session's history, where the launch's screen ends
         self._redeliver(result.get("open_requests"))
 
     def _snapshot_home(self) -> Path | None:

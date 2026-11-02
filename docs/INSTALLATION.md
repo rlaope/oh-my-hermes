@@ -3341,23 +3341,34 @@ covers gateways whose last recorded start precedes this update, and a
 gateway running without a pid record is not named. `omh update --json`
 carries the same lines as `gateway_restart_hints`.
 
-The OMH TUI says the same at launch, once, as a transcript warning, and
-`omh doctor` reports it as the `hermes_gateway` row (`hermes_gateway:<name>`
-for a profile's own gateway, shown only when it has something to say). Both
-also read Hermes' `gateway_state.json`: when its `session_store.status` is
-`unavailable`, the gateway refuses writes to a session store it holds,
-often one of a profile deleted while the gateway served it, and Hermes logs
-that as "state.db was replaced". The line says the gateway is Hermes', that
-the sessions already saved on disk are fine, and to run
-`hermes gateway restart`. While a restart is already under way the record
-says `gateway_state: "draining"`: Hermes waits for its running turns, up to
-`agent.restart_after_turn_timeout`, and refuses every new message meanwhile
-(bots answer `runtime_draining`). The line then says the gateway is
-restarting, how many turns it waits for, the seconds left when the
-restart-wait line in `logs/gateway.log` is fresh, and the knob that caps
-the wait; it replaces the other two lines, whose restart is the one in
-progress. All of it is local files only; OMH stops, kills and restarts
-nothing, and the doctor row warns without failing.
+The OMH TUI says the same at launch, once, as a transcript warning (under a
+resumed session's history), and `omh doctor` reports it as the
+`hermes_gateway` row (`hermes_gateway:<name>` for a profile's own gateway,
+shown only when it has something to say). Both read Hermes'
+`gateway_state.json` only while it is fresh (re-stamped within Hermes' own
+120 s bound, in a state Hermes reads as running), and say:
+
+- the session store, when the record says `unavailable` and
+  `logs/gateway.error.log` holds a store failure logged after the gateway's
+  last recorded start. The flag alone says nothing, because a restarted
+  gateway keeps the old process's value until it publishes its own. A
+  deleted profile Hermes still references (a cron job, a kanban board or a
+  served profile) is named, with no restart advice, since a restart does
+  not clear it; remove the reference or recreate the profile. A store
+  replaced underneath the gateway gets `hermes gateway restart`, which
+  restarts every bot it serves and first waits for their running turns;
+- a stale plugin bundle, as `omh update` names it above;
+- a drain (`gateway_state: "draining"`). The gateway starts no new turns
+  until it is done, and Hermes holds or refuses new messages as
+  `runtime_draining`. For a restart, the line names the turns it waits for,
+  the seconds left when the restart-wait line in `logs/gateway.log` is
+  fresh, and the knob that caps the wait, `agent.restart_after_turn_timeout`.
+  With a `.drain_request.json` in the home, it is paused by a drain request
+  and keeps running. Anything else is a stop. While it drains, nothing else
+  is said.
+
+All of it is local files only, in bounded reads; OMH stops, kills and
+restarts nothing, and the doctor row warns without failing.
 
 To opt one bot out of managed skill registration, unregister that profile only:
 

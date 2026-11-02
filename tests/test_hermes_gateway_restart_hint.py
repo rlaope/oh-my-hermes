@@ -262,6 +262,26 @@ class UpdatePrintsRestartHintsTests(unittest.TestCase):
             self.assertTrue(hint.startswith(f"Hermes gateway for {hermes_home.resolve()}: last recorded start "))
             self.assertTrue(hint.endswith("; run `hermes gateway restart`"))
 
+    def test_update_json_says_none_when_it_did_not_compute_hints_and_a_list_when_it_did(self) -> None:
+        # A dry run installs no bundle to compare, so it says "not computed" (null), never "no restart needed" ([]).
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hermes_home = root / ".hermes"
+            status, _, stderr = run_cli(self._base(root) + ["setup"])
+            self.assertEqual(status, 0, stderr)
+            _write_home(hermes_home, starts=[datetime.now(UTC).timestamp() - 86400], pid_record=_record(hermes_home),
+                        installed_at=None)
+
+            status, stdout, stderr = run_cli(self._base(root) + ["update", "--dry-run"])
+            self.assertEqual(status, 0, stderr)
+            self.assertIn("gateway_restart_hints", json.loads(stdout))
+            self.assertIsNone(json.loads(stdout)["gateway_restart_hints"])
+
+            (hermes_home / "gateway.pid").unlink()
+            status, stdout, stderr = run_cli(self._base(root) + ["update"])
+            self.assertEqual(status, 0, stderr)
+            self.assertEqual(json.loads(stdout)["gateway_restart_hints"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,22 +4,28 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **The OMH TUI and `omh doctor` say when Hermes' gateway needs a restart.**
-  Two cases used to leave a slow TUI, an empty `/resume` or missing skills
-  with no reason given. When Hermes' `gateway_state.json` reports its
-  session store `unavailable` (often a deleted profile the shared gateway
-  still holds, which Hermes logs as "state.db was replaced"), the line says
-  the gateway cannot write its session store, that the sessions saved on
-  disk are fine, and to run `hermes gateway restart`. When the gateway's
-  last recorded start precedes the OMH plugin bundle's install, it says OMH
-  was updated after the gateway started and a restart loads the new plugin
-  code. When the gateway is already draining for a restart (it refuses new
-  messages, and bots answer `runtime_draining`), it says the gateway is
-  restarting, how many running turns it waits for, the seconds left when
-  Hermes' log says, and that `agent.restart_after_turn_timeout` caps the
-  wait. The TUI shows each once at launch; doctor shows them as the
-  `hermes_gateway` warning row; `omh update --json` now carries the update
-  restart hints as `gateway_restart_hints`. Local files only; OMH stops and
+- **The OMH TUI and `omh doctor` say what Hermes' gateway needs, and why.**
+  Three cases used to leave a slow TUI, an empty `/resume`, refused
+  messages or missing skills with no reason given. Each line is said as
+  Hermes', only while its `gateway_state.json` is fresh:
+  - **A session store failure** is said when the record says `unavailable`
+    and Hermes' error log holds a store failure from after the last start.
+    A deleted profile still referenced (a cron job, a kanban board or a
+    served profile) is named, with no restart advice, since a restart does
+    not clear it. A replaced store gets `hermes gateway restart`, with what
+    that restart does to every bot it serves.
+  - **A gateway started before the last OMH update** still runs the old
+    OMH plugin code, and the line says so.
+  - **A draining gateway** starts no new turns, and Hermes holds or refuses
+    new messages as `runtime_draining`. A restart is named with its turns,
+    its seconds left and `agent.restart_after_turn_timeout`; a drain
+    request with the fact that the gateway keeps running; anything else as
+    a stop.
+
+  The TUI shows each once at launch; doctor shows them as the
+  `hermes_gateway` warning row. `omh update --json` now carries the update
+  restart hints as `gateway_restart_hints` (`null` on a dry run, which
+  computes none). Local files only, read in bounded reads; OMH stops and
   restarts nothing.
 
 - **The info line's badge carries the version.** It reads
