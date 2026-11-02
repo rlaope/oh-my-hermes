@@ -43,14 +43,19 @@ Bad example:
 
 ## Completion Checklist
 
-- The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
-- Draft recommendations, accepted decisions, and executor handoffs are separate states.
-- Rejected options or unresolved tradeoffs are recorded before handoff.
+- repo_map/v1 cites an observed path for every directory, entrypoint, generated surface, and test location it names; what was inferred is marked inferred, and what was never opened is listed as unread.
+- reading_path/v1 is an ordered list of real files, each with why it comes at that point and what the reader knows after it.
+- Every domain_glossary/v1 term points to where it is defined or used; a term with no source is an open question, not an entry.
+- risk_and_unknowns_map/v1 keeps observed risks, each with the file or command that shows it, apart from unknowns, each with how it would be resolved.
+- Every first_task_runway/v1 task names the files it touches and its verification command, and says whether that command was run during onboarding.
+- The stop condition named at the start is met, or the reply names what was left unread.
 
 ## Recovery Notes
 
-- If acceptance criteria or verification are missing, route back to clarification before handoff.
-- If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
+- If the repository is too large for the stated depth, narrow to the entrypoint the audience touches first and record the rest as unread rather than summarizing it from file names.
+- If a build, test, or setup command could not run (read-only mode, missing toolchain, secrets), list it in first_task_runway/v1 as not run with the reason, never as a known-good command.
+- If docs and code disagree, report what the code does, cite both, and add the disagreement to risk_and_unknowns_map/v1 instead of trusting the docs.
+- If the user names a concrete task mid-tour, stop at the current reading_path/v1 entry and hand the runway so far to planning.
 
 ## Workflow Lane
 

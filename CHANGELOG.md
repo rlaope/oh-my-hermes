@@ -4,6 +4,20 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Review, commit, rule and onboarding skills check what they actually
+  rely on.** `omh-code-review` now searches the reviewed repository for its
+  standards files (`REVIEW.md`, `CONTRIBUTING.md`, `AGENTS.md`/`CLAUDE.md`,
+  `*STANDARDS*.md`, linter and formatter configuration) before the smell
+  baseline applies, hands that list to a dispatched reviewer, and skips
+  smells the configured tooling already enforces. `omh-commit-pr-authoring`'s
+  no-template fallback says whether a revert undoes the change or what it
+  leaves behind, and a structural change shows the smallest file tree, call
+  tree or diff sketch of its new shape. `omh-rules-distill` classes each
+  recurring miss as mechanical (it becomes a check, proven by failing on an
+  injected violation) or judgement (prose). `omh-codebase-onboarding` checks
+  its own repo map, reading path, glossary, risk map and first-task runway
+  instead of a generic planning checklist.
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`

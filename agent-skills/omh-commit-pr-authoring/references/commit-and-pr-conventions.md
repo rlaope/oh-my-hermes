@@ -6,7 +6,7 @@ Load this while drafting a commit message or a pull-request body. OMH writes the
 
 | Source | What to take from it | When it is missing |
 | --- | --- | --- |
-| PR template (`.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `docs/`) | the section headings, in order, and any checkbox list | say no template was found and use a plain summary, why, and validation |
+| PR template (`.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `docs/`) | the section headings, in order, and any checkbox list | say no template was found and use a plain summary, why, validation, and reversibility (section 4) |
 | Recent log (`git log -10 --format=%B`) | subject shape (imperative, `type(scope):`, ticket prefix), body width, trailer set | say the log is empty or unreadable, and do not import a convention |
 | Contributor docs (`CONTRIBUTING.md`, `AGENTS.md`) | sign-off rule, required trailers, forbidden lines | record the rule as not found |
 
@@ -38,6 +38,8 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 
 - Subject: the repository's shape, the change's effect, within the length the log uses.
 - Body: why the change exists and what is now true, not a restated diff. Measured before/after values belong here when the change is about a measurement.
+- When the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
+- Reversibility, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks): say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
 - `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`.
 
 ## 5. Trailers and sign-off

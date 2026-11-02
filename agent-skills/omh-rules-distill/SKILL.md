@@ -42,9 +42,10 @@ Bad example:
 
 ## Completion Checklist
 
-- The durable fact, source evidence, retrieval hint, and staleness risk are recorded.
-- Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.
-- Separate coding or docs tasks are extracted instead of buried in notes.
+- Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on; a candidate resting on one observation stays needs-evidence in review_queue/v1.
+- Every candidate is classed mechanical or judgement before it is worded. A mechanical miss (a fixed syntactic pattern, a banned API, an import shape, a file-location rule) becomes a check (a linter rule, test, hook, or CI step), and an existing check that is unwired or silently broken is named instead of a new one; its approved handoff carries the proof that the check fails on an injected violation and passes once the violation is reverted. Only judgement calls (cross-file consistency, fit with the surrounding code) are worded as prose.
+- duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.
+- Nothing reached a destination without an approval recorded in review_queue/v1.
 
 ## Recovery Notes
 
@@ -92,7 +93,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- principle_candidate_set/v1 with source references, repeated pattern, candidate wording, scope, non-goals, and risk
+- principle_candidate_set/v1 with source references, repeated pattern, mechanical or judgement class, candidate wording or check, scope, non-goals, and risk
 - duplication_conflict_report/v1 with already-covered rules, conflicts, and stale guidance
 - review_queue/v1 separating proposed, approved, rejected, deferred, and needs-evidence candidates
 
