@@ -1857,6 +1857,8 @@ it ready. The pane shows OMH catches, the plan checklist, the active delegation
 graph, board or route summaries, and the active fanout DAG as they become
 available. It reads idle when nothing is running, keeps the plan and status bar
 in agreement, and leaves individual subagent rows to Desktop's Agents panel.
+A failed lane reads as failed (red), apart from blocked (yellow). At the
+default pane width a delegation row stacks its model under the title.
 It uses calmer colours and follows Desktop's language when Korean is selected.
 `omh uninstall --registration-only` does not disable the plugin or
 change `plugins.enabled`. Desktop mounting must be observed separately.
