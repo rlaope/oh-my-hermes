@@ -70,7 +70,8 @@ class GatewayRestartHintTests(unittest.TestCase):
             self.assertEqual(
                 hint,
                 "Hermes gateway for profile miku: last recorded start 2026-09-19T09:35:55Z precedes this bundle's "
-                "install (2026-09-24T02:05:26Z); run `hermes --profile miku gateway restart`",
+                "install (2026-09-24T02:05:26Z); OMH skills reload on their own, but the new OMH plugin code loads "
+                "only after `hermes --profile miku gateway restart`",
             )
 
     def test_a_gateway_started_after_the_install_needs_no_restart(self) -> None:
@@ -169,7 +170,8 @@ class GatewayRestartHintTests(unittest.TestCase):
                 self.assertEqual(
                     hint,
                     "Hermes gateway for x: last recorded start 2026-09-24T01:05:26Z precedes this bundle's "
-                    "install (9999-12-31T23:59:59Z); run `y`",
+                    "install (9999-12-31T23:59:59Z); OMH skills reload on their own, but the new OMH plugin code "
+                    "loads only after `y`",
                 )
             else:
                 self.assertIsNone(hint)
@@ -196,9 +198,36 @@ class GatewayRestartHintTests(unittest.TestCase):
                 hints,
                 [
                     f"Hermes gateway for {hermes_home}: last recorded start 2026-09-24T01:05:26Z precedes this "
-                    "bundle's install (2026-09-24T02:05:26Z); run `hermes gateway restart`",
+                    "bundle's install (2026-09-24T02:05:26Z); OMH skills reload on their own, but the new OMH plugin "
+                    "code loads only after `hermes gateway restart`",
                     "Hermes gateway for profile miku: last recorded start 2026-09-24T02:04:26Z precedes this "
-                    "bundle's install (2026-09-24T02:05:26Z); run `hermes --profile miku gateway restart`",
+                    "bundle's install (2026-09-24T02:05:26Z); OMH skills reload on their own, but the new OMH plugin "
+                    "code loads only after `hermes --profile miku gateway restart`",
+                ],
+            )
+
+    def test_a_home_whose_skill_refresh_failed_is_told_the_restart_also_reloads_skills(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hermes_home = root / ".hermes"
+            _write_home(hermes_home, starts=[_INSTALLED_EPOCH - 3600], pid_record=_record(hermes_home))
+            miku = hermes_home / "profiles" / "miku"
+            miku.mkdir(parents=True, exist_ok=True)
+            (miku / "SOUL.md").write_text("Profile identity\n", encoding="utf-8")
+            _write_home(miku, starts=[_INSTALLED_EPOCH - 60], pid_record=_record(miku))
+            paths = OmhPaths(omh_home=root / ".omh", hermes_home=hermes_home)
+
+            hints = gateway_restart_hints(paths, unrefreshed_configs=frozenset({str(miku / "config.yaml")}))
+
+            self.assertEqual(
+                hints,
+                [
+                    f"Hermes gateway for {hermes_home}: last recorded start 2026-09-24T01:05:26Z precedes this "
+                    "bundle's install (2026-09-24T02:05:26Z); OMH skills reload on their own, but the new OMH plugin "
+                    "code loads only after `hermes gateway restart`",
+                    "Hermes gateway for profile miku: last recorded start 2026-09-24T02:04:26Z precedes this "
+                    "bundle's install (2026-09-24T02:05:26Z); the new OMH skills and plugin code load only after "
+                    "`hermes --profile miku gateway restart`",
                 ],
             )
 
@@ -240,10 +269,15 @@ class UpdatePrintsRestartHintsTests(unittest.TestCase):
 
             self.assertEqual(status, 0, stderr)
             self.assertIn(f"  Hermes gateway for {hermes_home.resolve()}: last recorded start ", stdout)
-            self.assertIn("; run `hermes gateway restart`", stdout)
+            self.assertIn("; OMH skills reload on their own, but the new OMH plugin code loads only after `hermes gateway restart`", stdout)
             self.assertNotIn("hermes --profile miku gateway restart", stdout)
-            # The existing restart line is kept beside the named hint.
-            self.assertIn("Restart Hermes Desktop for bot chats to reload skills.", stdout)
+            # The profile line no longer asks for a restart to reload skills.
+            self.assertIn(
+                "New bot conversations and every skill load use the new OMH skills on their own; an open conversation "
+                "keeps the skill list it started with until `/new`, and only new OMH plugin code needs a gateway restart.",
+                stdout,
+            )
+            self.assertNotIn("Restart Hermes Desktop for bot chats to reload skills.", stdout)
             self.assertLess(stdout.index("Bot profiles:"), stdout.index("Hermes gateway for"))
 
     def test_update_json_carries_the_same_hints(self) -> None:
@@ -260,7 +294,7 @@ class UpdatePrintsRestartHintsTests(unittest.TestCase):
             self.assertEqual(status, 0, stderr)
             [hint] = json.loads(stdout)["gateway_restart_hints"]
             self.assertTrue(hint.startswith(f"Hermes gateway for {hermes_home.resolve()}: last recorded start "))
-            self.assertTrue(hint.endswith("; run `hermes gateway restart`"))
+            self.assertTrue(hint.endswith("; OMH skills reload on their own, but the new OMH plugin code loads only after `hermes gateway restart`"))
 
     def test_update_json_says_none_when_it_did_not_compute_hints_and_a_list_when_it_did(self) -> None:
         # A dry run installs no bundle to compare, so it says "not computed" (null), never "no restart needed" ([]).

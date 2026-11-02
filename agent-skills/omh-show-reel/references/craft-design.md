@@ -12,6 +12,7 @@
 - Layout and safe areas
 - Transitions
 - Flash safety
+- Short promo clips
 - What not to do
 
 ## Choosing the art direction
@@ -148,6 +149,19 @@ A transition is the logic that joins two segments. Design it so that the next se
 ## Flash safety
 
 Keep changes in which 10% or more of the screen rises and falls by more than 0.1 in brightness to 3 or fewer per second (photosensitivity). Flashes on a dark background use opacity 0.15 or less, for 0.12-0.25 seconds. The detailed rules are in "Common rules" and T20 in `craft-techniques.md`.
+
+## Short promo clips
+
+> OMH note: upstream designs multi-segment showreels. A promo or social clip of 15 seconds or less is a single segment, and the rules below override this file's per-segment variety, transitions, giant numbers, and end card for it. They generalize reviewer feedback on repeated revisions of short launch clips.
+
+- Hold one hero scene from the first frame to the last. No scene cuts, no end-card lockup; vary the shot with the camera (push, tilt, parallax), light (a slow drift, one or two sweeps), and speed (trails, streaming type).
+- No meta text: explanatory labels ("REAL STREAM", "NOT SPED UP"), subheads, model or product IDs, URLs, footnotes. Viewers read the meaning from the picture and have no time to read a short clip; text only crowds it. Links, prices, and IDs go in the post that carries the clip.
+- One number. The single key figure sits on one line under the logo or subject, smaller than it (about 0.35-0.45 of the logo height). No giant extruded number scene and no second or third figure (a discount, a multiplier, a footnote, a live counter whose value differs from the headline).
+- The official logo as supplied, unboxed and large: at least 25% of the frame height in the opening. A small icon beside a text label does not replace it. Never redraw or regenerate a logo; on a dark ground only its color may change.
+- No slop UI: glass cards, pill badges, "LIVE" badges, rounded stat boxes, invented terminal or dashboard UI, default-font white text on black. A real product capture follows the full method instead.
+- Smooth light: gradients interpolate in oklab/oklch over several stops across broad radial or mesh fields with 1-3% noise dither against banding, no hard edges or rainbows. Shade the subject with a local light (rim light, soft glow), a vignette, and soft layered shadows instead of a full-screen glow or flash.
+- An OFL typeface pairing chosen for the clip (the brand's own face first), bundled with its license; never the system UI face or Inter by default.
+- Before rendering the video, render a still sheet (first frame, number entrance, middle, last frame), view it yourself, and check every item above. A failed item is a revision before the full render, not a note after it.
 
 ## What not to do
 
