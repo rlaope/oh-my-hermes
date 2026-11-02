@@ -173,6 +173,18 @@ class TestExpectationNoteTest(_Turn):
         self.assertEqual(len(tc._requests), tc._MAX_SESSIONS)
         self.assertNotIn("s0", tc._requests)
 
+    def test_every_stop_logs_its_reason(self):
+        with self.assertLogs("omh.test_expectation_check", "INFO") as logs:
+            self.kwarg_turn()
+            ct.reset()
+            self.kwarg_turn(KWARG + " See test_http_client.")
+            ct.reset()
+            self.kwarg_turn("Add a feature.")
+            tc.round_end_note("never-noted", str(self.root))
+        reasons = [line.split("reason=")[1].split()[0] for line in logs.output]
+        self.assertEqual(reasons, ["lost_expectation", "test_named", "no_keep_request", "no_request"])
+        self.assertIn("fire=True", logs.output[0])
+
     def test_a_broken_read_says_nothing(self):
         tc.note_request(SESSION, KWARG)
         with mock.patch.object(tc, "turn_snapshots", side_effect=RuntimeError("boom")):

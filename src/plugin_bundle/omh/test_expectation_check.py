@@ -93,26 +93,40 @@ def note_request(session_id: object, user_message: object) -> None:
 def round_end_note(session_id: str, root: str | None = None) -> str:
     """``pre_verify`` attempt 0: the note naming changed test expectations, or ``""``."""
     try:
-        with _lock:
-            request = _requests.get(session_id) if session_id else None
-        if request is None or not request.keeps_behaviour or request.asks_test_edit:
-            return ""
-        snapshots = turn_snapshots(session_id)
-        changed = {path: after for path, before in snapshots.items()
-                   if (after := _read(path)) is not None and after != before}
-        if not any(not _is_test_file(path, root) for path in changed):
-            return ""
-        rows: list[tuple[str, int, str]] = []
-        for path in sorted(changed):
-            before = snapshots[path]
-            if not before or not _is_test_file(path, root) or _named(path, request.named, root):
-                continue
-            rows.extend(_lost_expectations(_relative(path, root), before, changed[path], request.named))
-        _LOG.info("test_expectation_check session=%s fire=%s rows=%d", session_id, bool(rows), len(rows))
+        reason, rows = _decide(session_id, root)
+        # One line per stop, whatever the outcome, so a turn with no note shows why it had none.
+        _LOG.info("test_expectation_check session=%s fire=%s reason=%s rows=%d", session_id, bool(rows), reason, len(rows))
         return format_note(rows)
     except Exception as exc:  # noqa: BLE001 - a broken check says nothing rather than fail the turn
         _LOG.warning("test_expectation_check round_end session=%s failed=%s", session_id, type(exc).__name__)
         return ""
+
+
+def _decide(session_id: str, root: str | None) -> tuple[str, list[tuple[str, int, str]]]:
+    with _lock:
+        request = _requests.get(session_id) if session_id else None
+    if request is None:
+        return "no_request", []
+    if not request.keeps_behaviour:
+        return "no_keep_request", []
+    if request.asks_test_edit:
+        return "test_edit_asked", []
+    snapshots = turn_snapshots(session_id)
+    changed = {path: after for path, before in snapshots.items()
+               if (after := _read(path)) is not None and after != before}
+    if not any(not _is_test_file(path, root) for path in changed):
+        return "no_code_change", []
+    rows: list[tuple[str, int, str]] = []
+    named = False
+    for path in sorted(changed):
+        before = snapshots[path]
+        if not before or not _is_test_file(path, root):
+            continue
+        if _named(path, request.named, root):
+            named = True
+            continue
+        rows.extend(_lost_expectations(_relative(path, root), before, changed[path], request.named))
+    return ("lost_expectation" if rows else "test_named" if named else "kept_expectations"), rows
 
 
 def format_note(rows: list[tuple[str, int, str]]) -> str:
