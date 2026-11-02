@@ -228,7 +228,12 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # #2488 adds the short-promo line to show-reel's idea lane (only
         # show-reel moves); main's pin before it is
         # 52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c.
-        self.assertEqual(_digest(legacy_hashes), 'ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b')
+        # #2502 adds frontend's state-discipline, forms-and-input and
+        # browser-support lines and frontend-refactor's visual-parity clause;
+        # only frontend and frontend-refactor move, and main's producer gives
+        # the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        self.assertEqual(_digest(legacy_hashes), '99bdb5f2edb3a7fd2f2f79dd3b2f9fb96c9a8ee5b560b05f837fbc6b27fc0f84')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
