@@ -4,6 +4,26 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A running gateway keeps working through `omh update`.** Three causes
+  are fixed. GC could delete the generation an older gateway still served:
+  the first activation it recorded had no time, and GC read that as earlier
+  than every gateway start, so it held the wrong generation. When the
+  history cannot say which generation a gateway started on, GC now keeps
+  every generation created before that start and prints a `note:` saying
+  so. An open OMH TUI holds its own generation the same way, through an OS
+  lock under `generation-holds/`. Every update also rewrote the plugin bundle
+  and restamped `installed_at` even when no bundle file changed, so the
+  gateway restart hint fired after every update; a moved package directory
+  now updates only the manifest's `package_site`, and the hint fires only
+  when the bundle's files change. Last, a gateway's `omh` finder never looked
+  at the manifest again. It now keeps its directory while that exists. Once
+  an update removes it, the finder moves to the recorded directory when that
+  holds the version already loaded (`package_site` status `moved`), so later
+  `omh.*` imports keep working; code that reads files through an old
+  module's `__file__` still points at the removed directory until a restart.
+  The recorded directory holding another version is reported as
+  `stale_until_restart`, and nothing is loaded from it.
+
 - **The OMH TUI rides out a slow or busy Hermes gateway.** Its connection to
   the shared gateway sent websockets' default keepalive ping, so a gateway
   whose event loop was busy for about 40 s (a long `/compress`, a heavy
