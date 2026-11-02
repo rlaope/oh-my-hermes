@@ -1230,7 +1230,7 @@ Esc closes it):
 | `@` | Starts a file or folder reference; Hermes offers matches above the composer |
 | `!` | At the start of a line, makes it a shell command Hermes runs when you send it (30 s at most); it and its output are not sent to the model |
 | `?` | On an empty composer, shows this list; `/keys` does too |
-| ↑ / ↓ | Move between the composer's rows, walk the input history at its first and last row (earlier sessions' too, shared with `hermes --tui`), or move through an open completion menu (earlier sessions' too, shared with `hermes --tui`), or move through an open completion menu |
+| ↑ / ↓ | Move between the composer's rows, walk the input history at its first and last row (earlier sessions' too, shared with `hermes --tui`), or move through an open completion menu (Ctrl+J / Ctrl+K and Ctrl+N / Ctrl+P move through the menu too) |
 | Ctrl+R | Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, Esc leaves the composer as it was |
 | Ctrl+X | Opens the `/sessions` picker |
 | Ctrl+S | Opens the bot board, as `/bots` does: this machine's Hermes profiles, their gateways and sessions, read-only |

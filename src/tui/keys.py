@@ -812,8 +812,8 @@ class KeyDecoder:
 def list_nav_step(event: Key | Paste) -> int:
     """Return navigation delta for list/picker items: +1 (down) or -1 (up), else 0.
 
-    Matches DOWN and Ctrl+N (without Alt or Shift) to +1.
-    Matches UP and Ctrl+P (without Alt or Shift) to -1.
+    Matches DOWN, Ctrl+N and Ctrl+J (without Alt or Shift) to +1.
+    Matches UP, Ctrl+P and Ctrl+K (without Alt or Shift) to -1.
     """
     if not isinstance(event, Key):
         return 0
@@ -826,7 +826,7 @@ def list_nav_step(event: Key | Paste) -> int:
         and event.ctrl
         and not event.alt
         and not event.shift
-        and event.char in ("n", "p")
+        and event.char in ("n", "p", "j", "k")
     ):
-        return 1 if event.char == "n" else -1
+        return 1 if event.char in ("n", "j") else -1
     return 0

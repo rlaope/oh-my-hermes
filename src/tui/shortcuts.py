@@ -35,7 +35,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("?", "On an empty composer, shows this list; /keys does too"),
     ("↑ / ↓", "Move between the composer's rows, walk the input history at its first and last row "
               "(earlier sessions' too, shared with hermes --tui), or move through an open completion menu "
-              "(earlier sessions' too, shared with hermes --tui), or move through an open completion menu"),
+              "(Ctrl+J / Ctrl+K and Ctrl+N / Ctrl+P move through the menu too)"),
     ("Ctrl+R", "Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, "
                "Esc leaves the composer as it was"),
     ("Ctrl+X", "Opens the /sessions picker"),

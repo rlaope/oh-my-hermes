@@ -533,3 +533,247 @@ class CtrlNPNavigationTests(unittest.TestCase):
         app._on_input(Key(CHAR, "n"))
         app._on_input(Key(CHAR, "p"))
         self.assertEqual(app.composer.text, "np")
+
+    def test_ctrl_jk_step_matches_arrows(self) -> None:
+        """B1: Across all pickers, Ctrl+J and Ctrl+K step like Down and Up."""
+        from omh.tui.launch_picker import LAUNCH_PRESETS, LaunchPicker
+        from omh.tui.model_picker import ModelPicker, ModelRow
+        from omh.tui.rewind_picker import RewindPicker, RewindRow
+        from omh.tui.session_picker import SessionPicker, SessionRow
+        from omh.tui.history import HistorySearch
+        from omh.tui.subagents import MAIN_ID, Roster
+
+        # 1. ModelPicker
+        m_rows = [ModelRow("m1", "p1", "Provider 1", True), ModelRow("m2", "p2", "Provider 2", False), ModelRow("m3", "p3", "Provider 3", False)]
+        mp_arrow = ModelPicker(m_rows, current="m1")
+        mp_ctrl = ModelPicker(m_rows, current="m1")
+        mp_arrow.handle_key(Key(DOWN))
+        mp_ctrl.handle_key(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(mp_arrow.index, mp_ctrl.index)
+        self.assertEqual(mp_ctrl.index, 1)
+        mp_arrow.handle_key(Key(UP))
+        mp_ctrl.handle_key(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(mp_arrow.index, mp_ctrl.index)
+        self.assertEqual(mp_ctrl.index, 0)
+
+        # 2. SessionPicker
+        s_rows = [SessionRow("s1", "Session 1", "preview 1", 100.0, 5), SessionRow("s2", "Session 2", "preview 2", 90.0, 3), SessionRow("s3", "Session 3", "preview 3", 80.0, 1)]
+        sp_arrow = SessionPicker(s_rows, current="s1")
+        sp_ctrl = SessionPicker(s_rows, current="s1")
+        sp_arrow.handle_key(Key(DOWN))
+        sp_ctrl.handle_key(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(sp_arrow.index, sp_ctrl.index)
+        self.assertEqual(sp_ctrl.index, 1)
+        sp_arrow.handle_key(Key(UP))
+        sp_ctrl.handle_key(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(sp_arrow.index, sp_ctrl.index)
+        self.assertEqual(sp_ctrl.index, 0)
+
+        # 3. RewindPicker
+        r_rows = [RewindRow(1, "prompt 1", 1, 0, 100.0), RewindRow(2, "prompt 2", 2, 1, 101.0), RewindRow(3, "prompt 3", 3, 2, 102.0)]
+        rp_arrow = RewindPicker(r_rows)
+        rp_ctrl = RewindPicker(r_rows)
+        rp_arrow.handle_key(Key(DOWN))
+        rp_ctrl.handle_key(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(rp_arrow.index, rp_ctrl.index)
+        self.assertEqual(rp_ctrl.index, 1)
+        rp_arrow.handle_key(Key(UP))
+        rp_ctrl.handle_key(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(rp_arrow.index, rp_ctrl.index)
+        self.assertEqual(rp_ctrl.index, 0)
+
+        # 4. LaunchPicker
+        lp_arrow = LaunchPicker(LAUNCH_PRESETS[0])
+        lp_ctrl = LaunchPicker(LAUNCH_PRESETS[0])
+        lp_arrow.handle_key(Key(DOWN))
+        lp_ctrl.handle_key(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(lp_arrow.index, lp_ctrl.index)
+        self.assertEqual(lp_ctrl.index, 1)
+        lp_arrow.handle_key(Key(UP))
+        lp_ctrl.handle_key(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(lp_arrow.index, lp_ctrl.index)
+        self.assertEqual(lp_ctrl.index, 0)
+
+        # 5. HistorySearch
+        entries = ["cmd 1", "cmd 2", "cmd 3", "cmd 4"]
+        hs_arrow = HistorySearch(entries, "")
+        hs_ctrl = HistorySearch(entries, "")
+        hs_arrow.handle_key(Key(DOWN))
+        hs_ctrl.handle_key(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(hs_arrow.skip, hs_ctrl.skip)
+        self.assertEqual(hs_ctrl.skip, 1)
+        hs_arrow.handle_key(Key(UP))
+        hs_ctrl.handle_key(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(hs_arrow.skip, hs_ctrl.skip)
+        self.assertEqual(hs_ctrl.skip, 0)
+
+        # 6. AgentView - Ordinary roster
+        app_arrow, _ = make_app()
+        app_ctrl, _ = make_app()
+        for a in (app_arrow, app_ctrl):
+            a.roster = Roster()
+            a.roster.apply("subagent.start", {"subagent_id": "sub1", "goal": "Sub1"}, 1.0)
+            a.roster.apply("subagent.start", {"subagent_id": "sub2", "goal": "Sub2"}, 2.0)
+            a.list_selected = MAIN_ID
+
+        app_arrow._agent_list_key(Key(DOWN))
+        app_ctrl._agent_list_key(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(app_arrow.list_selected, app_ctrl.list_selected)
+        self.assertEqual(app_ctrl.list_selected, "sub1")
+
+        app_arrow._agent_list_key(Key(UP))
+        app_ctrl._agent_list_key(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(app_arrow.list_selected, app_ctrl.list_selected)
+        self.assertEqual(app_ctrl.list_selected, MAIN_ID)
+
+        # 7. AgentView - DAG tree mode
+        from test_tui_dag_tree import tree_app
+        app_tree_arrow, _ = tree_app()
+        app_tree_ctrl, _ = tree_app()
+        app_tree_arrow._on_input(Key(DOWN))
+        app_tree_ctrl._on_input(Key(DOWN))
+        self.assertEqual(app_tree_arrow.tree_selected, app_tree_ctrl.tree_selected)
+
+        app_tree_arrow._tree_key(Key(DOWN))
+        app_tree_ctrl._tree_key(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(app_tree_arrow.tree_selected, app_tree_ctrl.tree_selected)
+        self.assertIsNotNone(app_tree_ctrl.tree_selected)
+
+        app_tree_arrow._tree_key(Key(UP))
+        app_tree_ctrl._tree_key(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(app_tree_arrow.tree_selected, app_tree_ctrl.tree_selected)
+
+    def test_ctrl_jk_menu_moves(self) -> None:
+        """B2: Slash and @path completion menus move with Ctrl+J/Ctrl+K matching Down/Up."""
+        from omh.tui.app import PathItem
+
+        # 1. Slash command menu
+        app, _ = make_app(rows=30, cols=80)
+        type_text(app, "/")
+        drawn(app)
+        self.assertTrue(bool(app._menu_rows()))
+        initial_index = app.menu_index
+
+        app._on_input(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(app.menu_index, initial_index + 1)
+
+        app._on_input(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(app.menu_index, initial_index)
+
+        # 2. Path completion menu (@)
+        app_path, _ = make_app()
+        app_path.path_items = [PathItem("f1.txt", "f1.txt", "file"), PathItem("f2.txt", "f2.txt", "file")]
+        self.assertTrue(bool(app_path._menu_rows()))
+        self.assertEqual(app_path.menu_index, 0)
+
+        app_path._on_input(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(app_path.menu_index, 1)
+
+        app_path._on_input(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(app_path.menu_index, 0)
+
+    def test_no_list_ctrl_j_inserts_newline_and_steers(self) -> None:
+        """B3: No-list Ctrl+J preserves byte-identical newline addition and send-now / steer precedence."""
+        from omh.tui.app import QueuedLine
+
+        app, _ = make_app()
+        type_text(app, "hello")
+        app._on_input(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(app.composer.text, "hello\n")
+
+        # Steer queue precedence on empty composer while turn runs
+        app_turn, _ = make_app()
+        app_turn.transcript.running = True  # make _busy() True
+        app_turn.queued.append(QueuedLine("steer me"))
+        steered = []
+        app_turn._steer = lambda text, line: steered.append(text)
+        app_turn._on_input(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(steered, ["steer me"])
+        self.assertEqual(len(app_turn.queued), 0)
+
+    def test_no_list_ctrl_k_deletes_to_eol(self) -> None:
+        """B4: No-list Ctrl+K preserves byte-identical delete-to-EOL and image removal."""
+        app, _ = make_app()
+        type_text(app, "hello world")
+        # Move caret to index 5 ("hello| world")
+        app.composer.caret = 5
+        app._on_input(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(app.composer.text, "hello")
+
+    def test_legacy_decode_preserved(self) -> None:
+        """B5: Raw 0x0a and 0x0b decode to Ctrl+J and Ctrl+K, STEER_FALLBACK_KEY equality holds."""
+        from omh.tui.app import STEER_FALLBACK_KEY
+        from omh.tui.keys import KeyDecoder
+
+        decoder = KeyDecoder()
+        k_0a = decoder.feed(b"\x0a")
+        k_0b = decoder.feed(b"\x0b")
+        self.assertEqual(k_0a, [Key(CHAR, "j", ctrl=True)])
+        self.assertEqual(k_0b, [Key(CHAR, "k", ctrl=True)])
+        self.assertEqual(STEER_FALLBACK_KEY, Key(CHAR, "j", ctrl=True))
+
+        # Unfocused 0x0a feeds into app as newline
+        app, _ = make_app()
+        type_text(app, "line1")
+        app._on_input(k_0a[0])
+        self.assertEqual(app.composer.text, "line1\n")
+
+    def test_menu_precedence_over_composer_and_escape_hatches(self) -> None:
+        """B6: Menu open navigates menu instead of editing composer; Alt+Enter / Shift+Enter insert newline."""
+        app, _ = make_app(rows=30, cols=80)
+        type_text(app, "/")
+        drawn(app)
+        self.assertTrue(bool(app._menu_rows()))
+        init_index = app.menu_index
+
+        # Ctrl+J steps menu, doesn't add newline to composer
+        app._on_input(Key(CHAR, "j", ctrl=True))
+        self.assertEqual(app.menu_index, init_index + 1)
+        self.assertEqual(app.composer.text, "/")
+
+        # Ctrl+K steps menu, doesn't delete to EOL
+        app._on_input(Key(CHAR, "k", ctrl=True))
+        self.assertEqual(app.menu_index, init_index)
+        self.assertEqual(app.composer.text, "/")
+
+        # Alt+Enter and Shift+Enter are guaranteed newline escape hatches
+        app._on_input(Key(ENTER, alt=True))
+        self.assertEqual(app.composer.text, "/\n")
+
+        app._on_input(Key(ENTER, shift=True))
+        self.assertEqual(app.composer.text, "/\n\n")
+
+    def test_modifier_purity_plain_jk_and_modified(self) -> None:
+        """B7: Exact modifier gate: plain j/k type into filters; alt/shift chords return 0 step."""
+        from omh.tui.keys import list_nav_step
+        from omh.tui.model_picker import ModelPicker, ModelRow
+
+        # Plain j and k in picker filter
+        m_rows = [ModelRow("m1", "p1", "Provider 1", True), ModelRow("m2", "p2", "Provider 2", False)]
+        picker = ModelPicker(m_rows, current="m1")
+        picker.handle_key(Key(CHAR, "j"))
+        self.assertEqual(picker.query, "j")
+        self.assertEqual(picker.index, 0)
+        picker.handle_key(Key(CHAR, "k"))
+        self.assertEqual(picker.query, "jk")
+        self.assertEqual(picker.index, 0)
+
+        # Plain j and k in composer
+        app, _ = make_app()
+        app._on_input(Key(CHAR, "j"))
+        app._on_input(Key(CHAR, "k"))
+        self.assertEqual(app.composer.text, "jk")
+
+        # Helper rejects plain j/k, alt+j/k, shift+j/k, ctrl+alt+j, ctrl+shift+j
+        self.assertEqual(list_nav_step(Key(CHAR, "j")), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "k")), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "j", alt=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "k", alt=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "j", shift=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "k", shift=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "j", ctrl=True, alt=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "k", ctrl=True, shift=True)), 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
