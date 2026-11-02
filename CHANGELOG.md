@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **`plan` cuts code tasks as vertical slices, and `decision-prototype` says
+  what a good prototype looks like.** A plan's code tasks each deliver one
+  behavior through every layer it needs, with a done check that drives it
+  through the surface a user or caller reaches, so an integration failure
+  shows in the task that caused it instead of first in the closing gate.
+  Slices that write the same file are ordered by a direct dependency rather
+  than re-cut by layer; a layer-only task is a prefactor placed first, or a
+  wide mechanical change that goes to `refactor-plan`'s expand, migrate and
+  contract phases. `decision-prototype` gains `references/artifact-shapes.md`:
+  a logic or state question gets a pure module a later plan can lift, with the
+  full state shown after each action; an interaction or layout question gets
+  structurally different variants mounted in the real host page inside a
+  temporary worktree, with writes stubbed; and prototype code the receipt
+  lets later work reference is kept on a named throwaway ref the receipt
+  cites.
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`

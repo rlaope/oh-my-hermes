@@ -503,6 +503,9 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'code-review/references/review-lenses.md',
     'ai-slop-cleaner/references/prose-lexicon.md',
     'plan/references/project-constitution.md',
+    # Named by a decision-prototype quality_bar pointer that projects into this
+    # target; host-neutral prose with no OMH command or Hermes-only surface.
+    'decision-prototype/references/artifact-shapes.md',
 })
 
 

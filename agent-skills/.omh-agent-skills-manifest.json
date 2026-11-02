@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "353e064d7c81718d22e9bb9a69ad403147a3b1cd9ca306bb7f3d37748edf072a",
+  "catalog_revision": "ba09d6e1b1deccf56f3ef8c39e4fd3d38e3d1561813686a43ad0212f411d63c7",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -79,7 +79,8 @@
     "omh-decide/SKILL.md": "b77499f32ef1b8b78a313bc1099c88ff2c4940865cb6e522772839d0e8e01f7a",
     "omh-decide/references/capacity-planning.md": "5f017b357b0bfb37279918098b9992c3c793ac8ad4056969bf3e2c0e6d5bb9ae",
     "omh-decide/references/decision-records.md": "4da873d3351a8d7ab96d44860c62d7d18130147abb7aa390078eee6dbe2d4d2d",
-    "omh-decision-prototype/SKILL.md": "9d0ff71b3aacd456a745093eb7c2fdd541064885971992a0f15c8e1e94ab3100",
+    "omh-decision-prototype/SKILL.md": "89086c7ac723f02769a9399a190596da479231f37b7b7f7bd92ddfee8e00364a",
+    "omh-decision-prototype/references/artifact-shapes.md": "e3ea13ffcef4dde581ab3275f0689b2ac6f0ab8d4e9a955c5a796d04cc3cebdc",
     "omh-decision-prototype/references/procedure.md": "53334fb4c76acb18a49272bd9dfab9317c0f9d3eb812b7ef9e87550d99762e88",
     "omh-decision-recall/SKILL.md": "ef8b4aca0c5dd0cf1e20b38d13373a2a2d76f4c02f914c623a485da8032cf62c",
     "omh-deliverable-package/SKILL.md": "d73265970c758ab236cd328a37d585d1e47326148f740a8d196971d83bdbae0c",
@@ -181,7 +182,7 @@
     "omh-paper-learning/SKILL.md": "3570ec1b8c8eebfcc86899c3271bc56430f4ddf601ad3c8be4224e3e9e57a7ab",
     "omh-people-ops/SKILL.md": "b253ad5988f314b12a4add343353eb68e84d4dcc1d1b3f448636f29de9fcadf9",
     "omh-physical-device-readiness/SKILL.md": "1324c49b4b10b43fe408aeb8904b7edd4df74bab34f29c063039bd41128226a8",
-    "omh-plan/SKILL.md": "9910b7041ec829a7de8743e7d194d8e1a84d936c5ff0f27881852f8728bc53ef",
+    "omh-plan/SKILL.md": "9f02f246951ff802bdb384b687fe0f291a95046e2086da868e5cedf360a52baa",
     "omh-plan/references/project-constitution.md": "577991e718cf3e1d62ce93704d4a734f7e058a3d516b0722c636cc8cf7a519da",
     "omh-product-brief/SKILL.md": "3fce228b5da3c471d241cbe60787c1e4826be1143467a0f84a909f6cdfdebc27",
     "omh-product-discovery-validation/SKILL.md": "d81b2f489402b9eabfe33449828f2714c7ac7941c05b19e6ed498ad243ede19c",
