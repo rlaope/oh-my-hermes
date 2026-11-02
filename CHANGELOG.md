@@ -25,6 +25,91 @@ All notable changes will be documented here.
   references no longer end with an attribution block about Rust `unsafe`
   and native debugging that did not belong to them.
 
+- **`omh-llm-app-dev` and `omh-rust` cover the code around the model and the
+  command line.** The LLM provider boundary now has a deterministic fake
+  adapter beside the real one, so parsing, repair, retry classification,
+  tool handling and budget termination get offline unit tests while evals
+  stay a separate suite against the pinned model. A response cut off at the
+  output cap is classified as truncation and never re-asked under the same
+  cap; tool-call arguments are validated before the tool runs, and invalid
+  calls and tool failures return to the model as tool results; a streamed
+  call is cancelled upstream when its client goes away and is validated only
+  once complete. The Rust gate list now lints every target with all features,
+  tests both feature extremes, checks the declared MSRV, adds `--locked` in
+  CI-shaped runs and no longer claims `cargo doc` runs doc tests; new
+  sections cover binary and CLI contracts (stdout for data, named exit codes,
+  no panic on user input, binary integration tests) and adding a dependency
+  (license, MSRV, default features, `cargo tree -d`).
+
+- **Review, commit, rule and onboarding skills check what they actually
+  rely on.** `omh-code-review` now searches the reviewed repository for its
+  standards files (`REVIEW.md`, `CONTRIBUTING.md`, `AGENTS.md`/`CLAUDE.md`,
+  `*STANDARDS*.md`, linter and formatter configuration) before the smell
+  baseline applies, hands that list to a dispatched reviewer, and skips
+  smells the configured tooling already enforces on the diff.
+  `omh-commit-pr-authoring`'s no-template fallback says whether a revert undoes the change or what it
+  leaves behind, and a structural change shows the smallest file tree, call
+  tree or diff sketch of its new shape. `omh-rules-distill` classes each
+  recurring miss as mechanical (it becomes a check, proven by failing on an
+  injected violation) or judgement (prose). `omh-codebase-onboarding` checks
+  its own repo map, reading path, glossary, risk map and first-task runway
+  instead of a generic planning checklist.
+
+- **A green regression test no longer proves a fix on its own, and a
+  reproduction has to be the reported bug.** `omh-verification-gate` now asks,
+  for a "fixed" claim whose evidence is a new or changed test, for an observed
+  red of that test, for the bug's reason, on the tree before the fix (a
+  worktree run, a CI job, or the debugging session's own pre-fix run, recorded
+  with its source); an intermittent fault or a test-only fix is witnessed by a
+  failure rate beside 0/N at the same N. A fix test only ever seen green holds
+  the claim with `regression_witness_missing`.
+  `omh-app-debugging`'s reproduction record gains `symptom_match` (the
+  observed failure beside the reported one; a nearby failure is another bug),
+  `loop_cost` (time per run and what was pinned), and `minimised` (the
+  reproduction cut down until every element is load-bearing). Its method
+  reference gains a ladder for faults no test reaches, ending in numbered
+  steps for a person with named fields to report, and a session tag on every
+  temporary probe with an observed search for it before handover. Commands
+  read credentials from environment variables and quoted output is redacted.
+  The confirmed hypothesis and its eliminated rivals go into the fix's commit
+  or PR body. `omh-native-debugging`'s fault statement takes the symptom
+  match, the minimise step and the probe tag too.
+
+- **`plan` cuts code tasks as vertical slices, and `decision-prototype` says
+  what a good prototype looks like.** A plan's code tasks each deliver one
+  behavior through every layer it needs, with a done check that drives it
+  through the surface a user or caller reaches, so an integration failure
+  shows in the task that caused it instead of first in the closing gate.
+  Slices that write the same file are ordered rather than re-cut by layer,
+  each later slice listing every earlier one that writes it as a direct
+  dependency; a file every slice only appends to (a changelog, a generated
+  index) may instead be written by one task after them. A layer-only task is
+  a prefactor placed first, or a wide mechanical change handed to
+  `refactor-plan` (the new form beside the old, callers moved in groups while
+  both stay green, the old form deleted last). `decision-prototype` gains
+  `references/artifact-shapes.md`:
+  a logic or state question gets a pure module a later plan can lift, with the
+  full state shown after each action; an interaction or layout question gets
+  structurally different variants mounted in the real host page inside a
+  temporary worktree, with writes stubbed; and prototype code the receipt
+  lets later work reference is kept on a named throwaway ref the receipt
+  cites.
+
+- **The frontend skill now covers data, forms, and input, not only the look.**
+  A page that reads or writes remote data loads the state rules that until now
+  only a refactor loaded (server state in a query cache, each mutation naming
+  what it invalidates, an optimistic write with its rollback), and the route
+  state matrix gains submitting, submit-failed, optimistic-pending, stale, and
+  conflict rows. A new `forms-and-input` reference, loaded for a form, a text
+  composer, or a dialog, covers labels, when errors appear, mapping server
+  field errors onto fields, one submit in flight, dialog focus, and an
+  Enter-to-send that waits for IME composition, so a Korean, Japanese, or
+  Chinese user no longer sends half-composed text. The brief names a
+  browser-support target before newer platform features are used, the taste
+  reference gains interface-copy rules, and the component inventory records
+  each primitive's interface. `frontend-refactor` now requires a before/after
+  capture when a change alters DOM nesting or class composition, and inlines
+  only abstractions whose deletion makes their complexity vanish.
 - **A running gateway keeps working through `omh update`.** Three causes
   are fixed. GC could delete the generation an older gateway still served:
   the first activation it recorded had no time, and GC read that as earlier
