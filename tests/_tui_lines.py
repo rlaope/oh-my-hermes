@@ -6,12 +6,21 @@ from collections.abc import Iterable
 
 from omh.tui.frame import INFO_INSET as INFO_INSET_CELLS, RULE
 from omh.tui.style import Line
+from omh.tui import app as tui_app
 
 INFO_INSET = " " * INFO_INSET_CELLS  # the info line under the composer's rule starts this far in
 
 
-BADGE_TEXTS = ("[⚚ OMH Native]", "[⚚ OMH]", "⚚")  # the badge at the info line's left end, longest form first
-BADGE_GAP = "  "  # between the badge and what follows it
+# The badge at the info line's left end without the version, longest form first (`badge_text` is the one with it).
+BADGE_TEXTS = ("[⚚ OMH Native]", "[⚚ OMH]", "⚚")
+BADGE_GAP = "  "  # between the badge and what follows it on the left
+INFO_GAP = "   "  # between the left side and the right side's fields, at least
+
+
+def badge_text() -> str:
+    """The badge's longest form as the TUI draws it now: `[⚚ OMH Native v<version>]`, the version read where the
+    badge reads it (`omh.tui.app.__version__`), so a test that pins the version sees the form it pinned."""
+    return f"[⚚ OMH Native v{tui_app.__version__}]"
 
 
 def info_row_index(screen: list[str]) -> int:
@@ -22,11 +31,14 @@ def info_row_index(screen: list[str]) -> int:
 
 def without_badge(row: str) -> str:
     """The info line's text with the badge at its left end taken out, its inset kept: what the line says after the
-    badge, as the line read before the badge moved onto it."""
+    badge, as the line read before the badge moved onto it. When nothing follows the badge on the left, the gap to
+    the right side's fields stays at least `INFO_GAP` wide, as it is drawn."""
     body = row.removeprefix(INFO_INSET)
-    for badge in BADGE_TEXTS:
+    for badge in (badge_text(), *BADGE_TEXTS):
         if body.startswith(badge):
             rest = body[len(badge) :]
+            if rest.startswith(INFO_GAP):
+                return INFO_INSET + rest
             return INFO_INSET + rest.removeprefix(BADGE_GAP) if rest.startswith(BADGE_GAP) or not rest.strip() else row
     return row
 
