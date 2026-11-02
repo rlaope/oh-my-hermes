@@ -1,6 +1,6 @@
 # Test Authoring
 
-Load this before writing or changing a test in any lane, whether or not the run is tests-first. It is the shape a test must have before its result counts as evidence. A tests-first lane also runs each new test red before any implementation line, on top of this page.
+Load this before writing or changing a test in any lane, whether or not the run is tests-first. It is the shape a test must have before its result counts as evidence. A tests-first lane run through `ulw-work` also runs each new test red before any implementation line, on top of this page.
 
 This page shapes tests; it runs none. A test that was written but not run is `prepared_not_observed`, and only an observed run is evidence.
 

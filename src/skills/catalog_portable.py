@@ -579,11 +579,11 @@ PORTABLE_REFERENCE_REWRITES: dict[str, tuple[tuple[str, str], ...]] = {
             "Keep existing `USER.md`/`MEMORY.md` cleanup out of the wiki; route new durable project facts to `memory-new`,",
         ),
     ),
-    # The TDD discipline ships only in the Hermes projection of `ulw-work`.
+    # `ulw-work` ships portably, but its TDD reference ships only in the Hermes projection.
     'verification-gate/references/test-authoring.md': (
         (
             "A tests-first lane also follows `ulw-work`'s `references/tdd-red-green.md`, which adds the red-before-green order and the red-commit checkpoint on top of this page.",
-            "A tests-first lane also runs each new test red before any implementation line, on top of this page.",
+            "A tests-first lane run through `ulw-work` also runs each new test red before any implementation line, on top of this page.",
         ),
     ),
     # `skill_view` is Hermes' loader; the portable pack reads the file by path.
