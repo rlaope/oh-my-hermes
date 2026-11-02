@@ -113,12 +113,16 @@ The check fires when one of these is true:
   definition's docstring or the comments at it, or in a module-docstring
   sentence that names the edited file as a file (`billing.py`, or a dotted
   module ending in `.billing`) and, when it names definitions of its module,
-  names this one. The shape is closed: an intent word (`intentionally`,
-  `deliberately`, `on purpose`, `by design`) followed by `differs`,
-  `different` or `diverges`. A note with a negation (`not`, `never`, `no`, "is
-  a bug") or an identity word (`identical`, `same`, `copy`, `mirrors`,
-  `duplicated`) declares nothing, so "deliberately kept identical; never let
-  the two diverge" is still a copy;
+  names this one; a sentence that names none speaks only for the one
+  definition its module shares with the edited file. The shape is a
+  whitelist: an intent word (`intentionally`, `deliberately`, `on purpose`,
+  `by design`) with `differs`, `different`, `differently` or `diverges` right
+  after it, at most one word between. A note with a negation (`not`, `never`,
+  `no`, "is a bug"), an identity word (`identical`, `same`, `copy`,
+  `mirrors`, `duplicated`) or a limit on the difference (`only`, `match`,
+  `equal`, `equivalent`, `shared`, `track`) declares nothing, so
+  "deliberately kept identical; never let the two diverge" and "differs only
+  in its imports" are still copies;
 - a definition the edit removed or renamed is still named in another Python
   file, or in a `.toml`, `.cfg`, `.ini`, `.yaml`, `.yml` or `.json` file;
 - a touched function's signature changed, or a class's `__init__`, `__new__`
@@ -198,20 +202,26 @@ that lost an expected value this turn: a literal constant in an `assert` or a
 `quote["total_cents"]` becoming `quote.total_cents` reaches the same value. It
 speaks only when all of these hold:
 
-- the turn's request asked for behaviour to stay the same (`stays the same`,
-  `unchanged`, `without changing`, `keep its behaviour`, "do not change the
-  tests", "must return the same dict as before", and a few more), in a clause
-  no scope word narrows: "everything else stays the same" or "leave the other
-  keys unchanged" keeps nothing about the part the request changes;
+- the turn's request asked for behaviour to stay the same, as a whole: the
+  subject is the behaviour, the output, the result, the return value, "what
+  `fetch` returns", the tests or an unscoped "everything", and it stays /
+  remains the same, is unchanged, or must not change; or the request says
+  "without changing" the behaviour, the output or the tests, or "do not change
+  the tests". A clause with a scope word (`else`, `other`, `otherwise`, `for`,
+  `when`, `only`) keeps nothing, and neither does a keep of a named part:
+  "the signature stays the same", "the public API is unchanged" and "the
+  return type stays the same" draw no note;
 - the request does not name the test file or the test, does not ask to update
-  a test ("update its docstring and tests", "refresh the kib test"), and
-  states no result the code must now give (`must return`, `to return`). A
-  negated ask ("don't update any tests") asks for nothing;
+  a test ("update its docstring and tests", "refresh the kib test", "the test
+  is outdated", "bring it up to date"), and states no result the code must
+  now give (`must return`, `to return`). A negated ask ("don't update any
+  tests") asks for nothing;
 - the turn also changed a Python file that is not a test;
 - the test file existed at the turn's start and has its pre-edit text.
 
 Expected values are pooled over every test file the turn changed, so an
-assertion moved between test files loses nothing, and a unittest message
+assertion moved between test files, or folded into a
+`@pytest.mark.parametrize` table, loses nothing, and a unittest message
 (`msg=`, or a trailing string) is not an expected value.
 
 `pre_llm_call` keeps those three facts about the request, never its text. The

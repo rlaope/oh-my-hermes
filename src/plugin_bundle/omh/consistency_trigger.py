@@ -135,16 +135,20 @@ NO_CHECK_PLATFORMS: Final = frozenset({"subagent"})
 # Statement bodies read as if their definitions sat at the enclosing level.
 _BLOCK_FIELDS: Final = ("body", "orelse", "finalbody")
 _FUNCTION_TYPES: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
-# A note saying a look-alike differs on purpose (`_declared_divergent`): an intent word followed, in
-# the same sentence, by a difference word ("intentionally different from billing.py"). A sentence with
-# a negation or an identity word declares nothing: "must not differ", "never let the two diverge",
-# "a deliberate copy", "same rounding by design: any difference is a bug", "mirrors invoice.py".
+# A note saying a look-alike differs on purpose (`_declared_divergent`). A whitelist, silent otherwise:
+# an intent word with the difference word right after it, at most one word between ("intentionally
+# different from billing.py", "deliberately rounds differently", "by design it diverges"). A sentence
+# that negates, speaks of identity, or limits the difference declares nothing: "must not differ", "never
+# let the two diverge", "a deliberate copy", "mirrors invoice.py", "differs only in its imports",
+# "diverges in logging, while the rounding must match", "the rounding is shared".
 _DIVERGENT: Final = re.compile(
-    r"\b(?:intentional(?:ly)?|deliberate(?:ly)?|on purpose|by design|purposely|purposefully)\b"
-    r".*?\b(?:differs?|differ(?:ent|ently)|diverges?|divergent)\b")
+    r"\b(?:intentional(?:ly)?|deliberate(?:ly)?|on purpose|by design|purposely|purposefully)\s+(?:[a-z]+\s+)?"
+    r"(?:differs?|different|differently|diverges?|divergent)\b")
 _REFUSES_DIVERGENCE: Final = re.compile(
     r"\b(?:not|never|no|nor|cannot|without)\b|n't\b|\bis a bug\b"
-    r"|\b(?:identical|same|copy|copies|copied|mirror(?:s|ed|ing)?|duplicat\w*|in step|in sync)\b")
+    r"|\b(?:identical|same|copy|copies|copied|mirror(?:s|ed|ing)?|duplicat\w*|in step|in sync)\b"
+    r"|\b(?:only|match(?:es|ed|ing)?|equal(?:s|ly)?|equivalent|shar(?:e|es|ed|ing)|track(?:s|ed|ing)?"
+    r"|agree(?:s|d)?|consistent)\b")
 _SENTENCE_BREAK: Final = re.compile(r"(?<=[.!?;:])\s+")
 
 _LOG = logging.getLogger("omh.consistency_trigger")
@@ -465,6 +469,7 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
     renamed = {name: named[name] for name in sorted(needles.renamed)}
     suffixes = PYTHON_SUFFIXES + (CONFIG_SUFFIXES if renamed else ())
     divergent: list[str] = []
+    edited_tops = _edited_tops(edited) if defined else {}
     try:
         for path in _walk(root, suffixes, deadline):
             if path in edited:
@@ -483,7 +488,7 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
                 continue
             for name, pattern in defined.items():
                 if name in text and pattern.search(text):
-                    if _declared_divergent(text, name, needles.defined[name]):
+                    if _declared_divergent(text, name, needles.defined[name], edited_tops):
                         divergent.append(f"{name} in {where}")
                         continue
                     return Verdict(True, "copy", f"{name} in {where}")
@@ -504,7 +509,18 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
     return Verdict(False, "no_copy_or_reference")
 
 
-def _declared_divergent(text: str, name: str, stems: set[str]) -> bool:
+def _edited_tops(edited: set[str]) -> dict[str, set[str]]:
+    """Stem -> the lower-cased top-level definitions of each edited Python file (empty when unreadable)."""
+    tops: dict[str, set[str]] = {}
+    for path in edited:
+        if path.endswith(PYTHON_SUFFIXES):
+            tree = _parse(_read(path, missing="") or "")
+            names = {top.lower() for top in _definitions(tree) if "." not in top} if tree is not None else set()
+            tops.setdefault(_stem(path), set()).update(names)
+    return tops
+
+
+def _declared_divergent(text: str, name: str, stems: set[str], edited_tops: dict[str, set[str]]) -> bool:
     """Whether the file ``text`` says its ``name`` differs from the edited one on purpose, so it is not a
     copy that has to change with the edit. Read with ``ast``, in two places only:
 
@@ -513,12 +529,14 @@ def _declared_divergent(text: str, name: str, stems: set[str]) -> bool:
       that negates or speaks of identity;
     - the module docstring: such a sentence that also names one of the edited files as a file
       (``billing.py``, or a dotted module ending in ``.billing``; the bare word does not count). When
-      that sentence also names definitions of this module, it speaks only for those, so it must name
-      ``name`` too.
+      that sentence names definitions of this module, it speaks only for those, so it must name
+      ``name``. When it names none, it speaks for the module only if ``name`` is the one top-level
+      definition this module shares with that edited file.
 
-    "Differs on purpose" is `_DIVERGENT`, an intent word followed by a difference word, in a sentence
-    `_REFUSES_DIVERGENCE` does not match (no negation, no identity word). A file that does not parse,
-    or a note in a string or comment anywhere else, declares nothing."""
+    "Differs on purpose" is `_DIVERGENT`, an intent word with a difference word right after it, in a
+    sentence `_REFUSES_DIVERGENCE` does not match (no negation, no identity word, nothing that limits
+    the difference). A file that does not parse, or a note in a string or comment anywhere else,
+    declares nothing."""
     tree = _parse(text)
     if tree is None:
         return False
@@ -540,12 +558,17 @@ def _declared_divergent(text: str, name: str, stems: set[str]) -> bool:
     module_doc = ast.get_docstring(tree) or ""
     own = {top.lower() for top in _definitions(tree) if "." not in top}
     for sentence in _sentences(module_doc):
-        if not _says_divergent(sentence) or not any(
-                re.search(rf"(?:\b{re.escape(stem)}\.pyi?\b|\.{re.escape(stem)}\b)", sentence) for stem in stems if stem):
+        if not _says_divergent(sentence):
             continue
-        named = {word for word in re.findall(r"[a-z_][a-z0-9_]*", sentence) if word in own}
-        if not named or name.lower() in named:
-            return True
+        for stem in stems:
+            if not stem or not re.search(rf"(?:\b{re.escape(stem)}\.pyi?\b|\.{re.escape(stem)}\b)", sentence):
+                continue
+            named = {word for word in re.findall(r"[a-z_][a-z0-9_]*", sentence) if word in own}
+            if named:
+                if name.lower() in named:
+                    return True
+            elif own & edited_tops.get(stem, set()) == {name.lower()}:
+                return True
     return False
 
 

@@ -893,8 +893,24 @@ These changes are in the branch head after `c071c591f`, the measured new arm.
   - "update its docstring and tests" and "refresh / revise the ... test" are asks.
   - Expected values are pooled across test files, and unittest messages are not counted.
 
-The offline replay of the 132 H2H2 `omn` sessions, re-run on the fixed code
-(`OPT/OPT-I/replay-omn-review.txt`):
+A second review round turned both rules into whitelists, silent otherwise:
+- **The test check's keep.** It counts only when its subject is the behaviour, the output,
+  the result, the return value, "what `fetch` returns", the tests or an unscoped
+  "everything", and the phrase keeps it whole.
+  - "The signature stays the same", "the public API is unchanged", "the return type stays
+    the same", "values stay the same" and any scoped clause (`for`, `when`, `otherwise`,
+    `only`) are no keep.
+  - "The test is outdated" and "bring it up to date" are asks.
+  - Constants in `@pytest.mark.parametrize` count as gained values.
+- **`declared_divergent`.**
+  - The difference word must come right after the intent word, with at most one word between.
+  - A limiting word (`only`, `match`, `equal`, `equivalent`, `shared`, `track`, `agree`)
+    voids the note.
+  - A module sentence that names no definition speaks only for the one definition its module
+    shares with the edited file. The bench decoy shares only `_to_cents`.
+
+The offline replay of the 132 H2H2 `omn` sessions, re-run on the code after both rounds
+(`OPT/OPT-I/replay-omn-review2.txt`):
 - `C-DECOY`: 12 continues to 0.
 - `C-DUPLICATE`: 8 of 8 fires kept.
 - The `I-KWARG` test note fires on the 3 failed Haiku runs only.

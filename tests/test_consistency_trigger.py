@@ -464,9 +464,9 @@ class NamedFileSnapshotTest(_Workspace):
     def test_a_file_changed_before_the_call_that_names_it_is_still_opaque(self):
         self.write("src/app/a.py", "def other():\n    return 1\n")
         self.command("true")
-        # An unnamed change first. It changes the size: the index is (mtime, size), and a coarse mtime
-        # clock (the Windows runner) can leave a same-size rewrite looking untouched.
-        self.write("src/app/a.py", "def other():\n    return 22\n")
+        # An unnamed change first, of the same size: the racy-file digest sees it even when the clock
+        # leaves (mtime, size) unmoved.
+        self.write("src/app/a.py", "def other():\n    return 2\n")
         self.command("cat src/app/a.py")
         self.assertEqual(self.verdict(), ct.Verdict(True, "opaque_edit", "src/app/a.py"))
 
@@ -557,6 +557,54 @@ class DeclaredDivergenceTest(_Workspace):
         self.write("src/app/duty.py", DECOY.replace("so this rounding is", "so _to_cents is").replace(
             "from invoice.py", "from benchapp.invoice"))
         self.assertEqual(self.verdict(self.fix_invoice())[:2], (False, "declared_divergent"))
+
+    def test_a_module_sentence_naming_no_definition_needs_a_single_shared_definition(self):
+        # Re-review of #2494: a file sentence that names no definition covered the whole module, so a
+        # real copy of `invoice_total` beside the declared `_to_cents` was hidden.
+        total = ("\n\ndef invoice_total(amounts: list[str]) -> decimal.Decimal:\n"
+                 '    return sum((_to_cents(amount) for amount in amounts), decimal.Decimal("0.00"))\n')
+        for note in ("The rounding here is intentionally different from invoice.py.",
+                     "Unlike invoice.py, receipts deliberately round differently."):
+            with self.subTest(note=note):
+                ct.reset()
+                self.write("src/app/receipt.py", RECEIPT.replace('"""Receipt totals."""', f'"""Receipt totals. {note}"""')
+                           + total)
+                self.write("src/app/invoice.py", INVOICE)
+                changed = self.edit("src/app/invoice.py", 'Decimal("0.00"))', 'Decimal("0"))')
+                self.assertEqual(self.verdict(changed), ct.Verdict(True, "copy", "invoice_total in src/app/receipt.py"))
+        # One shared definition: the module sentence speaks for it.
+        ct.reset()
+        self.write("src/app/receipt.py", RECEIPT.replace(
+            '"""Receipt totals."""', '"""Receipt totals. Unlike invoice.py, receipts deliberately round differently."""'))
+        self.assertEqual(self.verdict(self.fix_invoice())[:2], (False, "declared_divergent"))
+
+    def test_a_note_that_limits_the_difference_declares_nothing(self):
+        notes = (
+            "Deliberately written to differ from invoice.py only in its imports.",
+            "Intentionally differs from invoice.py only in naming; the arithmetic is equal.",
+            "Purposely diverges from invoice.py in logging, while the rounding must match it exactly.",
+            "Purposely diverges from invoice.py in logging only; the rounding must track it.",
+            "Intentionally called with different inputs than invoice.py; the rounding is shared.",
+            "Deliberately different in its error messages, but equivalent in its arithmetic.",
+        )
+        for note in notes:
+            for where in ("module", "definition"):
+                with self.subTest(note=note, where=where):
+                    ct.reset()
+                    if where == "module":
+                        text = RECEIPT.replace('"""Receipt totals."""', f'"""Receipt totals. {note}"""')
+                    else:
+                        text = RECEIPT.replace("decimal.Decimal:\n", f'decimal.Decimal:\n    """{note}"""\n', 1)
+                    self.write("src/app/receipt.py", text)
+                    self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
+
+    def test_the_difference_word_must_follow_the_intent_word(self):
+        for note in ("It is deliberately written so that it can differ from invoice.py.",
+                     "Intentionally kept apart; it then diverges from invoice.py."):
+            with self.subTest(note=note):
+                ct.reset()
+                self.write("src/app/receipt.py", RECEIPT.replace("decimal.Decimal:\n", f'decimal.Decimal:\n    """{note}"""\n', 1))
+                self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
 
     def test_an_intent_word_alone_or_a_note_elsewhere_declares_nothing(self):
         variants = {

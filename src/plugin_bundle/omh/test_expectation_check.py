@@ -8,15 +8,18 @@ key in the returned dict and the same key in ``tests/test_http_client.py``.
 
 ``round_end_note`` (``pre_verify``, attempt 0) names such an edit, and only when all of these hold:
 
-- this turn's request asked for behaviour to stay the same (``note_request``, from ``pre_llm_call``:
-  a closed phrase list, `_KEEPS_BEHAVIOUR`, in a clause `_SCOPED_KEEP` does not narrow);
+- this turn's request asked for behaviour to stay the same (``note_request``, from ``pre_llm_call``):
+  a whitelist, `_KEEPS_BEHAVIOUR`, whose subject is the behaviour, the output, the result, the return
+  value, "what <fn> returns", the tests or an unscoped "everything", in a clause `_SCOPED_KEEP` does not
+  narrow. A keep of a named part ("the signature stays the same", "the API is unchanged") is no keep;
 - the request neither names the test file (its path, file name or module name) or the test, nor
   asks to update a test or states a result the code must now give (`_ASKS_TEST_EDIT`, unless a
   negation right before it takes it back): an edit the task asked for is not questioned;
 - the turn also changed a Python file that is not a test;
 - a test file that existed at the turn's start lost an expected value: a literal constant inside an
   ``assert`` statement or the compared arguments of a unittest ``self.assert*`` call is gone, counted
-  over every test file the turn changed (so an assertion moved between test files loses nothing). A
+  over every test file the turn changed (so an assertion moved between test files, or folded into a
+  ``@pytest.mark.parametrize`` table, loses nothing). A
   subscript key is how a value is reached, not an expected value, and a unittest message is not one
   either. A test that only gained assertions, a renamed test, or a renamed identifier inside an
   assertion loses none.
@@ -43,23 +46,30 @@ MAX_SOURCE_CHARS: Final = 160
 MAX_NAMED_TOKENS: Final = 64
 MAX_FILE_BYTES: Final = 512_000
 _MAX_SESSIONS: Final = 64
-# The request asks for behaviour to be kept, in so many words: a keep phrase, a refusal to change the
-# tests, or a result that must stay what it is ("must return the same dict as before").
+# The request asks for behaviour to be kept, as a whole. A whitelist, silent otherwise: the subject is
+# the behaviour, the output, the result, the return value, "what <fn> returns", the tests, or an
+# unscoped "everything", and the phrase keeps it whole (stays / remains the same, is unchanged, must
+# not / does not change); or "without changing" the behaviour, the output or the tests; or a refusal
+# to change the tests. "The signature stays the same", "the public API is unchanged", "the return
+# type stays the same" and "values stay the same" keep a named part only, so they are no keep.
+_KEEP_SUBJECT: Final = (r"(?:(?:its|the|their|this|existing|current|observable|overall) )*"
+                        r"(?:behaviou?r|outputs?|results?|return values?|what [\w.()]+ returns|tests|everything)")
+_KEEP_VERB: Final = (r"(?:(?:must|should|will|shall|has to|have to|needs to|need to) )?"
+                     r"(?:(?:stays?|remains?) (?:the same|unchanged)|(?:is|are) unchanged"
+                     r"|(?:must not|mustn't|does not|doesn't|do not|don't|should not|shouldn't|may not|cannot"
+                     r"|can't|will not|won't|must never|should never) change)")
 _KEEPS_BEHAVIOUR: Final = re.compile(
-    r"\b(?:stays?|remains?) the same\b|\bunchanged\b|\bwithout changing\b|\bno behaviou?r change"
-    r"|\b(?:keeps?|keeping|preserves?|preserving) (?:its |their |the |existing |current )*behaviou?r\b"
-    r"|\bsame behaviou?r\b"
-    r"|\b(?:do not|don't|dont|never|must not|mustn't|should not|shouldn't) (?:\w+ ){0,2}"
-    r"(?:change|update|modify|edit|touch|rewrite|alter) (?:(?:the|any|its|their|existing|current) )*"
-    r"(?:tests?|assertions?)\b"
-    r"|\breturns? (?:the same|exactly|what it)\b"
+    rf"\b{_KEEP_SUBJECT} {_KEEP_VERB}\b"
+    r"|\bwithout changing (?:(?:its|the|their|any|existing|current) )*(?:behaviou?r|outputs?|tests)\b"
+    r"|\b(?:do not|don't|dont|never|must not|mustn't|should not|shouldn't) (?:change|update|modify|edit|touch"
+    r"|rewrite|alter) (?:(?:the|any|its|their|existing|current) )*tests?\b"
 )
-# A keep phrase in a clause that scopes it to part of the request ("everything else stays the same",
-# "leave the other keys unchanged", "keep the existing behaviour for callers that ...") keeps nothing
-# about the part the request does change.
+# A keep in a clause that scopes it ("everything else stays the same", "otherwise behaviour should stay
+# the same", "behaviour stays the same for exact multiples") keeps nothing about the part the request
+# changes.
 _SCOPED_KEEP: Final = re.compile(
-    r"\b(?:else|other|others|rest|remaining|except|besides|apart from|aside from)\b"
-    r"|\bfor (?:\w+ ){1,2}(?:that|who|which|where|whose|with)\b"
+    r"\b(?:else|other|others|otherwise|rest|remaining|except|besides|apart from|aside from|for|when|if|unless"
+    r"|where|only)\b"
 )
 _CLAUSE_BREAK: Final = re.compile(r"[.;!?]\s+|,\s+|\s+(?:and|but)\s+")
 # The request asks for a test to be changed (a change verb shortly before the test or its expectation),
@@ -71,6 +81,8 @@ _ASKS_TEST_EDIT: Final = re.compile(
     r"(?:(?!(?:add|adds|adding|write|new)\b)[\w'-]+ ){0,3}"
     r"(?:tests?|assertions?|expectations?|expected values?)\b"
     r"|\b(?:to|now|should|must) return\b(?! (?:the same|exactly|what it)\b)"
+    r"|[\w./-]*\btest[\w./-]*(?: [\w.:/()-]+){0,3} (?:is|are) (?:outdated|out of date|stale|obsolete)\b"
+    r"|\bbring (?:it|them|the tests?|its tests?) up to date\b"
 )
 _NEGATED_BEFORE: Final = re.compile(r"(?:\b(?:not|never|without|no)|n't)\s+(?:\w+\s+){0,2}$")
 # Positional arguments a unittest assertion compares; a positional past them is its message.
@@ -165,6 +177,7 @@ def _decide(session_id: str, root: str | None) -> tuple[str, list[tuple[str, int
             continue
         gained.update(value for test, _node, values in _expectations(new_tree) if test.lower() not in request.named
                       for value in values)
+        gained.update(_parametrized_values(new_tree))
         if old_tree is not None:
             old += [(_relative(path, root), before, test, node, values) for test, node, values in _expectations(old_tree)
                     if test.lower() not in request.named]
@@ -230,6 +243,19 @@ def _expectations(tree: ast.AST) -> list[tuple[str, ast.AST, list[tuple[str, str
 
     visit(tree, "")
     return found
+
+
+def _parametrized_values(tree: ast.AST) -> list[tuple[str, str]]:
+    """The constants a ``@pytest.mark.parametrize(names, values)`` feeds a test: an assertion folded into
+    a parametrized test keeps its expected values there, so they count as gained."""
+    values: list[tuple[str, str]] = []
+    for node in ast.walk(tree):
+        for decorator in getattr(node, "decorator_list", None) or []:
+            if isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute) \
+                    and decorator.func.attr == "parametrize":
+                arguments = decorator.args[1:] + [k.value for k in decorator.keywords if k.arg == "argvalues"]
+                values += [value for argument in arguments for value in _expected_values(argument)]
+    return values
 
 
 def _expected_values(node: ast.AST) -> list[tuple[str, str]]:

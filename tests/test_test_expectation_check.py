@@ -151,8 +151,9 @@ class TestExpectationNoteTest(_Turn):
         self.assertEqual(tc.round_end_note("never-noted", str(self.root)), "")
 
     def test_request_phrases(self):
-        keeps = ("What fetch returns stays the same.", "Results remain the same.", "Leave the API unchanged.",
-                 "Fix it without changing its signature.", "Keep its behaviour.", "preserving the existing behavior")
+        keeps = ("What fetch returns stays the same.", "Results remain the same.", "Its behaviour is unchanged.",
+                 "Rename it without changing behavior.", "The output must not change.", "Everything stays the same.",
+                 "What parse_size() returns must stay the same.", "The return value does not change.")
         asks = ("Update the test.", "fix the failing tests", "Change the existing kib assertion to 2048.",
                 "adjust its expected value", "Change build_quote to return a frozen dataclass.",
                 "parse_duration('90s') returns 5400, but it must return 90.")
@@ -179,12 +180,51 @@ class TestExpectationNoteTest(_Turn):
                      "Revise the existing tests for the new unit."):
             tc.note_request(SESSION, text)
             self.assertTrue(tc._requests[SESSION].asks_test_edit, text)
-        # A negated ask, or a result that must stay as it is, keeps behaviour and asks for nothing.
-        for text in ("Speed it up; do not change the tests.", "Rename the flag and don't update any tests.",
-                     "fetch must return the same dict as before.",
-                     "It should return exactly what it returns today."):
+        # A negated ask keeps the tests, and asks for nothing.
+        for text in ("Speed it up; do not change the tests.", "Rename the flag and don't update any tests."):
             tc.note_request(SESSION, text)
             self.assertEqual(tc._requests[SESSION][:2], (True, False), text)
+        # A result that must stay as it is asks for no new result.
+        for text in ("fetch must return the same dict as before.", "It should return exactly what it returns today."):
+            tc.note_request(SESSION, text)
+            self.assertFalse(tc._requests[SESSION].asks_test_edit, text)
+
+    def test_a_keep_of_a_named_part_or_a_scoped_keep_is_no_keep(self):
+        # Re-review of #2494: each of these once read as "keep the behaviour" and, after a correct code
+        # change and a correct test update, drew a note asking to revert the test.
+        for text in ("Raise the default retries to 3; the signature stays the same.",
+                     "Fix the rounding without changing the signature.",
+                     "The public API is unchanged.",
+                     "The return type stays the same.",
+                     "Fix it so it returns the same type.",
+                     "Keep the existing behaviour for exact multiples.",
+                     "Round half up; otherwise behaviour should stay the same.",
+                     "The default values stay the same.",
+                     "URL handling remains unchanged.",
+                     "Behaviour stays the same for exact multiples.",
+                     "Everything else stays the same.",
+                     "Keep its behaviour.",
+                     "Preserve the existing behavior."):
+            tc.note_request(SESSION, text)
+            self.assertFalse(tc._requests[SESSION].keeps_behaviour, text)
+
+    def test_an_outdated_test_is_an_ask(self):
+        for text in ("test_sizes is outdated; bring it up to date.", "tests/test_units.py is outdated.",
+                     "The tests are stale.", "Bring the tests up to date with the new unit."):
+            tc.note_request(SESSION, text)
+            self.assertTrue(tc._requests[SESSION].asks_test_edit, text)
+
+    def test_named_part_keeps_with_a_correct_test_update_get_no_note(self):
+        for request in ("Raise the default retries of fetch to 3; the signature stays the same.",
+                        "The public API is unchanged."):
+            with self.subTest(request=request):
+                ct.reset()
+                tc.note_request(SESSION, request)
+                self.write("src/app/client.py", "def fetch(retries=1):\n    return retries\n")
+                self.write("tests/test_client.py", "def test_default():\n    assert fetch() == 1\n")
+                self.edit("src/app/client.py", "retries=1", "retries=3")
+                self.edit("tests/test_client.py", "== 1", "== 3")
+                self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
 
     def test_a_scoped_keep_with_a_correct_test_update_gets_no_note(self):
         request = "parse_size must count a kib as 1024 bytes; everything else stays the same."
@@ -215,6 +255,17 @@ class TestExpectationNoteTest(_Turn):
         ct.snapshot_before_edit({"tool_name": "write_file", "session_id": SESSION, "turn_id": "t1"},
                                 {"path": "tests/test_new.py", "content": "x"})
         self.write("tests/test_new.py", "def test_defaults():\n" + moved)
+        self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
+
+    def test_asserts_folded_into_parametrize_lose_nothing(self):
+        tc.note_request(SESSION, "Speed up to_cents without changing behaviour.")
+        self.write("src/app/units.py", "def to_cents(x):\n    return int(round(x * 100))\n")
+        self.write("tests/test_units.py", "def test_cents():\n    assert to_cents(1.25) == 125\n    assert to_cents(0) == 0\n")
+        self.edit("src/app/units.py", "int(round(x * 100))", "round(x * 100)")
+        self.edit("tests/test_units.py",
+                  "def test_cents():\n    assert to_cents(1.25) == 125\n    assert to_cents(0) == 0\n",
+                  "import pytest\n\n\n@pytest.mark.parametrize('amount, cents', [(1.25, 125), (0, 0)])\n"
+                  "def test_cents(amount, cents):\n    assert to_cents(amount) == cents\n")
         self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
 
     def test_a_unittest_message_is_not_an_expected_value(self):
