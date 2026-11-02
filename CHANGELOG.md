@@ -4,6 +4,33 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **An answer Hermes sends late no longer acts on what the person moved on
+  to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s
+  draft, an alias) that arrives after a session switch is dropped with a
+  notice instead of running in the new session, and its `command.dispatch`
+  fallback is not sent there. Output it prints is still shown, a `/branch` it
+  made is not switched to, a side task stays the left session's, and images
+  typed with it come back to the composer. A prefill or a rewind pick that
+  lands on a draft typed meanwhile puts that draft in the session's history
+  first and says Up brings it back. The `/model` and `/rewind` lists do not
+  open during a turn that started while they were on their way (the busy
+  notice is said instead), nor over another open picker. Asking for the same
+  list twice in a session sends one call, a list still out for a session left
+  never holds up the new one, `/model --refresh` while a bare `/model`'s list
+  is out says one is on its way, and a second answer never resets the open
+  picker. While a list is on its way the slot says `waiting for Hermes…`. A
+  late `/model <name>` answer for a session already left says nothing in the
+  new one. Keys always go to the picker the screen draws. An approval or
+  question arms only after a quiet gap with no key, so a person still typing
+  when it opens answers nothing. What they type, and their edits to it
+  (Backspace, Delete, Left, Right, Home, End, Ctrl+A/E/U/K/W), go on into the
+  field they were typing in, the tell field too, and a path-shaped paste is
+  still a drop. A key that would send, interrupt, complete or walk history
+  does nothing then, and nothing is typed while a mouse report may still
+  arrive. A Shift+Tab approvals switch Hermes never answered no longer leaves
+  Shift+Tab dead: accept is shown as possibly on, and the next Shift+Tab
+  sends an explicit off.
+
 - **`omh` says what it waits for while the Hermes gateway restarts.** The
   launch waited for the gateway and for the session before drawing
   anything, so a busy or restarting gateway left the shell silent for up to a
