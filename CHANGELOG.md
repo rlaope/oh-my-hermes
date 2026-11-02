@@ -4,6 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A same-size rewrite in one clock tick no longer hides from the round-end
+  check.** The workspace index kept each Python file's modification time and
+  size. A `sed`, `execute_code` or delegated child that rewrote a file at the
+  same size within one tick of the filesystem's clock (about 16 ms on
+  Windows) left both unchanged, so the edit went unseen and the check was
+  skipped. A file modified within two seconds of the index is now also indexed
+  by a digest of its bytes and compared by content. This was also why two
+  `test_consistency_trigger` tests failed now and then on Windows CI.
+
 - **An answer Hermes sends late no longer acts on what the person moved on
   to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s
   draft, an alias) that arrives after a session switch is dropped with a
