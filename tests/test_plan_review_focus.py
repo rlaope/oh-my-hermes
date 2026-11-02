@@ -48,8 +48,8 @@ PLAN_TASK_SHAPE_TOKENS = (
     "the ids it depends on",
     "the files it may write",
     "its done check",
-    # dag-ulw VERIFY runs a command, so a code task's done check is one or names one
-    "for a code task, a command or one named - a test, a gate, or a grep for the signature",
+    # dag-ulw VERIFY runs a command, so a code task's done check is a literal command
+    "for a code task, a command with the result that counts as passing - the test's run command, a gate, or a grep for the signature",
     "a task that is not code may keep an observable check",
     # dag-ulw refuses a shared write scope unless one node lists the other
     # directly (dag_core.shared_scope_pairs); an order through a third does not count

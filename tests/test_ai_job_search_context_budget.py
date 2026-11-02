@@ -225,7 +225,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then plan's done check is a command or names one for a code task;
         # only plan moves, and main's producer gives the previous pin
         # 2f7f10cca0591d057e137b6a697cee02a77858695561d57043b0e26ed592b27c.
-        self.assertEqual(_digest(legacy_hashes), '020c6213e0f82ed2939375c4067cf8a0067c7d3c75d298d80080ce3d6ff7b992')
+        self.assertEqual(_digest(legacy_hashes), '52744725ec2b2ef602498d2da43ad02733857604efb0e28ea6686aa99e43f44c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

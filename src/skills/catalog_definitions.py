@@ -154,7 +154,7 @@ _PLAN_AMBITION_CHECK = (
 # executor needs for each task. The Hermes line adds the `dag-ulw` mapping,
 # which only the Hermes projection ships.
 _PLAN_TASK_SHAPE = (
-    "When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above; for a code task, a command or one named - a test, a gate, or a grep for the signature - while a task that is not code may keep an observable check); when two tasks write the same file, one lists the other directly among its dependencies, since an order through a third task does not count."
+    "When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above; for a code task, a command with the result that counts as passing - the test's run command, a gate, or a grep for the signature - while a task that is not code may keep an observable check); when two tasks write the same file, one lists the other directly among its dependencies, since an order through a third task does not count."
 )
 
 # Shared by ralplan's Hermes quality_bar, its portable override, and plan's
