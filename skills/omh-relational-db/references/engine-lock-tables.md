@@ -52,7 +52,7 @@ Every step carries its statement, the lock it takes and for how long, its timeou
 | Huge append-only table ordered by time | BRIN |
 | Query touches a known subset | partial index with that `WHERE` |
 | Query reads few columns | covering index (`INCLUDE`) for an index-only scan |
-| Keyset (cursor) pagination: `WHERE (sort_col, id) > ($1, $2) ORDER BY sort_col, id LIMIT n` | B-tree on the equality-filter columns first, then the sort columns in sort direction, then the unique tie-breaker; the plan shows an index scan with no sort step. Mixed sort directions need the index to match them and the predicate written as `OR` terms, because a row comparison assumes one direction |
+| Keyset (cursor) pagination: `WHERE (sort_col, id) > ($1, $2) ORDER BY sort_col, id LIMIT n` | B-tree on the equality-filter columns first, then the sort columns in sort direction, then the unique tie-breaker; the plan shows an index scan with no sort step. Mixed sort directions need the index to match them and the predicate written as `OR` terms, because a row comparison assumes one direction. On MySQL write the expanded `OR` form even for a single direction, because an equality prefix followed by a row comparison uses only the prefix columns of the index; check that the plan's `key_len` and range cover the sort columns, not only that there is no filesort |
 
 Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build.
 
@@ -72,13 +72,14 @@ Sections 1 and 2 cover the locks DDL takes. These rules cover two transactions w
 | --- | --- | --- |
 | Default isolation | `READ COMMITTED` | `REPEATABLE READ` |
 | Serialization failure | SQLSTATE `40001`, at `REPEATABLE READ` and `SERIALIZABLE` | not raised at the default level; a plain `SELECT` reads an old snapshot while `UPDATE` sees the latest row |
+| Rollback scope after an error | any error aborts the whole transaction; only a savepoint taken before the statement lets the transaction continue | depends on the error; see the two rows below |
 | Deadlock | SQLSTATE `40P01` | error 1213 (SQLSTATE `40001`); the whole transaction is rolled back |
-| Lock wait timeout | `lock_timeout` raises SQLSTATE `55P03` | error 1205; by default only the statement is rolled back, not the transaction |
+| Lock wait timeout | `lock_timeout` raises SQLSTATE `55P03`; the transaction is aborted | error 1205; by default only the statement is rolled back, so either retry that statement or `ROLLBACK` before retrying the whole transaction |
 | Upsert | `INSERT ... ON CONFLICT (cols) DO UPDATE` / `DO NOTHING`, with a unique index matching the conflict target | `INSERT ... ON DUPLICATE KEY UPDATE`, which fires on any unique key; with more than one unique key the row it updates is ambiguous |
 | Queue table | `SELECT ... FOR UPDATE SKIP LOCKED` (9.5+) | `SELECT ... FOR UPDATE SKIP LOCKED` (8.0+) |
 
 - **Read-modify-write takes the row lock first.** Read with `SELECT ... FOR UPDATE`, or move the arithmetic into the `UPDATE` itself (`SET qty = qty - $1 WHERE id = $2 AND qty >= $1`) and check the affected row count. A version column compared in the `WHERE` clause works without holding a lock across the read.
 - **A check-then-insert is a race.** Insert under the unique constraint and handle the violation, or use the upsert row above. Never select first and insert if absent.
 - **Lock rows in one order.** Two transactions that lock the same rows in different orders deadlock. Lock in a fixed order, for example `ORDER BY id` in the `FOR UPDATE` query, and lock parents before children everywhere.
-- **Retry the whole transaction, with a bound.** A serialization failure or a deadlock is retried by re-running the transaction from its start, with backoff and a maximum attempt count; retrying the failed statement alone runs it without the locks and effects of the statements before it, which the rollback already undid. Name the error codes that are retried; every other error is not.
+- **Retry the whole transaction, with a bound.** A serialization failure or a deadlock is retried by re-running the transaction from its start, with backoff and a maximum attempt count; retrying the failed statement alone runs it without the locks and effects of the statements before it, which the rollback already undid. On PostgreSQL every error aborts the transaction, so the retry starts with `ROLLBACK` unless a savepoint was taken before the statement. A MySQL lock wait timeout (1205) leaves the transaction open: retry that statement, or `ROLLBACK` first and retry the whole transaction, never resume as if nothing failed. Name the error codes that are retried; every other error is not.
 - **Keep the transaction short.** No network call, user wait, or model call happens while a transaction holds row locks.

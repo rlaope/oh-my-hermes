@@ -232,7 +232,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # relational-db's concurrency and non-transactional-DDL lines; only
         # backend and relational-db move, and main's pin before it is
         # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
-        self.assertEqual(_digest(legacy_hashes), '1ff8a13de651e0f8b17a558e3140bab12d5f3d20b5310eb78279a7e7996279ed')
+        # Its review round (webhook receipt vs job transaction, the cursor
+        # sections pointer) moves backend only.
+        self.assertEqual(_digest(legacy_hashes), '88f9738b08088b947d4d18c2baa92a2f5443d099d4e0b3062593977057dba4c0')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
