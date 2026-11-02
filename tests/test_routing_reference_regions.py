@@ -5,6 +5,7 @@ from typing import ClassVar
 import unittest
 
 from omh.plugin_bundle.omh.awareness import awareness_route_hint
+from omh.plugin_bundle.omh.command_verb import leads_with_code_edit
 from omh.routing.chat import explicit_skill_invocation, public_chat_route_payload, route_chat_message
 from omh.routing.intent import classify_workflow_intent
 from omh.routing.policy import explicit_skill_invocation as policy_invocation
@@ -150,6 +151,31 @@ class RoutingReferenceRegionTests(unittest.TestCase):
                 self.assertFalse(intent.explicit_execution)
                 self.assertEqual(intent.execution_cues, ())
                 self.assertNotIn("workflow_marker", intent.structural_cues)
+
+    def test_korean_execution_cue_matches_whole_syllables_only(self) -> None:
+        # The fold splits Hangul into jamo, where 보내 is a prefix of the past
+        # tense 보냈: "OMH가 ... 보냈어" reports what OMH did (#2455 follow-up).
+        for message in ("이 PR codex로 보내줘", "요약해서 팀 채널로 보내", "결과를 보내서 공유해줘", "팀 채널로 보낼 수 있을까요?", "이거 보낼래?"):
+            with self.subTest(message=message):
+                self.assertIn("보내", classify_workflow_intent(message).execution_cues)
+        for message in ("OMH가 내 메시지를 code-review로 보냈어", "어제 보낸 메시지를 찾아줘"):
+            with self.subTest(message=message):
+                self.assertNotIn("보내", classify_workflow_intent(message).execution_cues)
+
+    def test_tool_lead_counts_as_a_code_edit_only_before_an_edit_verb(self) -> None:
+        # "using OMH, <edit>" and migrate / refactor / rewrite open a code edit
+        # for the wide reading only (#2455 follow-up); the report reader keeps
+        # the narrow set, so "Migrate the DB was all I asked, but OMH chose
+        # ..." stays a report (#2485 final review).
+        for message in ("using omh, refactor the parser", "with omh, rename the loader", "omh: migrate the cache"):
+            with self.subTest(message=message):
+                self.assertTrue(leads_with_code_edit(message, wide=True))
+        for message in ("using omh, explain the parser", "with omh, summarize the module", "with the omh router, fix it"):
+            with self.subTest(message=message):
+                self.assertFalse(leads_with_code_edit(message, wide=True))
+        for message in ("migrate the db was all i asked", "rewrite this paragraph, i typed", "using omh, rename the loader"):
+            with self.subTest(message=message):
+                self.assertFalse(leads_with_code_edit(message))
 
     def test_direct_invocation_keeps_precedence_and_apostrophes(self) -> None:
         for message in (

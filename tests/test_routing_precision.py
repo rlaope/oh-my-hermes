@@ -90,7 +90,11 @@ class RoutingPrecisionTests(unittest.TestCase):
         # and so do two throwaway OMH test messages and the user's own router,
         # two tasks on what OMH selected or picked, and a Korean test request,
         # and eight messages where a command follows what OMH chose.
-        self.assertEqual(payload["summary"]["case_count"], 1327)
+        # #2485: find-out tasks after what OMH picked, an OMH terminology
+        # loader migration, Korean messages with "OMH가" that read as on main,
+        # OMH ignoring files, and a filler adverb, a why-question about a
+        # parser and "Hermes with OMH" before a task stay off it too.
+        self.assertEqual(payload["summary"]["case_count"], 1353)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -169,7 +173,9 @@ class RoutingPrecisionTests(unittest.TestCase):
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
         # are file tasks (+2), and so is opening the files OMH selected (+1).
-        self.assertEqual(payload["summary"]["file_lookup_count"], 15)
+        # Finding the unused keys of the config OMH picked, asked in Korean, is
+        # a file lookup (+1), and so is the English one with a courtesy tail (+1).
+        self.assertEqual(payload["summary"]["file_lookup_count"], 17)
         self.assertEqual(payload["summary"]["overroute_count"], 0)
         self.assertEqual(payload["summary"]["catalog_picker_count"], 0)
         self.assertEqual(payload["summary"]["generic_ack_count"], 0)
@@ -238,7 +244,13 @@ class RoutingPrecisionTests(unittest.TestCase):
         # reports or meta questions keep workflow-learning. A later command keeps
         # release-cut, and two more reports keep workflow-learning. A command
         # after "then" keeps command-operator, and "list the reasons" is a report.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1225)
+        # Three reports the classifier missed (a Korean 보냈어, OMH ignoring the
+        # request, OMH "apparently" choosing) reach workflow-learning, and a
+        # Korean casual "고쳐줘?" after what OMH picked keeps the coding lane,
+        # a Korean "정리해 둬" keeps toolbelt-readiness, OMH missing a test
+        # before an add-tests request keeps ultrawork, and two reports quoting
+        # the user's own migrate / rewrite ask reach workflow-learning.
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1233)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

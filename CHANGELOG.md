@@ -20,6 +20,42 @@ All notable changes will be documented here.
   the audit; on main they asked about codebase onboarding, the CTO loop, or
   unrelated lanes. The bare word "architecture" still scores nothing for it.
 
+- **The OMH TUI rides out a slow or busy Hermes gateway.** Its connection to
+  the shared gateway sent websockets' default keepalive ping, so a gateway
+  whose event loop was busy for about 40 s (a long `/compress`, a heavy
+  turn) had a healthy connection closed under it. The TUI then said the
+  gateway exited, marked the running turn lost, and gave the resume 30 s
+  before leaving. Now:
+  - The connection sends no keepalive ping, as Hermes' own loopback
+    connections do not. During a turn, once nothing has come from the
+    gateway for 45 s and no tool is running (Hermes sends nothing while a
+    terminal tool runs), the working row says "no word from Hermes' gateway
+    for N s"; the TUI closes nothing.
+  - A connection that does drop says "the connection to Hermes' gateway
+    dropped; the turn may still be running". The resume reads whether the
+    turn still runs (or Hermes has started it): one that
+    does goes on with its clock and any stop already asked, and one that
+    ended meanwhile says so. A gateway that started again (a new authority
+    epoch) says the turn was lost.
+  - The launch's and a respawn's session calls wait 120 s, as Hermes' own
+    TUI and the TUI's in-session calls do, not 30 s.
+  - `omh --resume <id>` that Hermes refuses (`not_found`,
+    `permission_denied`, ...) says why and exits 1; a session Hermes keeps
+    for another app is to be opened where it was started. It used to open
+    Hermes' own TUI, which starts a new session in its place without a word.
+  - `session.replay_gap`, sent when the gateway stops sending this screen a
+    session's events because it fell behind, resumes the session, as
+    Hermes' own TUI does. Before, the turn spun with no end. The turn's own
+    events that arrive before the answer win over it. A resume refused or
+    unanswered closes the turn and holds the queue; one that names a newer
+    id for the session moves the screen to it and closes the turn shown.
+  - `skills.changed` asks for the command catalog again, once per burst, so
+    a skill installed from another terminal reaches completion and `/help`.
+  - A turn Hermes interrupted itself says "Hermes interrupted this turn;
+    send `continue` to go on" instead of "Interrupted.". A stop the person
+    asked for (Esc, `/stop`, a prompt in busy mode `interrupt`) still says
+    "Interrupted.".
+
 - **`/resume` always answers, and `omh --resume` opens the picker.** A bare
   `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
   list, which during a turn can take a while. Now `Loading sessions…` stands
@@ -48,6 +84,33 @@ All notable changes will be documented here.
   has the session it opened closed again. A second `/resume`
   while the list is out sends no second call, and an answer that comes while
   the picker is open no longer resets its highlight or filter.
+
+- **Reports on OMH's routing reach workflow learning, and tasks that only
+  name OMH do not.** "OMH가 왜 내 메시지를 code-review로 보냈어?" dispatched
+  the code-review it names, because the fold reads the past tense 보냈 as the
+  request cue 보내; a Korean execution cue now matches whole syllables.
+  Three English report shapes reach workflow learning: an adverb between OMH
+  and its verb ("OMH apparently chose ..."), a why-question about what OMH
+  did ("Show me why OMH picked them"), and OMH ignoring the request. The
+  other way round, "OMH picked the config. Find out which keys are unused"
+  no longer gets the ~1.1k-char workflow-learning hint: "find out" with a
+  question of its own is the user's task when what OMH picked is a concrete
+  artifact (by its head noun, never a catalog skill name), while a bare
+  "find out why", a question about the choice itself, or a choice made for
+  the user's own message still reads as a report. Nor does a code edit led
+  by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
+  module; a report that quotes such an ask ("Migrate the cache was all I
+  asked, but OMH chose ...") stays a report. 9 of the 12 router misses #2455 listed are fixed on the route
+  hint. The other 3 are Korean reports that name OMH with a particle
+  ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"); reading that form as OMH was
+  tried for seven review rounds and dropped, because each closed list it
+  needed let coding requests through. The particle mention itself gives no
+  routing context, as before; the 보내 fix still changes Korean reports that
+  use 보냈. "OMH ignored ..." is a report only when OMH ignored the user's
+  own ask or a routing target, not a file or a setting. Measured offline on
+  the earlier held-out sets and eleven fresh sets frozen for this change
+  (1,083 scored messages, hint and chat route), no message the previous
+  router answered right is answered wrong.
 
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path

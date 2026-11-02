@@ -9487,6 +9487,235 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "workflow-learning",
     ),
+    # #2455 follow-up: "find out" after a neutral setting is the user's task,
+    # decided by the clause before it (the #2454 reviewer's design); OMH
+    # vocabulary under a code-edit lead is what the edit acts on; and the
+    # Korean particle on the product name does not make a setting a report.
+    # The route hint gave each of these workflow-learning on origin/main; the
+    # chat route never named it, and these pin that it still does not.
+    RoutingPrecisionCase(
+        "omh-picked-config-then-find-out-is-a-task",
+        "OMH picked the config, find out which keys are unused, is a task, not a report",
+        "OMH picked the config. Find out which keys are unused",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "omh-migrate-terminology-loader-is-a-coding-request",
+        "OMH: migrate the terminology loader is a coding request, not workflow meta discussion",
+        "OMH: migrate the terminology glossary JSON loader to use pathlib",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "korean-omh-picked-config-then-find-keys-is-a-task",
+        "A Korean request after what OMH picked is a task, not a report on OMH's routing",
+        "OMH가 설정 파일을 골랐어. 안 쓰는 키가 뭔지 찾아줘",
+        "answer_file_lookup",
+        "file_or_text",
+        "workflow-learning",
+    ),
+    # #2485 final review: OMH ignoring a file or a setting is no routing
+    # report; only ignoring the user's own ask or a routing target is.
+    RoutingPrecisionCase(
+        "omh-ignored-an-ignore-file-is-not-a-report",
+        "OMH ignoring an ignore file is not a report on OMH's routing",
+        "OMH ignored the .eslintignore file",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "omh-ignored-my-path-aliases-is-not-a-report",
+        "OMH ignoring the user's tsconfig path aliases is not a report on OMH's routing",
+        "OMH ignored my tsconfig path aliases",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    # A filler adverb, a why-question about something else, and "Hermes with
+    # OMH" before a setting and the user's own find-out task.
+    RoutingPrecisionCase(
+        "omh-apparently-picked-config-then-find-out-is-a-task",
+        "OMH apparently picked the config, find out which keys are unused, is a task",
+        "OMH apparently picked the staging config. Find out which keys are unused",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "why-question-about-a-parser-is-not-an-omh-report",
+        "Show me why the parser picked an encoding is not a report on OMH's routing",
+        "Show me why the parser picked the wrong encoding",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "hermes-with-omh-picked-config-then-find-out-is-a-task",
+        "Hermes with OMH picked the config, find out which keys are unused, is a task",
+        "Hermes with OMH picked the staging config; find out which keys are unused",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    # #2485: Korean statements and requests with "OMH가" / "OMH는" that an
+    # earlier head of the PR read as reports on OMH's routing: a routing word
+    # as a code noun, a routing verb in a coding sense, 결과 / 이유 statements,
+    # 왠지, a later request in an unlisted ending, and English praise after the
+    # particle. The particle mention gives no routing context, as on main.
+    RoutingPrecisionCase(
+        "korean-routing-word-as-code-noun-is-not-a-report",
+        "A routing word inside a code noun (레인 감지 코드) is not a report on OMH's routing",
+        "OMH가 레인 감지 코드를 이상하게 바꿨어",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-routing-verb-in-a-coding-sense-is-not-a-report",
+        "OMH starting a server on an odd port (띄웠어) is not a report on OMH's routing",
+        "OMH가 테스트 서버를 엉뚱한 포트로 띄웠어",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-result-statement-is-not-a-report",
+        "OMH tabulating benchmark results (결과) is not a report on OMH's routing",
+        "OMH가 성능 측정 결과를 표로 정리했어",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-reason-statement-is-not-a-report",
+        "OMH writing down why it chose a design (이유) is not a report on OMH's routing",
+        "OMH가 이 설계를 고른 이유를 문서에 남겼어",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-somehow-praise-is-not-a-report",
+        "왠지 is not 왜: praise for OMH's review is not a report on OMH's routing",
+        "OMH가 왠지 오늘따라 리뷰를 잘해",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-report-then-unlisted-request-for-other-work-is-a-task",
+        "A routing report, then other work in an unlisted request ending, is a task",
+        "OMH가 엉뚱한 스킬을 골랐어. 그건 됐고 결제 폼 검증 로직 짜 주실 수 있을까요?",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "english-praise-after-particle-is-not-a-report",
+        "English praise after the particle is not a report on OMH's routing",
+        "OMH가 picked a clean module layout, nice",
+        "answer_clarification",
+        "",
+    ),
+    # #2485: a complaint about OMH's coding work, a deferred complaint, a word
+    # holding 원인, and an English choice before a Korean request, each after
+    # "OMH가". d4fdeeb56 dispatched workflow-learning on the first, third and
+    # fourth; they read as on main.
+    RoutingPrecisionCase(
+        "korean-omh-coding-work-complaint-then-code-request-is-a-task",
+        "A Korean complaint about OMH's coding work, then a code request, is a task",
+        "OMH가 쿼리를 잘못 짰어. 라우터 테스트 다시 써 줘",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "korean-deferred-routing-complaint-then-other-work-is-a-task",
+        "A Korean routing complaint put off for later, then other work, is a task",
+        "OMH가 레인을 잘못 고른 건 나중에 보고, 지금은 장바구니 API 테스트 짜줘",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "korean-word-containing-cause-syllables-is-not-a-report",
+        "회원인증 is not 원인: OMH opening a member-auth router file is not a report",
+        "OMH가 회원인증 라우터 파일을 열었어",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "english-choice-after-particle-then-korean-request-is-a-task",
+        "An English choice after the particle, then a Korean request, is a task",
+        "OMH가 chose the parser module. 라우팅 규칙 정리해줘",
+        "answer_clarification",
+        "",
+        # The shortlist names workflow-learning as a candidate on origin/main
+        # too; the pin is that the route asks instead of dispatching it.
+    ),
+    # #2485: a request in an unlisted ending after a setting sentence with
+    # "OMH가" reads as on main (76adc3fd9 dispatched workflow-learning on both).
+    RoutingPrecisionCase(
+        "korean-must-polish-routing-rules-after-setting-is-a-task",
+        "A Korean 다듬어야 돼 request on routing rules after a setting sentence is a task",
+        "OMH가 레포를 열었어. 라우팅 규칙 다듬어야 돼",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-would-like-routing-table-split-after-setting-is-a-task",
+        "A Korean 주면 좋겠어 request on a routing table after a setting sentence is a task",
+        "OMH가 저장소를 열었어. 라우팅 테이블 나눠 주면 좋겠어",
+        "answer_clarification",
+        "",
+    ),
+    # #2485: a Korean request after a setting sentence with "OMH가" /
+    # "OMH는"; 라우터 / 라우팅 is the user's code, as on main. 666f778bb
+    # dispatched workflow-learning on each of these.
+    RoutingPrecisionCase(
+        "korean-casual-look-at-routing-rules-after-setting-is-a-task",
+        "A Korean 손 좀 봐줘? request on routing rules after what OMH picked is a task",
+        "OMH가 저장소를 골랐어. 라우팅 규칙 손 좀 봐줘?",
+        "answer_clarification",
+        "",
+        # The shortlist names workflow-learning as a candidate on origin/main
+        # too; the pin is that the route asks instead of dispatching it.
+    ),
+    RoutingPrecisionCase(
+        "korean-polite-touch-up-router-code-after-newline-is-a-task",
+        "A Korean polite 손봐 주세요 request on router code after a line break is a task",
+        "OMH가 브랜치를 열었어.\n라우터 코드 손봐 주세요",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    RoutingPrecisionCase(
+        "korean-plain-update-routing-table-after-setting-is-a-task",
+        "A Korean plain 업데이트 좀 해 request on a routing table after a setting is a task",
+        "OMH는 준비됐어. 라우팅 테이블 업데이트 좀 해",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
+    # A courtesy word after a find-out with its own question keeps it the
+    # user's task; only a bare question takes it as a tail.
+    RoutingPrecisionCase(
+        "find-out-task-with-courtesy-tail-is-a-task",
+        "Find out which keys are unused, please, after what OMH picked is a task",
+        "OMH picked the config file. Find out which keys are unused please",
+        "answer_file_lookup",
+        "file_or_text",
+        "workflow-learning",
+    ),
+    # #2485: a Korean edit request after a setting sentence with "OMH가"
+    # reads as on main; the PR's first head dispatched workflow-learning here.
+    RoutingPrecisionCase(
+        "korean-edit-request-after-setting-sentence-is-a-coding-request",
+        "A Korean migration request after what OMH picked is a coding request, not workflow meta discussion",
+        "OMH가 라우터 파일을 골랐어. 라우터 테스트 마이그레이션해줘",
+        "answer_clarification",
+        "",
+        "workflow-learning",
+    ),
 )
 
 
@@ -12264,6 +12493,95 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "omh-picked-code-review-for-a-question-reaches-workflow-learning",
         "OMH picking code-review when the user only asked a question is a report on OMH's routing",
         "OMH picked code-review, and I only asked a question",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    # #2455 follow-up: reports the classifier missed. On origin/main the
+    # Korean one dispatched the code-review it names (보냈어, "sent", read as
+    # the execution cue 보내), and the other two asked a clarifying question.
+    # #2485 final review: a report that quotes the user's own ask, which
+    # opens with an edit verb, stays a report.
+    RoutingInterventionCase(
+        "quoted-migrate-ask-then-omh-chose-reaches-workflow-learning",
+        "Migrate was all I asked, but OMH chose a workflow: a report on OMH's routing",
+        "Migrate the cache was all I asked, but OMH chose ralplan. why",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    RoutingInterventionCase(
+        "quoted-rewrite-ask-then-omh-routed-reaches-workflow-learning",
+        "Rewrite was all I wanted, and OMH routed it to code-review: a report on OMH's routing",
+        "Rewrite my cover letter was all I wanted, and OMH routed it to code-review, why?",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    # #2485: Korean requests after "OMH가 / OMH는" keep origin/main's lane:
+    # a casual "고쳐줘?" (a2d8bf6c2 dispatched workflow-learning), an unlisted
+    # ending ("해 둬"), and a request after OMH missing a test (d4fdeeb56
+    # dispatched workflow-learning).
+    RoutingInterventionCase(
+        "korean-omh-missed-a-test-then-add-tests-keeps-coding-lane",
+        "A Korean note that OMH missed a test, then a request to add tests, keeps the coding lane",
+        "OMH가 테스트를 누락했어. 라우팅 핸들러 테스트 추가해줘",
+        "dispatch",
+        "ultrawork",
+        "present_plan",
+        "plan",
+        "ultrawork",
+    ),
+    RoutingInterventionCase(
+        "korean-leave-it-tidied-router-config-after-setting-keeps-toolbelt",
+        "A Korean 정리해 둬 request on router settings after a setting sentence keeps its lane",
+        "OMH는 붙여 놨어. 라우터 설정 정리해 둬",
+        "dispatch",
+        "toolbelt-readiness",
+        "prepare_toolbelt_readiness",
+        "toolbelt_readiness",
+        "toolbelt-readiness",
+    ),
+    RoutingInterventionCase(
+        "korean-casual-edit-question-after-setting-keeps-coding-lane",
+        "A Korean casual edit request ending in a question mark after what OMH picked keeps the coding lane",
+        "OMH가 라우터 파일을 골랐어. 라우터 테스트 고쳐줘?",
+        "dispatch",
+        "ultrawork",
+        "present_plan",
+        "plan",
+        "ultrawork",
+    ),
+    RoutingInterventionCase(
+        "korean-omh-sent-my-message-to-code-review-reaches-workflow-learning",
+        "A Korean question on why OMH sent a message to code-review is a report on OMH's routing",
+        "OMH가 왜 내 메시지를 code-review로 보냈어?",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    RoutingInterventionCase(
+        "omh-ignored-my-request-reaches-workflow-learning",
+        "OMH ignoring the request and using no workflow is a report on OMH's routing",
+        "OMH ignored my request and didn't use any workflow; why?",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
+    RoutingInterventionCase(
+        "omh-apparently-chose-ultrawork-reaches-workflow-learning",
+        "OMH apparently choosing ultrawork for a typo is a report on OMH's routing",
+        "OMH apparently chose ultrawork for a typo, can we look at why",
         "dispatch",
         "workflow-learning",
         "audit_learning_readiness",
