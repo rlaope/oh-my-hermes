@@ -4,6 +4,32 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI rides out a slow or busy Hermes gateway.** Its connection to
+  the shared gateway sent websockets' default keepalive ping, so a gateway
+  whose event loop was busy for about 40 s (a long `/compress`, a heavy
+  turn) had a healthy connection closed under it. The TUI then said the
+  gateway exited, marked the running turn lost, and gave the resume 30 s
+  before leaving. Now:
+  - The connection sends no keepalive ping, as Hermes' own loopback
+    connections do not.
+  - A connection that does drop says "the connection to Hermes' gateway
+    dropped; the turn may still be running". The resume reads whether the
+    turn still runs: one that does goes on, and one that ended meanwhile
+    says so. Neither is called lost.
+  - The launch's and a respawn's session calls wait 120 s, as Hermes' own
+    TUI and the TUI's in-session calls do, not 30 s.
+  - `omh --resume <id>` that Hermes refuses (`not_found`,
+    `permission_denied`, ...) says why and exits 1. It used to open Hermes'
+    own TUI, which starts a new session in its place without a word.
+  - `session.replay_gap`, sent when the gateway stops sending this screen a
+    session's events because it fell behind, resumes the session, as
+    Hermes' own TUI does. Before, the turn spun with no end.
+  - `skills.changed` asks for the command catalog again, so a skill
+    installed from another terminal reaches completion and `/help`.
+  - A turn Hermes interrupted itself, not the person's Esc, says "Hermes
+    interrupted this turn; send `continue` to go on" instead of
+    "Interrupted.".
+
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before

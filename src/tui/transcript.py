@@ -147,6 +147,9 @@ TITLE_MARKS = (
 FIRST_WORD_CHARS = 200
 
 INTERRUPTED_NOTICE = "Interrupted."
+# An interrupted turn the person did not stop (`Transcript.hermes_interrupted`): Hermes ended it itself, as when the
+# session's lease was lost (Hermes #142161), and the person may want it to go on.
+HERMES_INTERRUPTED_NOTICE = "Hermes interrupted this turn; send `continue` to go on."
 FAILED_NOTICE = "The turn ended with an error."
 # The first row a full redraw prints when `retake_tail` left the session's earlier blocks out; once the cap
 # below has dropped blocks, /history no longer holds them all, and the row says how many it does.
@@ -1334,6 +1337,9 @@ class Transcript:
         self.status = ""  # the last status.update text of the running turn; "" when none
         self.moa = ""  # a MoA turn's progress (`MoA: refs 2/3`), added to the working row; "" when none
         self.running = False
+        # The app says, before each `message.complete`, whether it did not ask for the stop an `interrupted` status
+        # reports (`App.interrupting`): then Hermes stopped the turn, and the notice says so.
+        self.hermes_interrupted = False
         self.details_expanded = False
         self._clock = clock
         self._waits: list[tuple[float, float]] = []  # questions' waits on the person that ended: (began, ended)
@@ -1788,7 +1794,8 @@ class Transcript:
             self._append(AssistantBlock(text))
         self._close_live()
         if status == "interrupted":
-            self._append(NoticeBlock(INTERRUPTED_NOTICE, NOTICE_WARN))
+            self._append(NoticeBlock(HERMES_INTERRUPTED_NOTICE if self.hermes_interrupted else INTERRUPTED_NOTICE,
+                                     NOTICE_WARN))
         if status == "error":
             self._append(NoticeBlock(error.strip() or FAILED_NOTICE, NOTICE_ERROR))
         warning = as_text(payload.get("warning")).strip()

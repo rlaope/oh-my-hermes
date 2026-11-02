@@ -6,11 +6,13 @@ settled before the first byte is drawn, and each such failure exits through
 `request_fallback` (the file `omh` named, then `FALLBACK_EXIT`), so `omh`
 opens Hermes' own terminal instead: a terminal that cannot run the TUI, a
 gateway that does not start, and a session call (create or resume) this
-Hermes refuses or no longer understands. The busy mode and the command
-catalog are asked for without waiting; drift in either is met in the loop,
-as drift in any call is. An attach hand-off is refused with exit 1 and a
-line naming `hermes --tui --resume <id>` (0 would make `omh` print a resume
-hint for a session this TUI never opened). SIGTERM and SIGHUP leave through
+Hermes refuses or no longer understands. A resume Hermes refuses as itself
+(not_found, permission_denied, ...) is said and exits 1 instead: Hermes'
+own TUI would open a new session in its place without a word. The busy
+mode and the command catalog are asked for without waiting; drift in either
+is met in the loop, as drift in any call is. An attach hand-off is refused
+with exit 1 and a line naming `hermes --tui --resume <id>` (0 would make
+`omh` print a resume hint for a session this TUI never opened). SIGTERM and SIGHUP leave through
 `SystemExit(128 + signum)`, so the terminal is restored and the gateway reaped
 as on any other exit.
 
@@ -655,6 +657,26 @@ RESPAWNED_NOTICE = "Resumed session {session} on a new Hermes gateway."
 RESPAWN_LEFT_REASON = "you left while the Hermes gateway was starting again"
 LEAVE_CHARS = ("c", "d")  # with Ctrl, read while a respawn waits: the person leaves (`App._respawn_cancel`)
 TURN_LOST_NOTICE = "The running turn was lost when the Hermes gateway exited; it was not sent again."
+# The attach child's connection to Hermes' shared gateway ended (`gateway_attach.relay` exits 1): the gateway may still
+# be running the session's turn, so a respawn resumes the session and reads whether it still runs before saying more.
+CONNECTION_DROPPED_REASON = "the connection to Hermes' gateway dropped"
+TURN_MAY_RUN = "; the turn may still be running"
+RECONNECTED_NOTICE = "Reconnected to Hermes' gateway and resumed session {session}."
+RECONNECTED_WHY = "The connection to Hermes' gateway dropped"
+# The turn on a shared gateway that this screen stopped hearing from: the resume says it is over, or the TUI leaves.
+TURN_ENDED_UNSEEN_NOTICE = (
+    "The running turn ended while this screen was not receiving Hermes' events, so how it ended is not shown here."
+)
+TURN_LEFT_RUNNING_NOTICE = "This screen lost the running turn; Hermes may still be running it."
+# `session.replay_gap`: the shared gateway dropped this screen's subscription for falling behind and resumed nothing.
+REPLAY_GAP_REFUSED_NOTICE = (
+    "Hermes stopped sending this session's events to this screen and did not resume it ({reason}); "
+    "what it does next does not show here."
+)
+# A launch's `--resume` that Hermes refused as itself (not drift): said, and no other TUI opens a new session instead.
+RESUME_REFUSED_AT_LAUNCH = (
+    "omh: Hermes refused to resume session {session} ({code}: {message}).{sentence} Nothing was opened in its place."
+)
 QUESTION_LOST_NOTICE = "Hermes' {method} request closed unanswered: the gateway that asked has exited."
 # Between the interrupt key and the end of the turn, the working row says so in place of the spinner.
 INTERRUPTING = "interrupting…"
@@ -1924,15 +1946,18 @@ class App(ModesMixin, AgentViewMixin):
         session and naming it, because Hermes discovers project-local skills
         for the session's workspace) are answered in the loop like any call
         made during the session; until the busy mode arrives it is
-        `BUSY_QUEUE`, Hermes' own default. Raises `GatewayCallError`,
-        `GatewayTimeout` or `GatewayUnavailable` from the session call; the
-        caller turns each into `FALLBACK_EXIT`.
+        `BUSY_QUEUE`, Hermes' own default. The session call waits
+        `CALL_ANSWER_SECONDS`, as Hermes' own TUI waits for its calls. Raises
+        `GatewayCallError`, `GatewayTimeout` or `GatewayUnavailable` from the
+        session call; the caller turns each into `FALLBACK_EXIT`, except a
+        resume Hermes refused as itself (`RESUME_REFUSED_AT_LAUNCH`).
         """
         resume = self.environ.get("HERMES_TUI_RESUME", "")
         if resume:
-            result = self.client.call("session.resume", {"session_id": resume, "cols": self.size[0]})
+            result = self.client.call("session.resume", {"session_id": resume, "cols": self.size[0]},
+                                      timeout=CALL_ANSWER_SECONDS)
         else:
-            result = self.client.call("session.create", self._create_params())
+            result = self.client.call("session.create", self._create_params(), timeout=CALL_ANSWER_SECONDS)
         info = result.get("info")
         self.launch_profile = as_text(info.get("profile_name")) if isinstance(info, dict) else ""
         home = self._snapshot_home()
@@ -2595,7 +2620,9 @@ class App(ModesMixin, AgentViewMixin):
 
         The open question and the ones waiting behind it close unanswered,
         since the gateway that asked is gone; a running turn is reported lost
-        and never sent again; the queue is held as after an interrupt
+        and never sent again, except on a shared gateway, where it may still
+        run: it stays open while the resume's `running` says so, and is said
+        over otherwise; the queue is held as after an interrupt
         (`_hold_queue`). At most `RESPAWN_LIMIT` respawns in
         `RESPAWN_WINDOW_SECONDS`, each saying so; a gateway that does not start
         again, or exits before it resumed the session, uses one and the next is
@@ -2617,8 +2644,17 @@ class App(ModesMixin, AgentViewMixin):
         """
         reason, self.respawn_reason = self.respawn_reason, ""
         stored = self.stored_id
+        busy = self._busy()
+        # On a shared gateway the turn may run on without this child: it stays open until the resume says (`running`).
+        kept = busy and self.shared_gateway
+
+        def lose(why: str) -> None:
+            if kept:  # the live block goes to the scrollback as it stands
+                self.transcript.fail_turn(TURN_LEFT_RUNNING_NOTICE)
+            self._lose_gateway(why)
+
         self._close_questions_unanswered()
-        if self._busy():
+        if busy and not kept:
             self.transcript.fail_turn(TURN_LOST_NOTICE)
         self.turn_pending = self.interrupting = False
         self._lose_roster()  # they stay in the agent view, so the HUD's agents block does not take them up instead
@@ -2638,7 +2674,7 @@ class App(ModesMixin, AgentViewMixin):
             now = self.clock()
             self.respawned_at = [at for at in self.respawned_at if now - at < RESPAWN_WINDOW_SECONDS]
             if not stored or len(self.respawned_at) >= RESPAWN_LIMIT:
-                self._lose_gateway(reason)
+                lose(reason)
                 return
             self.respawned_at.append(now)
             self.transcript.add_notice(RESPAWN_NOTICE.format(
@@ -2657,18 +2693,19 @@ class App(ModesMixin, AgentViewMixin):
                 self.client = self.make_client(gateway_spawn(self.environ), first_id=first_id)
                 self.client.start(ready_timeout=respawn_ready_seconds(self.environ), cancel=self._respawn_cancel)
             except GatewayCancelled:  # `start` reaped its child
-                self._lose_gateway(RESPAWN_LEFT_REASON)
+                lose(RESPAWN_LEFT_REASON)
                 return
             except (GatewayUnavailable, GatewayCallError) as error:
                 reason = f"the new Hermes gateway did not start ({error})"
                 continue
             try:
                 result = self.client.call(
-                    "session.resume", {"session_id": stored, "cols": self.size[0]}, cancel=self._respawn_cancel
+                    "session.resume", {"session_id": stored, "cols": self.size[0]}, timeout=CALL_ANSWER_SECONDS,
+                    cancel=self._respawn_cancel,
                 )
             except GatewayCancelled:
                 self.client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
-                self._lose_gateway(RESPAWN_LEFT_REASON)
+                lose(RESPAWN_LEFT_REASON)
                 return
             except GatewayUnavailable as error:  # it exited too: the next attempt resumes the same session
                 self.client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
@@ -2676,16 +2713,54 @@ class App(ModesMixin, AgentViewMixin):
                 continue
             except (GatewayCallError, GatewayTimeout) as error:
                 self.client.close(grace=CLOSE_GRACE_SECONDS, terminate_grace=TERMINATE_GRACE_SECONDS)
-                self._lose_gateway(f"the new Hermes gateway did not resume session {stored} ({error})")
+                lose(f"the new Hermes gateway did not resume session {stored} ({error})")
                 return
             break
         self.wake = self.client.wake_fd()
         self._adopt_session(result, fallback_stored=stored)
-        self.transcript.add_notice(RESPAWNED_NOTICE.format(session=self.stored_id), NOTICE_OK)
-        self._hold_queue(RESPAWNED_WHY)
+        if kept and not self.turn_pending:  # the resume says it no longer runs: it ended while this screen was away
+            self.transcript.fail_turn(TURN_ENDED_UNSEEN_NOTICE)
+        shared = self.shared_gateway  # the same gateway, over a new connection
+        self.transcript.add_notice((RECONNECTED_NOTICE if shared else RESPAWNED_NOTICE).format(session=self.stored_id),
+                                   NOTICE_OK)
+        self._hold_queue(RECONNECTED_WHY if shared else RESPAWNED_WHY)
         self._request("config.get", {"key": "full"}, self._take_settings, self._on_settings_refused)
         self._refresh_catalog()
         self._redeliver(result.get("open_requests"))
+
+    def _resume_after_gap(self) -> None:
+        """`session.replay_gap`: the shared gateway dropped this screen's subscription for falling behind, and sends
+        nothing more for the session until it is resumed. Resume it again, as Hermes' own TUI does (`resumeById`): the
+        resume subscribes anew, and its `running` says whether the turn the screen shows is still going."""
+        sid = self.sid
+        self._request(
+            "session.resume",
+            {"session_id": self.stored_id or sid, "cols": self.size[0]},
+            lambda result: self._on_gap_resumed(sid, result),
+            lambda error: self._on_gap_resume_refused(sid, error),
+        )
+
+    def _on_gap_resumed(self, sid: str, result: dict[str, Any]) -> None:
+        """The turn shown runs on while the answer says it runs; one that ended unseen closes, and the queue goes on."""
+        if sid != self.sid:
+            return
+        running = bool(result.get("running"))
+        if self._busy() and not running:
+            if self.transcript.running:
+                self.transcript.fail_turn(TURN_ENDED_UNSEEN_NOTICE)
+            else:
+                self.transcript.add_notice(TURN_ENDED_UNSEEN_NOTICE, NOTICE_WARN)
+            self.turn_pending = False
+            self._turn_ended()
+        elif running and not self._busy():  # a turn started while the events did not arrive
+            self.turn_pending = True
+            self.busy_since = self.clock()
+
+    def _on_gap_resume_refused(self, sid: str, error: dict[str, Any]) -> bool:
+        if sid == self.sid:
+            reason = as_text(error.get("message")).strip() or "refused"
+            self.transcript.add_notice(REPLAY_GAP_REFUSED_NOTICE.format(reason=reason), NOTICE_WARN)
+        return True
 
     def _settle_lost_calls(self) -> None:
         """The calls the exited gateway never answered, settled now rather than when their wait runs out.
@@ -2776,7 +2851,11 @@ class App(ModesMixin, AgentViewMixin):
             elif isinstance(item, Response):
                 self._on_response(item)
             elif isinstance(item, GatewayExited):
-                self._gateway_gone(f"the Hermes gateway exited (code {item.returncode})", item.returncode)
+                if self.shared_gateway and item.returncode == 1:  # the attach child's connection ended, not the gateway
+                    reason = CONNECTION_DROPPED_REASON + (TURN_MAY_RUN if self._busy() else "")
+                else:
+                    reason = f"the Hermes gateway exited (code {item.returncode})"
+                self._gateway_gone(reason, item.returncode)
             if self.exit_code is not None or self.respawn_reason:
                 return
 
@@ -2823,11 +2902,17 @@ class App(ModesMixin, AgentViewMixin):
         if event.type in contract.SIDE_ANSWER_EVENTS and event.session_id != self.sid:
             self._side_answer(event.type, payload, event.session_id)  # a /bg started before a switch: never dropped
             return
+        if event.type == "skills.changed":  # gateway-wide (no session): a skill was installed or removed elsewhere
+            if self.sid:
+                self._refresh_catalog()
+            return
         if not event.type.startswith(contract.GATEWAY_SCOPED_EVENT_PREFIX) and event.session_id != self.sid:
             return
         self._watch_turn(event.type)
         if event.type == "session.info":
             self._on_session_info(payload)
+        elif event.type == "session.replay_gap":
+            self._resume_after_gap()
         elif event.type == "session.usage":
             self._take_usage(payload.get("usage"))
         elif event.type == "connection.request":
@@ -2866,6 +2951,7 @@ class App(ModesMixin, AgentViewMixin):
         else:
             if event.type == "message.complete":  # before the reply closes: a steer row goes where it went before
                 self._settle_steers_at_turn_end()
+                self.transcript.hermes_interrupted = not self.interrupting  # a stop this TUI did not ask for
             self.transcript.apply(event)
             self._track_sent_now(event.type)
             self._count_streamed(event.type, payload)
@@ -7299,6 +7385,16 @@ def _run(
     try:
         app.startup()
     except (GatewayCallError, GatewayTimeout, GatewayUnavailable) as error:
+        resume = environ.get("HERMES_TUI_RESUME", "")
+        if resume and isinstance(error, GatewayCallError) and not error.drift:
+            # Hermes refused this session as itself (not_found, permission_denied, ...): its own TUI, the fallback,
+            # would print the code and open a new session in its place without a word (Hermes #143907).
+            sentence = refusal_sentence({"code": error.code, "message": error.message})
+            _say(stderr, RESUME_REFUSED_AT_LAUNCH.format(
+                session=resume, code=error.code, message=error.message.strip() or "refused",
+                sentence=f" {sentence}" if sentence else "",
+            ))
+            return 1
         _say(stderr, f"omh: the OMH TUI could not open a Hermes session: {error}")
         return request_fallback(environ, stderr.said())
     try:
