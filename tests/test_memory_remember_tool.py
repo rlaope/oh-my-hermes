@@ -36,7 +36,7 @@ class RememberSchemaTests(unittest.TestCase):
         self.assertEqual(properties["action"]["default"], "save")
         self.assertEqual(properties["record_type"]["enum"], list(memory_tool.CAPTURE_RECORD_TYPES))
         self.assertLessEqual(len(json.dumps(schema, separators=(",", ":"))), 1200)
-        for guidance in ("without asking", "preference", "decision", "setup", "project", "One fact", "self-contained", "absolute dates", "secrets", "logs", "transcripts", "task progress", "one short line", "recall"):
+        for guidance in ("Save first", "same turn", "before other tools", "own words", "without asking", "preference", "decision", "setup", "project", "One fact", "self-contained", "absolute dates", "pasted or quoted", "secrets", "logs", "transcripts", "task progress", "current task", "one short line", "recall"):
             self.assertIn(guidance, schema["description"])
 
 
@@ -192,7 +192,7 @@ class RememberStoreTests(unittest.TestCase):
         line = self.live.system_prompt_block()
         self.assertLessEqual(len(line), 300)
         self.assertEqual(len(line.splitlines()), 1)
-        for word in ("omh_remember", "preferences", "decisions", "facts"):
+        for word in ("omh_remember", "preferences", "decisions", "facts", "same turn", "before other work"):
             self.assertIn(word, line)
         for platform, context in (("cron", "cron"), ("subagent", "subagent"), ("cli", "cron"), ("cli", "subagent")):
             with self.subTest(platform=platform, context=context):
