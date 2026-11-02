@@ -14,15 +14,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
-import shlex
 import subprocess
-import sys
 from tempfile import TemporaryDirectory
 import unittest
 
 from _local_package import load_local_package
 
 load_local_package()
+
+from _verification_python import verification_python  # noqa: E402
 
 from omh.coding.fanout import build_fanout_contract  # noqa: E402
 from omh.coding.fanout_admission import reproduction_hold_released  # noqa: E402
@@ -38,7 +38,7 @@ from omh.workflows.observation_journal import read_observation_events  # noqa: E
 
 _GOAL = "fix the value regression"
 _REPRO_SCRIPT = "tests/repro_value.py"
-_REPRO_COMMAND = f"{shlex.quote(sys.executable)} {_REPRO_SCRIPT}"
+_REPRO_COMMAND = f"{verification_python()} {_REPRO_SCRIPT}"
 _FAILING_REPRO = "raise SystemExit(1)\n"
 _PASSING_REPRO = "raise SystemExit(0)\n"
 

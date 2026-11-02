@@ -11,15 +11,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
-import shlex
 import subprocess
-import sys
 from tempfile import TemporaryDirectory
 import unittest
 
 from _local_package import load_local_package
 
 load_local_package()
+
+from _verification_python import verification_python  # noqa: E402
 
 from omh.codegraph import build_codegraph  # noqa: E402
 from omh.coding.fanout import build_fanout_contract  # noqa: E402
@@ -37,8 +37,8 @@ from omh.runtime.artifacts import append_journal_observation  # noqa: E402
 from omh.system.paths import OmhPaths  # noqa: E402
 
 _GOAL = "change the sample module"
-_RUNNER = f"{shlex.quote(sys.executable)} -m unittest"
-_PASSING_COMMAND = f"{shlex.quote(sys.executable)} -c pass"
+_RUNNER = f"{verification_python()} -m unittest"
+_PASSING_COMMAND = f"{verification_python()} -c pass"
 
 _MODULE = "def value():\n    return 1\n"
 _BROKEN_MODULE = "def value():\n    return 2\n"
