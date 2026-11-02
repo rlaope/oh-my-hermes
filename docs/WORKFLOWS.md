@@ -2891,7 +2891,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - While building, look at each change that affects what renders: after it, capture the affected surface and read the capture before the next change, for a 3D or canvas scene the default camera and each declared preset; a change not looked at is not done (`references/screenshot-loop.md`, section `During implementation`).
   - After implementation lands on a web surface, load `references/screenshot-loop.md` and require the screenshot iteration loop live-environment-first: capture the running UI at 1440/768/375px, compare against the supplied target or DESIGN.md, list every difference triaged Blocker/High/Medium/Nit with its capture attached, fix, and recapture until the difference list is empty.
   - Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.
-  - When the handoff asks for component or interaction tests, load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` and name the seam each test drives: assert through what a user perceives (role, accessible name, visible text) across the frontend_component_state_inventory/v1 states, never class names or component-internal state, and fake only the network boundary.
+  - When the handoff asks for component or interaction tests, load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` and name the seam each test drives: assert through what a user perceives (role, accessible name, visible text) across the frontend_component_state_inventory/v1 states, never class names or component-internal state, and fake only at the boundaries the shared page lists (network, clock, randomness).
   - Keep implementation, browser verification, accessibility/performance checks, visual QA, and deployment as observed-only evidence.
 - Completion checklist:
   - The target page/component, audience, primary task, references, and quality bar are named.
@@ -6733,7 +6733,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - At least three hypotheses on distinct axes were written before the first observation was chosen.
   - Each observation records which hypotheses its result eliminated.
   - The root cause cites the demonstrating observation and the observation that ruled out each rival.
-  - The fix handoff carries the reproduction as a regression test that fails before and passes after.
+  - The fix handoff carries the reproduction as a regression test that fails before and passes after, or records `regression_seam: none_correct` with the reason, with the reproduction loop observed red before the fix and green after it.
 - Recovery notes:
   - If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it.
   - If every hypothesis is eliminated, record that, widen the axes, and keep root cause unclaimed rather than promoting the last survivor.
@@ -6755,8 +6755,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - competing_hypotheses/v1 spans distinct axes -- input and state, ordering and timing, environment and build, dependency behaviour -- rather than three phrasings of one guess
   - discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates
   - root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival
-  - fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it
-  - fix_handoff/v1 names the seam the regression test drives and how it runs the pattern that produced the bug (callers, ordering, call chain); when no seam can, it records `regression_seam: none_correct` with the reason, keeps the reproduction loop as the fix's verification, and reports the missing seam as an `omh-refactor-plan` candidate instead of a shallow test that passes before and after the fix
+  - fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it, or records `regression_seam: none_correct` with the reason, with the reproduction loop observed red before the fix and green after it
+  - fix_handoff/v1 names the seam the regression test drives and how it runs the pattern that produced the bug (callers, ordering, call chain); when the pattern cannot run at any reachable seam, it records `regression_seam: none_correct` with the reason and what was tried, keeps the reproduction loop as the fix's verification, and reports the missing seam as an `omh-refactor-plan` candidate instead of a shallow test that passes before and after the fix
 - Safety rules:
   - No fix before an observed reproduction: `fix_handoff/v1` stays blocked while `reproduction_record/v1` reads not_observed, and a proposed change without one is a guess, not a fix.
   - Do not claim a reproduction, a probe result, a root cause, or a passing fix from a prepared plan.

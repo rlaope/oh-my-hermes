@@ -65,14 +65,16 @@ COUPLED_TOKENS = (
 BOUNDARY_TOKENS = (
     "Fakes Only at System Boundaries",
     "a local throwaway instance of the same engine",
-    "pass the external client in",
+    "so the wrapper's parsing, retry, and error mapping run real",
 )
 
 # A regression test with no seam that runs the bug's pattern is recorded, not
 # written shallow.
 NO_SEAM_TOKENS = (
     "regression_seam: none_correct",
-    "keep the reproduction loop as the fix's verification",
+    "First try to run the pattern at the seam you can reach",
+    "measure the test's hit rate on the pre-fix code over N runs",
+    "Keep the reproduction loop as the fix's verification",
     "omh-refactor-plan",
 )
 
@@ -107,7 +109,8 @@ BACKEND_TEST_PLAN_TOKENS = (
     "caller A requests B's id",
     "error_path_table/v1",
     "status, machine code, and envelope shape asserted together",
-    "never a different engine",
+    "dependency table in section 5 of the shared page",
+    "the stored shape is itself a contract",
     "not by querying the table",
     "Migrations run on populated data",
 )

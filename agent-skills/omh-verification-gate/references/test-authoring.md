@@ -35,7 +35,7 @@ An existing test with one of these shapes is a finding for the report, not somet
 
 These tests fail the other way: they go red when the code is restructured without any change in behavior, and they can stay green when behavior breaks. The tell is a refactor that keeps every caller's result the same and still turns the test red.
 
-- Own-module fake: the test replaces a module, class, or function the repository owns with a fake, so the code under test never runs against the real collaborator it ships with.
+- Own-module fake: the test replaces a module, class, or function the repository owns, other than the boundary adapter section 5 names, with a fake, so the code under test never runs against the real collaborator it ships with.
 - Call-count assertion: the test asserts that an internal collaborator was called, how many times, in what order, or with which arguments, instead of asserting the result a caller sees.
 - Side-channel read: the test checks a write by reading the table row, the private field, or the cache entry directly when the seam itself can read the result back. Read it back through the seam.
 
@@ -48,19 +48,21 @@ A stand-in replaces a dependency only where the process leaves the repository's 
 | Dependency | Stand-in |
 | --- | --- |
 | Code the repository owns, in process | none: it runs real |
-| A datastore | a local throwaway instance of the same engine; never a different engine whose locking, types, and constraints differ |
+| A datastore | a local throwaway instance of the same engine; never a different engine whose locking, types, and constraints differ. When the engine cannot run locally (a managed-only store, no container runtime), use the vendor's emulator and name what it does not model; when neither runs, list the test as untested with the reason |
 | A service the same team owns, across the network | an in-memory adapter that implements the same interface the production client does |
-| A third-party service | a fake at the client seam: the one module that wraps the vendor client |
+| A third-party service | a fake below the repository's wrapper (the injected transport or vendor client), so the wrapper's parsing, retry, and error mapping run real; fake the wrapper's interface only in tests of its callers |
 | Clock, randomness, generated ids | injected and pinned to fixed values |
 | Filesystem or local network | a temporary directory or a local server; a fake only when the real one cannot be made deterministic |
 
-When a boundary is hard to fake, the fix belongs in the code, not deeper in the test: pass the external client in instead of constructing it inside the function, and give each external operation its own function so a fake implements a small surface with no branching. That change has a production caller, so it is not the test-only seam question 4 rejects; name it in the handoff.
+A boundary that no stand-in can reach without patching deep inside the code is a design finding, not a test-writing problem. Change the code so the dependency arrives from outside the function that uses it, and name that change in the handoff; because production code calls it, it is not the test-only seam question 4 rejects.
 
 ## 6. When No Correct Seam Exists
 
-A regression test for a bug must drive the pattern that produced it: the two callers of a race, the call chain a fault needs, the real ordering. A correct seam is one where that pattern can run.
+A regression test earns its place only when it reproduces the conditions the bug needed, not just the function it lived in. A lost update needs two writers inside one transaction window; a fault that appears only when the retry wrapper re-enters the handler needs that re-entry. A test that drives the same code without those conditions passes on the pre-fix code and guards nothing with a fix attached.
 
-When the only reachable seam is shallower -- a single-caller unit test for a race that needs two callers, a unit test that cannot rebuild the chain that triggered the fault -- a test there passes before the fix and after it. Do not write it, and do not bend it until it happens to fail before the fix. Record `regression_seam: none_correct` with the reason, keep the reproduction loop as the fix's verification, and report the missing seam as an architecture finding (an `omh-refactor-plan` candidate). A shallow test that passes on the pre-fix code is a test that guards nothing with a fix attached.
+1. First try to run the pattern at the seam you can reach: concurrent callers released together through a barrier at an existing injection point, or the real call chain driven from its entry point instead of the innermost function.
+2. When the pattern is probabilistic, measure the test's hit rate on the pre-fix code over N runs before calling it red. "Fails before the fix" means a measured rate, and "passes after" means zero failures over enough runs to beat that rate.
+3. Only when the pattern cannot run at any reachable seam, record `regression_seam: none_correct` with the reason and the attempts that failed. Keep the reproduction loop as the fix's verification, observed red before the fix and green after it, and report the missing seam as an architecture finding (an `omh-refactor-plan` candidate). Do not write the shallow test, and do not bend it until it happens to fail before the fix.
 
 ## Attribution
 

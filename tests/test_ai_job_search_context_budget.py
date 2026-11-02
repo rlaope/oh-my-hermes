@@ -233,7 +233,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # gains the no-correct-seam expectation; only those three move, and
         # main's producer gives the previous pin
         # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
-        self.assertEqual(_digest(legacy_hashes), '54a64344bcc7611d51ed9edc3fe6f1397051a1165197c61f28b0d7b5c9b16ded')
+        # Its review round lets a none_correct regression seam pass
+        # app-debugging's fix_handoff line and checklist, and names frontend's
+        # fakes by the shared page's boundaries; only app-debugging and
+        # frontend move again.
+        self.assertEqual(_digest(legacy_hashes), 'c16bb2d0e94e52d8934b8004dcbcb447ff895b68bdd24d2d52674db532abf535')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

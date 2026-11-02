@@ -23,23 +23,20 @@ Logic behind a handler is tested through the interface of the module that owns i
 
 ## 3. Stand-ins by dependency category
 
-| Dependency | Stand-in in the test |
-| --- | --- |
-| Code in this service | none: it runs real |
-| The database | a local instance of the same engine, at the version production runs where behaviour differs; never a different engine whose locking, types, and constraints differ |
-| A service the same team owns | an in-memory adapter that implements the client interface the handler already calls |
-| A third-party API (payments, email, identity) | a fake at the client seam that records what was sent; no test reaches the real vendor |
-| Clock, randomness, generated ids | injected and pinned |
+Pick every stand-in from the dependency table in section 5 of the shared page. What a backend adds to it:
+
+- The database runs at the version production runs wherever behaviour differs between versions. A managed-only store or a host with no container runtime falls back to the vendor's emulator, with what the emulator does not model named in the plan.
+- A third-party API (payments, email, identity) is faked below the service's own client wrapper, at the transport or vendor client the wrapper is given, and the fake records what was sent; the wrapper's parsing, retry, and error mapping run real, and no test reaches the real vendor.
 
 A repository class replaced by a mock, or an assertion that `save` was called, is a test coupled to internals: the shared page says how to rewrite it.
 
 ## 4. Writes are read back through the interface
 
-Check a write by reading it back the way a caller would -- the read endpoint, or the module's read function -- not by querying the table. A table read passes while the read path is broken and fails when the storage layout changes without any behaviour change.
+Check a write by reading it back the way a caller would -- the read endpoint, or the module's read function -- not by querying the table. A table read passes while the read path is broken and fails when the storage layout changes without any behaviour change. The exception is a table another consumer reads directly -- change-data capture, an outbox relay, a reporting job: there the stored shape is itself a contract, and a test asserts it alongside the read-back.
 
 ## 5. Migrations run on populated data
 
-A migration test applies the migration to a database that already holds rows in the previous shape, including the null, empty, and boundary values the old shape allowed, never only to an empty schema. It asserts that the migration completes, that backfilled values are right, that code still running against the previous shape keeps working during the expand step, and that each step's rollback point (`references/schema-migration.md`) restores a readable state.
+A migration test applies the migration to a database that already holds rows in the previous shape, including the null, empty, and boundary values the old shape allowed, never only to an empty schema. It asserts that the migration completes, that backfilled values are right, that code still running against the previous shape keeps working through expand, backfill, and switch until the contract step, and that each step's rollback point (`references/schema-migration.md`) restores a readable state.
 
 ## 6. What the plan records
 

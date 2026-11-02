@@ -4548,7 +4548,7 @@ _DEFINITIONS = [
             "Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.",
             shared_test_authoring_line(
                 "When the handoff asks for component or interaction tests, ",
-                " and name the seam each test drives: assert through what a user perceives (role, accessible name, visible text) across the frontend_component_state_inventory/v1 states, never class names or component-internal state, and fake only the network boundary.",
+                " and name the seam each test drives: assert through what a user perceives (role, accessible name, visible text) across the frontend_component_state_inventory/v1 states, never class names or component-internal state, and fake only at the boundaries the shared page lists (network, clock, randomness).",
             ),
             "Keep implementation, browser verification, accessibility/performance checks, visual QA, and deployment as observed-only evidence.",
         ),
@@ -9982,8 +9982,8 @@ _DEFINITIONS.append(
             "competing_hypotheses/v1 spans distinct axes -- input and state, ordering and timing, environment and build, dependency behaviour -- rather than three phrasings of one guess",
             "discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates",
             "root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival",
-            "fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it",
-            "fix_handoff/v1 names the seam the regression test drives and how it runs the pattern that produced the bug (callers, ordering, call chain); when no seam can, it records `regression_seam: none_correct` with the reason, keeps the reproduction loop as the fix's verification, and reports the missing seam as an `omh-refactor-plan` candidate instead of a shallow test that passes before and after the fix",
+            "fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it, or records `regression_seam: none_correct` with the reason, with the reproduction loop observed red before the fix and green after it",
+            "fix_handoff/v1 names the seam the regression test drives and how it runs the pattern that produced the bug (callers, ordering, call chain); when the pattern cannot run at any reachable seam, it records `regression_seam: none_correct` with the reason and what was tried, keeps the reproduction loop as the fix's verification, and reports the missing seam as an `omh-refactor-plan` candidate instead of a shallow test that passes before and after the fix",
         ),
         safety_rules=(
             "No fix before an observed reproduction: `fix_handoff/v1` stays blocked while `reproduction_record/v1` reads not_observed, and a proposed change without one is a guess, not a fix.",
@@ -10046,7 +10046,7 @@ _DEFINITIONS.append(
             "At least three hypotheses on distinct axes were written before the first observation was chosen.",
             "Each observation records which hypotheses its result eliminated.",
             "The root cause cites the demonstrating observation and the observation that ruled out each rival.",
-            "The fix handoff carries the reproduction as a regression test that fails before and passes after.",
+            "The fix handoff carries the reproduction as a regression test that fails before and passes after, or records `regression_seam: none_correct` with the reason, with the reproduction loop observed red before the fix and green after it.",
         ),
         recovery_notes=(
             "If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it.",
