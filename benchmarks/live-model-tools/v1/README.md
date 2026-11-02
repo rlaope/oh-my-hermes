@@ -574,6 +574,162 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-11-02 round-end check: declared look-alikes and rewritten test expectations, base vs new
+
+Pre-registered before its first live run.
+
+The 2026-10-31 head-to-head against oh-my-pi (research folder `H2H2/REPORT.md`) found two gaps
+in the round-end check on origin/main:
+
+- **`C-DECOY` over-fire.** On Sonnet 5.5 the check continued 3 of 3 `C-DECOY` sessions,
+  against 1 of 3 before. That cost 8 model calls against 3 and 96k tokens against 42k.
+  - One continue was a `copy` of the look-alike `_to_cents`, whose module docstring says its
+    rounding is intentionally different from the edited file.
+  - Two were `opaque_edit`: the model appended its regression test with
+    `printf ... >> tests/test_<x>.py`, so the test file had no turn-start text.
+- **`I-KWARG` on Haiku 4.5: 0 of 3 passes.** In every failure Haiku renamed the `timeout` key
+  in the dict `fetch` returns, and rewrote `tests/test_http_client.py` to expect the new key.
+  The task said "What fetch returns stays the same". The round-end check fired and asked only
+  about copies and call sites.
+
+The change, in `consistency_trigger.py`, a new `test_expectation_check.py`, `verify_hooks.py`
+and `llm_hooks.py`:
+
+1. **Declared look-alikes.** A `copy` hit is skipped when the other file says its definition
+   differs on purpose (`declared_divergent`). The trigger reads two places with `ast`:
+   - the definition's docstring, or the comments directly above or on its first line;
+   - the module docstring, but only a sentence there that names the edited file.
+
+   "Differs on purpose" is a closed vocabulary: an intent word (`intentionally`, `deliberately`,
+   `on purpose`, `by design`) and a difference word in one sentence, or
+   "not kept in step / in sync with". Every other signal still fires, and so does a real copy
+   beside a declared one.
+2. **Files a command names.** Before a `terminal` or `execute_code` call, the trigger keeps the
+   turn-start text of every `.py` / `.pyi` file the call's arguments name. A `printf >>` or
+   `sed -i` on a named file is then diffed like a patch. A file a command changes without
+   naming it still fires as `opaque_edit`.
+3. **Test check (always on, `pre_verify` attempt 0).** It names an existing test that lost an
+   expected value: a literal constant in an `assert` or a `self.assert*` call is gone from the
+   file. Subscript keys are not counted. It fires only when all of these hold:
+   - the request asked for behaviour to stay the same (closed phrase list);
+   - the request does not name the test file or the test;
+   - the request does not ask to update a test, and states no result the code "must / should /
+     now / to return";
+   - the turn also changed a non-test Python file.
+
+   Like the export note, it continues the turn by itself. The consistency check rides along in
+   its "beside a re-check" form.
+
+Two candidate signals were measured offline and rejected:
+- **A body-similarity threshold.** The look-alike's `_to_cents` body scores the same against
+  the edited one in `C-DUPLICATE` and `C-DECOY` (`difflib` ratio 0.794 for every seed), so no
+  threshold separates them.
+- **Subscript keys as expected values.** Counting them flagged all 12 `I-RETURN-SHAPE`
+  sessions, where `quote["total_cents"]` correctly became `quote.total_cents`.
+
+**Offline replay, before this registration.** The research folder's
+`OPT/OPT-I/replay_h2h2.py` replayed the 132 H2H2 `omn` sessions on fresh fixtures: their
+`patch` / `write_file` calls and `printf >>` appends, up to the turn's first stop. Results:
+- `C-DECOY`: 12 of 12 continues become 0, every one `declared_divergent`.
+- `C-DUPLICATE`: 8 of 8 still fire `copy`.
+- `I-KWARG`: the test note fires on the 3 failed Haiku runs and on no passing run.
+- No test note anywhere else.
+
+The replay does not model the impact or export notes, or shell edits other than `printf >>`.
+
+**The new control, `C-TEST-UPDATE`** (consistency-ab split). The task asks for a kib to be 1024
+bytes, names `tests/test_sizes.py`, and asks for its existing kib assertion to expect the new
+value. It also says every other unit stays the same, so the request carries a keep-behaviour
+phrase. A correct edit changes the existing expectation. The validator needs:
+- the new kib;
+- every other unit unchanged;
+- the test file's tests passing;
+- the old expected value gone from the test.
+
+The setup, fixed before the first live run:
+
+- **Arms.** Each arm links its OMH plugin bundle from a source snapshot. The bundles differ
+  only in the four files above.
+  - `base`: origin/main `76fa9c615`.
+  - `new`: this branch at `bec5cb80e`.
+- **Load path.** The bench profiles symlink the bundle into the profile, and the shared
+  gateway has no `omh` package. So both arms run the standalone path, which since #2455 runs
+  the router's code. The meter's per-call `omh_pkg` field records this, and the result
+  reports it.
+- **Profiles.** `opti-<lane>-<arm>`, with H2H2's OMH-arm configuration:
+  - Hermes's default `tools.tool_search`;
+  - plugin settings `omh_home` and `lsp_tools: true`; `impact_check` not set, so off, as shipped;
+  - `pyright` pinned by an absolute `lsp.servers.pyright.command`;
+  - `agent.max_turns: 120` and `agent.run_budget_seconds: 600`;
+  - the observer-only meter plugin.
+
+  Edit surface `lsp` (toolsets `file,terminal,omh-lsp`). The prompt is the `baseline`
+  condition, with no edit directive, `--git-init-workspace`, `--test-env` and effort `medium`.
+- **Panel.** Subscription routes only:
+
+  | Lane | Model | Route | Tier |
+  | --- | --- | --- | --- |
+  | h45 | `claude-haiku-4-5-20251001` | `claude-proxy` (CPA) | weak |
+  | s55 | `claude-sonnet-5-5` | `claude-proxy` (CPA) | strong |
+  | luna | `gpt-6-luna` | `openai-codex` | weak |
+  | sol | `gpt-6.1-sol` | `openai-codex` | strong |
+
+- **Templates.** Seven:
+  - positives: `I-KWARG` (test note) and `C-DUPLICATE` (copy);
+  - negatives and controls: `C-DECOY`, `C-SCOPE-TRAP`, `I-CONTROL`, `E-BUGFIX` and
+    `C-TEST-UPDATE`.
+- **Seeds.** None appears anywhere under `.omc/research` or in the bench.
+  - 409993, 502133 and 524287 for every template.
+  - Also 646619, 715827 and 829601 for `C-DECOY` and `I-KWARG`, so that each must-improve
+    clause has n = 6 per model.
+  - That is 27 instances per lane per arm, 108 per arm.
+- **Order.** Per instance, the two arms run back to back on identical fresh workspaces, and
+  the order alternates. Lanes run in parallel.
+- **Retries.** A run classified `rate_limited`, `provider_error`, `model_unavailable` or
+  `authentication_failed` is retried on the same route. Any other outcome is final. A run with
+  no completed record is a fail.
+- **Ceiling check on the base arm, from H2H2 (origin/main `ffdef9347`, before #2454/#2455).**
+  - Sonnet `C-DECOY`: 3 of 3 continued, so the fire rate has room to drop.
+  - Haiku `I-KWARG`: 0 of 3 passed, so passes have room to rise.
+
+Definitions:
+- A **fire** is a session with at least one assistant row whose `finish_reason` is
+  `verify_hook_continue`, from the session DB.
+- **Model calls** are `sessions.api_call_count`.
+- **Tokens** are the run record's `observation.tokens`.
+- A **test note** is a `test_expectation_check session=<id> fire=True` line in the new arm's
+  profile log.
+
+The gate. Must improve, `new` against `base`:
+
+1. **Sonnet `C-DECOY` fires** (n = 6): new at most 1, and strictly below base.
+2. **`C-DECOY` cost, pooled over the four models** (24 runs per arm):
+   - median model calls: new at most base - 1;
+   - median tokens: new at most 0.90x base.
+3. **Haiku `I-KWARG` passes** (n = 6): new at least base + 2.
+
+Must hold:
+
+4. `C-DUPLICATE` passes (n = 12): new at least base.
+5. Total passes (108 per arm): new at least base - 1.
+6. The test-edit control `C-TEST-UPDATE` (n = 12):
+   - test notes in the new arm: exactly 0;
+   - fires: new at most base.
+7. `mutation_outside_scope` count: new at most base.
+
+Reported, not gated:
+- the per-lane, per-template table: passes, fires, median calls and median tokens;
+- test notes by template;
+- the trigger's verdict reasons per arm, and on `C-DECOY`;
+- median wall time;
+- final answer kept;
+- the load path (`omh_pkg`);
+- tokens and money by route.
+
+Recomputed from the raw run records, the session-DB snapshots and the profile logs, by
+`OPT/OPT-I/gate.py`, not from the driver log. If any clause fails, the failure is recorded here
+and the branch does not ask to merge.
+
 ### 2026-10-31 compact `omh_context` result: base vs branch
 
 The `omh_context` tool result rides every later model call of its session. In the 2026-10-30
