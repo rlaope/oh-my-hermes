@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Hermes picks up the new OMH skills after an update without a restart.**
+  A running Hermes resolves `skills.external_dirs` once and keeps the path
+  until `config.yaml` changes, so after `omh update` moved the `current`
+  pointer, chats kept the previous generation's OMH skills, or lost them all
+  once that generation was collected, until `hermes gateway restart`. The
+  update now moves the modification time of every Hermes `config.yaml` (the
+  primary home and each bot profile) that names `current/skills`, without
+  rewriting it, and says `Hermes skills refreshed in <N> homes`; a rollback
+  and a `--recover-known-good` do the same after their last pointer switch.
+  New conversations and every skill load use the new pack; a conversation
+  that is already open keeps the skill list it started with until `/new`. A
+  home it could not touch is a warning and a `failed` row under
+  `hermes_skill_refresh`, and does not fail the update. The gateway hint now
+  says what a restart is still for: skills reload on their own, the new OMH
+  plugin code loads only after `hermes gateway restart` (and, for a home
+  whose touch failed, the skills too). The bot-profile line no longer asks
+  for a Hermes Desktop restart to reload skills.
+
 - **A same-size rewrite in one clock tick no longer hides from the round-end
   check.** The workspace index kept each Python file's modification time and
   size. A `sed`, `execute_code` or delegated child that rewrote a file at the
@@ -221,6 +239,17 @@ All notable changes will be documented here.
   custom root is configured without printing it, and a custom endpoint that
   reports no cost is shown as unpriced instead of at TypeSafe's list price.
   Contributed by @yqm-307 (#2473; requested in #2468).
+
+- **Short promo clips get their own design rules.** A launch clip of 15
+  seconds or less is one segment, so `show-reel` no longer applies its
+  multi-segment habits (scene variety, transitions, a giant number scene, an
+  end card) to it. The new Short promo clips section in `craft-design.md` asks
+  for one hero scene held throughout, no meta text (labels, IDs, URLs and
+  prices go in the post body), one number smaller than the logo, and the
+  official logo at 25% or more of the frame height, checked on a still sheet
+  before the render. `design-quality-gate` scores the same items as a
+  Short-clip discipline axis. Generalized from six review rounds on one
+  launch clip. (#2488)
 
 ## 4.0.4 - 2026-11-01
 

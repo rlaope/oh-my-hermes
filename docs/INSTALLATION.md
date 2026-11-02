@@ -3358,12 +3358,34 @@ sync reads, so nothing is left behind for the next update to score as still
 registered — while keeping their plugin directories, which is exactly the
 deliberate opt-out state described below.
 
-After a sync, restart Hermes Desktop so bot chats reload their skills.
-A gateway that was running through the update keeps serving the bundle it
-loaded at start. When Hermes' own records in a home (`gateway.pid` and the
+After a sync, new bot conversations pick up the new OMH skills on their own.
+A running Hermes resolves each `skills.external_dirs` entry once and keeps
+the resolved path until that home's `config.yaml` changes, so after the
+`current` pointer moved it kept reading the previous generation's skills, or
+none once that generation was collected. `omh update` therefore moves the
+modification time of every `config.yaml` (the primary home and each bot
+profile) that names the pointer's `current/skills`, after the pointer
+switch. The file's bytes are never rewritten, a missing `config.yaml` is never
+created, and a home that does not name the pointer is left alone. A rollback,
+and a `--recover-known-good` that moves the pointer, refresh the same homes
+after their last switch. Hermes re-reads the pointer on its next skill lookup,
+so new conversations and every skill load use the new OMH skills without a
+restart. A conversation that is already open keeps the skill list it started
+with (Hermes reuses that session's system prompt, and the skills index is
+part of it) until `/new`. The update says
+`Hermes skills refreshed in <N> homes: ...`, and the JSON result lists each
+home under `hermes_skill_refresh`. Only `<hermes_home>` and its
+`profiles/*` are refreshed; another Hermes home that names the same pointer
+keeps its cached path until it restarts. A home whose file could not be
+touched is a warning line and a `failed` row with the reason; the update's
+exit code does not move and the JSON `status` stays `ok`, so a wrapper reads
+the rows, and that home's gateway hint below asks for the restart for its
+skills as well.
+A gateway that was running through the update still runs the OMH plugin code
+it loaded at start. When Hermes' own records in a home (`gateway.pid` and the
 `gateway-starts.log` ledger) show a last recorded start earlier than that
-home's bundle install, the update names it with the command that reloads
-it: `hermes gateway restart` for the primary home,
+home's bundle install, the update names it with the command that loads the
+new plugin code: `hermes gateway restart` for the primary home,
 `hermes --profile <name> gateway restart` for a profile. That is file
 evidence only: the bundle stamp is rewritten by every update, so the hint
 covers gateways whose last recorded start precedes this update, and a
@@ -4965,7 +4987,11 @@ and the workflow pack Hermes reads is registered in `skills.external_dirs` as
 `current/skills`. Because both names stay fixed, the command you run and the
 pack Hermes serves always come from the same generation. There is no observable
 moment, including a crash mid-update, where you get the new command with the old
-pack or the reverse.
+pack or the reverse. A Hermes process that was already running resolved
+`current/skills` when it first read it and keeps that path until its
+`config.yaml` changes; the update moves the modification time of each
+`config.yaml` that names the pointer, so new conversations and skill loads
+resolve the new pack without a restart (see [Bot Profiles](#bot-profiles)).
 
 On disk, under the managed root:
 

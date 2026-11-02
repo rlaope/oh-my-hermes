@@ -11,11 +11,11 @@ import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
-from typing import Any, Literal, Protocol, TypedDict
+from typing import Any, Literal, NotRequired, Protocol, TypedDict
 
 try:
     from ..core.errors import OmhError
-    from ..maintenance.hermes_gateway import recorded_gateway_starts
+    from ..maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from ..system.local_store import FileLockTimeout, file_lock
     from ..system.paths import managed_command_venv_dir, resolve_paths
     from .self_update_platform import SelfUpdatePlatform
@@ -23,7 +23,7 @@ try:
     from .self_update_state_validation import require_generation_path, same_existing_path
 except ImportError:  # pragma: no cover - direct-source installer smoke.
     from core.errors import OmhError
-    from maintenance.hermes_gateway import recorded_gateway_starts
+    from maintenance.hermes_gateway import recorded_gateway_starts, refresh_skill_dir_caches
     from system.local_store import FileLockTimeout, file_lock
     from system.paths import managed_command_venv_dir, resolve_paths
     from install.self_update_platform import SelfUpdatePlatform
@@ -89,6 +89,7 @@ class SelfUpdateResult(TypedDict):
     rollback: RollbackResult
     recovery: RecoveryResult
     cleanup: CleanupResult
+    hermes_skill_refresh: NotRequired[list[dict[str, str]]]
 
 
 def _result(candidate: Path) -> SelfUpdateResult:
@@ -223,6 +224,18 @@ def _switch(root: Path, target: Path, platform: SelfUpdatePlatform) -> None:
         switch_current(root, target)
 
 
+def _refresh_hermes_skills(root: Path, hermes_home: Path | None, result: SelfUpdateResult) -> None:
+    """After a final pointer switch, make a running Hermes re-resolve `current/skills`.
+
+    The re-entered `cmd_update` refreshes after an ordinary switch, but a
+    rollback or a known-good revert may land on a generation older than that
+    refresh, or not re-enter at all. Best effort: the rows, a `failed` one
+    included, go into the result rather than raising.
+    """
+    if hermes_home is not None:
+        result["hermes_skill_refresh"] = refresh_skill_dir_caches(hermes_home, root / "current" / "skills")
+
+
 def run_installer_self_update(args: Any, plan: Mapping[str, object], *, runner: Runner = subprocess.run, platform: SelfUpdatePlatform | None = None) -> SelfUpdateResult:
     """Run stage, verification, pointer activation, rollback, and retention."""
     release = plan.get("release")
@@ -245,9 +258,9 @@ def run_installer_self_update(args: Any, plan: Mapping[str, object], *, runner: 
             if had_marker and interrupted is None:
                 result["recovery"] = {"status": "ok", "action": "discarded_unswitched_candidate"}
             if interrupted is not None:
-                return _recover_interrupted(root, state, interrupted, args, runner, selected, result)
+                return _recover_interrupted(root, state, interrupted, args, runner, selected, result, hermes_home=paths.hermes_home)
             if bool(getattr(args, "recover_known_good", False)):
-                return _recover_known_good(root, state, args, runner, selected, result)
+                return _recover_known_good(root, state, args, runner, selected, result, hermes_home=paths.hermes_home)
             if not package_url:
                 raise OmhError("cannot update command package because no package URL is available")
             staged, reason = _stage(candidate, package_url, str(plan.get("python") or sys.executable), runner=runner, json_mode=bool(getattr(args, "json", False)), platform=selected)
@@ -288,7 +301,7 @@ def _activate(root: Path, state: dict[str, Any], candidate: Path, args: Any, run
     passed, reason = _reenter(root, candidate, args, runner, platform)
     result.update(phase="post_activation", post_activation={"status": "ok" if passed else "failed", "reason": reason})
     if not passed:
-        _rollback_activation(root, state, candidate, previous, args, runner, platform, result)
+        _rollback_activation(root, state, candidate, previous, args, runner, platform, result, hermes_home=hermes_home)
         return result
     commit_activation(root, state, candidate)
     collect_garbage(root, state, result, running_generation=_running_generation(root), gateway_starts=recorded_gateway_starts(hermes_home) if hermes_home is not None else ())
@@ -297,7 +310,7 @@ def _activate(root: Path, state: dict[str, Any], candidate: Path, args: Any, run
     return result
 
 
-def _rollback_activation(root: Path, state: dict[str, Any], candidate: Path, previous: Path, args: Any, runner: Runner, platform: SelfUpdatePlatform, result: SelfUpdateResult) -> None:
+def _rollback_activation(root: Path, state: dict[str, Any], candidate: Path, previous: Path, args: Any, runner: Runner, platform: SelfUpdatePlatform, result: SelfUpdateResult, *, hermes_home: Path | None = None) -> None:
     # Persist the recovery intent before moving the pointer. A crash or failed
     # reentry must not make the next update discard this transaction as unswitched.
     state["activation_in_progress"]["restore_required"] = True
@@ -308,6 +321,9 @@ def _rollback_activation(root: Path, state: dict[str, Any], candidate: Path, pre
         restored, reason = False, str(exc)
     else:
         restored, reason = _reenter(root, previous, args, runner, platform, restoring=True)
+        # The candidate's re-entry may have refreshed Hermes onto the candidate,
+        # which is about to be deleted; the restored generation may predate the refresh.
+        _refresh_hermes_skills(root, hermes_home, result)
     if not restored:
         result["rollback"] = {"performed": True, "restored": "", "status": "failed", "reason": reason}
         result["recovery"] = {"status": "required", "action": "restore_failed", "reason": reason}
@@ -319,7 +335,7 @@ def _rollback_activation(root: Path, state: dict[str, Any], candidate: Path, pre
     result["rollback"] = {"performed": True, "restored": previous.name}
 
 
-def _recover_interrupted(root: Path, state: dict[str, Any], interrupted: tuple[Path, Path], args: Any, runner: Runner, platform: SelfUpdatePlatform, result: SelfUpdateResult) -> SelfUpdateResult:
+def _recover_interrupted(root: Path, state: dict[str, Any], interrupted: tuple[Path, Path], args: Any, runner: Runner, platform: SelfUpdatePlatform, result: SelfUpdateResult, *, hermes_home: Path | None = None) -> SelfUpdateResult:
     candidate, previous = interrupted
     restoring = state["activation_in_progress"].get("restore_required") is True
     passed, _reason = (False, "restore pending") if restoring else _reenter(root, candidate, args, runner, platform)
@@ -329,11 +345,11 @@ def _recover_interrupted(root: Path, state: dict[str, Any], interrupted: tuple[P
         result.update(ok=True, phase="recovery", recovery={"status": "ok", "action": "completed_interrupted_activation"})
         return result
     result.update(phase="recovery", recovery={"status": "failed", "action": "rolled_back_interrupted_activation"})
-    _rollback_activation(root, state, candidate, previous, args, runner, platform, result)
+    _rollback_activation(root, state, candidate, previous, args, runner, platform, result, hermes_home=hermes_home)
     return result
 
 
-def _recover_known_good(root: Path, state: dict[str, Any], args: Any, runner: Runner, platform: SelfUpdatePlatform, result: SelfUpdateResult) -> SelfUpdateResult:
+def _recover_known_good(root: Path, state: dict[str, Any], args: Any, runner: Runner, platform: SelfUpdatePlatform, result: SelfUpdateResult, *, hermes_home: Path | None = None) -> SelfUpdateResult:
     target = recovery_target(root, state)
     previous = Path(str(state["active"]["path"]))
     mark_activation(state, target, previous)
@@ -342,11 +358,14 @@ def _recover_known_good(root: Path, state: dict[str, Any], args: Any, runner: Ru
     passed, reason = _reenter(root, target, args, runner, platform)
     if not passed:
         _switch(root, previous, platform)
+        _refresh_hermes_skills(root, hermes_home, result)
         state["activation_in_progress"] = None
         save_state(root, state)
         result.update(phase="recovery", recovery={"status": "failed", "action": "restore_failed", "reason": reason})
         return result
     restore_known_good(root, state, target)
     save_state(root, state)
+    # The known-good target may predate the refresh its own re-entry would run.
+    _refresh_hermes_skills(root, hermes_home, result)
     result.update(ok=True, phase="recovery", recovery={"status": "ok", "action": "selected_known_good", "selected": target.name}, activation={"status": "skipped", "reason": "recovery"}, post_activation={"status": "ok", "reason": "known-good restored"})
     return result
