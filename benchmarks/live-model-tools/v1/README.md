@@ -846,6 +846,60 @@ Money: $0 (every `cost_usd` is 0). No DeepSeek, GLM, OpenRouter or OpenGateway.
 **Verdict.** The two readings disagree on clause 7 only, and only through crash records. In
 the re-run reading every clause passes. The branch asks to merge with that stated.
 
+#### Disclosures added at review (2026-11-02)
+
+- **An unregistered retry.** `run_opti.py` kept H2H2's `gateway_down` rule, which was in the
+  driver before the counted start. It re-runs a `process_exit` record with exit code 130, or
+  exit code 1 within 15 s, on the same route. The registration says any outcome other than
+  the four provider classes is final, so this retry was not registered.
+  - It changed 4 strict instances: h45/new `C-DUPLICATE-409993`, luna/base
+    `C-DUPLICATE-409993`, s55/base `C-SCOPE-TRAP-409993` and sol/new `C-DECOY-524287`. Each
+    exited 130 near 10:41, and each attempt 1 completed.
+  - In the re-runs it took h45/new `I-KWARG-715827` to 5 attempts, and retried h45/base
+    `C-DECOY-646619`, `I-KWARG-646619` and `I-KWARG-715827`, and luna/base `C-DECOY-646619`,
+    `I-KWARG-715827` and `I-KWARG-829601`, and luna/new `I-KWARG-829601`.
+- **First-attempt reading.** Scoring each instance by its first attempt (`gate.py
+  --first-attempt`, and the reviewer's independent re-score), both readings pass every
+  clause:
+  - strict: clause 5, total passes, 77 to 77; clause 7, scope, 26 to 26;
+  - re-run: clause 3, Haiku `I-KWARG`, 2/6 to 4/6; clause 5, 98 to 98; clause 7, 8 to 4.
+- **Missing test-check log lines.** The registration says a counted new-arm run with no line
+  is reported as missing. There are 8 such completed Sonnet runs: all six `I-KWARG`, plus
+  `C-DECOY-409993` and `C-DUPLICATE-524287`. Each edited only through `terminal` commands, so
+  Hermes reported no changed path, and no OMH stop hook ran (no trigger line either).
+- **Test-note count.** 2 in the strict reading, 3 in the re-run reading, all on Haiku
+  `I-KWARG`.
+- **`C-TEST-UPDATE` exercises both suppressors at once.** It names the test file and asks for
+  the assertion to change. It also scopes its keep phrase ("Every other unit stays the
+  same"), which after the review fixes below counts as no keep at all. So the control shows
+  that a requested test edit gets no note. It does not show which suppressor carried it.
+
+#### Review fixes after the result, not re-measured live
+
+These changes are in the branch head after `c071c591f`, the measured new arm.
+- **`declared_divergent`.**
+  - It needs an intent word followed by `differs` / `different` / `diverges`.
+  - A note with a negation or an identity word declares nothing: "Intentionally duplicated
+    from invoice.py, so it must not differ", "By design this mirrors invoice.py".
+  - A module-docstring sentence must name the edited file as a file, and must name the
+    definition whenever it names any definition of its module.
+- **Command-named snapshots.** They get a budget of their own (16 files, 512 KB). The ones a
+  command left unchanged are dropped at the next tool call, and a stop with no edited path
+  keeps none.
+- **The test check.**
+  - A scoped keep ("everything else stays the same") is no keep.
+  - A negated ask ("don't update any tests") asks for nothing, and "must return the same ..."
+    keeps behaviour.
+  - "update its docstring and tests" and "refresh / revise the ... test" are asks.
+  - Expected values are pooled across test files, and unittest messages are not counted.
+
+The offline replay of the 132 H2H2 `omn` sessions, re-run on the fixed code
+(`OPT/OPT-I/replay-omn-review.txt`):
+- `C-DECOY`: 12 continues to 0.
+- `C-DUPLICATE`: 8 of 8 fires kept.
+- The `I-KWARG` test note fires on the 3 failed Haiku runs only.
+- No other note.
+
 ### 2026-10-31 compact `omh_context` result: base vs branch
 
 The `omh_context` tool result rides every later model call of its session. In the 2026-10-30

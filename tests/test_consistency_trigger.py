@@ -332,10 +332,37 @@ class NamedFileSnapshotTest(_Workspace):
         self.assertEqual(self.verdict(), ct.Verdict(False, "nothing_changed"))
 
     def test_only_whole_python_paths_are_named_and_the_count_is_bounded(self):
-        self.assertEqual(ct._named_python_files({"command": "cat a.pyc b.py.bak c.pyi 'd/e.py' f.py. x", "n": 3}),
-                         ["c.pyi", "d/e.py"])
+        self.assertEqual(ct._named_python_files({"command": "cat a.pyc b.py.bak c.pyi 'd/e.py' f.py. x ~/g.py *.py src/*.pyi",
+                                                 "n": 3}), ["c.pyi", "d/e.py"])
         many = " ".join(f"m{index}.py" for index in range(20))
         self.assertEqual(len(ct._named_python_files({"command": many})), ct.MAX_NAMED_FILES)
+
+    def test_files_read_only_commands_name_never_take_the_edits_budget(self):
+        # Review of #2494: five `cat` calls naming 40 files filled the 32 slots, and a later patch fired
+        # `opaque_edit` where main said `no_copy_or_reference`.
+        for index in range(40):
+            self.write(f"src/app/m{index}.py", f"def f{index}():\n    return {index}\n")
+        self.write("src/app/units.py", UNITS)
+        for batch in range(5):
+            self.command("cat " + " ".join(f"src/app/m{index}.py" for index in range(batch * 8, batch * 8 + 8)))
+        changed = self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')
+        self.assertEqual(ct._sessions[SESSION]["named"], {})
+        self.assertEqual(self.verdict(changed), ct.Verdict(False, "no_copy_or_reference"))
+
+    def test_the_named_budget_is_its_own_and_bounded(self):
+        for index in range(ct.MAX_NAMED_SNAPSHOTS + 4):
+            self.write(f"src/app/m{index}.py", "x = 1\n")
+        self.command("cat " + " ".join(f"src/app/m{index}.py" for index in range(8)))
+        self.command("cat " + " ".join(f"src/app/m{index}.py" for index in range(8, 16)))
+        self.assertLessEqual(len(ct._sessions[SESSION]["named"]), ct.MAX_NAMED_SNAPSHOTS)
+        self.assertEqual(ct._sessions[SESSION]["before"], {})
+
+    def test_a_stop_with_no_edited_path_keeps_no_snapshot(self):
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.command("cat src/app/a.py")
+        self.assertIn(SESSION, ct._sessions)
+        self.assertIsNone(verify_hooks.pre_verify(session_id=SESSION, coding=True, attempt=0, changed_paths=[]))
+        self.assertNotIn(SESSION, ct._sessions)
 
     def test_a_file_changed_before_the_call_that_names_it_is_still_opaque(self):
         self.write("src/app/a.py", "def other():\n    return 1\n")
@@ -378,11 +405,11 @@ class DeclaredDivergenceTest(_Workspace):
         body = '    return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)\n'
         variants = {
             "docstring": ('import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:\n'
-                          '    """Half to even, deliberately unlike the other totals."""\n' + body),
-            "comment above": ("import decimal\n\n\n# Banker's rounding: this differs on purpose.\n"
+                          '    """Half to even, deliberately different from the other totals."""\n' + body),
+            "comment above": ("import decimal\n\n\n# Banker's rounding: this intentionally differs from the totals.\n"
                               "def _to_cents(amount: str) -> decimal.Decimal:\n" + body),
-            "not in step": ("import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:  # not kept in sync with the rest\n"
-                            + body),
+            "first-line comment": ("import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:  # by design it diverges\n"
+                                   + body),
         }
         for label, text in variants.items():
             with self.subTest(label):
@@ -390,12 +417,55 @@ class DeclaredDivergenceTest(_Workspace):
                 self.write("src/app/duty.py", text)
                 self.assertEqual(self.verdict(self.fix_invoice())[:2], (False, "declared_divergent"))
 
+    def test_a_note_that_the_copy_must_not_differ_declares_nothing(self):
+        # Review of #2494: each of these once read as a declared divergence and hid a real copy.
+        notes = (
+            "Intentionally duplicated from invoice.py, so it must not differ.",
+            "Deliberately kept identical to invoice.py; never let the two diverge.",
+            "A deliberate copy of invoice.py, with no difference in rounding.",
+            "Same rounding as invoice.py by design: any difference is a bug.",
+            "Not intentionally different from invoice.py: keep the two in step.",
+            "By design this mirrors invoice.py and should never differ.",
+            "Intentionally different? No: it is kept in step with invoice.py.",
+        )
+        for note in notes:
+            for where in ("module", "definition", "comment"):
+                with self.subTest(note=note, where=where):
+                    ct.reset()
+                    if where == "module":
+                        text = RECEIPT.replace('"""Receipt totals."""', f'"""Receipt totals. {note}"""')
+                    elif where == "definition":
+                        text = RECEIPT.replace("decimal.Decimal:\n", f'decimal.Decimal:\n    """{note}"""\n', 1)
+                    else:
+                        text = RECEIPT.replace("def _to_cents", f"# {note}\ndef _to_cents", 1)
+                    self.write("src/app/receipt.py", text)
+                    self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
+
+    def test_a_module_sentence_must_name_the_edited_file_and_speaks_only_for_what_it_names(self):
+        variants = {
+            # The stem as an ordinary word is not the file.
+            "bare stem": DECOY.replace("from invoice.py", "from the invoice totals"),
+            # A module sentence naming another definition of this module does not speak for `_to_cents`.
+            "names another definition": DECOY.replace("so this rounding is", "so duty_total is") +
+            "\n\ndef duty_total(amounts):\n    return [_to_cents(a) for a in amounts]\n",
+        }
+        for label, text in variants.items():
+            with self.subTest(label):
+                ct.reset()
+                self.write("src/app/duty.py", text)
+                self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
+        ct.reset()
+        self.write("src/app/duty.py", DECOY.replace("so this rounding is", "so _to_cents is").replace(
+            "from invoice.py", "from benchapp.invoice"))
+        self.assertEqual(self.verdict(self.fix_invoice())[:2], (False, "declared_divergent"))
+
     def test_an_intent_word_alone_or_a_note_elsewhere_declares_nothing(self):
         variants = {
             "intent only": DECOY.replace("intentionally different from", "intentionally written next to"),
             "differ only": DECOY.replace("intentionally different from", "different from"),
+            "differ before intent": DECOY.replace("is intentionally different from", "differs, on purpose, from"),
             "string in a body": ('import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:\n'
-                                 '    note = "this differs on purpose"\n'
+                                 '    note = "this is intentionally different"\n'
                                  '    return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"))\n'),
         }
         for label, text in variants.items():

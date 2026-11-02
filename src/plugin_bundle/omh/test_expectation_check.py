@@ -9,15 +9,17 @@ key in the returned dict and the same key in ``tests/test_http_client.py``.
 ``round_end_note`` (``pre_verify``, attempt 0) names such an edit, and only when all of these hold:
 
 - this turn's request asked for behaviour to stay the same (``note_request``, from ``pre_llm_call``:
-  a closed phrase list, `_KEEPS_BEHAVIOUR`);
+  a closed phrase list, `_KEEPS_BEHAVIOUR`, in a clause `_SCOPED_KEEP` does not narrow);
 - the request neither names the test file (its path, file name or module name) or the test, nor
-  asks to update a test or states a result the code must now give (`_ASKS_TEST_EDIT`): an edit the
-  task asked for is not questioned;
+  asks to update a test or states a result the code must now give (`_ASKS_TEST_EDIT`, unless a
+  negation right before it takes it back): an edit the task asked for is not questioned;
 - the turn also changed a Python file that is not a test;
 - a test file that existed at the turn's start lost an expected value: a literal constant inside an
-  ``assert`` statement or a unittest ``self.assert*`` call is gone from the file (a subscript key is
-  how a value is reached, not an expected value, and is not counted). A test that only gained
-  assertions, a renamed test, or a renamed identifier inside an assertion loses none.
+  ``assert`` statement or the compared arguments of a unittest ``self.assert*`` call is gone, counted
+  over every test file the turn changed (so an assertion moved between test files loses nothing). A
+  subscript key is how a value is reached, not an expected value, and a unittest message is not one
+  either. A test that only gained assertions, a renamed test, or a renamed identifier inside an
+  assertion loses none.
 
 The turn-start text is the snapshot ``consistency_trigger`` keeps; a test file changed without one is
 not judged. Only the facts above are kept from the request, never its text. Nothing here raises into a
@@ -41,21 +43,38 @@ MAX_SOURCE_CHARS: Final = 160
 MAX_NAMED_TOKENS: Final = 64
 MAX_FILE_BYTES: Final = 512_000
 _MAX_SESSIONS: Final = 64
-# The request asks for behaviour to be kept, in so many words.
+# The request asks for behaviour to be kept, in so many words: a keep phrase, a refusal to change the
+# tests, or a result that must stay what it is ("must return the same dict as before").
 _KEEPS_BEHAVIOUR: Final = re.compile(
     r"\b(?:stays?|remains?) the same\b|\bunchanged\b|\bwithout changing\b|\bno behaviou?r change"
     r"|\b(?:keeps?|keeping|preserves?|preserving) (?:its |their |the |existing |current )*behaviou?r\b"
     r"|\bsame behaviou?r\b"
+    r"|\b(?:do not|don't|dont|never|must not|mustn't|should not|shouldn't) (?:\w+ ){0,2}"
+    r"(?:change|update|modify|edit|touch|rewrite|alter) (?:(?:the|any|its|their|existing|current) )*"
+    r"(?:tests?|assertions?)\b"
+    r"|\breturns? (?:the same|exactly|what it)\b"
 )
-# The request asks for a test to be changed (a change verb right before the test or its expectation),
+# A keep phrase in a clause that scopes it to part of the request ("everything else stays the same",
+# "leave the other keys unchanged", "keep the existing behaviour for callers that ...") keeps nothing
+# about the part the request does change.
+_SCOPED_KEEP: Final = re.compile(
+    r"\b(?:else|other|others|rest|remaining|except|besides|apart from|aside from)\b"
+    r"|\bfor (?:\w+ ){1,2}(?:that|who|which|where|whose|with)\b"
+)
+_CLAUSE_BREAK: Final = re.compile(r"[.;!?]\s+|,\s+|\s+(?:and|but)\s+")
+# The request asks for a test to be changed (a change verb shortly before the test or its expectation),
 # or states a result the code must now give ("must return 90", "change it to return a dataclass"):
-# either way a changed expectation is what was asked for.
+# either way a changed expectation is what was asked for. A match negated by the words before it
+# ("do not change the tests") asks for nothing.
 _ASKS_TEST_EDIT: Final = re.compile(
-    r"\b(?:update|change|fix|adjust|edit|rewrite|correct|modify)(?:s|d|ed)? "
-    r"(?:(?:the|its|their|this|that|these|those|existing|old|failing) )*(?:\w+ )?"
+    r"\b(?:update|change|fix|adjust|edit|rewrite|correct|modify|refresh|revise)(?:s|d|ed)? "
+    r"(?:(?!(?:add|adds|adding|write|new)\b)[\w'-]+ ){0,3}"
     r"(?:tests?|assertions?|expectations?|expected values?)\b"
-    r"|\b(?:to|now|should|must) return\b"
+    r"|\b(?:to|now|should|must) return\b(?! (?:the same|exactly|what it)\b)"
 )
+_NEGATED_BEFORE: Final = re.compile(r"(?:\b(?:not|never|without|no)|n't)\s+(?:\w+\s+){0,2}$")
+# Positional arguments a unittest assertion compares; a positional past them is its message.
+_UNARY_ASSERTS: Final = frozenset({"assertTrue", "assertFalse", "assertIsNone", "assertIsNotNone"})
 # Words of the request that could name a test file or a test: any token with `test` in it.
 _TEST_TOKEN: Final = re.compile(r"[\w./-]*test[\w./-]*")
 _TEST_DIRS: Final = frozenset({"test", "tests", "testing"})
@@ -80,7 +99,7 @@ def note_request(session_id: object, user_message: object) -> None:
             return
         text = " ".join(str(user_message or "").lower().split())
         named = frozenset(token.strip("./-") for token in _TEST_TOKEN.findall(text)[:MAX_NAMED_TOKENS])
-        request = _Request(bool(_KEEPS_BEHAVIOUR.search(text)), bool(_ASKS_TEST_EDIT.search(text)), named)
+        request = _Request(_keeps_behaviour(text), _asks_test_edit(text), named)
         with _lock:
             _requests[session_id] = request
             _requests.move_to_end(session_id)
@@ -88,6 +107,17 @@ def note_request(session_id: object, user_message: object) -> None:
                 _requests.popitem(last=False)
     except Exception as exc:  # noqa: BLE001 - never fail the turn; no record means no note
         _LOG.warning("test_expectation_check note_request failed=%s", type(exc).__name__)
+
+
+def _keeps_behaviour(text: str) -> bool:
+    """A keep phrase in a clause no scope word narrows."""
+    return any(_KEEPS_BEHAVIOUR.search(clause) and not _SCOPED_KEEP.search(clause)
+               for clause in _CLAUSE_BREAK.split(text))
+
+
+def _asks_test_edit(text: str) -> bool:
+    """An ask to change a test, or a stated new result, that no negation right before it takes back."""
+    return any(not _NEGATED_BEFORE.search(text[:match.start()]) for match in _ASKS_TEST_EDIT.finditer(text))
 
 
 def round_end_note(session_id: str, root: str | None = None) -> str:
@@ -116,16 +146,40 @@ def _decide(session_id: str, root: str | None) -> tuple[str, list[tuple[str, int
                if (after := _read(path)) is not None and after != before}
     if not any(not _is_test_file(path, root) for path in changed):
         return "no_code_change", []
-    rows: list[tuple[str, int, str]] = []
+    # Expected values are pooled over every test file the turn changed, so an assertion moved from one
+    # test file to another (or into a new one) loses nothing.
     named = False
+    old: list[tuple[str, str, str, ast.AST, list[tuple[str, str]]]] = []
+    gained: Counter[tuple[str, str]] = Counter()
     for path in sorted(changed):
-        before = snapshots[path]
-        if not before or not _is_test_file(path, root):
+        if not _is_test_file(path, root):
             continue
         if _named(path, request.named, root):
             named = True
             continue
-        rows.extend(_lost_expectations(_relative(path, root), before, changed[path], request.named))
+        before, after = snapshots[path], changed[path]
+        try:
+            old_tree = ast.parse(before) if before else None
+            new_tree = ast.parse(after)
+        except (SyntaxError, ValueError):
+            continue
+        gained.update(value for test, _node, values in _expectations(new_tree) if test.lower() not in request.named
+                      for value in values)
+        if old_tree is not None:
+            old += [(_relative(path, root), before, test, node, values) for test, node, values in _expectations(old_tree)
+                    if test.lower() not in request.named]
+    lost = Counter(value for *_rest, values in old for value in values) - gained
+    rows: list[tuple[str, int, str]] = []
+    for where, before, _test, node, values in old:
+        if not any(lost[value] for value in values):
+            continue
+        source = " ".join((ast.get_source_segment(before, node) or "").split())
+        if len(source) > MAX_SOURCE_CHARS:
+            source = source[:MAX_SOURCE_CHARS - 3] + "..."
+        rows.append((where, node.lineno, source))
+        for value in values:
+            if lost[value]:
+                lost[value] -= 1
     return ("lost_expectation" if rows else "test_named" if named else "kept_expectations"), rows
 
 
@@ -149,30 +203,6 @@ def reset() -> None:
         _requests.clear()
 
 
-def _lost_expectations(where: str, before: str, after: str, named: frozenset[str]) -> list[tuple[str, int, str]]:
-    """``(path, line, source)`` of each turn-start assertion holding an expected value the file lost,
-    skipping a test function the request names."""
-    try:
-        old_tree, new_tree = ast.parse(before), ast.parse(after)
-    except (SyntaxError, ValueError):
-        return []
-    old = _expectations(old_tree)
-    lost = Counter(value for _test, _node, values in old for value in values) - Counter(
-        value for _test, _node, values in _expectations(new_tree) for value in values)
-    rows = []
-    for test, node, values in old:
-        if test.lower() in named or not any(lost[value] for value in values):
-            continue
-        source = " ".join((ast.get_source_segment(before, node) or "").split())
-        if len(source) > MAX_SOURCE_CHARS:
-            source = source[:MAX_SOURCE_CHARS - 3] + "..."
-        rows.append((where, node.lineno, source))
-        for value in values:
-            if lost[value]:
-                lost[value] -= 1
-    return rows
-
-
 def _expectations(tree: ast.AST) -> list[tuple[str, ast.AST, list[tuple[str, str]]]]:
     """Every ``assert`` statement and ``self.assert*(...)`` call: (enclosing function name, node,
     the literal constants in it as (type, repr))."""
@@ -185,8 +215,16 @@ def _expectations(tree: ast.AST) -> list[tuple[str, ast.AST, list[tuple[str, str
                 continue
             if isinstance(child, ast.Assert) or (isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute)
                                                  and child.func.attr.startswith("assert")):
-                target = child.test if isinstance(child, ast.Assert) else child
-                found.append((function, child, _expected_values(target)))
+                if isinstance(child, ast.Assert):
+                    values = _expected_values(child.test)
+                else:
+                    # The compared arguments only: a `msg=` keyword or a trailing message string is not
+                    # an expected value.
+                    arity = 1 if child.func.attr in _UNARY_ASSERTS else 2
+                    values = [value for argument in child.args[:arity] for value in _expected_values(argument)]
+                    values += [value for keyword in child.keywords if keyword.arg != "msg"
+                               for value in _expected_values(keyword.value)]
+                found.append((function, child, values))
                 continue
             visit(child, function)
 

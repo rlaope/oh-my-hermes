@@ -97,7 +97,9 @@ when it can pay off (`consistency_trigger.py`).
 - Before each `patch` or `write_file`, it keeps the pre-edit text of each
   Python file that call edits. Before each `terminal` or `execute_code` call,
   it does the same for every Python file the call's arguments name, so a
-  `printf ... >> tests/test_x.py` is diffed like a patch.
+  `printf ... >> tests/test_x.py` is diffed like a patch. Those snapshots have
+  a budget of their own (16 files, 512 KB), and the ones the command left
+  unchanged are dropped at the next tool call.
 - At the first stop, the workspace is indexed again, so every Python file the
   turn changed is found, whatever tool changed it.
 - The definitions the changed lines touch are compared with the other files,
@@ -109,9 +111,14 @@ The check fires when one of these is true:
 - a touched top-level definition is also defined in another file, unless that
   file says its definition differs on purpose (`declared_divergent`): in the
   definition's docstring or the comments at it, or in a module-docstring
-  sentence that names the edited file. The vocabulary is closed: an intent
-  word (`intentionally`, `deliberately`, `on purpose`, `by design`) with a
-  difference word, or "not kept in step / in sync with";
+  sentence that names the edited file as a file (`billing.py`, or a dotted
+  module ending in `.billing`) and, when it names definitions of its module,
+  names this one. The shape is closed: an intent word (`intentionally`,
+  `deliberately`, `on purpose`, `by design`) followed by `differs`,
+  `different` or `diverges`. A note with a negation (`not`, `never`, `no`, "is
+  a bug") or an identity word (`identical`, `same`, `copy`, `mirrors`,
+  `duplicated`) declares nothing, so "deliberately kept identical; never let
+  the two diverge" is still a copy;
 - a definition the edit removed or renamed is still named in another Python
   file, or in a `.toml`, `.cfg`, `.ini`, `.yaml`, `.yml` or `.json` file;
 - a touched function's signature changed, or a class's `__init__`, `__new__`
@@ -192,12 +199,20 @@ that lost an expected value this turn: a literal constant in an `assert` or a
 speaks only when all of these hold:
 
 - the turn's request asked for behaviour to stay the same (`stays the same`,
-  `unchanged`, `without changing`, `keep its behaviour`, and a few more);
+  `unchanged`, `without changing`, `keep its behaviour`, "do not change the
+  tests", "must return the same dict as before", and a few more), in a clause
+  no scope word narrows: "everything else stays the same" or "leave the other
+  keys unchanged" keeps nothing about the part the request changes;
 - the request does not name the test file or the test, does not ask to update
-  a test, and states no result the code must now give (`must return`,
-  `to return`);
+  a test ("update its docstring and tests", "refresh the kib test"), and
+  states no result the code must now give (`must return`, `to return`). A
+  negated ask ("don't update any tests") asks for nothing;
 - the turn also changed a Python file that is not a test;
 - the test file existed at the turn's start and has its pre-edit text.
+
+Expected values are pooled over every test file the turn changed, so an
+assertion moved between test files loses nothing, and a unittest message
+(`msg=`, or a trailing string) is not an expected value.
 
 `pre_llm_call` keeps those three facts about the request, never its text. The
 note continues the turn like the export note, and asks for the expected value

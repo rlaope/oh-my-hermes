@@ -126,6 +126,9 @@ def pre_verify(
     )
     _ = observe_plugin_hook_call("pre_verify", observation)
     if attempt_value is None or not paths:
+        if attempt_value == 0:
+            # A stop with no edited path still ends the turn: its snapshots are not kept to the next one.
+            discard_snapshots(session_id)
         return None
     # The opt-in cross-file impact check (`impact_check`) answers once per
     # turn, at the first stop, and does not depend on the coding posture: it

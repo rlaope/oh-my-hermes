@@ -10,7 +10,8 @@ deterministically and from the disk alone, whether such a thing exists:
    - Before each ``patch`` / ``write_file`` of such a file, it keeps the file's text, once per turn
      (``""`` for a file that does not exist yet). Before each ``terminal`` / ``execute_code`` call it
      does the same for every such file the call's arguments name (``printf ... >> tests/test_x.py``,
-     ``sed -i ... a.py``).
+     ``sed -i ... a.py``), within a budget of their own; at the next tool call the ones the command left
+     unchanged are dropped.
    - A file that changed since the index before its first snapshot (a command that did not name it,
      or a delegated child's edit) is marked as having no turn-start text.
    - No index is taken for a session whose platform never gets the check (``note_turn_posture``, from
@@ -29,8 +30,8 @@ deterministically and from the disk alone, whether such a thing exists:
 
      - ``copy``: a touched top-level definition is also defined at the top level of another file,
        unless that file says its definition differs on purpose (``declared_divergent``: in the
-       definition's docstring or the comments at it, or in the module docstring naming the edited
-       file);
+       definition's docstring or the comments at it, or in a module-docstring sentence naming the
+       edited file as a file; a negation or an identity word voids the note);
      - ``renamed``: a definition the edit removed is still named in another Python file or a config
        file (``.toml`` ``.cfg`` ``.ini`` ``.yaml`` ``.yml`` ``.json``);
      - ``signature``: a touched function's parameters or return annotation changed, or a class's
@@ -111,6 +112,9 @@ _V4A_MOVE: Final = re.compile(r"^\*\*\*\s*Move\s+File:\s*(.+?)\s*->\s*(.+)$", re
 _PATH_RUN: Final = re.compile(r"[\w./@+~-]+")
 MAX_NAMED_FILES: Final = 8
 MAX_NAMED_SCAN_CHARS: Final = 65_536
+# The command-named snapshots' own budget per session, apart from the edits' 32 files / 4 MB.
+MAX_NAMED_SNAPSHOTS: Final = 16
+MAX_NAMED_SNAPSHOT_BYTES: Final = 512_000
 # Top-level names many unrelated modules define; one of them defined elsewhere is not a copy.
 _COMMON_NAMES: Final = frozenset({"main", "log", "LOG", "logger", "LOGGER", "app"})
 _CONSTRUCTOR_METHODS: Final = frozenset({"__init__", "__new__", "__call__"})
@@ -119,12 +123,17 @@ NO_CHECK_PLATFORMS: Final = frozenset({"subagent"})
 # Statement bodies read as if their definitions sat at the enclosing level.
 _BLOCK_FIELDS: Final = ("body", "orelse", "finalbody")
 _FUNCTION_TYPES: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
-# A note saying a look-alike differs on purpose (`_declared_divergent`): an intent word and a
-# difference word in one sentence, or an explicit "not kept in step / in sync with".
-_INTENT: Final = re.compile(r"\b(?:intentional(?:ly)?|deliberate(?:ly)?|on purpose|by design|purposely|purposefully)\b")
-_DIFFER: Final = re.compile(r"\b(?:differ(?:s|ed|ent|ently|ence)?|diverge[sd]?|divergent|divergence|deviates?|unlike)\b")
-_NOT_IN_STEP: Final = re.compile(r"\bnot (?:be )?(?:kept )?in (?:step|sync) with\b")
-_SENTENCE_BREAK: Final = re.compile(r"(?<=[.!?;])\s+")
+# A note saying a look-alike differs on purpose (`_declared_divergent`): an intent word followed, in
+# the same sentence, by a difference word ("intentionally different from billing.py"). A sentence with
+# a negation or an identity word declares nothing: "must not differ", "never let the two diverge",
+# "a deliberate copy", "same rounding by design: any difference is a bug", "mirrors invoice.py".
+_DIVERGENT: Final = re.compile(
+    r"\b(?:intentional(?:ly)?|deliberate(?:ly)?|on purpose|by design|purposely|purposefully)\b"
+    r".*?\b(?:differs?|differ(?:ent|ently)|diverges?|divergent)\b")
+_REFUSES_DIVERGENCE: Final = re.compile(
+    r"\b(?:not|never|no|nor|cannot|without)\b|n't\b|\bis a bug\b"
+    r"|\b(?:identical|same|copy|copies|copied|mirror(?:s|ed|ing)?|duplicat\w*|in step|in sync)\b")
+_SENTENCE_BREAK: Final = re.compile(r"(?<=[.!?;:])\s+")
 
 _LOG = logging.getLogger("omh.consistency_trigger")
 _lock = threading.Lock()
@@ -158,6 +167,7 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
         if not session_id:
             return
         state = _turn_state(session_id, kwargs)
+        _prune_named(state)
         tool_name = kwargs.get("tool_name")
         if not isinstance(tool_input, dict):
             return
@@ -172,6 +182,10 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
         else:
             return
         root = state["root"]
+        index = state["index"]
+        named = tool_name in _COMMAND_TOOLS
+        if named and index is None:
+            return  # without an index every verdict fires anyway; a command's snapshot buys nothing
         for requested in requested_paths:
             if not requested.endswith(PYTHON_SUFFIXES):
                 continue
@@ -179,9 +193,8 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
             if path is None:
                 continue
             with _lock:
-                if path in state["before"] or path in state["opaque"]:
+                if path in state["before"] or path in state["named"] or path in state["opaque"]:
                     continue
-            index = state["index"]
             if index is not None and _stat(path) != index.get(path):
                 # Changed since the turn began, by a call that did not name it: the text on disk now
                 # is not the turn's starting text.
@@ -190,14 +203,38 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
                 continue
             text = _read(path, missing="")
             with _lock:
-                if text is None or len(state["before"]) >= MAX_SNAPSHOT_FILES \
-                        or state["bytes"] + len(text) > MAX_SNAPSHOT_BYTES:
+                if text is None:
                     continue
-                if path not in state["before"]:
-                    state["before"][path] = text
-                    state["bytes"] += len(text)
+                if named:
+                    # A budget of their own, so files a read-only command names never take the slots
+                    # an edit needs; `_prune_named` frees the ones the command left unchanged.
+                    if len(state["named"]) >= MAX_NAMED_SNAPSHOTS \
+                            or state["named_bytes"] + len(text) > MAX_NAMED_SNAPSHOT_BYTES:
+                        continue
+                    state["named"][path] = text
+                    state["named_bytes"] += len(text)
+                    state["pending"].append(path)
+                    continue
+                if len(state["before"]) >= MAX_SNAPSHOT_FILES or state["bytes"] + len(text) > MAX_SNAPSHOT_BYTES:
+                    continue
+                state["before"][path] = text
+                state["bytes"] += len(text)
     except Exception as exc:  # noqa: BLE001 - never fail the call; a missing snapshot fires the check
         _LOG.warning("consistency_trigger snapshot failed=%s", type(exc).__name__)
+
+
+def _prune_named(state: dict[str, Any]) -> None:
+    """At the next tool call, drop the command-named snapshots the command left unchanged: only a file
+    the command changed needs its turn-start text, and the rest would sit in memory for nothing."""
+    index = state["index"]
+    with _lock:
+        pending, state["pending"] = state["pending"], []
+    for path in pending:
+        if index is not None and _stat(path) == index.get(path):
+            with _lock:
+                text = state["named"].pop(path, None)
+                if text is not None:
+                    state["named_bytes"] -= len(text)
 
 
 def round_end_trigger(session_id: str, code_paths: tuple[str, ...]) -> Verdict:
@@ -231,7 +268,7 @@ def turn_snapshots(session_id: object) -> dict[str, str]:
         return {}
     with _lock:
         state = _sessions.get(session_id)
-        return dict(state["before"]) if state is not None else {}
+        return {**state["named"], **state["before"]} if state is not None else {}
 
 
 def discard_snapshots(session_id: object) -> None:
@@ -294,7 +331,7 @@ def _turn_state(session_id: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         if state is not None and state["turn"] == turn:  # a parallel first call got here first
             return state
         state = {"turn": turn, "root": root, "index": index, "unindexed": unindexed, "before": {},
-                 "opaque": set(), "bytes": 0}
+                 "opaque": set(), "bytes": 0, "named": {}, "named_bytes": 0, "pending": []}
         _sessions.pop(session_id, None)
         _sessions[session_id] = state
         while len(_sessions) > _MAX_SESSIONS:
@@ -326,12 +363,13 @@ def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline:
     changed |= reported
     needles = _Needles()
     for path in sorted(changed):
-        if path in state["opaque"] or path not in state["before"]:
+        before = state["before"].get(path, state["named"].get(path))
+        if path in state["opaque"] or before is None:
             return Verdict(True, "opaque_edit", _relative(path, root))
         after = _read(path, missing="")
         if after is None:
             return Verdict(True, "too_large", _relative(path, root))
-        status = _collect(state["before"][path], after, needles, path)
+        status = _collect(before, after, needles, path)
         if status != "ok":
             return Verdict(True, status, _relative(path, root))
     if needles.empty():
@@ -458,12 +496,16 @@ def _declared_divergent(text: str, name: str, stems: set[str]) -> bool:
     copy that has to change with the edit. Read with ``ast``, in two places only:
 
     - the docstring of a top-level definition of ``name``, or the comment lines directly above it
-      or on its first line: a sentence there that says it differs on purpose;
-    - the module docstring: such a sentence that also names one of the edited files (``stems``,
-      ``billing`` for ``billing.py``), since a module docstring speaks for every definition in it.
+      or on its first line: a sentence there that says it differs on purpose, and no sentence there
+      that negates or speaks of identity;
+    - the module docstring: such a sentence that also names one of the edited files as a file
+      (``billing.py``, or a dotted module ending in ``.billing``; the bare word does not count). When
+      that sentence also names definitions of this module, it speaks only for those, so it must name
+      ``name`` too.
 
-    "Differs on purpose" is a closed vocabulary (`_INTENT` plus `_DIFFER`, or `_NOT_IN_STEP`). A file
-    that does not parse, or a note in a string or comment anywhere else, declares nothing."""
+    "Differs on purpose" is `_DIVERGENT`, an intent word followed by a difference word, in a sentence
+    `_REFUSES_DIVERGENCE` does not match (no negation, no identity word). A file that does not parse,
+    or a note in a string or comment anywhere else, declares nothing."""
     tree = _parse(text)
     if tree is None:
         return False
@@ -477,11 +519,21 @@ def _declared_divergent(text: str, name: str, stems: set[str]) -> bool:
         first = lines[start - 1] if start <= len(lines) else ""
         if "#" in first:
             notes.append(first[first.index("#"):])
-        if any(_says_divergent(sentence) for note in notes for sentence in _sentences(note)):
+        # A definition's note is judged whole: one negating or identity sentence anywhere in it voids it.
+        sentences = [sentence for note in notes for sentence in _sentences(note)]
+        if any(_DIVERGENT.search(sentence) for sentence in sentences) \
+                and not any(_REFUSES_DIVERGENCE.search(sentence) for sentence in sentences):
             return True
     module_doc = ast.get_docstring(tree) or ""
-    return any(_says_divergent(sentence) and any(re.search(rf"\b{re.escape(stem)}\b", sentence) for stem in stems if stem)
-               for sentence in _sentences(module_doc))
+    own = {top.lower() for top in _definitions(tree) if "." not in top}
+    for sentence in _sentences(module_doc):
+        if not _says_divergent(sentence) or not any(
+                re.search(rf"(?:\b{re.escape(stem)}\.pyi?\b|\.{re.escape(stem)}\b)", sentence) for stem in stems if stem):
+            continue
+        named = {word for word in re.findall(r"[a-z_][a-z0-9_]*", sentence) if word in own}
+        if not named or name.lower() in named:
+            return True
+    return False
 
 
 def _sentences(note: str) -> list[str]:
@@ -490,7 +542,7 @@ def _sentences(note: str) -> list[str]:
 
 
 def _says_divergent(sentence: str) -> bool:
-    return bool((_INTENT.search(sentence) and _DIFFER.search(sentence)) or _NOT_IN_STEP.search(sentence))
+    return bool(_DIVERGENT.search(sentence)) and not _REFUSES_DIVERGENCE.search(sentence)
 
 
 def _stem(path: str) -> str:
@@ -688,6 +740,9 @@ def _named_python_files(args: dict[str, Any]) -> list[str]:
             continue
         for match in _PATH_RUN.finditer(value, 0, MAX_NAMED_SCAN_CHARS):
             token = match.group(0)
+            # `~` is the shell's, not a workspace path; a bare `.py` is a glob's leftover (`*.py`).
+            if token.startswith("~") or os.path.basename(token) in PYTHON_SUFFIXES:
+                continue
             if token.endswith(PYTHON_SUFFIXES) and token not in found:
                 found.append(token)
                 if len(found) >= MAX_NAMED_FILES:

@@ -167,6 +167,67 @@ class TestExpectationNoteTest(_Turn):
             tc.note_request(SESSION, text)
             self.assertEqual(tc._requests[SESSION][:2], (False, False), text)
 
+    def test_review_phrases_for_scope_negation_and_wider_asks(self):
+        # Review of #2494. A scoped keep keeps nothing about the part the request changes.
+        for text in ("Make a kib 1024 bytes; everything else stays the same.",
+                     "Rename the key and leave the other keys unchanged.",
+                     "Add a seconds argument and keep the existing behaviour for callers that pass none."):
+            tc.note_request(SESSION, text)
+            self.assertFalse(tc._requests[SESSION].keeps_behaviour, text)
+        # A wider ask to edit a test.
+        for text in ("Rename it and update its docstring and tests.", "Refresh the kib test.",
+                     "Revise the existing tests for the new unit."):
+            tc.note_request(SESSION, text)
+            self.assertTrue(tc._requests[SESSION].asks_test_edit, text)
+        # A negated ask, or a result that must stay as it is, keeps behaviour and asks for nothing.
+        for text in ("Speed it up; do not change the tests.", "Rename the flag and don't update any tests.",
+                     "fetch must return the same dict as before.",
+                     "It should return exactly what it returns today."):
+            tc.note_request(SESSION, text)
+            self.assertEqual(tc._requests[SESSION][:2], (True, False), text)
+
+    def test_a_scoped_keep_with_a_correct_test_update_gets_no_note(self):
+        request = "parse_size must count a kib as 1024 bytes; everything else stays the same."
+        tc.note_request(SESSION, request.replace("must count", "counts"))
+        self.write("src/app/sizes.py", "UNIT = {'kib': 1000}\n")
+        self.write("tests/test_sizes.py", "def test_kib():\n    assert parse_size('2kib') == 2000\n")
+        self.edit("src/app/sizes.py", "1000", "1024")
+        self.edit("tests/test_sizes.py", "2000", "2048")
+        self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
+
+    def test_an_assertion_moved_to_another_test_file_loses_nothing(self):
+        tc.note_request(SESSION, KWARG)
+        self.write("src/benchapp/http_client.py", CLIENT)
+        self.write("tests/test_http_client.py", CLIENT_TEST)
+        self.write("tests/test_fetch.py", "from benchapp.http_client import fetch\n")
+        self.edit("src/benchapp/http_client.py", 'timeout: float = 5.0', 'timeout_s: float = 5.0')
+        moved = '    assert fetch("u") == {"url": "u", "timeout": 5.0, "retries": 1}\n'
+        self.edit("tests/test_http_client.py", moved, "    pass\n")
+        self.edit("tests/test_fetch.py", "import fetch\n", "import fetch\n\n\ndef test_defaults():\n" + moved)
+        self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
+        ct.reset()
+        # Moved into a test file the turn created, too.
+        tc.note_request(SESSION, KWARG)
+        self.write("src/benchapp/http_client.py", CLIENT)
+        self.write("tests/test_http_client.py", CLIENT_TEST)
+        self.edit("src/benchapp/http_client.py", 'timeout: float = 5.0', 'timeout_s: float = 5.0')
+        self.edit("tests/test_http_client.py", moved, "    pass\n")
+        ct.snapshot_before_edit({"tool_name": "write_file", "session_id": SESSION, "turn_id": "t1"},
+                                {"path": "tests/test_new.py", "content": "x"})
+        self.write("tests/test_new.py", "def test_defaults():\n" + moved)
+        self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
+
+    def test_a_unittest_message_is_not_an_expected_value(self):
+        tc.note_request(SESSION, "Speed up total without changing behaviour.")
+        self.write("src/app/calc.py", "def total(xs):\n    return sum(xs)\n")
+        self.write("tests/test_calc.py", "import unittest\n\n\nclass T(unittest.TestCase):\n    def test_total(self):\n"
+                                         "        self.assertEqual(total([1, 2]), 3, 'sum of two')\n"
+                                         "        self.assertTrue(total([]) == 0, msg='empty is zero')\n")
+        self.edit("src/app/calc.py", "return sum(xs)", "return sum(list(xs))")
+        self.edit("tests/test_calc.py", "'sum of two'", "'sum of both'")
+        self.edit("tests/test_calc.py", "msg='empty is zero'", "msg='empty sums to zero'")
+        self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
+
     def test_requests_are_bounded_across_sessions(self):
         for index in range(tc._MAX_SESSIONS + 5):
             tc.note_request(f"s{index}", KWARG)
