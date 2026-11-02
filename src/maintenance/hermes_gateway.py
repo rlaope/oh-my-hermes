@@ -74,6 +74,7 @@ import time
 
 from ..install.config_adapter import read_config
 from ..install.plugin_pack import PLUGIN_MANAGED_MANIFEST, read_plugin_manifest
+from ..plugin_bundle.omh.iso_datetime import strict_fromisoformat
 from ..paths import OmhPaths
 from ..install.skill_registration import hermes_profile_dirs, managed_candidate_entries, registration_home_label
 
@@ -634,7 +635,8 @@ def _iso_epoch(value: object) -> float | None:
     if not isinstance(value, str) or not value.strip():
         return None
     try:
-        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        # Hermes writes `updated_at`; 3.14 would read T24:00:00 as the next midnight (`iso_datetime`).
+        parsed = strict_fromisoformat(value.strip().replace("Z", "+00:00"))
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=UTC)
         return parsed.timestamp()
