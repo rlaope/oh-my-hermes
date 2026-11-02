@@ -25,6 +25,8 @@ from omh.tui.theme import (
 )
 from test_tui_modes import make_app
 
+VERSION = "9.9.9"  # a fixed version, so no width pinned here moves with a release
+
 PORCELAIN = """# branch.oid 9d013ddd827e803eea5b5d2d1259acad43b295d9
 # branch.head omh/terminology-unification
 # branch.upstream origin/omh/terminology-unification
@@ -196,6 +198,9 @@ class LongBranchTests(unittest.TestCase):
         from test_tui_modes import drawn, make_app, queue, show_mode
         from omh.tui.frame import MODE_PLAN
 
+        patched = mock.patch("omh.tui.app.__version__", VERSION)  # the badge reads it as it draws
+        patched.start()
+        self.addCleanup(patched.stop)
         app, _client = make_app(cols=cols, busy=scene == "busy-queue")
         app.git = SimpleNamespace(state=GitState(self.BRANCH, 3, 2), refresh=lambda: None, stop=lambda: None)
         app.model, app.context_percent, app.effort = "claude-opus-5-5", 50.0, "high"
@@ -213,16 +218,16 @@ class LongBranchTests(unittest.TestCase):
         expected = {
             ("idle", 40): "  [⚚ OMH]  branch:feature/rea… | !3 ?2",
             ("idle", 80): "  [⚚ OMH Native]  branch:feature/really-long-bra… | !3 ?2   ctx ━━━━━━────── 50%",
-            ("idle", 120): "  [⚚ OMH Native]  branch:feature/really-long-branch-name-for-the-steer-key-hint-work-063 | !3 ?2"
-                           "    ctx ━━━━━━────── 50%",
+            ("idle", 120): "  [⚚ OMH Native v9.9.9]  branch:feature/really-long-branch-name-for-the-steer-key-hint-work-063"
+                           " | !3 ?2          ctx 50%",
             ("plan", 40): "  ⏸ plan mode on (⇧⇥ to cycle)   ctx 50%",
             ("plan", 80): "  [⚚ OMH Native]  branch:feature/rea… | !3 ?2  ⏸ plan mode on (⇧⇥ to cycle)",
             ("plan", 120): "  [⚚ OMH Native]  branch:feature/really-long-bra… | !3 ?2  ⏸ plan mode on (⇧⇥ to cycle)"
                            "             ctx ━━━━━━────── 50%",
             ("busy-queue", 40): "  [⚚ OMH]  branch:feature/rea… | !3 ?2",
             ("busy-queue", 80): "  [⚚ OMH Native]  branch:feature/really-long-bra… | !3 ?2   ctx ━━━━━━────── 50%",
-            ("busy-queue", 120): "  [⚚ OMH Native]  branch:feature/really-long-branch-name-for-the-steer-key-hint-work-063"
-                                 " | !3 ?2    ctx ━━━━━━────── 50%",
+            ("busy-queue", 120): "  [⚚ OMH Native v9.9.9]  branch:feature/really-long-branch-name-for-the-steer-key-hint-work-063"
+                                 " | !3 ?2          ctx 50%",
         }
         for (scene, cols), row in expected.items():
             with self.subTest(scene=scene, cols=cols):
@@ -240,24 +245,27 @@ class BottomLineTests(unittest.TestCase):
     def line(self, width: int, state: GitState | None = STATE, **facts: object) -> str:
         word, accent = native("spectrum", "#0D1117")
         return line_text(info_line(mode=facts.pop("mode", "normal"), width=width, theme=self.THEME,
-                                   right=self.RIGHT, badge=badge_forms(self.THEME, accent, word, self.NAME),
+                                   right=self.RIGHT, badge=badge_forms(self.THEME, accent, word, self.NAME, VERSION),
                                    branch=branch_forms(state, self.THEME), **facts))  # type: ignore[arg-type]
 
     def test_the_badge_then_the_branch_on_the_left_and_the_fields_on_the_right(self) -> None:
         text = self.line(130)
         self.assertEqual(len(text), 130)
-        self.assertTrue(text.startswith("[⚚ OMH Native]  branch:omh/terminology-unification | !3 ?128   "), text)
+        self.assertTrue(text.startswith("[⚚ OMH Native v9.9.9]  branch:omh/terminology-unification | !3 ?128   "), text)
         self.assertTrue(text.endswith("   deepseek-v4.1-flash · ctx 12% · effort high"), text)
 
-    def test_the_fields_go_first_then_the_branch_name_then_the_badge(self) -> None:
+    def test_the_fields_go_first_then_the_version_then_the_branch_name_then_the_badge(self) -> None:
         branch = "branch:omh/terminology-unification | !3 ?128"  # 44 cells
         cut24, cut12 = "branch:omh/terminology-unifica… | !3 ?128", "branch:omh/termino… | !3 ?128"  # 41 and 29
+        versioned = "[⚚ OMH Native v9.9.9]  "  # 21 cells and 2
         badge = "[⚚ OMH Native]  "  # the badge's 14 cells and 2; `[⚚ OMH]` is 7, `⚚` 1; the right side 3 away
         widths = {
-            106: (badge + branch, "deepseek-v4.1-flash · ctx 12% · effort high"),
-            105: (badge + branch, "ctx 12% · effort high"),
-            84: (badge + branch, "ctx 12% · effort high"),
-            83: (badge + branch, ""),  # the fields go first
+            113: (versioned + branch, "deepseek-v4.1-flash · ctx 12% · effort high"),
+            112: (versioned + branch, "ctx 12% · effort high"),
+            91: (versioned + branch, "ctx 12% · effort high"),
+            90: (versioned + branch, ""),  # the fields go first
+            67: (versioned + branch, ""),
+            66: (badge + branch, ""),  # then the version
             60: (badge + branch, ""),
             59: (badge + cut24, ""),  # then the branch's name is cut, before the badge shortens
             57: (badge + cut24, ""),
@@ -283,7 +291,7 @@ class BottomLineTests(unittest.TestCase):
 
     def test_the_badge_and_the_branch_keep_their_colours(self) -> None:
         word, accent = native("spectrum", "#0D1117")
-        row = info_line(mode="normal", width=120, theme=self.THEME, badge=badge_forms(self.THEME, accent, word, self.NAME),
+        row = info_line(mode="normal", width=120, theme=self.THEME, badge=badge_forms(self.THEME, accent, word, self.NAME, VERSION),
                         branch=branch_forms(self.STATE, self.THEME))
         styles = {span.text: span.style for span in row}
         self.assertEqual((styles["!3"], styles["?128"], styles["⚚"]), (self.THEME.warn, self.THEME.faint, accent))

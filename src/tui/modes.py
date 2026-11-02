@@ -212,8 +212,9 @@ def info_line(
     What gives way, in order: the first `right_spare` of the right
     side's forms (the session's title), then the background-process row
     (through its forms, then whole), then the rest of the right side
-    (through its forms, then whole), then the branch's name (`branch`'s
-    shorter forms), then the badge (to `[⚚ OMH]`, then `⚚`, then none),
+    (through its forms, then whole), then the badge's version (`badge`'s
+    second form), then the branch's name (`branch`'s shorter forms), then
+    the badge (to `[⚚ OMH]`, then `⚚`, then none),
     then the branch; the label, the agent count and what the next key
     does (a question's or a picker's way out) keep their words until all
     of those are gone, and only then shorten. So the row goes before the
@@ -280,8 +281,9 @@ def info_line(
     tries = [(badges[0], branches[0], rows[0], side) for side in sides[: spare + 1]]
     tries += [(badges[0], branches[0], form, sides[spare]) for form in [*rows[1:], ()]]
     tries += [(badges[0], branches[0], (), side) for side in sides[spare + 1 :]]
-    tries += [(badges[0], form, (), ()) for form in branches[1:]]
-    tries += [(form, branches[-1], (), ()) for form in [*badges[1:], ()]]
+    unversioned = badges[1] if len(badges) > 1 else badges[0]  # the version goes before the branch name is cut
+    tries += [(unversioned, form, (), ()) for form in branches]
+    tries += [(form, branches[-1], (), ()) for form in [*badges[2:], ()]]
     tries += [((), (), (), ())]
     shown_badge, shown_branch, shown_row, shown_right = next(
         (tried for tried in tries if fits(line_width(lead(*tried[:3])) + whole, tried[3])), tries[-1]

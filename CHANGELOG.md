@@ -4,6 +4,11 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The info line's badge carries the version.** It reads
+  `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
+  narrow line the version is the first part of the left side to go, before
+  the branch name is cut and before the badge shortens.
+
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
   grey edge (`#4A4F66`); they are now a muted violet (`#6E5A9E`), lifted for
