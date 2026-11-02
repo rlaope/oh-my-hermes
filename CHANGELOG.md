@@ -12,11 +12,12 @@ All notable changes will be documented here.
   before leaving. Now:
   - The connection sends no keepalive ping, as Hermes' own loopback
     connections do not. During a turn, once nothing has come from the
-    gateway for 45 s, the working row says "no word from Hermes' gateway
+    gateway for 45 s and no tool is running (Hermes sends nothing while a
+    terminal tool runs), the working row says "no word from Hermes' gateway
     for N s"; the TUI closes nothing.
   - A connection that does drop says "the connection to Hermes' gateway
     dropped; the turn may still be running". The resume reads whether the
-    turn still runs (or Hermes still holds it, queued or started): one that
+    turn still runs (or Hermes has started it): one that
     does goes on with its clock and any stop already asked, and one that
     ended meanwhile says so. A gateway that started again (a new authority
     epoch) says the turn was lost.
@@ -30,7 +31,8 @@ All notable changes will be documented here.
     session's events because it fell behind, resumes the session, as
     Hermes' own TUI does. Before, the turn spun with no end. The turn's own
     events that arrive before the answer win over it. A resume refused or
-    unanswered closes the turn and holds the queue.
+    unanswered closes the turn and holds the queue; one that names a newer
+    id for the session moves the screen to it and closes the turn shown.
   - `skills.changed` asks for the command catalog again, once per burst, so
     a skill installed from another terminal reaches completion and `/help`.
   - A turn Hermes interrupted itself says "Hermes interrupted this turn;

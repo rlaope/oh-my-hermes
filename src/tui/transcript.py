@@ -1587,6 +1587,11 @@ class Transcript:
         if rows:
             self._append(ToolGroup(rows, done=True))
 
+    def tool_running(self) -> bool:
+        """Whether a tool of the live turn has started and not reported yet: Hermes sends nothing until it does."""
+        group = self._live(ToolGroup)
+        return group is not None and any(row.status == TOOL_RUNNING for row in group.tools)
+
     def fail_turn(self, message: str) -> None:
         """A turn the gateway ended with a bare `error` event instead of `message.complete`.
 

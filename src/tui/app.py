@@ -675,13 +675,16 @@ REPLAY_GAP_REFUSED_NOTICE = (
     "what it does next does not show here."
 )
 REPLAY_GAP_WHY = "Hermes stopped sending this session's events"
+TURN_MOVED_NOTICE = "Hermes moved this session to {session}; what the running turn did before that does not show here."
 REPLAY_GAP_UNANSWERED = "no answer in {seconds:g} s"
-# The admissions a resume's `pending` rows list that are still Hermes' to run: the turn is live although `running`
-# (only a started admission) says no (Hermes' own client reads them, `hermes_cli/gateway_agent.py` `_recover`).
-LIVE_ADMISSIONS = frozenset({"queued", "started"})
-# During a turn, the working row says how long nothing has come from the gateway, past this long: Hermes' own TUI
-# counts any inbound frame as liveness with this deadline (ui-tui `gatewayClient.ts`). Only said, never acted on: a busy
-# gateway can be silent that long and still finish the turn.
+# The admission a resume's `pending` rows list that makes the turn live besides `running`: a started one, as Hermes'
+# own TUI reads busy (ui-tui `submissionCore.ts`). Never a queued one: Hermes holds a queue behind an `unknown` head
+# (a turn it lost) until someone settles that head (`gateway/session_authority.py`), so a queued row may never start.
+LIVE_ADMISSIONS = frozenset({"started"})
+# During a turn, the working row says how long nothing has come from the gateway, past this long, except while a tool
+# runs: Hermes sends nothing between a terminal tool's start and its end, however long it takes. Only said, never acted
+# on. Unlike Hermes' own TUI, which pings the gateway and counts from the last answer (`json-rpc-channel.ts`), this
+# counts from the last thing the gateway sent, so it can only say how long it has been quiet, not that it is gone.
 GATEWAY_SILENCE_SECONDS = 45.0
 GATEWAY_SILENCE = "no word from Hermes' gateway for {seconds} s"
 # A launch's `--resume` that Hermes refused as itself (not drift): said, and no other TUI opens a new session instead.
@@ -1127,8 +1130,8 @@ def plain_sentence(message: str) -> str:
 
 
 def resumed_running(result: Mapping[str, Any]) -> bool:
-    """Whether a create or resume answer has a turn still Hermes' to run: `running`, or a `pending` admission still
-    queued or started (`LIVE_ADMISSIONS`)."""
+    """Whether a create or resume answer has a turn running: `running`, or a `pending` admission Hermes has started
+    (`LIVE_ADMISSIONS`); a queued one is not, until it starts."""
     pending = result.get("pending")
     rows = pending if isinstance(pending, list) else []
     return bool(result.get("running")) or any(
@@ -2804,7 +2807,18 @@ class App(ModesMixin, AgentViewMixin):
                 self._request("session.close", {"session_id": answered}, lambda _result: None, lambda _error: True)
             return
         if answered and answered != self.sid:
-            self.sid = answered  # the live session's events now carry this id
+            # Hermes moved the session to a newer id (a compression's tip). Its events under that id were dropped until
+            # now, so neither `seen` nor `running` says what the shown turn did: it closes, and its later events show.
+            self.sid = answered
+            if self._busy():
+                if self.transcript.running:
+                    self.transcript.fail_turn(TURN_MOVED_NOTICE.format(session=answered))
+                else:
+                    self.transcript.add_notice(TURN_MOVED_NOTICE.format(session=answered), NOTICE_WARN)
+                self.turn_pending = False
+                if not resumed_running(result):
+                    self._turn_ended()
+            return
         if self.lifecycle_seen != seen:  # the turn's own events came after the resume went out: they are newer
             return
         running = resumed_running(result)
@@ -3029,8 +3043,7 @@ class App(ModesMixin, AgentViewMixin):
             if event.type == "message.complete":  # before the reply closes: a steer row goes where it went before
                 self._settle_steers_at_turn_end()
                 # A stop the person asked for in no way (Esc, `/stop`, a prompt in busy mode `interrupt`) is Hermes' own.
-                self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)
-                self.stop_asked = False
+                self.transcript.hermes_interrupted = not (self.interrupting or self.stop_asked)  # `_turn_ended` spends it
             self.transcript.apply(event)
             self._track_sent_now(event.type)
             self._count_streamed(event.type, payload)
@@ -4820,6 +4833,7 @@ class App(ModesMixin, AgentViewMixin):
         prompt that goes waits for that check before its turn starts (`_start_turn`).
         """
         self.tell_turn_runs = False  # an open tell field now says what to do after this turn, not in it
+        self.stop_asked = False  # whichever way the turn ended, a stop asked for it is spent
         self.turns_ended += 1
         # A turn ended before Hermes admitted it (refused, cancelled while the agent built) left what was staged for
         # it: detached. After `message.start` nothing is left (`_claimed` emptied `staged`).
@@ -7159,7 +7173,7 @@ class App(ModesMixin, AgentViewMixin):
             row: Line = lead
             status = (Span(f" · {said}", self.theme.faint),) if said else ()
             silent = now - max(self.inbound_at, self.busy_since or now)
-            if silent >= GATEWAY_SILENCE_SECONDS:  # in place of the status: the gateway has said nothing at all
+            if silent >= GATEWAY_SILENCE_SECONDS and not self.transcript.tool_running():  # in place of the status
                 status = (Span(f" · {GATEWAY_SILENCE.format(seconds=int(silent))}", self.theme.warn),)
             for facts, tail in (((elapsed, written, effort, interrupt), status), ((elapsed, written, effort, interrupt), ()),
                                 ((elapsed, written, interrupt), ()), ((elapsed, interrupt), ()), ((interrupt,), ())):

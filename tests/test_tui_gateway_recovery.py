@@ -33,6 +33,7 @@ from omh.tui.app import (
     TURN_ENDED_UNSEEN_NOTICE,
     TURN_LEFT_RUNNING_NOTICE,
     TURN_LOST_NOTICE,
+    TURN_MOVED_NOTICE,
     QueuedLine,
     _run,
     _Told,
@@ -176,14 +177,57 @@ class DroppedConnectionTests(unittest.TestCase):
         self.assertIn(INTERRUPTED_NOTICE, said)
         self.assertNotIn(HERMES_INTERRUPTED_NOTICE, said)
 
-    def test_a_turn_hermes_still_holds_as_queued_or_started_is_live(self) -> None:
-        for status, live in (("queued", True), ("started", True), ("unknown", False)):
-            with self.subTest(status=status):
+    def test_only_a_started_admission_is_a_live_turn(self) -> None:
+        # Hermes holds a queue behind an `unknown` head (a turn it lost) until that head is settled: a queued row may
+        # never start, and reading it as a turn would leave the screen working forever.
+        for statuses, live in ((("started",), True), (("queued",), False), (("unknown", "queued"), False),
+                               (("unknown",), False)):
+            with self.subTest(statuses=statuses):
                 resumed = {**SHARED_RESUMED, "session_id": SID, "running": False,
-                           "pending": [{"admission_id": "a1", "status": status}]}
+                           "pending": [{"admission_id": f"a{n}", "status": status} for n, status in enumerate(statuses)]}
                 app, _spawner = self.dropped(resumed)
                 self.assertEqual(app._busy(), live)  # type: ignore[attr-defined]
                 self.assertEqual(TURN_ENDED_UNSEEN_NOTICE in notices(app), not live)
+
+    def test_a_session_adopted_behind_a_paused_queue_is_idle(self) -> None:
+        app, _client = make_app()
+        app._adopt_session({"session_id": SID, "running": False, "info": {},
+                            "pending": [{"admission_id": "a1", "status": "unknown"},
+                                        {"admission_id": "a2", "status": "queued"}]})
+        self.assertFalse(app._busy())
+
+    def test_no_epoch_before_is_no_restart(self) -> None:
+        new = RespawnClient(resume={**SHARED_RESUMED, "session_id": SID, "authority_epoch": 5, "running": True})
+        app, old, _spawner, _now = crashing(spawner=Spawner(new))
+        app.sid, app.shared_gateway, app.authority_epoch = SID, True, None
+        streaming(app)
+        crash(app, old, 1)
+        said = notices(app)
+        self.assertIn(RECONNECTED_NOTICE.format(session=STORED), said)
+        self.assertNotIn(TURN_LOST_NOTICE, said)
+
+    def test_the_silence_count_starts_again_at_a_reconnect_no_exit_reported(self) -> None:
+        # A write the dead child refused starts the respawn with nothing drained from the gateway.
+        new = RespawnClient(resume={**SHARED_RESUMED, "session_id": SID, "running": True})
+        app, _old, _spawner, now = crashing(spawner=Spawner(new))
+        app.sid, app.shared_gateway = SID, True
+        streaming(app)
+        app.inbound_at = now[0]
+        now[0] += GATEWAY_SILENCE_SECONDS + 15
+        app._gateway_gone("the gateway stopped reading its input")
+        app._respawn_gateway()
+        self.assertTrue(app._busy())
+        self.assertNotIn("no word from", "\n".join(line_text(line) for line in app._tail(120)))
+
+    def test_the_silence_count_starts_again_at_the_reconnect(self) -> None:
+        new = RespawnClient(resume={**SHARED_RESUMED, "session_id": SID, "running": True})
+        app, old, _spawner, now = crashing(spawner=Spawner(new))
+        app.sid, app.shared_gateway = SID, True
+        streaming(app)
+        app.inbound_at = now[0]
+        now[0] += GATEWAY_SILENCE_SECONDS + 15  # the kept turn's clock goes back to its start
+        crash(app, old, 1)
+        self.assertNotIn("no word from", "\n".join(line_text(line) for line in app._tail(120)))
 
     def test_a_crash_of_a_gateway_the_child_ran_itself_still_loses_the_turn(self) -> None:
         app, old, _spawner, _now = crashing(busy=True)  # the stdio entry: no subscription, the child is the gateway
@@ -363,10 +407,40 @@ class ReplayGapTests(unittest.TestCase):
 
     def test_an_answer_naming_the_sessions_newer_id_moves_the_screen_to_it(self) -> None:
         app, client = self.gap()
-        self.answer(app, client, {"session_id": "live-tip", "running": True})
+        app.queued.append(QueuedLine("next one"))
+        self.answer(app, client, {"session_id": "live-tip", "running": False})
         self.assertEqual(app.sid, "live-tip")
+        self.assertIn(TURN_MOVED_NOTICE.format(session="live-tip"), notices(app))
+        self.assertEqual(client.named("prompt.submit")[0]["session_id"], "live-tip")
+
+    def test_a_moved_id_never_leaves_the_turn_open_on_a_stale_running(self) -> None:
+        # The turn ended under the new id before the answer: that end was dropped, so `running` cannot be trusted.
+        app, client = self.gap()
         app._on_event(Event("message.complete", "live-tip", {"text": "done", "status": "complete"}))
+        self.answer(app, client, {"session_id": "live-tip", "running": True})
         self.assertFalse(app._busy())
+        self.assertIn(TURN_MOVED_NOTICE.format(session="live-tip"), notices(app))
+
+    def test_a_moved_id_ends_a_submitted_turn_no_event_showed(self) -> None:
+        app, client = make_app(busy=True)  # the prompt went out; no `message.start` reached this screen
+        app.stored_id = STORED
+        app._on_event(Event("session.replay_gap", SID, {}))
+        self.answer(app, client, {"session_id": "live-tip", "running": True})
+        self.assertFalse(app._busy())
+        self.assertIn(TURN_MOVED_NOTICE.format(session="live-tip"), notices(app))
+
+    def test_a_started_admission_in_the_answer_keeps_the_turn(self) -> None:
+        app, client = self.gap()
+        self.answer(app, client, {"session_id": SID, "running": False,
+                                  "pending": [{"admission_id": "a1", "status": "started"}]})
+        self.assertTrue(app._busy())
+        self.assertNotIn(TURN_ENDED_UNSEEN_NOTICE, notices(app))
+
+    def test_a_stale_answer_naming_the_session_now_shown_closes_nothing(self) -> None:
+        app, client = self.gap()
+        app.sid = "live-9"  # the person moved to live-9 first; Hermes answered the gap's resume with it
+        self.answer(app, client, {"session_id": "live-9", "running": False})
+        self.assertEqual(client.named("session.close"), [])
 
     def test_a_gap_for_another_session_is_dropped(self) -> None:
         app, client = make_app()
@@ -443,6 +517,36 @@ class HermesInterruptTests(unittest.TestCase):
         self.assertIn(INTERRUPTED_NOTICE, said)
         self.assertNotIn(HERMES_INTERRUPTED_NOTICE, said)
 
+    def test_a_prompt_in_busy_mode_steer_or_queue_asks_no_stop(self) -> None:
+        for mode in ("steer", "queue"):
+            with self.subTest(mode=mode):
+                app, _client = make_app()
+                streaming(app)
+                app.busy_mode = mode
+                app._send_prompt("more")
+                self.assertFalse(app.stop_asked)
+
+    def test_stop_with_no_turn_asks_no_stop(self) -> None:
+        app, client = make_app()
+        type_text(app, "/stop")
+        app._on_input(Key(ENTER))
+        self.assertEqual(len(client.named("slash.exec")), 1)
+        self.assertFalse(app.stop_asked)
+
+    def test_a_turn_that_ends_any_other_way_spends_the_stop(self) -> None:
+        app, _client = make_app()
+        streaming(app)
+        app.stop_asked = True
+        app._on_event(Event("error", SID, {"message": "cancelled"}))  # a bare error ends the turn
+        self.assertFalse(app._busy())
+        self.assertFalse(app.stop_asked)
+
+    def test_a_session_adopted_starts_with_no_stop_asked(self) -> None:
+        app, _client = make_app()
+        app.stop_asked = True
+        app._adopt_session({"session_id": "live-2", "info": {}})
+        self.assertFalse(app.stop_asked)
+
     def test_the_stop_asked_is_for_one_turn_only(self) -> None:
         app, _client = make_app()
         streaming(app)
@@ -463,6 +567,19 @@ class GatewaySilenceTests(unittest.TestCase):
     def test_a_shorter_silence_says_nothing(self) -> None:
         rows = "\n".join(self.rows(GATEWAY_SILENCE_SECONDS - 5))
         self.assertNotIn("no word from Hermes' gateway", rows)
+
+    def test_a_running_tool_is_never_silence(self) -> None:
+        # Hermes sends nothing between a terminal tool's start and its end: a long build is not a quiet gateway.
+        now = [100.0]
+        app, _client = make_app(clock=lambda: now[0])
+        streaming(app)
+        app._on_event(Event("tool.start", SID, {"tool_id": "t1", "name": "terminal", "args": {"command": "make"}}))
+        app.inbound_at = now[0]
+        now[0] += GATEWAY_SILENCE_SECONDS + 15
+        self.assertNotIn("no word from", "\n".join(line_text(line) for line in app._tail(120)))
+        app._on_event(Event("tool.complete", SID, {"tool_id": "t1", "name": "terminal"}))
+        now[0] += GATEWAY_SILENCE_SECONDS + 15
+        self.assertIn("no word from", "\n".join(line_text(line) for line in app._tail(120)))
 
     def test_anything_from_the_gateway_restarts_the_count(self) -> None:
         now = [100.0]
