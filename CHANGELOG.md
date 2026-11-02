@@ -20,6 +20,35 @@ All notable changes will be documented here.
   capture when a change alters DOM nesting or class composition, and inlines
   only abstractions whose deletion makes their complexity vanish.
 
+- **`/resume` always answers, and `omh --resume` opens the picker.** A bare
+  `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
+  list, which during a turn can take a while. Now `Loading sessions…` stands
+  where the picker opens, keys typed meanwhile stay in the composer (the
+  picker opens with an empty filter and the draft is there when it closes),
+  and no stored session, a refusal in Hermes' words, or no answer within the
+  call's wait each say so. A list that arrives after you typed into the
+  composer shows its rows but leaves your typing in the composer, pauses
+  included, and the next prompt too after Enter sends one; ↑, ↓ or Esc hands
+  it the keys, and its filter row says so. `omh --resume` with no id (short form `-r`) starts
+  the TUI on that picker; `omh --resume <id>` and `omh --continue` are
+  unchanged.
+
+- **A prompt sent while a session switch waits goes to the session it opens.**
+  While `/new`, `/resume <id>` or a pick waits on Hermes, `switching to
+  <title>…` (or `starting a new session…`) shows under the queue, and a prompt
+  sent then is held and sent in the new session once it is live; before, it
+  went into the session being left, which was then closed. That holds for
+  plan-mode prompts, slash and skill commands and `!` lines too. Prompts still
+  queued behind the old session's turn come back to the composer with a
+  notice instead of vanishing, and so do prompts held for a switch that
+  failed. Of two switches out at once only the newer lands: a session the
+  older one opened late is closed again, with a notice on the new screen,
+  but never the session the newest switch goes to. Asking again for a switch
+  already out sends nothing, and a switch answered after its wait ran out
+  has the session it opened closed again. A second `/resume`
+  while the list is out sends no second call, and an answer that comes while
+  the picker is open no longer resets its highlight or filter.
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`
