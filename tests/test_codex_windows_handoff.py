@@ -15,7 +15,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.coding.codex_windows_sandbox import codex_windows_sandbox_signal  # noqa: E402
-from omh.coding.fanout_dispatch import build_dispatch_argv, dispatch_fanout  # noqa: E402
+from omh.coding.fanout_dispatch import build_dispatch_argv, dispatch_fanout, with_codex_windows_sandbox  # noqa: E402
 from omh.coding.fanout_output import FanoutOutput  # noqa: E402
 from omh.coding.fanout_settings import (  # noqa: E402
     FANOUT_SETTINGS_SCHEMA_VERSION,
@@ -274,24 +274,33 @@ class FanoutSettingsTests(unittest.TestCase):
 
 
 class CodexSandboxArgvTests(unittest.TestCase):
+    def _argv(self, owner: str, route: dict[str, str] | None, backend: str) -> list[str] | None:
+        return with_codex_windows_sandbox(build_dispatch_argv(owner, "do it", route), owner, backend)
+
     def test_a_stored_backend_becomes_a_config_override_before_the_prompt(self) -> None:
-        argv = build_dispatch_argv("codex", "do it", None, codex_windows_sandbox="mxc")
-        self.assertEqual(argv, ["codex", "exec", "--config", "windows.sandbox=mxc", "do it"])
+        self.assertEqual(self._argv("codex", None, "mxc"),
+                         ["codex", "exec", "--config", "windows.sandbox=mxc", "do it"])
 
     def test_no_backend_keeps_the_template_byte_identical(self) -> None:
-        self.assertEqual(build_dispatch_argv("codex", "do it", None), ["codex", "exec", "do it"])
+        self.assertEqual(self._argv("codex", None, ""), ["codex", "exec", "do it"])
 
     def test_it_follows_a_routed_model(self) -> None:
-        argv = build_dispatch_argv("codex", "do it", {"selected_model": "m"}, codex_windows_sandbox="elevated")
-        self.assertEqual(argv, ["codex", "exec", "--model", "m", "--config", "windows.sandbox=elevated", "do it"])
+        self.assertEqual(self._argv("codex", {"selected_model": "m"}, "elevated"),
+                         ["codex", "exec", "--model", "m", "--config", "windows.sandbox=elevated", "do it"])
 
     def test_other_owners_ignore_it(self) -> None:
-        self.assertEqual(build_dispatch_argv("claude-code", "x", None, codex_windows_sandbox="mxc"),
-                         build_dispatch_argv("claude-code", "x", None))
+        self.assertEqual(self._argv("claude-code", None, "mxc"), build_dispatch_argv("claude-code", "do it"))
 
     def test_an_unknown_backend_never_reaches_argv(self) -> None:
         with self.assertRaises(ValueError):
-            build_dispatch_argv("codex", "x", None, codex_windows_sandbox="danger")
+            self._argv("codex", None, "danger")
+
+    def test_build_dispatch_argv_keeps_its_three_argument_shape(self) -> None:
+        # Fixtures across the suite substitute it with a (owner, prompt, route)
+        # function; a new keyword at the call sites broke every one of them.
+        import inspect
+        self.assertEqual(list(inspect.signature(build_dispatch_argv).parameters),
+                         ["owner", "prompt", "model_route"])
 
 
 class SandboxRefusalCaptureTests(unittest.TestCase):

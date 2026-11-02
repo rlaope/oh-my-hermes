@@ -925,15 +925,11 @@ def build_dispatch_argv(
     owner: str,
     prompt: str,
     model_route: Mapping[str, Any] | None = None,
-    *,
-    codex_windows_sandbox: str = "",
 ) -> list[str] | None:
     """Return the spawn argv for one owner, or None when the owner has no template.
 
     Without a model route the argv is byte-identical to the base template; a
-    routed model/effort inserts the per-owner option fragments only. A stored
-    codex Windows sandbox backend inserts `--config windows.sandbox=<backend>`
-    the same way (#2471); with none set the argv is unchanged.
+    routed model/effort inserts the per-owner option fragments only.
     """
     if owner == "pi-family-runtime":
         host = pi_family_host()
@@ -960,16 +956,27 @@ def build_dispatch_argv(
         options.extend(part.replace("{model}", model) for part in model_template)
     if effort:
         options.extend(part.replace("{effort}", effort) for part in effort_template)
-    if owner == "codex" and codex_windows_sandbox:
-        if codex_windows_sandbox not in CODEX_WINDOWS_SANDBOX_BACKENDS:
-            raise ValueError(f"unknown codex Windows sandbox backend: {codex_windows_sandbox!r}")
-        options.extend(("--config", f"windows.sandbox={codex_windows_sandbox}"))
     if not options:
         return argv
     insert_at = insert_index
     if insert_at is None:
         return argv + options
     return argv[:insert_at] + options + argv[insert_at:]
+
+
+def with_codex_windows_sandbox(argv: list[str] | None, owner: str, backend: str) -> list[str] | None:
+    """`argv` with `--config windows.sandbox=<backend>` before the codex prompt (#2471).
+
+    Separate from `build_dispatch_argv` so its three-argument shape, which
+    tests and wrappers substitute, stays the same. No backend, another
+    owner, or no argv: returned unchanged. The codex prompt is the last
+    positional in every codex argv `build_dispatch_argv` returns.
+    """
+    if not backend or owner != "codex" or not argv:
+        return argv
+    if backend not in CODEX_WINDOWS_SANDBOX_BACKENDS:
+        raise ValueError(f"unknown codex Windows sandbox backend: {backend!r}")
+    return [*argv[:-1], "--config", f"windows.sandbox={backend}", argv[-1]]
 
 
 def build_unit_prompt(
@@ -4710,7 +4717,7 @@ def _dispatch_unit(
     # `-c windows.sandbox=<backend>` for codex when the operator stored one;
     # without it native-Windows Codex runs read-only (#2471).
     codex_sandbox_backend = stored_codex_windows_sandbox(paths.omh_home) if owner == "codex" else ""
-    argv = build_dispatch_argv(owner, prompt, effective_model_route, codex_windows_sandbox=codex_sandbox_backend)
+    argv = with_codex_windows_sandbox(build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend)
     child_environment = fanout_child_environment(
         os.environ if base_env is None else base_env,
         depth=dispatch_depth,
@@ -4906,7 +4913,7 @@ def _dispatch_unit(
         # The early read is not authority: serialize only the atomically validated claim.
         assembled = _assemble_prompt(sidecar_path, clarification)
         prompt = assembled.text
-        argv = build_dispatch_argv(owner, prompt, effective_model_route, codex_windows_sandbox=codex_sandbox_backend)
+        argv = with_codex_windows_sandbox(build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend)
     known_secrets = (goal_text, prompt, *tuple(
         value for key, value in child_env.items()
         if any(marker in key.upper() for marker in ('TOKEN', 'SECRET', 'PASSWORD', 'API_KEY'))
@@ -5224,7 +5231,7 @@ def _dispatch_unit(
                 if previous_path is not None and sidecar_path is not None:
                     assembled = _assemble_prompt(sidecar_path, clarification)
                     prompt = assembled.text
-                    argv = build_dispatch_argv(owner, prompt, effective_model_route, codex_windows_sandbox=codex_sandbox_backend)
+                    argv = with_codex_windows_sandbox(build_dispatch_argv(owner, prompt, effective_model_route), owner, codex_sandbox_backend)
                     assert argv is not None  # Same previously admitted owner and route.
                     argv = session_argv(argv)
                     if confinement is not None:
