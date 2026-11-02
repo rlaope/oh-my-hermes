@@ -458,16 +458,9 @@ HERMES_PENDING_APPROVAL_CLAUSE = (
 # brief, a routing recommendation) is planning evidence, never permission to
 # start the next engine. Planning-lane skills compose the fit-recommendation
 # rule; workflow engines compose the entry-confirmation rule into their quality
-# bars so a chained start still stops for the user's go-ahead.
-ENGINE_FIT_RECOMMENDATION_RULE = (
-    "Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on "
-    "path that fits the work's shape — `ultrawork` durable checkpoints for progress that must survive "
-    "sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into "
-    "disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a "
-    "single owner, `ultrawork` for one bounded delivery cycle, or "
-    "a direct selected executor/runtime handoff for a single prepared coding change — state the fit "
-    "reason in one line, and start it only after the user's explicit go-ahead."
-)
+# bars so a chained start still stops for the user's go-ahead. The
+# fit-recommendation rule is defined after `PortableLine` below, because it
+# names `dag-ulw`, which only the Hermes projection ships.
 ENGINE_ENTRY_CONFIRMATION_RULE = (
     "Do not start this engine as an automatic continuation of another skill's output: an accepted plan, "
     "a clarified brief, or a routing recommendation is planning evidence, not permission. Unless the user "
@@ -986,6 +979,28 @@ class PortableLine(str):
     def __getnewargs__(self) -> tuple[str, str]:
         return (str(self), self.portable)
 
+
+# The planning lanes' follow-on rule (see ENGINE_ENTRY_CONFIRMATION_RULE above).
+# `dag-ulw` is offered only where it ships; the portable wording keeps the rest.
+_ENGINE_FIT_LEAD = (
+    "Plan acceptance approves the plan content, not execution: after acceptance, recommend the follow-on "
+    "path that fits the work's shape — "
+)
+_ENGINE_FIT_TAIL = (
+    "`ultrawork` durable checkpoints for progress that must survive "
+    "sessions as a checkpointed ledger, `ultrawork` coordinated lanes for an accepted plan split into "
+    "disjoint parallel lanes, `ultrawork` single-owner persistence for one already-scoped task with a "
+    "single owner, `ultrawork` for one bounded delivery cycle, or "
+    "a direct selected executor/runtime handoff for a single prepared coding change — state the fit "
+    "reason in one line, and start it only after the user's explicit go-ahead."
+)
+ENGINE_FIT_RECOMMENDATION_RULE = PortableLine(
+    _ENGINE_FIT_LEAD
+    + "`dag-ulw` for an accepted plan whose tasks form a graph (several tasks with disjoint write scopes "
+    "or an order between them, handing work on through files, plus a separate verification task), "
+    + _ENGINE_FIT_TAIL,
+    _ENGINE_FIT_LEAD + _ENGINE_FIT_TAIL,
+)
 
 # One on-demand procedure shared by planning, implementation, DAG and verification.
 ADAPTATION_QUALITY_READ_RULE = PortableLine(

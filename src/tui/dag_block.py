@@ -46,6 +46,8 @@ from .width import truncate_line
 DAG_TOOL = "omh_dag"
 END = "end"  # the title an end moment opens with
 END_STATES = ("done", "stopped", "cancelled")
+# The goal verdicts an end title adds (`dag_run.VERDICTS`, held equal by tests/test_dag_transcript.py).
+VERDICTS = ("verified", "unverified", "verify_failed")
 INDENT = "  "
 
 
@@ -85,7 +87,9 @@ def moment(payload: Mapping[str, Any], ended: set[tuple[str, int]]) -> tuple[str
     # The end is the settle (or cancel) that ended the run; a later status or ready reading it says nothing new.
     if action in ("settle", "cancel") and state in END_STATES and (run, len(nodes)) not in ended:
         ended.add((run, len(nodes)))
-        return f"{END} · {state}", run, []
+        # The goal verdict the result carries (`dag_run.goal_verdict`): `end · done · unverified`.
+        verdict = result.get("verdict") if result.get("verdict") in VERDICTS else ""
+        return " · ".join([END, str(state), *([verdict] if verdict else [])]), run, []
     return None
 
 

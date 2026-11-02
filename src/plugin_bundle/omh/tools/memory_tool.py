@@ -5,14 +5,12 @@ it, and none of the nine registered tools did, so the model could not reach it
 from chat. That is the half of the problem #672 did not close -- the store had
 governance and no outlet.
 
-The tool later grew a second job. OMH's memory blocks split into a tier that
-renders every turn and a tier that is listed by label and read on request, and
-the second tier only means anything if something can perform the read. That
-something is this tool rather than a memory-provider tool schema: Hermes gates
-provider tools behind toolset config (``memory_provider_tools_enabled`` in
-``agent/memory_manager.py``), so a tier built on one would disappear for any
-operator whose toolsets exclude memory, and ``agent/memory_provider.py`` names
-tool-schema bloat as the reason only one external provider may run at all.
+OMH's memory blocks split into a tier rendered every turn and a tier read on
+request. The full ``omh_memory`` tool stays on the plugin path; the memory
+provider adds only the small ``omh_remember`` save/recall tool, which Hermes
+tool_search never defers. When toolset config hides provider tools
+(``memory_provider_tools_enabled`` in ``agent/memory_manager.py``),
+``omh_memory`` still provides the full memory path.
 
 Two different redaction rules meet here, and they do not merge. OMH block values
 are OMH's own content and are returned in full. Hermes memory entries are not
@@ -194,6 +192,29 @@ DEMOTE_OLD_TEXT_MAX_CHARS = 60
 # Hermes' memory tool names its two files by these `target` values.
 HERMES_MEMORY_TARGETS = {"MEMORY.md": "memory", "USER.md": "user"}
 
+REMEMBER_TOOL_NAME = "omh_remember"
+REMEMBER_TOOL_SCHEMA = {
+    "name": REMEMBER_TOOL_NAME,
+    "description": (
+        "Call save without asking when the user states a lasting preference, a decision, or a fact "
+        "about their setup or project that should still hold in a later conversation. One fact per "
+        "call, in one or two self-contained sentences with absolute dates. Never save secrets, logs, "
+        "transcripts or task progress. After saving, tell the user in one short line. "
+        "Use recall to look up what was saved before."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "enum": ["save", "recall"], "default": "save"},
+            "summary": {"type": "string", "description": "save: the fact, at most 500 characters."},
+            "record_type": {"type": "string", "enum": list(CAPTURE_RECORD_TYPES)},
+            "subject": {"type": "string", "description": "Optional lowercase slug, at most 48 characters."},
+            "query": {"type": "string", "description": "recall: what to look up."},
+        },
+        "additionalProperties": False,
+    },
+}
+
 OMH_MEMORY_SCHEMA = {
     "name": "omh_memory",
     "description": (
@@ -265,6 +286,27 @@ OMH_MEMORY_SCHEMA = {
         },
     },
 }
+
+
+def omh_remember_handler(args: dict, *, session_id: str, **kwargs) -> str:
+    """Save or recall through the full tool's admission and published session lens."""
+    kwargs = {**kwargs, "session_id": session_id}
+    args = args or {}
+    observation = observe_plugin_tool_call(REMEMBER_TOOL_NAME, args, kwargs)
+    action = str(args.get("action", "") or "save").strip().lower()
+    if action == "save":
+        payload = _capture({key: args[key] for key in ("summary", "record_type", "subject") if key in args}, kwargs)
+    elif action == "recall":
+        payload = _lifecycle("recall", {key: args[key] for key in ("query", "limit") if key in args}, kwargs)
+    else:
+        payload = _capture_result(
+            "refused", reason="unknown_action", supported_actions=["save", "recall"],
+            next_action="Nothing changed. Use action='save' or action='recall'.",
+        )
+    payload["plugin_tool"] = REMEMBER_TOOL_NAME
+    payload["action"] = action
+    payload["source_backend"] = "bundle_memory"
+    return json.dumps(attach_public_observation(payload, observation), sort_keys=True)
 
 
 def omh_memory_handler(args: dict, **kwargs) -> str:
@@ -1733,4 +1775,7 @@ def _unavailable(reason: str) -> dict[str, object]:
     }
 
 
-__all__ = ["MEMORY_ACTIONS", "OMH_MEMORY_SCHEMA", "omh_memory_handler", "read_memory_block"]
+__all__ = [
+    "MEMORY_ACTIONS", "OMH_MEMORY_SCHEMA", "omh_memory_handler", "read_memory_block",
+    "REMEMBER_TOOL_NAME", "REMEMBER_TOOL_SCHEMA", "omh_remember_handler",
+]

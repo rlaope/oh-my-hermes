@@ -211,7 +211,18 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # agent.log turn-exit read; only agent-debug moves, and main's
         # producer gives the previous pin
         # dea773e27e735e108611c1fe72c593375d3f70d89a79e0d3cd89bdef8b1f65e4.
-        self.assertEqual(_digest(legacy_hashes), '19b756e55d0c861edce77c0d7c556a4aaa2bbfcc0104a691a3562ebb0bc0cbe9')
+        # Then plan's task shape and closing gate, and the shared follow-on
+        # rule's `dag-ulw` clause; only plan and ralplan move, and main's
+        # producer gives the previous pin
+        # 19b756e55d0c861edce77c0d7c556a4aaa2bbfcc0104a691a3562ebb0bc0cbe9.
+        # The review round (direct-edge write rule, dag-ulw conversion
+        # wording, verification-task name) moves plan only.
+        # Then dag-ulw names the node `role` field and reports the goal met only
+        # on `verdict: verified`, and plan's closing gate becomes a `role: verify`
+        # node in dag-ulw (Hermes projection only); only dag-ulw and plan move,
+        # and main's producer gives the previous pin
+        # 0e66028d94805874a359b8f53b05a866f8fb539893e78a615d09e83f8b0d9f77.
+        self.assertEqual(_digest(legacy_hashes), '2f7f10cca0591d057e137b6a697cee02a77858695561d57043b0e26ed592b27c')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -239,7 +250,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72370,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143).
+            'plugin_tool_schema_chars': 72455,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85).
             'pre_llm_call_context_chars_max': 5632,  # The pi-family runtime rename (+6), then the route-hint dedup (-154).
             'pre_llm_call_context_fallback_chars_max': 7184,  # The same rename (+6), the human-voice primer sentence (+116), then the route-hint dedup (-154).
             'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).

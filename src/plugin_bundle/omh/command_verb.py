@@ -1,17 +1,18 @@
 """A request's command verb, and the verbs that make it a code edit: one list for every reader.
 
-The direct code-edit guard in `policy` and the workflow-intent classifier in
-`intent` both ask whether a request commands an edit. `policy` imports
-`intent`, so the words live here, in a module both can import without a
-cycle. Stdlib only.
+The router's direct code-edit guard (`omh.routing.policy`) and the
+workflow-intent classifier (`workflow_intent`, which the router and the
+bundle's route hint share) both ask whether a request commands an edit, so the
+words live here, in a bundle module both can import without a cycle and that a
+host without the `omh` package can load. Stdlib only.
 """
 
 from __future__ import annotations
 
 import re
 
-from ..plugin_bundle.omh.korean_request import korean_request
-from ..plugin_bundle.omh.request_lead import after_courtesy
+from .korean_request import korean_request
+from .request_lead import after_courtesy
 
 DIRECT_CODING_EDIT_VERBS = frozenset(
     {"add", "adjust", "build", "change", "delete", "edit", "fix", "implement", "make", "patch", "remove", "rename", "set", "tweak", "update"}
