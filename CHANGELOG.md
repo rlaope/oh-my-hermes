@@ -60,8 +60,8 @@ All notable changes will be documented here.
   node past the stuck mark, which was named only on an `omh_dag` call. The
   next turn's context now carries one `[OMH dag]` line naming the run and the
   call to make (`omh_dag action=ready`, `settle`, `repair` or `status`), once
-  per situation; when other work holds every `delegate_task` slot, it says to
-  call `ready` at a later turn. Not named: a node out within
+  per situation; when every `delegate_task` slot of the process is taken, it
+  says to call `ready` at a later turn. Not named: a node out within
   `dag_stale_after_s` (its child may still be starting), a parked node whose
   `wake_at` is ahead, and a node exported to a coding owner or left to the
   parent, which its fanout result or the parent's own work settles.
@@ -139,6 +139,21 @@ All notable changes will be documented here.
   summary, the messenger end block and the TUI end view all show it, and an
   unverified done run is told to add a verify node through `extend`. Runs
   stored before this update keep reading their nodes as before.
+
+- **A dag-ulw writer sent with no role that reads like a check stays native.**
+  A node with no `role` and a `write_scope` whose label reads like a check
+  past its first word ("Re-verify the fix", "Final verification pass",
+  "Re-review the diff", "Double-check the migration") ran as a build node and
+  could go to the external coding owner, where the builder approves itself.
+  It still runs as a build node and still counts as a producer, but it now
+  stays on `delegate_task`; the lint names the role it reads like, and
+  `role=build` sends it to the owner. Build work that reads the same way
+  ("Add input validation to the API") stays native too until the parent
+  names its role. When such a node reads like a verify node and fails, it
+  runs again after its repair, the way a verify node does. A new advisory
+  lint, `no_review_node`, names a run whose build nodes write more than docs
+  with no `review` node; it never refuses a run or moves its state or goal
+  verdict.
 
 - **`omh_jev_ask` can reach a TypeSafe endpoint you configure.** It honors
   `TYPESAFE_BASE_URL`, the API-root variable TypeSafe's own SDKs read: an
