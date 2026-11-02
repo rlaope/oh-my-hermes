@@ -320,8 +320,11 @@ from .transcript import (
     compact_count,
     review_line,
 )
+from .update_notice import UpdateCheck, fetch_latest
+from .update_notice_switch import update_check_off
 from .wallpaper import TICK_SECONDS as WALLPAPER_TICK_SECONDS
 from .wallpaper import SCENES, Cell, scene
+from .whats_new import is_due as whats_new_due, read_shown, record_shown, whats_new_forms, whats_new_text
 from .width import cell_width, clusters, line_width, truncate, truncate_left, truncate_line
 from ..version import __version__
 
@@ -597,6 +600,11 @@ CARD_KEPT = "kept"
 LAUNCH_UNKNOWN_NOTICE = "The launch look {name!r} saved in {path} is not one OMH has; spectrum is used."
 LAUNCH_NO_NAME_NOTICE = "No theme or launch look named {name}. Themes: {themes}. Launch looks: {looks}."
 LAUNCH_KEPT_NOTICE = "Launch look {name}, kept in {path}."
+# The info line's update notice, beside the badge's version, while npm's latest release is newer (`update_notice`).
+UPDATE_NOTICE = "v{latest} available"
+UPDATE_NOTICE_HOW = " · omh update"
+UPDATE_NOTICE_SHORT = "↑ v{latest}"  # what stays beside the version once the line narrows
+WHATS_NEW_NONE_NOTICE = "There is no What's new written for v{version}."
 GLOW_KEPT_NOTICE = "Working glow {state}, kept in {path}."
 GLOW_SESSION_NOTICE = "Working glow {state} for this session; there is no OMH home to keep it in."
 GLOW_SAVE_FAILED_NOTICE = "Working glow {state} for this session; it could not be saved to {path}: {error}"
@@ -1697,6 +1705,7 @@ class App(ModesMixin, AgentViewMixin):
         pick_model_chains: Callable[..., str] = run_model_chain_picker,
         make_client: Callable[..., GatewayClient] | None = None,
         git: GitWatcher | None = None,
+        fetch_latest: Callable[[], str] = fetch_latest,
     ) -> None:
         self.terminal = terminal
         self.git = git  # the session directory's branch for the row under the info line; None draws no branch
@@ -1881,6 +1890,12 @@ class App(ModesMixin, AgentViewMixin):
         self.launch_picker: LaunchPicker | None = None  # /theme's picker, while open; its highlight is previewed
         self.card_state = CARD_NONE
         self.card_room = 0  # the rows the live card was last fitted to: the form it is kept in once the prompt goes
+        self.whats_new = ""  # the version whose What's new goes under the launch card: once, after an update
+        self.whats_new_recorded = False  # it was drawn, and recorded as said (`_card_lines`)
+        # The once-a-day ask for npm's latest release (`run` starts it; None while off or without an OMH home), and
+        # what asks.
+        self.update_check: UpdateCheck | None = None
+        self.fetch_latest = fetch_latest
         # Hermes' skills, regrouped for the card: the last launch's (last-known) from startup, the session's once
         # `session.info` says.
         self.session_skills: Skills | None = None
@@ -2001,6 +2016,7 @@ class App(ModesMixin, AgentViewMixin):
         self._refresh_catalog()
         if not resume:
             self._ask_last_session()
+            self._whats_new_on_launch()
         self._read_default()
         self.banner_record = self._banner_record(result, resumed=self.stored_id if resume else "")
         self.banner_facts = dict(self.banner_record)
@@ -2035,6 +2051,40 @@ class App(ModesMixin, AgentViewMixin):
             self.theme = self._themed()
         elif home is not None:
             self.transcript.add_notice(LAUNCH_UNKNOWN_NOTICE.format(name=saved, path=theme_store_path(home)), NOTICE_WARN)
+
+    def _whats_new_on_launch(self) -> None:
+        """Put this version's What's new under the launch card when it is due (`whats_new.is_due`), to be recorded as
+        said once it is drawn; a new install, or a version with no entry, records the version now and shows nothing."""
+        home = self._omh_home()
+        if home is None:
+            return
+        if whats_new_due(home, __version__):
+            self.whats_new = __version__
+        elif read_shown(home) != __version__:
+            record_shown(home, __version__)
+
+    def _start_update_check(self) -> None:
+        """Name a newer release beside the badge: the one kept under the OMH home at once, and npm's latest, asked on
+        a thread, once its day is up; nothing at all while it is off or without an OMH home to keep the answer in."""
+        home = self._omh_home()
+        if home is None or update_check_off(self.environ, home):
+            return
+        self.update_check = UpdateCheck(home, __version__, fetch=self.fetch_latest, now=self.wall_clock)
+        self.update_check.start(self._wake_loop)
+
+    def _take_update_check(self) -> None:
+        if self.update_check is not None and self.update_check.take():
+            self.dirty = True
+
+    def _update_notice(self) -> tuple[Line, ...]:
+        """While a newer release is known, the info line's update notice, longest first: `v4.0.5 available · omh
+        update` (the warning colour, then the hint's), then `↑ v4.0.5` (the warning colour)."""
+        latest = self.update_check.latest if self.update_check is not None else ""
+        if not latest:
+            return ()
+        warn, hint = self.theme.warn, self.theme.hint
+        return ((Span(UPDATE_NOTICE.format(latest=latest), warn), Span(UPDATE_NOTICE_HOW, hint)),
+                (Span(UPDATE_NOTICE_SHORT.format(latest=latest), warn),))
 
     def _ask_last_session(self) -> None:
         """Ask for the stored sessions, to say under the banner where the last one is; a refusal says nothing."""
@@ -2332,6 +2382,7 @@ class App(ModesMixin, AgentViewMixin):
         self.poller.start(self._wake_loop)  # a new HUD snapshot wakes the loop as gateway news does
         if self.git is not None:
             self.git.start(self._wake_loop)  # so does a branch or a file count that moved
+        self._start_update_check()  # and npm's answer about the latest release
         try:
             if typed:
                 self._take_input(typed)
@@ -2373,6 +2424,7 @@ class App(ModesMixin, AgentViewMixin):
         self._ask_tail_when_due()
         self._take_hud()
         self._take_board()
+        self._take_update_check()
         self._render_when_due()
 
     def _take_input(self, data: bytes) -> None:
@@ -5453,6 +5505,7 @@ class App(ModesMixin, AgentViewMixin):
         return {
             "help": self._help,
             "keys": self._keys,
+            "whats-new": self._whats_new_command,
             "quit": self._quit,
             "new": self._new_session,
             "redraw": self._redraw,
@@ -5502,6 +5555,14 @@ class App(ModesMixin, AgentViewMixin):
         rows.append(HELP_KEYS)
         rows.append(BARE_HERMES_NOTE)
         self._show_output("/help", "\n".join(rows), whole=True)
+
+    def _whats_new_command(self, arg: str) -> None:
+        """`/whats-new`: this version's What's new under the echo, whenever it is asked for."""
+        text = whats_new_text(__version__)
+        if text:
+            self._show_output("/whats-new", text, whole=True)
+        else:
+            self.transcript.add_notice(WHATS_NEW_NONE_NOTICE.format(version=__version__))
 
     def _reload_skills(self, arg: str) -> None:
         """Hermes re-scans its skills for this session, then the catalog is read again, as Ink's /reload-skills does.
@@ -6058,7 +6119,17 @@ class App(ModesMixin, AgentViewMixin):
             last_title=row.label if row is not None else "", last_id=row.id if row is not None else "",
             last_count=row.message_count if row is not None else 0,
         )
-        return launch_card(self._shown_look(), facts, self._launch_paint(), cols, room, self.session_skills)
+        look, paint = self._shown_look(), self._launch_paint()
+        # What's new under the card, a blank row between: its longest form the card still fits beside in some form.
+        for news in whats_new_forms(self.whats_new, self.theme, cols) if self.whats_new else []:
+            card = launch_card(look, facts, paint, cols, room - len(news) - 1, self.session_skills)
+            if card:
+                home = self._omh_home()
+                if not self.whats_new_recorded and home is not None:  # said: drawn, in either form; tried once
+                    record_shown(home, self.whats_new)
+                    self.whats_new_recorded = True
+                return [*card, (), *news]
+        return launch_card(look, facts, paint, cols, room, self.session_skills)
 
     def _launch_swatches(self) -> dict[str, tuple[Style, ...]]:
         """Each launch look's colours for its row in the /theme picker, each lifted to a glyph's 3:1; while the living
@@ -7020,6 +7091,7 @@ class App(ModesMixin, AgentViewMixin):
             background=background,
             right_spare=int(bool(self.session_title)),  # the title goes before the row does (`_compose_info_right`)
             editing=editing,
+            notice=self._update_notice(),
         )
         # Whether the row's form made it onto the line: what keeps its clock ticking (`_background_second`).
         words = "".join(span.text for span in line)
@@ -7563,6 +7635,7 @@ def _run(
     make_poller: Callable[[str | None, str | None], PollerLike],
     make_client: Callable[..., GatewayClient] | None = None,
     make_git: Callable[[str], GitWatcher] = GitWatcher,
+    fetch_latest: Callable[[], str] = fetch_latest,
 ) -> int:
     """Start the gateway, open the session, then run the loop on the raw terminal; the exit code.
 
@@ -7603,6 +7676,7 @@ def _run(
                     # (`gateway_attach`).
                     git=make_git(cwd) if (cwd := environ.get("HERMES_TUI_CWD") or environ.get("HERMES_CWD")
                                           or environ.get("TERMINAL_CWD")) else None,
+                    fetch_latest=fetch_latest,
                 )
             app.client = client
             wait.phase = LAUNCH_OPENING
@@ -7660,8 +7734,10 @@ def main(
     open_terminal: Callable[[], TerminalLike] | None = None,
     make_client: Callable[..., GatewayClient] = GatewayClient,
     make_poller: Callable[[str | None, str | None], PollerLike] = HudPoller,
+    fetch_latest: Callable[[], str] = fetch_latest,
 ) -> int:
-    """Start the OMH TUI and return its exit code (`FALLBACK_EXIT` when it could not start)."""
+    """Start the OMH TUI and return its exit code (`FALLBACK_EXIT` when it could not start). `fetch_latest` is what
+    asks npm for the latest release (`update_notice`)."""
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     stderr = _Told(sys.stderr if stderr is None else stderr)
@@ -7680,7 +7756,8 @@ def main(
     try:
         # The terminal picks its key reports from the environment the TUI was given (TERM_PROGRAM and kin).
         return _run(
-            client, environ, stderr, open_terminal or (lambda: Terminal(environ=environ)), make_poller, make_client
+            client, environ, stderr, open_terminal or (lambda: Terminal(environ=environ)), make_poller, make_client,
+            fetch_latest=fetch_latest,
         )
     except KeyboardInterrupt:
         # Ctrl+C is a signal, not a key, until the terminal goes raw: while the gateway starts

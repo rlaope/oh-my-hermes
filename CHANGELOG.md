@@ -94,6 +94,27 @@ All notable changes will be documented here.
   narrow line the version is the first part of the left side to go, before
   the branch name is cut and before the badge shortens.
 
+- **The OMH TUI says when a newer OMH is out.** At most once a day, on a
+  thread the screen never waits for, the TUI asks
+  `https://registry.npmjs.org/oh-my-hermes/latest` for the latest published
+  version and keeps only that and the time of the ask in
+  `<omh_home>/tui/update-check.json`. While it is newer than the one running,
+  the info line says so beside the badge:
+  `[⚚ OMH Native v4.0.4]  v4.0.5 available · omh update`. On a narrower
+  line it is the first thing to shorten, to `↑ v4.0.5`, which stays beside
+  the version until the version itself goes. Offline, a timeout or a bad reply
+  says nothing. `OMH_TUI_UPDATE_CHECK=0` holds it off in one terminal,
+  `omh theme update-check off` in every later session, and so does an
+  `omh update-check` you set to `off` (in `omh setup` or with
+  `omh update-check set --mode off`).
+
+- **What's new, once, after an update.** The first fresh OMH TUI session on a
+  new version shows `What's new in v<version>` and a few one-line items under
+  the launch card, and once they are drawn records the version in
+  `<omh_home>/tui/whats-new.json` so they are not shown again. An install
+  that ran the OMH TUI before this release is told too; a new install shows
+  nothing. `/whats-new` shows them whenever you ask.
+
 - **A plan's done check for a code task is a command.** `plan` accepted a
   done check such as "an exact signature and its file", which a converter to
   `dag-ulw` had to turn into a command by guesswork. For a code task the done

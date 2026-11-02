@@ -265,7 +265,12 @@ clipboard helper where Hermes stages images, as the stdio entry saved it.
 
 ## Connections and the import allow list
 
-The frontend opens no socket and makes no network call, strips the sidecar and
+The frontend makes one network call of its own, the update notice: at most
+once a day per OMH home, on a background thread, an HTTPS GET of npm's latest
+`oh-my-hermes` version from `registry.npmjs.org`, keeping only the version
+(`tui/update_notice.py`, listed in INVARIANT 2's `NETWORK_CLIENT_BRIDGES`; off
+with `OMH_TUI_UPDATE_CHECK=0`, `omh theme update-check off`, or `omh
+update-check` set to `off`). Beyond that it opens no socket. It strips the sidecar and
 attach URLs from the child's environment, and reaps the child when it exits,
 SIGTERM and SIGHUP included; the child's only connections are the two above, to
 the person's own Hermes home (the WebSocket goes to the URL the gateway's grant
