@@ -195,6 +195,23 @@ FAILURE_ORIGIN_PRECEDENCE = (
 FAILURE_ORIGIN_PROOF_NAMING = (
     "Name the proof beside the origin: a merge-base run is an observation, a diff-line reading is an inference"
 )
+# A regression test written with its fix and only ever run green never saw the
+# bug: it may pass on the broken tree too. The witness is that test's observed
+# red on the tree before the fix. Its source is whatever observed it -- a
+# worktree run, a CI job, the debugging session's own pre-fix run -- because the
+# gate already weighs a row by its `source`. A test-only fix (a flake or a wrong
+# assertion) has nothing to revert, so its witness is the old test's rate.
+REGRESSION_WITNESS_RULE = (
+    "A fix claim whose evidence is a new or changed test needs a regression witness: an observed red of that test, "
+    "for the bug's reason, on the pre-fix tree (the fix commit's parent, or the merge-base when the fix is the whole "
+    "change), recorded with its source -- a run in a clean detached worktree at that tree, a CI job on a commit that "
+    "adds only the test, or the debugging session's run before the fix. A collection or import error there is not a "
+    "witness. For an intermittent fault the witness is the failure rate over N runs before beside 0/N at the same N "
+    "after. When the test calls a seam the fix added, force the red by reverting only the behavioural lines, keep the "
+    "seam, and show that diff. When the fix changes only test code, the witness is the old test's measured failure "
+    "rate on the pre-fix tree beside the new test's 0/N at the same N. A fix test only ever observed green is HOLD "
+    "with `regression_witness_missing`."
+)
 
 # Hermes' bundled `grounded-citations` skill (`scripts/sources.py`), as
 # `research`, `web-research`, and `research-brief` use it. One copy of each
@@ -4487,6 +4504,7 @@ _DEFINITIONS = [
             "DESIGN.md or design-system source of truth when available",
             "framework/stack when known",
             "routes, states, breakpoints, and locale/CJK risks",
+            "browser-support target (default: Baseline Widely available, in every core browser for 30+ months)",
             "accessibility and performance constraints",
             "observed browser evidence for completion claims",
         ),
@@ -4508,8 +4526,8 @@ _DEFINITIONS = [
             "frontend_initial_generation_contract/v1 declares DESIGN.md/design-system work, reference lane, token extraction, reusable primitives, and visual QA path before new UI code",
             "design_system_contract/v1 with layout, spacing, typography, color, component, motion, and responsive rules",
             "design_reference_selection/v1 names supplied references or the domain-fit style direction and explicitly avoids copying third-party logos, assets, or brand copy",
-            "frontend_route_state_matrix/v1 with pages, states, viewports, CJK/locale, empty/loading/error, and interaction states",
-            "frontend_component_state_inventory/v1 with default, hover, focus, active, disabled, loading, empty, and error states for reusable primitives",
+            "frontend_route_state_matrix/v1 with pages, states, viewports, CJK/locale, empty/loading/error, and interaction states, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict (409) rows wherever the surface writes remote data",
+            "frontend_component_state_inventory/v1 with default, hover, focus, active, disabled, loading, empty, and error states for reusable primitives, and each primitive's interface: props, events, slots, and the invariants a caller must know; a wrapper earns a row only when deleting it would push its complexity into its callers",
             "frontend_implementation_handoff/v1 for the selected executor/runtime",
             "browser screenshots, accessibility reports, Lighthouse/Core Web Vitals, and visual QA only when observed",
         ),
@@ -4539,6 +4557,9 @@ _DEFINITIONS = [
             "A 3D or canvas scene (WebGL, a three.js-style engine, a voxel world) is judged on its first frame: load `references/rendered-scene-craft.md`, boot on the view the scene's own title and copy promise, light it with a warm-or-cool key, a sky fill, explicit tone mapping, shadows, and fog, and make every small animated object read as what it is. A clean console is not a finished scene.",
             "For first-time UI creation, name the initial generation branch, reference direction, reusable primitives, state coverage, and required visual QA path.",
             "Cover responsive layout, empty/loading/error states, hover/focus/active states, CJK text, accessibility, and performance expectations.",
+            "When the surface reads or writes remote data, load the frontend-refactor skill's `omh-frontend-refactor/references/state-discipline.md` (sections 1 and 4-6) before writing the component: server state lives in a query cache, each mutation names the query keys it invalidates, and an optimistic write ships with its rollback.",
+            "When the surface has a form, a text composer, or a dialog, load `references/forms-and-input.md` before writing it: labelled controls, errors shown after the user commits a value, server field errors mapped onto their fields, one submit in flight, an Enter-to-send that waits for IME composition, and focus returned when a dialog closes.",
+            "Check the browser-support target before using a newer platform feature: a feature newer than the target (by default, anything only Baseline Newly available) needs feature detection plus a fallback, or a deliberate target change; suggest recording the target in the repository's agent instruction file (`omh-agent-instructions` owns that file).",
             "State performance as a budget, not an adjective: load `references/web-vitals-budgets.md`, name one metric with its published bar (LCP, INP, CLS), the device and network class it is judged on, the route and load shape, and the baseline captured under that same profile - before the change. A budget chosen after seeing the result describes what happened instead of gating it.",
             "Attribute before optimizing: name the LCP element and its dominant phase, the interaction that produced the worst INP and where the time went, or the node that shifted and what moved above it. A list of optimizations with no attribution is folklore, and a change that improved a different element than the one attributed did not fix the metric.",
             "Keep field and lab apart: a p75 claim needs field data, a lab audit is a diagnostic sample on one device profile, and a lab pass is never a statement about real users.",
@@ -4572,7 +4593,7 @@ _DEFINITIONS = [
             "The target page/component, audience, primary task, references, and quality bar are named.",
             "Greenfield work includes frontend_initial_generation_contract/v1 before implementation handoff.",
             "The design_system_contract/v1 covers typography, spacing, palette, components, layout, motion, and responsive rules.",
-            "The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks.",
+            "The frontend_route_state_matrix/v1 covers pages, 375/768/1280-style breakpoints, empty/loading/error, interaction, and CJK/locale risks, plus submitting, submit-failed, optimistic-pending, stale/refetching, and conflict rows for remote writes.",
             "The frontend_component_state_inventory/v1 covers reusable primitives and their default/hover/focus/active/disabled/loading/empty/error states.",
             "The handoff names the executor/runtime owner and keeps code, browser, Lighthouse, accessibility, deployment, and visual QA evidence observed-only.",
             "The next action is prepare_frontend_handoff, route to visual-qa, or report the missing evidence blocker.",
@@ -4653,7 +4674,7 @@ _DEFINITIONS = [
             "Make impossible states unrepresentable before memoizing anything: flag clusters become one discriminated union or reducer, and a state machine only when transitions carry retries, resets, or races.",
             "Treat effects as synchronization with external systems: deriving, event responses, prop-change resets, parent notification, and effect chains each have a non-effect form named in `omh-frontend-refactor/references/state-discipline.md`.",
             "Run the micro pass in fixed order - dead code, naming, simplification, modernization - finishing one category before the next; the full contract is `omh-frontend-refactor/references/refactor-passes.md`.",
-            "Gate macro changes on characterization tests written before the refactor; snapshot tests lock markup, not behavior, and do not count.",
+            "Gate macro changes on characterization tests written before the refactor; snapshot tests lock markup, not behavior, and do not count. A change that alters DOM nesting, element type, or class composition also needs a before/after capture at one viewport, because green tests do not prove the render is unchanged.",
             "The scroll test picks the decomposition entry point, and extraction follows independent change reasons completely - a half-extracted component is two coupled ones.",
         ),
         why_this_exists=(
@@ -5005,7 +5026,7 @@ _DEFINITIONS = [
             "observed_debugger_evidence/v1 when observed",
         ),
         artifact_expectations=(
-            "native_fault_statement/v1 separates the observed symptom from the assumed cause and names the reproduction command",
+            "native_fault_statement/v1 separates the observed symptom from the assumed cause, names the reproduction command, quotes the observed failure beside the reported one (`symptom_match`), and records the `minimised` reproduction",
             "hypothesis_set/v1 spans distinct axes — caller-side misuse, callee invariant, memory lifetime, concurrency, build/runtime mismatch — not three phrasings of one guess",
             "distinguishing_observation_plan/v1 pairs each hypothesis with the one observation that refutes it, and where to read it",
             "debugger_session_plan/v1 names the adapter (lldb or gdb via DAP), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop",
@@ -5056,6 +5077,7 @@ _DEFINITIONS = [
             "The debugger session plan names the DAP adapter, breakpoints, watchpoints, threads, frames, and values to read.",
             "The handoff says the executor drives the debugger and OMH executes nothing.",
             "Reproduction, debugger output, root cause, and fix are reported as separate observed or not_observed states.",
+            "Any print-and-rebuild probe carried the session's probe tag, and an observed search for that tag returns nothing.",
         ),
         recovery_notes=(
             "If the fault does not reproduce, make reproduction the first hypothesis and plan the observation that would establish it, rather than debugging a fault no one can trigger.",
@@ -5757,7 +5779,7 @@ _DEFINITIONS = [
         artifact_expectations=(
             "verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable",
             observed_check_results_expectation(),
-            "claim_verdict/v1 with PASS, HOLD, or BLOCK and exact missing or failed checks, each failed one with its origin",
+            "claim_verdict/v1 with PASS, HOLD, or BLOCK, a HOLD reason of `regression_witness_missing` when a fix test has no observed pre-fix red, and exact missing or failed checks, each failed one with its origin",
             "generated_artifact_provenance/v1 with one row per touched generated path: the source of truth that produces it, the regeneration command, and the drift gate that catches it, or the single state `map_not_declared` when the repository declares no generated-artifact map",
         ),
         safety_rules=(
@@ -5783,6 +5805,7 @@ _DEFINITIONS = [
             ),
             "When the change answers to a written spec, plan, or issue, load `references/requirement-coverage-map.md` and map requirement to task to evidence under stable ids before claiming coverage.",
             f"Give each failing check an `origin`: {FAILURE_ORIGIN_PROOF_RULE}. {FAILURE_ORIGIN_PRECEDENCE}. {FAILURE_ORIGIN_PROOF_NAMING}.",
+            REGRESSION_WITNESS_RULE,
             f"Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `{_PRE_EXISTING}` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `{_UNKNOWN_ORIGIN}` is HOLD with the merge-base run named as the missing evidence.",
             "Keep fixes, reruns, review, CI, and merge as separate observed states.",
         ),
@@ -5926,7 +5949,7 @@ _DEFINITIONS = [
         ),
         required_inputs=(
             "source corpus: skills, prompts, traces, reviews, failures, or docs",
-            "destination boundary: AGENTS, skill catalog, prompt, docs, memory, or no-write review",
+            "destination boundary: AGENTS, skills, prompt, docs, memory, check, or no-write review",
             "rule granularity and acceptance criteria",
             "reviewer or approval requirement",
         ),
@@ -5939,7 +5962,7 @@ _DEFINITIONS = [
             "not-evidence boundary",
         ),
         artifact_expectations=(
-            "principle_candidate_set/v1 with source references, repeated pattern, candidate wording, scope, non-goals, and risk",
+            "principle_candidate_set/v1 with source references, repeated pattern, mechanical or judgement class, candidate wording or check, scope, non-goals, and risk",
             "duplication_conflict_report/v1 with already-covered rules, conflicts, and stale guidance",
             "review_queue/v1 separating proposed, approved, rejected, deferred, and needs-evidence candidates",
         ),
@@ -5959,6 +5982,12 @@ _DEFINITIONS = [
             "Use imperative, testable wording and include non-goals for each candidate.",
             "Require review approval before any patch handoff or generated-skill update.",
             "On Hermes, read a curator run report (`logs/curator/<run>/REPORT.md` and `run.json` under the active profile's Hermes home) as a source like a review or a trace: it records which skills the curator consolidated, archived, or created in that run, and one report is one observation, never repeated evidence by itself.",
+        ),
+        final_checklist=(
+            "Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on; a candidate resting on one observation stays needs-evidence in review_queue/v1.",
+            "Every candidate is classed mechanical or judgement before it is worded. A mechanical candidate is a miss a machine can find from the text alone (a forbidden call, a disallowed import, a file in the wrong place), and its destination is a check (a linter rule, test, hook, or CI step); when the repository already has a check for it that never runs or no longer fails, the candidate is repairing that check, not adding another. Its approved_patch_handoff/v1 names the check and where it is wired, and sets as an acceptance criterion the run the implementer must observe: the check fails with the violation injected and passes once it is reverted. A mechanical candidate outside the chosen destination boundary is reported as a check proposal outside the boundary, never reworded as prose. Only judgement candidates, which need a reader (consistency across files, fit with the code around them), are worded as prose.",
+            "duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.",
+            "Nothing reached a destination without an approval recorded in review_queue/v1.",
         ),
         why_this_exists=(
             "`rules-distill` gives OMH a disciplined way to learn from large skill ecosystems like ECC without wholesale copying: "
@@ -6045,6 +6074,20 @@ _DEFINITIONS = [
             "Separate observed files and commands from inferred architecture and unknowns.",
             "Produce a practical reading path and first-task runway rather than a flat file tour.",
             "Route follow-up implementation to plan, ultrawork, verification-gate, or workspace-audit as needed.",
+        ),
+        final_checklist=(
+            "repo_map/v1 cites an observed path for every directory, entrypoint, generated surface, and test location it names; what was inferred is marked inferred, and what was never opened is listed as unread.",
+            "reading_path/v1 is an ordered list of real files, each with why it comes at that point and what the reader knows after it.",
+            "Every domain_glossary/v1 term points to where it is defined or used; a term with no source is an open question, not an entry.",
+            "risk_and_unknowns_map/v1 keeps observed risks, each with the file or command that shows it, apart from unknowns, each with how it would be resolved.",
+            "Every first_task_runway/v1 task names the files it touches and its verification command, and says whether that command was run during onboarding.",
+            "The stop condition named at the start is met, or the reply names what was left unread.",
+        ),
+        recovery_notes=(
+            "If the repository is too large for the stated depth, narrow to the entrypoint the audience touches first and record the rest as unread rather than summarizing it from file names.",
+            "If a build, test, or setup command could not run (read-only mode, missing toolchain, secrets), list it in first_task_runway/v1 as not run with the reason, never as a known-good command. A command that installs or syncs dependencies as a side effect (`npm ci`, `uv sync`, and `uv run`, which syncs first) counts as setup and stays not run.",
+            "If docs and code disagree, report what the code does, cite both, and add the disagreement to risk_and_unknowns_map/v1 instead of trusting the docs.",
+            "If the user names a concrete task mid-tour, stop at the current reading_path/v1 entry and hand the runway so far to `omh-plan`, or to `ulw-work` or `omh-idea-to-deploy` when the task already has acceptance criteria.",
         ),
         why_this_exists=(
             "`codebase-onboarding` adapts ECC's code-tour and onboarding surfaces into an OMH-native first-read workflow "
@@ -7111,6 +7154,7 @@ _DEFINITIONS = [
                 _PLAN_TASK_SHAPE + " These carry a `dag-ulw` node's id, depends_on and write_scope, and the done check feeds its VERIFY and STOP WHEN; converting still adds each node's label, category and full prompt, and a baseline node before a full-suite check.",
                 _PLAN_TASK_SHAPE,
             ),
+            "When the plan describes code changes, cut the code tasks as vertical slices: each delivers one behavior through every layer it needs, and its done check drives that behavior through the surface a user or caller reaches, so an integration failure shows in the task that caused it rather than first in the closing gate. Do not split by layer to keep write scopes apart: slices that write the same file are ordered, each later slice listing every earlier slice that writes it directly among its dependencies, since an order through a slice between them does not count; a file every slice only appends to (a changelog, a generated index) may instead be written by one task after the slices. A layer-only task is either a prefactor that makes the later slices easy and comes before them, or a wide mechanical change across many callers, handed to `refactor-plan` (the new form beside the old, callers moved in groups while both stay green, the old form deleted last) instead of a split by layer.",
             PortableLine(
                 "When the plan describes code changes, its last task is the closing gate, named as the verification task (in `dag-ulw`, a node with `role: verify`): it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or fewer when the engine running the plan stops sooner, after which the open findings are reported.",
                 "When the plan describes code changes, its last task is the closing gate, named as the verification task: it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or fewer when the engine running the plan stops sooner, after which the open findings are reported.",
@@ -7133,6 +7177,7 @@ _DEFINITIONS = [
         + (
             "When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.",
             "When the plan describes code changes, every task has an id, its dependencies, the files it may write, and a done check, and the last task is the closing gate.",
+            "When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.",
             _PLAN_AMBITION_CHECK,
         ),
         situations=(
@@ -7511,7 +7556,7 @@ _DEFINITIONS = [
             "If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.",
             "To dispatch a reviewer rather than write the findings yourself, load `omh-code-review/references/review-dispatch.md`; it carries the base-SHA rule, the findings schema the return is checked against, and the implementer status contract.",
             "When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.",
-            "For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it names the twelve baseline smells with their fixes and the repo-standards-override rule.",
+            "For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.",
             "Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.",
             "Before final findings, load `omh-code-review/references/finding-validation.md` for candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.",
         ),
@@ -9973,10 +10018,10 @@ _DEFINITIONS.append(
             "observed_fix_verification/v1 when observed",
         ),
         artifact_expectations=(
-            "reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs; it reads observed or not_observed and nothing between",
+            "reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs, plus `symptom_match` (the observed failure quoted beside the reported one), `loop_cost` (wall time per run, and what was pinned or, for an intermittent fault, how the rate was raised), and `minimised` (the cuts made and the load-bearing form left); it reads observed or not_observed and nothing between",
             "competing_hypotheses/v1 spans distinct axes -- input and state, ordering and timing, environment and build, dependency behaviour -- rather than three phrasings of one guess",
             "discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates",
-            "root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival",
+            "root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival, and the fix's commit or pull-request body states that confirmed hypothesis and the rivals it eliminated, because the next debugger reads history, not this record",
             "fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it",
         ),
         safety_rules=(
@@ -9985,11 +10030,14 @@ _DEFINITIONS.append(
             "Require at least three hypotheses on distinct axes before planning observations; one hypothesis makes every reading confirmatory.",
             "Never treat a symptom's disappearance as a root cause; a bug that stops after a print statement, a retry, or a sleep is an open timing fault.",
             "Do not execute tests, debuggers, or commands from OMH core; the executor runs them and the record takes only what it observed.",
+            "Redact before recording: reproduction commands read credentials from environment variables by name, quoted output keeps only the lines that carry the signal with each secret replaced by `<redacted>`, and a capture too redacted to diagnose is reported as such, never recorded unredacted.",
         ),
         quality_tier="root-cause-evidence-gated",
         quality_bar=(
             "State the symptom and the expected behaviour separately from any suspected cause.",
             "Record the reproduction with its hit rate; an intermittent fault is reproduced when its rate over N runs is measured, not when it happened once.",
+            "A reproduction counts for this bug only when its `symptom_match` shows the failure the user reported; a different failure near the same code is another bug, and this record stays not_observed.",
+            "`minimised` is filled before `competing_hypotheses/v1`: an input, caller, config value, or step leaves the reproduction only when the loop rerun without it still shows the symptom (for an intermittent fault, the same rate at the same N), and the record lists what left and what stayed; `fix_handoff/v1` builds the regression test from what stayed.",
             "Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.",
             "Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.",
             "Keep reproduction, root cause, fix, and verification as separate observed states.",
@@ -10037,9 +10085,10 @@ _DEFINITIONS.append(
             "Each observation records which hypotheses its result eliminated.",
             "The root cause cites the demonstrating observation and the observation that ruled out each rival.",
             "The fix handoff carries the reproduction as a regression test that fails before and passes after.",
+            "An observed search for the session's probe tag returns nothing, and every throwaway harness file is deleted or listed.",
         ),
         recovery_notes=(
-            "If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it.",
+            "If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it; when no test reaches the fault, choose a loop from the method reference's loop table; if none can be built, the record stays not_observed with each attempt and what stopped it, and the request to the user is for an environment, a redacted capture, or permission for tagged temporary instrumentation.",
             "If every hypothesis is eliminated, record that, widen the axes, and keep root cause unclaimed rather than promoting the last survivor.",
         ),
         situations=(

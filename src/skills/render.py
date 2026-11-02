@@ -3163,7 +3163,7 @@ Category: `{definition.category}`. Phase: `{definition.phase}`. Hermes role: `{d
         return _progressive_method_body(definition, name)
     title = name.replace("-", " ").title()
     compact_contracts = {
-        "decision-prototype": "Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`.",
+        "decision-prototype": "Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`. For a logic, state, or layout question, or prototype code a later plan may reference, load `references/artifact-shapes.md`.",
         "lifecycle-growth": "Required: lifecycle objective, audience/events, consent, budget, and owner. Output: a brief, audience/safety policy, experiment, readout, and handoff.",
         "product-discovery-validation": "Required: problem, segment/evidence, owner, learning budget, and criteria. Output: a decision frame, evidence and customer plan, test portfolio, receipt, and GTM hypothesis.",
         "sales-pipeline-review": "Required: supplied snapshot and as-of time, definitions, prior outcomes, and owner. Output: scope, health, forecast, supported annexes, and follow-up handoff.",
@@ -3811,7 +3811,7 @@ Hermes bundles three skills that meet this one: `systematic-debugging` (MIT, ada
 
 | Its phase | What this skill records there |
 | --- | --- |
-| Root cause investigation, around one tight command that goes red on the symptom | `reproduction_record/v1`: the command, its observed output, and the hit rate over N runs |
+| Root cause investigation, around one tight command that goes red on the symptom | `reproduction_record/v1`: the command, its observed output, the hit rate over N runs, `symptom_match`, `loop_cost`, and the `minimised` form |
 | Pattern analysis | nothing of its own; working examples and differences feed the hypotheses |
 | Hypothesis and testing | `competing_hypotheses/v1` with at least three hypotheses on distinct axes, then `discriminating_observation_plan/v1`, then `root_cause_record/v1` citing the observation that decided it |
 | Implementation | `fix_handoff/v1`, still blocked until the reproduction reads observed, then `observed_fix_verification/v1` |
@@ -3841,14 +3841,43 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 
 | Field | What it holds |
 | --- | --- |
-| Command | the exact command, request, or test id, with its inputs |
-| Observed | the output, value, or assertion as it came back |
+| Command | the exact command, request, or test id, with its inputs; a credential is named by its environment variable, never written inline |
+| Observed | the output, value, or assertion as it came back: the lines that carry the signal, each secret in them replaced by `<redacted>` |
 | Expected | the output that would have been correct, and where that expectation comes from |
+| Symptom match | the observed failure quoted beside the one the user reported; a different failure near the same code is a different bug, and the record stays not_observed for this one |
 | Hit rate | failures over runs, for example `4/20`; one sighting is a report, not a reproduction |
+| Loop cost | wall time per run; what was pinned, which is only what no standing hypothesis implicates; for an intermittent fault, how the rate was raised |
+| Minimised | what left the reproduction and what stayed, each element that stayed because the symptom (or the rate) went with it |
 | Environment | interpreter, dependency versions, OS, parallelism, and anything the failing run had that the passing run did not |
 | State | observed or not_observed; nothing between |
 
 An intermittent fault is reproduced when its rate is measured, not when it happened once. Run it in a loop first (`for i in $(seq 50); do <cmd> || echo FAIL $i; done`) and record the rate before changing anything; the same loop is what proves the fix later.
+
+If a capture is too redacted to diagnose, record that and ask for a narrower one; never record it unredacted.
+
+**Make the loop cheap before trusting it.** A loop that takes minutes per run is the next thing to fix, ahead of any hypothesis: narrow what it runs, skip setup the fault does not need, and assert the reported symptom rather than "it did not crash". What to do about variation depends on the fault:
+
+- **Deterministic fault.** Pin what varies between runs and no standing hypothesis implicates -- a clock, a seed, a temp directory, the network -- so the verdict repeats.
+- **Intermittent fault.** The rate is the signal (section 3). Raise it -- more iterations, parallel runs, load, a narrower timing window -- rather than pin the variation away.
+- **A pin that turns the loop green** is an observation about the cause, not a cleaner loop: record it in section 2 against the hypothesis that names what was pinned.
+
+Record time per run and what was pinned or raised under Loop cost.
+
+**Then minimise.** An element of the reproduction -- an input, a caller, a config value, a data row, a step -- leaves it only when the loop rerun without it still shows the symptom; otherwise it goes back. For an intermittent fault, "still shows" means the same rate at the same N, never one red run. The Minimised field lists what left and what stayed. What stayed leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test.
+
+### When no test reaches the fault
+
+Choose the loop by what the fault needs; any row that yields one command going red on the reported symptom will do.
+
+| The fault | Loop |
+| --- | --- |
+| shows through an interface the repository serves | a test at whichever seam reaches the path; a request script against a local server; the CLI on a fixture with its output diffed against a known-good copy; a headless browser script asserting on the page, console, or network |
+| needs an input the repository cannot recreate | the captured payload or event log, saved to disk and replayed through the path alone; or a throwaway harness calling the path directly, with fakes only where the process leaves the repository's control |
+| shows only for some inputs | a property or fuzz loop over generated inputs |
+| appeared between two versions or two configurations | a differential run diffing both outputs for one input; or a bisect harness, handed to `git-workflow` as `bisect_plan/v1` |
+| can be triggered only by a person, on a device, a GUI, or a third-party console | numbered steps for the person, and named fields reported after every run -- failed or not, the message as shown, the time -- so each run returns the same fields; the record takes them as user-observed. This is an observation capture: nobody is asked to approve anything |
+
+If no row yields a loop, `reproduction_record/v1` stays not_observed and lists each loop attempted and what stopped it. The request to the user is then for one of: an environment where the fault reproduces, a redacted capture (a log, a trace, a timestamped recording), or permission for tagged temporary instrumentation. `competing_hypotheses/v1` waits for an observed record.
 
 ## 2. Hypotheses on distinct axes
 
@@ -3864,6 +3893,8 @@ Write at least three before choosing an observation. Three phrasings of one gues
 | Dependency behaviour | a library, service, or OS call behaves differently than documented | pin or stub it and compare |
 
 For each hypothesis write the claim, the observation that would refute it, and which other hypotheses the same observation also settles. Choose the next observation by cost first, then by how many hypotheses its result eliminates; record the eliminations as they happen.
+
+Every probe added to code -- a print, a log line, an assert, a counter -- carries one tag chosen for the session, such as `[DBG-7f3a]`. Before the fix is handed over, an observed search for that tag returns nothing, and every throwaway harness file is deleted or listed in the handoff. A probe left in the tree lands in the fix diff, where a reviewer has to tell it apart from the change.
 
 ## 3. Flaky tests
 
@@ -3920,8 +3951,13 @@ After the third failed fix, stop fixing. Every fix was tested against a structur
 | A hypothesis is eliminated | the observed value that contradicts it, quoted |
 | The root cause is known | an observation that explains every part of the symptom, including its rate, and one that ruled out each rival |
 | The fix works | the reproduction loop fails before the change and passes at the same run count after it |
+| The tree is free of probes | an observed search for the session's probe tag that returns nothing |
 
 A symptom that stopped after an edit, with no mechanism, is an open fault with a changed schedule.
+
+## Attribution
+
+The symptom match, the loop-cost and minimised fields, the loop table, the probe tag, the redaction rule, and the person-run capture adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. OMH keeps them as record fields under its observed-evidence boundary and executes none of the loops itself.
 """
 
 
@@ -4826,7 +4862,7 @@ Load this while drafting a commit message or a pull-request body. OMH writes the
 
 | Source | What to take from it | When it is missing |
 | --- | --- | --- |
-| PR template (`.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `docs/`) | the section headings, in order, and any checkbox list | say no template was found and use a plain summary, why, and validation |
+| PR template (`.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `docs/`) | the section headings, in order, and any checkbox list | say no template was found and use a plain summary, why, validation, and reversibility (section 4) |
 | Recent log (`git log -10 --format=%B`) | subject shape (imperative, `type(scope):`, ticket prefix), body width, trailer set | say the log is empty or unreadable, and do not import a convention |
 | Contributor docs (`CONTRIBUTING.md`, `AGENTS.md`) | sign-off rule, required trailers, forbidden lines | record the rule as not found |
 
@@ -4858,6 +4894,8 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 
 - Subject: the repository's shape, the change's effect, within the length the log uses.
 - Body: why the change exists and what is now true, not a restated diff. Measured before/after values belong here when the change is about a measurement.
+- In a PR body, when the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
+- Reversibility: in a PR body always, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks); in a commit message only when the recent log already carries a risk or rollback line or trailer (such as `Scope-risk:`). Say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
 - `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`.
 
 ## 5. Trailers and sign-off
@@ -7070,6 +7108,11 @@ Write three lines before anything else:
 
 If reproduction is not established, that is the first hypothesis and the first observation. Debugging a fault nobody can trigger produces a story, not a cause.
 
+Once it reproduces, check and shrink it before section 2:
+
+- **Symptom match.** Quote the observed failure beside the one reported. A different crash near the same code is a different fault; this one stays unreproduced.
+- **Minimised.** An input, flag, thread, or step leaves the reproduction only when a rerun without it still shows the fault (at the same rate over the same N, if intermittent). Debug what stays.
+
 ## 2. Three hypotheses on distinct axes
 
 One hypothesis makes every reading confirmatory. Three force observations that *distinguish*. Span the axes rather than rephrasing one guess:
@@ -7089,7 +7132,7 @@ For each hypothesis write: the claim in one sentence; the single observation tha
 
 Prefer a DAP debug adapter -- `lldb-dap`, `codelldb`, or a gdb adapter -- driven by the executor's own debugging surface. It reads state without rebuilding, and it reads state the source never printed.
 
-Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting.
+Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
 
 The plan names, concretely:
 
@@ -7126,6 +7169,8 @@ A stripped binary changes the evidence available, not the method. The hypotheses
 The last row is the one that gets skipped. A symptom that stopped appearing after an edit, with no mechanism, is an open fault with a changed schedule -- record it as unresolved.
 
 {_DOMAIN_ENGINEERING_ATTRIBUTION}
+
+The symptom match, the minimise step, and the probe tag adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock.
 """
 
 
@@ -8483,6 +8528,20 @@ reviewed repository's own documented standards override this baseline wherever
 they conflict. Cite the smell name in the finding so the author can look up the
 same definition. Adapted from the classic Fowler/Beck catalog.
 
+## Find the repository's standards first
+
+The override can only fire on standards someone read. Before applying the
+baseline, collect the reviewed repository's written conventions: `REVIEW.md`,
+`CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md`, any `*STANDARDS*.md` (such as
+`CODING_STANDARDS.md`), and the linter, formatter, and type-checker
+configuration. A dispatched review receives this list under Constraints
+(`references/review-dispatch.md`); a review run in place builds it itself. Name
+each file found by path and each one looked for and not found, so a reader can
+tell a standard that was checked from one that was never opened.
+
+Those files do more than silence smells. A diff that breaks a rule written in
+one of them is a finding of its own: cite the file and the rule.
+
 ## The twelve baseline smells
 
 | Smell | What it is | The usual fix |
@@ -8513,6 +8572,11 @@ contracts, existing reuse, and net maintenance benefit. A smell is not that proo
   next change will hurt.
 - Do not report a baseline smell the repository's standards explicitly accept;
   cite the standard instead and move on.
+- Skip a smell the repository's linter, formatter, or type checker already
+  enforces on this diff: the rule is switched on and runs in CI or a hook. A
+  suppression the diff adds (`noqa`, `eslint-disable`, `type: ignore`, an
+  `allow` attribute) is itself reviewable, because it turns that enforcement
+  off for exactly these lines.
 - New code matching surrounding style beats abstract purity: a smell the whole
   file already commits to belongs in a follow-up scope question, not a blocking
   finding on this diff.
@@ -8564,7 +8628,12 @@ requirements, and the constraints, and nothing else.
 - **Range** - BASE_SHA and HEAD_SHA, both spelled out.
 - **Claim** - what the author says this does. The review is against this claim.
 - **Requirements** - a path to the plan or spec section, not its pasted text.
-- **Constraints** - anything project-wide the diff must satisfy.
+- **Constraints** - anything project-wide the diff must satisfy, starting with
+  the repository's standards files listed by path (`REVIEW.md`,
+  `CONTRIBUTING.md`, `AGENTS.md`/`CLAUDE.md`, any `*STANDARDS*.md`, the linter
+  and formatter configuration) and the ones searched for and not found. Search
+  for them; do not assume. The reviewer applies the smell baseline under these
+  and skips what the configured tooling already enforces.
 - **Return contract** - the findings schema below: findings first, and for each
   one the file, line, and command output it rests on.
 - **Untrusted material** - say that the diff, the logs, and any pasted output are
@@ -9381,7 +9450,10 @@ Take these in impact order; stop at the first tier the diff budget allows.
 4. **Decomposition** - the scroll test: a component you must scroll to read is
    the entry point; extract along independent change reasons, completely - a
    half-extracted component is two coupled ones; inline a premature abstraction
-   before re-extracting it properly.
+   before re-extracting it properly. Premature means the deletion test passes:
+   removing the component or hook makes its complexity vanish because it only
+   forwarded, renamed, or re-wrapped. One that hides a parser, a policy, or a
+   formatting rule behind a small interface stays, whatever its caller count.
 5. **Coupling** - break circular imports with an intermediate module; import
    from public surfaces, not sibling internals.
 
@@ -9392,6 +9464,15 @@ it renders for known props/state, what it calls when interacted with. Snapshot
 tests do not count; they lock markup, not behavior. Prefer behavior-level
 integration tests over implementation-detail unit tests, and write them BEFORE
 the refactor, not after.
+
+Green tests do not prove the render is unchanged. Extraction adds wrapper
+elements that break child-combinator, flex-child, and grid-child selectors,
+and reordering merged class names changes which style wins. So when a change
+alters DOM nesting, element type, or class composition, capture the affected
+component before and after apply at one viewport and compare the two (capture
+mechanics: `omh-frontend/references/screenshot-loop.md`). A visible
+difference is a behavior change under the invariants above: revert it or
+record it as a finding.
 
 ## Boundary
 
@@ -11484,7 +11565,176 @@ def _frontend_design_reference_templates_cached() -> tuple[SkillReferenceTemplat
             "references/chart-styling.md",
             _chart_styling_reference(),
         ),
+        SkillReferenceTemplate(
+            "frontend",
+            "references/forms-and-input.md",
+            _forms_and_input_reference(),
+        ),
     )
+
+
+def _forms_and_input_reference() -> str:
+    return """# Forms and Input
+
+Load this before writing a form, a text composer (chat box, comment field),
+or a dialog. The accessibility-audit skill's FORM rules check the same ground
+after the code exists; these rules put it in the first draft, where it costs
+least.
+
+## Labels and descriptions
+
+- Every control has a visible label tied to it in markup (`<label for>`, a
+  wrapping label, or `aria-labelledby`). A placeholder is an example value,
+  never the label: it disappears on the first keystroke.
+- Help text and the error message are linked with `aria-describedby`, which
+  every screen reader reads. Add `aria-errormessage` only on top of
+  `aria-invalid="true"`, and only when the screen readers the product targets
+  are known to honor it. A format hint sits above the field, where the
+  browser's autofill list cannot cover it.
+- Required fields say so in text, and no state is carried by color alone.
+- A personal-data field declares its autofill purpose (`autocomplete` such as
+  `email`, `name`, `tel`, `street-address`, `one-time-code`,
+  `current-password`, `new-password`) and the matching `type` / `inputmode`,
+  so the right keyboard and the password manager both appear.
+
+## When an error appears
+
+- Validate when the user commits a value (blur) or submits, not on each
+  keystroke of a value still being typed: a postcode with three of its five
+  digits entered is unfinished, not wrong. CSS `:user-invalid` has this
+  timing built in; JavaScript validation keeps a per-field touched flag for
+  the same effect.
+- Once a field shows an error, re-check it on input, so the error clears the
+  moment the value becomes valid.
+- `aria-invalid` turns on at the same moment the visual error appears. Set
+  earlier, a screen reader announces "invalid" when a user first tabs into an
+  empty required field.
+- Error text names the problem and the next step (copy rules:
+  `taste-foundations.md`, section `Interface copy`).
+
+## Server errors land on fields
+
+- Client validation is a convenience; the server's answer is the authority.
+  Map each field path in the error response onto its field (the backend
+  skill's error envelope carries field paths:
+  `omh-backend/references/service-contract.md`). A path with no matching
+  field, and an error with no field, goes to one form-level summary.
+- After a failed submit, use one announcement channel, not two. Either move
+  focus to the first invalid field and put only a short count ("2 fields
+  need attention") into a live region that was already in the page before
+  the error, or, when no field is at fault, move focus to the summary itself
+  (`tabindex="-1"`, not a live region). Focusing an element and announcing
+  the same content reads it twice.
+- A failed submit keeps everything the user typed. Clearing the form on an
+  error is data loss.
+- A conflict (409: the record changed since it was loaded) is its own state,
+  not a generic error: say that someone else changed it, keep the user's
+  edit, and offer reload or overwrite. Never overwrite silently.
+
+## One submit in flight
+
+- The guard lives in the form's `submit` handler, not on the button's click:
+  Enter in a field submits the form without going through the button, even
+  an `aria-disabled` one. While a submit is pending, that handler returns
+  early, so a double click, Enter, and a shortcut are all refused.
+- The submit control shows the pending state ("Saving…") and stays
+  focusable (`aria-disabled`, not `disabled`), so focus does not drop to the
+  page.
+- When the endpoint is not naturally idempotent, the request carries an
+  idempotency key created once per user intent and reused on retry, so a
+  retry after a timeout does not create the record twice.
+- An optimistic submit follows the cancel / snapshot / apply, restore on
+  error, invalidate on settle triple in the frontend-refactor skill's
+  `omh-frontend-refactor/references/state-discipline.md`, section 6.
+
+## Enter to submit, and IME composition
+
+Korean, Japanese, and Chinese input goes through an input method editor (IME),
+and Enter confirms the candidate being composed. A handler that sends on
+every Enter sends half-composed text: the most common defect in chat UIs for
+these languages.
+
+- A single-line input inside a `<form>` needs no handler: the browser's own
+  Enter submission already waits for composition. Do not add one.
+- A multiline field with a custom Enter-to-send checks composition first:
+  when the key event reports `isComposing`, the Enter belongs to the IME, so
+  return without sending. Some Safari versions hand the confirming Enter to
+  script after `compositionend`, when the flag already reads false, so the
+  recommended check inside the Enter branch is
+  `event.isComposing || event.keyCode === 229`. In a framework that wraps
+  events, read both from the native event.
+- Only a codebase that refuses `keyCode` uses the timing fallback, and it
+  has to be exact: record `event.timeStamp` of the last `compositionend`,
+  and skip an Enter whose own `event.timeStamp` is within about 50 ms of it
+  in absolute value (Safari can stamp the keydown earlier than the
+  `compositionend`). Compare the two events' timestamps; a clock read inside
+  the handler (`Date.now()`, `performance.now()`) drifts whenever the main
+  thread is busy.
+- Shift+Enter inserts a newline. Run the composition check before any
+  Enter branch, modified or not (Ctrl+Enter, Cmd+Enter included): it costs
+  nothing, and not every IME is known to leave modified Enter alone.
+- A visible submit button always remains; the key is an accelerator, not the
+  only path.
+- Verify it by typing Korean or Japanese with a real IME and pressing Enter
+  to confirm a candidate: nothing is sent until the next Enter. Reading the
+  handler is not that check.
+
+## Dialogs
+
+- Prefer the platform `<dialog>` opened with `showModal()` (top layer, inert
+  background, Escape to close) and the `popover` attribute for non-modal
+  overlays over hand-built focus traps.
+- On open, focus moves into the dialog: its first field, or its heading when
+  it has no field. Escape closes it, and on close focus returns to the
+  control that opened it.
+- A dialog holding unsaved input asks before discarding it on an accidental
+  close. Under the HTML close-watcher rules (shipped in Chromium; check
+  other engines), a modal's `cancel` can be prevented only once per user
+  activation, so a second Escape closes it anyway: ask on the first Escape,
+  or open it with `closedby="none"`, give it an explicit close control that
+  runs the check, and handle Escape yourself (keydown on the dialog) so it
+  runs the same check; `closedby="none"` turns close requests off entirely,
+  and keyboard users would otherwise lose Escape.
+- Keeping the page behind a modal still is partly an enhancement.
+  `overscroll-behavior: contain` on the dialog stops scroll chaining when the
+  dialog's own content overflows. Stopping scroll over the backdrop, or
+  inside a dialog whose content does not overflow, relies on
+  `overscroll-behavior` applying to a non-scrolling container (`overflow:
+  hidden` plus `overscroll-behavior: contain` on `::backdrop`). That works
+  in Chrome and Edge 144+ and Firefox 150+, not in Safari, and cannot be
+  feature-detected: `@supports` and `CSS.supports()` answer true everywhere.
+  Ship it as a progressive enhancement and say which browsers get it; when
+  the support target needs a hard lock in every browser, use the project's
+  scroll lock.
+- A destructive confirmation names the action on its button ("Delete
+  project"), never "OK".
+
+## Check the support target
+
+`:user-invalid`, `popover`, `closedby`, and the newest dialog behaviors
+arrived in engines at different times. Check each against the
+browser-support target named in the brief. A feature newer than the target
+(by default, anything only Baseline Newly available) ships behind feature
+detection with a fallback, or the target changes on purpose. A behavior that cannot be
+detected (the backdrop scroll above) cannot take that path: it ships only as
+an enhancement whose absence the page tolerates, or a different technique
+covers the target.
+
+## Boundary
+
+These rules shape the prepared contract and the first draft. Whether a form
+behaves is observed in a browser: a keyboard-only pass, a screen-reader
+announcement, a real IME test, a double-click on submit. A rule listed here is
+not evidence that it holds.
+
+## Attribution
+
+The validation timing, error announcement, IME-safe Enter, and dialog scroll
+rules adapt ideas from the `modern-web-guidance` skill guides in
+`GoogleChrome/modern-web-guidance` (Apache-2.0). No text from them is
+reproduced, the wording here is OMH's own, and OMH requires neither that
+package's command-line tool nor any network fetch.
+"""
 
 
 def _component_registry_adoption_reference() -> str:
@@ -12929,6 +13179,30 @@ sections in the order a visitor actually decides; visual symmetry never
 outranks that sequence. Review content accuracy and hierarchy before any
 polish — a beautiful wrong page fails first on content.
 
+## Interface copy
+
+Labels, toasts, errors, and empty states steer the reader as much as layout
+does, so read them in the same review. Four checks:
+
+- Name things the way the reader already does. A clinic receptionist books
+  "appointments", not "calendar slot reservations". A label lifted from the
+  schema, the API, or the code is a finding.
+- One action keeps one verb everywhere it shows up: the button, its
+  in-progress label, the result message, and any undo. A button that says
+  "Archive" is followed by a message that the item was archived, not
+  "Moved". Generic verbs such as "Submit", "Confirm", or "OK" tell the
+  reader nothing about the result.
+- An error message gives the cause, then the way out: "That date is fully
+  booked. Pick another day or join the waitlist." Drop the "Oops" and the
+  "Sorry"; "An error occurred" leaves the reader with nothing to do.
+- An empty list carries the control that fills it: "No appointments today"
+  sits beside "Book appointment". An illustration without that control is
+  decoration.
+
+Korean, Japanese, and Chinese copy takes the same checks in its own
+register; translate the meaning of an action name, and keep it identical
+across the flow in every locale.
+
 ## Boundary
 
 Taste guidance shapes the prepared direction and contract. It never
@@ -12936,6 +13210,10 @@ substitutes for observed rendered evidence: the visual-QA owner judges what
 actually shipped.
 
 {_DESIGN_CRAFT_ATTRIBUTION}
+
+The interface-copy checks adapt ideas from the `frontend-design` skill in
+`anthropics/claude-plugins-official` (Apache-2.0); no text from it is
+reproduced, and the examples and wording here are OMH's own.
 """
 
 
@@ -14345,8 +14623,49 @@ What stays with `ask`:
 
 def decision_prototype_reference_templates() -> list[SkillReferenceTemplate]:
     return [
-        SkillReferenceTemplate("decision-prototype", "references/spike-composition.md", _spike_composition_reference())
+        SkillReferenceTemplate("decision-prototype", "references/spike-composition.md", _spike_composition_reference()),
+        SkillReferenceTemplate("decision-prototype", "references/artifact-shapes.md", _decision_prototype_artifact_shapes_reference()),
     ]
+
+
+def _decision_prototype_artifact_shapes_reference() -> str:
+    """What a good artifact looks like for a logic question, a layout question, and kept prototype code."""
+    return """# Artifact shapes
+
+Load this when the decision question is about logic or state, about an interaction or layout, or when the receipt may let later work reference the prototype code. The question picks the shape, and the wrong shape spends the budget on an artifact that cannot answer it. A question that fits neither shape keeps the artifact kinds `prototype_smallest_artifact_check` lists.
+
+Every shape below is built inside the declared scratch boundary. When the artifact belongs inside the real application, that boundary is a temporary worktree of the repository, never the working tree the user is editing.
+
+## Logic or state question
+
+The question sounds like "does this state model refuse that sequence" or "can this data shape represent that case".
+
+- Put the decision-bearing logic in one pure module: no I/O, no UI, and no clock, randomness, or network it was not handed as an argument. A thin driver (a script, a CLI loop, a page) calls into the module and nothing calls out of it. The module is the part a later accepted plan may lift; the driver is discarded.
+- Pick the module's form from the question: a reducer over discrete actions, an explicit state machine when which actions are legal right now is part of the question, or plain functions over a data type when there is no current state.
+- After every action, the driver prints the full relevant state, labelled in the domain's own words, and marks what changed, so the observation ledger quotes state instead of narrating it.
+- Keep state in memory. Persistence enters only when persistence is the question, and then as a scratch store inside the boundary whose name says it is a prototype.
+- Start it with one command, written into the prepared handoff.
+- Script the runs the hypothesis turns on: the expected path, the awkward edge case, and one sequence that should be refused. Each run starts from a reset to the same initial state, so a rerun observes the same thing.
+
+## Interaction or layout question
+
+- Build at least two variants and at most five, differing in structure: layout, information hierarchy, or primary action. Variants that differ only in colour, spacing, or copy cannot settle a layout question; when two come out alike, rebuild one with the shared structure ruled out.
+- Mount the variants in the real host page or route, with its navigation, density, and data loading in place. A blank route makes every variant look acceptable. Use a new route only when no existing page could host the thing, follow the project's own routing convention, and name the route as a prototype.
+- Only the rendered part differs per variant; the data loading and access checks above it stay as they are. Switching needs no rebuild (a query parameter or a development-only switch), and the switch never reaches a production build.
+- Stub every write: a variant never performs a real mutation, because the question is how the surface is read and used, not whether the backend works. The data shown follows the skill's fixture rule: synthetic or development data unless the user approved real data for this run.
+- The measurement names the target task and what counts as better (completion, errors, the variant the user picks and why). Record picks per variant; a mixed answer, such as one variant's header with another's list, is recorded as that, not rounded to one variant.
+
+## Keeping the code
+
+- When the receipt lets later work reference the prototype code, commit it on a named throwaway ref: the temporary worktree's own branch, named for the decision id (for example `prototype/<decision_id>`) and declared with the scratch boundary. The receipt cites the ref and the commit.
+- The ref is never merged and never becomes the default branch. Pushing it to a remote is external publication and goes through the existing approval gate.
+- Removing the worktree directory is the cleanup to observe. Record `keep_discard_decision` as kept on the ref and `cleanup_status` as worktree removed, ref retained, never `discarded`, since the code still exists. Without reference permission, the branch is deleted with the worktree, the cleanup observes both, and only then is the result `discarded`.
+- A later accepted plan lifts the pure module or rebuilds the chosen variant to production standard; it never merges the prototype branch.
+
+## Attribution
+
+The three shapes adapt ideas from Matt Pocock's `prototype` skill (`SKILL.md`, `LOGIC.md`, `UI.md`) at `mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888`, MIT License, Copyright 2026 Matt Pocock. OMH keeps its own scratch boundary, observation ledger, and receipt, and does not take the upstream single-file demo page or variant switcher bar.
+"""
 
 
 def _spike_composition_reference() -> str:

@@ -716,6 +716,116 @@
       "reviewed_on": "2026-11-02",
       "rationale": "Adopted interface-level tests for Rust binaries and the rule that a trait with one implementation is not a seam; the CLI and gate contract is OMH's own.",
       "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-code-review-mattpocock",
+      "candidate_key": "code-review@github.com/mattpocock",
+      "prior_checkpoint": "plugin 1.2.3",
+      "next_checkpoint": "plugin 1.3.1",
+      "disposition": "adopted",
+      "decision_ref": "#2497",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted standards-file discovery before the smell baseline and skipping tooling-enforced smells; foreground sub-agents were already covered and the tracker-doc change does not apply.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-commit-pr-authoring-mattpocock",
+      "candidate_key": "commit-pr-authoring@github.com/mattpocock",
+      "prior_checkpoint": null,
+      "next_checkpoint": "plugin 1.3.1",
+      "disposition": "adopted",
+      "decision_ref": "#2497",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted a reversibility line and the smallest structural view for the no-template fallback; the fixed Summary/Evidence/Merge Danger template was rejected as an imposed convention.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-rules-distill-mattpocock",
+      "candidate_key": "rules-distill@github.com/mattpocock",
+      "prior_checkpoint": null,
+      "next_checkpoint": "plugin 1.3.1",
+      "disposition": "adopted",
+      "decision_ref": "#2497",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted mechanical-or-judgement classification with an inject-a-violation proof for checks; the retro categories and the TypeScript dependency-cruiser setup were not adopted.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-app-debugging-diagnosing-bugs",
+      "candidate_key": "app-debugging@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted symptom match, loop cost, minimise, the no-test loop ladder with person-run capture, probe tags, redaction and the hypothesis in the commit as record fields; the method stays Hermes' own.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-native-debugging-diagnosing-bugs",
+      "candidate_key": "native-debugging@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted symptom match, the minimise step and the probe tag for the native fault statement and the print-and-rebuild fallback.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-verification-gate-mattpocock-skills",
+      "candidate_key": "verification-gate@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "49dd158d1076134a641b33efb035946536778336",
+      "disposition": "adopted",
+      "decision_ref": "#2499",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the pre-fix red witness with a forced-red diff as a HOLD reason, and the test-shape ideas behind the shared test-authoring reference; tracker publishing and approval checkpoints rejected.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-decision-prototype-mattpocock-prototype",
+      "candidate_key": "decision-prototype@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "24fe0ef7737efae15c87225755e9f6f5965e4888",
+      "disposition": "adopted",
+      "decision_ref": "#2503",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the logic, layout, and keep shapes as an on-demand reference inside the scratch boundary and receipt; the single-file demo page and switcher bar were rejected.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-plan-mattpocock-to-tickets",
+      "candidate_key": "plan@github.com/mattpocock/skills",
+      "prior_checkpoint": null,
+      "next_checkpoint": "24fe0ef7737efae15c87225755e9f6f5965e4888",
+      "disposition": "adopted",
+      "decision_ref": "#2503",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted vertical slices with prefactor first and the wide-change exception routed to refactor-plan; tracker publishing and the user quiz were rejected.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-frontend-modern-web-guidance",
+      "candidate_key": "frontend@github.com/googlechrome/modern-web-guidance",
+      "prior_checkpoint": null,
+      "next_checkpoint": "4f2b13e25c5815b3f080ca0d983e828d96561a0f",
+      "disposition": "adopted",
+      "decision_ref": "#2502",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the form, validation-timing, IME-safe Enter, dialog and browser-support ideas as an OMH forms reference and one required input; the CLI and its network retrieval are not used.",
+      "supersedes": null
+    },
+    {
+      "receipt_id": "ssc-2026-11-02-frontend-claude-plugins-official",
+      "candidate_key": "frontend@github.com/anthropics/claude-plugins-official",
+      "prior_checkpoint": null,
+      "next_checkpoint": "44490cccaf6d9f82fdeec9416fbf7c9bd72575dc",
+      "disposition": "adopted",
+      "decision_ref": "#2502",
+      "reviewed_on": "2026-11-02",
+      "rationale": "Adopted the interface-copy ideas as an OMH taste-foundations section; the studio persona and calibration hex values are rejected.",
+      "supersedes": null
     }
   ]
 }
