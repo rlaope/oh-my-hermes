@@ -20,6 +20,12 @@ All notable changes will be documented here.
   narrow line the version is the first part of the left side to go, before
   the branch name is cut and before the badge shortens.
 
+- **A plan's done check for a code task is a command.** `plan` accepted a
+  done check such as "an exact signature and its file", which a converter to
+  `dag-ulw` had to turn into a command by guesswork. For a code task the done
+  check is now a command with the result that counts as passing (the
+  test's run command, a gate, a grep for the signature); a task that is not code may keep an observable check.
+
 - **The composer's rules are violet in the default look.** The lines above
   and below the composer, and the launch card's frames, were spectrum's
   grey edge (`#4A4F66`); they are now a muted violet (`#6E5A9E`), lifted for
