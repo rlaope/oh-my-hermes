@@ -370,6 +370,10 @@ class FormatTests(unittest.TestCase):
         self.assertEqual(len(lines), MAX_NOTE_LINES)
         self.assertEqual(lines[-2], "... and 28 more")
         self.assertIn("re-run the checks", lines[-1])
+        self.assertIn("OMH_LSP_TOOLS=1", lines[-1])
+        self.assertIn("lsp_tools", lines[-1])
+        # The opt-in enable path is named even when the tool is present.
+        self.assertIn("OMH_LSP_TOOLS=1", format_note(rows[:1], recheck_tool=True))
         # The final-answer sentence is not the note's: pre_verify adds one closing for the whole message.
         self.assertNotIn("final answer", note)
         self.assertEqual(format_note([], recheck_tool=True), "")
