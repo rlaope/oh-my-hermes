@@ -930,6 +930,38 @@ The offline replay of the 132 H2H2 `omn` sessions, re-run on the code after all 
 - The `I-KWARG` test note fires on the 3 failed Haiku runs only.
 - No other note.
 
+#### Scope decision after the fourth review: `declared_divergent` is dropped
+
+The fourth review found that the body gate stopped only verbatim copies. A respelled body, a
+renamed local or one added log line let every hedged or limiting note through again, and a
+method copied verbatim into a class with one extra method read as different. Four rounds
+showed that text cannot be trusted to suppress the copy check.
+
+So `declared_divergent` is removed with everything that served it: the vocabulary, the note
+readers, the body gate and `pre_bodies`, with their tests and docs. The copy check is never
+suppressed by text, and it matches main except for the structural named-file snapshot fix.
+
+The fourth review also made two test-check changes:
+- A verbless comma or semicolon clause after a keep narrows it, as does one ending in a
+  `-wise` / `-ly` word or starting "I mean" (", format-wise", ", structurally", "; I mean the
+  format").
+- An expected value folded into a module constant counts as kept.
+
+**What this means for the gate above.** The live gate measured `c071c591f`, which had
+`declared_divergent`. Its `C-DECOY` result (clauses 1 and 2, Sonnet fires 3/6 to 0/6, pooled
+calls 11 to 9, tokens 0.58x / 0.76x) came from that rule. The shipped code drops it, and was
+measured only by this replay. It does not reproduce those clauses.
+
+The offline replay of the 132 H2H2 `omn` sessions on the shipped code
+(`OPT/OPT-I/replay-omn-review4.txt`):
+- `C-DECOY`: 12 continues on base, 12 on new, every one `copy` of the look-alike `_to_cents`.
+  - The named-file snapshot turns the two Sonnet `opaque_edit` fires into judged diffs, and
+    those then find the same look-alike.
+  - So the shipped code does not reduce `C-DECOY` fires at all.
+- `C-DUPLICATE`: 8 of 8 fires kept.
+- `I-KWARG`: the test note fires on the 3 failed Haiku runs only, and no other note fires.
+  Clause 3 (Haiku `I-KWARG` passes) came from the test note, which ships.
+
 ### 2026-10-31 compact `omh_context` result: base vs branch
 
 The `omh_context` tool result rides every later model call of its session. In the 2026-10-30

@@ -80,7 +80,18 @@ _SCOPED_KEEP: Final = re.compile(
     r"\b(?:else|other|others|otherwise|rest|remaining|except|besides|apart from|aside from|for|when|if|unless"
     r"|where|only)\b"
 )
-_CLAUSE_BREAK: Final = re.compile(r"[.;!?]\s+|,\s+|\s+(?:and|but)\s+")
+_CLAUSE_BREAK: Final = re.compile(r"([.;!?]\s+|,\s+|\s+(?:and|but)\s+)")
+# A comma or semicolon clause right after a keep that has no verb, or ends in a `-wise` / `-ly` word,
+# narrows it to an aspect: "the output stays the same, format-wise", "..., structurally", "...; I mean
+# the format".
+_CLAUSE_VERBS: Final = frozenset({
+    "is", "are", "was", "were", "be", "been", "must", "should", "will", "would", "can", "could", "may",
+    "might", "shall", "stay", "stays", "remain", "remains", "change", "changes", "return", "returns",
+    "keep", "keeps", "do", "does", "did", "has", "have", "had", "add", "adds", "run", "runs", "pass",
+    "passes", "update", "fix", "make", "makes", "use", "uses", "raise", "raises", "rename", "write",
+})
+_ASPECT_TAIL: Final = re.compile(r"\b\w+(?:-wise|wise|ly)[\s.;,!]*$")
+_ASPECT_LEAD: Final = re.compile(r"^(?:i mean|meaning|that is|i\.e\.|namely)\b")
 # The request asks for a test to be changed (a change verb shortly before the test or its expectation),
 # or states a result the code must now give ("must return 90", "change it to return a dataclass"):
 # either way a changed expectation is what was asked for. A match negated by the words before it
@@ -133,10 +144,24 @@ def note_request(session_id: object, user_message: object) -> None:
 def _keeps_behaviour(text: str) -> bool:
     """A keep phrase that ends its clause, in a clause no scope word narrows, with no limiting clause
     right after it."""
-    clauses = [clause.strip() for clause in _CLAUSE_BREAK.split(text)]
+    parts = _CLAUSE_BREAK.split(text)
+    clauses = [part.strip() for part in parts[0::2]]
+    breaks = [part.strip() for part in parts[1::2]]
     return any(_KEEPS_BEHAVIOUR.search(clause) and not _SCOPED_KEEP.search(clause)
-               and not (index + 1 < len(clauses) and _LIMITING_FOLLOW.search(clauses[index + 1]))
+               and not (index + 1 < len(clauses) and _limits(clauses[index + 1], breaks[index]))
                for index, clause in enumerate(clauses))
+
+
+def _limits(clause: str, joined_by: str) -> bool:
+    """Whether ``clause``, the one after a keep, narrows it: one that starts "just" / "only" / "except";
+    or, after a comma or a semicolon, one with no verb, one ending in a `-wise` / `-ly` word, or one
+    that starts "I mean" / "that is"."""
+    if _LIMITING_FOLLOW.search(clause):
+        return True
+    if joined_by not in (",", ";"):
+        return False
+    words = set(re.findall(r"[a-z']+", clause))
+    return not (words & _CLAUSE_VERBS) or bool(_ASPECT_TAIL.search(clause)) or bool(_ASPECT_LEAD.search(clause))
 
 
 def _asks_test_edit(text: str) -> bool:
@@ -190,6 +215,7 @@ def _decide(session_id: str, root: str | None) -> tuple[str, list[tuple[str, int
         gained.update(value for test, _node, values in _expectations(new_tree) if test.lower() not in request.named
                       for value in values)
         gained.update(_parametrized_values(new_tree))
+        gained.update(_module_constants(new_tree))
         if old_tree is not None:
             old += [(_relative(path, root), before, test, node, values) for test, node, values in _expectations(old_tree)
                     if test.lower() not in request.named]
@@ -254,6 +280,16 @@ def _expectations(tree: ast.AST) -> list[tuple[str, ast.AST, list[tuple[str, str
 
     visit(tree, "")
     return found
+
+
+def _module_constants(tree: ast.AST) -> list[tuple[str, str]]:
+    """The constants a test module assigns at its top level (``RETRIES = 1``): an expected value folded
+    into a module constant is still expected, so it counts as gained."""
+    values: list[tuple[str, str]] = []
+    for node in getattr(tree, "body", []):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+            values += _expected_values(node.value)
+    return values
 
 
 def _parametrized_values(tree: ast.AST) -> list[tuple[str, str]]:

@@ -296,6 +296,30 @@ class TestExpectationNoteTest(_Turn):
             tc.note_request(SESSION, text)
             self.assertTrue(tc._requests[SESSION].keeps_behaviour, text)
 
+    def test_an_aspect_clause_after_a_keep_narrows_it(self):
+        # Fourth review of #2494: a verbless comma or semicolon clause, or one ending in -wise / -ly,
+        # names the aspect that is kept, not the whole behaviour.
+        for text in ("Switch to tuples; the output stays the same, format-wise.",
+                     "The result must not change, structurally.",
+                     "The output stays the same; I mean the format.",
+                     "The return value stays the same, the field order."):
+            tc.note_request(SESSION, text)
+            self.assertFalse(tc._requests[SESSION].keeps_behaviour, text)
+        for text in ("What fetch returns stays the same, and every caller must keep its behaviour.",
+                     "Its behaviour is unchanged; add a regression test."):
+            tc.note_request(SESSION, text)
+            self.assertTrue(tc._requests[SESSION].keeps_behaviour, text)
+
+    def test_an_expected_value_folded_into_a_module_constant_loses_nothing(self):
+        tc.note_request(SESSION, KWARG)
+        self.write("src/benchapp/http_client.py", CLIENT)
+        self.write("tests/test_http_client.py", CLIENT_TEST)
+        self.edit("src/benchapp/http_client.py", 'timeout: float = 5.0', 'timeout_s: float = 5.0')
+        self.edit("tests/test_http_client.py", "from benchapp.http_client import fetch\n",
+                  'from benchapp.http_client import fetch\n\nEXPECTED = {"url": "u", "timeout": 5.0, "retries": 1}\n')
+        self.edit("tests/test_http_client.py", '== {"url": "u", "timeout": 5.0, "retries": 1}', "== EXPECTED")
+        self.assertEqual(tc.round_end_note(SESSION, str(self.root)), "")
+
     def test_a_unittest_message_is_not_an_expected_value(self):
         tc.note_request(SESSION, "Speed up total without changing behaviour.")
         self.write("src/app/calc.py", "def total(xs):\n    return sum(xs)\n")

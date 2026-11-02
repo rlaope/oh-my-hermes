@@ -4,15 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **The round-end check skips a look-alike that says it differs on purpose,
-  and names a test whose expectation a keep-behaviour turn rewrote.** A
-  helper whose docstring or comment says it is intentionally different (in a
-  module docstring, from the edited file) is no longer a copy that fires the
-  check, and a test a command appends to (`printf >> tests/...`) is diffed
-  instead of firing as an unseen edit. A new always-on test check names an
-  existing test that lost an expected value when the request asked for
-  behaviour to stay the same and did not name that test, ask to update a
-  test, or state a new result. The bench gains the `C-TEST-UPDATE` control.
+- **The round-end check names a test whose expectation a keep-behaviour turn
+  rewrote, and diffs a Python file a command names.** A new always-on test
+  check names an existing test that lost an expected value when the request
+  asked for the behaviour, the output or the result to stay the same as a
+  whole, and did not name that test, ask to update a test, or state a new
+  result. A test a command appends to (`printf >> tests/...`) is now diffed
+  instead of firing as an unseen edit. The copy check is unchanged: a
+  look-alike that says it differs on purpose still fires it, because four
+  review rounds showed a note can hide a real copy. The bench gains the
+  `C-TEST-UPDATE` control.
 
 - **A running gateway keeps working through `omh update`.** Three causes
   are fixed. GC could delete the generation an older gateway still served:

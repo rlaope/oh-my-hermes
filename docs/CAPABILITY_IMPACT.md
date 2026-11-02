@@ -108,26 +108,10 @@ when it can pay off (`consistency_trigger.py`).
 
 The check fires when one of these is true:
 
-- a touched top-level definition is also defined in another file, unless that
-  file's definition already differs from the edited one's pre-edit body (an
-  `ast` comparison that ignores layout, comments and the docstring) and the
-  file says it differs on purpose (`declared_divergent`). A note can only
-  explain a difference the code has; over an equal body the copy fires
-  whatever the note says. The note sits in the definition's docstring or the
-  comments at it, or in a module-docstring sentence; either way it names the
-  edited file as a file (`billing.py`, or a dotted module ending in
-  `.billing`). A module sentence that names definitions of its module must
-  name this one; one that names none speaks only for the one definition its
-  module shares with the edited file. The shape is a
-  whitelist: an intent word (`intentionally`, `deliberately`, `on purpose`,
-  `by design`) with `differs`, `different`, `differently` or `diverges` right
-  after it, at most one word between. A note with a negation (`not`, `never`,
-  `no`, "is a bug"), an identity word (`identical`, `same`, `copy`,
-  `mirrors`, `duplicated`), a limit on the difference (`only`, `match`,
-  `equal`, `equivalent`, `shared`, `track`, `agree`, `consistent`), a TODO or
-  FIXME, or a question declares nothing, so "deliberately kept identical;
-  never let the two diverge" and "differs only in its imports" are still
-  copies;
+- a touched top-level definition is also defined in another file. No text in
+  that file suppresses this: a note saying the look-alike differs on purpose
+  was tried (`declared_divergent`) and dropped after four review rounds,
+  because every wording rule it grew still let some note hide a real copy;
 - a definition the edit removed or renamed is still named in another Python
   file, or in a `.toml`, `.cfg`, `.ini`, `.yaml`, `.yml` or `.json` file;
 - a touched function's signature changed, or a class's `__init__`, `__new__`
@@ -214,7 +198,10 @@ speaks only when all of these hold:
   "without changing" the behaviour, the output or the tests, or "do not change
   the tests". The keep must end its clause (only "exactly", "as before", "as
   today" or "as it is now" may follow), so "the output stays the same shape"
-  and "the result stays the same, just a different container" keep nothing. A
+  and "the result stays the same, just a different container" keep nothing,
+  nor does one narrowed by a comma or semicolon clause with no verb, or one
+  ending in a `-wise` / `-ly` word ("..., format-wise", "..., structurally",
+  "...; I mean the format"). A
   clause with a scope word (`else`, `other`, `otherwise`, `for`, `when`,
   `only`) keeps nothing, and neither does a keep of a named part: "the
   signature stays the same", "the public API is unchanged" and "the return
@@ -228,10 +215,10 @@ speaks only when all of these hold:
 - the test file existed at the turn's start and has its pre-edit text.
 
 Expected values are compared by presence, pooled over every test file the
-turn changed, so an
-assertion moved between test files, or folded into a
-`@pytest.mark.parametrize` table, loses nothing, and a unittest message
-(`msg=`, or a trailing string) is not an expected value.
+turn changed, so an assertion moved between test files, folded into a
+`@pytest.mark.parametrize` table, or folded into a module constant
+(`RETRIES = 1`) loses nothing, and a unittest message (`msg=`, or a trailing
+string) is not an expected value.
 
 `pre_llm_call` keeps those three facts about the request, never its text. The
 note continues the turn like the export note, and asks for the expected value
