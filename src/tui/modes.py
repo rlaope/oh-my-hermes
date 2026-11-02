@@ -77,6 +77,10 @@ ACCEPT_REFUSED_NOTICE = (
     "Hermes did not turn approvals off for this session alone ({}). "
     "Accept all stays off, and the OMH TUI asked Hermes to switch it back off."
 )
+YOLO_UNANSWERED_NOTICE = (
+    "Hermes has not answered the approvals switch in {seconds:g} s, so approvals may be off: accept is shown, "
+    "and Shift+Tab asks Hermes to turn them back on."
+)
 ACCEPT_STUCK_NOTICE = "Hermes did not confirm that this session asks for approvals again ({}). Accept all may still be on."
 # Said once per session, the first time Shift+Tab meets approvals Hermes turned off on its own.
 HERMES_APPROVALS_NOTICE = (
@@ -445,6 +449,7 @@ class ModesMixin:
             lambda error: self._on_yolo_answer(
                 sid, on, f"{error.get('code')}: {as_text(error.get('message')) or 'refused'}"
             ),
+            on_expiry=lambda seconds: self._on_yolo_unanswered(sid, seconds),
         )
 
     def _on_yolo_answer(self, sid: str, on: bool, problem: str) -> bool:
@@ -468,6 +473,7 @@ class ModesMixin:
                 lambda error: self._on_switched_back(
                     sid, f"{error.get('code')}: {as_text(error.get('message')) or 'refused'}"
                 ),
+                on_expiry=lambda seconds: self._on_yolo_unanswered(sid, seconds),
             )
         elif problem:
             self.transcript.add_notice(ACCEPT_STUCK_NOTICE.format(problem), NOTICE_ERROR)  # accept stays shown
@@ -498,6 +504,20 @@ class ModesMixin:
             self.transcript.add_notice(SWITCH_BACK_FAILED_NOTICE.format(problem), NOTICE_ERROR)
             self.approvals_off = self.yolo_by_tui = True
         return True
+
+    def _on_yolo_unanswered(self, sid: str, seconds: float) -> None:
+        """A yolo call (on, off or the switch-back) Hermes did not answer in `seconds`; its late answer is not read.
+
+        As for a switch-back that confirms nothing (`_on_switched_back`),
+        approvals may be off, so accept is shown as the TUI's own: Shift+Tab
+        then sends an explicit off, and leaving the session sends one. For a
+        session already left nothing changes: leaving it sent an off of its own.
+        """
+        if sid != self.sid:
+            return
+        self.mode_request_open = False
+        self.approvals_off = self.yolo_by_tui = True
+        self.transcript.add_notice(YOLO_UNANSWERED_NOTICE.format(seconds=seconds), NOTICE_WARN)
 
     # ── reasoning effort ──
 
