@@ -191,7 +191,7 @@ const findClick = node => {
   return findClick(node.props && node.props.children)
 }
 const scenarios = JSON.parse(readFileSync(scenariosPath, 'utf8'))
-const koreanScenarios = ['catches_and_lanes', 'settled_lanes', 'maestro_and_board', 'gateway_closed', 'open_with_payload']
+const koreanScenarios = ['catches_and_lanes', 'settled_lanes', 'maestro_and_board', 'gateway_closed', 'open_with_payload', 'failed_lane']
 const renders = {}
 for (const [name, scenario] of Object.entries(scenarios)) {
   globalThis.__omh.gateway = scenario.gateway
@@ -581,6 +581,29 @@ for _name, _data in {
     "settled_lanes": {**ESTABLISHED_PAYLOAD, "delegation_graph": SETTLED_GRAPH},
     "inactive_lanes": {**ESTABLISHED_PAYLOAD, "delegation_graph": {**NATIVE_GRAPH, "status": "inactive"}},
     "two_edges": {**MAESTRO_PAYLOAD, "graph": {**MAESTRO_PAYLOAD["graph"], "edges": [["a", "b"], ["b", "c"]], "edge_count": 2}},
+}.items():
+    SCENARIOS[_name] = {**SCENARIOS["open_with_payload"], "data": _data}
+# A live graph with a failed lane: failed is its own word, apart from blocked.
+FAILED_GRAPH = {
+    **NATIVE_GRAPH,
+    "nodes": [
+        *NATIVE_GRAPH["nodes"],
+        {"id": "broke", "kind": "lane", "title": "Failed child", "state": "failed", "model": "openai/gpt-5.6", "session_tail": "broke01"},
+    ],
+    "edges": [*NATIVE_GRAPH["edges"], {"from": "drawn", "to": "broke"}],
+}
+STUCK_AND_FAILED_GRAPH = {
+    **NATIVE_GRAPH,
+    "nodes": [
+        NATIVE_GRAPH["nodes"][0],
+        {"id": "held", "kind": "lane", "title": "Stuck child", "state": "stuck", "session_tail": "held01"},
+        {"id": "broke", "kind": "lane", "title": "Failed child", "state": "failed", "session_tail": "broke01"},
+    ],
+}
+for _name, _data in {
+    "failed_lane": {**ESTABLISHED_PAYLOAD, "delegation_graph": FAILED_GRAPH, "subagents": {"rows": [RUNNING_ROW]}},
+    "failed_without_running": {**ESTABLISHED_PAYLOAD, "todo": {"status": "absent"}, "delegation_graph": STUCK_AND_FAILED_GRAPH, "subagents": {"rows": []}},
+    "failed_row": {**ESTABLISHED_PAYLOAD, "todo": {"status": "absent"}, "subagents": {"rows": [{**RUNNING_ROW, "state": "failed"}, {**RUNNING_ROW, "task_id": "b2", "state": "blocked"}]}},
 }.items():
     SCENARIOS[_name] = {**SCENARIOS["open_with_payload"], "data": _data}
 SCENARIOS["busy"] = {**SCENARIOS["open_with_payload"], "busy": True}
@@ -988,7 +1011,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
     def test_the_pane_draws_maestro_board_dag_and_a_finished_plan(self) -> None:
         pane = self._pane("maestro_and_board")
         self.assertEqual(pane, [
-            "OMH", "1 running", "this session", "repeat x3 blocked", "board 2 queued, 1 running",
+            "OMH", "1 running", "1 blocked", "this session", "repeat x3 blocked", "board 2 queued, 1 running",
             "board dispatcher not seen", "yolo on", "PLAN", "Ship the pane", "✓ 1/2 (1 skipped)",
             "✓", "Build it", "–", "Benchmark it", "skipped: no bench harness", "ROUTES", "2",
             "⠋", "Refactor the router", "run-42", "(codex/maestro gpt-5.6)", "running", "30s",
@@ -1089,7 +1112,7 @@ class DesktopPluginNodeTests(unittest.TestCase):
         )
         self.assertEqual(
             formatters["hudStateLabel"],
-            ["idle", "2 running", "2 done", "3 running"],
+            ["idle", "2 running · 1 blocked", "2 done", "3 running · 1 blocked"],
         )
 
 
@@ -1245,13 +1268,78 @@ class DesktopPluginNodeTests(unittest.TestCase):
         live = report["renders"]["runtime_only"]
         self.assertEqual(live["byId"]["hud"][:2], ["OMH", "active"])
         self.assertEqual(live["byId"]["status"], ["OMH", "active"])
-        state = next(node for node in live["structure"] if "omh-pane-state-text" in node["className"])
+        state = next(node for node in live["structure"] if "omh-pane-state-seg" in node["className"])
         self.assertIn("omh-pane-accent", state["className"])
         self.assertEqual([dot["tone"] for dot in live["dots"]], ["good"])
         idle = report["renders"]["global_idle"]
-        state = next(node for node in idle["structure"] if "omh-pane-state-text" in node["className"])
+        state = next(node for node in idle["structure"] if "omh-pane-state-seg" in node["className"])
         self.assertIn("omh-pane-tertiary", state["className"])
         self.assertEqual(idle["dots"], [])
+
+    def test_a_failed_lane_is_its_own_word_in_the_header_and_the_status_bar(self) -> None:
+        renders = self._drive()["renders"]
+        failed = renders["failed_lane"]
+        self.assertEqual(failed["tally"]["failed"], 1)
+        self.assertEqual(failed["tally"]["blocked"], 0)
+        self.assertEqual(failed["byId"]["hud"][:3], ["OMH", "1 running", "1 failed"])
+        self.assertEqual(failed["byId"]["status"], ["OMH", "1 running", "1 failed"])
+        segments = [node for node in failed["structure"] if "omh-pane-state-seg" in node["className"]]
+        self.assertEqual([node["text"] for node in segments], ["1 running", "1 failed"])
+        self.assertIn("omh-pane-accent", segments[0]["className"])
+        self.assertIn("omh-pane-error", segments[1]["className"])
+        self.assertEqual([dot["tone"] for dot in failed["dots"]], ["good"])
+        # With nothing running, failed leads, blocked follows, and the dot is red.
+        held = renders["failed_without_running"]
+        self.assertEqual(held["byId"]["hud"][:3], ["OMH", "1 failed", "1 blocked"])
+        self.assertEqual(held["byId"]["status"], ["OMH", "1 failed", "1 blocked"])
+        self.assertEqual([dot["tone"] for dot in held["dots"]], ["bad"])
+        # A failed route row counts as failed, a blocked one as blocked.
+        rows = renders["failed_row"]
+        self.assertEqual((rows["tally"]["failed"], rows["tally"]["blocked"]), (1, 1))
+        self.assertEqual(rows["byId"]["status"], ["OMH", "1 failed", "1 blocked"])
+        self.assertIn("1 failed", rows["statusDetail"])
+        # The header and the status bar never disagree.
+        for name, render in renders.items():
+            data = SCENARIOS.get(name, {}).get("data")
+            if not data or not data.get("active") or data.get("error"):
+                continue
+            with self.subTest(name=name):
+                head = [node["text"] for node in render["structure"] if "omh-pane-state-seg" in node["className"]]
+                self.assertEqual(head, render["byId"]["status"][1 : 1 + len(head)])
+
+    def test_a_korean_host_reads_the_failed_count_in_korean(self) -> None:
+        korean = self._drive()["korean"]["failed_lane"]
+        self.assertEqual(korean["byId"]["hud"][:3], ["OMH", "1개 실행 중", "1개 실패"])
+        self.assertEqual(korean["byId"]["status"], ["OMH", "1개 실행 중", "1개 실패"])
+
+    def test_a_narrow_pane_stacks_the_lane_model_under_its_title(self) -> None:
+        report = self._drive()
+        css = report["style"]["css"]
+        self.assertIn("container-type:inline-size", css)
+        narrow = css[css.index("@container (max-width: 420px)") :]
+        narrow = narrow[: narrow.index("}}") + 2]
+        self.assertIn(".omh-pane-lane{grid-template-columns:14px minmax(0,1fr) 64px}", narrow)
+        self.assertIn(".omh-pane-lane-model{grid-column:2/-1;grid-row:2;max-width:none;padding-left:var(--omh-lane-indent,0)}", narrow)
+        self.assertIn(".omh-pane-lane-state{grid-column:3;grid-row:1}", narrow)
+        # The lane's indent rides a variable: the title always takes it, the model only on its own
+        # line in a narrow pane, so a wide row's model cell is not narrowed by it.
+        self.assertIn(".omh-pane-lane-title{min-width:0;padding-left:var(--omh-lane-indent,0);", css)
+        wide_model = css[css.index(".omh-pane-lane-model{") : css.index("}", css.index(".omh-pane-lane-model{"))]
+        self.assertNotIn("omh-lane-indent", wide_model)
+        lanes = [node for node in report["renders"]["failed_lane"]["structure"] if node["className"] == "omh-pane-lane"]
+        self.assertEqual(len(lanes), 2)
+        # `broke` runs after `drawn`, one step in: its row carries the indent, the top lane none.
+        self.assertEqual([node.get("style") for node in lanes], [None, {"--omh-lane-indent": "12px"}])
+        model = next(node for node in report["renders"]["failed_lane"]["structure"] if "omh-pane-lane-model" in node["className"])
+        self.assertEqual(model["text"], "gpt-5.6")
+
+    def test_text_the_user_reads_is_darker_than_the_hint_role(self) -> None:
+        css = self._drive()["style"]["css"]
+        self.assertIn("--omh-text-readable:color-mix(in srgb,var(--ui-text-secondary),var(--ui-text-tertiary))", css)
+        for rule in (".omh-pane-scope{", ".omh-pane-item-note{", ".omh-pane-summary{", ".omh-pane-notice{", ".omh-pane-tertiary{"):
+            with self.subTest(rule=rule):
+                body = css[css.index(rule) : css.index("}", css.index(rule))]
+                self.assertIn("color:var(--omh-text-readable)", body)
 
     def test_row_tool_counts_use_the_right_plural(self) -> None:
         extras = [figures["extras"] for figures in self._drive()["formatters"]["rowFigures"]]
