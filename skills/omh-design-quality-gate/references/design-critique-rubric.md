@@ -63,8 +63,8 @@ axis explicitly; a PASS with no named evidence per axis is not a review.
   smooth dithered gradients with local light on the subject. FAIL: scene
   cuts or an end-card lockup, meta text (explanatory labels, subheads, IDs,
   URLs, footnotes), a second number or a giant extruded one, a small or boxed
-  logo, slop UI (glass cards, pill or "LIVE" badges, stat boxes, terminal or
-  dashboard capture), visible banding, or no still sheet reviewed before
+  logo, slop UI (glass cards, pill or "LIVE" badges, stat boxes, invented
+  terminal or dashboard UI), visible banding, or no still sheet reviewed before
   render.
 
 ## Scoring the axes

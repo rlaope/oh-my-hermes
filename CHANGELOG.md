@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Short promo clips get their own design rules.** A launch clip of 15
+  seconds or less is one segment, so `show-reel` no longer applies its
+  multi-segment habits (scene variety, transitions, a giant number scene, an
+  end card) to it. The new Short promo clips section in `craft-design.md` asks
+  for one hero scene held throughout, no meta text (labels, IDs, URLs and
+  prices go in the post body), one number smaller than the logo, and the
+  official logo at 25% or more of the frame height, checked on a still sheet
+  before the render. `design-quality-gate` scores the same items as a
+  Short-clip discipline axis. Generalized from six review rounds on one
+  launch clip. (#2488)
+
 - **Show-reel judges the hero frame before the full render.** A product film
   that passes every lint and contact-sheet check can still read as cheap on
   sight, so `show-reel` now asks for a launch-frame verdict on the first frame:
