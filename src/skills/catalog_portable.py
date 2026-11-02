@@ -438,6 +438,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'frontend/references/scroll-motion-libraries.md',
     'frontend/references/component-registry-adoption.md',
     'frontend/references/chart-styling.md',
+    'frontend/references/forms-and-input.md',
     'frontend/references/rendered-scene-craft.md',
     'design-quality-gate/references/design-critique-rubric.md',
     'visual-qa/references/visual-verdict-contract.md',
@@ -466,6 +467,7 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'backend/references/schema-migration.md',
     'backend/references/consumer-impact.md',
     'backend/references/contract-tests.md',
+    'backend/references/inbound-and-async.md',
     'rust/references/rust-discipline.md',
     'rust/references/ub-escalation.md',
     'native-debugging/references/native-debug-loop.md',
@@ -507,6 +509,9 @@ PORTABLE_REFERENCE_PATHS = frozenset({
     'code-review/references/review-lenses.md',
     'ai-slop-cleaner/references/prose-lexicon.md',
     'plan/references/project-constitution.md',
+    # Named by a decision-prototype quality_bar pointer that projects into this
+    # target; host-neutral prose with no OMH command or Hermes-only surface.
+    'decision-prototype/references/artifact-shapes.md',
 })
 
 

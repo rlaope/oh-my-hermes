@@ -48,6 +48,7 @@ Bad example:
 - The debugger session plan names the DAP adapter, breakpoints, watchpoints, threads, frames, and values to read.
 - The handoff says the executor drives the debugger and OMH executes nothing.
 - Reproduction, debugger output, root cause, and fix are reported as separate observed or not_observed states.
+- Any print-and-rebuild probe carried the session's probe tag, and an observed search for that tag returns nothing.
 
 ## Recovery Notes
 
@@ -98,7 +99,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- native_fault_statement/v1 separates the observed symptom from the assumed cause and names the reproduction command
+- native_fault_statement/v1 separates the observed symptom from the assumed cause, names the reproduction command, quotes the observed failure beside the reported one (`symptom_match`), and records the `minimised` reproduction
 - hypothesis_set/v1 spans distinct axes — caller-side misuse, callee invariant, memory lifetime, concurrency, build/runtime mismatch — not three phrasings of one guess
 - distinguishing_observation_plan/v1 pairs each hypothesis with the one observation that refutes it, and where to read it
 - debugger_session_plan/v1 names the adapter (lldb or gdb via DAP), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop

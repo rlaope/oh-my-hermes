@@ -87,6 +87,8 @@ Quality bar:
 - When the change touches storage, load `references/schema-migration.md` and order the migration as expand, backfill, switch, contract, with the rollback point named per step.
 - Hold the `api` product-family expectations — authentication boundary, contract error paths, response consistency — as the standing bar for every prepared endpoint.
 - When an existing contract changes, name who consumes it before designing the change: each identified consumer with what breaks for it, then the compatibility window, migration path, and sunset date — the skill that owns a surface owns its evolution. Load `references/consumer-impact.md` for the enumeration sources and the window rules.
+- Name the guard on every write two requests can reach at once — a unique constraint, a stored idempotency key, a lost-update guard — and send side effects only after commit; the pagination-cursor, integrity, timeout, and cache rules are in sections 4 to 6 of the service-contract reference.
+- When the surface receives webhooks, consumes a queue, or sizes a connection pool, load `references/inbound-and-async.md`: verify a webhook over its raw body before parsing, and treat every queued message as one that can arrive more than once.
 - Name the per-stack reference the executor must read first; the stack is a routing input, not a detail discovered mid-implementation.
 - When the handoff asks for tests, load `references/contract-tests.md` and derive the test plan in backend_implementation_handoff/v1 from the contract: one negative test per auth_boundary_map/v1 row, one per error_path_table/v1 row, stand-ins chosen by dependency category with the same database engine, and migrations run on populated data.
 - Keep implementation, migration application, integration runs, load testing, and deployment as observed-only evidence.
@@ -118,7 +120,7 @@ Expected outputs:
 
 Artifact expectations:
 
-- backend_service_contract/v1 names each endpoint or job, its caller class, request and response shapes, and its idempotency and pagination rules
+- backend_service_contract/v1 names each endpoint or job, its caller class, request and response shapes, its idempotency and pagination rules, and its expected rate, latency target, and payload bound (or `unknown`)
 - auth_boundary_map/v1 states where an untrusted caller becomes a trusted one, and which check runs on each path
 - error_path_table/v1 pairs every failure mode with its status/code, body shape, retryability, and log/redaction rule
 - response_shape_contract/v1 keeps success and error envelopes consistent across the surface instead of per-endpoint improvisation
@@ -131,6 +133,7 @@ Safety rules:
 - Do not claim implementation, a running service, an applied migration, a passing integration suite, or a deployment from a prepared backend contract.
 - Require the auth boundary before endpoint work: an endpoint whose caller trust level is unnamed is not ready for handoff.
 - Require the error-path table before the happy path is called complete; an unlisted failure mode is a gap, not a default.
+- Treat an inbound webhook handler that does not verify the signature over the raw body before parsing as a blocker, not a follow-up.
 - Treat a destructive or non-reversible migration step as a blocker until an explicit rollback point and backfill order exist.
 - Report an unenumerable consumer set as `consumers_not_enumerable` with what was searched; consumers outside the repository are unknowable from it, and an empty list is a claim that nothing breaks.
 - Never place secrets, tokens, or connection strings in the contract, examples, or handoff text.
