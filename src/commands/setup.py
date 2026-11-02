@@ -573,6 +573,8 @@ def cmd_update(args: argparse.Namespace) -> int:
     )
     code = 1 if failures else 0
     payload.update({"status": "partial" if failures else "ok", "failures": failures, "exit_code": code})
+    restart_hints = [] if bool(getattr(args, "dry_run", False)) or not hasattr(args, "omh_home") else gateway_restart_hints(_paths(args))
+    payload["gateway_restart_hints"] = restart_hints
     if _wants_json(args):
         _print_json(payload)
     else:
@@ -588,7 +590,7 @@ def cmd_update(args: argparse.Namespace) -> int:
         if not bool(getattr(args, "dry_run", False)) and hasattr(args, "omh_home"):
             for line in _registration_ambiguity_lines(args):
                 print(f"  warning: {line}")
-            for hint in gateway_restart_hints(_paths(args)):
+            for hint in restart_hints:
                 print(f"  {hint}")
     return code
 

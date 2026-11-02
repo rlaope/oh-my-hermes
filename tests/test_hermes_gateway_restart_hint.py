@@ -246,6 +246,22 @@ class UpdatePrintsRestartHintsTests(unittest.TestCase):
             self.assertIn("Restart Hermes Desktop for bot chats to reload skills.", stdout)
             self.assertLess(stdout.index("Bot profiles:"), stdout.index("Hermes gateway for"))
 
+    def test_update_json_carries_the_same_hints(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hermes_home = root / ".hermes"
+            status, _, stderr = run_cli(self._base(root) + ["setup"])
+            self.assertEqual(status, 0, stderr)
+            _write_home(hermes_home, starts=[datetime.now(UTC).timestamp() - 86400], pid_record=_record(hermes_home),
+                        installed_at=None)
+
+            status, stdout, stderr = run_cli(self._base(root) + ["update"])
+
+            self.assertEqual(status, 0, stderr)
+            [hint] = json.loads(stdout)["gateway_restart_hints"]
+            self.assertTrue(hint.startswith(f"Hermes gateway for {hermes_home.resolve()}: last recorded start "))
+            self.assertTrue(hint.endswith("; run `hermes gateway restart`"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,24 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The OMH TUI and `omh doctor` say when Hermes' gateway needs a restart.**
+  Two cases used to leave a slow TUI, an empty `/resume` or missing skills
+  with no reason given. When Hermes' `gateway_state.json` reports its
+  session store `unavailable` (often a deleted profile the shared gateway
+  still holds, which Hermes logs as "state.db was replaced"), the line says
+  the gateway cannot write its session store, that the sessions saved on
+  disk are fine, and to run `hermes gateway restart`. When the gateway's
+  last recorded start precedes the OMH plugin bundle's install, it says OMH
+  was updated after the gateway started and a restart loads the new plugin
+  code. When the gateway is already draining for a restart (it refuses new
+  messages, and bots answer `runtime_draining`), it says the gateway is
+  restarting, how many running turns it waits for, the seconds left when
+  Hermes' log says, and that `agent.restart_after_turn_timeout` caps the
+  wait. The TUI shows each once at launch; doctor shows them as the
+  `hermes_gateway` warning row; `omh update --json` now carries the update
+  restart hints as `gateway_restart_hints`. Local files only; OMH stops and
+  restarts nothing.
+
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
