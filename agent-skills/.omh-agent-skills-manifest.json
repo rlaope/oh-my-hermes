@@ -1,5 +1,5 @@
 {
-  "catalog_revision": "5836c6407dae10858fb3a6dee4b7b03912df6463894796802d16aabd81006aa3",
+  "catalog_revision": "275ebfca4f4395ce54f7f1c41c21e4d0fedbedacccc21de5170ee5da28b07f0e",
   "files": {
     "omh-accessibility-audit/SKILL.md": "eb5011ae3f74d84dbe66bf2dcea9533c08ca407b246680b0bd686122f09b27fe",
     "omh-accessibility-audit/references/a11y-rules.md": "cd7e0404576923cfd3bcec9e055b1de7a78f3fc55971fd033598aac1043e4469",
@@ -98,11 +98,11 @@
     "omh-frontend-refactor/SKILL.md": "c8eda5a610057ded58794c2ef1f63d1115059e8e2545cf4dd8837c7793026037",
     "omh-frontend-refactor/references/refactor-passes.md": "8aaba7f2fef359d29bc5983ab74da2c0e58c4e1094f4e1437a4032e6294e7f60",
     "omh-frontend-refactor/references/state-discipline.md": "04084cfd8d849f9e0b468d8a30fecc58f8c37ca5d5585afeb1e3bce95719faa4",
-    "omh-frontend/SKILL.md": "4e7bb039a336d561511f97536e526d9fd8de011b8dfc965ea30a22c2596a00f0",
+    "omh-frontend/SKILL.md": "94699a56b2cd3da7d13bb623b82e5503ca117368bce956e3c6328c5c8b85c2e1",
     "omh-frontend/references/chart-styling.md": "aaaa79f8c52fd7e1b7daaa3a1142df79116eadfb7bb5653da5b0af0cbf0aecc3",
     "omh-frontend/references/component-registry-adoption.md": "8ec6284a7ad4e25e41f662474c85f280bed69869194c53509a22e23f3a3bc96e",
     "omh-frontend/references/design-system-contract.md": "551c4de7c97d31e1733af48a7ecfc6e9b4492c1be2fe35be65e8d24103f80dcd",
-    "omh-frontend/references/forms-and-input.md": "cbc460e2f1793407ae3029673f9da959fe60e74c9f85f221ba9c8c75661bcbbd",
+    "omh-frontend/references/forms-and-input.md": "28794119e18deb5ee360b49a83521731949896d454399f2cd0edfdc39f6133e7",
     "omh-frontend/references/reference-token-extraction.md": "b36dedde2f859f83a95563cddab06f4002ce8c0a2c3b4ef64abc8a954c1e12bf",
     "omh-frontend/references/rendered-scene-craft.md": "d6d3ab6749dc445580087358a0923db5e969918f5a64cf1336408ddb2dcbd310",
     "omh-frontend/references/screenshot-loop.md": "d471b396b9fc9a39e06d2b52b3a55f055ed0294fcff80f2855efcfc36251180d",

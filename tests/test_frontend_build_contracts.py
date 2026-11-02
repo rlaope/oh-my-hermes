@@ -104,6 +104,7 @@ class FormsAndInputTests(unittest.TestCase):
         self.assertIn("within about 50 ms of it in absolute value", content)
         self.assertIn("a clock read inside the handler (`Date.now()`, `performance.now()`) drifts", content)
         self.assertIn("A single-line input inside a `<form>` needs no handler", content)
+        self.assertIn("Run the composition check before any Enter branch, modified or not", content)
         self.assertIn("A visible submit button always remains", content)
         self.assertIn("typing Korean or Japanese with a real IME", content)
 
@@ -124,8 +125,11 @@ class FormsAndInputTests(unittest.TestCase):
         self.assertIn("The guard lives in the form's `submit` handler, not on the button's click", content)
         self.assertIn("idempotency key created once per user intent and reused on retry", content)
         self.assertIn("on close focus returns to the control that opened it", content)
-        self.assertIn("only once per user activation", content)
+        self.assertIn("Under the HTML close-watcher rules (shipped in Chromium; check other engines)", content)
+        self.assertIn("can be prevented only once per user activation", content)
         self.assertIn("`closedby=\"none\"`", content)
+        # closedby="none" turns Escape off; keyboard users must keep it.
+        self.assertIn("handle Escape yourself (keydown on the dialog) so it runs the same check", content)
 
     def test_undetectable_behavior_is_an_enhancement_not_a_detected_fallback(self) -> None:
         content = _packaged(FORMS)
@@ -153,8 +157,8 @@ class BrowserSupportTests(unittest.TestCase):
             body,
         )
         self.assertIn(
-            "a Baseline Newly available feature, or one newer than the target, needs feature detection plus a "
-            "fallback, or a deliberate target change",
+            "a feature newer than the target (by default, anything only Baseline Newly available) needs feature "
+            "detection plus a fallback, or a deliberate target change",
             body,
         )
         self.assertIn("`omh-agent-instructions` owns that file", body)

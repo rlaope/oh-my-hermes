@@ -233,7 +233,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # only frontend and frontend-refactor move, and main's producer gives
         # the previous pin
         # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
-        self.assertEqual(_digest(legacy_hashes), '99bdb5f2edb3a7fd2f2f79dd3b2f9fb96c9a8ee5b560b05f837fbc6b27fc0f84')
+        # Its second review round (dialog Escape under closedby="none", the
+        # close-watcher wording, the support-target wording) moves frontend
+        # only; the round before gives
+        # 99bdb5f2edb3a7fd2f2f79dd3b2f9fb96c9a8ee5b560b05f837fbc6b27fc0f84.
+        self.assertEqual(_digest(legacy_hashes), 'e498851bd607d40942631386858a10c1ed1ea5ea8e3a17a033b866d2c1bbe956')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.

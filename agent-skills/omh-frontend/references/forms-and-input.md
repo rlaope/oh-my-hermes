@@ -94,9 +94,9 @@ these languages.
   `compositionend`). Compare the two events' timestamps; a clock read inside
   the handler (`Date.now()`, `performance.now()`) drifts whenever the main
   thread is busy.
-- Shift+Enter inserts a newline. A send shortcut that needs a modifier
-  (Ctrl+Enter, Cmd+Enter) needs no composition check, because an IME confirms
-  its candidate with a bare Enter.
+- Shift+Enter inserts a newline. Run the composition check before any
+  Enter branch, modified or not (Ctrl+Enter, Cmd+Enter included): it costs
+  nothing, and not every IME is known to leave modified Enter alone.
 - A visible submit button always remains; the key is an accelerator, not the
   only path.
 - Verify it by typing Korean or Japanese with a real IME and pressing Enter
@@ -112,10 +112,13 @@ these languages.
   it has no field. Escape closes it, and on close focus returns to the
   control that opened it.
 - A dialog holding unsaved input asks before discarding it on an accidental
-  close. Chromium honors `preventDefault()` on a modal's `cancel` event only
-  once per user activation, so a second Escape closes it anyway: ask on the
-  first Escape, or open it with `closedby="none"` and give it an explicit
-  close control that runs the check.
+  close. Under the HTML close-watcher rules (shipped in Chromium; check
+  other engines), a modal's `cancel` can be prevented only once per user
+  activation, so a second Escape closes it anyway: ask on the first Escape,
+  or open it with `closedby="none"`, give it an explicit close control that
+  runs the check, and handle Escape yourself (keydown on the dialog) so it
+  runs the same check; `closedby="none"` turns close requests off entirely,
+  and keyboard users would otherwise lose Escape.
 - Keeping the page behind a modal still is partly an enhancement.
   `overscroll-behavior: contain` on the dialog stops scroll chaining when the
   dialog's own content overflows. Stopping scroll over the backdrop, or
@@ -134,9 +137,9 @@ these languages.
 
 `:user-invalid`, `popover`, `closedby`, and the newest dialog behaviors
 arrived in engines at different times. Check each against the
-browser-support target named in the brief. A feature that is only Baseline
-Newly available, or newer than the target, ships behind feature detection
-with a fallback, or the target changes on purpose. A behavior that cannot be
+browser-support target named in the brief. A feature newer than the target
+(by default, anything only Baseline Newly available) ships behind feature
+detection with a fallback, or the target changes on purpose. A behavior that cannot be
 detected (the backdrop scroll above) cannot take that path: it ships only as
 an enhancement whose absence the page tolerates, or a different technique
 covers the target.
