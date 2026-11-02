@@ -8,9 +8,11 @@ deterministically and from the disk alone, whether such a thing exists:
    - At the turn's first tool call of any kind, it records a bounded ``(mtime, size)`` index of the
      workspace's ``.py`` / ``.pyi`` files.
    - Before each ``patch`` / ``write_file`` of such a file, it keeps the file's text, once per turn
-     (``""`` for a file that does not exist yet).
-   - A file that changed since the index before its first snapshot (a ``sed``, ``execute_code`` or a
-     delegated child's edit) is marked as having no turn-start text.
+     (``""`` for a file that does not exist yet). Before each ``terminal`` / ``execute_code`` call it
+     does the same for every such file the call's arguments name (``printf ... >> tests/test_x.py``,
+     ``sed -i ... a.py``).
+   - A file that changed since the index before its first snapshot (a command that did not name it,
+     or a delegated child's edit) is marked as having no turn-start text.
    - No index is taken for a session whose platform never gets the check (``note_turn_posture``, from
      ``pre_llm_call``), or for a root whose last index ran over budget within ``OVER_BUDGET_SECONDS``.
    - Residual: Hermes blocks a tool call whose ``pre_tool_call`` times out, so no call this hook
@@ -25,7 +27,10 @@ deterministically and from the disk alone, whether such a thing exists:
      bodies.
    - It scans the other files for one of four signals:
 
-     - ``copy``: a touched top-level definition is also defined at the top level of another file;
+     - ``copy``: a touched top-level definition is also defined at the top level of another file,
+       unless that file says its definition differs on purpose (``declared_divergent``: in the
+       definition's docstring or the comments at it, or in the module docstring naming the edited
+       file);
      - ``renamed``: a definition the edit removed is still named in another Python file or a config
        file (``.toml`` ``.cfg`` ``.ini`` ``.yaml`` ``.yml`` ``.json``);
      - ``signature``: a touched function's parameters or return annotation changed, or a class's
@@ -96,8 +101,16 @@ _BUILD_PEEK_DIRS: Final = 64
 MIN_COPY_LINE_CHARS: Final = 30
 _MAX_SESSIONS: Final = 64
 _EDIT_TOOLS: Final = frozenset({"patch", "write_file"})
+# Tools that run a command or code, and so can change any file they name (`_named_python_files`).
+_COMMAND_TOOLS: Final = frozenset({"terminal", "execute_code"})
 _V4A_HEADER: Final = re.compile(r"^\*\*\*\s*(?:Update|Add|Delete)\s+File:\s*(.+)$", re.MULTILINE)
 _V4A_MOVE: Final = re.compile(r"^\*\*\*\s*Move\s+File:\s*(.+?)\s*->\s*(.+)$", re.MULTILINE)
+# A Python file named in a non-edit call's argument (a shell command, a code string): a whole run of
+# path characters that ends in `.py` / `.pyi` (so `x.pyc` and `a.py.bak` are not one). Only the first
+# `MAX_NAMED_SCAN_CHARS` of each argument are read.
+_PATH_RUN: Final = re.compile(r"[\w./@+~-]+")
+MAX_NAMED_FILES: Final = 8
+MAX_NAMED_SCAN_CHARS: Final = 65_536
 # Top-level names many unrelated modules define; one of them defined elsewhere is not a copy.
 _COMMON_NAMES: Final = frozenset({"main", "log", "LOG", "logger", "LOGGER", "app"})
 _CONSTRUCTOR_METHODS: Final = frozenset({"__init__", "__new__", "__call__"})
@@ -105,6 +118,13 @@ _CONSTRUCTOR_METHODS: Final = frozenset({"__init__", "__new__", "__call__"})
 NO_CHECK_PLATFORMS: Final = frozenset({"subagent"})
 # Statement bodies read as if their definitions sat at the enclosing level.
 _BLOCK_FIELDS: Final = ("body", "orelse", "finalbody")
+_FUNCTION_TYPES: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
+# A note saying a look-alike differs on purpose (`_declared_divergent`): an intent word and a
+# difference word in one sentence, or an explicit "not kept in step / in sync with".
+_INTENT: Final = re.compile(r"\b(?:intentional(?:ly)?|deliberate(?:ly)?|on purpose|by design|purposely|purposefully)\b")
+_DIFFER: Final = re.compile(r"\b(?:differ(?:s|ed|ent|ently|ence)?|diverge[sd]?|divergent|divergence|deviates?|unlike)\b")
+_NOT_IN_STEP: Final = re.compile(r"\bnot (?:be )?(?:kept )?in (?:step|sync) with\b")
+_SENTENCE_BREAK: Final = re.compile(r"(?<=[.!?;])\s+")
 
 _LOG = logging.getLogger("omh.consistency_trigger")
 _lock = threading.Lock()
@@ -139,10 +159,20 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
             return
         state = _turn_state(session_id, kwargs)
         tool_name = kwargs.get("tool_name")
-        if tool_name not in _EDIT_TOOLS or not isinstance(tool_input, dict):
+        if not isinstance(tool_input, dict):
+            return
+        if tool_name in _EDIT_TOOLS:
+            requested_paths = _edit_targets(str(tool_name), tool_input)
+        elif tool_name in _COMMAND_TOOLS:
+            # A command or a code string that names a Python file may change it: its text is kept now,
+            # before the call runs, so a `printf >> tests/x.py` or a `sed -i` on a named file is
+            # diffed like a patch instead of firing as opaque. A file the call changes without naming
+            # it still has no snapshot, and fires as before.
+            requested_paths = _named_python_files(tool_input)
+        else:
             return
         root = state["root"]
-        for requested in _edit_targets(str(tool_name), tool_input):
+        for requested in requested_paths:
             if not requested.endswith(PYTHON_SUFFIXES):
                 continue
             path = _resolve(requested, root)
@@ -153,8 +183,8 @@ def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
                     continue
             index = state["index"]
             if index is not None and _stat(path) != index.get(path):
-                # Changed since the turn began, by something that was not a patch or write_file:
-                # the text on disk now is not the turn's starting text.
+                # Changed since the turn began, by a call that did not name it: the text on disk now
+                # is not the turn's starting text.
                 with _lock:
                     state["opaque"].add(path)
                 continue
@@ -192,6 +222,16 @@ def turn_root(session_id: object) -> str | None:
     with _lock:
         state = _sessions.get(session_id)
         return state["root"] if state is not None else None
+
+
+def turn_snapshots(session_id: object) -> dict[str, str]:
+    """A copy of this turn's turn-start texts (realpath -> text, ``""`` for a file that did not exist),
+    without consuming the session's state. Empty when the session has none."""
+    if not isinstance(session_id, str) or not session_id:
+        return {}
+    with _lock:
+        state = _sessions.get(session_id)
+        return dict(state["before"]) if state is not None else {}
 
 
 def discard_snapshots(session_id: object) -> None:
@@ -291,7 +331,7 @@ def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline:
         after = _read(path, missing="")
         if after is None:
             return Verdict(True, "too_large", _relative(path, root))
-        status = _collect(state["before"][path], after, needles)
+        status = _collect(state["before"][path], after, needles, path)
         if status != "ok":
             return Verdict(True, status, _relative(path, root))
     if needles.empty():
@@ -301,7 +341,7 @@ def _decide(state: dict[str, Any] | None, code_paths: tuple[str, ...], deadline:
 
 class _Needles:
     def __init__(self) -> None:
-        self.defined: set[str] = set()   # copy: defined at the top level elsewhere
+        self.defined: dict[str, set[str]] = {}  # copy: defined at the top level elsewhere -> edited files' stems
         self.renamed: set[str] = set()   # renamed: named elsewhere, Python or config
         self.signature: set[str] = set()  # signature: named elsewhere
         self.lines: set[str] = set()     # line_copy: appears as a line elsewhere
@@ -310,7 +350,7 @@ class _Needles:
         return not (self.defined or self.renamed or self.signature or self.lines)
 
 
-def _collect(before: str, after: str, needles: _Needles) -> str:
+def _collect(before: str, after: str, needles: _Needles, path: str = "") -> str:
     """Add what this file's edit could have a copy or a reference of elsewhere.
 
     Returns ``"ok"``, ``"parse_error"`` (either side does not parse) or ``"unattributed"`` (a
@@ -351,7 +391,7 @@ def _collect(before: str, after: str, needles: _Needles) -> str:
             continue
         top = qualified.split(".", 1)[0]
         if not _dunder(top) and top not in _COMMON_NAMES and not top.startswith("test"):
-            needles.defined.add(top)
+            needles.defined.setdefault(top, set()).add(_stem(path))
         old_sigs = sorted(_signature(node) for _s, _e, node in entries if _is_function(node))
         new_sigs = sorted(_signature(node) for _s, _e, node in new_defs[qualified] if _is_function(node))
         if old_sigs != new_sigs and not _dunder(name):
@@ -373,6 +413,7 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
     named = {name: re.compile(rf"\b{re.escape(name)}\b") for name in sorted(needles.renamed | needles.signature)}
     renamed = {name: named[name] for name in sorted(needles.renamed)}
     suffixes = PYTHON_SUFFIXES + (CONFIG_SUFFIXES if renamed else ())
+    divergent: list[str] = []
     try:
         for path in _walk(root, suffixes, deadline):
             if path in edited:
@@ -391,6 +432,9 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
                 continue
             for name, pattern in defined.items():
                 if name in text and pattern.search(text):
+                    if _declared_divergent(text, name, needles.defined[name]):
+                        divergent.append(f"{name} in {where}")
+                        continue
                     return Verdict(True, "copy", f"{name} in {where}")
             for name, pattern in named.items():
                 if name in text and pattern.search(text):
@@ -404,7 +448,54 @@ def _scan(root: str, edited: set[str], needles: _Needles, deadline: float) -> Ve
         return Verdict(True, "scan_budget", str(exc))
     except _OutsideLink as exc:
         return Verdict(True, "outside_link", str(exc))
+    if divergent:
+        return Verdict(False, "declared_divergent", ", ".join(divergent))
     return Verdict(False, "no_copy_or_reference")
+
+
+def _declared_divergent(text: str, name: str, stems: set[str]) -> bool:
+    """Whether the file ``text`` says its ``name`` differs from the edited one on purpose, so it is not a
+    copy that has to change with the edit. Read with ``ast``, in two places only:
+
+    - the docstring of a top-level definition of ``name``, or the comment lines directly above it
+      or on its first line: a sentence there that says it differs on purpose;
+    - the module docstring: such a sentence that also names one of the edited files (``stems``,
+      ``billing`` for ``billing.py``), since a module docstring speaks for every definition in it.
+
+    "Differs on purpose" is a closed vocabulary (`_INTENT` plus `_DIFFER`, or `_NOT_IN_STEP`). A file
+    that does not parse, or a note in a string or comment anywhere else, declares nothing."""
+    tree = _parse(text)
+    if tree is None:
+        return False
+    lines = text.splitlines()
+    for start, _end, node in _definitions(tree).get(name, ()):
+        notes = [ast.get_docstring(node) or ""] if isinstance(node, (*_FUNCTION_TYPES, ast.ClassDef)) else []
+        above = start - 1
+        while above >= 1 and lines[above - 1].lstrip().startswith("#"):
+            notes.append(lines[above - 1])
+            above -= 1
+        first = lines[start - 1] if start <= len(lines) else ""
+        if "#" in first:
+            notes.append(first[first.index("#"):])
+        if any(_says_divergent(sentence) for note in notes for sentence in _sentences(note)):
+            return True
+    module_doc = ast.get_docstring(tree) or ""
+    return any(_says_divergent(sentence) and any(re.search(rf"\b{re.escape(stem)}\b", sentence) for stem in stems if stem)
+               for sentence in _sentences(module_doc))
+
+
+def _sentences(note: str) -> list[str]:
+    folded = " ".join(note.replace("#", " ").split()).lower()
+    return [part for part in _SENTENCE_BREAK.split(folded) if part]
+
+
+def _says_divergent(sentence: str) -> bool:
+    return bool((_INTENT.search(sentence) and _DIFFER.search(sentence)) or _NOT_IN_STEP.search(sentence))
+
+
+def _stem(path: str) -> str:
+    """``billing`` for ``.../billing.py``: how a docstring names an edited module."""
+    return os.path.splitext(os.path.basename(path))[0].lower()
 
 
 def _walk(root: str, suffixes: tuple[str, ...], deadline: float):
@@ -586,6 +677,24 @@ def _relative(path: str, root: str) -> str:
     return workspace_relative(path, root) if inside(path, root) else os.path.basename(path)
 
 
+def _named_python_files(args: dict[str, Any]) -> list[str]:
+    """The ``.py`` / ``.pyi`` paths spelled in a call's top-level string arguments, at most
+    ``MAX_NAMED_FILES`` of them. Each is resolved against the workspace root, so one written relative
+    to a directory the shell moved into resolves to another file or to none: the file the call
+    really changed then has no snapshot and fires as opaque, as it did before."""
+    found: list[str] = []
+    for value in args.values():
+        if not isinstance(value, str):
+            continue
+        for match in _PATH_RUN.finditer(value, 0, MAX_NAMED_SCAN_CHARS):
+            token = match.group(0)
+            if token.endswith(PYTHON_SUFFIXES) and token not in found:
+                found.append(token)
+                if len(found) >= MAX_NAMED_FILES:
+                    return found
+    return found
+
+
 def _edit_targets(tool_name: str, args: dict[str, Any]) -> list[str]:
     if tool_name == "patch" and args.get("mode") == "patch":
         body = args.get("patch")
@@ -628,4 +737,4 @@ def _parse(text: str) -> ast.AST | None:
 
 
 __all__ = ["Verdict", "discard_snapshots", "note_turn_posture", "reset", "round_end_trigger", "snapshot_before_edit",
-           "turn_root"]
+           "turn_root", "turn_snapshots"]

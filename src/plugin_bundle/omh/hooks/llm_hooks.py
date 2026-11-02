@@ -49,6 +49,7 @@ from ..skill_shortlist import claim_candidate_line, skill_candidate_line, skill_
 from .session_attendance import note_session_platform
 from .verify_hooks import clear_round_end_answer
 from ..consistency_trigger import note_turn_posture
+from ..test_expectation_check import note_request as note_test_request
 from .nudge_budget import session_is_delegated
 from ..remote_wait_nudge import failed_wait_context
 from ..jev_consent import MESSAGING_ATTENDED_PLATFORMS
@@ -571,6 +572,10 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     # Whether this session's platform can get the round-end check at all: one that cannot (a
     # delegated child) takes no workspace index in `pre_tool_call`, which is given no platform.
     note_turn_posture(kwargs.get("session_id"), kwargs.get("platform"))
+    # And what this turn's request said about keeping behaviour and changing tests, for the round-end
+    # test check: set here, before anything can return early, so a previous turn's facts never apply.
+    note_test_request(kwargs.get("session_id"),
+                      "" if _tracker_event_is_present(kwargs) else kwargs.get("user_message"))
     # Bind before any observer or awareness I/O. A failed root must not reach
     # downstream defaults as None, or fail before the status classifier runs.
     try:

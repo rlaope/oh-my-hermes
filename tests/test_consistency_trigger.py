@@ -302,6 +302,120 @@ class OpaqueEditTest(_Workspace):
         self.assertEqual(self.verdict(first, second), ct.Verdict(True, "opaque_edit", "src/app/b.py"))
 
 
+class NamedFileSnapshotTest(_Workspace):
+    """A `terminal` or `execute_code` call keeps the text of the Python files it names before it runs."""
+
+    def command(self, command: str, tool: str = "terminal") -> None:
+        key = "command" if tool == "terminal" else "code"
+        ct.snapshot_before_edit({"tool_name": tool, "session_id": SESSION, "turn_id": self.turn}, {key: command})
+
+    def test_a_test_appended_through_the_shell_is_diffed_not_opaque(self):
+        test = "from app.units import parse_duration\n\n\ndef test_minutes():\n    assert parse_duration('5m') == 300\n"
+        self.write("src/app/units.py", UNITS)
+        self.write("tests/test_units.py", test)
+        changed = self.edit("src/app/units.py", '{"s": 60,', '{"s": 1,')
+        self.command("printf '\\n\\ndef test_seconds():\\n    assert parse_duration(\"90s\") == 90\\n' >> tests/test_units.py")
+        self.write("tests/test_units.py", test + "\n\ndef test_seconds():\n    assert parse_duration('90s') == 90\n")
+        self.assertEqual(self.verdict(changed), ct.Verdict(False, "no_copy_or_reference"))
+
+    def test_a_sed_rename_of_a_named_file_is_judged_by_its_diff(self):
+        self.write("src/app/a.py", "def old_name(a):\n    return a\n")
+        self.write("src/app/use.py", "from app.a import old_name\nold_name(1)\n")
+        self.command("sed -i '' 's/old_name/renamed_name/' src/app/a.py")
+        self.write("src/app/a.py", "def renamed_name(a):\n    return a\n")
+        self.assertEqual(self.verdict(), ct.Verdict(True, "renamed", "old_name in src/app/use.py"))
+
+    def test_a_file_execute_code_names_and_creates_is_diffed(self):
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.command("open('src/app/generated.py', 'w').write('def made():\\n    return 1\\n')", tool="execute_code")
+        self.write("src/app/generated.py", "def made() -> int:\n    return 1\n")
+        self.assertEqual(self.verdict(), ct.Verdict(False, "nothing_changed"))
+
+    def test_only_whole_python_paths_are_named_and_the_count_is_bounded(self):
+        self.assertEqual(ct._named_python_files({"command": "cat a.pyc b.py.bak c.pyi 'd/e.py' f.py. x", "n": 3}),
+                         ["c.pyi", "d/e.py"])
+        many = " ".join(f"m{index}.py" for index in range(20))
+        self.assertEqual(len(ct._named_python_files({"command": many})), ct.MAX_NAMED_FILES)
+
+    def test_a_file_changed_before_the_call_that_names_it_is_still_opaque(self):
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.command("true")
+        self.write("src/app/a.py", "def other():\n    return 2\n")  # an unnamed change first
+        self.command("cat src/app/a.py")
+        self.assertEqual(self.verdict(), ct.Verdict(True, "opaque_edit", "src/app/a.py"))
+
+
+DECOY = (
+    '"""Duty amounts. The duty rules require half-to-even (banker\'s) rounding to the cent,\n'
+    'so this rounding is intentionally different from invoice.py."""\nimport decimal\n\n\n'
+    "def _to_cents(amount: str) -> decimal.Decimal:\n"
+    '    return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)\n'
+)
+
+
+class DeclaredDivergenceTest(_Workspace):
+    """A look-alike that says it differs from the edited file on purpose is not a copy to update."""
+
+    def fix_invoice(self) -> str:
+        self.write("src/app/invoice.py", INVOICE)
+        return self.edit("src/app/invoice.py", "ROUND_HALF_EVEN)\n\n\n", "ROUND_HALF_UP)\n\n\n")
+
+    def test_a_module_docstring_naming_the_edited_file_declares_it(self):
+        self.write("src/app/duty.py", DECOY)
+        self.assertEqual(self.verdict(self.fix_invoice()),
+                         ct.Verdict(False, "declared_divergent", "_to_cents in src/app/duty.py"))
+
+    def test_a_copy_kept_in_step_still_fires(self):
+        self.write("src/app/receipt.py", RECEIPT.replace('"""Receipt totals."""',
+                                                         '"""Receipt totals. Cent rounding here is kept in step with invoice.py."""'))
+        self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
+
+    def test_a_module_docstring_naming_another_file_declares_nothing(self):
+        self.write("src/app/duty.py", DECOY.replace("from invoice.py", "from orders.py"))
+        self.assertEqual(self.verdict(self.fix_invoice()), ct.Verdict(True, "copy", "_to_cents in src/app/duty.py"))
+
+    def test_a_definition_docstring_or_comment_declares_it_without_naming_a_file(self):
+        body = '    return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)\n'
+        variants = {
+            "docstring": ('import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:\n'
+                          '    """Half to even, deliberately unlike the other totals."""\n' + body),
+            "comment above": ("import decimal\n\n\n# Banker's rounding: this differs on purpose.\n"
+                              "def _to_cents(amount: str) -> decimal.Decimal:\n" + body),
+            "not in step": ("import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:  # not kept in sync with the rest\n"
+                            + body),
+        }
+        for label, text in variants.items():
+            with self.subTest(label):
+                ct.reset()
+                self.write("src/app/duty.py", text)
+                self.assertEqual(self.verdict(self.fix_invoice())[:2], (False, "declared_divergent"))
+
+    def test_an_intent_word_alone_or_a_note_elsewhere_declares_nothing(self):
+        variants = {
+            "intent only": DECOY.replace("intentionally different from", "intentionally written next to"),
+            "differ only": DECOY.replace("intentionally different from", "different from"),
+            "string in a body": ('import decimal\n\n\ndef _to_cents(amount: str) -> decimal.Decimal:\n'
+                                 '    note = "this differs on purpose"\n'
+                                 '    return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"))\n'),
+        }
+        for label, text in variants.items():
+            with self.subTest(label):
+                ct.reset()
+                self.write("src/app/duty.py", text)
+                self.assertEqual(self.verdict(self.fix_invoice())[:2], (True, "copy"))
+
+    def test_a_real_copy_beside_a_declared_one_still_fires(self):
+        self.write("src/app/duty.py", DECOY)
+        self.write("src/app/receipt.py", RECEIPT)
+        self.assertEqual(self.verdict(self.fix_invoice()), ct.Verdict(True, "copy", "_to_cents in src/app/receipt.py"))
+
+    def test_a_declared_look_alike_still_counts_for_a_changed_signature(self):
+        self.write("src/app/duty.py", DECOY + "\n\ndef duty_total(amounts):\n    return [_to_cents(a) for a in amounts]\n")
+        self.write("src/app/invoice.py", INVOICE)
+        changed = self.edit("src/app/invoice.py", "def _to_cents(amount: str)", "def _to_cents(amount: str, places: int = 2)")
+        self.assertEqual(self.verdict(changed)[:2], (True, "signature"))
+
+
 class IndexCostTest(_Workspace):
     def first_call(self, session: str = SESSION) -> None:
         ct.snapshot_before_edit({"tool_name": "read_file", "session_id": session, "turn_id": self.turn}, {"path": "x"})
