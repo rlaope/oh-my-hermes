@@ -12,8 +12,8 @@ All notable changes will be documented here.
   and no stored session, a refusal in Hermes' words, or no answer within the
   call's wait each say so. A list that arrives after you typed into the
   composer shows its rows but leaves your typing in the composer, pauses
-  included; ↑, ↓ or Esc (or an empty composer) hands it the keys, and its
-  filter row says so. `omh --resume` with no id (short form `-r`) starts
+  included, and the next prompt too after Enter sends one; ↑, ↓ or Esc hands
+  it the keys, and its filter row says so. `omh --resume` with no id (short form `-r`) starts
   the TUI on that picker; `omh --resume <id>` and `omh --continue` are
   unchanged.
 

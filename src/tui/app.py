@@ -1825,6 +1825,7 @@ class App(ModesMixin, AgentViewMixin):
         # Prompts sent while a session switch waits (`_switching`): sent in the session it opens, or given back.
         self.switch_held: list[SwitchHeld] = []
         self.switch_seq = 0  # the newest switch asked for; an older one's answer is stale
+        self.switch_counter = 0  # hands out switch numbers, only ever up: `switch_seq` may go back to one still out
         self.switch_targets: dict[int, str] = {}  # each switch's target (a stored id or a title), by its seq
         self.switch_notices: list[str] = []  # said once no switch is out, in the transcript the last one left
         self.switch_drain_due = False  # the queue held still while a switch was out (`_drain_queue`)
@@ -5604,8 +5605,8 @@ class App(ModesMixin, AgentViewMixin):
         if not self.sid:
             self.transcript.add_notice(NO_SESSION_NOTICE, NOTICE_WARN)
             return
-        self.switch_seq += 1
-        seq = self.switch_seq
+        self.switch_counter += 1
+        seq = self.switch_seq = self.switch_counter
         self._request(
             "session.create", self._create_params(), lambda result: self._on_new_session(result, seq),
             lambda error: self._on_create_refused(error, seq), switch=NEW_SESSION_LINE, switch_seq=seq,
@@ -5712,22 +5713,23 @@ class App(ModesMixin, AgentViewMixin):
         """Open the session picker over `rows`. When the person typed into the composer while its list was out, it
         waits (`SessionPicker.waiting`): typing stays in the composer, and only a key of the picker's own, or an
         empty composer, hands it the keys (`_picker_arms`)."""
-        typed = self.list_asked_draft is not None and self.composer.text != self.list_asked_draft
+        draft = self.composer.text
+        typed = bool(draft) and self.list_asked_draft is not None and draft != self.list_asked_draft
         self.list_asked_draft = None
         self.picker = SessionPicker(rows, current=self.stored_id, query=query, waiting=typed)
         self._settle_list()
 
     def _picker_arms(self, event: Key | Paste) -> bool:
-        """Whether `event` hands a waiting session picker the keys: Up, Down, Esc or Ctrl+C, or any key once the
-        composer is empty. Anything else stays the composer's, Enter included (it sends what was typed), so a prompt
-        being typed never becomes the filter."""
+        """Whether `event` hands a waiting session picker the keys: Up, Down, Esc or Ctrl+C. Anything else stays the
+        composer's, Enter included (it sends what was typed), and so does the next prompt typed after it: a prompt
+        being typed never becomes the filter, as its filter row says."""
         picker = self.picker
         if picker is None:
             return False
         own = isinstance(event, Key) and (
             event.name in (UP, DOWN, ESCAPE) or (event.name == CHAR and event.ctrl and event.char == "c")
         )
-        if own or not self.composer.text:
+        if own:
             picker.waiting = False
             return True
         return False
@@ -5753,6 +5755,8 @@ class App(ModesMixin, AgentViewMixin):
         it was out goes on."""
         if self._switching():
             return
+        out = {call.switch_seq for call in self.pending.values() if call.switch}
+        self.switch_targets = {seq: target for seq, target in self.switch_targets.items() if seq in out}
         held, self.switch_held = self.switch_held, []
         for line in held:
             self._give_back(line.text, line.images)
@@ -5823,11 +5827,12 @@ class App(ModesMixin, AgentViewMixin):
             if again is not None:  # that switch is out already: it is the newest again, and nothing more is sent
                 self.switch_seq = again
                 return
-            self.switch_seq += 1
-            seq = self.switch_seq
-            self.switch_targets[seq] = target
-        if target == self.stored_id:
+            self.switch_counter += 1
+            seq = self.switch_seq = self.switch_counter
+        self.switch_targets[seq] = target  # a title lookup's resolved id replaces the title it was asked by
+        if target == self.stored_id:  # a switch back: any other still out is stale, and what it held goes here
             self.transcript.add_notice(f"Already in session {target}.")
+            self._carry_switch_held()
             return
         self._request(
             "session.resume",

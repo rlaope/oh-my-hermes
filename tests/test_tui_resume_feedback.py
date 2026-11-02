@@ -304,11 +304,15 @@ class ReviewFollowUpTests(unittest.TestCase):
         resume(app)
         type_text(app, "send me")
         reply(app, client, LISTED)
-        app._on_input(Key(ENTER))  # what was typed is sent; the picker then takes the keys of an empty composer
+        app._on_input(Key(ENTER))  # what was typed is sent, and the picker still waits
         self.assertEqual(submitted(client), [(SID, "send me")])
-        self.assertIsNotNone(app.picker)
+        self.assertTrue(app.picker.waiting)
+        self.assertTrue(any("keep typing to stay in your prompt" in line for line in drawn(app)))
+        type_text(app, "the next prompt")  # typed after the Enter: the composer's, as the hint says
+        self.assertEqual((app.picker.query, app.composer.text), ("", "the next prompt"))
+        app._on_input(Key(DOWN))
         app._on_input(Key(CHAR, "x"))
-        self.assertEqual(app.picker.query, "x")
+        self.assertEqual((app.picker.query, app.composer.text), ("x", "the next prompt"))
 
     def test_a_titled_resume_picker_waits_for_typing_too(self) -> None:
         app, client = make_app()
@@ -446,6 +450,95 @@ class ReviewFollowUpTests(unittest.TestCase):
         self.assertEqual((app.sid, client.named("session.close")), (SID, [{"session_id": "live-b"}]))
 
 
+def landed(app: App, request_id: int, sid: str, stored: str) -> None:
+    app._on_response(Response(request_id, {"session_id": sid, "stored_session_id": stored, "messages": [],
+                                           "info": {}}, None))
+
+
+class VerificationFollowUpTests(unittest.TestCase):
+    def test_a_switch_asked_again_never_shares_its_number_with_a_later_one(self) -> None:
+        for order in ("newest first", "oldest first"):
+            with self.subTest(order=order):
+                app, client = make_app()
+                app.stored_id = "s-a"
+                ids = {}
+                for target in ("s-t", "s-u", "s-t", "s-v"):
+                    type_text(app, f"/sessions {target}")
+                    app._on_input(Key(ENTER))
+                    ids.setdefault(target, len(client.calls))
+                self.assertEqual(len(client.named("session.resume")), 3)
+                type_text(app, "for v")
+                app._on_input(Key(ENTER))
+                self.assertEqual(submitted(client), [])
+                answers = [("s-t", "live-t"), ("s-u", "live-u"), ("s-v", "live-v")]
+                for stored, sid in (reversed(answers) if order == "newest first" else answers):
+                    landed(app, ids[stored], sid, stored)
+                self.assertEqual((app.sid, app.stored_id), ("live-v", "s-v"))
+                self.assertEqual(submitted(client), [("live-v", "for v")])
+                closed = [params["session_id"] for params in client.named("session.close")]
+                self.assertIn("live-t", closed)
+                self.assertIn("live-u", closed)
+                self.assertNotIn("live-v", closed)
+
+    def test_a_title_resolving_to_the_target_of_a_switch_out_never_has_it_closed(self) -> None:
+        app, client = make_app()
+        app.stored_id = "s-a"
+        type_text(app, "/sessions s-b")
+        app._on_input(Key(ENTER))  # slow
+        type_text(app, "/resume title of b")
+        app._on_input(Key(ENTER))
+        app._on_response(Response(2, None, {"code": app_module.RESUME_REFUSED, "message": "not found"}))
+        lookup = len(client.calls)
+        app._on_response(Response(lookup, {"sessions": [{"id": "s-b", "resolved_id": "s-b", "title": "title of b"}]},
+                                  None))
+        second = len(client.calls)
+        self.assertEqual(client.calls[-1], ("session.resume", {"session_id": "s-b", "cols": 80}))
+        landed(app, 1, "s-b", "s-b")  # the first switch's answer, now stale: on the shared gateway the id is the same
+        self.assertNotIn({"session_id": "s-b"}, client.named("session.close"))
+        landed(app, second, "s-b", "s-b")
+        self.assertEqual(app.sid, "s-b")
+        self.assertNotIn({"session_id": "s-b"}, client.named("session.close"))
+
+    def test_the_old_queue_does_not_drain_while_a_switch_is_out(self) -> None:
+        app, client = make_app(busy=True)
+        app.queued.append(QueuedLine("queued in the old session"))
+        pick_other(app, client)
+        app.transcript.running = False
+        app.turn_pending = False
+        app._drain_queue()  # the old turn ended while the switch is out
+        self.assertEqual(submitted(client), [])
+        self.assertEqual([line.text for line in app.queued], ["queued in the old session"])
+
+    def test_already_in_the_session_sends_what_was_held_there(self) -> None:
+        app, client = make_app()
+        rid = pick_other(app, client)
+        type_text(app, "held prompt")
+        app._on_input(Key(ENTER))
+        landed(app, rid, SID, "s-current")  # Hermes answered with the session the TUI is in
+        self.assertEqual(submitted(client), [(SID, "held prompt")])
+
+    def test_a_switch_back_to_this_session_sends_what_was_held(self) -> None:
+        app, client = make_app()
+        pick_other(app, client)
+        type_text(app, "held prompt")
+        app._on_input(Key(ENTER))
+        type_text(app, "/sessions s-current")
+        app._on_input(Key(ENTER))
+        self.assertEqual(submitted(client), [(SID, "held prompt")])
+
+    def test_a_list_that_lands_over_a_waiting_session_picker_does_not_open(self) -> None:
+        from test_tui_late_answers import OPTIONS
+
+        app, client = make_app()
+        resume(app)
+        type_text(app, "draft")
+        reply(app, client, LISTED)
+        self.assertTrue(app.picker.waiting)
+        app._open_model_picker(SID, OPTIONS)
+        self.assertIsNone(app.model_picker)
+        self.assertIsNotNone(app.picker)
+
+
 class EmptyPickerTests(unittest.TestCase):
     def test_an_empty_list_says_no_stored_sessions_and_a_filter_says_it_hides_them(self) -> None:
         empty = SessionPicker([], current="")
@@ -470,7 +563,8 @@ class PickAtStartTests(unittest.TestCase):
     def test_a_bare_omh_resume_opens_the_picker_as_the_tui_starts(self) -> None:
         app, client = self.started({PICK_SESSION_ENV: "1"})
         self.assertEqual(client.calls[0][0], "session.create")
-        self.assertIn(("session.list", {"limit": SESSION_LIST_LIMIT}), client.calls)
+        self.assertEqual([params for method, params in client.calls if method == "session.list"],
+                         [{"limit": SESSION_LIST_LIMIT}])  # the picker's list alone, no last-session lookup
         self.assertTrue(app._sessions_loading())
         reply(app, client, LISTED)
         self.assertIsNotNone(app.picker)
