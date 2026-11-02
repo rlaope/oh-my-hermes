@@ -10,9 +10,10 @@ All notable changes will be documented here.
   where the picker opens, keys typed meanwhile stay in the composer (the
   picker opens with an empty filter and the draft is there when it closes),
   and no stored session, a refusal in Hermes' words, or no answer within the
-  call's wait each say so. A list that arrives while you are typing shows its
-  rows but takes keys only after a pause (the same 0.4 s an approval waits),
-  so the rest of a prompt never becomes the picker's filter. `omh --resume` with no id (short form `-r`) starts
+  call's wait each say so. A list that arrives after you typed into the
+  composer shows its rows but leaves your typing in the composer, pauses
+  included; ↑, ↓ or Esc (or an empty composer) hands it the keys, and its
+  filter row says so. `omh --resume` with no id (short form `-r`) starts
   the TUI on that picker; `omh --resume <id>` and `omh --continue` are
   unchanged.
 
@@ -20,11 +21,15 @@ All notable changes will be documented here.
   While `/new`, `/resume <id>` or a pick waits on Hermes, `switching to
   <title>…` (or `starting a new session…`) shows under the queue, and a prompt
   sent then is held and sent in the new session once it is live; before, it
-  went into the session being left, which was then closed. Prompts still
+  went into the session being left, which was then closed. That holds for
+  plan-mode prompts, slash and skill commands and `!` lines too. Prompts still
   queued behind the old session's turn come back to the composer with a
   notice instead of vanishing, and so do prompts held for a switch that
   failed. Of two switches out at once only the newer lands: a session the
-  older one opened late is closed again, with a notice. A second `/resume`
+  older one opened late is closed again, with a notice on the new screen,
+  but never the session the newest switch goes to. Asking again for a switch
+  already out sends nothing, and a switch answered after its wait ran out
+  has the session it opened closed again. A second `/resume`
   while the list is out sends no second call, and an answer that comes while
   the picker is open no longer resets its highlight or filter.
 

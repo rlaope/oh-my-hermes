@@ -147,17 +147,20 @@ class ResumeFeedbackTests(unittest.TestCase):
                 self.assertTrue(app.picker.waiting)
                 screen = drawn(app)
                 self.assertTrue(any("Sessions (2)" in line for line in screen))  # its rows show meanwhile
-                self.assertTrue(any("takes keys once typing stops" in line for line in screen))
+                self.assertTrue(any("↑↓ to pick · keep typing to stay in your prompt" in line for line in screen))
                 typed("미나 그런 스타일")
                 self.assertEqual((app.picker.query, app.composer.text), ("", "바꾸고 리드미나 그런 스타일"))
                 self.assertEqual(len(app.picker.visible()), 2)
-                now[0] += app_module.SLOT_ARM_SECONDS  # typing stopped: the next key is the picker's
-                app._on_input(Key(CHAR, "e"))
+                now[0] += 0.6  # a natural pause mid-prompt: the rest of it is still the composer's
+                typed(" 해줘")
+                self.assertEqual((app.picker.query, app.composer.text), ("", "바꾸고 리드미나 그런 스타일 해줘"))
+                app._on_input(Key(DOWN))  # a key of the picker's own hands it the keys
                 self.assertFalse(app.picker.waiting)
-                self.assertEqual((app.picker.query, app.composer.text), ("e", "바꾸고 리드미나 그런 스타일"))
+                app._on_input(Key(CHAR, "e"))
+                self.assertEqual((app.picker.query, app.composer.text), ("e", "바꾸고 리드미나 그런 스타일 해줘"))
                 app._on_input(Key(ESCAPE))
                 self.assertIsNone(app.picker)
-                self.assertEqual(app.composer.text, "바꾸고 리드미나 그런 스타일")
+                self.assertEqual(app.composer.text, "바꾸고 리드미나 그런 스타일 해줘")
 
     def test_a_list_that_answers_right_after_the_enter_that_asked_takes_keys_at_once(self) -> None:
         now = [100.0]
@@ -284,6 +287,163 @@ class SwitchWaitTests(unittest.TestCase):
         type_text(app, "session 3")
         app._open_session_picker(sessions)  # a late answer over the open picker
         self.assertEqual((app.picker.query, [row.id for row in app.picker.visible()]), ("session 3", ["s-3"]))
+
+
+class ReviewFollowUpTests(unittest.TestCase):
+    def test_esc_reaches_a_waiting_picker_and_enter_sends_the_prompt(self) -> None:
+        app, client = make_app()
+        resume(app)
+        type_text(app, "draft")
+        reply(app, client, LISTED)
+        self.assertTrue(app.picker.waiting)
+        app._on_input(Key(ESCAPE))
+        self.assertIsNone(app.picker)
+        self.assertEqual(app.composer.text, "draft")
+        resume_again = make_app()
+        app, client = resume_again
+        resume(app)
+        type_text(app, "send me")
+        reply(app, client, LISTED)
+        app._on_input(Key(ENTER))  # what was typed is sent; the picker then takes the keys of an empty composer
+        self.assertEqual(submitted(client), [(SID, "send me")])
+        self.assertIsNotNone(app.picker)
+        app._on_input(Key(CHAR, "x"))
+        self.assertEqual(app.picker.query, "x")
+
+    def test_a_titled_resume_picker_waits_for_typing_too(self) -> None:
+        app, client = make_app()
+        type_text(app, "/resume shared title")
+        app._on_input(Key(ENTER))
+        rid = len(client.calls)
+        type_text(app, "typing")
+        app._on_response(Response(rid, None, {"code": app_module.RESUME_REFUSED, "message": "not found"}))
+        lookup = len(client.calls)
+        app._on_response(Response(lookup, {"sessions": []}, None))
+        scan = len(client.calls)
+        rows = [{"id": "s-1", "title": "Shared title"}, {"id": "s-2", "title": "SHARED title"}]  # none exact
+        app._on_response(Response(scan, {"sessions": rows}, None))
+        self.assertTrue(app.picker.waiting)
+        type_text(app, " more")
+        self.assertEqual((app.picker.query, app.composer.text), ("shared title", "typing more"))
+
+    def test_a_second_switch_to_the_same_target_sends_nothing_and_closes_nothing(self) -> None:
+        app, client = make_app()
+        app.stored_id = "s-a"
+        for _ in range(2):
+            type_text(app, "/sessions s-b")
+            app._on_input(Key(ENTER))
+        self.assertEqual(len(client.named("session.resume")), 1)
+        rid = len(client.calls)
+        app._on_response(Response(rid, {"session_id": "s-b", "stored_session_id": "s-b", "messages": [], "info": {}},
+                                  None))
+        self.assertEqual((app.sid, client.named("session.close")), ("s-b", [{"session_id": "live-1"}]))
+
+    def test_a_stale_answer_never_closes_the_session_the_newest_switch_goes_to(self) -> None:
+        app, client = make_app()
+        app.stored_id = "s-a"
+        for target in ("s-b", "s-c", "s-b"):  # back to s-b while its first switch is out: that one is newest again
+            type_text(app, f"/sessions {target}")
+            app._on_input(Key(ENTER))
+        rid_b, rid_c = 1, 2
+        self.assertEqual(len(client.named("session.resume")), 2)
+        app._on_response(Response(rid_c, {"session_id": "s-c", "stored_session_id": "s-c", "messages": [],
+                                          "info": {}}, None))
+        app._on_response(Response(rid_b, {"session_id": "s-b", "stored_session_id": "s-b", "messages": [],
+                                          "info": {}}, None))
+        self.assertEqual(app.sid, "s-b")
+        self.assertEqual(client.named("session.close"), [{"session_id": "s-c"}, {"session_id": "live-1"}])
+        self.assertIn("Closed session s-c, which opened after a newer switch.", notices(app, NOTICE_WARN))
+
+    def test_in_natural_order_the_stale_notice_is_said_on_the_new_screen(self) -> None:
+        app, client = make_app()
+        app.stored_id = "s-a"
+        type_text(app, "/sessions s-b")
+        app._on_input(Key(ENTER))
+        type_text(app, "/sessions s-c")
+        app._on_input(Key(ENTER))
+        app._on_response(Response(1, {"session_id": "live-b", "stored_session_id": "s-b", "messages": [],
+                                      "info": {}}, None))
+        app._on_response(Response(2, {"session_id": "live-c", "stored_session_id": "s-c", "messages": [],
+                                      "info": {}}, None))
+        self.assertEqual(app.stored_id, "s-c")
+        self.assertIn({"session_id": "live-b"}, client.named("session.close"))
+        self.assertIn("Closed session s-b, which opened after a newer switch.", notices(app, NOTICE_WARN))
+
+    def test_an_older_switch_still_out_holds_nothing_once_the_newest_landed(self) -> None:
+        app, client = make_app()
+        app.stored_id = "s-a"
+        type_text(app, "/sessions s-b")
+        app._on_input(Key(ENTER))
+        type_text(app, "/sessions s-c")
+        app._on_input(Key(ENTER))
+        app._on_response(Response(2, {"session_id": "live-c", "stored_session_id": "s-c", "messages": [],
+                                      "info": {}}, None))
+        self.assertFalse(any("switching to" in line for line in drawn(app)))
+        type_text(app, "for s-c")
+        app._on_input(Key(ENTER))
+        self.assertEqual(submitted(client), [("live-c", "for s-c")])
+
+    def test_a_stale_refusal_or_title_lookup_does_nothing(self) -> None:
+        app, client = make_app()
+        app.stored_id = "s-a"
+        type_text(app, "/sessions old title")
+        app._on_input(Key(ENTER))
+        type_text(app, "/sessions s-c")
+        app._on_input(Key(ENTER))
+        before = list(client.calls)
+        app._on_response(Response(1, None, {"code": app_module.RESUME_REFUSED, "message": "not found"}))
+        self.assertEqual(client.calls, before)  # no title lookup for a switch a newer one replaced
+        self.assertNotIn("Could not switch", " ".join(notices(app)))
+        app._on_response(Response(2, None, {"code": 4007, "message": "gone"}))
+        self.assertIn("Could not switch to s-c (4007): gone. Still in s-a.", notices(app, NOTICE_WARN))
+
+    def test_a_stale_title_lookup_answer_says_nothing_and_switches_nowhere(self) -> None:
+        for listed in ([{"id": "old title"}], [{"id": "s-9", "title": "old title"}]):
+            with self.subTest(listed=listed):
+                app, client = make_app()
+                app.stored_id = "s-a"
+                type_text(app, "/sessions old title")
+                app._on_input(Key(ENTER))
+                app._on_response(Response(1, None, {"code": app_module.RESUME_REFUSED, "message": "not found"}))
+                lookup = len(client.calls)
+                type_text(app, "/sessions s-c")
+                app._on_input(Key(ENTER))
+                calls = len(client.calls)
+                app._on_response(Response(lookup, {"sessions": listed}, None))
+                self.assertEqual(len(client.calls), calls)  # nothing resumed for the replaced switch
+                self.assertNotIn("Could not switch to old title", " ".join(notices(app)))
+
+    def test_a_stale_create_refusal_says_nothing(self) -> None:
+        app, client = make_app()
+        type_text(app, "/new")
+        app._on_input(Key(ENTER))
+        type_text(app, "/sessions s-c")
+        app._on_input(Key(ENTER))
+        app._on_response(Response(1, None, {"code": 5000, "message": "no"}))
+        self.assertNotIn("Could not start a new session", " ".join(notices(app)))
+
+    def test_a_plan_mode_prompt_sent_during_a_switch_waits_for_the_new_session(self) -> None:
+        app, client = make_app()
+        app.plan_mode = True
+        rid = pick_other(app, client)
+        type_text(app, "plan this")
+        app._on_input(Key(ENTER))
+        self.assertEqual([method for method, _params in client.calls[rid:]], [])
+        app._on_response(Response(rid, RESUMED, None))
+        sent = [params for method, params in client.calls[rid:] if method in ("slash.exec", "command.dispatch")]
+        self.assertTrue(sent and all(params.get("session_id") == "live-2" for params in sent), client.calls[rid:])
+
+    def test_a_switch_answered_after_its_expiry_is_closed_again(self) -> None:
+        now = [100.0]
+        app, client = make_app(clock=lambda: now[0])
+        app.stored_id = "s-a"
+        type_text(app, "/sessions s-b")
+        app._on_input(Key(ENTER))
+        now[0] += app_module.CALL_ANSWER_SECONDS
+        app._expire_calls()
+        app._on_response(Response(1, {"session_id": "live-b", "stored_session_id": "s-b", "messages": [],
+                                      "info": {}}, None))
+        self.assertEqual((app.sid, client.named("session.close")), (SID, [{"session_id": "live-b"}]))
 
 
 class EmptyPickerTests(unittest.TestCase):

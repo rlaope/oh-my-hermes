@@ -40,7 +40,7 @@ KEYS = ("↑↓ move · enter switches · esc closes", "↑↓ enter switches ·
 FILTER_PROMPT = PROMPT  # the composer's mark, on the row that stands where the composer was
 FILTER_PLACEHOLDER = "type to filter"
 # The filter row while the picker waits for typing to stop before it takes keys (`SessionPicker.waiting`).
-WAITING_PLACEHOLDER = "takes keys once typing stops"
+WAITING_PLACEHOLDER = "↑↓ to pick · keep typing to stay in your prompt"
 # The sessions' day groups, by the local calendar day a session started: today, yesterday, the five days before
 # (the past week), and everything older or of no known start.
 DAY_GROUPS = ("Today", "Yesterday", "Previous 7 days", "Earlier")

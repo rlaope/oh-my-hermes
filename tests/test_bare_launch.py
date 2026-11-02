@@ -131,6 +131,33 @@ class LaunchHomeTests(unittest.TestCase):
                     self.assertEqual(json.loads(record.read_text()), str(paths.hermes_home))
 
 
+    def test_only_a_bare_resume_asks_the_omh_tui_for_its_picker(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        import json
+        from omh.commands import bare_launch
+        from omh.paths import resolve_paths
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / "child-env.json"
+            hermes = root / "hermes"
+            hermes.write_text(
+                f"#!{sys.executable}\nimport json, os, sys\n"
+                f"with open({str(record)!r}, 'w') as out: "
+                "json.dump([os.environ.get('OMH_TUI_PICK_SESSION'), sys.argv[1:]], out)\n",
+                encoding="utf-8",
+            )
+            hermes.chmod(0o755)
+            paths = resolve_paths(str(root / "omh"), str(root / "selected"))
+            for argv, expected in ((["--resume"], ["1", ["--tui"]]), (["-r", "s-1"], [None, ["--tui", "--resume", "s-1"]]),
+                                   ([], [None, ["--tui"]])):
+                with self.subTest(argv=argv), patch.dict(os.environ, {"OMH_TUI_PICK_SESSION": "1"}), \
+                        patch.object(bare_launch, "_omh_tui_blocker", return_value=""):
+                    bare_launch._run_terminal(str(hermes), bare_launch_args(argv), paths)
+                    self.assertEqual(json.loads(record.read_text()), expected)
+
+
 class BareImportTests(unittest.TestCase):
     def test_a_bare_launch_does_not_import_the_command_tree(self) -> None:
         # stdin is not a terminal, so the launch has nothing to open and prints the welcome text.
