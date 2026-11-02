@@ -41,7 +41,7 @@ from omh.tui.update_notice import (
 )
 from omh.tui.update_notice_switch import HELD_BY_ENV, HELD_BY_LAUNCH_CHECK, HELD_BY_THEME, held_off_by, update_check_off
 from _tui_gateway_replay import Scenario, spans
-from test_tui_app import AppTestCase, Step, startup_answers
+from test_tui_app import NO_TERMIOS, AppTestCase, Step, startup_answers
 from test_tui_badge_row import native
 from test_tui_modes import make_app
 
@@ -452,6 +452,7 @@ class InfoLineTests(Home):
         self.assertNotIn("available", line_text(app._info_line(120)))
 
 
+@unittest.skipIf(NO_TERMIOS, "the OMH TUI needs termios")
 class NoRealFetchInTestsTests(AppTestCase):
     """No App the test harnesses build can reach the real `fetch_latest` with the check on: the whole process holds
     it off (`_local_package`), and so do `make_app` and the replay loop's `prepare`."""
