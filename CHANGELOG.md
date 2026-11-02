@@ -31,6 +31,24 @@ All notable changes will be documented here.
   (1,083 scored messages, hint and chat route), no message the previous
   router answered right is answered wrong.
 
+- **Hermes picks up the new OMH skills after an update without a restart.**
+  A running Hermes resolves `skills.external_dirs` once and keeps the path
+  until `config.yaml` changes, so after `omh update` moved the `current`
+  pointer, chats kept the previous generation's OMH skills, or lost them all
+  once that generation was collected, until `hermes gateway restart`. The
+  update now moves the modification time of every Hermes `config.yaml` (the
+  primary home and each bot profile) that names `current/skills`, without
+  rewriting it, and says `Hermes skills refreshed in <N> homes`; a rollback
+  and a `--recover-known-good` do the same after their last pointer switch.
+  New conversations and every skill load use the new pack; a conversation
+  that is already open keeps the skill list it started with until `/new`. A
+  home it could not touch is a warning and a `failed` row under
+  `hermes_skill_refresh`, and does not fail the update. The gateway hint now
+  says what a restart is still for: skills reload on their own, the new OMH
+  plugin code loads only after `hermes gateway restart` (and, for a home
+  whose touch failed, the skills too). The bot-profile line no longer asks
+  for a Hermes Desktop restart to reload skills.
+
 - **A same-size rewrite in one clock tick no longer hides from the round-end
   check.** The workspace index kept each Python file's modification time and
   size. A `sed`, `execute_code` or delegated child that rewrote a file at the
@@ -238,6 +256,24 @@ All notable changes will be documented here.
   before the render. `design-quality-gate` scores the same items as a
   Short-clip discipline axis. Generalized from six review rounds on one
   launch clip. (#2488)
+
+- **Codex handoffs on native Windows can write (#2471).** Four changes:
+  - The child environment now passes `SYSTEMDRIVE` with the other Windows
+    base variables. Without it, Codex's MXC sandbox refused every shell call
+    (`MXC requires nonempty Unicode host SystemDrive`), and the only
+    workaround was `--owner-env codex:SYSTEMDRIVE` on every run.
+  - A new `coding/fanout-settings.json` stores environment grants and a
+    Codex Windows sandbox backend. Dispatches an agent starts, which never
+    see a command-line flag, now get them too. `"codex": {"windows_sandbox":
+    "mxc"}` passes `--config windows.sandbox=mxc` to `codex exec`.
+  - A unit the sandbox stopped is reported as `executor_sandbox_read_only` or
+    `executor_sandbox_start_failed`, with the fix in the journal summary,
+    instead of `malformed_result` with exit 0.
+  - On Windows, `omh coding executor-readiness --executor codex` reads the
+    effective backend and says the session will be read-only when none is
+    set, before a dispatch spends a run finding out. Its PATH report no
+    longer lists npm's extensionless shell shim, which logged
+    `[WinError 193]` before falling back to `codex.CMD`.
 
 ## 4.0.4 - 2026-11-01
 
