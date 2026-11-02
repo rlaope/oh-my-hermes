@@ -173,6 +173,30 @@ sections in the order a visitor actually decides; visual symmetry never
 outranks that sequence. Review content accuracy and hierarchy before any
 polish — a beautiful wrong page fails first on content.
 
+## Interface copy
+
+Labels, toasts, errors, and empty states steer the reader as much as layout
+does, so read them in the same review. Four checks:
+
+- Name things the way the reader already does. A clinic receptionist books
+  "appointments", not "calendar slot reservations". A label lifted from the
+  schema, the API, or the code is a finding.
+- One action keeps one verb everywhere it shows up: the button, its
+  in-progress label, the result message, and any undo. A button that says
+  "Archive" is followed by a message that the item was archived, not
+  "Moved". Generic verbs such as "Submit", "Confirm", or "OK" tell the
+  reader nothing about the result.
+- An error message gives the cause, then the way out: "That date is fully
+  booked. Pick another day or join the waitlist." Drop the "Oops" and the
+  "Sorry"; "An error occurred" leaves the reader with nothing to do.
+- An empty list carries the control that fills it: "No appointments today"
+  sits beside "Book appointment". An illustration without that control is
+  decoration.
+
+Korean, Japanese, and Chinese copy takes the same checks in its own
+register; translate the meaning of an action name, and keep it identical
+across the flow in every locale.
+
 ## Boundary
 
 Taste guidance shapes the prepared direction and contract. It never
@@ -191,3 +215,7 @@ No upstream text is reproduced; the wording here is OMH's own, and OMH keeps
 its deterministic no-render boundary. Product names appear as quality
 analogies only; OMH is not affiliated with, endorsed by, or sponsored by any
 named company.
+
+The interface-copy checks adapt ideas from the `frontend-design` skill in
+`anthropics/claude-plugins-official` (Apache-2.0); no text from it is
+reproduced, and the examples and wording here are OMH's own.
