@@ -204,11 +204,15 @@ The policy:
 
 This keeps the "not an LLM router" boundary above intact: the selection happens
 in Hermes, and core `omh` still makes no LLM, API, or network call on its own.
-The one scoped exception is the opt-in `omh_jev_ask` tool: when the user names
-Jev in a turn and a key resolves, it sends that turn's typed questions to Jev
-and returns probabilities. It re-routes nothing; its answer can be recorded
-with `answered_by: omh_jev_ask` only for an ask that OMH process itself sent
-and Jev answered. (The OMH TUI's gateway child is not core `omh`: it runs on
+Two scoped exceptions reach the network. The opt-in `omh_jev_ask` tool: when
+the user names Jev in a turn and a key resolves, it sends that turn's typed
+questions to Jev and returns probabilities. It re-routes nothing; its answer
+can be recorded with `answered_by: omh_jev_ask` only for an ask that OMH
+process itself sent and Jev answered. And the OMH TUI's update notice, which
+reads npm's latest published version at most once a day and names a newer
+one; it sends nothing about the person, routes nothing, and is off with
+`OMH_TUI_UPDATE_CHECK=0`, `omh theme update-check off`, or `omh update-check`
+set to `off`. (The OMH TUI's gateway child is not core `omh`: it runs on
 Hermes' interpreter and reaches the person's own Hermes gateway over loopback,
 as Hermes' own TUI does, relaying that terminal's frames.)
 

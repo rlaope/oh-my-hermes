@@ -883,10 +883,11 @@ PARSING_ONLY_URLLIB_REQUEST_FILES: dict[str, str] = {
 }
 
 
-# The one opt-in network client in `src/`. Its whole surface is these names:
-# a request object, an opener, the HTTPS handler, and the redirect handler it
-# subclasses to refuse every 3xx. Each entry must still import from
-# `urllib.request` (stale check), and only its named importer may import it.
+# The scoped network clients in `src/`. Their whole surface is these names:
+# a request object, an opener, the HTTPS handler, and the redirect handler each
+# subclasses to refuse a 3xx (every one for Jev; any off the registry's host for
+# the update notice). Each entry must still import from `urllib.request` (stale
+# check), and only its named importer may import it.
 NETWORK_CLIENT_BRIDGES: dict[str, str] = {
     "src/plugin_bundle/omh/jev_ask_client.py": (
         "omh_jev_ask -- the one opt-in bridge that POSTs typed questions to Jev with the user's own "
@@ -896,10 +897,19 @@ NETWORK_CLIENT_BRIDGES: dict[str, str] = {
         "redirects refused, bounded both ways; "
         "documented as a scoped exception in CLAUDE.md and AGENTS.md."
     ),
+    "src/tui/update_notice.py": (
+        "the OMH TUI's update notice -- GETs npm's `latest` oh-my-hermes version from the one fixed host "
+        "registry.npmjs.org, on a background thread, at most once a day per OMH home (cached under "
+        "`<omh_home>/tui/update-check.json`); HTTPS only, a 3 s socket timeout, redirects off that host refused, the "
+        "reply bounded and only its version kept; sends nothing about the person; off with "
+        "OMH_TUI_UPDATE_CHECK=0, `omh theme update-check off`, or `omh update-check` stored as off; documented "
+        "as a scoped exception in CLAUDE.md and AGENTS.md."
+    ),
 }
 NETWORK_CLIENT_BRIDGE_URLLIB_NAMES = frozenset({"Request", "build_opener", "HTTPSHandler", "HTTPRedirectHandler"})
 NETWORK_CLIENT_BRIDGE_IMPORTERS: dict[str, frozenset[str]] = {
     "src/plugin_bundle/omh/jev_ask_client.py": frozenset({"src/plugin_bundle/omh/tools/jev_ask_tool.py"}),
+    "src/tui/update_notice.py": frozenset({"src/tui/app.py"}),
 }
 
 
@@ -998,7 +1008,10 @@ HERMES_INTERPRETER_SCRIPTS: dict[str, HermesScriptPolicy] = {
         dial=("dial", "grant"),
         # Hermes' own client dials with `proxy=None` (`hermes_cli/gateway_client.py`): without it websockets sends
         # the session-ticket upgrade through HTTP(S)_PROXY.
-        dial_pinned={"proxy": None},
+        # `ping_interval=None`: Hermes keeps no keepalive ping on loopback (`hermes_cli/web_server.py`), since a busy
+        # gateway answers it late and websockets' default then closes a connection whose turn still runs. A liveness
+        # policy rather than a safety one, pinned here because this is where the dial's keywords are held.
+        dial_pinned={"proxy": None, "ping_interval": None},
         private_attributes={},  # it reads no private attribute of anything but itself
         environ_key="TERMINAL_CWD",  # set for Hermes' path helper and restored (`HermesFiles.image`)
         # What Hermes' own bootstrap removes before it may start a gateway (`ui-tui/scripts/gateway_bootstrap.py`).
@@ -1682,6 +1695,11 @@ class NoNetworkClientInSource(unittest.TestCase):
             "def go(api):\n    url, protocols = api.grant()\n    return api.dial(url, proxy='http://evil:8080')":
             "without `proxy=None`",
             "def go(api, how):\n    url, protocols = api.grant()\n    return api.dial(url, proxy=how)": "without `proxy=None`",
+            # and no keepalive ping, as Hermes' loopback policy
+            "def go(api):\n    url, protocols = api.grant()\n    return api.dial(url, proxy=None)":
+            "without `ping_interval=None`",
+            "def go(api):\n    url, protocols = api.grant()\n    return api.dial(url, proxy=None, ping_interval=20)":
+            "without `ping_interval=None`",
             # the launch-policy removal: its constant is the pinned literal, bound once, and its loop name kept
             "LAUNCH_POLICY_ENV = ('PATH', 'HERMES_HOME')": "as the pinned literal tuple",
             "LAUNCH_POLICY_ENV = ('HERMES_MODEL',) + ('HERMES_HOME',)": "as the pinned literal tuple",
@@ -1733,7 +1751,7 @@ class NoNetworkClientInSource(unittest.TestCase):
             "receipt = object()\ngetattr(receipt, 'state', None)\n"
             "os.environ.get('X')\nos.environ['TERMINAL_CWD'] = '/w'\nos.environ.pop('TERMINAL_CWD', None)\n"
             "copy = dict(os.environ)\nfor name in LAUNCH_POLICY_ENV:\n    os.environ.pop(name, None)\n"
-            "def relay(api, url):\n    return api.dial(url, proxy=None)\n"
+            "def relay(api, url):\n    return api.dial(url, proxy=None, ping_interval=None)\n"
             "def main():\n    api = attach_api()\n    url, protocols = api.grant()\n    return relay(api, url)\n"
             "class C:\n    def m(self):\n        self._serial = 1\n        return lambda: self._serial\n"
         )

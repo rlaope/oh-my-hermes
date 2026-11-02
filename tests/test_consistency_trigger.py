@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -277,6 +278,102 @@ class OpaqueEditTest(_Workspace):
         self.edit("src/app/b.py", "return 1", "return 3", session="child-session")
         changed = self.edit("src/app/a.py", "return 1", "return 2")
         self.assertEqual(self.verdict(changed), ct.Verdict(True, "opaque_edit", "src/app/b.py"))
+
+    def widen_racy_window(self) -> None:
+        """An hour-wide racy window: a runner stalled between a fixture write and the index must not
+        turn a fresh file stale and decide the test (the window itself is not what these tests pin)."""
+        patcher = mock.patch.object(ct, "RACY_WINDOW_NS", 3600 * 1_000_000_000)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def rewrite_in_one_clock_tick(self, relative: str, text: str) -> None:
+        """A same-size rewrite that keeps the file's mtime, as two writes inside one tick of a coarse
+        filesystem clock do (Windows CI, where this let a sed pass unseen)."""
+        path = self.root / relative
+        before = os.stat(path)
+        self.write(relative, text)
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        after = os.stat(path)
+        self.assertEqual((after.st_mtime_ns, after.st_size), (before.st_mtime_ns, before.st_size),
+                         "precondition: the rewrite must leave (mtime, size) where the index saw it")
+
+    def test_a_same_size_sed_inside_one_clock_tick_fires(self):
+        self.widen_racy_window()
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.write("src/app/b.py", "def old_step():\n    return 1\n")
+        self.tool()
+        self.rewrite_in_one_clock_tick("src/app/b.py", "def new_step():\n    return 1\n")
+        changed = self.edit("src/app/a.py", "return 1", "return 2")
+        entry = ct._sessions[SESSION]["index"].get(str(self.root / "src/app/b.py"))
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "opaque_edit", "src/app/b.py"),
+                         f"b.py indexed as {entry!r}: a third field is the digest of a file the index "
+                         "saw as racy; without one the racy window did not cover it")
+
+    def test_a_same_size_sed_then_a_patch_of_the_same_file_inside_one_clock_tick_fires(self):
+        self.widen_racy_window()
+        self.write("src/app/a.py", "def old_name(a):\n    return a\n\n\ndef other():\n    return 1\n")
+        self.write("src/app/use.py", "from app.a import old_name\nold_name(1)\n")
+        self.tool()
+        self.rewrite_in_one_clock_tick("src/app/a.py",
+                                       "def new_name(a):\n    return a\n\n\ndef other():\n    return 1\n")
+        changed = self.edit("src/app/a.py", "return 1", "return 2")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "opaque_edit", "src/app/a.py"))
+
+    def test_only_a_file_inside_the_racy_window_is_digested(self):
+        self.widen_racy_window()
+        old = self.write("src/app/old.py", "def old():\n    return 1\n")
+        fresh = self.write("src/app/fresh.py", "def fresh():\n    return 1\n")
+        long_ago = time.time_ns() - 2 * ct.RACY_WINDOW_NS
+        os.utime(self.root / old, ns=(long_ago, long_ago))
+        with mock.patch.object(ct, "_digest", wraps=ct._digest) as digests:
+            self.tool()
+        index = ct._sessions[SESSION]["index"]
+        self.assertEqual(len(index[str(self.root / old)]), 2)
+        self.assertEqual(len(index[str(self.root / fresh)]), 3)
+        digests.assert_called_once_with(str(self.root / fresh))
+
+    def test_a_racy_file_that_could_not_be_digested_fires(self):
+        self.widen_racy_window()
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.write("src/app/locked.py", "def locked():\n    return 1\n")
+        digest = ct._digest
+        with mock.patch.object(ct, "_digest", lambda path: None if path.endswith("locked.py") else digest(path)):
+            self.tool()
+        changed = self.edit("src/app/a.py", "return 1", "return 2")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "opaque_edit", "src/app/locked.py"))
+
+    def test_an_oversized_racy_file_is_not_read_and_fires(self):
+        self.widen_racy_window()
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        big = str(self.root / self.write("src/app/big.py", "#" * 256))
+        reads: list[tuple[str, int]] = []
+        real_open = open
+
+        class Recording:
+            def __init__(self, path, mode="r"):
+                self.path, self.handle = path, real_open(path, mode)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                self.handle.close()
+
+            def fileno(self):
+                return self.handle.fileno()
+
+            def read(self, size=-1):
+                reads.append((self.path, size))
+                return self.handle.read(size)
+
+        with mock.patch.object(ct, "MAX_FILE_BYTES", 200), \
+                mock.patch.object(ct, "open", Recording, create=True):
+            self.tool()
+        self.assertEqual([size for path, size in reads if path == big], [],
+                         "the oversized file was read for a digest instead of refused on its size")
+        self.assertEqual(ct._sessions[SESSION]["index"][big][2:], (None,))
+        changed = self.edit("src/app/a.py", "return 1", "return 2")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "opaque_edit", "src/app/big.py"))
 
     def test_a_tool_call_that_changes_no_python_file_does_not_fire(self):
         self.write("src/app/a.py", "def other():\n    return 1\n")
@@ -787,6 +884,10 @@ class ScanBoundsTest(_Workspace):
     def test_an_oversized_unedited_python_file_fires_and_an_oversized_config_does_not(self):
         self.write("src/app/units.py", TO_CENTS)
         self.write("src/app/big.py", "#" * 256)
+        # Older than the racy window, so the scan rules on it: a racy oversized file is refused before
+        # the scan (`test_an_oversized_racy_file_is_not_read_and_fires`).
+        long_ago = time.time_ns() - 2 * ct.RACY_WINDOW_NS
+        os.utime(self.root / "src/app/big.py", ns=(long_ago, long_ago))
         self.write("package-lock.json", "x" * 256)
         self.write("src/app/use.py", CART)
         changed = self.edit("src/app/units.py", "def to_cents(", "def amount_to_cents(")

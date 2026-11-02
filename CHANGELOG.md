@@ -14,6 +14,125 @@ All notable changes will be documented here.
   behaviour to stay the same and did not name that test, ask to update a
   test, or state a new result. The bench gains the `C-TEST-UPDATE` control.
 
+- **The OMH TUI rides out a slow or busy Hermes gateway.** Its connection to
+  the shared gateway sent websockets' default keepalive ping, so a gateway
+  whose event loop was busy for about 40 s (a long `/compress`, a heavy
+  turn) had a healthy connection closed under it. The TUI then said the
+  gateway exited, marked the running turn lost, and gave the resume 30 s
+  before leaving. Now:
+  - The connection sends no keepalive ping, as Hermes' own loopback
+    connections do not. During a turn, once nothing has come from the
+    gateway for 45 s and no tool is running (Hermes sends nothing while a
+    terminal tool runs), the working row says "no word from Hermes' gateway
+    for N s"; the TUI closes nothing.
+  - A connection that does drop says "the connection to Hermes' gateway
+    dropped; the turn may still be running". The resume reads whether the
+    turn still runs (or Hermes has started it): one that
+    does goes on with its clock and any stop already asked, and one that
+    ended meanwhile says so. A gateway that started again (a new authority
+    epoch) says the turn was lost.
+  - The launch's and a respawn's session calls wait 120 s, as Hermes' own
+    TUI and the TUI's in-session calls do, not 30 s.
+  - `omh --resume <id>` that Hermes refuses (`not_found`,
+    `permission_denied`, ...) says why and exits 1; a session Hermes keeps
+    for another app is to be opened where it was started. It used to open
+    Hermes' own TUI, which starts a new session in its place without a word.
+  - `session.replay_gap`, sent when the gateway stops sending this screen a
+    session's events because it fell behind, resumes the session, as
+    Hermes' own TUI does. Before, the turn spun with no end. The turn's own
+    events that arrive before the answer win over it. A resume refused or
+    unanswered closes the turn and holds the queue; one that names a newer
+    id for the session moves the screen to it and closes the turn shown.
+  - `skills.changed` asks for the command catalog again, once per burst, so
+    a skill installed from another terminal reaches completion and `/help`.
+  - A turn Hermes interrupted itself says "Hermes interrupted this turn;
+    send `continue` to go on" instead of "Interrupted.". A stop the person
+    asked for (Esc, `/stop`, a prompt in busy mode `interrupt`) still says
+    "Interrupted.".
+
+- **`/resume` always answers, and `omh --resume` opens the picker.** A bare
+  `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
+  list, which during a turn can take a while. Now `Loading sessions…` stands
+  where the picker opens, keys typed meanwhile stay in the composer (the
+  picker opens with an empty filter and the draft is there when it closes),
+  and no stored session, a refusal in Hermes' words, or no answer within the
+  call's wait each say so. A list that arrives after you typed into the
+  composer shows its rows but leaves your typing in the composer, pauses
+  included, and the next prompt too after Enter sends one; ↑, ↓ or Esc hands
+  it the keys, and its filter row says so. `omh --resume` with no id (short form `-r`) starts
+  the TUI on that picker; `omh --resume <id>` and `omh --continue` are
+  unchanged.
+
+- **A prompt sent while a session switch waits goes to the session it opens.**
+  While `/new`, `/resume <id>` or a pick waits on Hermes, `switching to
+  <title>…` (or `starting a new session…`) shows under the queue, and a prompt
+  sent then is held and sent in the new session once it is live; before, it
+  went into the session being left, which was then closed. That holds for
+  plan-mode prompts, slash and skill commands and `!` lines too. Prompts still
+  queued behind the old session's turn come back to the composer with a
+  notice instead of vanishing, and so do prompts held for a switch that
+  failed. Of two switches out at once only the newer lands: a session the
+  older one opened late is closed again, with a notice on the new screen,
+  but never the session the newest switch goes to. Asking again for a switch
+  already out sends nothing, and a switch answered after its wait ran out
+  has the session it opened closed again. A second `/resume`
+  while the list is out sends no second call, and an answer that comes while
+  the picker is open no longer resets its highlight or filter.
+
+- **Reports on OMH's routing reach workflow learning, and tasks that only
+  name OMH do not.** "OMH가 왜 내 메시지를 code-review로 보냈어?" dispatched
+  the code-review it names, because the fold reads the past tense 보냈 as the
+  request cue 보내; a Korean execution cue now matches whole syllables.
+  Three English report shapes reach workflow learning: an adverb between OMH
+  and its verb ("OMH apparently chose ..."), a why-question about what OMH
+  did ("Show me why OMH picked them"), and OMH ignoring the request. The
+  other way round, "OMH picked the config. Find out which keys are unused"
+  no longer gets the ~1.1k-char workflow-learning hint: "find out" with a
+  question of its own is the user's task when what OMH picked is a concrete
+  artifact (by its head noun, never a catalog skill name), while a bare
+  "find out why", a question about the choice itself, or a choice made for
+  the user's own message still reads as a report. Nor does a code edit led
+  by "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
+  module; a report that quotes such an ask ("Migrate the cache was all I
+  asked, but OMH chose ...") stays a report. 9 of the 12 router misses #2455 listed are fixed on the route
+  hint. The other 3 are Korean reports that name OMH with a particle
+  ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"); reading that form as OMH was
+  tried for seven review rounds and dropped, because each closed list it
+  needed let coding requests through. The particle mention itself gives no
+  routing context, as before; the 보내 fix still changes Korean reports that
+  use 보냈. "OMH ignored ..." is a report only when OMH ignored the user's
+  own ask or a routing target, not a file or a setting. Measured offline on
+  the earlier held-out sets and eleven fresh sets frozen for this change
+  (1,083 scored messages, hint and chat route), no message the previous
+  router answered right is answered wrong.
+
+- **Hermes picks up the new OMH skills after an update without a restart.**
+  A running Hermes resolves `skills.external_dirs` once and keeps the path
+  until `config.yaml` changes, so after `omh update` moved the `current`
+  pointer, chats kept the previous generation's OMH skills, or lost them all
+  once that generation was collected, until `hermes gateway restart`. The
+  update now moves the modification time of every Hermes `config.yaml` (the
+  primary home and each bot profile) that names `current/skills`, without
+  rewriting it, and says `Hermes skills refreshed in <N> homes`; a rollback
+  and a `--recover-known-good` do the same after their last pointer switch.
+  New conversations and every skill load use the new pack; a conversation
+  that is already open keeps the skill list it started with until `/new`. A
+  home it could not touch is a warning and a `failed` row under
+  `hermes_skill_refresh`, and does not fail the update. The gateway hint now
+  says what a restart is still for: skills reload on their own, the new OMH
+  plugin code loads only after `hermes gateway restart` (and, for a home
+  whose touch failed, the skills too). The bot-profile line no longer asks
+  for a Hermes Desktop restart to reload skills.
+
+- **A same-size rewrite in one clock tick no longer hides from the round-end
+  check.** The workspace index kept each Python file's modification time and
+  size. A `sed`, `execute_code` or delegated child that rewrote a file at the
+  same size within one tick of the filesystem's clock (about 16 ms on
+  Windows) left both unchanged, so the edit went unseen and the check was
+  skipped. A file modified within two seconds of the index is now also indexed
+  by a digest of its bytes and compared by content. This was also why two
+  `test_consistency_trigger` tests failed now and then on Windows CI.
+
 - **An answer Hermes sends late no longer acts on what the person moved on
   to.** A Hermes slash command's answer (a skill, `/retry`'s prompt, `/undo`'s
   draft, an alias) that arrives after a session switch is dropped with a
@@ -76,6 +195,27 @@ All notable changes will be documented here.
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
   narrow line the version is the first part of the left side to go, before
   the branch name is cut and before the badge shortens.
+
+- **The OMH TUI says when a newer OMH is out.** At most once a day, on a
+  thread the screen never waits for, the TUI asks
+  `https://registry.npmjs.org/oh-my-hermes/latest` for the latest published
+  version and keeps only that and the time of the ask in
+  `<omh_home>/tui/update-check.json`. While it is newer than the one running,
+  the info line says so beside the badge:
+  `[⚚ OMH Native v4.0.4]  v4.0.5 available · omh update`. On a narrower
+  line it is the first thing to shorten, to `↑ v4.0.5`, which stays beside
+  the version until the version itself goes. Offline, a timeout or a bad reply
+  says nothing. `OMH_TUI_UPDATE_CHECK=0` holds it off in one terminal,
+  `omh theme update-check off` in every later session, and so does an
+  `omh update-check` you set to `off` (in `omh setup` or with
+  `omh update-check set --mode off`).
+
+- **What's new, once, after an update.** The first fresh OMH TUI session on a
+  new version shows `What's new in v<version>` and a few one-line items under
+  the launch card, and once they are drawn records the version in
+  `<omh_home>/tui/whats-new.json` so they are not shown again. An install
+  that ran the OMH TUI before this release is told too; a new install shows
+  nothing. `/whats-new` shows them whenever you ask.
 
 - **A plan's done check for a code task is a command.** `plan` accepted a
   done check such as "an exact signature and its file", which a converter to
@@ -201,6 +341,35 @@ All notable changes will be documented here.
   custom root is configured without printing it, and a custom endpoint that
   reports no cost is shown as unpriced instead of at TypeSafe's list price.
   Contributed by @yqm-307 (#2473; requested in #2468).
+
+- **Short promo clips get their own design rules.** A launch clip of 15
+  seconds or less is one segment, so `show-reel` no longer applies its
+  multi-segment habits (scene variety, transitions, a giant number scene, an
+  end card) to it. The new Short promo clips section in `craft-design.md` asks
+  for one hero scene held throughout, no meta text (labels, IDs, URLs and
+  prices go in the post body), one number smaller than the logo, and the
+  official logo at 25% or more of the frame height, checked on a still sheet
+  before the render. `design-quality-gate` scores the same items as a
+  Short-clip discipline axis. Generalized from six review rounds on one
+  launch clip. (#2488)
+
+- **Codex handoffs on native Windows can write (#2471).** Four changes:
+  - The child environment now passes `SYSTEMDRIVE` with the other Windows
+    base variables. Without it, Codex's MXC sandbox refused every shell call
+    (`MXC requires nonempty Unicode host SystemDrive`), and the only
+    workaround was `--owner-env codex:SYSTEMDRIVE` on every run.
+  - A new `coding/fanout-settings.json` stores environment grants and a
+    Codex Windows sandbox backend. Dispatches an agent starts, which never
+    see a command-line flag, now get them too. `"codex": {"windows_sandbox":
+    "mxc"}` passes `--config windows.sandbox=mxc` to `codex exec`.
+  - A unit the sandbox stopped is reported as `executor_sandbox_read_only` or
+    `executor_sandbox_start_failed`, with the fix in the journal summary,
+    instead of `malformed_result` with exit 0.
+  - On Windows, `omh coding executor-readiness --executor codex` reads the
+    effective backend and says the session will be read-only when none is
+    set, before a dispatch spends a run finding out. Its PATH report no
+    longer lists npm's extensionless shell shim, which logged
+    `[WinError 193]` before falling back to `codex.CMD`.
 
 ## 4.0.4 - 2026-11-01
 
