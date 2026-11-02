@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The round-end check skips a look-alike that says it differs on purpose,
+  and names a test whose expectation a keep-behaviour turn rewrote.** A
+  helper whose docstring or comment says it is intentionally different (in a
+  module docstring, from the edited file) is no longer a copy that fires the
+  check, and a test a command appends to (`printf >> tests/...`) is diffed
+  instead of firing as an unseen edit. A new always-on test check names an
+  existing test that lost an expected value when the request asked for
+  behaviour to stay the same and did not name that test, ask to update a
+  test, or state a new result. The bench gains the `C-TEST-UPDATE` control.
+
 - **A dag-ulw run with no node running is named at the next turn.** A
   parent re-enters a run only when a child completes, so a run with no child
   running sat open: a parked node past its `wake_at`, ready nodes never

@@ -95,7 +95,9 @@ when it can pay off (`consistency_trigger.py`).
 - At the turn's first tool call, `pre_tool_call` records the size and
   modification time of the workspace's Python files.
 - Before each `patch` or `write_file`, it keeps the pre-edit text of each
-  Python file that call edits.
+  Python file that call edits. Before each `terminal` or `execute_code` call,
+  it does the same for every Python file the call's arguments name, so a
+  `printf ... >> tests/test_x.py` is diffed like a patch.
 - At the first stop, the workspace is indexed again, so every Python file the
   turn changed is found, whatever tool changed it.
 - The definitions the changed lines touch are compared with the other files,
@@ -104,7 +106,12 @@ when it can pay off (`consistency_trigger.py`).
 
 The check fires when one of these is true:
 
-- a touched top-level definition is also defined in another file;
+- a touched top-level definition is also defined in another file, unless that
+  file says its definition differs on purpose (`declared_divergent`): in the
+  definition's docstring or the comments at it, or in a module-docstring
+  sentence that names the edited file. The vocabulary is closed: an intent
+  word (`intentionally`, `deliberately`, `on purpose`, `by design`) with a
+  difference word, or "not kept in step / in sync with";
 - a definition the edit removed or renamed is still named in another Python
   file, or in a `.toml`, `.cfg`, `.ini`, `.yaml`, `.yml` or `.json` file;
 - a touched function's signature changed, or a class's `__init__`, `__new__`
@@ -117,9 +124,9 @@ or a reference out:
 
 - a changed source file that is not Python;
 - a Python file changed without a pre-edit text of its own (`opaque_edit`,
-  or `no_snapshot` when the session kept none): a `sed`, an `execute_code`
-  write, a delegated child's edit, or a file over the 32-file or 4 MB snapshot
-  cap;
+  or `no_snapshot` when the session kept none): a command or an
+  `execute_code` write that did not name the file, a delegated child's edit,
+  or a file over the 32-file or 4 MB snapshot cap;
 - a changed file that does not parse or is over 512 KB;
 - a non-trivial change that touches no definition, import or docstring
   (`unattributed`);
@@ -177,6 +184,25 @@ line it names is the work. A line the impact note already names, an edited
 importer's stale `from module import name` that the language server also
 reports, is not named twice. The consistency trigger never names a line: its
 verdict only decides whether the check fires.
+
+The test check is also always on at the first stop. It names an existing test
+that lost an expected value this turn: a literal constant in an `assert` or a
+`self.assert*` call is gone from the file. Subscript keys are not counted:
+`quote["total_cents"]` becoming `quote.total_cents` reaches the same value. It
+speaks only when all of these hold:
+
+- the turn's request asked for behaviour to stay the same (`stays the same`,
+  `unchanged`, `without changing`, `keep its behaviour`, and a few more);
+- the request does not name the test file or the test, does not ask to update
+  a test, and states no result the code must now give (`must return`,
+  `to return`);
+- the turn also changed a Python file that is not a test;
+- the test file existed at the turn's start and has its pre-edit text.
+
+`pre_llm_call` keeps those three facts about the request, never its text. The
+note continues the turn like the export note, and asks for the expected value
+back and the code changed until the original test passes.
+`src/plugin_bundle/omh/test_expectation_check.py` lists the rules.
 
 Hermes keeps the answer the model stopped with only as an interim message, and
 returns whatever follows the nudge as the turn's final response. So when no

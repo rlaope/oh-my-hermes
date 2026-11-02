@@ -754,6 +754,98 @@ The amendment:
   model. If the readings disagree, the result says so, and the branch asks to merge only with
   that stated.
 
+#### Result: the re-run reading passes every clause; the strict reading fails one, on crash records only
+
+The run setup:
+- **Counted runs:** 2026-11-02 10:28 to 12:15 KST; re-runs 12:15 to 13:33.
+- **Volume:** 216 counted runs, and 64 re-run records for 32 instances.
+- **Arms:** base `76fa9c615`, new `c071c591f`.
+- **Recompute:** the research folder's `OPT/OPT-I/gate.py`, from the raw records, the
+  session-DB snapshots and the profile logs (`gate.txt`, `gate.json`).
+
+**Crashes.** These are `process_crash` records: the client's websocket dropped while the
+gateway turn kept running.
+
+| Model | Strict base | Strict new | Re-run base | Re-run new |
+| --- | --- | --- | --- | --- |
+| Haiku 4.5 | 8 | 10 | 3 | 3 |
+| Sonnet 5.5 | 0 | 0 | 0 | 0 |
+| gpt-6-luna | 7 | 8 | 4 | 3 |
+| gpt-6.1-sol | 13 | 12 | 0 | 0 |
+| All | 28 | 30 | 7 | 6 |
+
+The two arms crashed at about the same rate.
+
+**Gate clauses:**
+
+| Clause | Strict reading | Re-run reading |
+| --- | --- | --- |
+| 1. Sonnet `C-DECOY` fires: new at most 1 and below base | pass: 3/6 to 0/6 | pass: 3/6 to 0/6 |
+| 2a. `C-DECOY` pooled median model calls: new at most base - 1 | pass: 11 to 9 | pass: 11 to 9 |
+| 2b. `C-DECOY` pooled median tokens: new at most 0.90x base | pass: 95,144 to 55,474 (0.58x) | pass: 99,441 to 75,645 (0.76x) |
+| 3. Haiku `I-KWARG` passes: new at least base + 2 | pass: 1/6 to 3/6 | pass: 2/6 to 5/6 |
+| 4. `C-DUPLICATE` passes: new at least base | pass: 12 to 12 | pass: 12 to 12 |
+| 5. Total passes: new at least base - 1 | pass: 79 to 79 | pass: 102 to 101 |
+| 6a. Test notes on `C-TEST-UPDATE`, new arm: 0 | pass: 0 | pass: 0 |
+| 6b. Fires on `C-TEST-UPDATE`: new at most base | pass: 0 to 0 | pass: 0 to 0 |
+| 7. `mutation_outside_scope`: new at most base | **fail: 24 to 25** | pass: 4 to 2 |
+
+**The strict-reading failure is a crash artifact.**
+- Every `mutation_outside_scope` record in either reading is a crash record, scored after the
+  bench removed the workspace: 49 of 49 strict, 6 of 6 re-run.
+- No completed run in either arm edited outside its scope.
+- Among completed runs, the model's own failures are:
+  - base: 2 (Haiku `I-KWARG` 409993 and 502133);
+  - new: 1 (luna `I-KWARG` 502133, which missed the `**CRAWL_OPTIONS` caller in crawler.py
+    that the consistency check named; not a test rewrite).
+
+**Where the change acted:**
+- **`C-DECOY`.**
+  - The new arm continued 0 of 24 sessions (base 19 of 24).
+  - Every new-arm trigger verdict there was `declared_divergent` (22 logged).
+  - Per model, base to new: Sonnet median calls 6 to 4 and tokens 68k to 43k; Haiku 11 to 10
+    and 117k to 95k; luna 12 to 9 and 100k to 74k; sol 11.5 to 9 and 102k to 76k.
+- **`I-KWARG` on Haiku.**
+  - The test note fired in 3 sessions, and all 3 then passed.
+  - It named `tests/test_http_client.py:5`, whose expected `"timeout"` key the model had
+    renamed.
+  - The new arm's completed runs passed 5 of 5; the base arm's passed 2 of 4.
+- **The note was silent everywhere else.** It fired on `I-KWARG` only, with 94 logged stops in
+  the new arm (re-run reading). That includes `C-TEST-UPDATE`: 10 stops logged `test_edit_asked`, and the 2
+  crashed runs logged no stop.
+- **`C-DUPLICATE`.** The `copy` signal still fired (8 logged). Passes held at 12 of 12.
+
+**Reported, re-run reading:**
+- **Medians, base to new:** tokens 81,775 to 74,821; wall 50.1 s to 47.0 s; model calls 9 to
+  9.
+- **Final answer kept:** 76 to 75.
+- **Per model, passes and median tokens:**
+  - Haiku: 23 to 24, 116k to 101k.
+  - Sonnet: 27 to 27, 52k to 44k.
+  - luna: 25 to 23, 90k to 71k. Both lost runs are crashes on `C-TEST-UPDATE`.
+  - sol: 27 to 27, 95k to 79k.
+
+**Load path.** Every call before 13:06 KST ran the standalone path (`omh_pkg` false): all
+counted runs and most re-runs. From 13:06, something outside this bench put an `omh` package
+into the shared gateway's `sys.modules`. The last h45 re-runs and every sol re-run then ran
+with it importable, in both arms alike: 293 of 2,137 metered calls. The round-end code is the
+bundle's own in both cases. The shared gateway itself was relaunched at 12:55:31 KST by an
+`osascript` call to the Hermes launcher. This bench sent it no signal and ran no launcher. The
+re-runs after that time ran on the new gateway process, in both arms.
+
+**Tokens and money.** The run records undercount, because a crashed run records no tokens
+while its gateway turn ran on.
+
+| Route | Counted runs | Re-runs | Smokes | Total |
+| --- | --- | --- | --- | --- |
+| CPA Claude | 7.56M | 1.66M | 0.25M | 9.47M |
+| openai-codex | 6.27M | 3.11M | 0.06M | 9.44M |
+
+Money: $0 (every `cost_usd` is 0). No DeepSeek, GLM, OpenRouter or OpenGateway.
+
+**Verdict.** The two readings disagree on clause 7 only, and only through crash records. In
+the re-run reading every clause passes. The branch asks to merge with that stated.
+
 ### 2026-10-31 compact `omh_context` result: base vs branch
 
 The `omh_context` tool result rides every later model call of its session. In the 2026-10-30
