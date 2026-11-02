@@ -9473,6 +9473,23 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "file_or_text",
         "workflow-learning",
     ),
+    # #2485 fourth review: "OMH가" names OMH only in a clause that reports on
+    # it, so a request after a setting sentence reads as on origin/main, with
+    # any ending (76adc3fd9 dispatched workflow-learning on both).
+    RoutingPrecisionCase(
+        "korean-must-polish-routing-rules-after-setting-is-a-task",
+        "A Korean 다듬어야 돼 request on routing rules after a setting sentence is a task",
+        "OMH가 레포를 열었어. 라우팅 규칙 다듬어야 돼",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-would-like-routing-table-split-after-setting-is-a-task",
+        "A Korean 주면 좋겠어 request on a routing table after a setting sentence is a task",
+        "OMH가 저장소를 열었어. 라우팅 테이블 나눠 주면 좋겠어",
+        "answer_clarification",
+        "",
+    ),
     # #2485 third review: beside a Korean request, read by its ending and not
     # by its verb, "OMH가" / "OMH는" is the setting, so 라우터 / 라우팅 is the
     # user's code. 666f778bb dispatched workflow-learning on each of these.
@@ -12311,6 +12328,30 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
     # #2485 second review: "고쳐줘?" is the casual way to ask for the edit, so
     # after a setting sentence it keeps the coding lane (a2d8bf6c2 dispatched
     # workflow-learning).
+    # #2485 fourth review: a request with an ending no list holds ("해 둬")
+    # after a setting sentence keeps origin/main's lane, and a Korean report
+    # whose OMH clause carries the feedback cue reaches workflow-learning
+    # (origin/main asked a question).
+    RoutingInterventionCase(
+        "korean-leave-it-tidied-router-config-after-setting-keeps-toolbelt",
+        "A Korean 정리해 둬 request on router settings after a setting sentence keeps its lane",
+        "OMH는 붙여 놨어. 라우터 설정 정리해 둬",
+        "dispatch",
+        "toolbelt-readiness",
+        "prepare_toolbelt_readiness",
+        "toolbelt_readiness",
+        "toolbelt-readiness",
+    ),
+    RoutingInterventionCase(
+        "korean-omh-routing-went-wrong-lets-look-reaches-workflow-learning",
+        "A Korean report that OMH's routing went wrong, then let's look at the cause, reaches workflow learning",
+        "OMH가 라우팅을 잘못했어, 원인을 같이 보자",
+        "dispatch",
+        "workflow-learning",
+        "audit_learning_readiness",
+        "workflow_learning",
+        "workflow-learning",
+    ),
     RoutingInterventionCase(
         "korean-casual-edit-question-after-setting-keeps-coding-lane",
         "A Korean casual edit request ending in a question mark after what OMH picked keeps the coding lane",

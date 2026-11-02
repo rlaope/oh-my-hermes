@@ -141,15 +141,31 @@ _CHOICE_VERB_FORMS = frozenset(
 _DO_THAT = frozenset({("do", "that"), ("did", "that"), ("does", "that"), ("do", "this"), ("did", "this"), ("do", "so")})
 
 
+_CHOICE_ANAPHORS = frozenset({"that", "this", "it", "them", "there", "so"})
+
+
 def find_out_asks_about_choice(clause: str) -> bool:
-    """`clause` is "find out" with a clause of its own about OMH's choice ("find out what made it pick that")."""
+    """`clause` is "find out" with a clause of its own about OMH's choice ("find out what made it pick that").
+
+    The choice verb's object is the choice itself (that, this, it, there, so)
+    or nothing, as in "why it picked that" or "how it decided to select that".
+    With an object of its own ("which worker it picked last night", "why it
+    chose arm64") the subject is the user's artifact, and it does not refer
+    back.
+    """
     rest = _after_find_out(clause)
     if not rest:
         return False
-    pairs = list(zip(rest, rest[1:]))
-    return any(subject in _CHOICE_SUBJECTS and verb in _CHOICE_VERB_FORMS for subject, verb in pairs) or any(
-        pair in _DO_THAT for pair in pairs
-    )
+    if any(pair in _DO_THAT for pair in zip(rest, rest[1:])):
+        return True
+    for index in range(len(rest) - 1):
+        if rest[index] in _CHOICE_SUBJECTS and rest[index + 1] in _CHOICE_VERB_FORMS:
+            after = index + 2
+            while rest[after : after + 1] == ["to"] and rest[after + 1 : after + 2] and rest[after + 1] in _CHOICE_VERB_FORMS:
+                after += 2
+            if after >= len(rest) or rest[after] in _CHOICE_ANAPHORS:
+                return True
+    return False
 
 
 # How a Korean clause ends when it asks or tells someone to do something,

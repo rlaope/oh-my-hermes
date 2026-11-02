@@ -964,8 +964,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # picked stay off workflow-learning (+3). Its review: a Korean
             # edit request after a setting sentence stays off it too (+1). Its
             # third review: three Korean requests read by their ending, and a
-            # find-out task with a courtesy tail, stay off it (+4).
-            expected=1330,
+            # find-out task with a courtesy tail, stay off it (+4). Its fourth
+            # review: two Korean requests with unlisted endings after a
+            # setting sentence stay off it too (+2).
+            expected=1332,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1537,7 +1539,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # ignoring the request, and OMH "apparently" choosing ultrawork reach
             # workflow-learning (+3). Its second review: a Korean casual edit
             # request ending in "?" after a setting sentence keeps ultrawork (+1).
-            expected=1223,
+            # Its fourth review: a Korean 정리해 둬 after a setting sentence keeps
+            # toolbelt-readiness, and a Korean report on OMH's routing reaches
+            # workflow-learning (+2).
+            expected=1225,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

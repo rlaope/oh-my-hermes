@@ -220,6 +220,7 @@ _CONCRETE_ARTIFACT_NOUNS = frozenset(
         "worker", "workers", "queue", "queues", "bucket", "buckets", "region", "env",
     }
 )
+_USER_OCCASION_PAIRS = frozenset({("for", "my"), ("when", "i"), ("after", "i")})
 # A chosen object headed by one of these is something OMH routes to, whatever
 # the words before it: "the cache skill", "the migration workflow".
 _OMH_ROUTING_TARGET_HEADS = frozenset({"skill", "skills", "workflow", "workflows", "lane", "lanes", "mode", "modes"})
@@ -441,18 +442,23 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     matching_compact = matching_normalized.replace(" ", "")
     matching_tokens = set(routing_tokens(matching_normalized, stopwords=set()))
     matching_tokens.update(matching_normalized.split())
-    # "OMH가" / "OMH는" names OMH as what the sentence is about. Beside a
-    # Korean request ("OMH는 설치 끝났어. 라우터 핸들러 정리해 줘") OMH is the
-    # setting and the request is the user's own task, so the name gives no
-    # routing context, unless another clause reports on OMH with a feedback
-    # cue ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"); OMH's Korean vocabulary
-    # (라우터 / 라우팅 / 용어) is then not a meta cue either (#2485 review).
+    # "OMH가" / "OMH는" names OMH only where its own clause reports on it:
+    # a feedback cue, 왜 or 원인 in a clause that is not itself a request
+    # ("OMH가 라우팅을 잘못했어, 원인을 같이 보자"). A setting sentence ("OMH는
+    # 설치 끝났어.") gives no routing context, so whatever follows reads as on
+    # origin/main; and where the name is the only routing context, only the
+    # cues inside those report clauses count (#2485 review).
     particle_names = _product_names_before_particle(matching_normalized)
-    beside_request = bool(particle_names) and not (matching_tokens & _PRODUCT_NAME_CONTEXT) and any(
-        ends_in_korean_request(clause) for clause in korean_clauses(matching_normalized)
-    )
-    if particle_names and (not beside_request or _korean_report_beside_request(matching_normalized)):
-        matching_tokens.update(particle_names)
+    particle_report_clauses: tuple[str, ...] = ()
+    particle_only_context = False
+    if particle_names and not (matching_tokens & _PRODUCT_NAME_CONTEXT):
+        particle_report_clauses = _korean_omh_report_clauses(matching_normalized)
+        if not particle_report_clauses and _reports_omh_behaviour(matching_normalized):
+            # An English report after the particle ("OMH가 picked the wrong skill").
+            particle_report_clauses = (matching_normalized,)
+        if particle_report_clauses:
+            particle_only_context = not _routing_context(matching_normalized, matching_tokens)
+            matching_tokens.update(particle_names)
 
     mentioned_workflows = _mentioned_workflows(matching_normalized, matching_tokens)
     mentioned_runtime_terms = _mentioned_runtime_terms(matching_normalized)
@@ -472,6 +478,13 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     feedback_cues = _matched_cues(_FEEDBACK_CUES, matching_normalized, matching_compact)
     if _reports_omh_behaviour(matching_normalized):
         feedback_cues = _compact_tuple((*feedback_cues, "omh_behaviour_report"))
+    if particle_only_context and not mentioned_workflows and not mentioned_runtime_terms:
+        report_text = "\n".join(particle_report_clauses)
+        report_compact = report_text.replace(" ", "")
+        report_meta = set(_matched_meta_cues(report_text, report_compact))
+        report_feedback = set(_matched_cues(_FEEDBACK_CUES, report_text, report_compact))
+        meta_cues = tuple(cue for cue in meta_cues if cue in report_meta)
+        feedback_cues = tuple(cue for cue in feedback_cues if cue in report_feedback or cue == "omh_behaviour_report")
     planning_cues = _matched_cues(_PLANNING_CUES, matching_normalized, matching_compact)
     negated_execution_cues = _compact_tuple(
         (*_matched_cues(_NEGATED_EXECUTION_CUES, matching_normalized, matching_compact), *_structural_negated_execution_cues(matching_normalized))
@@ -489,8 +502,6 @@ def classify_workflow_intent(message: str) -> WorkflowIntent:
     ):
         kept = _korean_omh_surface_cues(matching_normalized)
         meta_cues = tuple(cue for cue in meta_cues if cue not in _CODE_EDIT_OBJECT_META_CUES or cue in kept)
-    if beside_request:
-        meta_cues = tuple(cue for cue in meta_cues if cue not in _KOREAN_OMH_SURFACE_CUES)
     execution_cues = _suppress_negated_execution_cues(
         _matched_execution_cues(matching_normalized, matching_compact),
         negated_execution_cues,
@@ -806,6 +817,11 @@ def _clause_complains(clause: str) -> bool:
     words = ordered_words(clause)
     if inquiry_why_lead_length(words) or set(words) & (_OMH_ROUTING_VERBS | _OMH_COMPLAINT_WORDS):
         return True
+    # What OMH chose it for: the user's own message ("for my good morning",
+    # "when I typed thanks", "after I said hi"). OMH routing that message is
+    # the complaint, whatever it chose ("Files", "the nightly job").
+    if any(pair in _USER_OCCASION_PAIRS for pair in zip(words, words[1:])):
+        return True
     span, users_own = _chosen_object(words)
     return not _names_concrete_artifact(span, compound=not users_own)
 
@@ -1076,14 +1092,25 @@ def _matched_execution_cues(normalized: str, compact: str) -> tuple[str, ...]:
     return tuple(matches)
 
 
-def _korean_report_beside_request(normalized: str) -> bool:
-    """A Korean clause that is not itself a request carries a feedback cue: a report on OMH ("OMH가 라우팅을 잘못했어")."""
-    for clause in korean_clauses(normalized):
-        if ends_in_korean_request(clause):
-            continue
-        if _matched_cues(_FEEDBACK_CUES, clause, clause.replace(" ", "")):
-            return True
-    return False
+_KOREAN_CAUSE_WORD = normalized_phrase("원인")
+
+
+def _korean_omh_report_clauses(normalized: str) -> tuple[str, ...]:
+    """The Korean clauses that name OMH with a particle and report on it.
+
+    A report carries a feedback cue (왜, 잘못, 오해, ...) or 원인, and is not
+    itself a request: a code-edit lead or a request ending withholds the
+    reading, never grants it, so a request form either list misses only
+    reads as on origin/main.
+    """
+    return tuple(
+        clause
+        for clause in korean_clauses(normalized)
+        if _product_names_before_particle(clause)
+        and (_matched_cues(_FEEDBACK_CUES, clause, clause.replace(" ", "")) or _KOREAN_CAUSE_WORD in clause)
+        and not leads_with_code_edit(clause)
+        and not ends_in_korean_request(clause)
+    )
 
 
 def _product_names_before_particle(normalized: str) -> tuple[str, ...]:

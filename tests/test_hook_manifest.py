@@ -925,18 +925,24 @@ class HookManifestTests(unittest.TestCase):
                 self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
 
-    def test_a_korean_request_is_read_by_its_ending_beside_a_particle_product_name(self) -> None:
-        # #2485 third review: a closed list of Korean edit predicates leaked
-        # again ("다듬어 줘", "손 좀 봐줘?", "정리하자", "업데이트 좀 해"). Beside a
-        # clause that ends in a request, "OMH가" / "OMH는" is the setting, and
-        # 라우터 / 라우팅 / 용어 are the user's code; a clause that reports on OMH
-        # with a feedback cue keeps the report.
+    def test_a_particle_product_name_names_omh_only_in_a_clause_that_reports_on_it(self) -> None:
+        # #2485 third and fourth reviews: closed lists of Korean edit verbs,
+        # then of request endings, leaked in turn. "OMH가" / "OMH는" now gives
+        # routing context only where its own clause reports on OMH (a feedback
+        # cue, 왜 or 원인, in a clause that is not a request), so a setting
+        # sentence leaves whatever follows as it reads on origin/main.
         coding = (
             "OMH는 업데이트 끝났어. 라우터 핸들러 다듬어 줘",
             "OMH가 저장소를 골랐어. 라우팅 규칙 손 좀 봐줘?",
             "OMH를 방금 깔았어. 용어 목록 정리하자",
             "OMH가 브랜치를 열었어.\n라우터 코드 손봐 주세요",
             "OMH는 준비됐어. 라우팅 테이블 업데이트 좀 해",
+            "OMH는 붙여 놨어. 라우터 설정 정리해 둬",
+            "OMH가 레포를 열었어. 라우팅 규칙 다듬어야 돼",
+            "OMH를 켰어. 용어 목록 업데이트 바람",
+            "OMH가 저장소를 열었어. 라우팅 테이블 나눠 주면 좋겠어",
+            # A statement in the casual 해 form is no report clause either.
+            "OMH가 고른 건 라우터 브랜치야",
         )
         for message in coding:
             with self.subTest(message=message):
@@ -944,7 +950,12 @@ class HookManifestTests(unittest.TestCase):
 
                 self.assertNotEqual(payload.get("selected_workflow"), "workflow-learning")
                 self.assertNotIn(payload.get("intent_class"), {"meta_discussion", "feedback_signal"})
-        for message in ("OMH가 라우팅을 잘못했어. 원인 좀 같이 보자", "OMH가 왜 라우터를 그렇게 썼어?"):
+        for message in (
+            "OMH가 라우팅을 잘못했어. 원인 좀 같이 보자",
+            "OMH가 왜 라우터를 그렇게 썼어?",
+            "OMH가 내 인사를 잘못 라우팅했어",
+            "OMH가 picked the wrong skill again",
+        ):
             with self.subTest(message=message):
                 self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
 
@@ -956,6 +967,10 @@ class HookManifestTests(unittest.TestCase):
             "OMH chose the nightly job for my hi. Find out what made it pick that",
             "OMH picked the deploy pipeline for a thank-you; find out why OMH routed it there",
             "OMH selected the cache layer for my joke, find out what led it to do that",
+            # The user's own message as the occasion is the complaint, whatever
+            # OMH chose, a one-word catalog skill included (fourth review).
+            "OMH chose files for my 'brb'; find out what it keyed on",
+            "OMH picked docs when I typed hey, find out what it matched",
         ):
             with self.subTest(message=message):
                 self.assertEqual(awareness_route_hint(message)["selected_workflow"], "workflow-learning")
@@ -963,6 +978,8 @@ class HookManifestTests(unittest.TestCase):
             "OMH picked the port number; find out which daemon holds it",
             "OMH chose the report package template file. Find out who edits it",
             "OMH picked the config file. Find out which keys are unused please",
+            # "it" is the artifact here, with an object of its own (fourth review).
+            "OMH picked the cron runner. Find out which host it selected last week",
         ):
             with self.subTest(message=message):
                 payload = awareness_route_hint(message)
