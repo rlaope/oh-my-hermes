@@ -116,13 +116,41 @@ def valid_identifier(name: str, suffix: str) -> bool:
 
 
 def path_to_uri(path: str) -> str:
-    return "file://" + quote(os.path.abspath(path), safe="/:")
+    """The `file://` URI Hermes' LSP client opens `path` under (`agent/lsp/client.py` `file_uri`).
+
+    A position request must name the very URI the server was handed in didOpen, or the server answers for a
+    document it never opened (null). On Windows that is `file:///C:/x`: forward slashes, the drive as the first
+    path component.
+    """
+    return _path_to_uri(path, os.path)
 
 
 def uri_to_path(uri: str) -> str:
+    """The local path a server's `file://` URI names; anything else comes back as given."""
+    return _uri_to_path(uri, os.path)
+
+
+def _path_to_uri(path: str, flavour: Any) -> str:
+    abs_path = flavour.abspath(path)
+    if flavour.sep == "\\":
+        abs_path = abs_path.replace("\\", "/")
+        abs_path = abs_path if abs_path.startswith("/") else "/" + abs_path
+    return "file://" + quote(abs_path, safe="/:")
+
+
+def _uri_to_path(uri: str, flavour: Any) -> str:
     if not uri.startswith("file://"):
         return uri
-    return os.path.normpath(unquote(uri[len("file://"):]))
+    # Unquote first: a server may escape the drive's colon (pyright sends `file:///c%3A/x`).
+    raw = unquote(uri[len("file://"):])
+    if flavour.sep == "\\":
+        if raw[:10].lower() == "localhost/":
+            raw = raw[len("localhost"):]  # the local host named outright: an empty authority
+        if raw.startswith("/") and len(raw) > 2 and raw[2] == ":":
+            raw = raw[1:]  # the slash before the drive letter
+        elif raw and not raw.startswith("/") and raw[1:2] != ":":
+            raw = "//" + raw  # `file://server/share/x`: the authority is the UNC server
+    return flavour.normpath(raw)
 
 
 def inside(path: str, root: str) -> bool:
