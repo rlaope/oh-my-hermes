@@ -550,11 +550,12 @@ def writes_code(node: Mapping[str, Any]) -> bool:
 
 def _is_docs_entry(entry: str) -> bool:
     """Docs: a docs suffix or name, or a ``docs`` directory anywhere in the path (``/repo/docs/``, ``../wt/docs/x``).
-    An entry ending in ``/`` is all directories; otherwise its last segment is the file, so ``src/docs`` is code."""
+    An entry ending in ``/`` is all directories, and so is a bare ``docs``; otherwise its last segment is the file, so
+    ``src/docs`` is code."""
     segments = [segment for segment in entry.casefold().split("/") if segment not in ("", ".")]
     if not segments:
         return False
-    directories = segments if entry.endswith("/") else segments[:-1]
+    directories = segments if entry.endswith("/") or segments == ["docs"] else segments[:-1]
     return (posixpath.splitext(segments[-1])[1] in DOC_SUFFIXES or "docs" in directories
             or segments[-1] in DOC_NAMES)
 

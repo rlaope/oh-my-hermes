@@ -1179,7 +1179,7 @@ class ReviewLintTests(unittest.TestCase):
                             node("check", depends_on=("api", "diff"), role="verify")],
             "docs only": [node("docs", scope=("docs/api.md", "README.rst", "NOTES.TXT")),
                           node("check", depends_on=("docs",), role="verify")],
-            "docs directory": [node("docs", scope=("docs/", "./docs/guide/setup.png")),
+            "docs directory": [node("docs", scope=("docs/", "docs", "./docs", "./docs/guide/setup.png")),
                                node("check", depends_on=("docs",), role="verify")],
             "absolute and worktree docs": [node("docs", scope=("/repo/docs/", "../wt/docs/x.md", "../wt/docs/img.png")),
                                            node("check", depends_on=("docs",), role="verify")],
