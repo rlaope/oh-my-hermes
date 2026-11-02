@@ -265,10 +265,10 @@ class ReturnedTests(NudgeTestCase):
 
 
 class SlotTests(NudgeTestCase):
-    """Ready nodes while other work holds every delegate_task slot of this process.
+    """Ready nodes while every delegate_task slot of this process is taken.
 
-    Mutation: say "call ready" while ready would hand out nothing, or keep that situation claimed so the line never
-    comes back once a slot frees.
+    Mutation: say "call ready" while ready would hand out nothing, keep that situation claimed so the line never
+    comes back once a slot frees, or say the slots are held by other work (the holder can be this run's own node).
     """
 
     def test_slots_held_by_other_work_say_so_and_ready_comes_back_once_free(self) -> None:
@@ -282,11 +282,23 @@ class SlotTests(NudgeTestCase):
             slots_table(home)
             freed = line(home, moment + 20)
         self.assertEqual(held, (
-            "[OMH dag] Run feat: node a ready and no node of this run is running, but other work holds every "
-            "delegate_task slot of this process, so ready would hand out nothing now. Call omh_dag action=ready "
+            "[OMH dag] Run feat: node a ready and no node of this run is running, but every delegate_task "
+            "slot of this process is taken, so ready would hand out nothing now. Call omh_dag action=ready "
             "run=feat at a later turn, once a slot is free."))
         self.assertEqual(again, "")
         self.assertIn("node a ready and no node of this run is running. Call omh_dag action=ready", freed)
+
+    def test_the_slot_held_by_this_runs_own_dispatch_is_not_called_other_work(self) -> None:
+        # Between dispatch and subagent_start the one slot is a's own delegation, with no child bound to a yet.
+        moment = time.time()
+        with homes() as home:
+            (home.hermes / "config.yaml").write_text("delegation:\n  max_concurrent_children: 1\n", encoding="utf-8")
+            slots_table(home, running=[("deleg_a", os.getpid())])
+            stored(home, [node("a"), node("b")], moment, out={"a": {}})
+            held = line(home, moment + 5)
+        self.assertIn("node b ready", held)
+        self.assertIn("every delegate_task slot of this process is taken", held)
+        self.assertNotIn("other work", held)
 
 
 class RepairTests(NudgeTestCase):
