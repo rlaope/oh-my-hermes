@@ -18,8 +18,20 @@ All notable changes will be documented here.
   "find out why" still asks about what OMH did. Nor does a code edit led by
   "OMH: migrate" or "using OMH, rename" on a vocabulary or terminology
   module, or a Korean edit request after a period or a line break
-  ("OMH가 설정 파일을 골랐어. 리팩터링해줘"). The 12 router misses #2455 listed are fixed on the route hint; no
-  message in the earlier held-out sets that passed before fails now.
+  ("OMH가 설정 파일을 골랐어. 리팩터링해줘"). The 12 router misses #2455
+  listed are fixed on the route hint; no message in the earlier held-out sets
+  that passed before fails now.
+
+- **Show-reel judges the hero frame before the full render.** A product film
+  that passes every lint and contact-sheet check can still read as cheap on
+  sight, so `show-reel` now asks for a launch-frame verdict on the first frame:
+  a 3D product is a lit model rather than stacked CSS layers, light surfaces
+  are judged by measured luminance, and the title uses the brand's own live
+  typeface and colour. Brand looks are gathered from the brand's site and repo
+  with provenance, a film pairing two products names both from frame 0, and a
+  model's critique of a downscaled sheet is checked on a full-resolution crop
+  before anything changes. `design-quality-gate`'s rubric gains a matching
+  material-credibility axis.
 
 - **The info line's badge carries the version.** It reads
   `[⚚ OMH Native v4.0.4]`, the version faint inside the brackets. On a
