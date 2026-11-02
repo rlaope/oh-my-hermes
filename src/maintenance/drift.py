@@ -974,8 +974,12 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # find-out task (+3).
             # feature/architecture-deepening: shallow water, a new system's
             # architecture, a roadmap trade-off, a Korean system design and an
-            # architecture firm never name tech-debt-audit (+5).
-            expected=1353,
+            # architecture firm never name tech-debt-audit (+5). Its review: a
+            # model's, a bridge's, and (in Korean) a model's, cloud infra's and
+            # company org's architecture improvement, a course's shallow
+            # modules, deepening opportunities with clients, and a solar module
+            # that is hard to test never name it either (+8).
+            expected=1361,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1552,9 +1556,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # a request to add tests, keeps ultrawork (+1). Its final review:
             # two reports that quote the user's own ask, opened by migrate or
             # rewrite, reach workflow-learning (+2).
-            # feature/architecture-deepening: four architecture-deepening
-            # requests (one Korean) dispatch tech-debt-audit, a hard-to-test
-            # module names it as the clarify candidate, and improving an
+            # feature/architecture-deepening: three code-anchored
+            # architecture-deepening requests dispatch tech-debt-audit, a
+            # Korean codebase-architecture request and shallow modules in this
+            # repo name it as the clarify candidate, and improving an
             # architecture diagram stays codebase-uml's dispatch (+6).
             expected=1233,
             # The one reviewed test pin. Every other test compares its payload

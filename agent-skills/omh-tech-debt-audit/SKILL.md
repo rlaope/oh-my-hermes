@@ -59,7 +59,7 @@ Bad example:
 
 Use when the codebase's accumulated debt should be measured and ranked as a ledger - findings with file:line, severity, and effort, quick wins separated from big fixes - rather than judged as a diff or cleaned up on the spot.
 
-    Strong routing signals: `tech-debt-audit`, `tech debt`, `tech debt audit`, `technical debt`, `technical debt audit`, `tech debt ledger`, `debt ledger`, `audit our tech debt`, `tech debt report`, `code debt audit`, `where is our tech debt`, `architecture deepening`, `deepening opportunities`, `shallow modules`, `shallow module`, `improve the architecture of`, `improve the codebase architecture`, `architecture improvements`, `module is hard to test`, `기술부채`, `기술 부채`, `기술부채 감사`, `기술부채 감사해줘`, `기술부채 점검`, `기술부채 장부`, `부채 원장`, `아키텍처 개선`, `아키텍처 개선점`, `아키텍처 개선해줘`, `техдолг`, `технический долг`, `аудит техдолга`, `аудит технического долга`
+    Strong routing signals: `tech-debt-audit`, `tech debt`, `tech debt audit`, `technical debt`, `technical debt audit`, `tech debt ledger`, `debt ledger`, `audit our tech debt`, `tech debt report`, `code debt audit`, `where is our tech debt`, `improve the codebase architecture`, `improve the architecture of this codebase`, `improve the architecture of this repo`, `deepening opportunities in this codebase`, `shallow modules in this codebase`, `shallow modules in this repo`, `기술부채`, `기술 부채`, `기술부채 감사`, `기술부채 감사해줘`, `기술부채 점검`, `기술부채 장부`, `부채 원장`, `코드베이스 아키텍처 개선`, `코드 아키텍처 개선`, `техдолг`, `технический долг`, `аудит техдолга`, `аудит технического долга`
 
 ## Catalog Metadata
 

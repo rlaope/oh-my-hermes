@@ -3795,13 +3795,13 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # they claimed finance chat and every review request. Complete phrases
     # ("tech debt", "debt ledger", ...) carry the intent; no single token is
     # unambiguous alone.
-    # The architecture-deepening phrases are held the same way: "architecture"
-    # is system design, diagrams, and the CTO roadmap; "improve", "hard",
-    # "test" and "module" are everyday; "shallow" and "deepening" are water
-    # and relationships. Only the complete phrases ("improve the
-    # architecture of", "shallow module", "module is hard to test", ...)
-    # score, and "improve the architecture" ends in "of" so that "improve the
-    # architecture diagram" stays the diagram's request.
+    # The architecture-deepening phrases are held the same way, and each one
+    # names the code it is about ("... this codebase", "... this repo"):
+    # "architecture" is ML models, cloud and network infra, buildings, org
+    # charts and system design; "improve" is everyday;
+    # "shallow modules" and "deepening opportunities" are courses and client
+    # accounts. Without the code noun inside the phrase nothing scores, and
+    # the message routes exactly as it did before these phrases existed.
     "tech-debt-audit": frozenset(
         {
             "architecture",
@@ -3810,23 +3810,21 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
             "codebase",
             "debt",
             "deepening",
-            "hard",
             "improve",
-            "improvements",
+            "in",
             "is",
             "ledger",
-            "module",
             "modules",
             "of",
             "opportunities",
             "our",
+            "repo",
             "report",
             "shallow",
             "tech",
             "technical",
-            "test",
             "the",
-            "to",
+            "this",
             "where",
         }
     ),

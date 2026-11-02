@@ -15,10 +15,13 @@ All notable changes will be documented here.
   approval gate unchanged. Its tests phase now deletes tests that reach past
   the new interface once an interface-level test covers them, and
   `ai-slop-cleaner` keeps a single-caller module that hides real complexity
-  instead of inlining it. "improve the codebase architecture", "find shallow
-  modules", "find deepening opportunities" and "아키텍처 개선점 찾아줘" now reach
-  the audit; on main they asked about codebase onboarding, the CTO loop, or
-  unrelated lanes. The bare word "architecture" still scores nothing for it.
+  instead of inlining it. Requests that name the code ("improve the codebase
+  architecture", "improve the architecture of this repo", "find deepening
+  opportunities in this codebase") now reach the audit, and "shallow modules
+  in this repo" and "코드베이스 아키텍처 개선해줘" name it in the clarifying
+  question; on main they asked about codebase onboarding or unrelated lanes.
+  An architecture that is not code (a model, cloud infra, an org chart, a
+  building) routes exactly as before.
 
 - **The OMH TUI rides out a slow or busy Hermes gateway.** Its connection to
   the shared gateway sent websockets' default keepalive ping, so a gateway

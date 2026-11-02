@@ -76,19 +76,25 @@ looks-bad-but-is-actually-fine list with the record as its reason.
 
 ## Candidate rows
 
-Each candidate is a ledger row with these fields beside the usual id,
-file:line, severity, and effort:
+Each candidate is a `tech_debt_ledger/v1` row in the architectural-decay
+dimension: `id`, `dimension`, `file:line`, `severity`, and `effort` as usual,
+and the **deepening** - one sentence on what moves behind which interface -
+fills `recommendation`. These columns are added to the row:
 
 - **files** - the modules involved;
 - **friction** - one sentence on what the current shape costs;
-- **deepening** - one sentence on what moves behind which interface;
 - **wins** - stated as locality, leverage, or test surface, never "cleaner";
 - **dependency category** - from the table above;
 - **strength** - `strong`, `worth exploring`, or `speculative`.
 
-The before-picture of a candidate is derived, never drawn. Where the `omh`
-CLI is installed, `omh codegraph uml --focus <candidate path>` renders the
-current structure with its omissions legend (`codebase-uml`); elsewhere the
+Candidates rank by severity, then strength. The top pick is the first
+candidate in that order and sits in the ledger's top fixes; a deepening is
+rarely effort `S`, and one that is appears among the quick wins as well.
+
+The before-picture of a candidate is derived, never drawn. For a Python
+candidate where the `omh` CLI is installed (its codegraph reads Python
+sources only), `omh codegraph uml --focus <candidate path>` renders the
+current structure with its omissions legend (`codebase-uml`); otherwise the
 cited files stand in for it. The after-shape stays the one-sentence
 deepening. A future structure has no tree to derive a picture from, and a
 hand-drawn one would present a guess as structure.

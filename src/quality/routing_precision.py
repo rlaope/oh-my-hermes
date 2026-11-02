@@ -2775,10 +2775,11 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "",
         "tech-debt-audit",
     ),
-    # The architecture-deepening phrases score only whole ("shallow module",
-    # "improve the architecture of", ...); each of their words alone stays with
-    # the lane it had on main. System design, the CTO roadmap trade-off, water,
-    # and an architecture firm never name the debt ledger.
+    # The architecture-deepening phrases score only whole, and each names the
+    # code it is about ("improve the codebase architecture", "... of this
+    # repo", "shallow modules in this codebase"); each of their words alone
+    # stays with the lane it had on main. System design, the CTO roadmap
+    # trade-off, water, and an architecture firm never name the debt ledger.
     RoutingPrecisionCase(
         "shallow-water-not-tech-debt-audit",
         "Shallow water is not a shallow module",
@@ -2815,6 +2816,70 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "architecture-firm-not-tech-debt-audit",
         "An architecture firm's website is not codebase architecture",
         "improve architecture firm website seo",
+        "answer_clarification",
+        "",
+        "tech-debt-audit",
+    ),
+    RoutingPrecisionCase(
+        "model-architecture-improvement-not-tech-debt-audit",
+        "Improving a model's architecture is ML work, not a codebase audit",
+        "improve the architecture of this transformer model for long context",
+        "answer_clarification",
+        "",
+        "tech-debt-audit",
+    ),
+    RoutingPrecisionCase(
+        "bridge-architecture-improvement-not-tech-debt-audit",
+        "Improving a bridge design's architecture is not codebase architecture",
+        "improve the architecture of this bridge design",
+        "answer_clarification",
+        "",
+        "tech-debt-audit",
+    ),
+    RoutingPrecisionCase(
+        "korean-model-architecture-improvement-not-tech-debt-audit",
+        "A Korean model-architecture improvement never opens the debt ledger",
+        "트랜스포머 모델 아키텍처 개선점 정리해줘",
+        "answer_clarification",
+        "",
+        "tech-debt-audit",
+    ),
+    RoutingPrecisionCase(
+        "korean-cloud-architecture-improvement-not-tech-debt-audit",
+        "A Korean cloud-infra architecture improvement never opens the debt ledger",
+        "AWS 인프라 아키텍처 개선해줘",
+        "answer_clarification",
+        "",
+        "tech-debt-audit",
+    ),
+    RoutingPrecisionCase(
+        "korean-org-architecture-improvement-not-tech-debt-audit",
+        "A Korean company-org architecture improvement never opens the debt ledger",
+        "회사 조직 아키텍처 개선 방안 제안해줘",
+        "answer_clarification",
+        "",
+        "tech-debt-audit",
+    ),
+    RoutingPrecisionCase(
+        "course-shallow-modules-not-tech-debt-audit",
+        "Shallow modules in a course are curriculum, not code",
+        "our onboarding course has shallow modules, deepen them",
+        "answer_clarification",
+        "",
+        "tech-debt-audit",
+    ),
+    RoutingPrecisionCase(
+        "client-deepening-opportunities-not-tech-debt-audit",
+        "Deepening opportunities with clients are account work, not code",
+        "find deepening opportunities with our top ten clients",
+        "answer_clarification",
+        "",
+        "tech-debt-audit",
+    ),
+    RoutingPrecisionCase(
+        "solar-module-hard-to-test-not-tech-debt-audit",
+        "A hardware module that is hard to test is not a code module",
+        "this solar module is hard to test outdoors",
         "answer_clarification",
         "",
         "tech-debt-audit",
@@ -14959,8 +15024,10 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "tech_debt_audit",
     ),
     # Architecture deepening is the audit's second reading: candidates are
-    # ledger rows found by the deletion test. On main each of these clarified
-    # to codebase-onboarding, cto-loop, dag-ulw, or ai-job-search.
+    # ledger rows found by the deletion test. A phrase that names the code
+    # ("... the codebase architecture", "... of this repo") plus the code noun
+    # dispatches; on main each of these clarified to codebase-onboarding or
+    # ai-job-search.
     RoutingInterventionCase(
         "codebase-architecture-improvement-reaches-tech-debt-audit",
         "Improving the codebase architecture opens the deepening audit",
@@ -14971,18 +15038,9 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "tech_debt_audit",
     ),
     RoutingInterventionCase(
-        "korean-architecture-improvement-reaches-tech-debt-audit",
-        "A Korean architecture-improvement request opens the deepening audit",
-        "아키텍처 개선점 찾아줘",
-        "dispatch",
-        "tech-debt-audit",
-        "prepare_tech_debt_audit",
-        "tech_debt_audit",
-    ),
-    RoutingInterventionCase(
-        "shallow-modules-reach-tech-debt-audit",
-        "Finding shallow modules opens the deepening audit",
-        "find shallow modules",
+        "repo-architecture-improvement-reaches-tech-debt-audit",
+        "Improving the architecture of this repo opens the deepening audit",
+        "improve the architecture of this repo",
         "dispatch",
         "tech-debt-audit",
         "prepare_tech_debt_audit",
@@ -14997,21 +15055,30 @@ ROUTING_INTERVENTION_CASES: tuple[RoutingInterventionCase, ...] = (
         "prepare_tech_debt_audit",
         "tech_debt_audit",
     ),
-    # One phrase of testability friction names the audit but does not
-    # dispatch it: the ask is an interface, which the audit never proposes
-    # (refactor-plan's interface shaping does), so the route asks.
+    # One code-anchored phrase with no second signal names the audit and
+    # asks: Korean carries no description words to add one, and "shallow
+    # modules in this repo" adds only the code noun.
     RoutingInterventionCase(
-        "hard-to-test-module-names-tech-debt-audit",
-        "A module that is hard to test names the deepening audit as the clarify candidate",
-        "this module is hard to test, propose a better interface",
+        "korean-codebase-architecture-improvement-names-tech-debt-audit",
+        "A Korean codebase-architecture improvement names the deepening audit as the clarify candidate",
+        "코드베이스 아키텍처 개선해줘",
         "clarify",
         "oh-my-hermes",
         "answer_clarification",
         "clarification",
         "tech-debt-audit",
     ),
-    # "improve the architecture" scores only as "improve the architecture of",
-    # so improving a diagram stays the diagram workflow's dispatch.
+    RoutingInterventionCase(
+        "repo-shallow-modules-name-tech-debt-audit",
+        "Shallow modules in this repo name the deepening audit as the clarify candidate",
+        "are there shallow modules in this repo",
+        "clarify",
+        "oh-my-hermes",
+        "answer_clarification",
+        "clarification",
+        "tech-debt-audit",
+    ),
+    # Improving an architecture diagram stays the diagram workflow's dispatch.
     RoutingInterventionCase(
         "architecture-diagram-improvement-stays-on-codebase-uml",
         "Improving an architecture diagram stays with the diagram workflow",

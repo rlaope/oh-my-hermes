@@ -43,8 +43,9 @@ precede tests, tests precede cleanup:
    Verification: the full suite, plus a check that coverage did not silently
    narrow.
 5. **Cleanup** - delete the old contracts and their shims; this is the first
-   phase that removes anything. Verification: the full suite plus a dead-code
-   sweep. Rollback: restore from the tag cut before cleanup.
+   phase that removes production code (phase 4 deletes only tests that an
+   interface-level test now covers). Verification: the full suite plus a
+   dead-code sweep. Rollback: restore from the tag cut before cleanup.
 
 Every phase ends at a commit that could ship. A phase that cannot end green
 is split further or its plan is wrong.

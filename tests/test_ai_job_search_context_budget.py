@@ -105,8 +105,11 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # deepening widens the refactor-plan row (+136) and the
             # tech-debt-audit row (-2), itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; no other row moved.
+            # Its review swaps the tech-debt-audit triggers for code-anchored
+            # phrases, which moves that row's "+N more triggers" count (same
+            # length); the digest is re-derived.
             (skill_capabilities, 529803, FULL_ROW_DELTA_CAP,
-             'bb1ffc80341f0f8d0ea9658aa9d5e9d46ef5565a7146c32c4653c0e052bab4d2',
+             'b073f4fb8f7e4eb289820b96d75ff1612e3bfc53fafc99272148c1a0c34eeda7',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -239,7 +242,9 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # Then architecture deepening: only tech-debt-audit and refactor-plan
         # move, and main's producer gives the previous pin
         # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
-        self.assertEqual(_digest(legacy_hashes), 'f87957e1c2dc4dc2aa3d5f6ddba622fac3a6189a4906a922332004e3ad68cc19')
+        # Its review re-anchors tech-debt-audit's triggers on the code they
+        # name; only that body's routing-signal line moves.
+        self.assertEqual(_digest(legacy_hashes), 'fe8b8461b30c8fc0bf0cffca341ea62f0a1bc95113040e1a6f376c9069f9d22e')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
