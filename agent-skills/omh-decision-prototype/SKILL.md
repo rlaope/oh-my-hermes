@@ -85,6 +85,7 @@ Quality bar:
 - Separate prepared handoff, observed outputs, interpretation, confidence, and cleanup state as distinct evidence states.
 - Preserve the declared task, fixture, environment, and sample limits so the result is not generalized beyond them.
 - End with a decision receipt that `ralplan` can consume: supported option, rejected option, residual risk, evidence limits, and prototype-code reference permission.
+- When the question is about logic or state, or about an interaction or layout, or the receipt may let later work reference the prototype code, load `references/artifact-shapes.md`: a pure module a plan can lift with the full state shown after each action, structurally different variants mounted in the real host page, and kept code on a named throwaway ref.
 
 Required inputs:
 

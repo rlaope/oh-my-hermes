@@ -28,6 +28,113 @@ All notable changes will be documented here.
   computes none). Local files only, read in bounded reads; OMH stops and
   restarts nothing.
 
+- **Code skills tell the executor how to write a test, not only in TDD mode.**
+  The questions before a new test and the shapes of tests that guard nothing
+  loaded only when the user asked for TDD, so a backend or frontend handoff
+  that said "add tests" let an executor mock its own repository class and
+  assert that `save` was called. They now live in one shared page,
+  `omh-verification-gate`'s `references/test-authoring.md`, which adds tests
+  coupled to internals (own-module fakes, call-count assertions, side-channel
+  reads), fakes only at system boundaries chosen by dependency category, and a
+  `regression_seam: none_correct` outcome when no seam can run the pattern
+  that produced a bug. `omh-backend`, `omh-frontend` and `omh-app-debugging`
+  load it when a handoff asks for tests, and `ulw-work`'s TDD page points at it
+  instead of keeping a second copy. `omh-backend` also gains
+  `references/contract-tests.md`: one negative test per auth row and per
+  error-table row, the same database engine in tests, writes read back through
+  the interface, and migrations run on populated data.
+
+- **`backend` and `relational-db` now cover concurrent writes, cursors, and
+  inbound deliveries.** A backend contract names the guard on every write two
+  requests can reach at once: a unique constraint (mapped to a 409 row), an
+  idempotency key stored with its request fingerprint and response, a
+  lost-update guard, and side effects sent only after commit, through an
+  outbox or after the commit returns. Cursor pagination ends its ordering key
+  in a unique tie-breaker, binds the cursor to its filter, and caps the page
+  size; each endpoint states its expected rate, latency target, and payload
+  bound or `unknown`; dependency timeouts shrink down the chain; and a cache
+  names its key, TTL, and invalidating write. A new
+  `references/inbound-and-async.md` covers webhooks (signature over the raw
+  body, replay window, event-id record), queue consumers (at-least-once,
+  bounded attempts, dead-letter, poison messages), and connection-pool
+  sizing; an unsigned inbound webhook is a blocker. `relational-db` gains a
+  concurrency section (default isolation per engine, `FOR UPDATE`,
+  `SKIP LOCKED`, upsert, lock order, whole-transaction retry by error code),
+  the keyset-pagination index row, and the rule that `CREATE INDEX
+  CONCURRENTLY` gets its own non-transactional migration. The backend
+  references no longer end with an attribution block about Rust `unsafe`
+  and native debugging that did not belong to them.
+
+- **`omh-llm-app-dev` and `omh-rust` cover the code around the model and the
+  command line.** The LLM provider boundary now has a deterministic fake
+  adapter beside the real one, so parsing, repair, retry classification,
+  tool handling and budget termination get offline unit tests while evals
+  stay a separate suite against the pinned model. A response cut off at the
+  output cap is classified as truncation and never re-asked under the same
+  cap; tool-call arguments are validated before the tool runs, and invalid
+  calls and tool failures return to the model as tool results; a streamed
+  call is cancelled upstream when its client goes away and is validated only
+  once complete. The Rust gate list now lints every target with all features,
+  tests both feature extremes, checks the declared MSRV, adds `--locked` in
+  CI-shaped runs and no longer claims `cargo doc` runs doc tests; new
+  sections cover binary and CLI contracts (stdout for data, named exit codes,
+  no panic on user input, binary integration tests) and adding a dependency
+  (license, MSRV, default features, `cargo tree -d`).
+
+- **Review, commit, rule and onboarding skills check what they actually
+  rely on.** `omh-code-review` now searches the reviewed repository for its
+  standards files (`REVIEW.md`, `CONTRIBUTING.md`, `AGENTS.md`/`CLAUDE.md`,
+  `*STANDARDS*.md`, linter and formatter configuration) before the smell
+  baseline applies, hands that list to a dispatched reviewer, and skips
+  smells the configured tooling already enforces on the diff.
+  `omh-commit-pr-authoring`'s no-template fallback says whether a revert undoes the change or what it
+  leaves behind, and a structural change shows the smallest file tree, call
+  tree or diff sketch of its new shape. `omh-rules-distill` classes each
+  recurring miss as mechanical (it becomes a check, proven by failing on an
+  injected violation) or judgement (prose). `omh-codebase-onboarding` checks
+  its own repo map, reading path, glossary, risk map and first-task runway
+  instead of a generic planning checklist.
+
+- **A green regression test no longer proves a fix on its own, and a
+  reproduction has to be the reported bug.** `omh-verification-gate` now asks,
+  for a "fixed" claim whose evidence is a new or changed test, for an observed
+  red of that test, for the bug's reason, on the tree before the fix (a
+  worktree run, a CI job, or the debugging session's own pre-fix run, recorded
+  with its source); an intermittent fault or a test-only fix is witnessed by a
+  failure rate beside 0/N at the same N. A fix test only ever seen green holds
+  the claim with `regression_witness_missing`.
+  `omh-app-debugging`'s reproduction record gains `symptom_match` (the
+  observed failure beside the reported one; a nearby failure is another bug),
+  `loop_cost` (time per run and what was pinned), and `minimised` (the
+  reproduction cut down until every element is load-bearing). Its method
+  reference gains a ladder for faults no test reaches, ending in numbered
+  steps for a person with named fields to report, and a session tag on every
+  temporary probe with an observed search for it before handover. Commands
+  read credentials from environment variables and quoted output is redacted.
+  The confirmed hypothesis and its eliminated rivals go into the fix's commit
+  or PR body. `omh-native-debugging`'s fault statement takes the symptom
+  match, the minimise step and the probe tag too.
+
+- **`plan` cuts code tasks as vertical slices, and `decision-prototype` says
+  what a good prototype looks like.** A plan's code tasks each deliver one
+  behavior through every layer it needs, with a done check that drives it
+  through the surface a user or caller reaches, so an integration failure
+  shows in the task that caused it instead of first in the closing gate.
+  Slices that write the same file are ordered rather than re-cut by layer,
+  each later slice listing every earlier one that writes it as a direct
+  dependency; a file every slice only appends to (a changelog, a generated
+  index) may instead be written by one task after them. A layer-only task is
+  a prefactor placed first, or a wide mechanical change handed to
+  `refactor-plan` (the new form beside the old, callers moved in groups while
+  both stay green, the old form deleted last). `decision-prototype` gains
+  `references/artifact-shapes.md`:
+  a logic or state question gets a pure module a later plan can lift, with the
+  full state shown after each action; an interaction or layout question gets
+  structurally different variants mounted in the real host page inside a
+  temporary worktree, with writes stubbed; and prototype code the receipt
+  lets later work reference is kept on a named throwaway ref the receipt
+  cites.
+
 - **The frontend skill now covers data, forms, and input, not only the look.**
   A page that reads or writes remote data loads the state rules that until now
   only a refactor loaded (server state in a query cache, each mutation naming

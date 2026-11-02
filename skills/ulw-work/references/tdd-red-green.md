@@ -8,30 +8,17 @@ No implementation line before a failing test. Write the test that describes the 
 
 A test that passes on its first run proves nothing: it never witnessed the gap it claims to cover. Treat a first-run pass as a defect in the test - break the behavior deliberately or fix the test's target, watch it fail, then restore - before trusting it.
 
-## Questions Before a New Test
+## Before the Red Commit: Test Authoring
 
-Answer these four in the lane report before writing a new test; each answer either justifies the test or redirects the work.
+Load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` before writing the first test. It holds the authoring contract every lane shares, tests-first or not: the seam named before the test, the four questions a new test answers in the lane report, the shapes of tests that guard nothing, tests coupled to internals, fakes only at system boundaries, and the outcome when no correct seam exists for a regression test. In a tests-first lane those checks bind as follows:
 
-1. Behavior protected: name the observable behavior, invariant, or contract a caller depends on. If none exists, there is nothing for a test to witness: say so in the lane report, as the "Too simple to test" row below allows, and let the reviewer judge.
-2. Plausible regression: name a concrete code change someone could make that this test would turn red. A test no plausible change can break guards nothing.
-3. Why existing coverage misses it: point to the closest existing test and say why that regression slips past it. If that test already catches the regression, add nothing: its red run on the unimplemented code is the witness the Evidence Ledger asks for, and if it is already green the behavior exists and there is nothing to implement. If it owns the same contract but lacks this case, add the case to that test rather than a near-copy beside it.
-4. Production seam: say whether the test needs an export, flag, or hook that no production caller uses. If it does, test through the real entry point instead; if a new seam is unavoidable, name it in the lane report for the reviewer.
-
-## Tests That Guard Nothing
-
-A new test with any of these shapes is not evidence for the lane, red or green. Rewrite it before the red commit so it observes the behavior from question 1. If the shape is found after the red commit, rewrite the test to observe that behavior, run it red again, and explain the test diff in the lane report as the red-commit rule requires:
-
-- No-assertion probe: the test calls the code and passes as long as nothing raises. When not raising is the contract, assert that outcome explicitly and name it.
-- Self-comparison: the assertion compares a value with itself or with a copy of itself, so no change to the code can make it fail.
-- Expected value from the code under test: the test computes its expected value by calling the code it checks, so the assertion agrees with whatever that code returns. Write the expected value down independently; a committed, reviewed artifact or an independent oracle does not count as the code under test.
-- Negative control passing for an unrelated reason: the rejected input fails on a typo, a missing fixture, or a different guard than the one under test. Assert the reason for the rejection, not only that one happened.
-- Name promising more than the inputs: the test name claims a general rule while its inputs exercise one case. Narrow the name or widen the inputs.
-
-These shapes apply to tests a lane adds. An existing test with one of these shapes is a finding for the lane report; the Forbidden Moves below still bar editing or deleting it to get past a red run.
+- A test those checks reject is not evidence for the lane, red or green. Rewrite it before the red commit. If the shape is found after the red commit, rewrite the test to observe the protected behavior, run it red again, and explain the test diff in the lane report as the red-commit rule requires.
+- When the closest existing test already catches the regression, add nothing: its red run on the unimplemented code is the witness the Evidence Ledger asks for, and if it is already green the behavior exists and there is nothing to implement.
+- An existing test with one of those shapes is a finding for the lane report; the Forbidden Moves below still bar editing or deleting it to get past a red run.
 
 ## Regression Tests for a Bug
 
-A test written for a reported bug must fail on the code before the fix, and fail because of that bug: the failure lines name the bug's symptom, not an import error or an unrelated assertion. Run it against the pre-fix code and paste that red run as the Evidence Ledger requires. If a test already in the suite goes red on the unfixed code for that same reason, its red run is the witness, and no second reproduction is written.
+A test written for a reported bug must fail on the code before the fix, and fail because of that bug: the failure lines name the bug's symptom, not an import error or an unrelated assertion. Run it against the pre-fix code and paste that red run as the Evidence Ledger requires. If a test already in the suite goes red on the unfixed code for that same reason, its red run is the witness, and no second reproduction is written. When no seam can run the pattern that produced the bug, record `regression_seam: none_correct` as the test-authoring page describes instead of writing a test that cannot fail for the bug's reason.
 
 ## The Evidence Ledger
 
@@ -63,7 +50,7 @@ Commit the failing test as a checkpoint before the first implementation edit. Th
 
 ## Composition
 
-Hermes bundles the superpowers `test-driven-development` skill. When it is loaded, follow its cycle; this reference reinforces it and never overrides it. What OMH adds is the evidence vocabulary - the observed red-before-green rule, the red-commit checkpoint, and the `prepared_not_observed` labeling of unwitnessed cycles - plus authoring checks applied before a test counts: the questions a new test must answer, the shapes of tests that guard nothing, and the pre-fix failure rule for bug regressions.
+Hermes bundles the superpowers `test-driven-development` skill. When it is loaded, follow its cycle; this reference reinforces it and never overrides it. What OMH adds is the evidence vocabulary - the observed red-before-green rule, the red-commit checkpoint, and the `prepared_not_observed` labeling of unwitnessed cycles - plus the pre-fix failure rule for bug regressions and the shared authoring checks from `omh-verification-gate`'s `references/test-authoring.md` that a test passes before it counts.
 
 ## What This Does Not Change
 
@@ -73,4 +60,4 @@ Hermes bundles the superpowers `test-driven-development` skill. When it is loade
 
 ## Attribution
 
-This discipline adapts the red/green/refactor practice popularized by Kent Beck and the obra/superpowers `test-driven-development` skill that Hermes bundles. The questions before a new test, the shapes of tests that guard nothing, and the pre-fix failure rule for bug regressions adapt concepts from code-yeongyu/oh-my-openagent (Sustainable Use License 1.0, concepts only). No upstream text is reproduced. OMH maps the mechanisms onto its own lane, evidence, and `prepared_not_observed` vocabulary.
+This discipline adapts the red/green/refactor practice popularized by Kent Beck and the obra/superpowers `test-driven-development` skill that Hermes bundles. The pre-fix failure rule for bug regressions adapts concepts from code-yeongyu/oh-my-openagent (Sustainable Use License 1.0, concepts only). No upstream text is reproduced. OMH maps the mechanisms onto its own lane, evidence, and `prepared_not_observed` vocabulary.

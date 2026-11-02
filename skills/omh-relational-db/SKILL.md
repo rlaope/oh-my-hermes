@@ -86,6 +86,8 @@ Quality bar:
 - Load `references/engine-lock-tables.md` for the per-engine lock modes, the online DDL rules, and index-type selection instead of recalling them.
 - Size an index before proposing it: rows, key width, and the write amplification it adds.
 - Order an online migration as expand, backfill in batches, switch, contract, with the rollback for each step.
+- For a read-modify-write, an upsert, a queue table, or a deadlock, use the concurrency section of the lock tables: name the isolation level, the row lock and its order, and which error codes retry the whole transaction.
+- Give non-transactional DDL such as `CREATE INDEX CONCURRENTLY` its own migration marked non-transactional; never drop `CONCURRENTLY` to satisfy the migration tool.
 - Keep planned, observed, and applied as separate states for every statement.
 
 Handoff policy:

@@ -45,7 +45,7 @@ Bad example:
 - The escalation verdict is stated with the trigger that decided it.
 - The ownership shape names owners, borrows across boundaries, and every deliberate clone.
 - The error type, its conversion boundary, and every surviving `unwrap`/`expect`/`panic!` are named.
-- The gate list names the exact commands the executor must run and pass.
+- The gate list names the exact commands the executor must run and pass, covering every target, the feature extremes, doc tests, and the declared MSRV.
 - An escalated change carries the Miri, sanitizer, and concurrency-testing requirements as blocking items.
 - Compiler, clippy, test, Miri, sanitizer, and loom results stay observed-only.
 
@@ -72,7 +72,7 @@ Reasoning demand: `standard`
 Quality bar:
 
 - Run the escalation check before anything else and state the verdict; a change whose `unsafe`/FFI status is unknown is escalated by default.
-- Load `references/rust-discipline.md` for the ownership, error, and API rules, and name the gate commands from it rather than assuming `cargo build` is the whole bar.
+- Load `references/rust-discipline.md` for the ownership, error, API, binary-interface, and dependency rules, and name the gate commands from it rather than assuming `cargo build` is the whole bar.
 - When the escalation triggers, load `references/ub-escalation.md` and carry its Miri, sanitizer, and loom-style concurrency requirements into the handoff as blocking items.
 - Name the ownership decision behind every clone, `Arc`, interior-mutability wrapper, and lifetime annotation the change introduces.
 - Name the error type and its conversion boundary; a surviving `unwrap` needs a written reason, not silence.

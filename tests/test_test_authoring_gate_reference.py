@@ -1,31 +1,40 @@
-"""`ultrawork`'s TDD reference carries the checks a new test must pass (issue #2049).
+"""The test-authoring contract, shared by every lane that writes a test.
 
-`references/tdd-red-green.md` already demands a red run before any
-implementation line. A red run says nothing about whether the test that went
-red guards anything, so the reference also names four questions a new test
-answers first, the shapes of tests that guard nothing, and the rule that a
-bug's regression test fails on the unfixed code for the bug's own reason.
+Issue #2049 put four questions a new test answers first and the shapes of
+tests that guard nothing into `ultrawork`'s `references/tdd-red-green.md`.
+That page loads only in tests-first mode, so a backend, frontend, or debugging
+handoff that asked for tests never met them. The authoring checks now live in
+one shared page, `verification-gate`'s `references/test-authoring.md`, which
+adds tests coupled to internals, fakes only at system boundaries, and the
+outcome when no correct seam exists for a regression test. `tdd-red-green.md`
+keeps only what is TDD-specific (the red-commit and witness rules) and points
+at the shared page instead of holding a second copy.
 
-`ultrawork` already has its one entry in `MECHANISM_POINTERS` (the
-file-ownership manifest), so this file asserts the same contract for this
-reference directly: its named mechanism tokens are present and it records no
-date or volatile count. That the always-loaded body names the reference is
-owned by `tests/test_router_content.py` and is not repeated here. The
-body itself is not edited by this change, so the body byte ceiling is owned by
-`tests/test_skill_reference_mechanisms.py` and is not repeated here.
+This file pins three things: each named mechanism sits in the page that owns
+it; the TDD page loads the shared page and does not restate its shapes; and
+every code skill that hands off tests names the shared page in both
+projections, so the page is reachable rather than a file in the pack.
 
-Content is read from the producer, never from the generated `skills/` tree.
+Content is read from the producers, never from the generated `skills/` tree.
 """
 
 from __future__ import annotations
 
 import unittest
 
-from omh.skills.packaging import builtin_skill_reference_templates
+from omh.skills.packaging import builtin_skill_reference_templates, builtin_skill_templates
+from omh.skills.render import agent_skill_reference_templates, agent_skill_templates
 from test_skill_reference_mechanisms import _DATE, _VOLATILE_COUNT
 
-SKILL = "ultrawork"
-REFERENCE_PATH = "references/tdd-red-green.md"
+SHARED_SKILL = "verification-gate"
+SHARED_PATH = "references/test-authoring.md"
+SHARED_HERMES_POINTER = "skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')"
+SHARED_PORTABLE_POINTER = "../omh-verification-gate/references/test-authoring.md"
+
+TDD_SKILL = "ultrawork"
+TDD_PATH = "references/tdd-red-green.md"
+
+BACKEND_TESTS_PATH = "references/contract-tests.md"
 
 # One token per pre-add question; each is that question's lead label.
 QUESTION_TOKENS = (
@@ -44,6 +53,34 @@ GUARDS_NOTHING_TOKENS = (
     "Name promising more than the inputs",
 )
 
+# One token per shape of a test coupled to internals.
+COUPLED_TOKENS = (
+    "Own-module fake",
+    "Call-count assertion",
+    "Side-channel read",
+)
+
+# The boundary rule: stand-ins by dependency category, the same database
+# engine, and the code change that makes a boundary fakeable.
+BOUNDARY_TOKENS = (
+    "Fakes Only at System Boundaries",
+    "a local throwaway instance of the same engine",
+    "so the wrapper's parsing, retry, and error mapping run real",
+)
+
+# A regression test with no seam that runs the bug's pattern is recorded, not
+# written shallow.
+NO_SEAM_TOKENS = (
+    "regression_seam: none_correct",
+    "First try to run the pattern at the seam you can reach",
+    "measure the test's hit rate on the pre-fix code over N runs",
+    "Keep the reproduction loop as the fix's verification",
+    "omh-refactor-plan",
+)
+
+# An expected value from a reviewed artifact or an oracle is not self-derived.
+INDEPENDENT_EXPECTED_TOKEN = "a committed, reviewed artifact or an independent oracle does not count as the code under test"
+
 # The bug-regression rule: the test fails on the code before the fix, for the
 # bug's own reason.
 PRE_FIX_TOKENS = (
@@ -51,8 +88,9 @@ PRE_FIX_TOKENS = (
     "fail because of that bug",
 )
 
-# Question 3's "add nothing" branch: the existing test's red run is the
-# Evidence Ledger witness, and an already-green run means nothing to build.
+# The existing-test branch of question 3 in a tests-first lane: the existing
+# test's red run is the Evidence Ledger witness, and an already-green run
+# means nothing to build.
 EXISTING_WITNESS_TOKENS = (
     "its red run on the unimplemented code is the witness the Evidence Ledger asks for",
     "if it is already green the behavior exists and there is nothing to implement",
@@ -65,59 +103,112 @@ AFTER_RED_COMMIT_TOKENS = (
     "run it red again, and explain the test diff in the lane report",
 )
 
-# An expected value from a reviewed artifact or an oracle is not self-derived.
-INDEPENDENT_EXPECTED_TOKEN = "a committed, reviewed artifact or an independent oracle does not count as the code under test"
+# H3: each contract row is tied to the test that proves it.
+BACKEND_TEST_PLAN_TOKENS = (
+    "auth_boundary_map/v1",
+    "caller A requests B's id",
+    "error_path_table/v1",
+    "status, machine code, and envelope shape asserted together",
+    "dependency table in section 5 of the shared page",
+    "the stored shape is itself a contract",
+    "not by querying the table",
+    "Migrations run on populated data",
+)
+
+# Skills whose body must load the shared page.
+POINTING_SKILLS = ("backend", "frontend", "app-debugging")
 
 
-def _reference() -> str:
+def _reference(skill: str, path: str) -> str:
     matches = [
         template.content
         for template in builtin_skill_reference_templates()
-        if template.skill_name == SKILL and template.relative_path == REFERENCE_PATH
+        if template.skill_name == skill and template.relative_path == path
     ]
     if len(matches) != 1:
-        raise AssertionError(f"{SKILL} ships {len(matches)} copies of {REFERENCE_PATH}")
+        raise AssertionError(f"{skill} ships {len(matches)} copies of {path}")
     return matches[0]
 
 
-class TestAuthoringGateReferenceTests(unittest.TestCase):
-    def test_reference_names_each_of_the_four_pre_add_questions(self) -> None:
-        content = _reference()
-        for token in QUESTION_TOKENS:
+def _portable_reference(label: str, path: str) -> str:
+    matches = [
+        template.content
+        for template in agent_skill_reference_templates()
+        if template.skill_name == label and template.relative_path == path
+    ]
+    if len(matches) != 1:
+        raise AssertionError(f"the portable pack ships {len(matches)} copies of {label}/{path}")
+    return matches[0]
+
+
+def _hermes_body(name: str) -> str:
+    return next(template.content for template in builtin_skill_templates() if template.name == name)
+
+
+def _portable_body(label: str) -> str:
+    return next(template.content for template in agent_skill_templates() if template.name == label)
+
+
+class SharedTestAuthoringReferenceTests(unittest.TestCase):
+    def test_shared_page_carries_every_authoring_mechanism(self) -> None:
+        content = _reference(SHARED_SKILL, SHARED_PATH)
+        for group in (QUESTION_TOKENS, GUARDS_NOTHING_TOKENS, COUPLED_TOKENS, BOUNDARY_TOKENS, NO_SEAM_TOKENS):
+            for token in group:
+                with self.subTest(token=token):
+                    self.assertIn(token, content, f"{SHARED_PATH} lost {token!r}")
+        self.assertIn(INDEPENDENT_EXPECTED_TOKEN, content, f"{SHARED_PATH} lost the independent-oracle clause")
+
+    def test_tdd_page_keeps_its_own_rules_and_loads_the_shared_page(self) -> None:
+        content = _reference(TDD_SKILL, TDD_PATH)
+        for token in PRE_FIX_TOKENS + EXISTING_WITNESS_TOKENS + AFTER_RED_COMMIT_TOKENS:
             with self.subTest(token=token):
-                self.assertIn(token, content, f"{REFERENCE_PATH} lost the pre-add question {token!r}")
+                self.assertIn(token, content, f"{TDD_PATH} lost {token!r}")
+        self.assertIn(SHARED_HERMES_POINTER, content, f"{TDD_PATH} no longer loads the shared authoring page")
 
-    def test_reference_names_each_shape_of_a_test_that_guards_nothing(self) -> None:
-        content = _reference()
-        for token in GUARDS_NOTHING_TOKENS:
+    def test_tdd_page_holds_no_second_copy_of_the_shared_shapes(self) -> None:
+        content = _reference(TDD_SKILL, TDD_PATH)
+        for token in GUARDS_NOTHING_TOKENS + COUPLED_TOKENS + (INDEPENDENT_EXPECTED_TOKEN,):
             with self.subTest(token=token):
-                self.assertIn(token, content, f"{REFERENCE_PATH} lost the shape {token!r}")
+                self.assertNotIn(token, content, f"{TDD_PATH} restates {token!r}; point at {SHARED_PATH} instead")
 
-    def test_reference_requires_a_bug_regression_to_fail_before_the_fix(self) -> None:
-        content = _reference()
-        for token in PRE_FIX_TOKENS:
+    def test_each_code_skill_loads_the_shared_page_in_both_projections(self) -> None:
+        for name in POINTING_SKILLS:
+            with self.subTest(skill=name):
+                if name == "backend":
+                    # Backend reaches the shared page through its contract-tests page.
+                    self.assertIn(BACKEND_TESTS_PATH, _hermes_body(name))
+                    self.assertIn(BACKEND_TESTS_PATH, _portable_body("omh-backend"))
+                    continue
+                self.assertIn(SHARED_HERMES_POINTER, _hermes_body(name))
+                portable = _portable_body(f"omh-{name}")
+                self.assertIn(SHARED_PORTABLE_POINTER, portable)
+                self.assertNotIn(SHARED_HERMES_POINTER, portable)
+
+    def test_backend_contract_tests_tie_each_row_to_a_test_and_load_the_shared_page(self) -> None:
+        content = _reference("backend", BACKEND_TESTS_PATH)
+        for token in BACKEND_TEST_PLAN_TOKENS:
             with self.subTest(token=token):
-                self.assertIn(token, content, f"{REFERENCE_PATH} lost the pre-fix failure rule ({token!r})")
+                self.assertIn(token, content, f"backend {BACKEND_TESTS_PATH} lost {token!r}")
+        self.assertIn(SHARED_HERMES_POINTER, content)
+        portable = _portable_reference("omh-backend", BACKEND_TESTS_PATH)
+        self.assertNotIn("skill_view(", portable)
+        self.assertIn("../../omh-verification-gate/references/test-authoring.md", portable)
 
-    def test_question_three_names_the_existing_tests_red_run_as_the_witness(self) -> None:
-        content = _reference()
-        for token in EXISTING_WITNESS_TOKENS:
-            with self.subTest(token=token):
-                self.assertIn(token, content, f"{REFERENCE_PATH} lost the existing-test witness rule ({token!r})")
+    def test_portable_shared_page_names_no_hermes_only_page(self) -> None:
+        portable = _portable_reference("omh-verification-gate", SHARED_PATH)
+        self.assertNotIn(TDD_PATH, portable)
+        self.assertNotIn("skill_view(", portable)
 
-    def test_a_shape_found_after_the_red_commit_is_rewritten_and_rerun_red(self) -> None:
-        content = _reference()
-        for token in AFTER_RED_COMMIT_TOKENS:
-            with self.subTest(token=token):
-                self.assertIn(token, content, f"{REFERENCE_PATH} lost the after-red-commit rule ({token!r})")
+    def test_app_debugging_fix_handoff_records_a_missing_seam(self) -> None:
+        body = _hermes_body("app-debugging")
+        self.assertIn("regression_seam: none_correct", body)
 
-    def test_an_independent_expected_value_is_not_the_code_under_test(self) -> None:
-        self.assertIn(INDEPENDENT_EXPECTED_TOKEN, _reference(), f"{REFERENCE_PATH} lost the independent-oracle clause")
-
-    def test_reference_records_no_date_or_volatile_count(self) -> None:
-        content = _reference()
-        self.assertIsNone(_DATE.search(content), f"{REFERENCE_PATH} records a date")
-        self.assertIsNone(_VOLATILE_COUNT.search(content), f"{REFERENCE_PATH} records a volatile count")
+    def test_pages_record_no_date_or_volatile_count(self) -> None:
+        for skill, path in ((SHARED_SKILL, SHARED_PATH), (TDD_SKILL, TDD_PATH), ("backend", BACKEND_TESTS_PATH)):
+            content = _reference(skill, path)
+            with self.subTest(path=path):
+                self.assertIsNone(_DATE.search(content), f"{path} records a date")
+                self.assertIsNone(_VOLATILE_COUNT.search(content), f"{path} records a volatile count")
 
 
 if __name__ == "__main__":
