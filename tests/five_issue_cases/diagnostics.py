@@ -22,22 +22,9 @@ from omh.coding.fanout_failure_diagnostics import is_object_list, is_string_map
 from omh.runtime.artifacts import show_run
 from omh.system.paths import OmhPaths
 from _fanout_host_fence import host_cannot_fence_fanout
+from _verification_python import verification_python_path
 
 from . import CaseResult, JsonValue
-
-
-def _fixture_interpreter() -> str:
-    """An interpreter path that does not grow with the checkout's location.
-
-    The verification command is capped at MAX_UNIT_VERIFICATION_COMMAND_CHARS,
-    and `sys.executable` inside a project venv sits UNDER the checkout, so a
-    deep worktree path used to decide whether this fixture passed (#1474).
-    The base interpreter that created the venv lives outside the checkout and
-    runs a stdlib-only script just as well; a non-venv run resolves to the
-    same path it already used.
-    """
-    base = getattr(sys, '_base_executable', '') or ''
-    return base if base and Path(base).exists() else sys.executable
 
 
 def exercise_dispatch(*, stdout: bytes = b'', stderr: bytes = b'', exit_code: int = 3,
@@ -89,7 +76,7 @@ def exercise_dispatch(*, stdout: bytes = b'', stderr: bytes = b'', exit_code: in
                 encoding='utf-8',
             )
             unit['verification_commands'] = [
-                shlex.join([_fixture_interpreter(), str(failing_script)])
+                shlex.join([verification_python_path(), str(failing_script)])
             ]
         contract = write_fanout_contract(paths, build_fanout_contract(goal, [unit]))
         fanout_id = str(contract['fanout_id'])
