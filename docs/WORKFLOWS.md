@@ -2894,6 +2894,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - While building, look at each change that affects what renders: after it, capture the affected surface and read the capture before the next change, for a 3D or canvas scene the default camera and each declared preset; a change not looked at is not done (`references/screenshot-loop.md`, section `During implementation`).
   - After implementation lands on a web surface, load `references/screenshot-loop.md` and require the screenshot iteration loop live-environment-first: capture the running UI at 1440/768/375px, compare against the supplied target or DESIGN.md, list every difference triaged Blocker/High/Medium/Nit with its capture attached, fix, and recapture until the difference list is empty.
   - Prefer native UI controls, stable dimensions, and realistic content over decorative cards, blobs, and placeholder-heavy screens.
+  - When the handoff asks for component or interaction tests, load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` and name the seam each test drives: assert through what a user perceives (role, accessible name, visible text) across the frontend_component_state_inventory/v1 states, never class names or component-internal state, and fake only at the boundaries the shared page lists (network, clock, randomness).
   - Keep implementation, browser verification, accessibility/performance checks, visual QA, and deployment as observed-only evidence.
 - Completion checklist:
   - The target page/component, audience, primary task, references, and quality bar are named.
@@ -3056,7 +3057,10 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When the change touches storage, load `references/schema-migration.md` and order the migration as expand, backfill, switch, contract, with the rollback point named per step.
   - Hold the `api` product-family expectations — authentication boundary, contract error paths, response consistency — as the standing bar for every prepared endpoint.
   - When an existing contract changes, name who consumes it before designing the change: each identified consumer with what breaks for it, then the compatibility window, migration path, and sunset date — the skill that owns a surface owns its evolution. Load `references/consumer-impact.md` for the enumeration sources and the window rules.
+  - Name the guard on every write two requests can reach at once — a unique constraint, a stored idempotency key, a lost-update guard — and send side effects only after commit; the pagination-cursor, integrity, timeout, and cache rules are in sections 4 to 6 of the service-contract reference.
+  - When the surface receives webhooks, consumes a queue, or sizes a connection pool, load `references/inbound-and-async.md`: verify a webhook over its raw body before parsing, and treat every queued message as one that can arrive more than once.
   - Name the per-stack reference the executor must read first; the stack is a routing input, not a detail discovered mid-implementation.
+  - When the handoff asks for tests, load `references/contract-tests.md` and derive the test plan in backend_implementation_handoff/v1 from the contract: one negative test per auth_boundary_map/v1 row, one per error_path_table/v1 row, stand-ins chosen by dependency category with the same database engine, and migrations run on populated data.
   - Keep implementation, migration application, integration runs, load testing, and deployment as observed-only evidence.
 - Completion checklist:
   - The surface, its callers, and each caller's trust level are named.
@@ -3088,7 +3092,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - backend_implementation_handoff/v1
   - observed_integration_evidence/v1 when observed
 - Artifact expectations:
-  - backend_service_contract/v1 names each endpoint or job, its caller class, request and response shapes, and its idempotency and pagination rules
+  - backend_service_contract/v1 names each endpoint or job, its caller class, request and response shapes, its idempotency and pagination rules, and its expected rate, latency target, and payload bound (or `unknown`)
   - auth_boundary_map/v1 states where an untrusted caller becomes a trusted one, and which check runs on each path
   - error_path_table/v1 pairs every failure mode with its status/code, body shape, retryability, and log/redaction rule
   - response_shape_contract/v1 keeps success and error envelopes consistent across the surface instead of per-endpoint improvisation
@@ -3099,6 +3103,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Do not claim implementation, a running service, an applied migration, a passing integration suite, or a deployment from a prepared backend contract.
   - Require the auth boundary before endpoint work: an endpoint whose caller trust level is unnamed is not ready for handoff.
   - Require the error-path table before the happy path is called complete; an unlisted failure mode is a gap, not a default.
+  - Treat an inbound webhook handler that does not verify the signature over the raw body before parsing as a blocker, not a follow-up.
   - Treat a destructive or non-reversible migration step as a blocker until an explicit rollback point and backfill order exist.
   - Report an unenumerable consumer set as `consumers_not_enumerable` with what was searched; consumers outside the repository are unknowable from it, and an empty list is a claim that nothing breaks.
   - Never place secrets, tokens, or connection strings in the contract, examples, or handoff text.
@@ -3138,7 +3143,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: Compilation proves nothing about the invariant an `unsafe` block asserts, and the escalation is not optional.
 - Quality bar:
   - Run the escalation check before anything else and state the verdict; a change whose `unsafe`/FFI status is unknown is escalated by default.
-  - Load `references/rust-discipline.md` for the ownership, error, and API rules, and name the gate commands from it rather than assuming `cargo build` is the whole bar.
+  - Load `references/rust-discipline.md` for the ownership, error, API, binary-interface, and dependency rules, and name the gate commands from it rather than assuming `cargo build` is the whole bar.
   - When the escalation triggers, load `references/ub-escalation.md` and carry its Miri, sanitizer, and loom-style concurrency requirements into the handoff as blocking items.
   - Name the ownership decision behind every clone, `Arc`, interior-mutability wrapper, and lifetime annotation the change introduces.
   - Name the error type and its conversion boundary; a surviving `unwrap` needs a written reason, not silence.
@@ -3147,7 +3152,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The escalation verdict is stated with the trigger that decided it.
   - The ownership shape names owners, borrows across boundaries, and every deliberate clone.
   - The error type, its conversion boundary, and every surviving `unwrap`/`expect`/`panic!` are named.
-  - The gate list names the exact commands the executor must run and pass.
+  - The gate list names the exact commands the executor must run and pass, covering every target, the feature extremes, doc tests, and the declared MSRV.
   - An escalated change carries the Miri, sanitizer, and concurrency-testing requirements as blocking items.
   - Compiler, clippy, test, Miri, sanitizer, and loom results stay observed-only.
 - Recovery notes:
@@ -3230,6 +3235,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - The debugger session plan names the DAP adapter, breakpoints, watchpoints, threads, frames, and values to read.
   - The handoff says the executor drives the debugger and OMH executes nothing.
   - Reproduction, debugger output, root cause, and fix are reported as separate observed or not_observed states.
+  - Any print-and-rebuild probe carried the session's probe tag, and an observed search for that tag returns nothing.
 - Recovery notes:
   - If the fault does not reproduce, make reproduction the first hypothesis and plan the observation that would establish it, rather than debugging a fault no one can trigger.
   - If no debug adapter or symbols are available, say so, plan the coarser evidence path, and keep root cause unclaimed instead of upgrading a guess.
@@ -3248,7 +3254,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - native_debug_handoff/v1
   - observed_debugger_evidence/v1 when observed
 - Artifact expectations:
-  - native_fault_statement/v1 separates the observed symptom from the assumed cause and names the reproduction command
+  - native_fault_statement/v1 separates the observed symptom from the assumed cause, names the reproduction command, quotes the observed failure beside the reported one (`symptom_match`), and records the `minimised` reproduction
   - hypothesis_set/v1 spans distinct axes — caller-side misuse, callee invariant, memory lifetime, concurrency, build/runtime mismatch — not three phrasings of one guess
   - distinguishing_observation_plan/v1 pairs each hypothesis with the one observation that refutes it, and where to read it
   - debugger_session_plan/v1 names the adapter (lldb or gdb via DAP), the breakpoints and watchpoints, the frames and threads to inspect, and the values to read at each stop
@@ -3726,6 +3732,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - For native `omh_todo` checkpoints, load the todo-checklist closing recipe; `record` then `recall` this verification declaration. Stored declarations are not proof.
   - When the change answers to a written spec, plan, or issue, load `references/requirement-coverage-map.md` and map requirement to task to evidence under stable ids before claiming coverage.
   - Give each failing check an `origin`: `introduced` when the same command passes at the merge-base or the failure points at a line the diff added or changed; `pre_existing` only when an observed run of the same command fails the same way at the merge-base in a clean detached worktree (`git worktree add --detach <dir> <merge-base>`, removed afterwards), never by stashing or checking out the tree the user is working in; otherwise `unknown`. An observed merge-base run outranks a diff-line reading: a check that fails the same way at the merge-base is `pre_existing` even when its failure points at a line the diff changed. Name the proof beside the origin: a merge-base run is an observation, a diff-line reading is an inference.
+  - A fix claim whose evidence is a new or changed test needs a regression witness: an observed red of that test, for the bug's reason, on the pre-fix tree (the fix commit's parent, or the merge-base when the fix is the whole change), recorded with its source -- a run in a clean detached worktree at that tree, a CI job on a commit that adds only the test, or the debugging session's run before the fix. A collection or import error there is not a witness. For an intermittent fault the witness is the failure rate over N runs before beside 0/N at the same N after. When the test calls a seam the fix added, force the red by reverting only the behavioural lines, keep the seam, and show that diff. When the fix changes only test code, the witness is the old test's measured failure rate on the pre-fix tree beside the new test's 0/N at the same N. A fix test only ever observed green is HOLD with `regression_witness_missing`.
   - Return PASS only when required checks pass and stale or missing evidence is resolved; PASS never stands beside a failing required check, whatever its origin. A required check that fails `pre_existing` is HOLD worded as not charged to the change, naming the merge-base run that proves it, and only when the failing run's scope still covered the change: a failure that stopped the check before it exercised the change, such as a collection or import error, leaves that check as missing evidence. `unknown` is HOLD with the merge-base run named as the missing evidence.
   - Keep fixes, reruns, review, CI, and merge as separate observed states.
 - Completion checklist:
@@ -3751,7 +3758,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Artifact expectations:
   - verification_matrix/v1 covering build, lint, typecheck, unit/integration/e2e tests, generated docs, static/security checks, diff hygiene, and CI/DCO when applicable
   - observed_check_results/v1 with command (verbatim, not a description of it), source (this checkout, a CI job, or an operator report), exit status, summary (what the output said), scope (what that run covered, since a narrower run proves less), freshness (when it ran, and whether the tree has moved since), and origin (for a failing check: introduced, pre_existing, or unknown)
-  - claim_verdict/v1 with PASS, HOLD, or BLOCK and exact missing or failed checks, each failed one with its origin
+  - claim_verdict/v1 with PASS, HOLD, or BLOCK, a HOLD reason of `regression_witness_missing` when a fix test has no observed pre-fix red, and exact missing or failed checks, each failed one with its origin
   - generated_artifact_provenance/v1 with one row per touched generated path: the source of truth that produces it, the regeneration command, and the drift gate that catches it, or the single state `map_not_declared` when the repository declares no generated-artifact map
 - Safety rules:
   - Do not treat a planned command, stale output, green local check, or prepared handoff as fresh verification evidence.
@@ -3869,15 +3876,16 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Require review approval before any patch handoff or generated-skill update.
   - On Hermes, read a curator run report (`logs/curator/<run>/REPORT.md` and `run.json` under the active profile's Hermes home) as a source like a review or a trace: it records which skills the curator consolidated, archived, or created in that run, and one report is one observation, never repeated evidence by itself.
 - Completion checklist:
-  - The durable fact, source evidence, retrieval hint, and staleness risk are recorded.
-  - Uncertain or conflicting knowledge is marked as review-needed rather than permanent truth.
-  - Separate coding or docs tasks are extracted instead of buried in notes.
+  - Every candidate in principle_candidate_set/v1 cites the repeated observations it rests on; a candidate resting on one observation stays needs-evidence in review_queue/v1.
+  - Every candidate is classed mechanical or judgement before it is worded. A mechanical candidate is a miss a machine can find from the text alone (a forbidden call, a disallowed import, a file in the wrong place), and its destination is a check (a linter rule, test, hook, or CI step); when the repository already has a check for it that never runs or no longer fails, the candidate is repairing that check, not adding another. Its approved_patch_handoff/v1 names the check and where it is wired, and sets as an acceptance criterion the run the implementer must observe: the check fails with the violation injected and passes once it is reverted. A mechanical candidate outside the chosen destination boundary is reported as a check proposal outside the boundary, never reworded as prose. Only judgement candidates, which need a reader (consistency across files, fit with the code around them), are worded as prose.
+  - duplication_conflict_report/v1 names the existing rule or check each candidate repeats or contradicts, or says none was found and where it looked.
+  - Nothing reached a destination without an approval recorded in review_queue/v1.
 - Recovery notes:
   - If source evidence conflicts, route to memory or knowledge review before writing durable guidance.
   - If the fact may be stale, record the staleness warning and next refresh action.
 - Required inputs:
   - source corpus: skills, prompts, traces, reviews, failures, or docs
-  - destination boundary: AGENTS, skill catalog, prompt, docs, memory, or no-write review
+  - destination boundary: AGENTS, skills, prompt, docs, memory, check, or no-write review
   - rule granularity and acceptance criteria
   - reviewer or approval requirement
 - Expected outputs:
@@ -3888,7 +3896,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - approved_patch_handoff/v1 when approved
   - not-evidence boundary
 - Artifact expectations:
-  - principle_candidate_set/v1 with source references, repeated pattern, candidate wording, scope, non-goals, and risk
+  - principle_candidate_set/v1 with source references, repeated pattern, mechanical or judgement class, candidate wording or check, scope, non-goals, and risk
   - duplication_conflict_report/v1 with already-covered rules, conflicts, and stale guidance
   - review_queue/v1 separating proposed, approved, rejected, deferred, and needs-evidence candidates
 - Safety rules:
@@ -3934,12 +3942,17 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Produce a practical reading path and first-task runway rather than a flat file tour.
   - Route follow-up implementation to plan, ultrawork, verification-gate, or workspace-audit as needed.
 - Completion checklist:
-  - The plan names goals, non-goals, assumptions, acceptance criteria, and verification shape.
-  - Draft recommendations, accepted decisions, and executor handoffs are separate states.
-  - Rejected options or unresolved tradeoffs are recorded before handoff.
+  - repo_map/v1 cites an observed path for every directory, entrypoint, generated surface, and test location it names; what was inferred is marked inferred, and what was never opened is listed as unread.
+  - reading_path/v1 is an ordered list of real files, each with why it comes at that point and what the reader knows after it.
+  - Every domain_glossary/v1 term points to where it is defined or used; a term with no source is an open question, not an entry.
+  - risk_and_unknowns_map/v1 keeps observed risks, each with the file or command that shows it, apart from unknowns, each with how it would be resolved.
+  - Every first_task_runway/v1 task names the files it touches and its verification command, and says whether that command was run during onboarding.
+  - The stop condition named at the start is met, or the reply names what was left unread.
 - Recovery notes:
-  - If acceptance criteria or verification are missing, route back to clarification before handoff.
-  - If assumptions materially affect the plan, keep them visible and avoid treating the plan as accepted.
+  - If the repository is too large for the stated depth, narrow to the entrypoint the audience touches first and record the rest as unread rather than summarizing it from file names.
+  - If a build, test, or setup command could not run (read-only mode, missing toolchain, secrets), list it in first_task_runway/v1 as not run with the reason, never as a known-good command. A command that installs or syncs dependencies as a side effect (`npm ci`, `uv sync`, and `uv run`, which syncs first) counts as setup and stays not run.
+  - If docs and code disagree, report what the code does, cite both, and add the disagreement to risk_and_unknowns_map/v1 instead of trusting the docs.
+  - If the user names a concrete task mid-tour, stop at the current reading_path/v1 entry and hand the runway so far to `omh-plan`, or to `ulw-work` or `omh-idea-to-deploy` when the task already has acceptance criteria.
 - Required inputs:
   - repo root or supplied source context
   - target audience: operator, new contributor, maintainer, or executor
@@ -4490,14 +4503,14 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Why: Better is a claim about an observed run. Without one, the comparison is a design, and calling it a result is the false-green this workflow exists to prevent.
 - Quality bar:
   - Decide the rails in order - provider boundary, structured output, prompt artifacts, retrieval grounding, evaluation - and say which are deferred rather than leaving them unnamed. Load `references/build-rails.md` for the per-rail decision and its failure mode.
-  - Route every provider call through one client boundary module that owns the model ID, credentials, timeout, retry policy, and rate-limit backoff. A second call site that builds its own client is how a model pin, a timeout, and a retry policy quietly diverge.
+  - Route every provider call through one client boundary module that owns the model ID, credentials, timeout, retry policy, and rate-limit backoff. A second call site that builds its own client is how a model pin, a timeout, and a retry policy quietly diverge. Give that boundary a deterministic fake adapter beside the real one, so the code around the model is unit-tested offline; evals against the real model are a separate suite.
   - Pin the exact model ID as a named constant or config value, never a floating alias, and record it next to any result that will be compared to another result.
-  - Take structured output from a declared schema - a JSON schema, a typed parser, or the provider's structured-output mode - and validate every response against it. A response that fails validation is repaired by one bounded re-ask that shows the validation error, then fails loudly; it is never regex-scraped out of prose.
+  - Take structured output from a declared schema - a JSON schema, a typed parser, or the provider's structured-output mode - and validate every response against it. Read the stop reason first: a response cut off at the output cap is truncated, not invalid, and is never re-asked under the same cap. A response that fails validation is repaired by one bounded re-ask that shows the validation error, then fails loudly; it is never regex-scraped out of prose.
   - Keep prompts as reviewable files with a version identifier, separated into system rules, task instruction, and injected context, so a prompt change shows up in a diff instead of inside a string literal.
   - For retrieval, fix chunking and citation grounding first and evaluate retrieval before evaluating generation: a generation score on top of unmeasured retrieval cannot tell a bad answer from a bad document set.
   - Ship the eval suite as a deliverable, not a follow-up: golden set, task-level validators, baseline-vs-candidate comparison, with deterministic validators wherever the task allows one. Load `references/eval-harness.md` for the golden-set shape, the corpus-hygiene checks that run before a score is quoted, the validator ladder, and the comparison record.
   - Run the regression before a prompt or model swap, not after, and compare baseline against candidate on the same golden set with token and cost capture. Report only what the run reported; a metric the harness did not emit stays null.
-  - Give every agentic loop its budgets as product features, not prompt advice: step, time, token, cost, and tool-call budgets each with a recorded termination reason, and for recursive delegation the budgets bind the whole tree, not each node separately.
+  - Give every agentic loop its budgets as product features, not prompt advice: step, time, token, cost, and tool-call budgets each with a recorded termination reason, and for recursive delegation the budgets bind the whole tree, not each node separately. Tool arguments are validated before the tool runs, and an invalid call or a tool failure returns to the model as a tool result, never thrown past the loop and never swallowed.
   - Separate draft from commit for risky side effects: reads and drafts may run autonomously when scoped and labeled, but external writes, deletions, and communications need an approval record outside the prompt - a model's stated intention is never the authorization.
   - When the user asks for communication through a public board, treat the destination as a public external disclosure even when the account is authenticated: give read, search, register, profile, reply, publish their own authority and outbound-data expectation, show the exact destination, the public-audience label, and the complete outbound payload before a host-recorded approval, and reconcile an ambiguous send by read-back or receipt before any retry. Load `references/public-board.md` for the per-action authority table, the untrusted-peer rules, and what survives compaction and handoff.
   - When the feature presents or acts on business records; enforces a cumulative business limit; stores facts about a person, load `references/stateful-contracts.md`. Provenance is not authorization, follow-up references resolve against the final-order receipt, limits are checked on resulting state inside one atomic apply boundary, and stored user facts are host-validated and deletable. A feature with none of those properties records that and skips this conditional contract.
@@ -4507,6 +4520,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - One client boundary owns the model ID, credentials, timeout, retry, and backoff, and no credential appears in source, prompts, tests, or examples.
   - The model ID is exact, and it is recorded next to any result meant to be compared.
   - Every model response is validated against a declared schema, with a bounded repair path and a loud failure - no prose scraping.
+  - The client boundary has a deterministic fake adapter, the code around the model is unit-tested against it without a network call, and a streamed call is cancelled upstream when its client goes away.
   - Prompts are files with a version identifier, and system rules, task instruction, and injected context are separated.
   - Untrusted retrieved or user-supplied content is fenced from the instruction channel and cannot change the task.
   - The eval deliverables - golden set, task-level validators, baseline-vs-candidate comparison - exist as committed artifacts, and retrieval is evaluated before generation when retrieval is in the path.
@@ -4536,7 +4550,7 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Safety rules:
   - Do not hardcode an API key, token, or provider credential in source, prompts, tests, or examples; the client boundary reads them from the environment or a secret store.
   - Do not pin a model by a floating alias when the behavior is being evaluated; a benchmark against a moving target proves nothing.
-  - Do not catch provider failures broadly; classify timeout, rate limit, transient server error, invalid request, and content refusal separately, because only some of them are safe to retry.
+  - Do not catch provider failures broadly; classify timeout, rate limit, transient server error, invalid request, content refusal, and truncation at the output cap separately, because only some of them are safe to retry.
   - Do not put untrusted content - retrieved documents, user uploads, tool output, web pages - in the same channel as instructions, and never let it change the task.
   - Do not report token counts, latency, or cost that a run did not produce; telemetry the run did not report stays null and is never estimated.
   - Do not claim an eval passed, a prompt shipped, or a model swap is safe from a prepared design; every such claim needs an observed run.
@@ -4772,6 +4786,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - When the plan describes code changes, add a `Review Focus` section listing at most 5 inputs or failure modes the requirements imply that no planned test covers, likeliest first, each with its expected behavior and the id of the owning task that will add the test; an input the requirements do not mention must still leave the result intact, and when the check turns up nothing the section says it found none.
   - When the plan describes code changes, keep each step to a single action whose outcome can be checked - a named test and what it asserts, an exact signature and its file, or a command and the output that counts as passing; a step that leaves the choice open (`TBD`, `make it robust`) is a gap.
   - When the plan describes code changes, give each task a stable id (`T1`, `T2`, ...), the ids it depends on, the files it may write, and its done check (a checkable step as above; for a code task, a command with the result that counts as passing - the test's run command, a gate, or a grep for the signature - while a task that is not code may keep an observable check); when two tasks write the same file, one lists the other directly among its dependencies, since an order through a third task does not count. These carry a `dag-ulw` node's id, depends_on and write_scope, and the done check feeds its VERIFY and STOP WHEN; converting still adds each node's label, category and full prompt, and a baseline node before a full-suite check.
+  - When the plan describes code changes, cut the code tasks as vertical slices: each delivers one behavior through every layer it needs, and its done check drives that behavior through the surface a user or caller reaches, so an integration failure shows in the task that caused it rather than first in the closing gate. Do not split by layer to keep write scopes apart: slices that write the same file are ordered, each later slice listing every earlier slice that writes it directly among its dependencies, since an order through a slice between them does not count; a file every slice only appends to (a changelog, a generated index) may instead be written by one task after the slices. A layer-only task is either a prefactor that makes the later slices easy and comes before them, or a wide mechanical change across many callers, handed to `refactor-plan` (the new form beside the old, callers moved in groups while both stay green, the old form deleted last) instead of a split by layer.
   - When the plan describes code changes, its last task is the closing gate, named as the verification task (in `dag-ulw`, a node with `role: verify`): it depends on every other task, runs the real verification commands with the result that counts as passing, is run by someone other than the agent that built the work, and ends with a review. The plan states that a review that is not clean adds a fix task with its own id and done check and then reruns the gate instead of ending the plan - at most two fix rounds, or fewer when the engine running the plan stops sooner, after which the open findings are reported.
   - When the plan describes code changes, run a proportion check before acceptance: if the plan text outgrows the code it leads to, or is mostly function bodies, implementation has leaked into it; reduce bodies to test names, assertions, and signatures.
   - When the plan describes code changes, name the goal beyond the request before splitting tasks: one sentence on what should happen once the requested result exists, and whether the plan aims at that outcome or at the request as asked; when the two are the same, say so in one line. A plan aimed at the outcome adds, as its own tasks, the access the executor needs to work at that level unattended - failure logs, a reproduction environment, the raw data, the mapping from a released version to its commit.
@@ -4786,6 +4801,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Rejected options or unresolved tradeoffs are recorded before handoff.
   - When the plan describes code changes, it has a `Review Focus` section with at most 5 uncovered inputs and their owning task ids, or one stating the check found none.
   - When the plan describes code changes, every task has an id, its dependencies, the files it may write, and a done check, and the last task is the closing gate.
+  - When the plan describes code changes, each code task is a vertical slice whose done check exercises its behavior end to end, or a prefactor ordered before the slices, or a wide change handed to `refactor-plan`, or the one task that writes a file every slice only appends to; the closing gate and fix tasks aside.
   - When the plan describes code changes, it names the goal beyond the request, the raw material, and an outside judge for each verification step, or records the missing judge as an evidence gap.
 - Recovery notes:
   - If acceptance criteria or verification are missing, route back to clarification before handoff.
@@ -5038,7 +5054,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - If independent review evidence is unavailable, say so directly instead of implying a second reviewer passed it.
   - To dispatch a reviewer rather than write the findings yourself, load `omh-code-review/references/review-dispatch.md`; it carries the base-SHA rule, the findings schema the return is checked against, and the implementer status contract.
   - When findings arrive for work you own, load `omh-code-review/references/review-response.md` before changing anything.
-  - For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it names the twelve baseline smells with their fixes and the repo-standards-override rule.
+  - For maintainability judgement calls, load `omh-code-review/references/smell-baseline.md`; it finds the repository's standards files first, then names the twelve baseline smells with their fixes and the repo-standards-override rule.
   - Load `omh-code-review/references/risk-selection.md` to select depth; when additional lenses are justified, load `omh-code-review/references/review-lenses.md` and run only those selected as separate passes.
   - Before final findings, load `omh-code-review/references/finding-validation.md` for candidate confirmation, rejection, and unresolved-risk handling; load `omh-code-review/references/architecture-delta.md` when ownership, contracts, dependencies, or shared-code extraction change.
 - Required inputs:
@@ -6726,19 +6742,23 @@ These surfaces are generated command references, not installed Hermes workflow s
 - Quality bar:
   - State the symptom and the expected behaviour separately from any suspected cause.
   - Record the reproduction with its hit rate; an intermittent fault is reproduced when its rate over N runs is measured, not when it happened once.
+  - A reproduction counts for this bug only when its `symptom_match` shows the failure the user reported; a different failure near the same code is another bug, and this record stays not_observed.
+  - `minimised` is filled before `competing_hypotheses/v1`: an input, caller, config value, or step leaves the reproduction only when the loop rerun without it still shows the symptom (for an intermittent fault, the same rate at the same N), and the record lists what left and what stayed; `fix_handoff/v1` builds the regression test from what stayed.
   - Load `references/hypothesis-and-race-method.md` for the hypothesis table, flaky-test tactics, and race patterns instead of improvising them.
   - Pick the next observation by cost and by how many hypotheses its result eliminates, and record the eliminations.
   - Keep reproduction, root cause, fix, and verification as separate observed states.
   - Count a fix as failed when an executed run of the same reproduction command still shows the original symptom or shows a new symptom the fix caused rather than unmasked; planned runs and other commands do not count. After the third failed fix, prepare no fourth; re-examine the architecture assumptions every fix shared, per the method reference, and offer the user the next step as a question.
+  - Before the fix handoff names a regression test, load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` for the seam, the shapes of tests that guard nothing, fakes only at system boundaries, and the no-correct-seam outcome.
   - When Hermes' bundled `systematic-debugging` skill is loaded for the same bug, follow its phases and write this skill's records at each; a breakpoint read through `python-debugpy` or `node-inspect-debugger` is one discriminating observation. Load `references/debugging-skill-composition.md` for the mapping.
 - Completion checklist:
   - The reproduction names its command, observed output, expected output, and hit rate, and reads observed before any fix is prepared.
   - At least three hypotheses on distinct axes were written before the first observation was chosen.
   - Each observation records which hypotheses its result eliminated.
   - The root cause cites the demonstrating observation and the observation that ruled out each rival.
-  - The fix handoff carries the reproduction as a regression test that fails before and passes after.
+  - The fix handoff carries the reproduction as a regression test that fails before and passes after, or records `regression_seam: none_correct` with the reason, with the reproduction loop observed red before the fix and green after it.
+  - An observed search for the session's probe tag returns nothing, and every throwaway harness file is deleted or listed.
 - Recovery notes:
-  - If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it.
+  - If the fault does not reproduce, make reproduction the first hypothesis and plan the loop, seed, or ordering that would establish it; when no test reaches the fault, choose a loop from the method reference's loop table; if none can be built, the record stays not_observed with each attempt and what stopped it, and the request to the user is for an environment, a redacted capture, or permission for tagged temporary instrumentation.
   - If every hypothesis is eliminated, record that, widen the axes, and keep root cause unclaimed rather than promoting the last survivor.
 - Required inputs:
   - the wrong behaviour as observed, and the behaviour that was expected
@@ -6754,17 +6774,19 @@ These surfaces are generated command references, not installed Hermes workflow s
   - fix_handoff/v1 blocked until reproduction_record/v1 reads observed
   - observed_fix_verification/v1 when observed
 - Artifact expectations:
-  - reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs; it reads observed or not_observed and nothing between
+  - reproduction_record/v1 names the exact command, the input, the observed output, the expected output, and the hit rate over N runs, plus `symptom_match` (the observed failure quoted beside the reported one), `loop_cost` (wall time per run, and what was pinned or, for an intermittent fault, how the rate was raised), and `minimised` (the cuts made and the load-bearing form left); it reads observed or not_observed and nothing between
   - competing_hypotheses/v1 spans distinct axes -- input and state, ordering and timing, environment and build, dependency behaviour -- rather than three phrasings of one guess
   - discriminating_observation_plan/v1 orders the observations cheapest first and names, for each, which hypotheses its result eliminates
-  - root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival
-  - fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it
+  - root_cause_record/v1 cites the observation that demonstrated the cause and the one that ruled out each rival, and the fix's commit or pull-request body states that confirmed hypothesis and the rivals it eliminated, because the next debugger reads history, not this record
+  - fix_handoff/v1 carries the reproduction as the regression test that must fail before the fix and pass after it, or records `regression_seam: none_correct` with the reason, with the reproduction loop observed red before the fix and green after it
+  - fix_handoff/v1 names the seam the regression test drives and how it runs the pattern that produced the bug (callers, ordering, call chain); when the pattern cannot run at any reachable seam, it records `regression_seam: none_correct` with the reason and what was tried, keeps the reproduction loop as the fix's verification, and reports the missing seam as an `omh-refactor-plan` candidate instead of a shallow test that passes before and after the fix
 - Safety rules:
   - No fix before an observed reproduction: `fix_handoff/v1` stays blocked while `reproduction_record/v1` reads not_observed, and a proposed change without one is a guess, not a fix.
   - Do not claim a reproduction, a probe result, a root cause, or a passing fix from a prepared plan.
   - Require at least three hypotheses on distinct axes before planning observations; one hypothesis makes every reading confirmatory.
   - Never treat a symptom's disappearance as a root cause; a bug that stops after a print statement, a retry, or a sleep is an open timing fault.
   - Do not execute tests, debuggers, or commands from OMH core; the executor runs them and the record takes only what it observed.
+  - Redact before recording: reproduction commands read credentials from environment variables by name, quoted output keeps only the lines that carry the signal with each secret replaced by `<redacted>`, and a capture too redacted to diagnose is reported as such, never recorded unredacted.
 
 ### commit-pr-authoring
 
@@ -6957,6 +6979,8 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Load `references/engine-lock-tables.md` for the per-engine lock modes, the online DDL rules, and index-type selection instead of recalling them.
   - Size an index before proposing it: rows, key width, and the write amplification it adds.
   - Order an online migration as expand, backfill in batches, switch, contract, with the rollback for each step.
+  - For a read-modify-write, an upsert, a queue table, or a deadlock, use the concurrency section of the lock tables: name the isolation level, the row lock and its order, and which error codes retry the whole transaction.
+  - Give non-transactional DDL such as `CREATE INDEX CONCURRENTLY` its own migration marked non-transactional; never drop `CONCURRENTLY` to satisfy the migration tool.
   - Keep planned, observed, and applied as separate states for every statement.
 - Completion checklist:
   - Engine, version, and table sizes are stated.
@@ -7873,6 +7897,7 @@ These surfaces are generated command references, not installed Hermes workflow s
   - Separate prepared handoff, observed outputs, interpretation, confidence, and cleanup state as distinct evidence states.
   - Preserve the declared task, fixture, environment, and sample limits so the result is not generalized beyond them.
   - End with a decision receipt that `ralplan` can consume: supported option, rejected option, residual risk, evidence limits, and prototype-code reference permission.
+  - When the question is about logic or state, or about an interaction or layout, or the receipt may let later work reference the prototype code, load `references/artifact-shapes.md`: a pure module a plan can lift with the full state shown after each action, structurally different variants mounted in the real host page, and kept code on a named throwaway ref.
 - Completion checklist:
   - Exactly one decision question with a stable decision id, alternatives, and a falsifiable hypothesis is recorded, or the request was refused with the missing question named.
   - Time, tool, file, and command budgets carry units, and the scratch directory or temporary worktree identity matches the observed workspace.

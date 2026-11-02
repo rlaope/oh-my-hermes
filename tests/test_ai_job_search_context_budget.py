@@ -101,15 +101,27 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
             # 529429 -> 529669 and the digest re-derived: show-reel's idea-video
             # scope widens its row (+240, itemized at
             # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT); no other row moved.
-            # 529669 -> 529803 and the digest re-derived: architecture
-            # deepening widens the refactor-plan row (+136) and the
-            # tech-debt-audit row (-2), itemized at
-            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; no other row moved.
-            # Its review swaps the tech-debt-audit triggers for code-anchored
-            # phrases, which moves that row's "+N more triggers" count (same
-            # length); the digest is re-derived.
-            (skill_capabilities, 529803, FULL_ROW_DELTA_CAP,
-             'b073f4fb8f7e4eb289820b96d75ff1612e3bfc53fafc99272148c1a0c34eeda7',
+            # Digest re-derived, length unchanged: rules-distill's destination
+            # input names a check (same 85 characters) and its candidate-set
+            # expectation names the class (past the preview cut); only that row
+            # moves, and main's producer gives the previous pin d946e521...2173.
+            # 529669 -> 529956 and the digest re-derived: the app-debugging row
+            # gains its record and redaction lines (+287, #2499); no other row
+            # moved, and main's producer gives the previous digest d946e521...2173.
+            # Merged with #2499 after #2497: both rows' changes; the digest is re-derived from
+            # the producer (#2497's pin before the merge was 2c6ea588...fdd3, #2499's 509aec41...ecd8).
+                        # 529669 -> 530006 and the digest re-derived: the llm-app-dev
+            # (+307) and rust (+30) quality-bar lines (#2498, itemized at
+            # FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT). Merged with #2499 and #2497: both sides'
+            # rows; the base and digest are re-derived from the producer (#2498's pin before the
+            # merge was c409741a...73ca at 530006, #2497's 2f644f53...ec43 at 529956).
+            # Architecture deepening (#2501) widens the refactor-plan row (+136) and the
+            # tech-debt-audit row (-2), itemized at FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT; its
+            # review moves the tech-debt-audit "+N more triggers" count (same length). Merged with
+            # main: base and digest re-derived from the producer (#2501's pin before the merge was
+            # b073f4fb...eda7 at 529803, main's 83828030...e82a at 530293).
+            (skill_capabilities, 530427, FULL_ROW_DELTA_CAP,
+             '3a45e62c1db4289f129d86763c9e6628efc57e5d03a89fde354d046b54ea32d7',
              release.FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT),
             (standalone_skill_capability_items, 143589, STANDALONE_ROW_DELTA_CAP,
              '7971eca9f1c5df22ac9edb2065bc66e967fed6471a7400c016d0beb166617476',
@@ -248,10 +260,56 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # close-watcher wording, the support-target wording) moves frontend
         # only; the round before gives
         # 99bdb5f2edb3a7fd2f2f79dd3b2f9fb96c9a8ee5b560b05f837fbc6b27fc0f84.
+        # Then plan's vertical-slice line and checklist item, and
+        # decision-prototype's artifact-shapes pointer (body and quality bar);
+        # only plan and decision-prototype move, and main's producer gives the
+        # previous pin ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # The #2503 review round (the refactor-plan handoff named by its real
+        # shape, every earlier same-file slice as a direct dependency, the
+        # append-only file task, and the checklist matching the bar) moves
+        # plan only; the round's first commit gives the previous pin
+        # f0f941b8604a5e4680dad6819edb593cf59048d03d84c4567279dfad8908bf42.
+        # Merged with main after #2502: both sides' bodies; main's pin before the
+        # merge was e498851bd607d40942631386858a10c1ed1ea5ea8e3a17a033b866d2c1bbe956.
+        # #2499 adds the debugging-record and regression-witness lines; only
+        # app-debugging, native-debugging and verification-gate move, and
+        # main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # Merged with #2503's branch: both sides' bodies; #2503's pin before the merge was
+        # e352ad0c1c3d64e7f0fa179df5e11f9637816c2f628a2dd2d6434efb2566b230.
+        # Then code-review's standards-discovery loader line and the own-output
+        # checklists of codebase-onboarding and rules-distill; only those three
+        # move, and main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # Merged with #2499's branch (carrying #2503): both sides' bodies; the pin before the merge was
+        # 48c0ed82d69ebd2b692ed81fd74666257858f4e86a7ac384dabe8c685605f242.
+        # #2498 adds the fake-adapter, stop-reason, and tool-argument rules to
+        # llm-app-dev and names rust's binary and dependency sections; only
+        # llm-app-dev and rust move, and main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # Merged with #2497's branch (carrying #2503, #2499): both sides' bodies; the pin before the merge was
+        # 18d2ace67bd082ee6a0acef68039dec1aafb0b3dc9f7590a08c26118436755db.
+        # Then backend's integrity and inbound-delivery quality-bar lines and
+        # relational-db's concurrency and non-transactional-DDL lines; only
+        # backend and relational-db move, and main's pin before it is
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # Its review round (webhook receipt vs job transaction, the cursor
+        # sections pointer) moves backend only.
+        # Then backend, frontend, and app-debugging each gain one line loading
+        # the shared test-authoring reference, and app-debugging's fix_handoff
+        # gains the no-correct-seam expectation; only those three move, and
+        # main's producer gives the previous pin
+        # ede9f8f6bb352088bc25f14db195f47fd71070f98cd14cc2a18569b19296637b.
+        # Its review round lets a none_correct regression seam pass
+        # app-debugging's fix_handoff line and checklist, and names frontend's
+        # fakes by the shared page's boundaries; only app-debugging and
+        # frontend move again.
         # Then architecture deepening (#2501): only tech-debt-audit and
         # refactor-plan move, and main's producer gives the previous pin
         # e498851bd607d40942631386858a10c1ed1ea5ea8e3a17a033b866d2c1bbe956.
-        self.assertEqual(_digest(legacy_hashes), 'd801ae8e6ff9f419422db5edf5f0ceb185d350ee4e0c9638012a5f8214422658')
+        # Merged with main after #2506 (the whole chain): both sides' bodies; main's pin before the merge was
+        # 491fb471be66fac6154ef944b02563994a1ed46fbc59a89b79243c24d941fdff.
+        self.assertEqual(_digest(legacy_hashes), '81f862a9acafaf3d2d845069dd68b643e0e0284bacad19b62228c2d62fae97f5')
         legacy = _skill_context_cost_profile('full', legacy_templates, refs)
         current = _skill_context_cost_profile('full', templates, refs)
         # Main's search guidance adds 305; repro-audit's mandatory rails 1,943.
@@ -259,7 +317,10 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         # mandatory Workflow Lane (519) + Runtime Evidence (1446) = 1965, plus
         # 42 bytes of sibling reinforcement rails (+2007).
         # Merged with main: 126593 + 2007 = 128600, re-derived from the producer.
-        self.assertEqual(legacy['repeated']['bytes'], 128600)
+        # 128600 -> 128099: codebase-onboarding's own Completion Checklist and
+        # Recovery Notes replace the planning-category defaults it repeated
+        # (-501); swapping only that body back to main's restores 128600.
+        self.assertEqual(legacy['repeated']['bytes'], 128099)
         delta = current['repeated']['bytes'] - legacy['repeated']['bytes']
         self.assertEqual(delta, len(sections['Workflow Lane']) + len(sections['Runtime Evidence']))
         self.assertLessEqual(delta, REPEATED_DELTA_CAP)

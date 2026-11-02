@@ -910,13 +910,31 @@ PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72455
 # product film to every authored video (explainer, motion graphics, kinetic
 # type, logo intro, 3D scene, data-viz, music visual, short), and its four
 # genre triggers move "+N more triggers". Measured by release drift; no headroom.
-# 532741 -> 532875: architecture deepening. The `refactor-plan` row's first
+# 532741 -> 533028: the `app-debugging` row only (#2499). Its quality bar gains
+# the `symptom_match` and `minimised` lines and its safety rules the redaction
+# rule (+287). Re-derived from the producer on the tree merged with main; no
+# headroom.
+# 532741 -> 533078: the `llm-app-dev` row (+307) and the `rust` row (+30) only.
+# The llm-app-dev quality bar gains the three rules that are wrong to discover
+# after the call sites exist: a deterministic fake adapter at the client
+# boundary so the code around the model is unit-tested offline, the stop reason
+# read before validation (a response cut at the output cap is truncation, never
+# re-asked under the same cap), and tool arguments validated before the tool
+# runs with invalid calls and tool failures returned as tool results. The rust
+# line only names the new binary-interface and dependency sections it loads;
+# the gate flags, the CLI contract, and the dependency rules stay in
+# `references/rust-discipline.md`. Re-derived from the producer; no headroom.
+# Merged with #2499 and #2497 after #2498: 533028 (#2499's tree: +287 app-debugging) and
+# 533078 (#2498: +307 llm-app-dev, +30 rust) each grew a different row over 532741, so the
+# merged value is re-derived from the producer: 533365 (532741 + 287 + 307 + 30); no headroom.
+# Architecture deepening (#2501) adds: the `refactor-plan` row's first
 # required input admits a chosen deepening candidate whose interface is shaped
 # first by `references/interface-shaping.md` (+136); the `tech-debt-audit`
 # row's description names architecture deepening and drops "against the
 # previous ledger" from its rerun clause (-2). No other row moved.
-# Re-derived from the producer; no headroom.
-FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 532875
+# Merged with main after #2506: 533365 (main) + 136 - 2 = 533499, measured from the producer
+# on the merged tree; no headroom.
+FULL_CAPABILITY_SKILL_SECTION_CHAR_LIMIT = 533499
 FULL_CAPABILITY_SKILL_ITEM_CHAR_LIMIT = 9000
 # 100000 -> 102070: the same three domain workflows each add one standalone
 # capability row, again measured on the merged tree; warranted growth for three

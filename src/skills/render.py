@@ -3163,7 +3163,7 @@ Category: `{definition.category}`. Phase: `{definition.phase}`. Hermes role: `{d
         return _progressive_method_body(definition, name)
     title = name.replace("-", " ").title()
     compact_contracts = {
-        "decision-prototype": "Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`.",
+        "decision-prototype": "Required: one decision, a bounded experiment, an isolated scratch boundary, and a measurement method. Output: a decision record, prepared handoff, observation ledger, and receipt. When Hermes' bundled `spike` skill is loaded for the same question, build the way it says and keep these records: `references/spike-composition.md`. For a logic, state, or layout question, or prototype code a later plan may reference, load `references/artifact-shapes.md`.",
         "lifecycle-growth": "Required: lifecycle objective, audience/events, consent, budget, and owner. Output: a brief, audience/safety policy, experiment, readout, and handoff.",
         "product-discovery-validation": "Required: problem, segment/evidence, owner, learning budget, and criteria. Output: a decision frame, evidence and customer plan, test portfolio, receipt, and GTM hypothesis.",
         "sales-pipeline-review": "Required: supplied snapshot and as-of time, definitions, prior outcomes, and owner. Output: scope, health, forecast, supported annexes, and follow-up handoff.",
@@ -3811,7 +3811,7 @@ Hermes bundles three skills that meet this one: `systematic-debugging` (MIT, ada
 
 | Its phase | What this skill records there |
 | --- | --- |
-| Root cause investigation, around one tight command that goes red on the symptom | `reproduction_record/v1`: the command, its observed output, and the hit rate over N runs |
+| Root cause investigation, around one tight command that goes red on the symptom | `reproduction_record/v1`: the command, its observed output, the hit rate over N runs, `symptom_match`, `loop_cost`, and the `minimised` form |
 | Pattern analysis | nothing of its own; working examples and differences feed the hypotheses |
 | Hypothesis and testing | `competing_hypotheses/v1` with at least three hypotheses on distinct axes, then `discriminating_observation_plan/v1`, then `root_cause_record/v1` citing the observation that decided it |
 | Implementation | `fix_handoff/v1`, still blocked until the reproduction reads observed, then `observed_fix_verification/v1` |
@@ -3841,14 +3841,43 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 
 | Field | What it holds |
 | --- | --- |
-| Command | the exact command, request, or test id, with its inputs |
-| Observed | the output, value, or assertion as it came back |
+| Command | the exact command, request, or test id, with its inputs; a credential is named by its environment variable, never written inline |
+| Observed | the output, value, or assertion as it came back: the lines that carry the signal, each secret in them replaced by `<redacted>` |
 | Expected | the output that would have been correct, and where that expectation comes from |
+| Symptom match | the observed failure quoted beside the one the user reported; a different failure near the same code is a different bug, and the record stays not_observed for this one |
 | Hit rate | failures over runs, for example `4/20`; one sighting is a report, not a reproduction |
+| Loop cost | wall time per run; what was pinned, which is only what no standing hypothesis implicates; for an intermittent fault, how the rate was raised |
+| Minimised | what left the reproduction and what stayed, each element that stayed because the symptom (or the rate) went with it |
 | Environment | interpreter, dependency versions, OS, parallelism, and anything the failing run had that the passing run did not |
 | State | observed or not_observed; nothing between |
 
 An intermittent fault is reproduced when its rate is measured, not when it happened once. Run it in a loop first (`for i in $(seq 50); do <cmd> || echo FAIL $i; done`) and record the rate before changing anything; the same loop is what proves the fix later.
+
+If a capture is too redacted to diagnose, record that and ask for a narrower one; never record it unredacted.
+
+**Make the loop cheap before trusting it.** A loop that takes minutes per run is the next thing to fix, ahead of any hypothesis: narrow what it runs, skip setup the fault does not need, and assert the reported symptom rather than "it did not crash". What to do about variation depends on the fault:
+
+- **Deterministic fault.** Pin what varies between runs and no standing hypothesis implicates -- a clock, a seed, a temp directory, the network -- so the verdict repeats.
+- **Intermittent fault.** The rate is the signal (section 3). Raise it -- more iterations, parallel runs, load, a narrower timing window -- rather than pin the variation away.
+- **A pin that turns the loop green** is an observation about the cause, not a cleaner loop: record it in section 2 against the hypothesis that names what was pinned.
+
+Record time per run and what was pinned or raised under Loop cost.
+
+**Then minimise.** An element of the reproduction -- an input, a caller, a config value, a data row, a step -- leaves it only when the loop rerun without it still shows the symptom; otherwise it goes back. For an intermittent fault, "still shows" means the same rate at the same N, never one red run. The Minimised field lists what left and what stayed. What stayed leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test.
+
+### When no test reaches the fault
+
+Choose the loop by what the fault needs; any row that yields one command going red on the reported symptom will do.
+
+| The fault | Loop |
+| --- | --- |
+| shows through an interface the repository serves | a test at whichever seam reaches the path; a request script against a local server; the CLI on a fixture with its output diffed against a known-good copy; a headless browser script asserting on the page, console, or network |
+| needs an input the repository cannot recreate | the captured payload or event log, saved to disk and replayed through the path alone; or a throwaway harness calling the path directly, with fakes only where the process leaves the repository's control |
+| shows only for some inputs | a property or fuzz loop over generated inputs |
+| appeared between two versions or two configurations | a differential run diffing both outputs for one input; or a bisect harness, handed to `git-workflow` as `bisect_plan/v1` |
+| can be triggered only by a person, on a device, a GUI, or a third-party console | numbered steps for the person, and named fields reported after every run -- failed or not, the message as shown, the time -- so each run returns the same fields; the record takes them as user-observed. This is an observation capture: nobody is asked to approve anything |
+
+If no row yields a loop, `reproduction_record/v1` stays not_observed and lists each loop attempted and what stopped it. The request to the user is then for one of: an environment where the fault reproduces, a redacted capture (a log, a trace, a timestamped recording), or permission for tagged temporary instrumentation. `competing_hypotheses/v1` waits for an observed record.
 
 ## 2. Hypotheses on distinct axes
 
@@ -3864,6 +3893,8 @@ Write at least three before choosing an observation. Three phrasings of one gues
 | Dependency behaviour | a library, service, or OS call behaves differently than documented | pin or stub it and compare |
 
 For each hypothesis write the claim, the observation that would refute it, and which other hypotheses the same observation also settles. Choose the next observation by cost first, then by how many hypotheses its result eliminates; record the eliminations as they happen.
+
+Every probe added to code -- a print, a log line, an assert, a counter -- carries one tag chosen for the session, such as `[DBG-7f3a]`. Before the fix is handed over, an observed search for that tag returns nothing, and every throwaway harness file is deleted or listed in the handoff. A probe left in the tree lands in the fix diff, where a reviewer has to tell it apart from the change.
 
 ## 3. Flaky tests
 
@@ -3920,8 +3951,13 @@ After the third failed fix, stop fixing. Every fix was tested against a structur
 | A hypothesis is eliminated | the observed value that contradicts it, quoted |
 | The root cause is known | an observation that explains every part of the symptom, including its rate, and one that ruled out each rival |
 | The fix works | the reproduction loop fails before the change and passes at the same run count after it |
+| The tree is free of probes | an observed search for the session's probe tag that returns nothing |
 
 A symptom that stopped after an edit, with no mechanism, is an open fault with a changed schedule.
+
+## Attribution
+
+The symptom match, the loop-cost and minimised fields, the loop table, the probe tag, the redaction rule, and the person-run capture adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. OMH keeps them as record fields under its observed-evidence boundary and executes none of the loops itself.
 """
 
 
@@ -4060,6 +4096,10 @@ State `ALGORITHM=... , LOCK=...` explicitly in the statement so the server refus
 
 Every step carries its statement, the lock it takes and for how long, its timeout, and its rollback. A plan with any step missing lock behaviour or rollback is not ready.
 
+- **Non-transactional DDL gets its own migration.** Most migration tools wrap each migration in a transaction, and `CREATE INDEX CONCURRENTLY` (and `DROP INDEX CONCURRENTLY`) refuses to run inside one. Mark that migration non-transactional in the project's tool and keep the statement alone in it. Removing `CONCURRENTLY` to get past the error turns an online build into a write lock.
+- **Each backfill batch runs under a `statement_timeout`** sized to the batch, beside the `lock_timeout`, so a batch that hits a slow plan fails fast and resumes instead of holding locks.
+- **Read the SQL that will run.** When an ORM or migration tool generates the statement, plan against the SQL it emits (its statement log or its to-SQL output), not against the call that produced it.
+
 ## 4. Index selection and sizing
 
 | Need | Index type |
@@ -4070,6 +4110,7 @@ Every step carries its statement, the lock it takes and for how long, its timeou
 | Huge append-only table ordered by time | BRIN |
 | Query touches a known subset | partial index with that `WHERE` |
 | Query reads few columns | covering index (`INCLUDE`) for an index-only scan |
+| Keyset (cursor) pagination: `WHERE (sort_col, id) > ($1, $2) ORDER BY sort_col, id LIMIT n` | B-tree on the equality-filter columns first, then the sort columns in sort direction, then the unique tie-breaker; the plan shows an index scan with no sort step. Mixed sort directions need the index to match them and the predicate written as `OR` terms, because a row comparison assumes one direction. On MySQL write the expanded `OR` form even for a single direction, because an equality prefix followed by a row comparison uses only the prefix columns of the index; check that the plan's `key_len` and range cover the sort columns, not only that there is no filesort |
 
 Size before proposing: rows times (key width plus about 20 bytes of per-entry overhead), plus fill-factor slack. Every index adds a write per insert and per update of its columns; name that cost next to the read it saves. Cite the observed plan the index changes (`EXPLAIN (ANALYZE, BUFFERS)`), and re-read the plan after the build.
 
@@ -4080,6 +4121,26 @@ The symptom is one query for the list and one more per row, and the count scales
 ## 6. When to partition or shard
 
 Project rows, bytes, and write rate for 12 to 24 months. Partition when one table's maintenance (vacuum, index builds, retention deletes) outgrows its window; partitioning keeps one node. Shard only when a single primary cannot hold the write rate or the working set after vertical scaling, read replicas, and partitioning; name the shard key, the cross-shard queries it breaks, and the rebalancing plan.
+
+## 7. Concurrency
+
+Sections 1 and 2 cover the locks DDL takes. These rules cover two transactions writing the same rows.
+
+| | PostgreSQL | MySQL (InnoDB) |
+| --- | --- | --- |
+| Default isolation | `READ COMMITTED` | `REPEATABLE READ` |
+| Serialization failure | SQLSTATE `40001`, at `REPEATABLE READ` and `SERIALIZABLE` | not raised at the default level; a plain `SELECT` reads an old snapshot while `UPDATE` sees the latest row |
+| Rollback scope after an error | any error aborts the whole transaction; only a savepoint taken before the statement lets the transaction continue | depends on the error; see the two rows below |
+| Deadlock | SQLSTATE `40P01` | error 1213 (SQLSTATE `40001`); the whole transaction is rolled back |
+| Lock wait timeout | `lock_timeout` raises SQLSTATE `55P03`; the transaction is aborted | error 1205; by default only the statement is rolled back, so either retry that statement or `ROLLBACK` before retrying the whole transaction |
+| Upsert | `INSERT ... ON CONFLICT (cols) DO UPDATE` / `DO NOTHING`, with a unique index matching the conflict target | `INSERT ... ON DUPLICATE KEY UPDATE`, which fires on any unique key; with more than one unique key the row it updates is ambiguous |
+| Queue table | `SELECT ... FOR UPDATE SKIP LOCKED` (9.5+) | `SELECT ... FOR UPDATE SKIP LOCKED` (8.0+) |
+
+- **Read-modify-write takes the row lock first.** Read with `SELECT ... FOR UPDATE`, or move the arithmetic into the `UPDATE` itself (`SET qty = qty - $1 WHERE id = $2 AND qty >= $1`) and check the affected row count. A version column compared in the `WHERE` clause works without holding a lock across the read.
+- **A check-then-insert is a race.** Insert under the unique constraint and handle the violation, or use the upsert row above. Never select first and insert if absent.
+- **Lock rows in one order.** Two transactions that lock the same rows in different orders deadlock. Lock in a fixed order, for example `ORDER BY id` in the `FOR UPDATE` query, and lock parents before children everywhere.
+- **Retry the whole transaction, with a bound.** A serialization failure or a deadlock is retried by re-running the transaction from its start, with backoff and a maximum attempt count; retrying the failed statement alone runs it without the locks and effects of the statements before it, which the rollback already undid. On PostgreSQL every error aborts the transaction, so a whole-transaction retry always starts with `ROLLBACK`; a savepoint only lets you handle other errors inside the transaction, never `40001`/`40P01`. A MySQL lock wait timeout (1205) leaves the transaction open: retry that statement, or `ROLLBACK` first and retry the whole transaction, never resume as if nothing failed. Name the error codes that are retried; every other error is not.
+- **Keep the transaction short.** No network call, user wait, or model call happens while a transaction holds row locks.
 """
 
 
@@ -4826,7 +4887,7 @@ Load this while drafting a commit message or a pull-request body. OMH writes the
 
 | Source | What to take from it | When it is missing |
 | --- | --- | --- |
-| PR template (`.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `docs/`) | the section headings, in order, and any checkbox list | say no template was found and use a plain summary, why, and validation |
+| PR template (`.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE/`, `docs/`) | the section headings, in order, and any checkbox list | say no template was found and use a plain summary, why, validation, and reversibility (section 4) |
 | Recent log (`git log -10 --format=%B`) | subject shape (imperative, `type(scope):`, ticket prefix), body width, trailer set | say the log is empty or unreadable, and do not import a convention |
 | Contributor docs (`CONTRIBUTING.md`, `AGENTS.md`) | sign-off rule, required trailers, forbidden lines | record the rule as not found |
 
@@ -4858,6 +4919,8 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 
 - Subject: the repository's shape, the change's effect, within the length the log uses.
 - Body: why the change exists and what is now true, not a restated diff. Measured before/after values belong here when the change is about a measurement.
+- In a PR body, when the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
+- Reversibility: in a PR body always, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks); in a commit message only when the recent log already carries a risk or rollback line or trailer (such as `Scope-risk:`). Say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
 - `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`.
 
 ## 5. Trailers and sign-off
@@ -6453,30 +6516,17 @@ No implementation line before a failing test. Write the test that describes the 
 
 A test that passes on its first run proves nothing: it never witnessed the gap it claims to cover. Treat a first-run pass as a defect in the test - break the behavior deliberately or fix the test's target, watch it fail, then restore - before trusting it.
 
-## Questions Before a New Test
+## Before the Red Commit: Test Authoring
 
-Answer these four in the lane report before writing a new test; each answer either justifies the test or redirects the work.
+Load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')` before writing the first test. It holds the authoring contract every lane shares, tests-first or not: the seam named before the test, the four questions a new test answers in the lane report, the shapes of tests that guard nothing, tests coupled to internals, fakes only at system boundaries, and the outcome when no correct seam exists for a regression test. In a tests-first lane those checks bind as follows:
 
-1. Behavior protected: name the observable behavior, invariant, or contract a caller depends on. If none exists, there is nothing for a test to witness: say so in the lane report, as the "Too simple to test" row below allows, and let the reviewer judge.
-2. Plausible regression: name a concrete code change someone could make that this test would turn red. A test no plausible change can break guards nothing.
-3. Why existing coverage misses it: point to the closest existing test and say why that regression slips past it. If that test already catches the regression, add nothing: its red run on the unimplemented code is the witness the Evidence Ledger asks for, and if it is already green the behavior exists and there is nothing to implement. If it owns the same contract but lacks this case, add the case to that test rather than a near-copy beside it.
-4. Production seam: say whether the test needs an export, flag, or hook that no production caller uses. If it does, test through the real entry point instead; if a new seam is unavoidable, name it in the lane report for the reviewer.
-
-## Tests That Guard Nothing
-
-A new test with any of these shapes is not evidence for the lane, red or green. Rewrite it before the red commit so it observes the behavior from question 1. If the shape is found after the red commit, rewrite the test to observe that behavior, run it red again, and explain the test diff in the lane report as the red-commit rule requires:
-
-- No-assertion probe: the test calls the code and passes as long as nothing raises. When not raising is the contract, assert that outcome explicitly and name it.
-- Self-comparison: the assertion compares a value with itself or with a copy of itself, so no change to the code can make it fail.
-- Expected value from the code under test: the test computes its expected value by calling the code it checks, so the assertion agrees with whatever that code returns. Write the expected value down independently; a committed, reviewed artifact or an independent oracle does not count as the code under test.
-- Negative control passing for an unrelated reason: the rejected input fails on a typo, a missing fixture, or a different guard than the one under test. Assert the reason for the rejection, not only that one happened.
-- Name promising more than the inputs: the test name claims a general rule while its inputs exercise one case. Narrow the name or widen the inputs.
-
-These shapes apply to tests a lane adds. An existing test with one of these shapes is a finding for the lane report; the Forbidden Moves below still bar editing or deleting it to get past a red run.
+- A test those checks reject is not evidence for the lane, red or green. Rewrite it before the red commit. If the shape is found after the red commit, rewrite the test to observe the protected behavior, run it red again, and explain the test diff in the lane report as the red-commit rule requires.
+- When the closest existing test already catches the regression, add nothing: its red run on the unimplemented code is the witness the Evidence Ledger asks for, and if it is already green the behavior exists and there is nothing to implement.
+- An existing test with one of those shapes is a finding for the lane report; the Forbidden Moves below still bar editing or deleting it to get past a red run.
 
 ## Regression Tests for a Bug
 
-A test written for a reported bug must fail on the code before the fix, and fail because of that bug: the failure lines name the bug's symptom, not an import error or an unrelated assertion. Run it against the pre-fix code and paste that red run as the Evidence Ledger requires. If a test already in the suite goes red on the unfixed code for that same reason, its red run is the witness, and no second reproduction is written.
+A test written for a reported bug must fail on the code before the fix, and fail because of that bug: the failure lines name the bug's symptom, not an import error or an unrelated assertion. Run it against the pre-fix code and paste that red run as the Evidence Ledger requires. If a test already in the suite goes red on the unfixed code for that same reason, its red run is the witness, and no second reproduction is written. When no seam can run the pattern that produced the bug, record `regression_seam: none_correct` as the test-authoring page describes instead of writing a test that cannot fail for the bug's reason.
 
 ## The Evidence Ledger
 
@@ -6508,7 +6558,7 @@ Commit the failing test as a checkpoint before the first implementation edit. Th
 
 ## Composition
 
-Hermes bundles the superpowers `test-driven-development` skill. When it is loaded, follow its cycle; this reference reinforces it and never overrides it. What OMH adds is the evidence vocabulary - the observed red-before-green rule, the red-commit checkpoint, and the `prepared_not_observed` labeling of unwitnessed cycles - plus authoring checks applied before a test counts: the questions a new test must answer, the shapes of tests that guard nothing, and the pre-fix failure rule for bug regressions.
+Hermes bundles the superpowers `test-driven-development` skill. When it is loaded, follow its cycle; this reference reinforces it and never overrides it. What OMH adds is the evidence vocabulary - the observed red-before-green rule, the red-commit checkpoint, and the `prepared_not_observed` labeling of unwitnessed cycles - plus the pre-fix failure rule for bug regressions and the shared authoring checks from `omh-verification-gate`'s `references/test-authoring.md` that a test passes before it counts.
 
 ## What This Does Not Change
 
@@ -6518,7 +6568,7 @@ Hermes bundles the superpowers `test-driven-development` skill. When it is loade
 
 ## Attribution
 
-This discipline adapts the red/green/refactor practice popularized by Kent Beck and the obra/superpowers `test-driven-development` skill that Hermes bundles. The questions before a new test, the shapes of tests that guard nothing, and the pre-fix failure rule for bug regressions adapt concepts from code-yeongyu/oh-my-openagent (Sustainable Use License 1.0, concepts only). No upstream text is reproduced. OMH maps the mechanisms onto its own lane, evidence, and `prepared_not_observed` vocabulary.
+This discipline adapts the red/green/refactor practice popularized by Kent Beck and the obra/superpowers `test-driven-development` skill that Hermes bundles. The pre-fix failure rule for bug regressions adapts concepts from code-yeongyu/oh-my-openagent (Sustainable Use License 1.0, concepts only). No upstream text is reproduced. OMH maps the mechanisms onto its own lane, evidence, and `prepared_not_observed` vocabulary.
 """
 
 
@@ -6726,6 +6776,8 @@ def _domain_engineering_reference_templates_cached() -> tuple[SkillReferenceTemp
         SkillReferenceTemplate("backend", "references/service-contract.md", _backend_service_contract_reference()),
         SkillReferenceTemplate("backend", "references/schema-migration.md", _backend_schema_migration_reference()),
         SkillReferenceTemplate("backend", "references/consumer-impact.md", _backend_consumer_impact_reference()),
+        SkillReferenceTemplate("backend", "references/contract-tests.md", _backend_contract_tests_reference()),
+        SkillReferenceTemplate("backend", "references/inbound-and-async.md", _backend_inbound_and_async_reference()),
         SkillReferenceTemplate("rust", "references/rust-discipline.md", _rust_discipline_reference()),
         SkillReferenceTemplate("rust", "references/ub-escalation.md", _rust_ub_escalation_reference()),
         SkillReferenceTemplate(
@@ -6747,7 +6799,7 @@ below is something the executor runs, never OMH."""
 
 
 def _backend_service_contract_reference() -> str:
-    return f"""# Backend Service Contract
+    return """# Backend Service Contract
 
 Load this when preparing a server, API, or job surface. The always-loaded skill body states the rules; this is the filling order, the per-stack pointer table, and the failure modes that make a contract look complete while leaving the boundary undefined.
 
@@ -6759,7 +6811,7 @@ Fill in this order, because each step invalidates a guess made earlier out of or
 
 1. **Callers and trust.** List every caller class and mark it public, partner, internal, or machine. An endpoint whose caller class is unnamed cannot have a correct auth check.
 2. **Auth boundary.** Say exactly where an untrusted request becomes a trusted one -- the middleware, the guard, the token exchange -- and which check runs on each path. Authentication (who) and authorization (may they) are two rows, never one.
-3. **Resource and operation shape.** Name each endpoint or job, its operation, and whether it is safe, idempotent, or neither. A non-idempotent operation reachable by a retrying client needs an idempotency key, and that key is part of the contract, not an implementation detail.
+3. **Resource and operation shape.** Name each endpoint or job, its operation, and whether it is safe, idempotent, or neither. A non-idempotent operation reachable by a retrying client needs an idempotency key, and that key is part of the contract, not an implementation detail. Give each one its expected request rate, latency target, and payload bound, or write `unknown` against each: a page cap, a timeout, a cache, or a pool size chosen without them is a guess.
 4. **Response shape.** One success envelope and one error envelope for the whole surface. Per-endpoint improvisation is the most common source of client-side special-casing.
 5. **Error paths.** Every failure mode gets a row before the happy path is called done.
 6. **Storage.** Only now design tables and indexes; the access patterns are known by this point. Migration order goes in `references/schema-migration.md`.
@@ -6784,6 +6836,7 @@ Two rules the table exists to force:
 | unauthorized | 403 | error envelope, no resource hint | no | log subject and object |
 | not found vs not permitted | pick one deliberately | must not leak existence | no | log the real reason |
 | conflict / version mismatch | 409 | current version, expected version | after refetch | log both versions |
+| duplicate create (unique constraint) | 409 | error envelope naming the conflicting field | no; a replay with the same idempotency key gets the stored response | log the constraint name, never the value |
 | upstream dependency failure | 5xx or 503 | error envelope, retry hint | yes, with backoff | log upstream identity |
 | timeout | 504 or 408 | error envelope | yes, bounded | log duration and budget |
 
@@ -6793,11 +6846,30 @@ The two rows that are always argued about and always matter: **not-found versus 
 
 - One envelope shape for success, one for errors, across the surface.
 - Errors carry a stable machine code alongside the human message. Clients branch on the code; the message is for humans and may be localized.
-- Pagination is one style for the whole surface -- cursor or offset, not both -- and the contract names the ordering key. An unstable sort key makes pagination silently lossy.
+- Pagination is one style for the whole surface -- cursor or offset, not both -- and the contract names the ordering key. The key ends in a unique tie-breaker, such as `(created_at, id)` rather than `created_at` alone: a key with ties drops or repeats rows at page boundaries, and nobody sees it happen.
+- A cursor is opaque to the client and encodes the whole ordering tuple plus the filter and sort it was issued for. A cursor sent back with a different filter or sort is rejected as bad input, never reinterpreted.
+- The page size has a server-side maximum, and the contract says whether a larger request is clamped or rejected. A total count is optional and named as its own cost, not computed for every page by default.
+- An offset page reads and discards every row before it, so a surface that pages deep or grows without bound uses a cursor. The index that serves the cursor is a `relational-db` question; name it in the handoff.
 - Time is one representation. Nullability is explicit. An optional field that is sometimes absent and sometimes `null` is two shapes.
 - Versioning: name how a breaking change reaches clients before the first breaking change, not during it.
 
-## 5. Per-stack reference pointers
+## 5. Integrity under concurrency
+
+Every write two requests can reach at the same time names its guard in the contract. A test that sends one request at a time proves none of these.
+
+- **Uniqueness is a constraint.** A rule like "one account per email" is enforced by a unique constraint or index, and the violation maps to the duplicate-create row in section 3. A pre-check that selects and then inserts is only for a friendlier message: two concurrent requests both pass it.
+- **An idempotency key is stored, not just accepted.** Keep the key, scoped to the caller, under a unique constraint, together with a fingerprint of the request and the response it produced. The key record and its stored response commit in the same transaction as the effect; otherwise a crash between the two re-executes the effect when the request is replayed. The same key with the same request replays the stored response. The same key with a different request is rejected, with one status chosen for the surface. A second request that arrives while the first is still running gets a defined answer, not a second execution. The contract also says how long keys are kept.
+- **Every update that can race names its lost-update guard.** That is a version column checked in the `WHERE` clause (no row updated means 409), an update computed in SQL (`SET stock = stock - $1 WHERE stock >= $1`), or a row lock taken before the read. A read-modify-write in application code with none of these silently loses one of two concurrent writes.
+- **Side effects leave after the commit.** An email, an outbound event, or a webhook to another system is never sent before the transaction that records it commits; a rollback after the send tells the world about a state that does not exist. Either write the effect to an outbox table in the same transaction and deliver it from there, or send it after commit and accept that a crash in between drops it. The contract names which one. Outbox delivery repeats on retry, so its receiver deduplicates.
+- **Name the transaction and its isolation.** Each write path states its transaction boundary, the isolation level it relies on, and any row lock. The engine rules (default isolation per engine, `FOR UPDATE`, `SKIP LOCKED`, upsert, lock order, and which errors to retry) belong to the `relational-db` workflow and its engine lock tables.
+
+## 6. Budgets, timeouts, and caches
+
+- **Timeouts shrink down the chain.** Every call to a dependency -- database, cache, another service, a model API -- has a timeout shorter than what is left of the caller's own budget, so the service can still answer with the timeout row of section 3 instead of being cut off by its own caller. A call with no timeout runs on a library default nobody chose. Retries spend from the same budget.
+- **A cache names its key, its TTL, and the write that invalidates it.** The key covers every input that changes the answer, including the caller's identity when the answer differs per caller. A cache missing any of the three is not part of the contract yet.
+- Webhooks received, queue consumers, and connection-pool sizing have their own rules in `references/inbound-and-async.md`.
+
+## 7. Per-stack reference pointers
 
 The stack is a routing input. Name it in the contract and tell the executor which material to read first; do not restate framework documentation here.
 
@@ -6811,7 +6883,9 @@ The stack is a routing input. Name it in the contract and tell the executor whic
 
 If the stack is unknown, prepare the contract stack-neutral and name the stack as the one blocking input. A stack-neutral contract is useful; a contract written for the wrong stack is not.
 
-## 6. Failure modes
+On any stack, a handler parses and validates its input, calls one domain function, and maps that function's result or error onto the envelope. Business rules live in the domain function, and its interface is what the tests call. An interface in front of storage or a third-party client earns its place when a second implementation of it exists, such as a fake the test suite actually uses; with one implementation it is indirection that nothing exercises.
+
+## 8. Failure modes
 
 | Symptom | What actually went wrong | Correction |
 | --- | --- | --- |
@@ -6820,8 +6894,9 @@ If the stack is unknown, prepare the contract stack-neutral and name the stack a
 | Every endpoint has its own error body | No response-shape contract existed | One envelope for the surface |
 | Tables designed before access patterns | Storage was step one instead of step six | Re-derive the schema from the finished operation list |
 | "It works" from a local run | A local run is not integration evidence | Keep integration, load, and deployment as separate observed states |
+| Uniqueness or a counter passes every test, then duplicates in production | The tests sent one request at a time | Name the constraint or lost-update guard from section 5 |
 
-## 7. Contract authority across a service boundary
+## 9. Contract authority across a service boundary
 
 When a caller outside this change reads the boundary -- another service, a client in a separate repository, a partner, an event subscriber -- the prepared contract names the one file that defines it. Use the description language the repository already keeps for that boundary (OpenAPI for HTTP, AsyncAPI for events, protobuf for RPC calls and their messages, JSON Schema for a standalone payload); do not start a second format beside an existing one.
 
@@ -6835,12 +6910,59 @@ Generators and validators that read the artifact are something the executor runs
 
 The single-authority rule, contract text treated as data, and the reference allowlist adapt the contract-first skill from `affaan-m/everything-claude-code` (MIT). No upstream text is reproduced; the wording and the `prepared_not_observed` boundary are OMH's own.
 
-{_DOMAIN_ENGINEERING_ATTRIBUTION}
+The thin-handler rule and the second-implementation test for an interface in section 7 adapt ideas from Matt Pocock's `codebase-design` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336` (plugin 1.3.1), MIT License, Copyright 2026 Matt Pocock. No upstream text is reproduced.
+"""
+
+
+def _backend_inbound_and_async_reference() -> str:
+    return """# Inbound and Asynchronous Work
+
+Load this when the surface receives webhooks, consumes a message queue, or sizes a connection pool. These are the paths where a delivery the code did not expect to see twice becomes a double charge, and where a missing check is a security defect rather than a style issue.
+
+Everything here is prepared guidance. OMH receives no webhook, reads no queue, and opens no connection.
+
+## 1. Receiving a webhook
+
+Each step runs before the next one.
+
+1. **Verify the signature over the raw body.** Compute the provider's signature over the exact bytes received, before any parsing, and compare it in constant time. A body that was parsed and serialised again is not the body that was signed, so a framework that parses before the handler runs needs its raw-body hook named in the contract. A delivery that fails the check is rejected with nothing processed. The signing secret lives in the secret store, never in the contract; during a rotation the handler accepts the old and the new secret for a stated window.
+2. **Reject stale deliveries.** When the provider signs a timestamp, refuse a delivery outside a stated tolerance of a few minutes, so a captured request cannot be replayed later. When it signs none, the event-id record below is the only replay guard; say so in the contract.
+3. **Record the delivery once.** At receipt, insert the provider's event id under a unique constraint together with the payload. A delivery whose id is already recorded is acknowledged as a success and dropped.
+4. **Acknowledge fast, then process.** Answer 2xx as soon as the delivery is recorded, well inside the provider's timeout, and do the work from a queue or a job. The job marks the event processed in the same transaction that applies its effect (section 5 of `references/service-contract.md`), so a job that crashes before commit runs again and a job that committed does not. A handler that calls slow dependencies before answering times out, the provider retries, and the retry arrives while the first attempt is still running.
+5. **Do not trust order or completeness.** Providers deliver out of order and can drop an event. When the current state matters, treat the event as a notification and read the object from the provider's API instead of applying the event body as a change.
+
+## 2. Consuming a queue
+
+- **Delivery is at least once.** The handler is idempotent: it records the message id under a unique constraint, or its effect is naturally repeatable (setting a value, not adding to one). A broker's exactly-once setting covers the broker, not the database write the handler makes.
+- **Acknowledge after the effect commits.** Acknowledging on receipt loses the message when the handler crashes. Acknowledging after commit redelivers it when the crash lands in between, and idempotency absorbs that.
+- **The lease outlasts the handler.** The visibility timeout or lease is longer than the slowest handler run, or another consumer receives the message while the first is still working on it.
+- **State the ordering assumption.** Name the key that orders messages, such as a partition key or a message group, or state that nothing orders them. A handler that assumes order on a queue that does not keep it applies updates backwards.
+- **Bound the attempts, then dead-letter.** Retries back off and stop at a maximum attempt count; past it the message moves to a dead-letter queue with the failure reason and the attempt count. Name who watches that queue and how a message is replayed from it.
+- **Send a poison message straight to the dead-letter queue.** A message that can never succeed, because it fails validation or points at a row that no longer exists, is not retried. Retrying it blocks the messages behind it.
+
+## 3. Connection pools
+
+- **Size against the database's connection limit.** Pool size times processes per instance times the maximum instance count, plus migrations, admin sessions, and batch jobs, stays under the database's limit with headroom. Autoscaling multiplies the instance count; size for its maximum, or put a connection pooler in front of the database.
+- **Checkout has a timeout inside the request budget.** Waiting for a free connection is part of the request's latency (section 6 of `references/service-contract.md`). A checkout with no timeout turns a saturated pool into hanging requests instead of a fast 503.
+- **No connection is held across a remote call.** A transaction left open while the handler calls another service holds the connection and every row lock it took for the length of that call.
+- **Name the pooler mode.** A pooler that hands out connections per transaction drops session state between transactions: `SET` values, advisory locks, and prepared statements unless the pooler supports them. Name the mode when a pooler is in use.
+
+## 4. Failure modes
+
+| Symptom | What actually went wrong | Correction |
+| --- | --- | --- |
+| Signature checks fail on valid deliveries | The signature was computed over a re-serialised body | Verify over the raw bytes before parsing |
+| A payment or email happens twice | A provider retry or queue redelivery was processed again | Record the event or message id under a unique constraint |
+| Retries pile up during a slow dependency | The handler did the work before acknowledging | Store, acknowledge, process from a job |
+| One bad message stops the queue | It was retried forever at the head of the line | Bound attempts; send poison messages to the dead-letter queue |
+| "Too many connections" after a scale-out | The pool was sized for one instance | Size pool times processes times maximum instances |
+
+Signature checks, delivery counts, and pool saturation are claims about a running system; each stays `not_observed` until the executor reports the observation.
 """
 
 
 def _backend_schema_migration_reference() -> str:
-    return f"""# Schema and Migration Discipline
+    return """# Schema and Migration Discipline
 
 Load this when the prepared backend change touches storage. OMH writes no migration and applies none; this is the order the plan has to have before an executor runs anything.
 
@@ -6865,6 +6987,7 @@ Any of these is a blocker until the plan resolves it explicitly:
 - A new `NOT NULL` column with no default on a populated table.
 - An index creation on a large table without naming whether the engine builds it concurrently.
 - A migration that must run inside the same transaction as a long backfill.
+- A statement that cannot run in a transaction (`CREATE INDEX CONCURRENTLY`) inside a migration the tool wraps in one. Mark that migration non-transactional in the tool and keep the statement alone in it; dropping `CONCURRENTLY` to make the tool accept it turns an online build into a write lock.
 - Two deployments that must land in a specific order with nothing enforcing the order.
 
 ## 3. Compatibility window
@@ -6888,8 +7011,6 @@ A migration plan with no stated compatibility window is a plan that assumes atom
 | The contract step is safe | an observed stable period after the switch, with the duration named |
 
 A prepared plan supports none of these. Every row above stays `not_observed` until the executor reports the observation.
-
-{_DOMAIN_ENGINEERING_ATTRIBUTION}
 """
 
 
@@ -6926,31 +7047,58 @@ Escalation ladder when the checker refuses: restructure ownership, then narrow t
 - Cancellation is part of the contract: state what happens when a future is dropped mid-operation.
 - A hand-written lock-free structure is not ordinary Rust. It escalates.
 
-## 4. The gate list
+## 4. Binaries and CLIs
 
-Name the exact commands, in this order, and treat each as its own observed state:
+Apply this section when the change adds or alters a binary target, a subcommand, or a flag. The command line is a public interface in the same sense as a library's public API.
+
+- **Follow the crate's argument-parser style.** Use the parser the crate already uses, in the style it already uses; one crate does not mix a derive-style and a builder-style definition of the same parser.
+- **Data to stdout, diagnostics to stderr.** Output another program may consume goes to stdout; progress, warnings, and logs go to stderr, so a pipe never carries a log line.
+- **Exit codes are named.** Each non-zero code is a named constant with a documented meaning. A `main` that returns `Result` always exits 1 and prints the error's `Debug` form, so it cannot tell a usage error from a runtime failure; when codes must differ, `main` returns `std::process::ExitCode` (or a type implementing `Termination`) and prints the error itself.
+- **A closed pipe is a clean exit.** Rust ignores `SIGPIPE`, so `println!` into a pipe the reader closed (`| head`) panics. Write through a handle, treat a broken-pipe write error as the end of output, and exit cleanly.
+- **User input never reaches a panic.** A bad argument, a missing file, or malformed input ends in an error message and a non-zero exit, never in an `unwrap`, an `expect`, or an out-of-bounds index with a backtrace.
+- **Help text and flag names are interface.** Renaming or removing a flag, or changing an exit code, is a breaking change with the same semver weight as a public function.
+- **Test through the interface.** Integration tests under `tests/` either call the public library API or run the built binary through `std::process::Command::new(env!("CARGO_BIN_EXE_<name>"))` and assert stdout, stderr, and the exit code together; this needs no new dev-dependency. A `#[cfg(test)]` unit test is for logic the public interface cannot reach. Put I/O behind a trait only when a test actually supplies a second implementation: a trait with one implementation is indirection, not a seam.
+
+## 5. Dependencies
+
+Apply this section when `Cargo.toml` or `Cargo.lock` changes.
+
+- **Prefer what is already there.** The standard library or a crate already in the dependency tree beats a new one.
+- **A new dependency names three things:** its license against the project's allowed set (run `cargo deny check licenses` when the repository already uses cargo-deny), its own `rust-version` against this crate's MSRV, and its features -- `default-features = false` plus the features actually used, unless a default is needed and the handoff says which.
+- **No silent duplicates.** Run `cargo tree -d` after the change. A new second major version of a crate already in the tree is a finding to resolve or justify.
+- **The lockfile is part of the diff.** A `Cargo.lock` change is reviewed like code, and it never rides along unexplained in an unrelated change.
+
+## 6. The gate list
+
+The repository's own gates come first: its CI workflow, its task-runner targets, and its documented check commands decide the flags, and this table fills only what they leave out. Name the exact commands, in this order, and treat each as its own observed state:
 
 | Gate | What it proves | What it does not prove |
 | --- | --- | --- |
-| `cargo fmt --check` | formatting | nothing about behavior |
-| `cargo clippy -- -D warnings` | lint cleanliness at the crate's configured level | nothing about runtime behavior |
-| `cargo test` | the tests that exist pass | nothing about paths without tests |
+| `cargo fmt --all --check` | formatting | nothing about behavior |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | lint cleanliness of library, binaries, tests, examples, and benches with every feature on | runtime behavior; feature combinations other than all-on |
+| `cargo test --workspace --all-features` | the tests that exist pass, doc tests included, with every feature on | paths without tests |
+| `cargo test --workspace --no-default-features` when the crate has features | the crate builds and passes with its features off | the combinations between the two extremes |
 | `cargo test --release` | behavior under optimization | debug-only assertions no longer run |
-| `cargo doc` | doc links resolve, doc tests compile | nothing about API quality |
+| `cargo +<msrv> check --workspace --all-features` when an MSRV is declared | the change builds on the oldest toolchain the crate promises | behavior on that toolchain |
+| `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS="-D warnings"` | doc links and intra-doc paths resolve | nothing about API quality; it does not run doc tests |
 
-Add the repository's own gates rather than assuming this list is complete. When the change is escalated, the Miri and sanitizer gates from `references/ub-escalation.md` are appended and are blocking.
+Plain `cargo test` runs doc tests and `cargo test --all-targets` does not, so a test run that adds `--all-targets` needs its own `cargo test --doc`. Several independent features need more than the two extremes: use the repository's feature-powerset tool when it already has one, or name the combinations that ship. A crate with mutually exclusive features cannot build with `--all-features`; there the repository's own feature sets replace every `--all-features` above. The MSRV check needs a lockfile the MSRV toolchain can read and that was resolved for it: the repository's own MSRV lockfile or job, or a resolution with cargo's MSRV-aware resolver (cargo 1.84 or later, with `resolver = "3"` or `resolver.incompatible-rust-versions = "fallback"` in cargo config; a resolver-2 crate still ignores `rust-version`). A dependency whose `rust-version` exceeds the MSRV is a §5 dependency finding, not a defect in the change under review, unless the change added or bumped that dependency, in which case it is this change's §5 finding. In CI-shaped runs add `--locked`, so the committed lockfile, not a fresh resolution, decides the build. When the change is escalated, the Miri and sanitizer gates from `references/ub-escalation.md` are appended and are blocking.
 
-## 5. Failure modes
+## 7. Failure modes
 
 | Symptom | What actually went wrong | Correction |
 | --- | --- | --- |
 | Clones added until it compiled | Ownership was never designed | Name the owner, then re-derive the borrows |
 | `Rc<RefCell<_>>` everywhere | A compile-time problem was moved to runtime | State the decision, or restructure |
 | `unwrap` in a library path | A contract was assumed rather than encoded | Encode it in the type or return the error |
-| "It compiles" reported as done | Compilation is one gate of five | Report each gate separately |
+| "It compiles" reported as done | Compilation is one gate of several | Report each gate separately |
+| Green locally, red in CI or for a user | The gates ran with default features on the newest toolchain, or clippy skipped the tests | Run the all-targets lint, the feature extremes, and the MSRV check |
+| A CLI panics on bad input or logs into its stdout | The command line was treated as private | Apply §4: error and exit code, stdout for data only |
 | `unsafe` used to end a borrow argument | The change silently became a UB-risk change | Escalate; the compiler stopped checking |
 
 {_DOMAIN_ENGINEERING_ATTRIBUTION}
+
+The binary test shape and the rule that a trait with one implementation is not a seam adapt ideas from Matt Pocock's `codebase-design` and `tdd` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock.
 """
 
 
@@ -7043,6 +7191,11 @@ Write three lines before anything else:
 
 If reproduction is not established, that is the first hypothesis and the first observation. Debugging a fault nobody can trigger produces a story, not a cause.
 
+Once it reproduces, check and shrink it before section 2:
+
+- **Symptom match.** Quote the observed failure beside the one reported. A different crash near the same code is a different fault; this one stays unreproduced.
+- **Minimised.** An input, flag, thread, or step leaves the reproduction only when a rerun without it still shows the fault (at the same rate over the same N, if intermittent). Debug what stays.
+
 ## 2. Three hypotheses on distinct axes
 
 One hypothesis makes every reading confirmatory. Three force observations that *distinguish*. Span the axes rather than rephrasing one guess:
@@ -7062,7 +7215,7 @@ For each hypothesis write: the claim in one sentence; the single observation tha
 
 Prefer a DAP debug adapter -- `lldb-dap`, `codelldb`, or a gdb adapter -- driven by the executor's own debugging surface. It reads state without rebuilding, and it reads state the source never printed.
 
-Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting.
+Print-and-rebuild is the fallback, for when no adapter is available or the fault only appears in an environment that cannot host one. It is slower per iteration, it perturbs timing (which can hide a race), and it can only show values someone already guessed were interesting. Every print it adds carries one tag chosen for the session, such as `[DBG-7f3a]`, and an observed search for that tag returns nothing before the fix is handed over.
 
 The plan names, concretely:
 
@@ -7099,6 +7252,8 @@ A stripped binary changes the evidence available, not the method. The hypotheses
 The last row is the one that gets skipped. A symptom that stopped appearing after an edit, with no mechanism, is an open fault with a changed schedule -- record it as unresolved.
 
 {_DOMAIN_ENGINEERING_ATTRIBUTION}
+
+The symptom match, the minimise step, and the probe tag adapt ideas from Matt Pocock's `diagnosing-bugs` skill at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock.
 """
 
 
@@ -7146,9 +7301,11 @@ One module owns the provider client. It holds the model ID, the credential looku
 
 - **Model ID is exact.** `claude-opus-4-1-20250805`, not `claude-opus-latest`. A floating alias silently re-points under a benchmark, and the run that "regressed" was measuring a different model. Keep the ID in one named constant or config value, and record it beside any result meant to be compared with another result.
 - **Credentials come from the environment or a secret store.** Never a literal in source, a prompt file, a test fixture, or an example. A key committed once is a key rotated forever.
-- **Failures are classified, not swallowed.** Timeout, rate limit, transient 5xx, invalid request, and content refusal are five different outcomes, and only the first three are safe to retry. A single broad `except` around the call turns a schema bug into an infinite retry loop and a quota exhaustion into a silent empty answer.
-- **Retries are bounded and idempotent.** Cap the attempts, back off exponentially with jitter, honor the provider's retry-after header when it sends one, and never retry a request the caller cannot afford to have executed twice.
+- **Failures are classified, not swallowed.** Timeout, rate limit, transient 5xx, invalid request, content refusal, and truncation at the output cap are six different outcomes, and only the first three are safe to retry as sent. A single broad `except` around the call turns a schema bug into an infinite retry loop and a quota exhaustion into a silent empty answer.
+- **Retries are bounded and idempotent.** Cap the attempts, back off exponentially with jitter, honor the provider's retry-after header when it sends one, and never retry a request the caller cannot afford to have executed twice. When the production adapter wraps a provider SDK, turn the SDK's own retries off, because most SDKs retry by default and those retries stack under the boundary's policy; the boundary owns retry.
 - **Timeouts are explicit at both levels.** A per-request timeout and a total budget for the operation; a streaming call that stalls mid-response is not covered by a connect timeout alone.
+- **A stream has a cancel path.** When the client disconnects or the user stops, the boundary cancels the upstream request instead of letting the generation run, and bill, to the end; the call is recorded as `cancelled`, neither a failure nor a success. The record keeps the usage the stream reported up to the cancel; tokens it never reported stay null, never zero, and a cancelled call still counts against the token and cost budgets. Structured output is validated once, on the complete stream. Partial text is shown only as a provisional preview, under the provisional-render rule in `{LLM_APP_DEV_STATEFUL_CONTRACTS_REFERENCE_PATH}`.
+- **The boundary has two adapters.** The seam is at the wire: a request goes in, and a status, headers, and a body or stream of events come out. The production adapter speaks HTTP; a deterministic fake replays fixtures in the provider's wire shape. The boundary's own parsing, failure classification, retry, and cancellation sit above that seam and are the code under test, so the fake must not reimplement them. Use one fixture per scenario, chosen by the test, rather than one responder that branches on the request: a valid response, a schema-invalid one, a refusal, a rate limit carrying retry-after, a stream that times out midway, and a response cut off at the output cap. The mid-stream timeout runs on an injected clock, never a real sleep. Unit tests of parsing, repair, retry classification, tool handling, cancellation, and budget termination run against the fake and never reach the network. Evals run against the pinned real model, and the two never share a suite: a unit test that calls the provider is slow, flaky, and billed, and an eval scored against the fake measures the fixture.
 
 Deferring this rail means every later call site invents its own model pin, timeout, and retry policy, and they diverge without anyone deciding that they should.
 
@@ -7157,8 +7314,10 @@ Deferring this rail means every later call site invents its own model pin, timeo
 Decide the output contract before the prompt. The caller consumes a shape, so declare the shape.
 
 - **Schema first.** A JSON schema, a typed model, or the provider's structured-output/tool-call mode. The schema is the contract; the prompt is the attempt to satisfy it.
+- **Read the stop reason before validating.** A response that stopped at the output-token cap is truncated, not schema-invalid. A repair re-ask under the same cap hits the same wall and fails again at twice the cost. Raise the cap, shrink the requested output, or split the task, and record truncation as its own failure class in the comparison record (`references/eval-harness.md` §6), apart from validation failures.
 - **Validate every response.** Parse and validate before the value reaches any caller. An unvalidated response is an unvalidated input from an external system that happens to be fluent.
 - **Repair once, then fail loudly.** On a validation error, re-ask once with the specific error text included, then fail. An unbounded repair loop is a token bill with no exit condition, and a silent fallback to a default value is the false-green that makes a broken extractor look healthy for a month.
+- **Tool-call arguments are model output too.** Validate them against the tool's declared schema before the tool runs. An invalid call goes back to the model as a tool result carrying the validation error, and it counts against the tool-call budget. That budget, not the repair-once rule above, bounds these retries: after a set number of consecutive invalid calls to the same tool the loop ends with a recorded termination reason. A tool that fails returns an error result the model can see: never thrown past the loop, never swallowed into an empty success. A write tool that fails after a partial effect reports what it applied.
 - **Never regex-scrape prose.** Pulling a field out of a paragraph with a regular expression works until the model rephrases, and then it fails without an error. If the output is worth parsing, it is worth declaring.
 
 Deferring this rail means the parsing lives at the call sites, and every prompt edit becomes a parser edit nobody remembers to make.
@@ -7207,6 +7366,10 @@ A feature with none of these properties records that fact in the handoff and mov
 ## Evidence Boundary
 
 A rail decision, a schema, a prompt layout, or an eval design is prepared work. It is not implementation, an observed eval run, review, CI, or merge evidence. Token counts, latency, and cost belong to runs; a figure no run reported stays null and is never estimated from a pricing table.
+
+## Attribution
+
+The two-adapter rule and the fake without branching logic inside it adapt ideas from Matt Pocock's `codebase-design` and `tdd` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. The failure classes, the fixture list, and the unit-versus-eval split are OMH's own.
 """
 
 
@@ -7296,7 +7459,7 @@ Run the regression **before** the swap, not after it.
 - **Capture tokens and cost per run.** Prompt tokens, completion tokens, and cost belong in the record, because a candidate that is two points better and four times more expensive is a decision, not a win.
 - **Cost is per successful task.** When comparing models or effort settings, divide total cost including failed attempts by tasks that passed; a cheaper call that fails more often is not cheaper. Report time to first useful rendered output and full-task latency separately, with tail percentiles beside the median, and report difficult-task failures on their own line instead of averaging them away.
 - **Configuration first, then calibrated prompts.** Hold the harness and prompt fixed to isolate a model or effort change; only afterward allow comparable prompt tuning per candidate on separate tuning cases, and report the held-out result with each prompt version. Keeping the two comparisons distinct stops a prompt fitted to one model from settling the selection.
-- **Report per-case movement.** Which cases newly pass, which newly fail. A net-positive run that broke a case someone reported last month is not an improvement.
+- **Report per-case movement.** Which cases newly pass, which newly fail. A net-positive run that broke a case someone reported last month is not an improvement. A failing case names its class -- validation failure, truncation at the output cap, refusal, timeout -- so a candidate that only truncates more is not read as one that reasons worse.
 - **Missing telemetry stays null.** If the harness did not report tokens, latency, or cost, the field is null and the report says the harness did not report it. Never reconstruct a token count from a pricing table or a character count; an estimate presented beside observed numbers reads as observed.
 
 ## 7. What A Result Is Not
@@ -8448,6 +8611,20 @@ reviewed repository's own documented standards override this baseline wherever
 they conflict. Cite the smell name in the finding so the author can look up the
 same definition. Adapted from the classic Fowler/Beck catalog.
 
+## Find the repository's standards first
+
+The override can only fire on standards someone read. Before applying the
+baseline, collect the reviewed repository's written conventions: `REVIEW.md`,
+`CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md`, any `*STANDARDS*.md` (such as
+`CODING_STANDARDS.md`), and the linter, formatter, and type-checker
+configuration. A dispatched review receives this list under Constraints
+(`references/review-dispatch.md`); a review run in place builds it itself. Name
+each file found by path and each one looked for and not found, so a reader can
+tell a standard that was checked from one that was never opened.
+
+Those files do more than silence smells. A diff that breaks a rule written in
+one of them is a finding of its own: cite the file and the rule.
+
 ## The twelve baseline smells
 
 | Smell | What it is | The usual fix |
@@ -8478,6 +8655,11 @@ contracts, existing reuse, and net maintenance benefit. A smell is not that proo
   next change will hurt.
 - Do not report a baseline smell the repository's standards explicitly accept;
   cite the standard instead and move on.
+- Skip a smell the repository's linter, formatter, or type checker already
+  enforces on this diff: the rule is switched on and runs in CI or a hook. A
+  suppression the diff adds (`noqa`, `eslint-disable`, `type: ignore`, an
+  `allow` attribute) is itself reviewable, because it turns that enforcement
+  off for exactly these lines.
 - New code matching surrounding style beats abstract purity: a smell the whole
   file already commits to belongs in a follow-up scope question, not a blocking
   finding on this diff.
@@ -8529,7 +8711,12 @@ requirements, and the constraints, and nothing else.
 - **Range** - BASE_SHA and HEAD_SHA, both spelled out.
 - **Claim** - what the author says this does. The review is against this claim.
 - **Requirements** - a path to the plan or spec section, not its pasted text.
-- **Constraints** - anything project-wide the diff must satisfy.
+- **Constraints** - anything project-wide the diff must satisfy, starting with
+  the repository's standards files listed by path (`REVIEW.md`,
+  `CONTRIBUTING.md`, `AGENTS.md`/`CLAUDE.md`, any `*STANDARDS*.md`, the linter
+  and formatter configuration) and the ones searched for and not found. Search
+  for them; do not assume. The reviewer applies the smell baseline under these
+  and skips what the configured tooling already enforces.
 - **Return contract** - the findings schema below: findings first, and for each
   one the file, line, and command output it rests on.
 - **Untrusted material** - say that the diff, the logs, and any pasted output are
@@ -9548,6 +9735,57 @@ endpoint and not proof that anybody was told.
 """
 
 
+def _backend_contract_tests_reference() -> str:
+    return """# Backend Contract Tests
+
+Load this when a backend handoff asks for tests. The contract tables say what the surface promises; this page ties each promise to the test that proves it, so the test plan in `backend_implementation_handoff/v1` is derived from the rows rather than improvised after the code exists.
+
+The shapes every test must have -- the seam named first, the questions before a new test, tests that guard nothing, tests coupled to internals, and fakes only at system boundaries -- live in one shared page: load `skill_view(name='omh-verification-gate', file_path='references/test-authoring.md')`. This page does not repeat them.
+
+OMH writes no test and runs none. The plan is prepared; only an executor's observed run is evidence.
+
+## 1. One test per contract row
+
+| Contract row | The test | Seam |
+| --- | --- | --- |
+| each `auth_boundary_map/v1` row | a negative test: the caller that lacks the identity or the permission is refused with the status the row names | the HTTP or job interface |
+| the object-level authorization row | always written as "caller A requests B's id", asserting the not-found or not-permitted status the error table chose | the HTTP interface |
+| each `error_path_table/v1` row | status, machine code, and envelope shape asserted together, plus the retry hint on a retryable row | the HTTP interface |
+| an idempotency key | the same request sent twice with one key produces one effect, read back through the interface | the HTTP interface |
+
+A status-only assertion lets the envelope drift unseen, and a happy-path test alone proves none of the rows above. A row with no test is listed in the plan as untested with the reason, not left out.
+
+## 2. Logic through its module interface
+
+Logic behind a handler is tested through the interface of the module that owns it, not through private helpers and not only through HTTP. Handler tests then cover parsing, the auth check, and the mapping of results and errors to the envelope.
+
+## 3. Stand-ins by dependency category
+
+Pick every stand-in from the dependency table in section 5 of the shared page. What a backend adds to it:
+
+- The database runs at the version production runs wherever behaviour differs between versions. A managed-only store or a host with no container runtime falls back to the vendor's emulator, with what the emulator does not model named in the plan.
+- A third-party API (payments, email, identity) is faked below the service's own client wrapper, at the transport or vendor client the wrapper is given, and the fake records what was sent; the wrapper's parsing, retry, and error mapping run real, and no test reaches the real vendor.
+
+A repository class replaced by a mock, or an assertion that `save` was called, is a test coupled to internals: the shared page says how to rewrite it.
+
+## 4. Writes are read back through the interface
+
+Check a write by reading it back the way a caller would -- the read endpoint, or the module's read function -- not by querying the table. A table read passes while the read path is broken and fails when the storage layout changes without any behaviour change. The exception is a table another consumer reads directly -- change-data capture, an outbox relay, a reporting job: there the stored shape is itself a contract, and a test asserts it alongside the read-back.
+
+## 5. Migrations run on populated data
+
+A migration test applies the migration to a database that already holds rows in the previous shape, including the null, empty, and boundary values the old shape allowed, never only to an empty schema. It asserts that the migration completes, that backfilled values are right, that code still running against the previous shape keeps working through expand, backfill, and switch until the contract step, and that each step's rollback point (`references/schema-migration.md`) restores a readable state.
+
+## 6. What the plan records
+
+Per test: the contract row it proves, the seam, the stand-ins, and the command the executor runs. A planned test is `prepared_not_observed`; passing tests, applied migrations, and integration runs are recorded only from observed executor output.
+
+## Attribution
+
+One test per contract row, reading writes back through the interface, and stand-ins chosen by dependency category adapt ideas from Matt Pocock's `tdd` and `codebase-design` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. No upstream text is reproduced; the contract-row mapping and the `prepared_not_observed` boundary are OMH's own.
+"""
+
+
 def legal_compliance_reference_templates() -> list[SkillReferenceTemplate]:
     return list(_legal_compliance_reference_templates_cached())
 
@@ -9762,6 +10000,11 @@ def _verification_gate_reference_templates_cached() -> tuple[SkillReferenceTempl
             "references/adaptation-quality.md",
             _adaptation_quality_reference(),
         ),
+        SkillReferenceTemplate(
+            "verification-gate",
+            "references/test-authoring.md",
+            _test_authoring_reference(),
+        ),
     )
 
 
@@ -9871,6 +10114,79 @@ output-quality parity it did not demonstrate.
 Structural native_capability_quality_gate checks are not output-quality evidence.
 Procedure/link contract tests prove delivery of these instructions, not artistic
 validation, live-agent compliance, or that any future adaptation preserves quality.
+"""
+
+
+def _test_authoring_reference() -> str:
+    return """# Test Authoring
+
+Load this before writing or changing a test in any lane, whether or not the run is tests-first. It is the shape a test must have before its result counts as evidence. A tests-first lane also follows `ulw-work`'s `references/tdd-red-green.md`, which adds the red-before-green order and the red-commit checkpoint on top of this page.
+
+This page shapes tests; it runs none. A test that was written but not run is `prepared_not_observed`, and only an observed run is evidence.
+
+## 1. Name the Seam First
+
+The seam is the interface the test drives and reads back through: a public function or module interface, an HTTP route, a CLI command, a rendered component as a user meets it. Name the seam for each planned test in the handoff before the test is written, with one line on what a test there catches and what it cannot see.
+
+Prefer the seam real callers use. A test at a seam no production caller uses checks a path nobody runs.
+
+## 2. Questions Before a New Test
+
+Answer these four in the lane or handoff report before writing a new test; each answer either justifies the test or redirects the work.
+
+1. Behavior protected: name the observable behavior, invariant, or contract a caller depends on. If none exists, there is nothing for a test to witness: say so in the report and let the reviewer judge.
+2. Plausible regression: name a concrete code change someone could make that this test would turn red. A test no plausible change can break guards nothing.
+3. Why existing coverage misses it: point to the closest existing test and say why that regression slips past it. If that test already catches the regression, add nothing. If it owns the same contract but lacks this case, add the case to that test rather than a near-copy beside it.
+4. Production seam: say whether the test needs an export, flag, or hook that no production caller uses. If it does, test through the real entry point instead; if a new seam is unavoidable, name it in the report for the reviewer.
+
+## 3. Tests That Guard Nothing
+
+A new test with any of these shapes is not evidence, whether it passes or fails. Rewrite it so it observes the behavior from question 1:
+
+- No-assertion probe: the test calls the code and passes as long as nothing raises. When not raising is the contract, assert that outcome explicitly and name it.
+- Self-comparison: the assertion compares a value with itself or with a copy of itself, so no change to the code can make it fail.
+- Expected value from the code under test: the test computes its expected value by calling the code it checks, or by repeating the computation the code performs, so the assertion agrees with whatever that code returns. Write the expected value down independently; a committed, reviewed artifact or an independent oracle does not count as the code under test.
+- Negative control passing for an unrelated reason: the rejected input fails on a typo, a missing fixture, or a different guard than the one under test. Assert the reason for the rejection, not only that one happened.
+- Name promising more than the inputs: the test name claims a general rule while its inputs exercise one case. Narrow the name or widen the inputs.
+
+An existing test with one of these shapes is a finding for the report, not something to edit away in passing.
+
+## 4. Tests Coupled to Internals
+
+These tests fail the other way: they go red when the code is restructured without any change in behavior, and they can stay green when behavior breaks. The tell is a refactor that keeps every caller's result the same and still turns the test red.
+
+- Own-module fake: the test replaces a module, class, or function the repository owns, other than the boundary adapter section 5 names, with a fake, so the code under test never runs against the real collaborator it ships with.
+- Call-count assertion: the test asserts that an internal collaborator was called, how many times, in what order, or with which arguments, instead of asserting the result a caller sees.
+- Side-channel read: the test checks a write by reading the table row, the private field, or the cache entry directly when the seam itself can read the result back. Read it back through the seam.
+
+Rewrite such a test to drive the seam and assert what the seam returns or exposes. One exception: when crossing a system boundary is itself the contract (a payment is charged exactly once, one message reaches the third party), assert on what the boundary fake recorded as crossing the boundary, not on the internal calls that led there.
+
+## 5. Fakes Only at System Boundaries
+
+A stand-in replaces a dependency only where the process leaves the repository's control. Pick it by dependency category:
+
+| Dependency | Stand-in |
+| --- | --- |
+| Code the repository owns, in process | none: it runs real |
+| A datastore | a local throwaway instance of the same engine; never a different engine whose locking, types, and constraints differ. When the engine cannot run locally (a managed-only store, no container runtime), use the vendor's emulator and name what it does not model; when neither runs, list the test as untested with the reason |
+| A service the same team owns, across the network | an in-memory adapter that implements the same interface the production client does |
+| A third-party service | a fake below the repository's wrapper (the injected transport or vendor client), so the wrapper's parsing, retry, and error mapping run real; fake the wrapper's interface only in tests of its callers |
+| Clock, randomness, generated ids | injected and pinned to fixed values |
+| Filesystem or local network | a temporary directory or a local server; a fake only when the real one cannot be made deterministic |
+
+A boundary that no stand-in can reach without patching deep inside the code is a design finding, not a test-writing problem. Change the code so the dependency arrives from outside the function that uses it, and name that change in the handoff; because production code calls it, it is not the test-only seam question 4 rejects.
+
+## 6. When No Correct Seam Exists
+
+A regression test earns its place only when it reproduces the conditions the bug needed, not just the function it lived in. A lost update needs two writers inside one transaction window; a fault that appears only when the retry wrapper re-enters the handler needs that re-entry. A test that drives the same code without those conditions passes on the pre-fix code and guards nothing with a fix attached.
+
+1. First try to run the pattern at the seam you can reach: concurrent callers released together through a barrier at an existing injection point, or the real call chain driven from its entry point instead of the innermost function.
+2. When the pattern is probabilistic, measure the test's hit rate on the pre-fix code over N runs before calling it red. "Fails before the fix" means a measured rate, and "passes after" means zero failures over enough runs to beat that rate.
+3. Only when the pattern cannot run at any reachable seam, record `regression_seam: none_correct` with the reason and the attempts that failed. Keep the reproduction loop as the fix's verification, observed red before the fix and green after it, and report the missing seam as an architecture finding (an `omh-refactor-plan` candidate). Do not write the shallow test, and do not bend it until it happens to fail before the fix.
+
+## Attribution
+
+The seam named before the test, the coupled-to-internals shapes, fakes only at system boundaries, and the no-correct-seam outcome adapt ideas from Matt Pocock's `tdd` and `diagnosing-bugs` skills at `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, MIT License, Copyright 2026 Matt Pocock. The questions before a new test and the shapes of tests that guard nothing adapt concepts from code-yeongyu/oh-my-openagent (Sustainable Use License 1.0, concepts only). No upstream text is reproduced; the wording and the `prepared_not_observed` boundary are OMH's own.
 """
 
 
@@ -14737,8 +15053,49 @@ What stays with `ask`:
 
 def decision_prototype_reference_templates() -> list[SkillReferenceTemplate]:
     return [
-        SkillReferenceTemplate("decision-prototype", "references/spike-composition.md", _spike_composition_reference())
+        SkillReferenceTemplate("decision-prototype", "references/spike-composition.md", _spike_composition_reference()),
+        SkillReferenceTemplate("decision-prototype", "references/artifact-shapes.md", _decision_prototype_artifact_shapes_reference()),
     ]
+
+
+def _decision_prototype_artifact_shapes_reference() -> str:
+    """What a good artifact looks like for a logic question, a layout question, and kept prototype code."""
+    return """# Artifact shapes
+
+Load this when the decision question is about logic or state, about an interaction or layout, or when the receipt may let later work reference the prototype code. The question picks the shape, and the wrong shape spends the budget on an artifact that cannot answer it. A question that fits neither shape keeps the artifact kinds `prototype_smallest_artifact_check` lists.
+
+Every shape below is built inside the declared scratch boundary. When the artifact belongs inside the real application, that boundary is a temporary worktree of the repository, never the working tree the user is editing.
+
+## Logic or state question
+
+The question sounds like "does this state model refuse that sequence" or "can this data shape represent that case".
+
+- Put the decision-bearing logic in one pure module: no I/O, no UI, and no clock, randomness, or network it was not handed as an argument. A thin driver (a script, a CLI loop, a page) calls into the module and nothing calls out of it. The module is the part a later accepted plan may lift; the driver is discarded.
+- Pick the module's form from the question: a reducer over discrete actions, an explicit state machine when which actions are legal right now is part of the question, or plain functions over a data type when there is no current state.
+- After every action, the driver prints the full relevant state, labelled in the domain's own words, and marks what changed, so the observation ledger quotes state instead of narrating it.
+- Keep state in memory. Persistence enters only when persistence is the question, and then as a scratch store inside the boundary whose name says it is a prototype.
+- Start it with one command, written into the prepared handoff.
+- Script the runs the hypothesis turns on: the expected path, the awkward edge case, and one sequence that should be refused. Each run starts from a reset to the same initial state, so a rerun observes the same thing.
+
+## Interaction or layout question
+
+- Build at least two variants and at most five, differing in structure: layout, information hierarchy, or primary action. Variants that differ only in colour, spacing, or copy cannot settle a layout question; when two come out alike, rebuild one with the shared structure ruled out.
+- Mount the variants in the real host page or route, with its navigation, density, and data loading in place. A blank route makes every variant look acceptable. Use a new route only when no existing page could host the thing, follow the project's own routing convention, and name the route as a prototype.
+- Only the rendered part differs per variant; the data loading and access checks above it stay as they are. Switching needs no rebuild (a query parameter or a development-only switch), and the switch never reaches a production build.
+- Stub every write: a variant never performs a real mutation, because the question is how the surface is read and used, not whether the backend works. The data shown follows the skill's fixture rule: synthetic or development data unless the user approved real data for this run.
+- The measurement names the target task and what counts as better (completion, errors, the variant the user picks and why). Record picks per variant; a mixed answer, such as one variant's header with another's list, is recorded as that, not rounded to one variant.
+
+## Keeping the code
+
+- When the receipt lets later work reference the prototype code, commit it on a named throwaway ref: the temporary worktree's own branch, named for the decision id (for example `prototype/<decision_id>`) and declared with the scratch boundary. The receipt cites the ref and the commit.
+- The ref is never merged and never becomes the default branch. Pushing it to a remote is external publication and goes through the existing approval gate.
+- Removing the worktree directory is the cleanup to observe. Record `keep_discard_decision` as kept on the ref and `cleanup_status` as worktree removed, ref retained, never `discarded`, since the code still exists. Without reference permission, the branch is deleted with the worktree, the cleanup observes both, and only then is the result `discarded`.
+- A later accepted plan lifts the pure module or rebuilds the chosen variant to production standard; it never merges the prototype branch.
+
+## Attribution
+
+The three shapes adapt ideas from Matt Pocock's `prototype` skill (`SKILL.md`, `LOGIC.md`, `UI.md`) at `mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888`, MIT License, Copyright 2026 Matt Pocock. OMH keeps its own scratch boundary, observation ledger, and receipt, and does not take the upstream single-file demo page or variant switcher bar.
+"""
 
 
 def _spike_composition_reference() -> str:
