@@ -9,14 +9,43 @@ All notable changes will be documented here.
   standards files (`REVIEW.md`, `CONTRIBUTING.md`, `AGENTS.md`/`CLAUDE.md`,
   `*STANDARDS*.md`, linter and formatter configuration) before the smell
   baseline applies, hands that list to a dispatched reviewer, and skips
-  smells the configured tooling already enforces. `omh-commit-pr-authoring`'s
-  no-template fallback says whether a revert undoes the change or what it
+  smells the configured tooling already enforces on the diff.
+  `omh-commit-pr-authoring`'s no-template fallback says whether a revert undoes the change or what it
   leaves behind, and a structural change shows the smallest file tree, call
   tree or diff sketch of its new shape. `omh-rules-distill` classes each
   recurring miss as mechanical (it becomes a check, proven by failing on an
   injected violation) or judgement (prose). `omh-codebase-onboarding` checks
   its own repo map, reading path, glossary, risk map and first-task runway
   instead of a generic planning checklist.
+
+- **`/resume` always answers, and `omh --resume` opens the picker.** A bare
+  `/resume` (or `/sessions`, Ctrl+X) drew nothing until Hermes answered the
+  list, which during a turn can take a while. Now `Loading sessions…` stands
+  where the picker opens, keys typed meanwhile stay in the composer (the
+  picker opens with an empty filter and the draft is there when it closes),
+  and no stored session, a refusal in Hermes' words, or no answer within the
+  call's wait each say so. A list that arrives after you typed into the
+  composer shows its rows but leaves your typing in the composer, pauses
+  included, and the next prompt too after Enter sends one; ↑, ↓ or Esc hands
+  it the keys, and its filter row says so. `omh --resume` with no id (short form `-r`) starts
+  the TUI on that picker; `omh --resume <id>` and `omh --continue` are
+  unchanged.
+
+- **A prompt sent while a session switch waits goes to the session it opens.**
+  While `/new`, `/resume <id>` or a pick waits on Hermes, `switching to
+  <title>…` (or `starting a new session…`) shows under the queue, and a prompt
+  sent then is held and sent in the new session once it is live; before, it
+  went into the session being left, which was then closed. That holds for
+  plan-mode prompts, slash and skill commands and `!` lines too. Prompts still
+  queued behind the old session's turn come back to the composer with a
+  notice instead of vanishing, and so do prompts held for a switch that
+  failed. Of two switches out at once only the newer lands: a session the
+  older one opened late is closed again, with a notice on the new screen,
+  but never the session the newest switch goes to. Asking again for a switch
+  already out sends nothing, and a switch answered after its wait ran out
+  has the session it opened closed again. A second `/resume`
+  while the list is out sends no second call, and an answer that comes while
+  the picker is open no longer resets its highlight or filter.
 
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
