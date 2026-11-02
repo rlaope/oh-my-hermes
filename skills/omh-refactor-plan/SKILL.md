@@ -55,6 +55,7 @@ Bad example:
 - If the import graph is unavailable, build the codegraph first or reduce the plan's confidence and say which files are unverified.
 - If a phase cannot be made independently green, split it further; two half-phases beat one unabortable one.
 - If reconnaissance finds the direction itself is unsettled, route back to `ralplan` before ordering phases.
+- If the module to deepen is chosen but its interface is not, shape it under contrasting constraints and recommend one design before phase 1; that is not a contested direction.
 
 ## Workflow Lane
 
@@ -91,7 +92,7 @@ Hermes owns reconnaissance and the phased plan; implementation of any approved p
 
 Required inputs:
 
-- the decided target shape (what moves where), or a pointer to the accepted plan that decided it
+- the decided target shape (what moves where), or a pointer to the accepted plan that decided it; for a chosen deepening candidate whose interface is still open, shape it first per `omh-refactor-plan/references/interface-shaping.md`
 - the affected-file evidence: import graph, codegraph handoff, or an observed file inventory
 - the regression gates that exist today (test suite, typecheck, generated-artifact checks)
 

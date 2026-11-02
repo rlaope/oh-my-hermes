@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
+  architecture-deepening reading: it looks for shallow modules (an interface
+  nearly as large as what it hides), proves each one with the deletion test
+  rather than its size, classifies its dependencies to say how the deepened
+  module will be tested, and ranks the candidates as ledger rows with one top
+  pick, proposing no interface. `refactor-plan` then shapes the chosen
+  module's interface: at least three designs under contrasting constraints,
+  compared on depth, locality and seam placement, one recommendation, and the
+  approval gate unchanged. Its tests phase now deletes tests that reach past
+  the new interface once an interface-level test covers them, and
+  `ai-slop-cleaner` keeps a single-caller module that hides real complexity
+  instead of inlining it. "improve the codebase architecture", "find shallow
+  modules", "find deepening opportunities" and "아키텍처 개선점 찾아줘" now reach
+  the audit; on main they asked about codebase onboarding, the CTO loop, or
+  unrelated lanes. The bare word "architecture" still scores nothing for it.
+
 - **Hermes picks up the new OMH skills after an update without a restart.**
   A running Hermes resolves `skills.external_dirs` once and keeps the path
   until `config.yaml` changes, so after `omh update` moved the `current`

@@ -1089,17 +1089,18 @@
 }
 },
 {
-"anchors":"budget clean cleanup codebas quick rank win worst",
-"hangul":"감사 기술 부채 사해 술부 원장 장부 점검",
-"hangul_anchors":"감사 기술 부채 사해 술부 원장 장부 점검",
+"anchors":"budget clean cleanup quick rank win worst",
+"hangul":"감사 개선 기술 부채 사해 선점 선해 술부 아키 원장 장부 점검 키텍 텍처",
+"hangul_anchors":"감사 개선 기술 부채 사해 선점 선해 술부 아키 원장 장부 점검 키텍 텍처",
 "label":"omh-tech-debt-audit",
 "name":"tech-debt-audit",
-"situation":"Accumulated tech debt to rank",
+"situation":"Accumulated tech debt or architecture deepening to rank",
 "terms":{
-"1":"against big build carri citation diff dimension evidenc find judg measur named new observ orient previous rather reconcil repo rerun resolv separat spot",
-"2":"accumulat budget cleanup effort file first fix line plan problem severity technical week worst",
-"3":"clean codebas",
+"1":"big build carri citation diff dimension evidenc find judg measur named new observ orient rather reconcil repo rerun resolv separat spot",
+"2":"accumulat budget cleanup effort file first fix hard improv improvement line modul opportunity plan problem severity shallow technical test week worst",
+"3":"architectur clean deepen",
 "4":"code ledger quick rank report win",
+"5":"codebas",
 "6":"audit tech",
 "9":"debt"
 }

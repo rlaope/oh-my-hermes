@@ -90,7 +90,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # and so do two throwaway OMH test messages and the user's own router,
         # two tasks on what OMH selected or picked, and a Korean test request,
         # and eight messages where a command follows what OMH chose.
-        self.assertEqual(payload["summary"]["case_count"], 1322)
+        self.assertEqual(payload["summary"]["case_count"], 1327)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -238,7 +238,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # reports or meta questions keep workflow-learning. A later command keeps
         # release-cut, and two more reports keep workflow-learning. A command
         # after "then" keeps command-operator, and "list the reasons" is a report.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1219)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1225)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

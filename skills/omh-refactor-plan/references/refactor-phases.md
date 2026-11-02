@@ -36,8 +36,12 @@ precede tests, tests precede cleanup:
    until the last group lands. Verification: the full suite per group.
    Rollback: revert the group, not the phase.
 4. **Tests** - retarget tests that asserted the old shape; add the boundary
-   locks the new shape needs. Verification: the full suite, plus a check that
-   coverage did not silently narrow.
+   locks the new shape needs. A test that reaches past the new interface is
+   rewritten through it, or deleted once an interface-level test observes the
+   same behaviour; keeping both layers makes every later internal change edit
+   two suites. Name each deleted test and the interface test that covers it.
+   Verification: the full suite, plus a check that coverage did not silently
+   narrow.
 5. **Cleanup** - delete the old contracts and their shims; this is the first
    phase that removes anything. Verification: the full suite plus a dead-code
    sweep. Rollback: restore from the tag cut before cleanup.

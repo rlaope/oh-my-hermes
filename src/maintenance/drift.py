@@ -959,7 +959,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # own command (copy, open, set, run) is not a report (+4).
             # #2440 re-review 3: bump, ship, check into git and find the bug
             # after what OMH chose are requests too (+4).
-            expected=1322,
+            # feature/architecture-deepening: shallow water, a new system's
+            # architecture, a roadmap trade-off, a Korean system design and an
+            # architecture firm never name tech-debt-audit (+5).
+            expected=1327,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1527,7 +1530,11 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # naming workflow learning stays about OMH (+3).
             # #2440 re-review 3: a command after "then" keeps command-operator,
             # and "list the reasons" after what OMH chose is a complaint (+2).
-            expected=1219,
+            # feature/architecture-deepening: four architecture-deepening
+            # requests (one Korean) dispatch tech-debt-audit, a hard-to-test
+            # module names it as the clarify candidate, and improving an
+            # architecture diagram stays codebase-uml's dispatch (+6).
+            expected=1225,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),

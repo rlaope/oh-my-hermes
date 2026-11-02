@@ -3795,8 +3795,40 @@ _WHOLE_PHRASE_ONLY_TRIGGER_TOKENS = {
     # they claimed finance chat and every review request. Complete phrases
     # ("tech debt", "debt ledger", ...) carry the intent; no single token is
     # unambiguous alone.
+    # The architecture-deepening phrases are held the same way: "architecture"
+    # is system design, diagrams, and the CTO roadmap; "improve", "hard",
+    # "test" and "module" are everyday; "shallow" and "deepening" are water
+    # and relationships. Only the complete phrases ("improve the
+    # architecture of", "shallow module", "module is hard to test", ...)
+    # score, and "improve the architecture" ends in "of" so that "improve the
+    # architecture diagram" stays the diagram's request.
     "tech-debt-audit": frozenset(
-        {"audit", "code", "debt", "is", "ledger", "our", "report", "tech", "technical", "where"}
+        {
+            "architecture",
+            "audit",
+            "code",
+            "codebase",
+            "debt",
+            "deepening",
+            "hard",
+            "improve",
+            "improvements",
+            "is",
+            "ledger",
+            "module",
+            "modules",
+            "of",
+            "opportunities",
+            "our",
+            "report",
+            "shallow",
+            "tech",
+            "technical",
+            "test",
+            "the",
+            "to",
+            "where",
+        }
     ),
     # `award-bar-score` names its work with words every other lane owns --
     # "design" is the whole materials lane, "review" is code-review, "site",
