@@ -39,7 +39,7 @@ No signal means the check is skipped. Every other outcome fires it as it fired b
 
 - a changed source file that is not Python;
 - a Python file changed this turn without a turn-start snapshot (``opaque_edit``), including a racy one
-  that could not be read to digest, which counts as changed;
+  too large or unreadable to digest, which counts as changed;
 - a changed file that does not parse;
 - a non-trivial change that touches no definition, import or docstring (``unattributed``);
 - an index or scan over its entry or time budget, or a root cached as over budget;
@@ -84,6 +84,10 @@ SCAN_SECONDS: Final = 2.0
 # A file modified this close to the index's clock is racy: a later same-size rewrite can land in the
 # same tick of the filesystem's clock (about 16 ms on Windows, a scheduler tick on Linux, 1 s on HFS+)
 # and leave its (mtime, size) unmoved. Such a file is indexed with a digest of its bytes as well.
+# Each digest is a read inside the index's budget, so a workspace with many files this fresh (a
+# checkout seconds old) can run the index past INDEX_SECONDS, which fails open as `index_budget`.
+# The window is measured on this machine's clock: on a network filesystem whose server clock lags it
+# by more than the window less one tick, a fresh file is not digested and such a rewrite goes unseen.
 RACY_WINDOW_NS: Final = 2_000_000_000
 _DEADLINE_EVERY: Final = 64
 # A root whose index ran over budget is not walked again for this long, in this process: later turns
@@ -506,7 +510,7 @@ def _index(root: str, deadline: float) -> dict[str, tuple[Any, ...]]:
 def _differs(indexed: tuple[Any, ...] | None, current: tuple[Any, ...] | None, path: str) -> bool:
     """Whether ``path`` changed since the index saw it as ``indexed`` (None: absent then). ``current`` is
     its stat or index entry now (None: absent now). An unmoved stat proves nothing for a racy entry, so
-    its bytes are compared; one that could not be read to digest counts as changed."""
+    its bytes are compared; one too large or unreadable to digest counts as changed."""
     if indexed is None or current is None:
         return indexed is not current
     if indexed[:2] != current[:2]:
@@ -517,13 +521,17 @@ def _differs(indexed: tuple[Any, ...] | None, current: tuple[Any, ...] | None, p
 
 
 def _digest(path: str) -> str | None:
-    """A digest of the file's bytes, all of them (an oversized file is ruled on by the scan, not here);
-    None when it cannot be read."""
+    """A digest of a racy file's bytes; None when it is larger than ``MAX_FILE_BYTES`` (checked before
+    any read, so the pre-edit snapshot, which has no deadline, never reads a large file whole) or cannot
+    be read. ``_differs`` counts None as changed, as the scan counts a file it cannot read."""
     try:
         with open(path, "rb") as handle:
-            return hashlib.file_digest(handle, "sha256").hexdigest()
+            if os.fstat(handle.fileno()).st_size > MAX_FILE_BYTES:
+                return None
+            data = handle.read(MAX_FILE_BYTES + 1)
     except OSError:
         return None
+    return hashlib.sha256(data).hexdigest() if len(data) <= MAX_FILE_BYTES else None
 
 
 def _stat(path: str) -> tuple[int, int] | None:
