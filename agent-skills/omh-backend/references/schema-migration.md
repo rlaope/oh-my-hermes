@@ -23,6 +23,7 @@ Any of these is a blocker until the plan resolves it explicitly:
 - A new `NOT NULL` column with no default on a populated table.
 - An index creation on a large table without naming whether the engine builds it concurrently.
 - A migration that must run inside the same transaction as a long backfill.
+- A statement that cannot run in a transaction (`CREATE INDEX CONCURRENTLY`) inside a migration the tool wraps in one. Mark that migration non-transactional in the tool and keep the statement alone in it; dropping `CONCURRENTLY` to make the tool accept it turns an online build into a write lock.
 - Two deployments that must land in a specific order with nothing enforcing the order.
 
 ## 3. Compatibility window
@@ -46,14 +47,3 @@ A migration plan with no stated compatibility window is a plan that assumes atom
 | The contract step is safe | an observed stable period after the switch, with the duration named |
 
 A prepared plan supports none of these. Every row above stays `not_observed` until the executor reports the observation.
-
-## Attribution
-
-Concept lineage only. The idea of a mandatory per-language reference gate that
-escalates on `unsafe`/FFI contact, and of a hypothesis-first native debugging
-loop, is adapted from the `programming` and `debugging` skills of an
-upstream coding-agent plugin; the DAP-over-printf preference is adapted from `can1357/oh-my-pi`'s
-first-class debug adapter tooling. No upstream text is reproduced -- the
-wording, the artifact vocabulary, and the `prepared_not_observed` claim
-boundary are OMH's own, and OMH keeps its no-execution boundary: every command
-below is something the executor runs, never OMH.
