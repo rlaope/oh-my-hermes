@@ -128,6 +128,7 @@ import re
 import unicodedata
 
 from .jev_consent import BACKFILL_SEPARATOR, HOST_BLOCK_END, HOST_BLOCK_OPENERS, SENDER_PREFIX
+from .memory_query_sanitizer import GATEWAY_ORIGIN_CLOSING, GATEWAY_ORIGIN_OPENING
 from .reference_regions import executable_routing_text
 from .request_lead import after_courtesy
 from .show_reel_cues import backfill_is_inert
@@ -203,6 +204,27 @@ _BLOCK_CLOSES = (
 # its own (`jev_consent` counts it unsplittable too), so no cut finds where the
 # person's words start: the turn is left whole, as it read before this module.
 _UNSPLITTABLE_BLOCK = "[Quoted message]"
+# A message that reaches a messaging gateway while the agent is busy steers or
+# redirects the running turn with its origin written before it
+# (`_steer_text_with_origin`, `gateway/run_busy.py`): this opening line, the
+# origin as one JSON line, and this closing line, then a blank line and the
+# person's text. A redirect opens a turn on that text. Read as the request,
+# the JSON keys (platform, chat, thread, profile, message, reply) ranked the
+# same three skills on every such Discord or Slack turn and, being ASCII,
+# kept a Korean request off the Hangul line. Hermes joins steers that arrive
+# together with a newline (`agent/interrupt_control.py`) and a leftover steer
+# opens the next turn (`run_busy.py`), so a turn can hold several blocks, each
+# at the start of a line: every one is cut and the person's lines stay in
+# order. Only the exact shape is cut: the opening line, one JSON object of ids
+# on one line (`json.dumps(ensure_ascii=True)` with `[` and `]` escaped, so no
+# bracket), the closing line, a blank line. The two lines are
+# `memory_query_sanitizer`'s, the one source for both readers.
+_GATEWAY_ORIGIN_BLOCK = re.compile(
+    r"^" + re.escape(GATEWAY_ORIGIN_OPENING) + r"\n"
+    r"\{[^\n\[\]]*\}\n"
+    + re.escape(GATEWAY_ORIGIN_CLOSING) + r"\n\n",
+    re.MULTILINE,
+)
 # Hermes writes `[<display name>] ` before the person's text in a shared session
 # on a messaging gateway and nowhere else (`_prefix_inbound_sender_context`:
 # `is_shared_multi_user_session` and a user name). The name is one line with its
@@ -417,7 +439,7 @@ def _after_gateway_material(text: str) -> str:
     never closes, or that cannot be split, is left in place."""
     if BACKFILL_SEPARATOR in text:
         text = text.rsplit(BACKFILL_SEPARATOR, 1)[1]
-    text = text.lstrip()
+    text = _GATEWAY_ORIGIN_BLOCK.sub("", text.lstrip()).lstrip()
     while text.startswith(HOST_BLOCK_OPENERS) and not text.startswith(_UNSPLITTABLE_BLOCK):
         end, block_end = -1, HOST_BLOCK_END
         for opener, close in _BLOCK_CLOSES:

@@ -986,7 +986,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # omh/code-skills-round-followups: the same dress code and QR
             # code in the architecture request form never dispatch it (+2,
             # no forbidden_candidate: they name it as a clarify candidate).
-            expected=1388,
+            # fix/design-hint-precision: a concept question and a Korean
+            # remark under a busy-path gateway origin never dispatch
+            # gateway-intent-card (+2).
+            expected=1390,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
@@ -1572,7 +1575,10 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # the audit in the question, a tech-debt request that also names
             # the architecture still dispatches it, and Korean meeting notes
             # and a paper search keep operating-rhythm and source-finder (+3).
-            expected=1236,
+            # fix/design-hint-precision: a demo-video request, a Korean
+            # build-fix request and a PR review under a busy-path gateway
+            # origin route as they do bare (+3).
+            expected=1239,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
