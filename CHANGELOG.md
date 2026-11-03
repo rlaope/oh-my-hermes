@@ -13,7 +13,9 @@ All notable changes will be documented here.
   not at all. Set them with `omh memory recall-line` and `omh memory
   recall-mode`; `omh memory status` shows both. A `memory_mode` of `off`, or a
   disabled `retain_knowledge` family, now actually stops recall: before, the
-  provider and the recall tool kept serving records under it.
+  provider and the recall tool kept serving records under it. It also stops
+  the consolidation brief and the save reminder, which asked for saves that
+  `off` refuses.
 
 - **Running work survives a context compaction.** When Hermes compacts a
   session, OMH now hands its summarizer the work this conversation still has

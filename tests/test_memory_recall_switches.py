@@ -25,6 +25,7 @@ from _local_package import load_local_package
 load_local_package()
 
 from omh.install.config_adapter import memory_provider_selection, set_plugin_setting  # noqa: E402
+from omh.plugin_bundle.omh.memory_dreaming import DEFAULT_TURN_INTERVAL  # noqa: E402
 from omh.plugin_bundle.omh.memory_blocks import approve_memory_block, build_memory_block, write_memory_block  # noqa: E402
 from omh.plugin_bundle.omh.memory_provider import OmhMemoryProvider  # noqa: E402
 from omh.plugin_bundle.omh.memory_recall_settings import (  # noqa: E402
@@ -240,9 +241,10 @@ class MemoryModeOffTests(_Switches):
         self.assertNotIn("update failed", recalled["next_action"])
 
     def raise_brief(self) -> None:
-        """A console session that ends with an unconsolidated turn leaves a brief for the next one."""
+        """A console session that ends with a turn interval's worth of unconsolidated turns leaves a brief for the next one."""
         earlier = self.on("tui", "tui-earlier")
-        self.turn(earlier, 1, "hello")
+        for number in range(1, DEFAULT_TURN_INTERVAL + 1):
+            self.turn(earlier, number, "hello")
         earlier.shutdown()
 
     def test_under_memory_mode_off_no_capture_prompt_is_served(self) -> None:
