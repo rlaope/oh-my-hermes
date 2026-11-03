@@ -902,6 +902,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "Handlers must not raise into the host: an unexpected failure is `ok: false`, error "
         "`unexpected_error` with the exception class, never a diagnostics list or a file reported checked.",
     ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/installed_skills.py",
+        "hermes_skill_search_roots",
+        INTENTIONAL,
+        "Hermes' own skill-root reader runs inside `pre_llm_call` and must not raise into the host; a failure "
+        "means 'resolution unknown' and the hint keeps the manifest's installed set, which is exactly what it "
+        "named before this check existed. The same question is answered independently, and surfaced, by "
+        "the `hermes_skill_visibility` doctor row and the launch card's count warning.",
+    ),
 )
 
 # Ruff reports one hit per handler; the inventory is keyed per enclosing
@@ -996,10 +1005,13 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 100 -> 101 / 91 -> 92: `memory_provider._conversation_session_ids`, the
 # compaction-lineage read that decides which records stay in full on a no-match
 # turn (a fault keeps only this session and is reported on the receipt).
-# 101 -> 102 / 92 -> 93: `app.App._drawn`, the launched OMH TUI's render containment
+# 101 -> 102 / 92 -> 93: `installed_skills.hermes_skill_search_roots`, Hermes' own
+# skill-root reader inside `pre_llm_call` (a failure keeps the manifest's
+# installed set, what the hint named before the check, never a raise into the host).
+# 102 -> 103 / 93 -> 94: `app.App._drawn`, the launched OMH TUI's render containment
 # (a part of the frame that raises is a warn row naming it, its traceback in /logs).
-EXPECTED_HANDLER_COUNT = 102
-EXPECTED_ANCHOR_COUNT = 93
+EXPECTED_HANDLER_COUNT = 103
+EXPECTED_ANCHOR_COUNT = 94
 
 
 class DerivedSite(NamedTuple):

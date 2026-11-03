@@ -273,9 +273,18 @@ def _real_key(path: str | Path) -> str:
 
 
 def registered_managed_entries(
-    config_text: str, candidates: Iterable[Path], *, hermes_home: Path, current: Path | None = None
+    config_text: str,
+    candidates: Iterable[Path],
+    *,
+    hermes_home: Path,
+    current: Path | None = None,
+    present_only: bool = True,
 ) -> list[str]:
     """The registered entries that name a managed directory present on disk, one per real directory.
+
+    `present_only=False` keeps an entry whose directory is gone too: the
+    question "does this home register OMH's skills at all", which a dangling
+    pointer still answers yes.
 
     By text or by real path, the way `external_dir_registered` reads a single
     candidate. Two entries that resolve to the same directory -- the pointer
@@ -302,7 +311,7 @@ def registered_managed_entries(
         real = _anchored_real_key(entry, hermes_home)
         if real is None or (external_dir_key(entry) not in keys and real not in reals):
             continue
-        if not os.path.isdir(anchored_external_dir(entry, hermes_home)):
+        if present_only and not os.path.isdir(anchored_external_dir(entry, hermes_home)):
             continue
         if real in seen:
             continue
