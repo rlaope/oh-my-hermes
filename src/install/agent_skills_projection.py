@@ -1,7 +1,7 @@
 """Catalog-generated Agent Skills files, independent of Hermes configuration.
 
 Host-selected installs have one portable receipt; unselected installs duplicate
-one manifest at both roots. Roots come from the invocation, never the manifest.
+one manifest at both roots. Updates reuse an installed user pack's receipt.
 A partial write cannot report fresh: status compares every destination's bytes.
 """
 from __future__ import annotations
@@ -151,6 +151,7 @@ def agent_skills_status(target: Path, *, mirror: Path | None = None) -> dict[str
     roots = (target.absolute(),) if mirror is None else (target.absolute(), mirror.absolute())
     files = agent_skill_files()
     expected = agent_skills_manifest(files, roots=roots)
+    portable_expected = agent_skills_manifest(files)
     modified: list[str] = []
     states = []
     installed_revisions = []
@@ -164,19 +165,33 @@ def agent_skills_status(target: Path, *, mirror: Path | None = None) -> dict[str
             path = _checked_path(root, relative)
             if not path.is_file() or sha256_file(path) != digest:
                 modified.append(relative if index == 0 else f"mirror:{relative}")
-        matches = manifest == expected and all(
+        # A host-selected receipt stays portable even when status also probes
+        # the sibling root used by an unselected install.
+        matches = manifest in (expected, portable_expected) and all(
             _checked_path(root, relative).is_file()
             and sha256_file(root / relative) == digest
             for relative, digest in expected["files"].items()
         )
         states.append("fresh" if matches else "stale")
-    projection = "missing" if "missing" in states else "stale" if "stale" in states else "fresh"
+    projection = (
+        states[0] if len(states) == 2 and states[1] == "missing"
+        else "missing" if "missing" in states else "stale" if "stale" in states else "fresh"
+    )
+    warnings = duplicate_pack_warnings(target.absolute())
+    if len(states) == 2 and states[0] != "missing" and states[1] == "missing":
+        scope = "user" if target.absolute() == Path.home().absolute() / ".agents/skills" else "repo"
+        warnings.append(
+            f"The mirror copy at {roots[1]} is absent; the primary pack is {states[0]}. "
+            f"To create both copies, run `omh install --target agents --scope {scope}`."
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "catalog_revision": expected["catalog_revision"],
         "installed_revisions": installed_revisions,
         "target_dirs": [str(root) for root in roots],
         "projection": projection,
+        "primary": states[0],
+        "mirror": states[1] if len(states) == 2 else "none",
         "drift": "locally_modified" if modified else "unknown" if "missing" in states else "clean",
         "locally_modified": sorted(modified),
         "next_action": (
@@ -187,9 +202,37 @@ def agent_skills_status(target: Path, *, mirror: Path | None = None) -> dict[str
             if modified else "Rerun the same install command to generate the current catalog."
             if projection != "fresh" else "No repair needed; host use remains not_observed."
         ),
-        "warnings": duplicate_pack_warnings(target.absolute()),
+        "warnings": warnings,
         "host_observation": "not_observed",
         "claim_boundary": CLAIM_BOUNDARY,
+    }
+
+
+def refresh_installed_agent_skills(home: Path, *, dry_run: bool) -> dict[str, Any] | None:
+    """Refresh only an existing user .agents pack, preserving its install layout."""
+    target = home.absolute() / ".agents/skills"
+    if not (target / MANIFEST_NAME).exists():
+        return None
+    manifest = _read_manifest(target)
+    if manifest is None:
+        return None
+    directories = manifest["target_dirs"]
+    mirror = None
+    if directories != ["."]:
+        if (len(directories) != 2 or not all(Path(item).is_absolute() for item in directories)
+                or Path(directories[0]) != target or Path(directories[1]) == target):
+            raise ValueError("Invalid installed user Agent Skills target_dirs")
+        mirror = Path(directories[1])
+    roots = [str(target)] + ([str(mirror)] if mirror is not None else [])
+    if dry_run:
+        return {"would_refresh": roots}
+    before = agent_skills_status(target, mirror=mirror)
+    after = install_agent_skills(target, mirror=mirror)
+    return {
+        "target_dirs": roots,
+        "projection_before": before["projection"],
+        "projection_after": after["projection"],
+        "refreshed_files": len(agent_skill_files()) * len(roots),
     }
 
 
