@@ -86,30 +86,6 @@ _TEMPORAL_RELEVANCE_BANDS = 4
 # of one thing are recognized by a field, never by reading their text.
 MEMORY_SUBJECT_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]{0,47}")
 
-# Two summaries "share wording" when they share at least this share of their
-# distinct stemmed terms (token Jaccard, in percent, compared in integers). A
-# changed value in an otherwise repeated sentence ("The staging database runs
-# postgres 16" -> "... 17") scores 71, and so do two facts that differ in one
-# word ("Deploy notes alpha ..." / "Deploy notes bravo ..."); two different
-# facts about one topic ("Staging deploys run canary batches before
-# promotion" / "Staging deploys wait for a green nightly run") score 27.
-# Capture uses it as a hint only and never holds a capture on it. Recall uses
-# it only when the older record is a point-in-time snapshot, with a shared
-# scope and topic (`_collapse_similar_wording`), and serves the newer record.
-SIMILAR_WORDING_JACCARD_PCT = 60
-
-# A summary that states how something stands at one point in time: "As of
-# 2026-10-30 (v0.1.7), nanran has ...", "nanran v0.1.13 added ...". The next
-# release or date turns it into a past state. A closed set, measured on a real
-# store: a dated "as of" and a dotted version number written with "v". A bare
-# "v1" (an API or plan generation), a version without the "v" ("Hermes
-# 0.22.5", mostly a compatibility decision) and "currently" are deliberately
-# not in it.
-_POINT_IN_TIME_CUES = (
-    ("as_of_date", re.compile(r"\bas of \d{4}-\d{2}-\d{2}\b", re.IGNORECASE)),
-    ("version", re.compile(r"(?<![\w.])v\d+\.\d+(?:\.\d+)*\b")),
-)
-
 _SOURCE_EVIDENCE_MAX_BYTES = 4 * 1024 * 1024
 
 _FRESHNESS_WARNING_LIMIT = 12
@@ -759,10 +735,6 @@ def normalize_memory_subject(value: object) -> str:
     if isinstance(value, str) and MEMORY_SUBJECT_PATTERN.fullmatch(value):
         return value
     raise ValueError("subject must match [a-z0-9][a-z0-9-]{0,47}")
-
-def point_in_time_cue(summary: str) -> str:
-    """The first point-in-time cue a summary carries (`as_of_date`, `version`), or ""."""
-    return next((name for name, pattern in _POINT_IN_TIME_CUES if pattern.search(str(summary or ""))), "")
 
 def memory_summary_terms(summary: str) -> frozenset[str]:
     """The stemmed index terms of one summary, as a set (capture's similarity hint)."""
@@ -1670,7 +1642,6 @@ __all__ = [
     "DEFAULT_MEMORY_ATTENTION_TIER",
     "MAX_RETENTION_DAYS",
     "MEMORY_SUBJECT_PATTERN",
-    "SIMILAR_WORDING_JACCARD_PCT",
     "MEMORY_ATTENTION_TIERS",
     "MEMORY_RESOLUTIONS",
     "PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION",
@@ -1775,7 +1746,6 @@ __all__ = [
     "normalize_memory_attention_tier",
     "normalize_memory_subject",
     "open_resolution_marker",
-    "point_in_time_cue",
     "record_attention_tier",
     "newest_record",
     "record_subject",

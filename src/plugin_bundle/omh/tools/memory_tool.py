@@ -133,7 +133,6 @@ from ..memory_recall_support import (
     _record_staleness,
     _retention_class,
     normalize_memory_subject,
-    point_in_time_cue,
     record_subject,
 )
 from ..memory_records import (
@@ -163,7 +162,7 @@ from ..host_observation import OBSERVATION_SCHEMA, attach_public_observation, ho
 from ..memory_blocks import read_memory_block, read_memory_blocks, select_memory_blocks
 from ..memory_dreaming import read_dreaming_state, read_latest_consolidation
 from ..memory_origin import origin_session_id, origin_source_ref, resolve_origin
-from ..project_identity import project_identity_root, resolve_project_identity
+from ..project_identity import resolve_project_identity
 
 MEMORY_ACTIONS = ("status", "blocks", "read", "consolidation", "capture", "demote", "recall", "confirm", "correct", "retire")
 LIFECYCLE_ACTIONS = ("recall", "confirm", "correct", "retire")
@@ -277,7 +276,7 @@ OMH_MEMORY_SCHEMA = {
             "retention_class": {
                 "type": "string",
                 "enum": list(CAPTURE_RETENTION_CLASSES),
-                "description": "capture: defaults to 'durable'; an as-of or v1.2 snapshot gets a 90-day review; 'volatile' lasts a week.",
+                "description": "capture: defaults to 'durable'; 'volatile' expires within a week.",
             },
             "entry_sha256": {
                 "type": "string",
@@ -529,11 +528,7 @@ def _capture(args: dict, kwargs: dict) -> dict[str, object]:
     """Capture one memory through memory admission and map its answer."""
     summary = " ".join(str(args.get("summary", "") or "").split())
     record_type = str(args.get("record_type", "") or "fact").strip().lower()
-    chosen_retention = str(args.get("retention_class", "") or "").strip().lower()
-    # A snapshot the captor did not class itself ages with the standard review
-    # deadline instead of riding along as durable after the next release.
-    point_in_time = "" if chosen_retention else point_in_time_cue(summary)
-    retention = chosen_retention or ("standard" if point_in_time else "durable")
+    retention = str(args.get("retention_class", "") or "durable").strip().lower()
     tags = args.get("tags") or []
     refusal = _summary_refusal(summary, tags)
     if refusal:
@@ -555,9 +550,6 @@ def _capture(args: dict, kwargs: dict) -> dict[str, object]:
     bound = _bound_capture_scope(lens, str(args.get("scope", "") or "").strip().lower())
     if isinstance(bound, tuple):
         return _capture_result("refused", reason=bound[0], next_action="Nothing was saved. " + bound[1])
-    # Set only for a capture that lands user-global because the session is
-    # outside a repository and the captor named no scope.
-    outside_repository = False
     if bound is not None:
         scope_kind, scope_ref, principal_context = str(bound["scope_kind"]), bound["scope_ref"], bound["principal_context"]
     else:
@@ -578,7 +570,6 @@ def _capture(args: dict, kwargs: dict) -> dict[str, object]:
         scope_kind = "project" if scope == "project" else "user-global"
         scope_ref = identity.identity if scope == "project" and identity is not None else None
         principal_context = None
-        outside_repository = not in_project and not str(args.get("scope", "") or "").strip()
     try:
         payload = capture_project_memory_candidate(
             lens.lens_home,
@@ -611,76 +602,51 @@ def _capture(args: dict, kwargs: dict) -> dict[str, object]:
             next_action="Nothing is confirmed saved. Tell the user the capture failed; call action='status' to see what is held.",
         )
     result = _map_capture_payload(payload, lens)
-    if result["status"] not in ("remembered", "pending_review"):
-        return result
-    if point_in_time:
-        result["retention_class"] = retention
-        result["point_in_time"] = point_in_time
-    if outside_repository:
-        try:
-            projects = _named_projects(summary, str(subject or ""), lens)
-        except (OSError, ValueError):
-            projects = []
-        if projects:
-            result["scope_hint"] = _scope_hint(projects)
+    if result["status"] == "remembered" and result.get("record_id") and point_in_time_cue(summary, record_type):
+        result["point_in_time"] = _point_in_time_advice(str(result["record_id"]))
     return result
 
 
-# How a summary names a repository: a hosted one by URL, or a local checkout by
-# the absolute path of its root. The project's name is the last path part.
-_HOSTED_REPOSITORY = re.compile(r"\b(?:github\.com|gitlab\.com|bitbucket\.org)/[\w.-]+/([\w.-]+)", re.IGNORECASE)
-_ABSOLUTE_PATH = re.compile(r"(?<![\w~./\\])(?:/|[A-Za-z]:[\\/])[^\s,;:()'\"`<>]+")
+# A fact that states how something stands at one moment: "As of 2026-10-30
+# (v0.1.7), nanran has ...", "nanran v0.1.13 added ...", "nanran v0.1.16:
+# ...". The next release turns it into a past state, and a later save of the
+# new state is a second record unless it names this one in `replaces`; on the
+# owner's store 8 such records sat side by side, none ever replaced. The
+# capture stays durable and nothing is aged or hidden: the result only tells
+# the model how to retire it when the state moves on. Closed set; a version
+# alone ("requires Hermes v0.22.5", "tags look like v1.2.3") is not a cue,
+# and neither is any summary carrying constraint wording.
+_POINT_IN_TIME_CUES = (
+    re.compile(r"\bas of (?:\d{4}-\d{2}-\d{2}|v\d+\.\d+(?:\.\d+)*)\b", re.IGNORECASE),
+    re.compile(r"\bin v\d+\.\d+(?:\.\d+)*\b", re.IGNORECASE),
+    re.compile(r"(?<![\w.])v\d+\.\d+(?:\.\d+)* (?:added|adds|removed|removes|introduced|introduces|ships|shipped)\b", re.IGNORECASE),
+    re.compile(r"^[\w.-]+ v\d+\.\d+(?:\.\d+)*:", re.IGNORECASE),
+)
+_CONSTRAINT_WORDS = re.compile(
+    r"\b(?:requires?|required|minimum|at least|or newer|or later|pin|pinned|must|never|stay|frozen|compatible|below|above|prefers?)\b",
+    re.IGNORECASE,
+)
+# Statements of what is or was decided: three of the owner's eight snapshots
+# were saved as decisions ("As of 2026-11-01 (v0.1.15), nanran's sidebar
+# groups papers into folders"). A lesson or procedure keeps holding.
+_POINT_IN_TIME_RECORD_TYPES = ("fact", "episode", "decision")
 
 
-def _repository_names(text: str) -> set[str]:
-    """Names of the repositories a text points at, by URL or by a checkout root on this machine."""
-    names = {match[1].removesuffix(".git").lower() for match in _HOSTED_REPOSITORY.finditer(text)}
-    for match in _ABSOLUTE_PATH.finditer(text):
-        path = Path(match[0].rstrip(".,"))
-        # Only the root itself: a path inside some other checkout (a home
-        # directory kept under version control) names no project.
-        try:
-            if path.is_absolute() and project_identity_root(path) == path.absolute():
-                names.add(path.name.lower())
-        except (OSError, ValueError):
-            continue
-    return names - {""}
+def point_in_time_cue(summary: str, record_type: str) -> bool:
+    """Whether a capture states a point-in-time state that a later save should replace."""
+    return (
+        record_type in _POINT_IN_TIME_RECORD_TYPES
+        and not _CONSTRAINT_WORDS.search(summary)
+        and any(pattern.search(summary) for pattern in _POINT_IN_TIME_CUES)
+    )
 
 
-def _named_projects(summary: str, subject: str, lens: "_SessionLens") -> list[str]:
-    """Known projects a user-global capture names, by its summary or subject.
-
-    A project is known when this summary, or a user-global record the session
-    already holds, points at its repository (`_repository_names`): "nanran"
-    becomes known from one record that gives its checkout path, and every later
-    summary that names nanran is then recognized. A name matches as a whole
-    word in any case (a Korean particle after it included), or as the subject
-    or the subject's first part.
-    """
-    named = _repository_names(summary)
-    known = set(named)
-    for record in read_record_store_snapshot(lens.homes).records:
-        scope = record.get("scope") if isinstance(record.get("scope"), dict) else {}
-        if scope.get("kind") == "user-global" and _in_session_scope(record, lens):
-            known |= _repository_names(str(record.get("summary", "") or ""))
-    for name in known - named:
-        word = re.compile(rf"(?<![A-Za-z0-9_-]){re.escape(name)}(?![A-Za-z0-9_-])", re.IGNORECASE)
-        if subject == name or subject.startswith(name + "-") or word.search(summary):
-            named.add(name)
-    return sorted(named)
-
-
-def _scope_hint(projects: list[str]) -> dict[str, object]:
-    """Tell the model a project fact was saved for every repository; it decides, nothing is moved."""
-    names = ", ".join(projects)
+def _point_in_time_advice(record_id: str) -> dict[str, object]:
     return {
-        "projects": projects,
-        "saved_scope": "user-global",
-        "reason": "names_project_outside_repository",
+        "record_id": record_id,
         "next_action": (
-            f"Saved for every repository, since this session is outside one, but it names {names}. If it concerns "
-            "only that project, it is better kept there: save it from a session inside that repository and retire "
-            "this record. If it holds everywhere, nothing more is needed."
+            f"Saved as lasting. It states how things stand at one point in time: when that changes, save the new "
+            f"state with replaces='{record_id}' so this one leaves recall instead of being served beside it."
         ),
     }
 
@@ -1629,10 +1595,6 @@ def _correct(home: Path, record: dict, summary: str, tags: object, lens: _Sessio
         return _lifecycle_result("correct", "refused", record_id=record_id, reason=refusal, next_action="Nothing changed.")
     scope = record.get("scope") if isinstance(record.get("scope"), dict) else {}
     retention = _retention_class(record) or "durable"
-    if retention == "durable" and point_in_time_cue(summary):
-        # The same rule as a fresh capture: a correction that restates a
-        # snapshot ages like one, whatever the record it replaces was.
-        retention = "standard"
     try:
         payload = capture_project_memory_candidate(
             home,

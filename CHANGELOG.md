@@ -4,28 +4,15 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **Dated snapshot memories age out, and project facts saved outside a
-  repository say so.** A memory the model saves that states how something
-  stands at one moment ("As of 2026-10-30 (v0.1.7), nanran has ...", "nanran
-  v0.1.13 added ...") is now kept for the standard 90 days. After that it stops
-  being recalled until it is confirmed or corrected. Before, it was kept as
-  permanent, so it was recalled beside the newer facts that replaced it. Dated
-  decisions, a bare "v1" and versions without a "v" stay permanent. On a copy
-  of the owner's store, 8 of 39 memories matched, all release or dated-state
-  snapshots. Recall now also leaves out an older snapshot when a newer memory
-  says the same thing in other words. Both must be in the same scope, on one
-  topic (the project, or a shared tag), with no two different subjects, and
-  share at least 60% of their wording. Two similar facts that can both be true
-  are both still served, and so is any older memory that is not a snapshot.
-  On the owner's store no pair came near that bar, so the memories recalled
-  there are unchanged. Outside a repository, a save that names a
-  project OMH knows from a repository link or checkout path gets a
-  `scope_hint`: it was saved for every repository, and a fact about only that
-  project is better saved from inside it. Nothing is moved, and the model
-  decides. On the owner's store, 10 of the 24 user-global memories (all of
-  them about nanran) would get the hint. Existing memories are not rewritten.
-
-## 4.0.5 - 2026-11-03
+- **Saving a dated snapshot now says how to retire it later.** When the
+  model saves a fact like "As of 2026-10-30 (v0.1.7), nanran has ..." or
+  "nanran v0.1.13 added ...", the result tells it to name this memory in
+  `replaces` when it saves the new state. The old memory then leaves recall
+  instead of being served beside the new one. The owner's store held 8 such
+  snapshots side by side, none ever replaced. The memory itself is unchanged:
+  it stays permanent and nothing is aged or hidden. Versions stated as rules
+  ("requires Hermes v0.22.5 or newer", "pin Node v20.11"), "Decided <date>:" lines,
+  lessons and procedures get no such note.
 
 - **Skill hints read the request, not the gateway's busy-path header.** A
   Discord or Slack message sent while the agent is busy reaches the turn with
