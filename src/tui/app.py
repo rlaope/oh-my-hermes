@@ -928,6 +928,8 @@ IMAGE_WAIT_ELAPSED_SECONDS = 3.0
 LIST_WAIT_LINE = "waiting for Hermes…"
 # The row a part of the frame that raised is drawn as (`App._drawn`), in the warning colour; /logs has its traceback.
 FAULT_ROW = "{part} could not be drawn ({kind}); /logs has the traceback"
+# Said once in the transcript, as a warning, the first time a background thread's exception goes to `faults`.
+THREAD_FAULT_NOTICE = "A background thread raised; /logs has the traceback."
 # Where the prompt that stages images stands (`App.claim`).
 CLAIM_OPEN = "open"
 CLAIM_STAGING = "staging"
@@ -1804,11 +1806,12 @@ class App(ModesMixin, AgentViewMixin):
         contain_faults: bool = False,
     ) -> None:
         self.terminal = terminal
-        # The launched TUI's (`_run`): a part of the frame that raises is one warn row (`_drawn`), and while `run`
+        # The launched TUI's (`main`, `_run`): a part of the frame that raises is one warn row (`_drawn`), and while `run`
         # loops, thread tracebacks, warnings and stray writes go to `faults`, never onto the live region. Left off,
-        # as every test that builds an App leaves it, a render error raises: no bug is hidden there.
+        # as every test that builds an App or drives `main` leaves it, a render error raises: no bug is hidden there.
         self.contain_faults = contain_faults
         self.faults = FaultLog()  # shown by /logs after the gateway's stderr
+        self.faults.wake = self._wake_loop  # a background thread's exception is said at once (`_take_thread_fault`)
         self.git = git  # the session directory's branch for the row under the info line; None draws no branch
         self.client = client
         # What spawns a gateway again after a crash (`_respawn_gateway`); None: a crash ends the TUI.
@@ -2215,6 +2218,12 @@ class App(ModesMixin, AgentViewMixin):
         self.update_check = UpdateCheck(home, __version__, fetch=self.fetch_latest, now=self.wall_clock)
         self.update_check.start(self._wake_loop)
 
+    def _take_thread_fault(self) -> None:
+        """The first background-thread exception `faults` kept, said once in the transcript as a warning."""
+        if self.faults.take_thread_fault():
+            self.transcript.add_notice(THREAD_FAULT_NOTICE, NOTICE_WARN)
+            self.dirty = True
+
     def _take_update_check(self) -> None:
         if self.update_check is not None and self.update_check.take():
             self.dirty = True
@@ -2572,6 +2581,7 @@ class App(ModesMixin, AgentViewMixin):
         self._take_hud()
         self._take_board()
         self._take_update_check()
+        self._take_thread_fault()
         self._render_when_due()
 
     def _take_input(self, data: bytes) -> None:
@@ -8130,6 +8140,7 @@ def _run(
     make_client: Callable[..., GatewayClient] | None = None,
     make_git: Callable[[str], GitWatcher] = GitWatcher,
     fetch_latest: Callable[[], str] = fetch_latest,
+    contain_faults: bool = True,
 ) -> int:
     """Start the gateway, open the session, then run the loop on the raw terminal; the exit code.
 
@@ -8171,7 +8182,7 @@ def _run(
                     git=make_git(cwd) if (cwd := environ.get("HERMES_TUI_CWD") or environ.get("HERMES_CWD")
                                           or environ.get("TERMINAL_CWD")) else None,
                     fetch_latest=fetch_latest,
-                    contain_faults=True,
+                    contain_faults=contain_faults,
                 )
             app.client = client
             wait.phase = LAUNCH_OPENING
@@ -8241,9 +8252,11 @@ def main(
     make_client: Callable[..., GatewayClient] = GatewayClient,
     make_poller: Callable[[str | None, str | None], PollerLike] = HudPoller,
     fetch_latest: Callable[[], str] = fetch_latest,
+    contain_faults: bool = True,
 ) -> int:
     """Start the OMH TUI and return its exit code (`FALLBACK_EXIT` when it could not start). `fetch_latest` is what
-    asks npm for the latest release (`update_notice`)."""
+    asks npm for the latest release (`update_notice`). `contain_faults` is `App`'s; a test that drives the launch
+    passes False, so a render bug there raises."""
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     stderr = _Told(sys.stderr if stderr is None else stderr)
@@ -8263,7 +8276,7 @@ def main(
         # The terminal picks its key reports from the environment the TUI was given (TERM_PROGRAM and kin).
         return _run(
             client, environ, stderr, open_terminal or (lambda: Terminal(environ=environ)), make_poller, make_client,
-            fetch_latest=fetch_latest,
+            fetch_latest=fetch_latest, contain_faults=contain_faults,
         )
     except KeyboardInterrupt:
         # Ctrl+C is a signal, not a key, until the terminal goes raw: while the gateway starts

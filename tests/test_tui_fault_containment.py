@@ -21,7 +21,8 @@ from test_tui_app import FakePoller
 from test_tui_loop import LoopTerminal
 from test_tui_modes import SID, RecordingClient, drawn, make_app
 from test_tui_panels import hud_payload
-from omh.tui.app import App
+from omh.tui.app import THREAD_FAULT_NOTICE, App
+from omh.tui.faults import FAULT_CAP, FaultLog
 from omh.tui.panels import HudSnapshot
 from omh.tui.style import Span
 
@@ -106,12 +107,58 @@ class RenderContainmentTests(unittest.TestCase):
     def test_a_normal_frame_is_the_same_bytes_with_containment_on(self) -> None:
         frames = []
         for contain in (False, True):
-            app, _client = make_app(contain_faults=contain)
+            # One clock for both: the plan's shimmer moves with the time (`panel_lines`).
+            app, _client = make_app(contain_faults=contain, clock=lambda: 50.0, wall_clock=lambda: 1_000.0)
             with_plan(app)
             app.composer.text = "hello"
             app._render()
             frames.append("".join(app.terminal.writes))  # type: ignore[attr-defined]
         self.assertEqual(frames[0], frames[1])
+
+
+def raise_at(depth: int) -> None:
+    if depth:
+        raise_at(depth - 1)
+    else:
+        raise RuntimeError(f"a bug at depth {depth}")
+
+
+def caught(depth: int = 0) -> RuntimeError:
+    """The error `raise_at(depth)` raises, its message naming the depth: one raise site, a message that varies."""
+    try:
+        raise_at(depth)
+    except RuntimeError as error:
+        return error
+    raise AssertionError("nothing raised")
+
+
+class FaultLogTests(unittest.TestCase):
+    def test_stray_output_never_pushes_out_a_kept_traceback(self) -> None:
+        log = FaultLog()
+        log.fault("the agent view", caught())
+        log.write("a stray line\n" * 210)
+        for _ in range(100):
+            log.fault("the agent view", caught())
+        lines = log.lines()
+        self.assertEqual(lines.count("omh tui: the agent view could not be drawn"), 1)
+        self.assertEqual(lines[0], "omh tui: the agent view could not be drawn")  # before the stream's lines
+        self.assertIn("RuntimeError: a bug at depth 0", lines)
+
+    def test_one_raise_site_is_one_fault_whatever_its_depth_or_message(self) -> None:
+        log = FaultLog()
+        for depth in range(40):
+            log.fault("the info line", caught(depth))
+        self.assertEqual(log.lines().count("omh tui: the info line could not be drawn"), 1)
+
+    def test_past_the_cap_the_oldest_traceback_goes_and_the_newest_stays(self) -> None:
+        log = FaultLog()
+        for index in range(FAULT_CAP + 5):
+            log.fault(f"part {index}", caught())
+        heads = [line for line in log.lines() if line.startswith("omh tui: ")]
+        self.assertEqual(len(heads), FAULT_CAP)
+        self.assertEqual(heads[-1], f"omh tui: part {FAULT_CAP + 4} could not be drawn")
+        log.fault("part 0", caught())  # raised again: kept again
+        self.assertEqual(log.lines().count("omh tui: part 0 could not be drawn"), 1)
 
 
 class StrayOutputTests(unittest.TestCase):
@@ -141,6 +188,20 @@ class StrayOutputTests(unittest.TestCase):
             self.assertNotIn(said, written)
             self.assertIn(said, logged)
         self.assertIn("Exception in thread omh-test-poller:", logged)
+
+    def test_the_first_thread_traceback_is_said_once_in_the_transcript(self) -> None:
+        app, terminal = launched((0.0, b""), (0.0, b"\x04"))
+
+        def raise_in_a_thread() -> None:
+            thread = threading.Thread(target=lambda: 1 / 0)
+            thread.start()
+            thread.join()
+
+        terminal.during[1] = terminal.during[2] = raise_in_a_thread
+        self.assertEqual(app.run(), 0)
+        said = [block.text for block in app.transcript.blocks if getattr(block, "text", None) == THREAD_FAULT_NOTICE]
+        self.assertEqual(said, [THREAD_FAULT_NOTICE])
+        self.assertEqual("\n".join(app.faults.lines()).count("ZeroDivisionError"), 2)  # both kept in the log
 
     def test_a_crash_puts_the_hooks_back_and_still_raises_for_python_to_print(self) -> None:
         app, _terminal = launched()

@@ -383,6 +383,7 @@ class AppTestCase(unittest.TestCase):
             open_terminal=lambda: run.terminal,
             make_client=self.make_client(run),
             make_poller=lambda omh_home, hermes_home: run.poller,
+            contain_faults=False,  # a render bug raises here (`App.contain_faults`)
         )
         return run
 
@@ -414,6 +415,7 @@ class StartupRefusalTests(AppTestCase):
             open_terminal=lambda: run.terminal,
             make_client=self.make_client(run),
             make_poller=lambda omh_home, hermes_home: run.poller,
+            contain_faults=False,  # a render bug raises here (`App.contain_faults`)
         )
         self.assert_fell_back(run)
         self.assertIn("cannot run the OMH TUI", run.stderr.getvalue())
@@ -472,6 +474,20 @@ class StartupRefusalTests(AppTestCase):
         self.assert_clean_run(run)
         self.assertNotIn("this Hermes refused config.get", run.stderr.getvalue())
 
+    def test_a_render_bug_in_a_session_main_runs_here_raises(self) -> None:
+        # The harness passes `contain_faults=False`: a part of the frame that raises fails the test that drives
+        # `main`, where the launched TUI would draw it as a warn row (`App._drawn`).
+        answers = (
+            ("commands.catalog", recorded_answer("session", "commands_catalog")),
+            ("session.list", recorded_answer("session", "session_list")),
+            NO_DEFAULT,
+        )
+        run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
+        run.terminal.script(Step(b"\x04", when=run.terminal.idle, label="the idle info line"))
+        with patch.object(App, "_info_line", side_effect=RuntimeError("a render bug")):
+            with self.assertRaisesRegex(RuntimeError, "a render bug"):
+                self.run_main(run)
+
     def test_the_gateway_stderr_printed_at_a_failed_start_carries_no_escape_sequence(self) -> None:
         run = self.prepare(
             Scenario("session", (), stderr=("\x1b[31mboom\x1b[0m: no provider\x1b]0;title\x07",), after=EXIT, exit_code=1)
@@ -519,6 +535,7 @@ class StartupRefusalTests(AppTestCase):
             open_terminal=lambda: run.terminal,
             make_client=interrupted,
             make_poller=lambda omh_home, hermes_home: run.poller,
+            contain_faults=False,  # a render bug raises here (`App.contain_faults`)
         )
         self.assertEqual(run.code, 130)
         self.assertIn("interrupted", run.stderr.getvalue())
@@ -765,6 +782,7 @@ class SessionTests(AppTestCase):
                 stderr=run.stderr,
                 make_client=self.make_client(run),
                 make_poller=lambda omh_home, hermes_home: run.poller,
+                contain_faults=False,  # a render bug raises here (`App.contain_faults`)
             )
         self.assert_clean_run(run)
         self.assertEqual(given, [run.environ])
