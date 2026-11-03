@@ -291,6 +291,10 @@ class Key:
     and is not part of its identity either. A key can be decided well after
     that (an ESC waits for a report's `[`), so a deadline about when the person
     pressed it reads this. None on a key the decoder did not make.
+
+    `reported_shift` retains a protocol report's Shift bit even when Ctrl
+    normalization removes it from key identity. Navigation uses it to exclude
+    shifted aliases without changing legacy equality, hashing or shortcuts.
     """
 
     name: str
@@ -300,6 +304,7 @@ class Key:
     shift: bool = False
     protocol: bool = field(default=False, compare=False, repr=False)
     arrived_at: float | None = field(default=None, compare=False, repr=False)
+    reported_shift: bool = field(default=False, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -430,7 +435,7 @@ def _protocol_key(code_field: str, modifier_field: str) -> Key:
         return Key(UNKNOWN)
     code = int(codes[0])
     if code in _PROTOCOL_KEYS:
-        return Key(_PROTOCOL_KEYS[code], **flags)
+        return Key(_PROTOCOL_KEYS[code], reported_shift=flags["shift"], **flags)
     text = _KEYPAD_TEXT.get(code) or _code_text(codes[0])
     if not text:
         return Key(UNKNOWN)
@@ -439,11 +444,12 @@ def _protocol_key(code_field: str, modifier_field: str) -> Key:
     if flags["ctrl"] and main_key and (lowered.isascii() and lowered.isalpha() or text in _CTRL_BYTES):
         control = _CTRL_BYTES.get(text, ord(lowered) & 0x1F)
         key = Key(ESCAPE) if control == ESC_BYTE else _single_byte_key(control)
+        key = replace(key, reported_shift=flags["shift"])
         return replace(key, alt=True) if flags["alt"] else key
     if flags["shift"]:
         upper = text.upper()
         text = _code_text(codes[1] if len(codes) > 1 else "") or (upper if len(upper) == 1 else text)
-    return Key(CHAR, text, ctrl=flags["ctrl"], alt=flags["alt"])
+    return Key(CHAR, text, ctrl=flags["ctrl"], alt=flags["alt"], reported_shift=flags["shift"])
 
 
 def _sgr_mouse(parameters: str, pressed: bool) -> Key | Mouse:
@@ -927,6 +933,7 @@ def list_nav_step(event: Key | Paste) -> int:
 
     Matches DOWN, Ctrl+N and Ctrl+J (without Alt or Shift) to +1.
     Matches UP, Ctrl+P and Ctrl+K (without Alt or Shift) to -1.
+    Shift is read from the protocol report when present (`reported_shift`); legacy control bytes carry none.
     """
     if not isinstance(event, Key):
         return 0
@@ -939,6 +946,7 @@ def list_nav_step(event: Key | Paste) -> int:
         and event.ctrl
         and not event.alt
         and not event.shift
+        and not event.reported_shift
         and event.char in ("n", "p", "j", "k")
     ):
         return 1 if event.char in ("n", "j") else -1

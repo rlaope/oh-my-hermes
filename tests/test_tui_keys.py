@@ -28,6 +28,7 @@ from omh.tui.keys import (
     KeyDecoder,
     Mouse,
     Paste,
+    list_nav_step,
 )
 
 
@@ -521,6 +522,73 @@ class ProtocolReportedTests(unittest.TestCase):
         self.assertEqual(repr(reported), repr(legacy))
         self.assertTrue(reported.protocol)
         self.assertFalse(legacy.protocol)
+        self.assertFalse(reported.reported_shift)
+        self.assertFalse(legacy.reported_shift)
+
+    def test_reported_shift_normalization_and_invariants(self) -> None:
+        # CSI-u and modifyOtherKeys report Ctrl+Shift+N
+        # modifier = 1 + 1 (shift) + 4 (ctrl) = 6
+        csi_ctrl_shift_n = csi_u(ord("n"), 6)
+        mok_ctrl_shift_n = modify_other_keys(ord("n"), 6)
+
+        legacy_ctrl_n = decode(b"\x0e")[0]  # ord('n') - 0x60 = 14 = 0x0e
+        for report in (csi_ctrl_shift_n, mok_ctrl_shift_n):
+            with self.subTest(report=report):
+                (key,) = decode(report)
+                # Identity and legacy equality preserved
+                self.assertEqual(key, legacy_ctrl_n)
+                self.assertEqual(hash(key), hash(legacy_ctrl_n))
+                self.assertEqual(repr(key), repr(legacy_ctrl_n))
+                self.assertEqual(key.char, "n")
+                self.assertTrue(key.ctrl)
+                self.assertFalse(key.shift)
+                self.assertTrue(key.protocol)
+                self.assertTrue(key.reported_shift)
+
+        # Unshifted Ctrl+n does NOT have reported_shift
+        for report in (csi_u(ord("n"), CTRL), modify_other_keys(ord("n"), CTRL)):
+            with self.subTest(report=report):
+                (key,) = decode(report)
+                self.assertEqual(key, legacy_ctrl_n)
+                self.assertFalse(key.reported_shift)
+
+        # Ctrl+j protocol reporting preserves newline / steer key identity and invariants
+        csi_ctrl_j = csi_u(ord("j"), CTRL)
+        csi_ctrl_shift_j = csi_u(ord("j"), 6)
+        (key_j,) = decode(csi_ctrl_j)
+        (key_shift_j,) = decode(csi_ctrl_shift_j)
+        legacy_lf = decode(b"\n")[0]
+        self.assertEqual(key_j, legacy_lf)
+        self.assertEqual(key_shift_j, legacy_lf)
+        self.assertFalse(key_j.reported_shift)
+        self.assertTrue(key_shift_j.reported_shift)
+
+        # Chunked / split feeds of protocol reports preserve reported_shift. assertEqual ignores the
+        # compare=False field, so read it off the events of every split directly.
+        for report in (csi_ctrl_shift_n, mok_ctrl_shift_n):
+            for cut in range(1, len(report)):
+                with self.subTest(report=report, cut=cut):
+                    decoder = KeyDecoder()
+                    events = decoder.feed(report[:cut]) + decoder.feed(report[cut:]) + decoder.flush()
+                    self.assertEqual([e.reported_shift for e in events], [True])
+
+        # A bare uppercase code point does NOT infer reported_shift
+        (upper_n,) = decode(b"\x1b[78;1u")  # code 78 is 'N', no modifier bits
+        self.assertEqual(upper_n.char, "N")
+        self.assertFalse(upper_n.reported_shift)
+        self.assertFalse(upper_n.shift)
+
+        # Lock bits (kitty: caps 64, num 128; field is 1 + bits) are not Shift
+        for report, shifted in (
+            (csi_u(ord("n"), 69), False),  # Ctrl + Caps Lock
+            (csi_u(ord("n"), 133), False),  # Ctrl + Num Lock
+            (csi_u(ord("n"), 70), True),  # Ctrl + Shift + Caps Lock
+            (modify_other_keys(ord("N"), 6), True),  # Ctrl + Shift, uppercase code point
+        ):
+            with self.subTest(report=report):
+                (key,) = decode(report)
+                self.assertEqual(key.reported_shift, shifted)
+                self.assertEqual(list_nav_step(key), 0 if shifted else 1)
 
     def test_a_kitty_flags_answer_is_no_key_and_says_so_only_with_disambiguate_on(self) -> None:
         # The answer to `CSI ? u`, which `Terminal.query_background` sends where it pushed the kitty flags.

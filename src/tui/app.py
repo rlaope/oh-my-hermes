@@ -2543,10 +2543,14 @@ class App(ModesMixin, AgentViewMixin):
             self._on_resize()
         timeout, pace = self._read_timeout(), self.last_render + MIN_FRAME_SECONDS - self.clock()
         try:
-            if pace > 0:  # a frame was just drawn: gateway news waits out the interval, input does not
-                data = self.terminal.read(min(timeout, pace))
-            else:
-                data = self.terminal.read(timeout, self.wake)
+            started = self.clock()
+            data = self.terminal.read(timeout, self.wake)
+            if pace > 0 and not data:
+                # A frame was just drawn: gateway news waits out the interval, input does not. The wait is one read
+                # for the whole timeout; only a wake-up that cut it short sleeps out what is left of the interval.
+                left = min(timeout, pace) - (self.clock() - started)
+                if left > 0:
+                    data = self.terminal.read(left)
         except EOFError:
             self.exit_code = 0
             return
@@ -6846,10 +6850,12 @@ class App(ModesMixin, AgentViewMixin):
 
         The banner and the transcript's last `REDRAW_TAIL_ROWS` rows are
         rendered anew (`Transcript.retake_tail`), under one row counting the
-        messages above them, so nothing wrapped at the old width survives, no
+        entries above them, so nothing wrapped at the old width survives, no
         earlier frame is left in scrollback, and a long session costs a redraw
         no more than that. Scrollback from before the TUI started is erased
-        with it.
+        with it. At an unchanged width the rows come out the same, so a
+        finished reply's wrapped rows (`AssistantBlock.kept`) and a flushed
+        row's bytes (`screen._flushed_row`) are taken as kept.
         """
         if self.pager is not None:
             # Erasing from the alternate screen leaves the main screen's rows (and, on some terminals, its scrollback)

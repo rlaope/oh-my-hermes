@@ -388,6 +388,7 @@ def _ratio(first: float, second: float) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+@lru_cache(maxsize=16384)
 def _mix(start: str, end: str, share: float) -> str:
     one, two = hex_to_rgb(start), hex_to_rgb(end)
     if one is None or two is None:

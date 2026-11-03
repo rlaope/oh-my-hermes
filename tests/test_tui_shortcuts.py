@@ -263,6 +263,8 @@ class CtrlNPNavigationTests(unittest.TestCase):
         self.assertEqual(list_nav_step(Key(CHAR, "p")), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "n", ctrl=True, alt=True)), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "p", ctrl=True, shift=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "n", ctrl=True, reported_shift=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "p", ctrl=True, reported_shift=True)), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "n", alt=True)), 0)
         self.assertEqual(list_nav_step(Key(DOWN, alt=True)), 0)
         self.assertEqual(list_nav_step(Key(DOWN, ctrl=True)), 0)
@@ -774,7 +776,7 @@ class CtrlNPNavigationTests(unittest.TestCase):
         app._on_input(Key(CHAR, "k"))
         self.assertEqual(app.composer.text, "jk")
 
-        # Helper rejects plain j/k, alt+j/k, shift+j/k, ctrl+alt+j, ctrl+shift+j
+        # Helper rejects plain j/k, alt+j/k, shift+j/k, ctrl+alt+j, ctrl+shift+j, reported_shift
         self.assertEqual(list_nav_step(Key(CHAR, "j")), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "k")), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "j", alt=True)), 0)
@@ -783,6 +785,92 @@ class CtrlNPNavigationTests(unittest.TestCase):
         self.assertEqual(list_nav_step(Key(CHAR, "k", shift=True)), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "j", ctrl=True, alt=True)), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "k", ctrl=True, shift=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "j", ctrl=True, reported_shift=True)), 0)
+        self.assertEqual(list_nav_step(Key(CHAR, "k", ctrl=True, reported_shift=True)), 0)
+
+    def test_menu_open_protocol_ctrl_shift_j_inserts_newline(self) -> None:
+        """Decision pin: a Shift-reported Ctrl+J does not step an open menu; it falls through to a newline.
+
+        Legacy 0x0A still steps the menu because a legacy byte cannot carry Shift.
+        """
+        from omh.tui.keys import KeyDecoder
+
+        app, _ = make_app(rows=30, cols=80)
+        type_text(app, "/")
+        drawn(app)
+        self.assertTrue(bool(app._menu_rows()))
+        init_index = app.menu_index
+        (event,) = KeyDecoder().feed(b"\x1b[106;6u")
+        self.assertTrue(event.reported_shift)
+        app._on_input(event)
+        self.assertEqual(app.menu_index, init_index)
+        self.assertEqual(app.composer.text, "/\n")
+
+    def test_protocol_keys_navigation_and_reported_shift_rejection(self) -> None:
+        """Protocol-fed CSI-u and modifyOtherKeys navigation vs reported Shift rejection."""
+        from omh.tui.keys import KeyDecoder
+        from omh.tui.model_picker import ModelPicker, ModelRow
+
+        m_rows = [
+            ModelRow("m1", "p1", "Provider 1", True),
+            ModelRow("m2", "p2", "Provider 2", False),
+            ModelRow("m3", "p3", "Provider 3", False),
+        ]
+
+        # Modifier codes:
+        # 5 = 1 + 4 (Ctrl)
+        # 6 = 1 + 1 (Shift) + 4 (Ctrl) -> Ctrl+Shift
+        # 7 = 1 + 2 (Alt) + 4 (Ctrl) -> Ctrl+Alt
+        # 8 = 1 + 1 + 2 + 4 -> Ctrl+Alt+Shift
+
+        for prefix, template in (
+            ("csi_u", lambda code, mod: f"\x1b[{code};{mod}u".encode()),
+            ("modify_other_keys", lambda code, mod: f"\x1b[27;{mod};{code}~".encode()),
+        ):
+            # Unshifted Ctrl+n / Ctrl+j navigates down
+            for code in (ord("n"), ord("j")):
+                decoder = KeyDecoder()
+                events = decoder.feed(template(code, 5))
+                self.assertEqual(len(events), 1)
+                event = events[0]
+                self.assertEqual(list_nav_step(event), 1)
+                picker = ModelPicker(m_rows, current="m1")
+                picker.handle_key(event)
+                self.assertEqual(picker.index, 1)
+
+            # Unshifted Ctrl+p / Ctrl+k navigates up
+            for code in (ord("p"), ord("k")):
+                decoder = KeyDecoder()
+                events = decoder.feed(template(code, 5))
+                self.assertEqual(len(events), 1)
+                event = events[0]
+                self.assertEqual(list_nav_step(event), -1)
+                picker = ModelPicker(m_rows, current="m1")
+                picker.index = 2
+                picker.handle_key(event)
+                self.assertEqual(picker.index, 1)
+
+            # Modified: Ctrl+Shift (mod 6), Ctrl+Alt (mod 7), Ctrl+Alt+Shift (mod 8)
+            # must return 0 and NOT navigate picker
+            for key_char, code in (("n", ord("n")), ("p", ord("p")), ("j", ord("j")), ("k", ord("k"))):
+                for mod in (6, 7, 8):
+                    decoder = KeyDecoder()
+                    events = decoder.feed(template(code, mod))
+                    self.assertEqual(len(events), 1)
+                    event = events[0]
+                    self.assertEqual(
+                        list_nav_step(event),
+                        0,
+                        f"{prefix} char={key_char} mod={mod} must reject navigation",
+                    )
+                    picker = ModelPicker(m_rows, current="m1")
+                    picker.index = 1  # Interior row: neither direction can hide behind boundary clamping.
+                    picker.handle_key(event)
+                    self.assertEqual(
+                        picker.index,
+                        1,
+                        f"{prefix} char={key_char} mod={mod} must not change picker index",
+                    )
 
 
 if __name__ == "__main__":
