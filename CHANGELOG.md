@@ -20,6 +20,15 @@ All notable changes will be documented here.
   ambiguous registration and a missing directory separately. A healthy
   install shows the same suggestion and the same card as before.
 
+- **Typing in a long message no longer slows down.** The input box measured the
+  whole text again on every key, so a key cost about 5 ms at 5,000 characters
+  and about 17 ms at 20,000, longer than a frame. It now measures only the
+  words and lines an edit touched, which brings the 20,000-character key to
+  about 5 ms and the 5,000-character one to under 2 ms. This holds for text
+  with spaces between words (English, Korean and so on); a long line of
+  unspaced or Cyrillic text is still measured whole. What is drawn, the
+  caret, wrapping, wide characters, paste chips and image tokens are unchanged.
+
 - **Running work survives a context compaction.** When Hermes compacts a
   session, OMH now hands its summarizer the work this conversation still has
   open, stated as facts: each unfinished dag-ulw run (its goal, run state,
