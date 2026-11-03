@@ -512,6 +512,18 @@ class IndexCostTest(_Workspace):
             walks.assert_called_once()
         self.assertEqual(self.verdict(changed)[:2], (False, "no_copy_or_reference"))
 
+    def test_a_file_changed_outside_the_tools_before_the_first_non_read_call_is_baseline(self):
+        # The admitted cost of deferring the index past reads: an editor or a background process that
+        # writes during the read-only stretch is part of the turn's baseline, not an opaque edit.
+        self.write("src/app/a.py", "def other():\n    return 1\n")
+        self.write("src/app/b.py", "def helper():\n    return 1\n")
+        self.read()
+        self.write("src/app/b.py", "def helper():\n    return 3\n")
+        changed = self.edit("src/app/a.py", "return 1", "return 2")
+        verdict = self.verdict(changed)
+        self.assertNotEqual(verdict.reason, "opaque_edit")
+        self.assertEqual(verdict[:2], (False, "no_copy_or_reference"))
+
     def test_a_call_that_is_not_a_read_indexes_before_it_runs(self):
         self.write("src/app/a.py", "def other():\n    return 1\n")
         self.write("src/app/b.py", "def helper():\n    return 1\n")

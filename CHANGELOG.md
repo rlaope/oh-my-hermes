@@ -10,8 +10,10 @@ All notable changes will be documented here.
   thousand files even when the turn only read files or searched. The index is
   now taken at the turn's first call that can change a file (an edit, a
   command, a delegated child, any tool that is not a read), still before that
-  call runs, so a read-only turn pays nothing and the check decides exactly as
-  it did. The capability families and the router, which a session's first
+  call runs, so a read-only turn pays nothing and the check decides as it did
+  for the turn's own edits; a file changed by something else (an editor, a
+  background process) before the turn's first non-read call is now part of
+  the baseline. The capability families and the router, which a session's first
   user turns imported on the spot (about 60 ms on the first turn and 70-100 ms
   on the next new kind of request), are now imported on a background thread
   when the plugin loads, so after a normal pause before the first message the

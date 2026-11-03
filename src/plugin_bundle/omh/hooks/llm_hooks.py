@@ -598,7 +598,6 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     fork_of = str(kwargs.get("parent_session_id") or "").strip()
     if fork_of and fork_of == str(kwargs.get("session_id") or "").strip():
         return None
-    _await_import_warmup()
     # Next, before anything else can return early or raise: this turn has not
     # asked for Jev until its own request is read below. A marker left from
     # the previous turn must never survive a degraded turn.
@@ -608,6 +607,8 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     # forks never reach this line, so a background review cannot clear the
     # live turn's stash.
     clear_round_end_answer(kwargs.get("session_id"))
+    # Only after both clears: a wait the host abandons at its hook timeout must not keep either.
+    _await_import_warmup()
     # Whether this session's platform can get the round-end check at all: one that cannot (a
     # delegated child) takes no workspace index in `pre_tool_call`, which is given no platform.
     note_turn_posture(kwargs.get("session_id"), kwargs.get("platform"))

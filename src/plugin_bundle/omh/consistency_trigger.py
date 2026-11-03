@@ -23,8 +23,10 @@ deterministically and from the disk alone, whether such a thing exists:
    - Residual: Hermes blocks a tool call whose ``pre_tool_call`` times out, so no call this hook
      missed that way runs, and an index missed at one call is taken at the next. The one gap is a
      host-internal exception in ``_dispatch_pre_tool_call_hooks``, which never blocks the call. If it
-     hits the turn's first tool call and that tool changes a Python file, the index is taken at the
-     next call, after the change, and the change is not seen.
+     hits the turn's first call that is not a read (``_READ_TOOLS``) and that tool changes a Python
+     file, the index is taken at the next call, after the change, and the change is not seen. A file
+     changed by something other than the turn's tools (an editor, a background process) before that
+     first call is part of the index, not a change of the turn.
 2. ``round_end_trigger`` (``pre_verify``, attempt 0):
    - It re-indexes the workspace to find every Python file the turn changed, by any tool.
    - It diffs each kept snapshot against the disk, and finds the definitions the changed lines touch
@@ -164,7 +166,8 @@ class _OutsideLink(Exception):
 
 
 def snapshot_before_edit(kwargs: dict[str, Any], tool_input: object) -> None:
-    """``pre_tool_call``: index the workspace at the turn's first call; snapshot Python files before edits."""
+    """``pre_tool_call``: index the workspace at the turn's first call that is not a read (``_READ_TOOLS``);
+    snapshot Python files before edits."""
     try:
         session_id = str(kwargs.get("session_id", "") or kwargs.get("task_id", "") or "")
         if not session_id:
