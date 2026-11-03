@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 
 from ..skin_pack import hex_to_rgb
 
@@ -76,6 +77,7 @@ def nearest_16(rgb: tuple[int, int, int]) -> int:
     return min(range(16), key=lambda at: _distance(_ANSI_16[at], rgb))
 
 
+@lru_cache(maxsize=16384)
 def _colour_parameter(base: int, value: str | None, depth: str = TRUECOLOR) -> str:
     if value is None or depth == NO_COLOR:
         return ""

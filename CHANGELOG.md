@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A running turn with the glow and a living wallpaper uses less CPU.** The same frames are drawn, byte for byte,
+  but the colours the glow and the wallpaper scenes mix are no longer parsed again for every cell, and the loop no
+  longer wakes a second time per frame to wait out the frame interval when nothing arrives from the
+  gateway. On a 60x200 screen with the aurora look, a busy frame went from about 9.9 ms to 5.6 ms and
+  the loop from 38 to 19 wake-ups a second.
+
 - **Code-skill round follow-ups.** Seven review findings from the last round,
   fixed in OMH's own words. Commit-pr-authoring says where the reversibility
   line goes when the PR template has no risk or rollout section: one sentence

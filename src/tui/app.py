@@ -2533,10 +2533,14 @@ class App(ModesMixin, AgentViewMixin):
             self._on_resize()
         timeout, pace = self._read_timeout(), self.last_render + MIN_FRAME_SECONDS - self.clock()
         try:
-            if pace > 0:  # a frame was just drawn: gateway news waits out the interval, input does not
-                data = self.terminal.read(min(timeout, pace))
-            else:
-                data = self.terminal.read(timeout, self.wake)
+            started = self.clock()
+            data = self.terminal.read(timeout, self.wake)
+            if pace > 0 and not data:
+                # A frame was just drawn: gateway news waits out the interval, input does not. The wait is one read
+                # for the whole timeout; only a wake-up that cut it short sleeps out what is left of the interval.
+                left = min(timeout, pace) - (self.clock() - started)
+                if left > 0:
+                    data = self.terminal.read(left)
         except EOFError:
             self.exit_code = 0
             return
