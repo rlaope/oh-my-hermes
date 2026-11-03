@@ -499,6 +499,35 @@ class HangulAdmissionTests(unittest.TestCase):
         self.assertTrue(bundle.hangul_skill_candidates(message))
         self.assertEqual(_candidates(message), ())
 
+    def test_the_host_name_and_case_particles_admit_no_skill(self) -> None:
+        # Owner messages that drew a line naming skills they had nothing to do
+        # with: the host's name ("헤르메스" / "오마이헤르메스", whose bigrams
+        # sit in parallel-tools', executor-runtime-readiness' and memory-sync's
+        # triggers), "-에서"/"-으로" on any noun (codebase-uml for a drawing
+        # request), and the request verb "확인".
+        for message in (
+            "오마이헤르메스 비디오젠하고 연관잇는듯 한데 만들어줘봐",
+            "아니 오마이헤르메스 tui가 저게 아니잖아",
+            "카미야 헤르메스가 뭔지 소개해줘",
+            "카미도 병렬로 료가 양손으로 얼굴 덮고 책상에서 힘들어하는 장면 그리고 어두운 방에서 움직임 설계",
+            "확인해줘",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(_candidates(message), ())
+        for bigram in ("헤르", "르메", "메스", "오마", "이헤", "으로", "에서", "확인"):
+            with self.subTest(bigram=bigram):
+                self.assertIn(bigram, core.HANGUL_STOPWORDS)
+                self.assertNotIn(bigram, core.hangul_terms(f"오마이헤르메스에서 {bigram}"))
+
+    def test_a_skill_keeps_its_own_nouns_after_the_host_name_goes(self) -> None:
+        # The name left the index, the triggers' own nouns did not.
+        self.assertIn("omh-parallel-tools", [label for label, _ in _candidates("헤르메스 병렬 도구 설정 봐줘")])
+        self.assertIn(
+            "omh-executor-runtime-readiness",
+            [label for label, _ in _candidates("이 작업 코덱스로 넘길지 클로드 코드로 넘길지 정해줘")],
+        )
+        self.assertIn("omh-memory-sync", [label for label, _ in _candidates("오래된 기억 점검하고 메모리 정리해줘")])
+
 
 class LineTests(unittest.TestCase):
     def test_the_line_names_each_candidate_by_its_situation(self) -> None:

@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from .keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key, Paste
+from .keys import CHAR, DOWN, ENTER, ESCAPE, UP, Key, Paste, list_nav_step
 from .session_picker import CURRENT_MARK, pointer
 from .style import Line, Span, Style
 from .theme import LAUNCH_PRESETS, Theme
@@ -65,9 +65,11 @@ class LaunchPicker:
             return CLOSE
         if event.name == ENTER:
             return PICK
+        step = list_nav_step(event)
         plain = event.name == CHAR and not (event.ctrl or event.alt)
-        if event.name in (UP, DOWN) or (plain and event.char in ("j", "k")):
-            return self.move_to(self.index + (1 if event.name == DOWN or event.char == "j" else -1))
+        if step != 0 or event.name in (UP, DOWN) or (plain and event.char in ("j", "k")):
+            delta = step if step != 0 else (1 if event.name == DOWN or (plain and event.char == "j") else -1)
+            return self.move_to(self.index + delta)
         return None
 
     def move_to(self, index: int) -> str | None:

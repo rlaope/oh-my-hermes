@@ -96,8 +96,9 @@ Check each node against its SCOPE and the goal criteria too. When work is missin
   scope shared with any node of the run without an edge, 48 nodes in all).
 - a run gets at most two extend rounds (`extend_rounds_left`). After that, report what is still open.
 
-To stop early, `omh_dag action=cancel`; children already running finish on their own unless you stop
-them with `delegate_task action=stop`.
+To stop early, `omh_dag action=cancel`; the reply names every child still running (node, subagent id,
+how long open) under `still_running`, and they finish on their own unless you stop each with
+`delegate_task action=stop`. The cancelled run never settles them.
 
 ## Messengers
 

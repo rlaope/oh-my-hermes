@@ -376,7 +376,7 @@ class HistoryPager(Pager):
     jumping to either end render only the blocks the page and the last page
     reach, at the frame's width. A move asked for before the first frame is
     made at it; after that each move is made at once, as `Pager` makes it.
-    The footer counts messages (blocks), not rows. At most
+    The footer counts entries (blocks), not rows. At most
     `HISTORY_BLOCKS_KEPT` blocks' rows are kept, for one width and theme, the
     last block's always once drawn (with a cap of one, it and one other).
     """
@@ -495,4 +495,4 @@ class HistoryPager(Pager):
             shown.extend(self._rows(index, cols, theme)[skip:])
             index, skip = index + 1, 0
         first = self.item + 1 if self.count else 0
-        return shown[:body], f"{first}-{index}/{self.count} messages"
+        return shown[:body], f"{first}-{index}/{self.count} entries"

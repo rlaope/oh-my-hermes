@@ -412,9 +412,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   (and each page of a pager) one synchronized update (DECSET 2026), so a terminal that
   supports it shows it whole and nothing flickers. A full redraw (a resize,
   Ctrl+L, `/redraw`, switching or resuming a session) prints the session's
-  last 3,000 rows again under one row such as `⋯ 412 earlier messages ·
+  last 3,000 rows again under one row such as `⋯ 412 earlier entries ·
   /history shows all`; `/history` pages through the whole session. The OMH
-  TUI holds a session's last 2,000 messages (a prompt, a reply, its
+  TUI holds a session's last 2,000 entries (a prompt, a reply, its
   thinking, the tool calls between two replies, a notice, a command with its output, a
   steer and a turn's done line are one each); older ones are
   left to the terminal's scrollback until a full redraw clears it, and from
@@ -1221,7 +1221,7 @@ Esc closes it):
 | Key | Does |
 | --- | --- |
 | Enter | Sends the composer |
-| `\` then Enter, Alt+Enter, Shift+Enter, Ctrl+J | Adds a line |
+| `\` then Enter, Alt+Enter, Shift+Enter, Ctrl+J | Adds a line; with a list or menu focused, Ctrl+J moves down instead. Alt+Enter and Shift+Enter still add a line in an open menu; backslash then Enter may accept a completion |
 | Ctrl+Enter | While a turn runs, sends the composer's text into it now as a steer (`/steer <text>` too); idle, sends as Enter does |
 | Ctrl+Enter, Ctrl+J | While a turn runs, on an empty composer, send the oldest queued prompt into it now as a steer; the row under the queue names the key (Ctrl+J where the terminal has not shown it tells Ctrl+Enter from Enter). A queued `!` line, skill prompt or plan prompt waits its turn |
 | Tab | Completes a slash command, or the `@` reference being typed; on an open menu, Enter takes the highlighted row too, and sends a command already typed in full |
@@ -1230,18 +1230,18 @@ Esc closes it):
 | `@` | Starts a file or folder reference; Hermes offers matches above the composer |
 | `!` | At the start of a line, makes it a shell command Hermes runs when you send it (30 s at most); it and its output are not sent to the model |
 | `?` | On an empty composer, shows this list; `/keys` does too |
-| ↑ / ↓ | Move between the composer's rows, walk the input history at its first and last row (earlier sessions' too, shared with `hermes --tui`), or move through an open completion menu |
+| ↑ / ↓ | Move between the composer's rows, walk the input history at its first and last row (earlier sessions' too, shared with `hermes --tui`), or move through an open completion menu (Ctrl+J / Ctrl+K and Ctrl+N / Ctrl+P move through the menu too) |
 | Ctrl+R | Searches the input history; Ctrl+R again finds an older match, Enter puts it in the composer, Esc leaves the composer as it was |
 | Ctrl+X | Opens the `/sessions` picker |
 | Ctrl+S | Opens the bot board, as `/bots` does: this machine's Hermes profiles, their gateways and sessions, read-only |
-| Ctrl+P | Folds the plan above the composer to its header and the item it is on, or expands it again, while a turn runs or between turns; the header says which on its right |
+| Ctrl+P | Folds the plan above the composer to its header and the item it is on, or expands it again, while a turn runs or between turns; the header says which on its right; on an open menu, Ctrl+P and Ctrl+N move the menu instead |
 | ↑ | On an empty composer with prompts queued, takes them back into the composer to edit; a queued shell line comes back on its own |
 | ↓ | On an empty composer while the agent view under the info line shows subagents, gives its rows the keys as the agent list; in a DAG run, to its folding tree |
 | ← / → | Move by a character; with Ctrl or Alt, by a word (Alt+B and Alt+F too) |
 | Home / End, Ctrl+A / Ctrl+E | Go to the start or the end of the line |
 | Backspace / Delete | Delete a character, or a paste chip or an `[Image #N]` token whole; deleting a token removes its image |
 | Ctrl+W, Alt+Backspace, Ctrl+Backspace | Deletes the word before the caret (Ctrl+Backspace where the terminal reports it apart from Backspace) |
-| Ctrl+U / Ctrl+K | Delete to the start or the end of the line |
+| Ctrl+U / Ctrl+K | Delete to the start or the end of the line; with a list or menu focused, Ctrl+K moves up instead |
 | Ctrl+_ / Ctrl+Y | Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); a run of typed characters is one edit |
 | Esc | Closes the `/` or `@` menu; on an empty composer, interrupts a running turn (the activity row shows how long it has run, then `interrupting…`, and what you queued comes back to the composer unsent); cancels a rewind you picked; cancels an agent steer you picked and keeps what you typed; after an approval's tell row, sends nothing more and brings your draft back |
 | Esc Esc | With text, clears it and keeps it in this session's history; on an empty composer between turns, lists your prompts to rewind to (`/rewind` does too) |
