@@ -574,6 +574,160 @@ Results describe this pinned corpus, OMH version, Hermes version, provider,
 model id and conditions only. They do not establish universal model
 superiority.
 
+### 2026-11-03 round-end continue cost: settled signature references and evidence notes, base vs on
+
+Pre-registered before its first live run. Runs before the commit that adds this section are none;
+smokes after it are uncounted and say so in their folder name.
+
+In the H2H2 and H2H3 head-to-heads (research folder `H2H3/REPORT.md`, `OPT/opt-l/DIAGNOSIS.md`),
+OMH continued 68 of 198 sessions at the round end. 38 of those changed nothing and the run passed
+anyway, at 1.02M tokens, about 2 extra model calls each. Every one came from `consistency_trigger`
+firing alone:
+
+- `C-DECOY`, 18: `copy` of the look-alike `_to_cents`;
+- `I-KWARG`, 12: `signature fetch`, where the file named `fetch` only as `client.fetch()`, or an
+  unedited test called `fetch("u")`;
+- `I-SIGNATURE`, 8: `signature compute_fee`, named only by `from .pricing import compute_fee as fee`
+  in `__init__.py`, whose one user `cli.py` was already edited.
+
+The true positives this item must keep: `C-DUPLICATE` (12 of 12 continues fixed the copy; omp passes
+0 of 6) and `L-RENAME-ALIAS` (6 of 6, export note).
+
+The change, in `consistency_trigger.py` and `verify_hooks.py` (commit `47c73adb5`):
+
+1. **Settled references.** A `signature` hit on a module-level function is dropped in a file only when
+   every `\bname\b` match there is proven to need no change, by `ast`:
+   - `p.name`, where `p` is bound only as a parameter in that file; or
+   - `from <the edited module> import name [as alias]`, where the alias is bound once and called only
+     in calls that bind the same way under the old and new parameter lists; and an alias other than
+     the name appears in no other unedited Python or config file.
+
+   A comment, a string, a value use, a module attribute or an import from elsewhere keeps the hit.
+   Only a module-level function defined once, undecorated, with the same return annotation, is
+   eligible.
+2. **Evidence in the note.** When the check fires alone, the note shows the lines the trigger matched:
+   for a copy, the other definition with its module docstring and the comment above it. It does not
+   ask for a search. A fire with nothing to show keeps the generic checklist.
+
+`C-DECOY`'s fire count cannot drop structurally: its `_to_cents` is byte-identical to
+`C-DUPLICATE`'s real copy, and only the docstring prose differs. The alternative "fire only when the
+edited line appears verbatim in the other file" was measured and rejected, because both fixtures
+spell `Decimal` differently from the edited file, so it cuts `C-DUPLICATE` too. So `C-DECOY` is gated
+on the cost of a fire, not on the number of fires.
+
+**Offline replay, before this registration** (`OPT/opt-l/replay.py`). Every recorded H2H2 and H2H3
+omn session is re-driven through each tree's real hooks: the fixture is rebuilt from its seed, the
+`patch` / `write_file` calls up to the first stop are replayed (`snapshot_before_edit` before each),
+and then `pre_verify(attempt=0)` runs.
+
+| Tree | Sessions | Continue decision equal to live | Continues |
+| --- | --- | --- | --- |
+| base `3ad772371` | 198 | 198 / 198 | 68 |
+| on `47c73adb5` | 198 | n/a | 48 |
+
+Per template, base to on:
+- `I-KWARG` 15 to 3: the 3 left are Haiku, test note;
+- `I-SIGNATURE` 17 to 9: the 9 left are Luna and Haiku, with `cli.py` still broken at the stop;
+- `C-DECOY` 18 to 18; `C-DUPLICATE` 12 to 12; `L-RENAME-ALIAS` 6 to 6;
+- every other template 0 to 0.
+
+No true positive is lost, and no new fire appears.
+
+The setup, fixed before the first live run:
+
+- **Arms.** Each links its OMH bundle from a `git archive` snapshot (`OPT/opt-l/omh-head/<sha>`):
+  `base` = origin/main `3ad772371`; `on` = this branch at `47c73adb5`. The bundles differ only in
+  the two files above.
+- **Profiles.** `optl-<lane>-<arm>` (`OPT/opt-l/make_profiles.sh`), H2H3's OMH-arm configuration
+  in both arms:
+  - Hermes's default `tools.tool_search`;
+  - plugin settings `omh_home` and `lsp_tools: true`; `impact_check` not set (off, as shipped);
+  - `pyright` pinned by an absolute command;
+  - `agent.max_turns: 120`, `agent.run_budget_seconds: 600`;
+  - the observer-only meter plugin.
+
+  Edit surface `lsp`, the `baseline` prompt with no edit directive, `--git-init-workspace`,
+  `--test-env`, effort `medium`.
+- **Panel.** Subscription routes only; expected money $0:
+
+  | Lane | Model | Route |
+  | --- | --- | --- |
+  | h45 | `claude-haiku-4-5-20251001` | `claude-proxy` (CPA) |
+  | s55 | `claude-sonnet-5-5` | `claude-proxy` (CPA) |
+  | luna | `gpt-6-luna` | `openai-codex` |
+  | sol | `gpt-6.1-sol` | `openai-codex` |
+
+- **Templates.** The 11 head-to-head templates: `I-SIGNATURE`, `I-RETURN-SHAPE`, `I-KWARG`,
+  `I-CONTROL`, `C-DUPLICATE`, `C-SCOPE-TRAP`, `C-DECOY`, `E-RENAME`, `E-BUGFIX`, `L-RENAME-ALIAS`,
+  `L-RENAME-SHADOW`.
+  - Positives (fewer or cheaper fires): `I-KWARG`, `I-SIGNATURE`, `C-DECOY`.
+  - Controls that must keep their fire and their pass: `C-DUPLICATE`, `L-RENAME-ALIAS`, and the
+    `I-SIGNATURE` runs that stop with a caller still broken.
+  - Controls with no fire on either arm in the replay: the other six.
+- **Seeds.** 613981, 778469 and 860143. None appears under `.omc/research` or in the bench. That is 33
+  instances per lane per arm, 132 per arm, 264 runs.
+- **Order and load.** Per instance the two arms run back to back on identical fresh workspaces, in
+  alternating order; the four lanes run in parallel. The driver is `OPT/opt-l/run_optl.py` (sha256
+  `18e0994c...`), derived from H2H3's, and it holds the same gates before every instance:
+  - wait while the 1-minute load is above 20;
+  - wait while free disk is below 8 GB; stop if it falls below 5 GB.
+
+  Live batches run under the shared live-run lock.
+- **Retries and crashes.** As H2H3:
+  - Retried on the same route: `rate_limited`, `provider_error`, `model_unavailable`, and a client
+    the gateway refused within 15 s.
+  - `authentication_failed` aborts every lane.
+  - A timeout is final and scored as a fail.
+  - A `process_crash` is scored as a fail in the **strict reading**. Once the lanes finish, each
+    instance whose last record in either arm is a crash is run once more in both arms, and those
+    re-runs make the **re-run reading**. Every clause is reported under both readings.
+
+Definitions:
+- A **continue** is a session with at least one assistant row whose `finish_reason` is
+  `verify_hook_continue` (session DB).
+- **Tokens** are the record's `observation.tokens`.
+- **Calls** are `sessions.api_call_count`.
+- A **pass** is the controller validator's `grade.pass`.
+
+The gate, `on` against `base`. Must hold:
+
+1. Total passes (n = 132): on at least base.
+2. Per template, pooled over the four models (n = 12): on at least base - 1.
+3. `C-DUPLICATE`, `L-RENAME-ALIAS` and `I-SIGNATURE` passes (n = 12 each): on at least base.
+4. `mutation_outside_scope` runs: on at most base.
+
+Must improve:
+
+5. Pooled median tokens (n = 132): on at most 0.95x base.
+6. Sol median tokens (n = 33): on at most 0.95x base.
+7. `I-KWARG` + `I-SIGNATURE` continues (n = 24): on strictly below base.
+8. `C-DECOY` (n = 12):
+   - continues: on at most base;
+   - median tokens: on at most 0.90x base;
+   - median calls: on at most base - 1.
+
+Reported, not gated:
+- the per-lane, per-template table of passes, continues, median calls and median tokens;
+- the trigger's verdict reasons per arm, including `settled`;
+- the median calls of the extra round after a continue;
+- median wall time and final answer kept;
+- the load path (`omh_pkg`);
+- tokens and money by route.
+
+Everything is recomputed from the raw run records, the session-DB snapshots and the profile logs by
+`OPT/opt-l/gate.py`, not from the driver log.
+
+**Fallback, fixed now.** If any clause fails, the failure is recorded here and the branch does not
+ask to merge. What is dropped depends on where the regression sits:
+- **A quality clause (1 to 4) fails on runs where the on arm sent an evidence note.** The note is
+  the behavioural part, so `verify_hooks` returns to the generic checklist, and the settled
+  references stay.
+- **It fails on a run whose on-arm verdict was `settled`.** That is a cut that dropped a needed fire,
+  so `_settled` is dropped.
+- **Only the cost clauses (5 to 8) fail.** The change does not merge on this run.
+
+A re-measure after any drop is a new pre-registration with new seeds.
+
 ### 2026-11-02 round-end check: declared look-alikes and rewritten test expectations, base vs new
 
 Pre-registered before its first live run.
