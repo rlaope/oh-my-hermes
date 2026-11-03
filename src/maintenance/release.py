@@ -370,12 +370,12 @@ SKILL_INDEX_LINE_CHAR_LIMIT = 100
 # enum carries no description (the skill and the tool's results explain it).
 # Measured by per_turn_context.plugin_tool_schema_chars_by_tool() against base
 # c90d94551. No headroom.
-# 72455 -> 72488: `omh_memory`'s `retention_class` description (+33) says a
-# capture is `standard`, not `durable`, when its summary is an as-of or
-# versioned snapshot. Without it the schema would say "defaults to 'durable'"
-# for captures it no longer keeps durable. Only omh_memory moves; measured by
-# test_per_turn_budgets against base df1ece515. No headroom.
-PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72488
+# 72455 -> 72494: `omh_memory`'s `retention_class` description (+39) says a
+# capture gets a 90-day review instead of staying `durable` when its summary
+# is an as-of or versioned snapshot. It names two of the three enum members,
+# as before, so test_schema_overlap needs no new verdict. Only omh_memory
+# moves; measured by test_per_turn_budgets against base df1ece515. No headroom.
+PLUGIN_TOOL_SCHEMA_CHAR_LIMIT = 72494
 # PRE_LLM_CALL_CONTEXT_CHAR_LIMIT, PRE_LLM_CALL_CONTEXT_FALLBACK_CHAR_LIMIT: moved with
 # their history to src/plugin_bundle/omh/turn_budget.py; imported at the top of this file.
 # 340000 -> 349637: three capability-skill sections were added by the domain

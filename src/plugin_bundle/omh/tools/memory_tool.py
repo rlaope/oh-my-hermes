@@ -277,7 +277,7 @@ OMH_MEMORY_SCHEMA = {
             "retention_class": {
                 "type": "string",
                 "enum": list(CAPTURE_RETENTION_CLASSES),
-                "description": "capture: defaults to 'durable', 'standard' for an as-of or v1.2 snapshot; 'volatile' lasts a week.",
+                "description": "capture: defaults to 'durable'; an as-of or v1.2 snapshot gets a 90-day review; 'volatile' lasts a week.",
             },
             "entry_sha256": {
                 "type": "string",
