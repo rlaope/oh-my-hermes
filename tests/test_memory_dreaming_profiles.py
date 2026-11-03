@@ -338,16 +338,18 @@ class LegacyStateUpgradeTests(_SharedStore):
 
     def test_a_single_profile_host_keeps_its_pending_counters(self) -> None:
         state = empty_dreaming_state()
-        for _ in range(3):
+        for _ in range(5):
             state = record_turn(state)
         write_legacy(self.store, "dreaming.json", state)
         write_hermes_memory(self.profile_a, "one short fact")
         self.start(self.profile_a, "session-a")
-        # The session-start recovery counted the three turns it adopted.
-        self.assertIn("session_ending_with_unconsolidated_turns:3", read_latest_consolidation(self.store, self.profile_a)["reasons"])
+        # The session-start recovery counted the five turns it adopted.
+        self.assertIn("session_ending_with_unconsolidated_turns:5", read_latest_consolidation(self.store, self.profile_a)["reasons"])
 
     def test_adoption_never_replaces_the_profiles_own_state(self) -> None:
-        own = record_turn(empty_dreaming_state())
+        own = empty_dreaming_state()
+        for _ in range(5):
+            own = record_turn(own)
         write_dreaming_state(self.store, self.profile_a, own)
         legacy = empty_dreaming_state()
         for _ in range(4):
@@ -356,7 +358,7 @@ class LegacyStateUpgradeTests(_SharedStore):
         write_hermes_memory(self.profile_a, "one short fact")
         self.start(self.profile_a, "session-a")
         self.assertTrue(legacy_state.exists())
-        self.assertIn("session_ending_with_unconsolidated_turns:1", read_latest_consolidation(self.store, self.profile_a)["reasons"])
+        self.assertIn("session_ending_with_unconsolidated_turns:5", read_latest_consolidation(self.store, self.profile_a)["reasons"])
 
     def test_a_routed_profile_leaves_the_shared_files_unread(self) -> None:
         legacy_brief = write_legacy(self.store, "consolidation.json", due_brief("headroom_below_floor:12<=300"))

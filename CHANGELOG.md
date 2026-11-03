@@ -13,6 +13,13 @@ All notable changes will be documented here.
   of 114. On a stdio gateway, the first regrouping of the skills when they
   arrive went from about 50 ms to under 1 ms.
 
+- **The memory consolidation brief no longer rides almost every console turn.** A session that ended with one to
+  four unconsolidated turns used to raise a brief at its end and again as a recovery at the next start, so 213 of 216
+  console turns on one machine carried the capture request (153 briefs came from session-start recovery), and every
+  capture grew the store that recall draws from. The session-ending reasons now need the same five turns as the turn
+  interval, and a given brief is shown once per session instead of on every later turn. Headroom, duplicate and
+  expiring-record reasons keep their own thresholds, `dreaming_mode` is unchanged, and the model still captures
+  through its own tool with no approve step.
 - **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
   used to ride on every recommended skill, and one policy can run past 1 KB.
   It now stays on the top recommendation and on the skills the route selects,
