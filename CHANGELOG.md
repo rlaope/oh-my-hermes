@@ -638,6 +638,15 @@ All notable changes will be documented here.
   advisories gain `lsp_tools_disabled` (advice when unset or off, unobserved
   when the config shape cannot be read). (#2511)
 
+- **Korean requests that mention OMH by name stop drawing unrelated skill
+  suggestions.** The per-turn "skills that may fit" line ranked Korean on
+  syllable pairs, and "헤르메스"/"오마이헤르메스" sit in three skills' triggers,
+  so "오마이헤르메스 홍보 영상 만들어줘" was offered parallel-tools and
+  executor-runtime-readiness. The host name, the particles "-에서"/"-으로" and
+  the request verb "확인" now count as filler. Replayed over 722 Korean owner
+  messages, lines naming those three skills fall from 24 to 11; each skill still
+  matches its own nouns ("병렬 도구", "코덱스", "기억 점검").
+
 ## 4.0.4 - 2026-11-01
 
 - **Name your own identity: a prompt and a model chain.** Write
