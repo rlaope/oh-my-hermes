@@ -11,8 +11,9 @@ none goes missing, and nothing already in scrollback would need a repaint.
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 import time
+from typing import get_origin, get_type_hints
 import unicodedata
 import unittest
 from unittest.mock import patch
@@ -24,6 +25,7 @@ from omh.tui.style import Line, Span
 from omh.tui import transcript as transcript_module
 from omh.skin_pack import default_theme
 from omh.tui.theme import DEFAULT_THEME as THEME
+from omh.tui.theme import Theme
 from omh.tui.theme import with_launch_look
 from omh.tui.transcript import (
     STEER_QUEUED,
@@ -331,16 +333,16 @@ class RetakeTailTests(LoopTestCase):
 
 
 class KeptReplyRowsTests(unittest.TestCase):
-    """A finished reply is wrapped once per width and theme: drawn again (a full redraw), its rows are the kept ones,
-    the rows a reply never drawn before gets."""
+    """A finished reply a full redraw measured is wrapped once per width and theme: measured again, its rows are the
+    kept ones, the rows a reply never drawn before gets. Only replies inside the redraw's tail keep any."""
 
     TEXT = ("## Answer\n\n한국어 문장입니다 — 폭이 두 칸인 글자 🎉 ✅\n\n- item **bold** with `code`\n- [a link](https://example.com)\n\n"
             "```python\ndef fib(n: int) -> int:\n    return n\n```\n\n" + "lorem ipsum dolor sit amet " * 8)
 
     def rows(self, block: AssistantBlock, width: int, theme: object = THEME) -> tuple[list[Line], int]:
-        """`block_rows`, and how many times it wrapped markdown for them."""
+        """The rows a full redraw measures for `block`, and how many times it wrapped markdown for them."""
         with patch("omh.tui.transcript.render_lines", wraps=transcript_module.render_lines) as wrapped:
-            rows = block_rows(block, width, theme)  # type: ignore[arg-type]
+            rows = transcript_module._tail_rows(block, width, theme)  # type: ignore[arg-type]
         return rows, wrapped.call_count
 
     def fresh(self, block: AssistantBlock, width: int, theme: object = THEME) -> list[Line]:
@@ -383,6 +385,40 @@ class KeptReplyRowsTests(unittest.TestCase):
         block.done = True
         rows, wrapped = self.rows(block, WIDTH)
         self.assertEqual((rows, wrapped), (self.fresh(block, WIDTH), 1))
+
+    def replies(self, count: int) -> Transcript:
+        transcript = Transcript()
+        transcript.blocks.extend(AssistantBlock(f"reply {index}\n\n" + self.TEXT, done=True) for index in range(count))
+        return transcript
+
+    def test_a_reply_above_the_redraw_tail_lets_go_of_its_rows(self) -> None:
+        transcript = self.replies(20)
+        transcript.retake_tail(WIDTH, THEME, max_rows=100_000)  # the whole session in the tail: every reply keeps
+        self.assertTrue(all(block.kept is not None for block in transcript.blocks))
+        tall = len(block_rows(transcript.blocks[0], WIDTH, THEME)) + 1
+        transcript.retake_tail(WIDTH, THEME, max_rows=3 * tall)
+        cut = transcript.left_out
+        self.assertEqual(cut, 17)
+        self.assertEqual([block.kept is not None for block in transcript.blocks], [False] * cut + [True] * 3)
+
+    def test_history_and_a_take_keep_nothing(self) -> None:
+        # /history pages through `block_rows` at the pager's own width (the full screen under the edge frame), so
+        # keeping rows there would grow with every reply viewed and evict the redraw's.
+        transcript = self.replies(5)
+        transcript.history_lines(WIDTH, THEME)
+        transcript.history_lines(WIDTH, THEME, details=False)
+        for block in transcript.blocks:
+            block_rows(block, WIDTH + 4, THEME)
+        transcript.take_stable_lines(WIDTH, THEME)
+        self.assertEqual([block.kept for block in transcript.blocks], [None] * 5)
+
+    def test_the_theme_the_rows_are_kept_for_cannot_change_in_place(self) -> None:
+        # `kept` matches its theme by identity: sound only while a theme is frozen and holds nothing mutable.
+        self.assertTrue(Theme.__dataclass_params__.frozen)  # type: ignore[attr-defined]
+        hints = get_type_hints(Theme)
+        mutable = [name for name, hint in hints.items() if hint in (list, dict, set) or get_origin(hint) in (list, dict, set)]
+        self.assertEqual(mutable, [])
+        self.assertEqual({field.name for field in fields(Theme)}, set(hints))
 
 
 class BlockCapTests(LoopTestCase):

@@ -273,8 +273,9 @@ class AssistantBlock:
     text: str = ""
     done: bool = False
     model: str | None = ""  # the session's model as it began (`Transcript.model`); None: not known (a resumed reply)
-    # The rows `block_rows` last drew for it once done, with what they were drawn from: (text, model, width, theme,
-    # rows). A full redraw at that width and theme takes them as they are instead of wrapping the reply again.
+    # The rows the last full redraw measured for it once done, with what they were drawn from: (text, model, width,
+    # theme, rows), while it is inside that redraw's tail (`Transcript._measure_tail`). The next redraw at that width
+    # and theme takes them as they are instead of wrapping the reply again.
     kept: tuple[str, str | None, int, Theme, tuple[Line, ...]] | None = field(default=None, compare=False, repr=False)
 
 
@@ -1034,14 +1035,21 @@ def _reply_width(width: int) -> int:
 
 
 def _assistant_rows(block: AssistantBlock, width: int, theme: Theme) -> list[Line]:
+    rows = render_lines(_display_lines(block.text), MarkdownState(), _reply_width(width), theme)[0]
+    return _marked(rows, True, theme, width, block.model)
+
+
+def _tail_rows(block: Block, width: int, theme: Theme) -> list[Line]:
+    """`block_rows` as a full redraw measures it: a finished reply's rows are kept on it (`AssistantBlock.kept`) and
+    taken again while its text, model, width and theme are the ones they were drawn from."""
+    if not (isinstance(block, AssistantBlock) and block.done):
+        return block_rows(block, width, theme)
     kept = block.kept
     if kept is not None and kept[0] == block.text and kept[1] == block.model and kept[2] == width and kept[3] is theme:
         return list(kept[4])
-    rows = render_lines(_display_lines(block.text), MarkdownState(), _reply_width(width), theme)[0]
-    marked = _marked(rows, True, theme, width, block.model)
-    if block.done:
-        block.kept = (block.text, block.model, width, theme, tuple(marked))
-    return marked
+    rows = block_rows(block, width, theme)
+    block.kept = (block.text, block.model, width, theme, tuple(rows))
+    return rows
 
 
 def _seconds(value: float) -> str:
@@ -2023,11 +2031,15 @@ class Transcript:
         return self._measure_tail(width, theme, max_rows)[0]
 
     def _measure_tail(self, width: int, theme: Theme, max_rows: int) -> tuple[int, list[list[Line]]]:
-        """`_tail_start`, and the rows of each block from there to the live one, in order, as measuring rendered them."""
+        """`_tail_start`, and the rows of each block from there to the live one, in order, as measuring rendered them.
+
+        A reply above the cut lets go of the rows it kept, so what replies keep is about this tail's rows, not the
+        session's (`/history` pages through `block_rows`, which keeps nothing).
+        """
         end = len(self.blocks) - (1 if self.blocks and not self.blocks[-1].done else 0)
         cut, rows, kept = end, 0, []
         while cut > 0:
-            block_lines = block_rows(self.blocks[cut - 1], width, theme)
+            block_lines = _tail_rows(self.blocks[cut - 1], width, theme)
             height = len(block_lines) + 1
             if rows + height > max_rows and cut < end:
                 break
@@ -2035,6 +2047,9 @@ class Transcript:
             cut -= 1
             kept.append(block_lines)
         kept.reverse()
+        for block in self.blocks[:cut]:
+            if isinstance(block, AssistantBlock):
+                block.kept = None
         return cut, kept
 
     def live_lines(

@@ -8,8 +8,8 @@ All notable changes will be documented here.
   tabs, Ctrl+L, `/redraw` and every other full redraw at the width the
   session was printed at reprinted the session by wrapping every finished
   reply's markdown and painting every row again: 119 ms for a 1,100-turn
-  session, 109 ms for a 100-turn one. A finished reply now keeps its rows for
-  the width and theme it was drawn at, and a row printed above the live
+  session, 109 ms for a 100-turn one. A finished reply in the redraw's tail
+  now keeps its rows for the width and theme it was drawn at, and a row printed above the live
   region keeps its bytes, so the second and later redraws take 6 to 9 ms and
   the first after a reply streamed about half what it did. What is written is
   unchanged, byte for byte. A redraw still erases the terminal's
