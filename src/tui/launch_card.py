@@ -97,7 +97,9 @@ class Skills:
 @lru_cache(maxsize=1)
 def family_members() -> tuple[tuple[str, tuple[str, ...]], ...]:
     """(label, installed skill names) per family, from the generated sidecar, read once."""
-    from ..skills.catalog_types import omh_skill_display_name  # only once skills arrive, never on the import path
+    # Not `omh.skills`: its package `__init__` imports the whole catalog, ~100 modules before the frame that
+    # shows the shared gateway's skills. Only once skills arrive, never on the import path.
+    from ..catalogs.skill_display_names import omh_skill_display_name
 
     try:
         sidecar = resources.files("omh.plugin_bundle.omh.tools").joinpath("capability_families.json")
