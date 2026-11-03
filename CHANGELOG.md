@@ -10,6 +10,22 @@ All notable changes will be documented here.
   gateway. On a 60x200 screen with the aurora look, a busy frame went from about 9.9 ms to 5.6 ms and
   the loop from 38 to 19 wake-ups a second.
 
+- **Code-skill round follow-ups.** Seven review findings from the last round,
+  fixed in OMH's own words. Commit-pr-authoring says where the reversibility
+  line goes when the PR template has no risk or rollout section: one sentence
+  at the end of its summary section. App-debugging names what the loop-cost
+  filter checks before `competing_hypotheses/v1` exists, and lets
+  `regression_seam: none_correct` name the verifying reproduction loop in
+  place of a regression test. Plan's append-only-file task keeps a generated,
+  drift-gated file's gate out of each slice's done check. Verification-gate
+  says a fix recorded with `regression_seam: none_correct` has no fix test, so
+  the regression-witness rule does not apply. Frontend's support-target
+  paragraph is reflowed to 80 columns, and backend's thin-handler paragraph
+  gets its own heading inside section 7. Two Korean negative controls pin that
+  a dress code or a QR code in the architecture request form never dispatches
+  `tech-debt-audit`; they still name it as a clarify candidate, the accepted
+  cost of the clarify-only cap, as the English cases do.
+
 - **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
   Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
   dialogs (/model, /sessions, /rewind, /theme, /launch), the agent view list
@@ -613,6 +629,18 @@ All notable changes will be documented here.
   heaviest montage. Short promos keep the one-scene rule; every capture and
   citation rule still applies. Method notes come from a frame-by-frame study of
   a public 99 s launch film; nothing was copied.
+
+- **Cancelling a dag run names the children still running.** `omh_dag
+  action=cancel` now lists each node whose delegate child is still out, with its
+  subagent id and how long it has been open, under `still_running`, and the reply
+  names each one with its `delegate_task action=stop` route. A repeated cancel
+  names the same children instead of saying none are left. (#2512)
+- **The LSP opt-in has a visible enable path.** When the impact check finds new
+  errors and the `omh-lsp` toolset is off, its note says `lsp_diagnostics`
+  re-checks directly once `OMH_LSP_TOOLS=1` or the `lsp_tools` setting is on and
+  Hermes restarted; with the toolset on it no longer repeats that. `omh doctor`
+  advisories gain `lsp_tools_disabled` (advice when unset or off, unobserved
+  when the config shape cannot be read). (#2511)
 
 ## 4.0.4 - 2026-11-01
 
