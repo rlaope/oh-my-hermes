@@ -301,15 +301,22 @@ class FanoutFilesystemConfinement:
             return dict(selected_environment)
         scratch = self.child.work / _FANOUT_TOOLCHAIN_TEMP_DIRECTORY
         result = {**selected_environment, "TMPDIR": str(scratch)}
-        for key, default in (("TMPPREFIX", scratch / "zsh"), ("UV_CACHE_DIR", scratch / "uv-cache")):
-            if not self._within_write_roots(selected_environment.get(key, "")):
+        # TMPPREFIX is a file-name prefix (`<prefix>XXXX`), so what must sit
+        # inside a root is its directory; `TMPPREFIX=<root>` writes beside it.
+        for key, default, as_prefix in (
+            ("TMPPREFIX", scratch / "zsh", True),
+            ("UV_CACHE_DIR", scratch / "uv-cache", False),
+        ):
+            if not self._within_write_roots(selected_environment.get(key, ""), as_prefix=as_prefix):
                 result[key] = str(default)
         return result
 
-    def _within_write_roots(self, value: str) -> bool:
+    def _within_write_roots(self, value: str, *, as_prefix: bool = False) -> bool:
         if not value or not os.path.isabs(value):
             return False
         resolved = Path(os.path.realpath(value))
+        if as_prefix:
+            resolved = resolved.parent
         return any(resolved.is_relative_to(os.path.realpath(root)) for root in self.write_roots)
 
 

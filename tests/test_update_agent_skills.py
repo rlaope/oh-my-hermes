@@ -89,7 +89,7 @@ class UpdateAgentSkillsTests(unittest.TestCase):
         self._old_pack()
         before = self._snapshot()
         result = projection.refresh_installed_agent_skills(self.home, dry_run=True)
-        self.assertEqual(result, {"would_refresh": [str(self.target)]})
+        self.assertEqual(result, {"would_refresh": [str(self.target)], "mirror_skipped": False})
         status, stdout, stderr = self._update("--dry-run")
         self.assertEqual(status, 0, stderr)
         self.assertEqual(json.loads(stdout)["agent_skills"], result)
@@ -114,7 +114,52 @@ class UpdateAgentSkillsTests(unittest.TestCase):
         self.assertEqual((result["projection_before"], result["projection_after"]), ("stale", "fresh"))
         status, stdout, stderr = self._update(output_json=False)
         self.assertEqual(status, 0, stderr)
-        self.assertIn("Agent Skills (Codex/.agents): refreshed 2 files", stdout)
+        self.assertIn("Agent Skills (Codex/.agents): already up to date", stdout)
+
+    def test_refreshed_files_counts_only_changed_files(self):
+        self._old_pack()
+        (self.target / "omh-demo/SKILL.md").write_text("old guidance\n", encoding="utf-8")
+        result = projection.refresh_installed_agent_skills(self.home, dry_run=False)
+        self.assertEqual(result["refreshed_files"], 1)
+        self.assertEqual(projection.refresh_installed_agent_skills(self.home, dry_run=False)["refreshed_files"], 0)
+
+    def test_mirrored_receipt_through_a_symlinked_home_refreshes(self):
+        # `omh install --scope user` records resolved roots; a HOME reached
+        # through a symlink must still match them (verifier finding 1).
+        self._old_pack(mirrored=True)
+        link = Path(self.temporary.name + "-link")
+        link.symlink_to(self.home, target_is_directory=True)
+        self.addCleanup(link.unlink)
+        with patch.dict("os.environ", {projection.USER_HOME_ENV: str(link)}):
+            home = projection.agent_skills_user_home()
+            result = projection.refresh_installed_agent_skills(home, dry_run=False)
+        self.assertEqual(result["target_dirs"], [str(self.target), str(self.mirror)])
+        self.assertEqual(result["projection_after"], "fresh")
+
+    def test_removed_mirror_is_not_recreated(self):
+        self._old_pack(mirrored=True)
+        for path in sorted(self.mirror.rglob("*"), reverse=True):
+            path.unlink() if path.is_file() else path.rmdir()
+        self.mirror.rmdir()
+        dry = projection.refresh_installed_agent_skills(self.home, dry_run=True)
+        self.assertEqual(dry, {"would_refresh": [str(self.target)], "mirror_skipped": True})
+        result = projection.refresh_installed_agent_skills(self.home, dry_run=False)
+        self.assertTrue(result["mirror_skipped"])
+        self.assertEqual(result["projection_after"], "fresh")
+        self.assertFalse(self.mirror.exists())
+        self.assertEqual(json.loads((self.target / projection.MANIFEST_NAME).read_text())["target_dirs"], ["."])
+
+    def test_receipt_naming_a_foreign_mirror_is_refused(self):
+        self._old_pack(mirrored=True)
+        path = self.target / projection.MANIFEST_NAME
+        manifest = json.loads(path.read_text())
+        manifest["target_dirs"] = [str(self.target), str(self.home / "elsewhere")]
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        before = self._snapshot()
+        with self.assertRaises(ValueError):
+            projection.refresh_installed_agent_skills(self.home, dry_run=False)
+        self.assertEqual(self._snapshot(), before)
+        self.assertFalse((self.home / "elsewhere").exists())
 
     def test_edited_toolkit_is_reported_without_aborting_other_phases(self):
         self._old_pack()
@@ -150,8 +195,9 @@ class UpdateAgentSkillsTests(unittest.TestCase):
 
 class AgentSkillsUserHomeTests(unittest.TestCase):
     def test_override_env_wins_and_empty_falls_back_to_user_home(self):
-        with TemporaryDirectory() as tmp:
-            with patch.dict("os.environ", {"OMH_AGENT_SKILLS_HOME": tmp}):
+        with TemporaryDirectory() as raw:
+            tmp = str(Path(raw).resolve())
+            with patch.dict("os.environ", {"OMH_AGENT_SKILLS_HOME": raw}):
                 self.assertEqual(projection.agent_skills_user_home(), Path(tmp))
             with patch.dict("os.environ", {"OMH_AGENT_SKILLS_HOME": "  "}), \
                     patch.object(Path, "home", return_value=Path(tmp) / "user"):

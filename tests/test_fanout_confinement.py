@@ -684,6 +684,9 @@ class FanoutConfinementPolicyTests(unittest.TestCase):
             )
             replaced = confinement.command_environment({"UV_CACHE_DIR": outside, "TMPPREFIX": "/tmp/zsh"})
             relative = confinement.command_environment({"UV_CACHE_DIR": "cache/uv"})
+            # TMPPREFIX is a file-name prefix: `<root>` itself writes `<root>XXXX` beside the root.
+            root_prefix = confinement.command_environment({"TMPPREFIX": str(worktree)})
+            self.assertEqual(root_prefix["TMPPREFIX"], str(scratch / "zsh"))
 
             self.assertEqual(kept["UV_CACHE_DIR"], inside)
             self.assertEqual(kept["TMPPREFIX"], str(worktree / "zsh-tmp" / "zsh"))

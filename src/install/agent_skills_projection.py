@@ -179,7 +179,7 @@ def agent_skills_status(target: Path, *, mirror: Path | None = None) -> dict[str
     )
     warnings = duplicate_pack_warnings(target.absolute())
     if len(states) == 2 and states[0] != "missing" and states[1] == "missing":
-        scope = "user" if target.absolute() == Path.home().absolute() / ".agents/skills" else "repo"
+        scope = "user" if target.resolve() == Path.home().resolve() / ".agents/skills" else "repo"
         warnings.append(
             f"The mirror copy at {roots[1]} is absent; the primary pack is {states[0]}. "
             f"To create both copies, run `omh install --target agents --scope {scope}`."
@@ -217,36 +217,76 @@ def agent_skills_user_home() -> Path:
     `OMH_AGENT_SKILLS_HOME` overrides the user home; the test process sets it
     to a temp root, so no test run can refresh or read the developer's real
     Codex pack (the same leak `OMH_HOME` closes for the OMH home).
+    Resolved, because `omh install --scope user` records resolved roots in a
+    mirrored receipt: an unresolved home behind a symlink would never match.
     """
     override = os.environ.get(USER_HOME_ENV, "").strip()
-    return Path(override).expanduser() if override else Path.home()
+    return (Path(override).expanduser() if override else Path.home()).resolve()
+
+
+def installed_receipt_roots(target: Path, manifest: dict[str, Any]) -> tuple[Path, Path | None]:
+    """The roots a user-scope receipt at `target` covers: `(target, mirror)`.
+
+    A portable receipt (`target_dirs == ["."]`) is the single target. A
+    mirrored one must list exactly this target and its sibling
+    `.claude/skills` (the only mirror `omh install --scope user` writes);
+    anything else is refused, so a receipt can never point a refresh at an
+    arbitrary directory. Doctor and update share this reader.
+    """
+    directories = manifest["target_dirs"]
+    if directories == ["."]:
+        return target, None
+    resolved_target = target.resolve()
+    expected_mirror = resolved_target.parent.parent / ".claude/skills"
+    if (len(directories) != 2 or not all(Path(item).is_absolute() for item in directories)
+            or Path(directories[0]).resolve() != resolved_target
+            or Path(directories[1]).resolve() != expected_mirror):
+        raise ValueError(f"Invalid installed user Agent Skills target_dirs: {directories!r}")
+    return resolved_target, expected_mirror
+
+
+def _changed_file_count(roots: tuple[Path, ...], files: dict[str, str]) -> int:
+    changed = 0
+    for root in roots:
+        for relative, content in files.items():
+            path = _checked_path(root, relative)
+            if not path.is_file() or path.read_bytes() != content.encode("utf-8"):
+                changed += 1
+    return changed
 
 
 def refresh_installed_agent_skills(home: Path, *, dry_run: bool) -> dict[str, Any] | None:
-    """Refresh only an existing user .agents pack, preserving its install layout."""
-    target = home.absolute() / ".agents/skills"
+    """Refresh only an existing user .agents pack, preserving its install layout.
+
+    A mirrored receipt whose `.claude/skills` copy the user removed (as
+    docs/AGENT-SKILLS.md#duplicate-copies advises) refreshes the primary
+    alone and is rewritten as a single-target receipt: update never
+    re-creates a copy that is not there.
+    """
+    target = home.resolve() / ".agents/skills"
     if not (target / MANIFEST_NAME).exists():
         return None
     manifest = _read_manifest(target)
     if manifest is None:
         return None
-    directories = manifest["target_dirs"]
-    mirror = None
-    if directories != ["."]:
-        if (len(directories) != 2 or not all(Path(item).is_absolute() for item in directories)
-                or Path(directories[0]) != target or Path(directories[1]) == target):
-            raise ValueError("Invalid installed user Agent Skills target_dirs")
-        mirror = Path(directories[1])
-    roots = [str(target)] + ([str(mirror)] if mirror is not None else [])
+    target, mirror = installed_receipt_roots(target, manifest)
+    mirror_skipped = mirror is not None and _read_manifest(mirror) is None
+    if mirror_skipped:
+        mirror = None
+    roots = (target,) if mirror is None else (target, mirror)
+    names = [str(root) for root in roots]
+    result: dict[str, Any] = {"mirror_skipped": mirror_skipped}
     if dry_run:
-        return {"would_refresh": roots}
+        return {"would_refresh": names, **result}
     before = agent_skills_status(target, mirror=mirror)
+    changed = _changed_file_count(roots, agent_skill_files())
     after = install_agent_skills(target, mirror=mirror)
     return {
-        "target_dirs": roots,
+        "target_dirs": names,
         "projection_before": before["projection"],
         "projection_after": after["projection"],
-        "refreshed_files": len(agent_skill_files()) * len(roots),
+        "refreshed_files": changed,
+        **result,
     }
 
 

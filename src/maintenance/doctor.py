@@ -1479,18 +1479,17 @@ def _agent_skills_pack_check() -> Check:
     """
     name = "agent_skills_pack"
     target = agent_skills_projection.agent_skills_user_home() / ".agents/skills"
-    if not (target / agent_skills_projection.MANIFEST_NAME).is_file():
-        return Check(name, True, f"OMH Agent Skills pack for Codex/.agents hosts is not installed at {target}", severity="ok")
     try:
+        # Inside the try: on Python < 3.14 `is_file()` raises PermissionError
+        # for an unsearchable directory instead of returning False.
+        if not (target / agent_skills_projection.MANIFEST_NAME).is_file():
+            return Check(name, True, f"OMH Agent Skills pack for Codex/.agents hosts is not installed at {target}", severity="ok")
         manifest = agent_skills_projection._read_manifest(target)
         if manifest is None:
             raise ValueError(f"Agent Skills manifest vanished: {target / agent_skills_projection.MANIFEST_NAME}")
-        directories = manifest["target_dirs"]
-        mirror = None
-        if directories != ["."]:
-            if len(directories) != 2 or not all(Path(item).is_absolute() for item in directories):
-                raise ValueError(f"Invalid Agent Skills target_dirs: {directories!r}")
-            mirror = Path(directories[1])
+        target, mirror = agent_skills_projection.installed_receipt_roots(target, manifest)
+        if mirror is not None and agent_skills_projection._read_manifest(mirror) is None:
+            mirror = None
         status = agent_skills_projection.agent_skills_status(target, mirror=mirror)
         current = agent_skills_projection.agent_skills_manifest(agent_skills_projection.agent_skill_files())["files"]
     except (OSError, ValueError, UnicodeDecodeError) as exc:

@@ -670,9 +670,10 @@ All notable changes will be documented here.
   a Mac with six personal skills there, every Codex unit was told to start with
   `$generate2dsprite` and `$game-video-feedback-loop` (11 of 11 units in a real
   run, about 32k characters of unrelated skill text each). Discovery now reads
-  the repo `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` in Codex's own
-  order, so the same unit gets `$omh-plan`, `$omh-build-failure-triage`,
-  `$omh-code-review`. Inside the macOS fence, zsh heredocs and `uv` now work:
+  the repo `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the
+  same unit gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`;
+  a name found in two roots is never suggested, since Codex refuses a plain
+  `$name` that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now work:
   `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir (before,
   every `git commit -F - <<EOF` failed with "can't create temp file for here
   document" and `uv run` could not open its cache). The fence's write

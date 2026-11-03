@@ -159,13 +159,14 @@ def discovered_executor_skills(
     sources: dict[str, object] = {}
     skills: list[dict[str, str]] = []
     rejected = 0
-    shadowed = 0
-    # Codex resolves a duplicate skill name to the first root in its
-    # precedence order, so only that copy is reported; the later copies are
-    # counted, never listed, so a dry run can see that shadowing happened.
-    # Keyed on the invocation: a `/name` prompt and a `$name` skill are
-    # distinct commands and do not shadow each other.
+    # Codex lists every skill it finds (deduped by SKILL.md path, not by
+    # name) and refuses a plain `$name` mention when two skills share the name
+    # (openai/codex `skills/selection.rs`). So an invocation found in more than
+    # one Codex root is ambiguous there: it is dropped from the payload, never
+    # recommended, and counted. Keyed on the invocation: a `/name` prompt and a
+    # `$name` skill are distinct commands.
     seen_invocations: set[str] | None = set() if profile == "codex" else None
+    ambiguous: set[str] = set()
     for source_id, entries, status, reason in _probe_profile(profile, base, project_root, codex_home):
         source: dict[str, str] = {"status": status}
         if reason:
@@ -179,7 +180,7 @@ def discovered_executor_skills(
             resolved_invocation = invocation.replace(_NAME_PLACEHOLDER, safe)
             if seen_invocations is not None:
                 if resolved_invocation in seen_invocations:
-                    shadowed += 1
+                    ambiguous.add(resolved_invocation)
                     continue
                 seen_invocations.add(resolved_invocation)
             role, score = classify_role_scored(description, safe)
@@ -192,6 +193,7 @@ def discovered_executor_skills(
                     "source": source_id,
                 }
             )
+    skills = [entry for entry in skills if entry["invocation"] not in ambiguous]
     skills.sort(key=lambda entry: (str(entry["role"]), -int(entry["role_score"]), str(entry["name"])))
     return {
         "schema_version": EXECUTOR_SKILL_DISCOVERY_SCHEMA_VERSION,
@@ -200,7 +202,7 @@ def discovered_executor_skills(
         "sources": sources,
         "skills": skills,
         "rejected_name_count": rejected,
-        "shadowed_name_count": shadowed,
+        "ambiguous_name_count": len(ambiguous),
         "claim_boundary": EXECUTOR_SKILL_DISCOVERY_CLAIM_BOUNDARY,
     }
 

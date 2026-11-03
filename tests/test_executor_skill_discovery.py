@@ -166,7 +166,7 @@ class CodexSkillRootTests(unittest.TestCase):
         )
         self.assertEqual(payload["sources"]["codex_user_agent_skills"]["status"], "present")
         self.assertEqual(payload["sources"]["codex_skills"]["status"], "absent")
-        self.assertEqual(payload["shadowed_name_count"], 0)
+        self.assertEqual(payload["ambiguous_name_count"], 0)
 
     def test_codex_repo_agent_skills_with_project_root(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -188,17 +188,21 @@ class CodexSkillRootTests(unittest.TestCase):
             ["codex_repo_agent_skills", "codex_prompts", "codex_skills", "codex_user_agent_skills"],
         )
 
-    def test_codex_duplicate_name_keeps_codex_home_copy(self) -> None:
+    def test_codex_duplicate_name_is_ambiguous_and_never_recommended(self) -> None:
+        # Codex lists both copies and refuses a plain `$omh-plan` when two
+        # skills share the name (openai/codex skills/selection.rs), so OMH
+        # must not recommend it; a unique sibling still is.
         with TemporaryDirectory() as tmp:
             home = Path(tmp)
             _write_skill(home / ".codex" / "skills", "omh-plan", "Structured planning before execution")
             _write_skill(home / ".agents" / "skills", "omh-plan", "Structured planning before execution")
+            _write_skill(home / ".agents" / "skills", "omh-code-review", "Review the diff before merge")
             payload = discovered_executor_skills("codex", home)
         self.assertEqual(
             [(entry["invocation"], entry["source"]) for entry in payload["skills"]],
-            [("$omh-plan", "codex_skills")],
+            [("$omh-code-review", "codex_user_agent_skills")],
         )
-        self.assertEqual(payload["shadowed_name_count"], 1)
+        self.assertEqual(payload["ambiguous_name_count"], 1)
 
     def test_codex_prompt_and_skill_with_one_name_do_not_shadow(self) -> None:
         # `/name` and `$name` are distinct Codex commands, so neither hides the other.
@@ -210,7 +214,7 @@ class CodexSkillRootTests(unittest.TestCase):
             _write_skill(home / ".agents" / "skills", "planner", "Plan work")
             payload = discovered_executor_skills("codex", home)
         self.assertEqual(sorted(entry["invocation"] for entry in payload["skills"]), ["$planner", "/planner"])
-        self.assertEqual(payload["shadowed_name_count"], 0)
+        self.assertEqual(payload["ambiguous_name_count"], 0)
 
     def test_codex_home_env_is_honoured(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -257,10 +261,10 @@ class CodexSkillRootTests(unittest.TestCase):
         self.assertNotIn("escaped", repr(payload))
         self.assertNotIn("imagegen", repr(payload))
 
-    def test_claude_code_payload_gains_only_a_zero_shadowed_count(self) -> None:
+    def test_claude_code_payload_gains_only_a_zero_ambiguous_count(self) -> None:
         with TemporaryDirectory() as tmp:
             payload = discovered_executor_skills("claude-code", _claude_home(tmp))
-        self.assertEqual(payload["shadowed_name_count"], 0)
+        self.assertEqual(payload["ambiguous_name_count"], 0)
         self.assertEqual(
             list(payload["sources"]), ["claude_user_skills", "claude_plugin_skills"]
         )

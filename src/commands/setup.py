@@ -600,7 +600,9 @@ def cmd_update(args: argparse.Namespace) -> int:
             _print_install_summary(payload, command="update", language=_resolve_language(args))
         agent_skills = payload.get("agent_skills")
         if agent_skills and "refreshed_files" in agent_skills:
-            print(f"Agent Skills (Codex/.agents): refreshed {agent_skills['refreshed_files']} files")
+            count = agent_skills["refreshed_files"]
+            print(f"Agent Skills (Codex/.agents): refreshed {count} files" if count
+                  else "Agent Skills (Codex/.agents): already up to date")
         _print_display_release_lines(primary_registration, profile_results)
         _print_registration_migrations(primary_registration, profile_results)
         _print_omh_home_reclaims(profile_results)

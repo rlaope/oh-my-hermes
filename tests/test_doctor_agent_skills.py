@@ -53,6 +53,29 @@ class DoctorAgentSkillsPackTests(unittest.TestCase):
         revision = projection.agent_skills_status(self.target)["catalog_revision"]
         self.assertIn(revision[:12], check.message)
 
+    def test_unsearchable_pack_dir_warns_instead_of_raising(self):
+        # Python < 3.14 raises PermissionError from is_file() here (finding 2).
+        with patch.object(Path, "is_file", side_effect=PermissionError(13, "Permission denied")):
+            check = self._check()
+        self.assertEqual((check.ok, check.severity, check.observed), (True, "warning", False))
+
+    def test_fresh_mirrored_pack_through_a_symlinked_home_is_ok(self):
+        projection.install_agent_skills(self.target, mirror=self.mirror)
+        link = Path(self.temporary.name + "-link")
+        link.symlink_to(self.home, target_is_directory=True)
+        self.addCleanup(link.unlink)
+        with patch.dict("os.environ", {projection.USER_HOME_ENV: str(link)}):
+            check = self._check()
+        self.assertEqual((check.ok, check.severity), (True, "ok"), check.message)
+
+    def test_receipt_naming_a_foreign_mirror_warns_unobserved(self):
+        projection.install_agent_skills(self.target, mirror=self.mirror)
+        manifest = json.loads(self._manifest_path().read_text())
+        manifest["target_dirs"] = [str(self.target), str(self.home / "elsewhere")]
+        self._manifest_path().write_text(json.dumps(manifest), encoding="utf-8")
+        check = self._check()
+        self.assertEqual((check.ok, check.severity, check.observed), (True, "warning", False))
+
     def test_fresh_mirrored_pack_is_ok(self):
         projection.install_agent_skills(self.target, mirror=self.mirror)
         check = self._check()
