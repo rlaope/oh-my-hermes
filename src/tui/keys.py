@@ -26,15 +26,17 @@ key.
 
 A paste the terminal sent without its markers is plain bytes, and a person
 types one key a read. So a read of plain text (no ESC, no control byte but
-Tab and line breaks) that holds two line breaks, or text after one, is pasted:
-it is held, every plain read less than the burst window (`BURST_SECONDS`, or
+Tab and line breaks) that holds two line breaks, or one line break with text on
+both sides in a read of at least eight characters, is pasted: it is held, every plain read less than the burst window (`BURST_SECONDS`, or
 `SSH_BURST_SECONDS` as the caller says) after the one before joins it, and it
 settles as one `Paste` at the first read that does not or at the first
 `flush()` once the window passed. A read of text that ends in a line break,
 less than the window after the read before it, has its text decoded and its
-line break held for the window: the next chunk of a paste makes it a newline,
-nothing makes it the key it is. A lone Enter, a run of bare Enters, and a
-read of text and Enter after a pause decode at once, as before.
+line break held for the window: a next chunk shaped like a paste's (a line
+break, or more than one character) makes it a newline; one typed key, a read
+that is not plain, or nothing makes it the key it is, before that key. A lone
+Enter, a run of bare Enters, and a read of text and Enter after a pause decode
+at once, as before.
 
 Nothing here raises on input. A sequence it does not know becomes
 `Key("unknown")` and decoding continues with the next byte. So does an OSC
@@ -149,9 +151,11 @@ PASTE_SETTLE_SECONDS = 0.5
 PASTE_LATE_SECONDS = 1.0
 # A terminal that sends no paste markers (tmux or SSH strips them, or it has no bracketed paste) delivers a paste as
 # plain bytes, so the line breaks in it would be Enter. A person types one key a read, so a read of plain text that
-# holds two line breaks, or text after one, is pasted; it is held as one paste for as long as reads of plain bytes
-# keep coming less than this apart. A read of text ending in a line break, less than this after the read before it,
-# is held as well: the next chunk of a paste joins it. Senpi uses the same window (`stdin-buffer.ts`).
+# holds two line breaks, or one between text in a read longer than a typing burst (`_pasted`), is pasted; it is held
+# as one paste for as long as reads of plain bytes keep coming less than this apart. A read of text ending in a line
+# break, less than this after the read before it, has the line break held as well: a next chunk with a line break or
+# more than one character in it joins it, one typed key makes it the key it was. Senpi uses the same window
+# (`stdin-buffer.ts`).
 BURST_SECONDS = 0.02
 # Over SSH a paste's chunks arrive further apart.
 SSH_BURST_SECONDS = 0.1
@@ -656,11 +660,29 @@ def _plain(data: bytes) -> bool:
     return not data.translate(None, _PLAIN_BYTES)
 
 
+# One line break between text is a paste only in a read longer than this many characters (line breaks aside): a
+# stalled loop can hand over a prompt, its Enter and the first key typed after it (`fix A\rt`) in one read.
+_ONE_BREAK_PASTE_CHARS = 8
+
+
 def _pasted(raw: bytes) -> bool:
-    """Whether plain `raw` from one read is pasted: it holds text, and two line breaks or text after one."""
+    """Whether plain `raw` from one read is pasted: it holds text and two line breaks, or one line break with text on
+    both sides of it in a read of at least `_ONE_BREAK_PASTE_CHARS` characters."""
     lines = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     text = lines.rstrip(b"\n")
-    return bool(text.replace(b"\n", b"")) and (lines.count(b"\n") >= 2 or b"\n" in text)
+    if not text.replace(b"\n", b""):
+        return False
+    if lines.count(b"\n") >= 2:
+        return True
+    before, _, after = text.partition(b"\n")
+    chars = len(text.decode("utf-8", "replace")) - 1
+    return bool(before and after) and chars >= _ONE_BREAK_PASTE_CHARS
+
+
+def _paste_shaped(data: bytes) -> bool:
+    """Whether a read may go on with a paste: it holds a line break or more than one character. One typed key does
+    not, so a held line break it follows is the key it was."""
+    return CARRIAGE_RETURN in data or LINE_FEED in data or len(data.decode("utf-8", "replace")) > 1
 
 
 class KeyDecoder:
@@ -698,9 +720,12 @@ class KeyDecoder:
         gap, self._read_at = now - self._read_at, now
         events: list[Key | Paste | Mouse] = []
         if self._burst is not None:
-            if gap < self._burst_seconds and _plain(data):  # the burst goes on
+            # A paste goes on with any plain read in the window; a held line break only with a read shaped like a
+            # paste's next chunk, and it is then a newline once text joined it.
+            joins = self._burst_pasted or _paste_shaped(data)
+            if gap < self._burst_seconds and _plain(data) and joins:  # the burst goes on
                 self._burst.extend(data)
-                self._burst_pasted = self._burst_pasted or _pasted(bytes(self._burst))
+                self._burst_pasted = self._burst_pasted or bool(bytes(self._burst).translate(None, b"\r\n"))
                 self._fed_at = now
                 return events
             events = self._settle_burst()

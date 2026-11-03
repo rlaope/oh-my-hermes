@@ -10,7 +10,10 @@ All notable changes will be documented here.
   a burst of pasted lines as one paste: the lines land in the composer (as a
   chip when the paste is long) instead of the first line break submitting the
   first line. Over SSH the burst may arrive in chunks up to 100 ms apart. An
-  Enter pressed on its own still sends at once. Over SSH and in WSL a lone Esc
+  Enter pressed on its own still sends at once, and so does an Enter followed
+  by the next key typed. Two or more prompts typed ahead into one read while
+  the TUI was stalled now arrive as a draft in the composer instead of being
+  sent, since those bytes are the same as a paste. Over SSH and in WSL a lone Esc
   now waits 100 ms instead of 40 ms for the rest of its sequence, so an arrow
   key split by a slow link is the arrow and not Esc and two letters, which
   could clear the draft or open rewind. Locally nothing changes.

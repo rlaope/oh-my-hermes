@@ -151,6 +151,24 @@ class InputRobustnessTests(unittest.TestCase):
                 self.assertEqual(app.composer.text, "line one\nline two\nline three")
                 self.assertEqual(client.calls, [])  # nothing was sent
 
+    def test_enter_and_a_key_typed_ahead_in_one_read_during_a_turn_queue_the_prompt(self) -> None:
+        app, terminal, _client = loop_app((0.0, b"fix A\rt"), busy=True)
+        self.steps_until_settled(app, terminal)
+        self.assertEqual([line.text for line in app.queued], ["fix A"])
+        self.assertEqual(app.composer.text, "t")
+
+    def test_two_prompts_typed_ahead_in_one_read_during_a_stall_land_as_a_draft(self) -> None:
+        # The same bytes as an unmarked two-line paste: nothing tells them apart, so they wait in the composer.
+        app, terminal, client = loop_app((0.0, b"first prompt\rsecond prompt\r"), busy=True)
+        self.steps_until_settled(app, terminal)
+        self.assertEqual(app.composer.text, "first prompt\nsecond prompt\n")
+        self.assertEqual((list(app.queued), client.named("prompt.submit")), ([], []))
+
+    def test_over_ssh_ctrl_j_held_after_text_then_a_key_moves_the_menu_and_types_the_key(self) -> None:
+        app, terminal, _client = loop_app((0.0, b"/"), (0.05, b"o\n"), (0.03, b"d"), environ=SSH)
+        self.steps_until_settled(app, terminal)
+        self.assertEqual(app.composer.text, "/od")  # Ctrl+J moved the menu; no newline, no paste
+
     def test_a_lone_enter_sends_in_the_step_that_reads_it(self) -> None:
         app, terminal, client = loop_app((0.0, b"h"), (0.004, b"i"), (0.004, b"\r"))
         for _ in range(3):
