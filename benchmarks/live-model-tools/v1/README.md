@@ -694,6 +694,22 @@ a fix that would change any on-arm note in this run is reported, and the branch 
 merge only on a new measurement. The next candidate after a failed gate is `impact_check` on by
 default (the language-server path), under its own pre-registration against the same base.
 
+#### Amendment 1 (2026-11-03 14:30 KST, during the counted runs, before any result was computed)
+
+From 14:25:36 KST every `openai-codex` call failed with HTTP 401 `token_revoked` (the profile logs
+also show `refresh_token_invalidated`). The owner's own `kami` profile logged the same error, so it
+is the shared Hermes Codex credential, not the bench. The bench classified these runs as
+`process_crash` (exit 2, about 3 s, no model call completed). They are harness failures, not model
+outcomes:
+- The 36 records (9 per arm on luna and on sol, every one after 14:25:36) are moved, unread, to
+  `runs/discarded-auth/` and are not counted in either reading.
+- Every luna / sol instance recorded before 14:25:36 completed in both arms (4 pairs on luna,
+  3 on sol) and stays counted.
+- The two GPT lanes were stopped (driver processes only) and resume from the first missing
+  instance once the credential works again, with the same driver, arms, seeds and order. Nothing
+  was logged in, refreshed or re-authenticated by the bench.
+- The Claude lanes (CPA) were not affected and kept running.
+
 ### 2026-11-02 round-end check: declared look-alikes and rewritten test expectations, base vs new
 
 Pre-registered before its first live run.
