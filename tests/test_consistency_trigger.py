@@ -918,6 +918,7 @@ class SettledReferenceTest(_Workspace):
             "star_args": ("fetch(*ARGS)", "timeout: float = 5.0", "timeout_s: float = 5.0"),
             "double_star": ("fetch('u', **OPTIONS)", "timeout: float = 5.0", "timeout_s: float = 5.0"),
             "changed_default": ("fetch('u')", "timeout: float = 5.0", "timeout: float = 9.0"),
+            "removed_default": ("fetch('u')", "timeout: float = 5.0", "timeout: float"),
             "new_required": ("fetch('u')", "retries: int = 1)", "retries: int = 1, verify: bool)"),
             "shifted_positional": ("fetch('u', 'GET')", "(url: str, *,", "(url: str, method: str = 'GET', *,"),
             "changed_return": ("fetch('u')", "-> dict[str, object]", "-> dict[str, str]"),
@@ -932,6 +933,24 @@ class SettledReferenceTest(_Workspace):
                 self.write("src/app/sync.py", f"from app.http_client import fetch\n\nARGS = ()\nOPTIONS = {{}}\n\n\n"
                                               f"def sync():\n    return {call}\n")
                 self.assertEqual(self.verdict(self.edit("src/app/http_client.py", old, new))[:2], (True, "signature"))
+
+    def test_a_keyword_pass_through_fires(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/wrap.py", "from app.http_client import fetch\n\n\n"
+                                      "def fetch_with(url, **options):\n    return fetch(url, **options)\n")
+        self.assertEqual(self.verdict(self.rename_timeout()), ct.Verdict(True, "signature", "fetch in src/app/wrap.py"))
+
+    def test_a_star_import_fires(self):
+        self.write("src/app/http_client.py", HTTP_CLIENT)
+        self.write("src/app/sync.py", "from app.http_client import *\n\n\ndef sync():\n    return fetch('u')\n")
+        self.assertEqual(self.verdict(self.rename_timeout()), ct.Verdict(True, "signature", "fetch in src/app/sync.py"))
+
+    def test_an_alias_re_exported_from_a_plain_module_and_used_elsewhere_fires(self):
+        self.write("src/app/pricing.py", PRICING)
+        self.write("src/app/invoices.py", "from app.pricing import compute_fee as calc_fee\n")
+        self.write("src/app/cli.py", "from app.invoices import calc_fee\n\n\ndef cli(argv):\n    return calc_fee(1, 2)\n")
+        changed = self.edit("src/app/pricing.py", "rate_bp: int)", "rate_bp: int, minimum_cents: int)")
+        self.assertEqual(self.verdict(changed), ct.Verdict(True, "signature", "compute_fee in src/app/invoices.py"))
 
     def test_a_mention_outside_code_fires(self):
         for label, extra in {"comment": "# fetch is called above\n", "string": "NOTE = 'see fetch'\n",

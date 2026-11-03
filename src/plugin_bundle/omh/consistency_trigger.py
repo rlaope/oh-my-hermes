@@ -74,7 +74,7 @@ import time
 from collections import OrderedDict
 from typing import Any, Final, NamedTuple
 
-from . import lsp_nav
+from . import call_shape, lsp_nav
 from .impact_check import _imports_from, module_names
 from .lsp_nav import LspNavError, inside
 from .tools.lsp_nav_tool import _workspace_root, workspace_relative
@@ -698,34 +698,32 @@ def _named_elsewhere(name: str, root: str, skip: set[str], deadline: float) -> b
 
 
 def _same_binding(call: ast.Call, old: ast.arguments, new: ast.arguments) -> bool:
-    """Whether ``call`` binds under both parameter lists the same way: each argument reaches a
-    parameter of the same name and annotation, and the parameters it leaves to their defaults have
-    the same defaults. A ``*args`` / ``**kwargs`` at the call, or an argument that only a ``*args`` /
-    ``**kwargs`` parameter takes, is unproven."""
-    if any(isinstance(arg, ast.Starred) for arg in call.args) or any(kw.arg is None for kw in call.keywords):
+    """Whether ``call`` binds under both parameter lists (`call_shape.bind`) and the same way: each
+    argument reaches a parameter of the same name and annotation, and the parameters it leaves to
+    their defaults have the same defaults. A ``*args`` / ``**kwargs`` at the call, or an argument that
+    only a ``*args`` / ``**kwargs`` parameter takes, is unproven."""
+    if call_shape.bind(call_shape.shape(old), call) != "" or call_shape.bind(call_shape.shape(new), call) != "":
         return False
-    before, after = _binding(call, old), _binding(call, new)
-    return before is not None and before == after
+    before = _binding(call, old)
+    return before is not None and before == _binding(call, new)
 
 
 def _binding(call: ast.Call, params: ast.arguments) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
-    """The parameters ``call`` binds, in call order with their annotations, and the sorted defaults of
-    the ones it leaves unbound; None when the call does not bind or reaches ``*args`` / ``**kwargs``."""
+    """For a call that binds: the parameters it binds, in call order with their annotations, and the
+    sorted defaults of the ones it leaves unbound. None when an argument reaches ``*args`` /
+    ``**kwargs``."""
     positional = params.posonlyargs + params.args
     if len(call.args) > len(positional):
         return None
     by_name = {arg.arg: arg for arg in params.args + params.kwonlyargs}
     bound = list(positional[:len(call.args)])
     for keyword in call.keywords:
-        arg = by_name.get(keyword.arg or "")
-        if arg is None or arg in bound:
-            return None  # an unknown name (or one only `**kwargs` takes), or a value given twice
-        bound.append(arg)
+        if keyword.arg not in by_name:
+            return None
+        bound.append(by_name[keyword.arg])
     defaults = dict(zip([arg.arg for arg in positional][len(positional) - len(params.defaults):], params.defaults))
     defaults.update((arg.arg, value) for arg, value in zip(params.kwonlyargs, params.kw_defaults) if value is not None)
     unbound = [arg for arg in positional + params.kwonlyargs if arg not in bound]
-    if any(arg.arg not in defaults for arg in unbound):
-        return None  # a required parameter left unbound
     shown = tuple(f"{arg.arg}:{ast.dump(arg.annotation) if arg.annotation else ''}" for arg in bound)
     return shown, tuple(sorted(f"{arg in params.kwonlyargs}:{ast.dump(defaults[arg.arg])}" for arg in unbound))
 
