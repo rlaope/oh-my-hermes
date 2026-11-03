@@ -115,7 +115,12 @@ class MemoryIndexFallbackTests(unittest.TestCase):
                 self.assertIn("<record_index", pack)
                 self.assertNotIn(record["summary"], pack)
                 self.assertEqual(rendered_ids(pack), [])
-                self.assertEqual(live.recall_status().count, 0)
+                if surface == "console":
+                    self.assertEqual(live.recall_status().count, 0)
+                else:
+                    # The default `recall_line: console` keeps the line off Discord;
+                    # the index was served all the same.
+                    self.assertIsNone(live.recall_status())
                 receipt = live.latest_prefetch_receipt()
                 self.assertEqual(receipt["rendering"]["indexed_records"], [record["record_id"]])
                 self.assertEqual(receipts.validate_prefetch_receipt(receipt), [])

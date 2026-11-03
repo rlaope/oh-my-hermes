@@ -13,6 +13,7 @@ from ..install.config_adapter import (
     memory_provider_selection,
     read_config,
     set_memory_provider,
+    set_plugin_setting,
     update_config,
 )
 from ..installer import OmhError
@@ -28,6 +29,12 @@ from ..plugin_bundle.omh.memory_blocks import (
 from ..plugin_bundle.omh.memory_dreaming import read_dreaming_mode_setting, read_dreaming_state
 from ..plugin_bundle.omh.memory_principals import parse_principal_context
 from ..plugin_bundle.omh.memory_provider import OmhMemoryProvider
+from ..plugin_bundle.omh.memory_recall_settings import (
+    RECALL_LINE_SETTING,
+    RECALL_MODE_SETTING,
+    read_recall_line_setting,
+    read_recall_mode_setting,
+)
 from ..plugin_bundle.omh.project_identity import mint_explicit_project_identity, project_identity_root, require_project_identity, resolve_project_identity
 from ..plugin_bundle.omh.memory_records import prefetch_required_scope_kinds, prefetch_scope_allowlist
 from ..workflows.memory_project_identity import build_project_identity_migration_report, migrate_project_identity, rollback_project_identity_migration
@@ -955,6 +962,61 @@ def cmd_memory_provider(args: argparse.Namespace) -> int:
         }
     )
     return 0
+
+
+def cmd_memory_recall_line(args: argparse.Namespace) -> int:
+    """Show or set where Hermes shows the recall line for this profile: all, console, or off."""
+    return _cmd_memory_recall_setting(args, RECALL_LINE_SETTING, read_recall_line_setting)
+
+
+def cmd_memory_recall_mode(args: argparse.Namespace) -> int:
+    """Show or set whether this profile recalls memory every turn: auto, on_demand, or off."""
+    return _cmd_memory_recall_setting(args, RECALL_MODE_SETTING, read_recall_mode_setting)
+
+
+def _cmd_memory_recall_setting(args: argparse.Namespace, name: str, read_setting) -> int:
+    """One profile plugin setting, read back after any write.
+
+    Writes only `plugins.entries.omh.settings.<name>` in the profile's own
+    config.yaml, never Hermes' `memory.provider` slot. A write the editor
+    refused leaves the old value in force and exits 1, so a shell reading
+    only the status is not told it changed.
+    """
+    paths = _paths(args)
+    path = paths.hermes_config_path
+    wanted = args.value
+    change = None
+    if wanted is not None:
+        try:
+            change = update_config(
+                path, lambda text: set_plugin_setting(text, name, wanted), omh_home=paths.omh_home, dry_run=bool(args.dry_run)
+            )
+        except OSError as exc:
+            raise OmhError(str(exc)) from exc
+    setting = read_setting(paths.hermes_home)
+    value = setting["value"]
+    # A dry run wrote nothing, so the value in force is still the old one.
+    refused = wanted is not None and value != wanted and not (args.dry_run and change is not None and change.changed)
+    _print_json(
+        {
+            "schema_version": "omh_memory_recall_setting/v1",
+            "setting": name,
+            "value": value,
+            "setting_read": {key: item for key, item in setting.items() if key != "value"},
+            "requested": wanted,
+            "changed": bool(change.changed) if change is not None else False,
+            "refused": refused,
+            "reason": change.message if change is not None else "status only",
+            "dry_run": bool(args.dry_run),
+            "config_path": str(path),
+            "next_action": "Applies from the next turn; no restart is needed.",
+            "claim_boundary": (
+                "This reports and edits one OMH plugin setting in this profile's config.yaml. "
+                "It is not evidence that Hermes ran a turn under it."
+            ),
+        }
+    )
+    return 1 if refused else 0
 
 
 def _cmd_memory_lifecycle(args: argparse.Namespace, operation: str) -> int:
