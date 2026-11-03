@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **One broken part of the OMH TUI's screen no longer ends the session.** If
+  the info line, the live transcript, a picker, the plan or HUD panel, the
+  agent view or the sticky prompt fails to draw, that part becomes one row in
+  the warning colour that names it, and the rest of the screen and your keys
+  keep working. Its traceback is kept once, and `/logs` shows it after the
+  gateway's lines. While the TUI runs, a background thread's traceback, a
+  Python warning or a stray print now goes to the same in-memory log instead
+  of landing on the screen and shifting every later frame. A crash that does
+  end the TUI still prints its traceback once your terminal is restored.
+
 - **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
   Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
   dialogs (/model, /sessions, /rewind, /theme, /launch), the agent view list

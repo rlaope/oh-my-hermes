@@ -652,6 +652,18 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "end, and the thread reads again instead of dying for the rest of the session.",
     ),
     ClassifiedSite(
+        "src/tui/app.py",
+        "_drawn",
+        INTENTIONAL,
+        "Only in the launched TUI (`contain_faults`, which `_run` sets and no test-built App does, so a "
+        "render bug still raises in tests): a part of the frame whose producer raises (the info line, the "
+        "live transcript, the rows above the composer, the menu or HUD panel, the agent view, the sticky "
+        "prompt) is drawn as one warning-colour row saying that part could not be drawn and the "
+        "exception's class, and its traceback is kept once in the TUI's `FaultLog`, which /logs shows. "
+        "It is never drawn as the part's normal rows or as nothing; catching it keeps one part's bug "
+        "from ending the session.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/host_process.py",
         "this_process",
         INTENTIONAL,
@@ -963,8 +975,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 97 -> 99 / 88 -> 90: `test_expectation_check.note_request` and `round_end_note`,
 # the round-end test check: a pre_llm_call body that records nothing on a failure,
 # and a note that says nothing on one.
-EXPECTED_HANDLER_COUNT = 99
-EXPECTED_ANCHOR_COUNT = 90
+# 99 -> 100 / 90 -> 91: `app.App._drawn`, the launched OMH TUI's render containment
+# (a part of the frame that raises is a warn row naming it, its traceback in /logs).
+EXPECTED_HANDLER_COUNT = 100
+EXPECTED_ANCHOR_COUNT = 91
 
 
 class DerivedSite(NamedTuple):
