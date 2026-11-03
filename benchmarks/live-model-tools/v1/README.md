@@ -728,6 +728,26 @@ ask to merge. What is dropped depends on where the regression sits:
 
 A re-measure after any drop is a new pre-registration with new seeds.
 
+#### Amendment 1 (2026-11-03, before any live run of either arm)
+
+- **The `on` arm moves from `47c73adb5` to `8442cb3c4`.** That commit moves the argument-binding
+  rule into the shared leaf module `call_shape.py`, as the lead assigned, for the parallel caller
+  check. It adds four pinned negatives: a removed default, a `**kwargs` pass-through, a star import,
+  and an alias re-exported from a plain module and used elsewhere. The offline replay of `8442cb3c4`
+  gives the same continue decision and the same note text as `47c73adb5` on all 198 sessions
+  (`replay-on-8442cb3c4.json`).
+- **Why the briefed clause "`C-DECOY` continues strictly fewer" was replaced by clause 8**
+  (approved by the lead). The fixtures in `lib/corpus.py` give both look-alikes the same body:
+  `return decimal.Decimal(amount).quantize(decimal.Decimal("0.01"), rounding=decimal.ROUND_HALF_EVEN)`
+  in `C-DUPLICATE`'s second module and in `C-DECOY`'s. The edited file's line is
+  `return Decimal(amount).quantize(CENT, rounding=ROUND_HALF_EVEN)`. A verbatim-old-text rule
+  therefore cuts both copies, and any code-only rule treats them alike. Only the module docstring
+  separates them ("kept in step with" vs "intentionally different from"), and a prose signal is the
+  suppressor #2494 dropped.
+- **The evidence note shows context only.** That means the definition, the module docstring and
+  the comment above it. Its wording is the same for every copy, and it never says a copy may be
+  skipped. Clause 3 (`C-DUPLICATE` on at least base) stays a hard clause.
+
 ### 2026-11-02 round-end check: declared look-alikes and rewritten test expectations, base vs new
 
 Pre-registered before its first live run.
