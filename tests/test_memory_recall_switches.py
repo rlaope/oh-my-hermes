@@ -124,8 +124,12 @@ class RecallLineTests(_Switches):
                 live = self.on(platform, f"{platform}-same")
                 author = self.author(platform)
                 self.turn(live, 1, QUESTION, author_id=author)  # spends the once-per-session digest
+                # A compaction before each repeat: the conversation no longer
+                # holds the record, so the same question serves it again.
+                live.on_session_switch(f"{platform}-same", reset=False)
                 default = self.turn(live, 2, QUESTION, author_id=author)
                 self.settings(dreaming_mode="off", recall_line="off")
+                live.on_session_switch(f"{platform}-same", reset=False)
                 silenced = self.turn(live, 3, QUESTION, author_id=author)
                 self.assertIsNone(live.recall_status())
                 self.settings(dreaming_mode="off")

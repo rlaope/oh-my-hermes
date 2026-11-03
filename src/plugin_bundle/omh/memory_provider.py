@@ -36,7 +36,7 @@ import json
 import os
 import secrets
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -114,8 +114,8 @@ from .memory_prefetch_receipt import (
 from .memory_principals import principal_recall_decision
 from .memory_query_sanitizer import sanitize_memory_query
 from .memory_recall_settings import configured_recall_line, configured_recall_mode, recall_line_shown
-from .memory_recall_selector import resolve_scope_allowlist
-from .memory_recall_support import _record_perspective_matches
+from .memory_recall_selector import recall_revision, resolve_scope_allowlist
+from .memory_recall_support import _memory_query_split, _record_perspective_matches
 from .memory_session_digest import (
     clamp_to_reported,
     digest_window_start,
@@ -309,7 +309,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # prefetch() is called before every API call and the base class asks for
         # it to be fast, so the pack is rendered off the hot path and served
         # from here. `_query` is what the pack was ranked for; `_pack_count`
-        # is how many memories it carries in full.
+        # is how many memories it carries in full that this conversation did
+        # not already hold (`_recalled`).
         self._pack = ""
         self._query = ""
         self._query_sanitized = sanitize_memory_query("")
@@ -343,6 +344,27 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # turn is one serve. `served.json` is never a ranking input.
         self._prepared_record_ids: tuple[str, ...] = ()
         self._served_recorded = False
+        # What this conversation already holds, so a turn never re-serves it.
+        # Hermes replays each turn's injected block byte for byte until
+        # compaction, so a record served once is still in context: `_recalled`
+        # maps each served record id to its `recall_revision`, and the selector
+        # skips a record still at that revision. `_recalled_blocks` is the
+        # digest of the last served block text; blocks are re-rendered every
+        # turn but count for the recall line only when they changed. Both
+        # empty at a session start, any session switch (a compaction drops the
+        # blocks that carried them, so each record may be served once more)
+        # and shutdown. Updated only by a serve, never by a queued render.
+        self._recalled: dict[str, str] = {}
+        self._recalled_blocks = ""
+        self._prepared_record_revisions: dict[str, str] = {}
+        # The records the current pack lists by name in its `<record_index>`,
+        # as `listed:<revision>` tokens for `_recalled`.
+        self._prepared_listed: dict[str, str] = {}
+        self._pack_blocks_digest = ""
+        # True when the current pack left out a record only because it was
+        # held (`served_this_session`): a rebind that forgets what is held
+        # must render again rather than serve that pack.
+        self._pack_held = False
         # The consolidation brief is served once per session: Hermes replays
         # provider context for the rest of the session, so the same brief
         # (`raised_at`) rode every later turn as well. `_prepared_brief_at` is
@@ -418,6 +440,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._pack_held = False
+        self._prepared_listed = {}
+        self._forget_recalled()
         self._prepared_brief_at, self._served_brief_at = "", ""
         self._session_id = str(session_id or "")
         # Hermes passes `platform` (`cli`, `tui`, `desktop`, a gateway name,
@@ -532,6 +557,12 @@ class OmhMemoryProvider(_MemoryProviderBase):
                 # conversation, and a real `/new` still reaches
                 # `on_session_switch(reset=True)` from Hermes' worker.
                 self._rebind_session(str(session_id), reset=True)
+                if self._pack_held:
+                    # `on_turn_start` rendered this turn while the old
+                    # conversation's records were still held, and the rebind
+                    # just forgot them: Hermes often reports `/new` only after
+                    # that render. The new conversation holds none of them.
+                    self._pack = self.render_pack()
             if principal_context is not None and self._conversation is None:
                 # A verified messenger conversation binds its own principal.
                 supplied = parse_principal_context(
@@ -605,6 +636,16 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._prepared_record_ids and not self._served_recorded:
                 self._served_recorded = True
                 self._record_served(self._prepared_record_ids)
+                self._recalled.update(self._prepared_record_revisions)
+            # Listed by name: held for later unanswered packs, never over a
+            # record the conversation holds in full at this revision. A full
+            # hold at an older revision is replaced: that text is stale, and
+            # keeping it would list the revised record again every turn.
+            for record_id, token in self._prepared_listed.items():
+                if self._recalled.get(record_id) != token.removeprefix("listed:"):
+                    self._recalled[record_id] = token
+            if self._pack_blocks_digest:
+                self._recalled_blocks = self._pack_blocks_digest
             if self._prepared_brief_at:
                 self._served_brief_at = self._prepared_brief_at
             return self._pack
@@ -882,10 +923,13 @@ class OmhMemoryProvider(_MemoryProviderBase):
         Hermes prints ``🧠 OMH — recalled N memories`` through its status
         channel, on the surfaces the profile's `recall_line` admits (by default
         cli/tui/desktop), right after the prefetch that carried it, so the user sees memory was used even when
-        the model says nothing about it. Nothing served, nothing said. A pack
-        that is only a reference-block index counts as content without a
-        discrete count, which Hermes renders generically; a pack that is only
-        a consolidation brief is a request, not memory, and says nothing.
+        the model says nothing about it. Nothing served, nothing said. Only
+        what is new to the conversation counts: records it did not already
+        hold, and blocks whose text changed since the last serve, so a turn
+        that adds nothing posts no line. A pack that is only a reference-block
+        index counts as content without a discrete count, which Hermes renders
+        generically; a pack that is only a consolidation brief is a request,
+        not memory, and says nothing.
         """
         if not self._served_pack or not self._served_has_memory:
             return None
@@ -933,6 +977,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._pack_held = False
+        self._prepared_listed = {}
+        self._forget_recalled()
         self._prepared_brief_at, self._served_brief_at = "", ""
         self._digest_window, self._digest_pending, self._pack_digest_evaluated, self._pack_digest = None, False, False, ""
         self._principal_context = None
@@ -976,6 +1023,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
             self._prepared_receipt = None
             self._prepared_reminder, self._reminder_recorded = None, False
             self._prepared_record_ids, self._served_recorded = (), False
+            self._pack_held = False
+            self._prepared_listed = {}
             self._prepared_brief_at = ""
             self._pack_digest_evaluated, self._pack_digest = False, ""
             self._query_sanitized = sanitize_memory_query(str(message or ""))
@@ -1014,9 +1063,21 @@ class OmhMemoryProvider(_MemoryProviderBase):
         digest and the close are left to do here.
         """
         new_id = str(new_session_id or "")
-        if rewound or not new_id:
+        if not new_id:
             return
         with self._render_lock:
+            # Every switch Hermes reports changes what the context holds: a
+            # compaction (rotated or in place, both reach here with `reset`
+            # false) summarises away the turns whose blocks carried the served
+            # records, and a rewind drops turns. Each record may be served once
+            # more rather than be missing for the rest of the conversation.
+            # A `/new` reported late, after `prefetch` already adopted its id,
+            # is the exception: that rebind started the new conversation empty,
+            # and what it served since is in the new context.
+            if not (reset and not rewound and new_id == self._session_id):
+                self._forget_recalled()
+            if rewound:
+                return
             if new_id != self._session_id:
                 self._rebind_session(new_id, reset=reset)
             elif not reset:
@@ -1035,6 +1096,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
     def _rebind_session(self, new_id: str, *, reset: bool) -> None:
         """Withdraw the old lens and publish one under ``new_id``; carry its lists unless ``reset``."""
         old_id = self._session_id
+        self._forget_recalled()
         carried = None if reset or not old_id else read_session_lens(self._omh_home, old_id)
         if old_id:
             self._safely(
@@ -1237,8 +1299,17 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # explicit user-global/project/thread allowlist, the Hermes perspective
         # lens, and the selector's own lifecycle, ranking and budget ladder.
         snapshot = read_record_store_snapshot(self._record_homes())
+        # A live turn shows in full only what it asked for. A query that
+        # matches nothing, or has no terms at all, lists the records it would
+        # otherwise have shown by name in one `<record_index>` line; pins and
+        # records captured in this conversation stay in full. Records this
+        # conversation already holds -- shown, or listed in an earlier index --
+        # are left out (`_recalled`). A turn that was only a host notice
+        # considers no record at all: nobody wrote it, and on a messenger it
+        # posted the recall line anyway.
+        unqueried = not _memory_query_split(self._query)[0]
         prepared = prepare_prefetch_records(
-            snapshot,
+            replace(snapshot, records=()) if self._query_sanitized.host_only else snapshot,
             self._query,
             allowed_scopes=self._prefetch_scopes(),
             session_id=self._session_id,
@@ -1247,8 +1318,10 @@ class OmhMemoryProvider(_MemoryProviderBase):
             principal_context=self._principal_context,
             shared_surface=self._shared_surface,
             required_scope_kinds=prefetch_required_scope_kinds(self._project_resolution.identity),
+            session_served=dict(self._recalled),
             index_fallback=True,
-            full_text_ids=origin_record_ids(snapshot.records, self._conversation_session_ids()),
+            full_text_ids=origin_record_ids(snapshot.records, self._conversation_session_ids()) | snapshot.pins,
+            index_unqueried=unqueried,
         )
         # The reminder asks about the oldest open record whose review deadline
         # passed and whose last ask is older than `open_ask_days`, one line per
@@ -1260,6 +1333,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_reminder = None
         self._reminder_recorded = False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._pack_held = False
+        self._prepared_listed = {}
         self._prepared_brief_at = ""
         reminder = (
             select_open_reminder(
@@ -1299,9 +1374,14 @@ class OmhMemoryProvider(_MemoryProviderBase):
             digest=digest,
         )
         pack = fitted.text
-        # The count is what the renderer emitted, never what selection chose.
-        self._pack_count = fitted.block_count + len(prepared.section.rendered)
-        self._pack_has_memory = bool(fitted.system or fitted.index or fitted.records)
+        # The count is what the renderer emitted, never what selection chose,
+        # and only what the conversation did not already hold: the records
+        # are new by selection, the blocks only when their text changed.
+        blocks_text = f"{fitted.system}\n{fitted.index}" if fitted.system or fitted.index else ""
+        self._pack_blocks_digest = hashlib.sha256(blocks_text.encode("utf-8")).hexdigest() if blocks_text else ""
+        blocks_new = bool(blocks_text) and self._pack_blocks_digest != self._recalled_blocks
+        self._pack_count = (fitted.block_count if blocks_new else 0) + len(prepared.section.rendered)
+        self._pack_has_memory = blocks_new or bool(fitted.records)
         self._prepared_reminder = reminder if fitted.reminder else None
         self._prepared_brief_at = _brief_key(brief) if brief is not None and fitted.brief else ""
         self._prepared_receipt = build_prefetch_receipt(
@@ -1320,12 +1400,21 @@ class OmhMemoryProvider(_MemoryProviderBase):
         )
         # Last, so a render that raised leaves no ids beside the previous pack.
         self._prepared_record_ids = tuple(str(item["record_id"]) for item in prepared.section.rendered)
+        by_id = {str(record.get("record_id", "")): record for record in snapshot.records}
+        self._prepared_record_revisions = {record_id: recall_revision(by_id[record_id]) for record_id in self._prepared_record_ids}
+        self._prepared_listed = {record_id: f"listed:{recall_revision(by_id[record_id])}" for record_id in prepared.section.indexed}
+        counts = prepared.selection.exclusion_reason_counts
+        self._pack_held = bool(counts.get("served_this_session") or counts.get("listed_this_session"))
         # A digest the budget left out stays pending for a later render.
         self._pack_digest_evaluated, self._pack_digest = (
             not digest_withheld and self._digest_pending and fitted.digest == digest,
             fitted.digest,
         )
         return pack
+
+    def _forget_recalled(self) -> None:
+        """The conversation no longer holds what was served: the next turns may serve it again."""
+        self._recalled, self._recalled_blocks = {}, ""
 
     def _recall_policy(self) -> tuple[dict[str, object], bool]:
         """The project memory policy, and whether `setup-profile.json` could not be read.
@@ -1900,9 +1989,9 @@ def _askable_record_ids(pack: dict[str, Any]) -> set[str]:
     with no working answer, and it would still mark the ledger. So the ask
     set is what the selector delivered, plus records it held back only for
     reasons that are not about eligibility: no query overlap, overlap only on
-    store-common words, and the budget cut. The reminder is not query-bound --
-    an open question is open whether or not this turn's message mentions it --
-    but it is eligibility-bound.
+    store-common words, the budget cut, and already served this session. The
+    reminder is not query-bound -- an open question is open whether or not
+    this turn's message mentions it -- but it is eligibility-bound.
     Hidden exclusions (scope, perspective, principal) never appear in the
     pack at all, so they never appear here.
     """
@@ -1915,7 +2004,7 @@ def _askable_record_ids(pack: dict[str, Any]) -> set[str]:
         str(item.get("record_id", ""))
         for item in pack.get("excluded_records", [])
         if isinstance(item, dict)
-        and str(item.get("reason", "")) in {"no_query_overlap", "common_terms_only", "over_budget"}
+        and str(item.get("reason", "")) in {"no_query_overlap", "common_terms_only", "over_budget", "served_this_session"}
         and str(item.get("eligibility_reason", "")) == "eligible"
     )
     askable.discard("")

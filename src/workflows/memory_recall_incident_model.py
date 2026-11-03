@@ -119,6 +119,7 @@ REASON_STAGES: Final[dict[str, Stage]] = {
     'rendered_delivery_not_observed': 'rendered_delivery_not_observed',
     'delivered_model_use_unknown': 'delivered_model_use_unknown', 'used': 'used',
     'selected_live_evidence_unavailable': 'unresolved', 'live_selection_excluded': 'unresolved',
+    'served_this_session': 'unresolved',
     'store_unavailable': 'unresolved',
     'native_only_not_omh_reviewed': 'unresolved', 'selection_unresolved': 'unresolved',
     'ambiguous_anchor': 'unresolved', 'project_memory_disabled': 'unresolved',

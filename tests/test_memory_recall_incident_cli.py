@@ -92,8 +92,9 @@ class MemoryRecallIncidentCliTests(unittest.TestCase):
             record_id = json.loads(stdout)["record"]["record_id"]
             live = OmhMemoryProvider(home, hermes_home=root / "hermes")
             live.initialize("session-a", platform="cli", hermes_home=str(root / "hermes"), agent_context="primary", cwd=str(root))
-            live.queue_prefetch("")
-            live.prefetch("")
+            # A live turn serves what its query matches, never the whole store.
+            live.queue_prefetch("LIVE_CLAIM_SENTINEL")
+            live.prefetch("LIVE_CLAIM_SENTINEL")
             receipt = live.latest_prefetch_receipt()
             live.shutdown()
             assert receipt is not None

@@ -2710,7 +2710,7 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             for index in range(40):
                 _approve_record(root, f"Approved local fact {index}.")
             provider = self._provider(root)
-            text = provider.prefetch("")
+            text = provider.prefetch("approved local fact")
             # The 2,400 budget is the records section's. This first pack of a
             # session may also carry the "since your last session" digest (40
             # records were just created; those made in the session-start second
@@ -2734,7 +2734,7 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             root = Path(tmp)
             write_memory_block(root / ".omh", approve_memory_block(build_memory_block("facts", "OMH wraps Hermes.")))
             _approve_record(root, "Tests need PYTHONPATH=tests.")
-            pack = self._provider(root).prefetch("")
+            pack = self._provider(root).prefetch("tests need pythonpath")
             self.assertLess(pack.index("<memory_blocks>"), pack.index("<memory_records>"))
 
     def test_the_queued_query_ranks_the_records(self) -> None:
@@ -2755,11 +2755,15 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             pack = provider.prefetch("cut a release")
             self.assertIn("Release notes", pack)
             self.assertNotIn("menubar helper", pack)
-            # An unqueried turn ranks rather than excludes: both records travel.
+            # An unqueried live turn lists what it would serve by name; both
+            # records are already in this conversation in full, so neither is
+            # shown or listed again.
             provider.queue_prefetch("")
             pack = provider.prefetch("")
-            self.assertIn("Release notes", pack)
-            self.assertIn("menubar helper", pack)
+            self.assertNotIn("Release notes", pack)
+            self.assertNotIn("menubar helper", pack)
+            self.assertNotIn("<record_index", pack)
+            self.assertEqual(_served_receipt(provider)["selection"]["exclusion_reason_counts"], {"served_this_session": 2})
 
     def test_the_project_store_is_read_when_the_session_runs_inside_a_repository(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -2773,11 +2777,12 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             # labelled `user-global`. Neither is inferred from the store path.
             _approve_record(root, "Project-scoped: the API lives under src/api.", home="repo/.omh")
             _approve_record(root, "User-scoped: the owner prefers Korean replies.", scope_kind="user-global", scope_ref="default")
-            pack = self._provider(root, cwd=repo / "src" / "deep").prefetch("")
+            query = "where does the api live, which replies"
+            pack = self._provider(root, cwd=repo / "src" / "deep").prefetch(query)
             self.assertIn("Project-scoped", pack)
             self.assertIn("User-scoped", pack)
             # Outside any repository only the user store is read.
-            self.assertNotIn("Project-scoped", self._provider(root, cwd=root).prefetch(""))
+            self.assertNotIn("Project-scoped", self._provider(root, cwd=root).prefetch(query))
 
     def test_summaries_are_escaped_and_the_budget_names_what_it_cut(self) -> None:
         records = [
@@ -2849,7 +2854,8 @@ class RecordsReachPrefetchTests(unittest.TestCase):
             provider.queue_prefetch("release", now=_datetime(2025, 12, 31, tzinfo=_timezone.utc))
             pack = provider.prefetch("release")
             self.assertIn("Expired release note.", pack)
-            self.assertEqual(_served_receipt(provider)["selection"]["exclusion_reason_counts"], {"superseded": 1})
+            # The live note is still in this conversation from the first serve.
+            self.assertEqual(_served_receipt(provider)["selection"]["exclusion_reason_counts"], {"served_this_session": 1, "superseded": 1})
 
     def test_a_record_id_shared_by_two_homes_is_read_once_project_first(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -2974,14 +2980,19 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             pack = provider.prefetch("next turn")
             # The same brief is not served a second time in this session.
             self.assertNotIn("<memory_consolidation", pack)
+            self.assertEqual(provider.recall_status(), RecallStatus(provider_label="OMH", count=1))
             # A fresh brief beside the memory is served and still not counted.
             brief_path = consolidation_path(root / ".omh", root / ".hermes")
             fresh = json.loads(brief_path.read_text(encoding="utf-8"))
             fresh["raised_at"] = "2099-01-01T00:00:00Z"
             brief_path.write_text(json.dumps(fresh), encoding="utf-8")
+            # A changed block text makes the block news again.
+            write_memory_block(root / ".omh", approve_memory_block(build_memory_block("facts", "OMH wraps Hermes and ships tools.")))
             provider.queue_prefetch("")
             pack = provider.prefetch("next turn")
             self.assertIn("<memory_consolidation", pack)
+            self.assertIn("ships tools", pack)
+            # The brief never counts: only the changed block does.
             self.assertEqual(provider.recall_status(), RecallStatus(provider_label="OMH", count=1))
 
     def test_a_new_conversation_is_served_a_still_due_brief_but_a_rebind_is_not(self) -> None:
@@ -3001,6 +3012,24 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             provider.on_session_switch("s2", reset=True)
             provider.on_turn_start(1, "hello")
             self.assertIn("<memory_consolidation", provider.prefetch("hello"))
+
+    def test_a_new_conversation_reported_late_is_still_owed_the_brief(self) -> None:
+        # Hermes often reports /new after the next turn's prefetch already
+        # adopted the new id. The held-records skip for that late report must
+        # not hold back the brief: a new conversation is owed it either way.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_hermes_memory(root / ".hermes", "one fact")
+            provider = self._provider(root)
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
+            provider.on_session_end()
+            provider.on_turn_start(2, "hello")
+            self.assertIn("<memory_consolidation", provider.prefetch("hello"))
+            provider.on_turn_start(1, "hello")
+            self.assertNotIn("<memory_consolidation", provider.prefetch("hello", session_id="s2"))
+            provider.on_session_switch("s2", reset=True)
+            provider.on_turn_start(2, "hello")
+            self.assertIn("<memory_consolidation", provider.prefetch("hello", session_id="s2"))
 
     def test_a_brief_is_served_once_per_session_and_a_new_one_is_served_again(self) -> None:
         with TemporaryDirectory() as tmp:

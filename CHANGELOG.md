@@ -16,6 +16,21 @@ All notable changes will be documented here.
   errors are identical. On the domain-routing benchmark 772.81 ms fell to
   290.94 ms (median of three runs). Contributed by @dexhunter (#2536).
 
+- **Memory recall shows what the turn asked for, once per conversation.**
+  A message with nothing to search for (an empty turn, "야") used to get every
+  saved memory in full; it now gets pinned ones in full and the rest as the
+  one-line list of names a non-matching message already gets. A
+  background-process or delegation notice that nobody typed gets nothing at
+  all. A memory the conversation already holds is not sent again until it
+  changes or a compaction drops it, and a list of names it was already shown
+  is not repeated. The recall line counts only what is new, so a turn that
+  adds nothing posts no line. `omh_remember` and `omh_memory` recall return
+  `nothing_found` for a query that matches nothing instead of unrelated
+  memories, and look up a memory by the id or subject a list names. Coding
+  handoffs and `omh memory recall` are unchanged. Replaying stored turns on
+  read-only copies of the owner's stores, the largest per-session memory text
+  went from 111,665 to 6,649 characters on the console profile, repeats from
+  91% to 0%, and messenger recall lines from 447 to 61.
 - **Turns that only read, and a session's first turns, are faster.** The
   round-end consistency check indexed every Python file in the workspace at a
   turn's first tool call, which cost about 110-175 ms in a checkout of a few
@@ -87,6 +102,7 @@ All notable changes will be documented here.
   interval, and a given brief is shown once per session instead of on every later turn. Headroom, duplicate and
   expiring-record reasons keep their own thresholds, `dreaming_mode` is unchanged, and the model still captures
   through its own tool with no approve step.
+
 - **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
   used to ride on every recommended skill, and one policy can run past 1 KB.
   It now stays on the top recommendation and on the skills the route selects,

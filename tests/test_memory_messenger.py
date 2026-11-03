@@ -525,7 +525,13 @@ class PerTurnBindingTests(_Messenger):
     def test_an_author_mismatch_is_shared_for_that_turn_only(self) -> None:
         self.assertIn(self.record_id, self.turn(self.live, 1, "billing service deploy", author_id=SLACK_OWNER))
         self.assert_turn_is_shared(2, author_id="U03INTRUDER")
-        self.assertIn(self.record_id, self.turn(self.live, 3, "billing service deploy", author_id=SLACK_OWNER))
+        # The owner's next turn passes the lens again. The record it admits is
+        # the one turn 1 already put into this conversation, so it is held as
+        # served, which a shared turn never reaches (it is hidden before selection).
+        self.assertNotIn(self.record_id, self.turn(self.live, 3, "billing service deploy", author_id=SLACK_OWNER))
+        receipt = self.live.latest_prefetch_receipt()
+        assert receipt is not None
+        self.assertEqual(receipt["selection"]["exclusion_reason_counts"], {"served_this_session": 1})
 
     def test_a_bot_author_is_shared(self) -> None:
         self.assert_turn_is_shared(1, author_id=SLACK_OWNER, author_is_bot=True)
