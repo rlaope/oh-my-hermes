@@ -693,6 +693,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
             "homes": [str(home) for home in self._record_homes()],
             "project_identity": resolve_project_identity(self._project_cwd).identity if self._project_cwd is not None else "",
             "executor_target": PREFETCH_EXECUTOR_TARGET,
+            # The profile whose `recall_mode` this provider reads, so tool
+            # recall reads the same one rather than the process's Hermes home.
+            "profile_home": str(self._profile_home),
         }
         looser_foreign: dict[str, Any] | None = None
         if not reset:

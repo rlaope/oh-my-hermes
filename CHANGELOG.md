@@ -4,6 +4,19 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **The recall switches and records say what they do.** Under
+  `recall_mode: on_demand` or `off`, a save that resembles a held memory no
+  longer tells the model that either one "recalls": no turn is served
+  memories unasked there, and the hint now says so. Tool recall reads
+  `recall_mode` from the profile the memory provider was started with rather
+  than the process's `HERMES_HOME`, so the two cannot disagree about whether
+  recall is off. In the TUI, an `omh_remember` recall that found memories
+  lists them and gets the same sweep as an `omh_memory` one. A test now pins
+  that a consolidation brief raised in the same second by another trigger is
+  served. A pinned memory still suppresses the list of the rest's names on a
+  message that matches nothing: listing them would make the live recall
+  select differently from coding handoffs, which the recall suite and
+  incident replay hold equal.
 - **Memory recall shows what the turn asked for, once per conversation.**
   A message with nothing to search for (an empty turn, "야") used to get every
   saved memory in full; it now gets pinned ones in full and the rest as the

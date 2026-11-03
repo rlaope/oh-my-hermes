@@ -116,6 +116,7 @@ from ..memory_session_lens import (
     SURFACE_OWNER_DIRECT,
     SURFACE_SHARED,
     lens_channel_scope,
+    lens_profile_home,
     lens_surface_class,
     note_session_records,
     read_session_lens,
@@ -673,6 +674,16 @@ def _recallable_ids(lens: "_SessionLens") -> set[str]:
     return served
 
 
+def _per_turn_recall(lens: "_SessionLens") -> bool:
+    """Whether a turn under this lens is served records unasked: the provider's rule in `render_pack`.
+
+    `memory_mode` off or a disabled retain_knowledge family (the policy), or a
+    `recall_mode` other than `auto` in the provider's profile, serves none.
+    """
+    policy = read_project_memory_policy(lens.lens_home)
+    return bool(policy.get("recall_enabled", True)) and configured_recall_mode(lens.settings_home()) == "auto"
+
+
 def _recall_clause(record_id: str, recallable: set[str] | None) -> str:
     if recallable is None:
         return f"whether {record_id} recalls could not be read"
@@ -694,9 +705,13 @@ def _capture_hints(payload: dict, candidate: dict, new_id: str, lens: "_SessionL
     similar = str(payload.get("similar_record_id", "") or "")
     if not held_by and not similar:
         return {}, ""
+    per_turn = True
     try:
-        recallable: set[str] | None = _recallable_ids(lens) if lens is not None else None
-    except (OSError, ValueError):
+        # Under `recall_mode` on_demand/off or `memory_mode` off no turn is
+        # served records unasked, so nothing "recalls" in the hint's sense.
+        per_turn = lens is None or _per_turn_recall(lens)
+        recallable: set[str] | None = (_recallable_ids(lens) if per_turn else set()) if lens is not None else None
+    except (OSError, ValueError, RecursionError):
         recallable = None
     involved = sorted({record_id for record_id in (new_id, held_by, similar) if record_id})
     fields: dict[str, object] = {
@@ -710,7 +725,11 @@ def _capture_hints(payload: dict, candidate: dict, new_id: str, lens: "_SessionL
         fields["similar_wording_pct"] = int(payload.get("similar_wording_pct", 0) or 0)
     if not new_id:
         return fields, ""
-    status = f"{_recall_clause(new_id, recallable)}, {_recall_clause(held_by or similar, recallable)}."
+    status = (
+        f"{_recall_clause(new_id, recallable)}, {_recall_clause(held_by or similar, recallable)}."
+        if per_turn
+        else "per-turn recall is off for this profile, so neither recalls."
+    )
     if held_by:
         subject = str(candidate.get("subject", "") or "")
         return fields, (
@@ -1059,6 +1078,13 @@ class _SessionLens:
     required_scope_kinds: tuple[str, ...]
     # A group conversation's own scope (`memory_session_lens.lens_channel_scope`).
     channel_scope: dict[str, str] | None = None
+    # The Hermes profile home the provider reads `recall_mode` from
+    # (`memory_session_lens.lens_profile_home`); None when the lens names none.
+    profile_home: Path | None = None
+
+    def settings_home(self) -> Path:
+        """Where this session's recall settings live: the provider's profile home, else this process's Hermes home."""
+        return self.profile_home if self.profile_home is not None else Path(_home("HERMES_HOME", "~/.hermes"))
 
 
 def _lifecycle(action: str, args: dict, kwargs: dict) -> dict[str, object]:
@@ -1160,6 +1186,7 @@ def _session_lens(kwargs: dict) -> _SessionLens:
         surface_class,
         prefetch_required_scope_kinds(project_identity),
         channel,
+        lens_profile_home(published),
     )
 
 
@@ -1210,7 +1237,7 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             "recall", "error", reason="memory_policy_unreadable",
             next_action="OMH could not read this profile's memory settings (setup-profile.json); nothing was searched. Tell the user memory recall is unavailable.",
         )
-    if not policy.get("recall_enabled", True) or configured_recall_mode(Path(_home("HERMES_HOME", "~/.hermes"))) == "off":
+    if not policy.get("recall_enabled", True) or configured_recall_mode(lens.settings_home()) == "off":
         return _lifecycle_result(
             "recall", "refused", reason="recall_disabled",
             next_action="Recall is turned off for this profile; nothing was searched.",
