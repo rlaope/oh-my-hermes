@@ -4,6 +4,12 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
+  measures frame cost by transcript size, full redraw, streaming per chunk,
+  keystroke cost by composer length, idle wake-ups and bytes, plugin hook
+  latency and launch to first frame, offline with temp homes, and
+  `--compare <tree>` judges two checkouts back to back. It changes nothing
+  you see in the TUI.
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface
   nearly as large as what it hides), proves each one with the deletion test
