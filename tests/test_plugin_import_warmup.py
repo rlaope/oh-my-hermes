@@ -19,6 +19,7 @@ import unittest
 from unittest import mock
 
 from _local_package import load_local_package
+from _module_patch import patch_modules
 
 load_local_package()
 
@@ -130,10 +131,10 @@ class ImportWarmupTests(unittest.TestCase):
 
     def test_a_failed_import_raises_nothing(self) -> None:
         # A `None` entry makes the import raise ImportError, as on a host without `omh`.
-        with mock.patch.dict(sys.modules, {"omh.capabilities.families": None}):
+        with patch_modules({"omh.capabilities.families": None}):
             llm_hooks._warm_imports()
             self.assertIsNone(sys.modules["omh.capabilities.families"])
-        with mock.patch.dict(sys.modules, {"omh.routing.chat": None}):
+        with patch_modules({"omh.routing.chat": None}):
             llm_hooks._warm_imports()
 
     def test_a_thread_that_cannot_start_leaves_registration_and_the_first_turn_as_they_were(self) -> None:
