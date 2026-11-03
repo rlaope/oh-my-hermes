@@ -4,6 +4,17 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A multi-line paste no longer sends half a prompt where the terminal strips
+  paste markers, and arrows hold together over SSH and WSL.** When tmux, SSH
+  or the terminal itself drops bracketed-paste markers, the OMH TUI now reads
+  a burst of pasted lines as one paste: the lines land in the composer (as a
+  chip when the paste is long) instead of the first line break submitting the
+  first line. Over SSH the burst may arrive in chunks up to 100 ms apart. An
+  Enter pressed on its own still sends at once. Over SSH and in WSL a lone Esc
+  now waits 100 ms instead of 40 ms for the rest of its sequence, so an arrow
+  key split by a slow link is the arrow and not Esc and two letters, which
+  could clear the draft or open rewind. Locally nothing changes.
+
 - **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
   Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
   dialogs (/model, /sessions, /rewind, /theme, /launch), the agent view list

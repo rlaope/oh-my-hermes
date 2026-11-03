@@ -24,6 +24,18 @@ among them is a newline (`Paste("\n")`) until the late end marker arrives,
 which is no key, or `PASTE_LATE_SECONDS` pass without a read of more than one
 key.
 
+A paste the terminal sent without its markers is plain bytes, and a person
+types one key a read. So a read of plain text (no ESC, no control byte but
+Tab and line breaks) that holds two line breaks, or text after one, is pasted:
+it is held, every plain read less than the burst window (`BURST_SECONDS`, or
+`SSH_BURST_SECONDS` as the caller says) after the one before joins it, and it
+settles as one `Paste` at the first read that does not or at the first
+`flush()` once the window passed. A read of text that ends in a line break,
+less than the window after the read before it, has its text decoded and its
+line break held for the window: the next chunk of a paste makes it a newline,
+nothing makes it the key it is. A lone Enter, a run of bare Enters, and a
+read of text and Enter after a pause decode at once, as before.
+
 Nothing here raises on input. A sequence it does not know becomes
 `Key("unknown")` and decoding continues with the next byte. So does an OSC
 string (`ESC ]` up to BEL or ST) whose `ESC ]` has a digit after it: a
@@ -135,6 +147,14 @@ PASTE_SETTLE_SECONDS = 0.5
 # read and do not count), a carriage return is a newline in the paste, not Enter: a stalled multi-line paste must
 # not submit its first lines. The marker itself is then no key.
 PASTE_LATE_SECONDS = 1.0
+# A terminal that sends no paste markers (tmux or SSH strips them, or it has no bracketed paste) delivers a paste as
+# plain bytes, so the line breaks in it would be Enter. A person types one key a read, so a read of plain text that
+# holds two line breaks, or text after one, is pasted; it is held as one paste for as long as reads of plain bytes
+# keep coming less than this apart. A read of text ending in a line break, less than this after the read before it,
+# is held as well: the next chunk of a paste joins it. Senpi uses the same window (`stdin-buffer.ts`).
+BURST_SECONDS = 0.02
+# Over SSH a paste's chunks arrive further apart.
+SSH_BURST_SECONDS = 0.1
 
 # A CSI longer than this without a final byte is garbage, not a slow key; the
 # bound keeps a hostile or broken stream from growing the held tail forever.
@@ -628,12 +648,34 @@ def _paste_text(raw: bytes) -> str:
     return raw.decode("utf-8", "replace").replace("\r\n", "\n").replace("\r", "\n")
 
 
+# Bytes a paste is made of: text, Tab and line breaks. ESC, DEL or any other control byte in a read makes it typed.
+_PLAIN_BYTES = bytes((HORIZONTAL_TAB, LINE_FEED, CARRIAGE_RETURN, *range(0x20, DELETE_BYTE), *range(DELETE_BYTE + 1, 256)))
+
+
+def _plain(data: bytes) -> bool:
+    return not data.translate(None, _PLAIN_BYTES)
+
+
+def _pasted(raw: bytes) -> bool:
+    """Whether plain `raw` from one read is pasted: it holds text, and two line breaks or text after one."""
+    lines = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    text = lines.rstrip(b"\n")
+    return bool(text.replace(b"\n", b"")) and (lines.count(b"\n") >= 2 or b"\n" in text)
+
+
 class KeyDecoder:
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, clock: Callable[[], float] = time.monotonic, burst_seconds: float = BURST_SECONDS) -> None:
         self._clock = clock
         self._pending = bytearray()
         self._paste: bytearray | None = None
         self._fed_at = 0.0  # when the last byte arrived
+        self._read_at = float("-inf")  # when the last read arrived
+        # Plain bytes held for `burst_seconds` (`BURST_SECONDS`): an unmarked paste (`_burst_pasted`), or the line break
+        # that ended a read of text, a key unless the next read joins it. `_burst_at` is when that line break arrived.
+        self._burst_seconds = burst_seconds
+        self._burst: bytearray | None = None
+        self._burst_pasted = False
+        self._burst_at = 0.0
         # Until when a carriage return is a newline of a paste `flush` settled without its end marker.
         self._late_paste_until = float("-inf")
         self._held_at = 0.0  # when the first byte of what is held arrived
@@ -648,17 +690,27 @@ class KeyDecoder:
     @property
     def holding(self) -> bool:
         """Whether bytes wait to be decided (part of a key, an open paste, a settled report's rest): `flush` has work."""
-        return bool(self._pending) or self._paste is not None or bool(self._settled_start)
+        held = bool(self._pending) or self._paste is not None or bool(self._settled_start)
+        return held or self._burst is not None
 
     def feed(self, data: bytes) -> list[Key | Paste | Mouse]:
         now = self._clock()
+        gap, self._read_at = now - self._read_at, now
+        events: list[Key | Paste | Mouse] = []
+        if self._burst is not None:
+            if gap < self._burst_seconds and _plain(data):  # the burst goes on
+                self._burst.extend(data)
+                self._burst_pasted = self._burst_pasted or _pasted(bytes(self._burst))
+                self._fed_at = now
+                return events
+            events = self._settle_burst()
         if self._settled_start and now >= self._drop_until:
             self._close_drop_window()
         # A lone ESC held from an earlier read, whether or not a silence passed since: a read that does not go
         # on with a sequence ends the wait. It was Esc, and this read's keys are keys of their own.
         escape = self._pending == bytes((ESC_BYTE,)) and not _continues_escape(data)
-        events: list[Key | Paste | Mouse] = [Key(ESCAPE, arrived_at=self._held_at)] if escape else []
         if escape:
+            events.append(Key(ESCAPE, arrived_at=self._held_at))
             self._pending.clear()
         if not self._pending:
             self._held_at = now
@@ -680,6 +732,8 @@ class KeyDecoder:
                 return events  # still that report's rest: held, and dropped when the window closes
             else:
                 self._settled_start = b""
+        if self._paste is None and now >= self._late_paste_until and self._hold_burst(gap):
+            return events
         held = len(self._pending)
         decoded = self._drain(final=False, earlier=earlier)
         if len(decoded) > 1 and now < self._late_paste_until:
@@ -702,10 +756,14 @@ class KeyDecoder:
         then are Esc and one unknown key (a lone ESC's wait also ends at the
         next read that does not go on with a sequence: see `feed`). An open
         paste ends after `PASTE_SETTLE_SECONDS`, as what it holds, and opens
-        the `PASTE_LATE_SECONDS` window for its rest. Anything
+        the `PASTE_LATE_SECONDS` window for its rest. Plain bytes held as a
+        burst settle once the burst window passed since their last read: a
+        paste as one `Paste`, a held line break as its key. Anything
         else held settles now: a lone ESC becomes `Key("escape")`.
         """
         now = self._clock()
+        if self._burst is not None:
+            return [] if now - self._read_at < self._burst_seconds else self._settle_burst()
         if self._paste is not None:
             if now - self._fed_at < PASTE_SETTLE_SECONDS:
                 return []
@@ -725,6 +783,36 @@ class KeyDecoder:
                 return []
             return self._settle_start(held, Key(ESCAPE) if len(held) == 1 else Key(UNKNOWN), now)
         return self._drain(final=True, earlier=len(held))
+
+    def _hold_burst(self, gap: float) -> bool:
+        """Hold what this read left, if plain, as a burst: True when it is a paste, held whole; a line break that
+        ends text read less than the burst window after the read before is held alone, and its text decodes now."""
+        held = bytes(self._pending)
+        if (CARRIAGE_RETURN not in held and LINE_FEED not in held) or not _plain(held):
+            return False
+        if _pasted(held):
+            self._burst, self._burst_pasted = bytearray(held), True
+            self._pending.clear()
+            return True
+        text = held.rstrip(b"\r\n")
+        if text and gap < self._burst_seconds:
+            self._burst, self._burst_pasted, self._burst_at = bytearray(held[len(text) :]), False, self._read_at
+            del self._pending[len(text) :]
+        return False
+
+    def _settle_burst(self) -> list[Key | Paste | Mouse]:
+        """The held burst: one `Paste`, or the line break no paste joined as the keys it is."""
+        body, pasted = bytes(self._burst or b""), self._burst_pasted
+        self._burst, self._burst_pasted = None, False
+        if pasted:
+            return [Paste(_paste_text(body))]
+        keys: list[Key | Paste | Mouse] = []
+        index = 0
+        while index < len(body):
+            key, index = _decode_one(body, index, final=True)
+            if isinstance(key, Key):
+                keys.append(replace(key, arrived_at=self._burst_at))
+        return keys
 
     def _settle_paste(self) -> list[Key | Paste | Mouse]:
         """The open paste as it stands, its end marker given up on; nothing when it holds nothing."""
