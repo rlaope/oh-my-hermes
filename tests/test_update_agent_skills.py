@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from _cli_harness import run_cli
+from _platform_support import requires_posix
 from omh.commands import setup
 from omh.install import agent_skills_projection as projection
 
@@ -203,6 +204,7 @@ class AgentSkillsUserHomeTests(unittest.TestCase):
                     patch.object(Path, "home", return_value=Path(tmp) / "user"):
                 self.assertEqual(projection.agent_skills_user_home(), Path(tmp) / "user")
 
+    @requires_posix  # Windows CI's temp root sits under the user profile, as test_home_isolation notes.
     def test_test_process_never_points_at_the_real_user_pack(self):
         real = Path("~").expanduser().resolve()
         self.assertFalse(projection.agent_skills_user_home().resolve().is_relative_to(real))
