@@ -27,11 +27,11 @@ import json
 from pathlib import Path
 import re
 import shutil
-import sys
 from tempfile import TemporaryDirectory
 import types
 import unittest
-from unittest import mock
+
+from _module_patch import patch_modules
 
 from omh.installer import install_skill_pack
 from omh.maintenance.doctor import run_doctor
@@ -89,10 +89,8 @@ def _hermes(*roots: Path, raises: bool = False) -> types.ModuleType:
 
 def _context(paths: OmhPaths, session: str, hermes: types.ModuleType | None = None) -> str:
     skill_shortlist.reset_candidate_line_state()
-    patched = {HERMES_SKILL_UTILS_MODULE: hermes} if hermes is not None else {}
-    with mock.patch.dict(sys.modules, patched):
-        if hermes is None:
-            sys.modules.pop(HERMES_SKILL_UTILS_MODULE, None)
+    # No Hermes: a module without the reader, which the plugin reads as no resolution at all.
+    with patch_modules({HERMES_SKILL_UTILS_MODULE: hermes or types.ModuleType(HERMES_SKILL_UTILS_MODULE)}):
         result = llm_hooks.pre_llm_call(
             user_message=CANDIDATE_MESSAGE,
             session_id=session,
@@ -104,7 +102,7 @@ def _context(paths: OmhPaths, session: str, hermes: types.ModuleType | None = No
 
 
 def _loadable(paths: OmhPaths, hermes: types.ModuleType) -> frozenset[str] | None:
-    with mock.patch.dict(sys.modules, {HERMES_SKILL_UTILS_MODULE: hermes}):
+    with patch_modules({HERMES_SKILL_UTILS_MODULE: hermes}):
         return hermes_loadable_skill_names(paths.omh_home)
 
 
@@ -194,9 +192,9 @@ class HintTests(_Installed):
     def test_a_reader_that_raises_or_a_hermes_without_one_keeps_the_installed_set(self) -> None:
         installed = installed_skill_names(self.paths.omh_home)
         for module in (_hermes(raises=True), types.ModuleType(HERMES_SKILL_UTILS_MODULE)):
-            with self.subTest(module=module), mock.patch.dict(sys.modules, {HERMES_SKILL_UTILS_MODULE: module}):
+            with self.subTest(module=module):
                 reset_installed_skill_cache()
-                self.assertEqual(hermes_loadable_skill_names(self.paths.omh_home), installed)
+                self.assertEqual(_loadable(self.paths, module), installed)
 
     def test_the_layout_scan_reads_both_pack_shapes(self) -> None:
         flat = self.root / "flat"
