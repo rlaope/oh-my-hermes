@@ -329,6 +329,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "projection failing remains distinguishable from absence.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/hooks/llm_hooks.py",
+        "_warm_imports",
+        INTENTIONAL,
+        "The register-time warm-up only pre-loads modules; it computes and returns nothing. A failed import "
+        "leaves the modules unloaded, and each call site (`context_brief._capability_family_cards`, "
+        "`awareness._user_trigger_pack_route_decision`) imports them again and takes its own guarded, "
+        "reported path, exactly as it did with no warm-up.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/host_observation.py",
         "_record_observation",
         INTENTIONAL,
@@ -963,8 +972,10 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 97 -> 99 / 88 -> 90: `test_expectation_check.note_request` and `round_end_note`,
 # the round-end test check: a pre_llm_call body that records nothing on a failure,
 # and a note that says nothing on one.
-EXPECTED_HANDLER_COUNT = 99
-EXPECTED_ANCHOR_COUNT = 90
+# 99 -> 100 / 90 -> 91: `llm_hooks._warm_imports`, the register-time warm-up thread for the
+# first turns' package imports (a failure loads nothing, and the call sites import and report as before).
+EXPECTED_HANDLER_COUNT = 100
+EXPECTED_ANCHOR_COUNT = 91
 
 
 class DerivedSite(NamedTuple):

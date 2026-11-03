@@ -512,6 +512,44 @@ def _reset_board_card_state() -> None:
         _board_card_sessions.clear()
 
 
+# The package modules a session's first turns import: the capability families the first turn's
+# brief reads (`context_brief._capability_family_cards`) and the router a later turn's route hint
+# asks (`awareness._user_trigger_pack_route_decision`). Importing them costs 80-300 ms, paid by the
+# first user turn that reaches each. `register()` starts this thread so they load while the person
+# types; `pre_llm_call` waits for it before doing anything, so no turn imports the same modules from
+# another thread at the same time (two threads entering one import cycle from different sides is
+# what CPython's deadlock detection fails one of). Both call sites keep their own guarded import,
+# so a host without `omh`, or an import that fails here, is still reported where it was before.
+_import_warmup: threading.Thread | None = None
+
+
+def _warm_imports() -> None:
+    try:
+        from omh.capabilities.families import capability_family_cards  # noqa: F401
+        from omh.routing.chat import user_trigger_pack_route_hint  # noqa: F401
+    except Exception:  # noqa: BLE001 - the call sites import again and report the failure themselves
+        return
+
+
+def start_import_warmup() -> None:
+    """`register()`: import the first turns' package modules on a daemon thread, once per process copy."""
+    global _import_warmup
+    if _import_warmup is not None:
+        return
+    thread = threading.Thread(target=_warm_imports, name="omh-import-warmup", daemon=True)
+    try:
+        thread.start()
+    except RuntimeError:  # no thread to spare: the first turns import as they did
+        return
+    _import_warmup = thread
+
+
+def _await_import_warmup() -> None:
+    thread = _import_warmup
+    if thread is not None:
+        thread.join()
+
+
 def _tracker_event_is_present(kwargs: dict) -> bool:
     """Recognize a host-labelled tracker event without inspecting its text."""
     for key in ("tracker_event", "github_event"):
@@ -560,6 +598,7 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     fork_of = str(kwargs.get("parent_session_id") or "").strip()
     if fork_of and fork_of == str(kwargs.get("session_id") or "").strip():
         return None
+    _await_import_warmup()
     # Next, before anything else can return early or raise: this turn has not
     # asked for Jev until its own request is read below. A marker left from
     # the previous turn must never survive a degraded turn.
