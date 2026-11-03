@@ -4,6 +4,13 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
+  measures frame cost by transcript size, full redraw, streaming per chunk,
+  keystroke cost by composer length, idle wake-ups and bytes, plugin hook
+  latency and launch to first frame, offline with temp homes, and
+  `--compare <tree>` judges two checkouts back to back. It changes nothing
+  you see in the TUI.
+
 - **Ctrl+N/P and Ctrl+J/K move through lists and menus.** In the `/model`,
   `/sessions`, `/rewind` and `/theme` pickers, the agent list (roster and DAG
   tree), history search (Ctrl+R) and the slash and `@` path completion menus,
