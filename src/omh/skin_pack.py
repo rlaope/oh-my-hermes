@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 from importlib import resources
 import json
@@ -305,6 +306,7 @@ def skin_logo(name: str = SKIN_NAME) -> list[tuple[str, str, bool]]:
     return logo_from_text(skin_payload(name).decode("utf-8"))
 
 
+@lru_cache(maxsize=4096)
 def hex_to_rgb(value: str) -> tuple[int, int, int] | None:
     """`#RRGGBB` -> channel triple, or None when the token is not a plain hex."""
     text = value.strip().lstrip("#")

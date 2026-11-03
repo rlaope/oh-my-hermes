@@ -156,10 +156,21 @@ _HANGUL_RUN_RE = re.compile(r"[\uac00-\ud7a3]+")
 # please, this, how, our, now, today, very -- the Hangul counterparts of
 # `STOPWORDS`' filler. Both filters apply to the message and the triggers
 # alike, so containing a trigger phrase still means sharing its bigrams.
+# The second line is the host's own name and two case particles. "헤르메스"
+# and "오마이헤르메스" appear in most messages an OMH user sends, so their
+# bigrams (each in three skills' triggers) put parallel-tools and
+# executor-runtime-readiness on the line for "오마이헤르메스 홍보 영상 만들어줘".
+# "-으로" (by, as) and "-에서" (at, from) attach to any noun ("방에서",
+# "포맷으로") and admitted codebase-uml for a drawing request. "확인" (check)
+# is a request verb like "알려" and "보여": once the name bigrams left the
+# index, "확인해줘" alone ranked parallel-tools past the one-word score.
+# Each skill keeps the bigrams of its trigger's own nouns ("병렬 도구",
+# "코덱스", "시크릿").
 HANGUL_REQUEST_ENDING = "줘"
 HANGUL_STOPWORDS: frozenset[str] = frozenset(
     "만들 들어 도와 보여 알려 싶어 있어 해서 아서 어서 하고 하는 해주 주세 세요 어주 "
-    "이거 그거 저거 어떻 떻게 어떤 우리 지금 오늘 너무".split()
+    "이거 그거 저거 어떻 떻게 어떤 우리 지금 오늘 너무 "
+    "헤르 르메 메스 오마 이헤 으로 에서 확인".split()
 )
 
 

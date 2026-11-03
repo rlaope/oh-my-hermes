@@ -173,6 +173,7 @@ from .keys import (
     KeyDecoder,
     Mouse,
     Paste,
+    list_nav_step,
 )
 from .launch import CLOSED_EXIT, PICK_SESSION_ENV, SESSION_FILE_ENV, request_fallback
 from .agent_view import AGENT_STEER_LEFT_UNANSWERED_NOTICE, STEER_SAY, TAIL_ANSWER_SECONDS, AgentViewMixin
@@ -2532,10 +2533,14 @@ class App(ModesMixin, AgentViewMixin):
             self._on_resize()
         timeout, pace = self._read_timeout(), self.last_render + MIN_FRAME_SECONDS - self.clock()
         try:
-            if pace > 0:  # a frame was just drawn: gateway news waits out the interval, input does not
-                data = self.terminal.read(min(timeout, pace))
-            else:
-                data = self.terminal.read(timeout, self.wake)
+            started = self.clock()
+            data = self.terminal.read(timeout, self.wake)
+            if pace > 0 and not data:
+                # A frame was just drawn: gateway news waits out the interval, input does not. The wait is one read
+                # for the whole timeout; only a wake-up that cut it short sleeps out what is left of the interval.
+                left = min(timeout, pace) - (self.clock() - started)
+                if left > 0:
+                    data = self.terminal.read(left)
         except EOFError:
             self.exit_code = 0
             return
@@ -3815,6 +3820,8 @@ class App(ModesMixin, AgentViewMixin):
         alone for want of rows, where neither folding nor expanding it changes what shows (its header offers no key)."""
         if not isinstance(event, Key) or event != Key(CHAR, "p", ctrl=True):
             return False
+        if self._menu_rows():
+            return False
         payload = self.hud.payload if self.hud is not None else None
         if plan_state(payload) != "open" or not self.panel_shown:  # a menu over the plan: nothing to fold where seen
             return False
@@ -4661,13 +4668,15 @@ class App(ModesMixin, AgentViewMixin):
         return [(item.display or item.text, item.meta) for item in self.path_items]
 
     def _menu_moves(self, key: Key) -> bool:
-        """Up and Down move the open completion menu's highlight, stopping at either end as every list does."""
-        if key.name not in (UP, DOWN):
+        """Up and Down (or Ctrl+P/Ctrl+N) move the open completion menu's highlight, stopping at either end as every list does."""
+        step = list_nav_step(key)
+        if step == 0 and key.name not in (UP, DOWN):
             return False
         rows = self._menu_rows()
         if not rows:
             return False
-        self.menu_index = min(max(self.menu_index + (-1 if key.name == UP else 1), 0), len(rows) - 1)
+        delta = step if step != 0 else (-1 if key.name == UP else 1)
+        self.menu_index = min(max(self.menu_index + delta, 0), len(rows) - 1)
         return True
 
     def _menu_enter(self, key: Key) -> bool:
@@ -6831,10 +6840,12 @@ class App(ModesMixin, AgentViewMixin):
 
         The banner and the transcript's last `REDRAW_TAIL_ROWS` rows are
         rendered anew (`Transcript.retake_tail`), under one row counting the
-        messages above them, so nothing wrapped at the old width survives, no
+        entries above them, so nothing wrapped at the old width survives, no
         earlier frame is left in scrollback, and a long session costs a redraw
         no more than that. Scrollback from before the TUI started is erased
-        with it.
+        with it. At an unchanged width the rows come out the same, so a
+        finished reply's wrapped rows (`AssistantBlock.kept`) and a flushed
+        row's bytes (`screen._flushed_row`) are taken as kept.
         """
         if self.pager is not None:
             # Erasing from the alternate screen leaves the main screen's rows (and, on some terminals, its scrollback)
