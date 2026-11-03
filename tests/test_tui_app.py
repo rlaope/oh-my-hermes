@@ -109,6 +109,11 @@ NO_DEFAULT = ("model.options", {"result": {"model": "", "provider": ""}})
 UNREAD_DEFAULT = ("model.options", {"error": {"code": 4001, "message": "no default"}})
 
 
+# Ctrl+U, a no-op on the empty composer, in front of prompts typed ahead in one read. A read of plain lines is an
+# unmarked paste (`KeyDecoder`) and stays in the composer; a read with a control key in it is typed, so its Enters send.
+TYPED_AHEAD = b"\x15"
+
+
 def startup_answers(default: tuple[str, dict] = NO_DEFAULT) -> tuple[tuple[str, dict], ...]:
     return (
         ("config.get", {"result": {"config": {}}}),
@@ -646,7 +651,7 @@ class SessionTests(AppTestCase):
         )
         run.terminal.script(
             # One read: the second Enter lands while the first prompt's turn is pending.
-            Step(b"first prompt\rsecond prompt\r", when=run.terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r", when=run.terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: "cleanly)." in run.terminal.history() and run.terminal.idle(), label="turn 2"),
         )
         self.run_main(run)
@@ -829,7 +834,7 @@ class SessionTests(AppTestCase):
         terminal = run.terminal
         terminal.script(
             # One read: the second prompt queues behind the first, whose turn the error ends.
-            Step(b"first prompt\rsecond prompt\r", when=terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r", when=terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: len(run.calls("prompt.submit")) == 2, label="the queued prompt sent"),
         )
         self.run_main(run)
@@ -849,7 +854,7 @@ class SessionTests(AppTestCase):
         run = self.prepare(Scenario("session", spans("session", "startup", "create"), answers=answers))
         terminal = run.terminal
         terminal.script(
-            Step(b"first prompt\rsecond prompt\r", when=terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r", when=terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: len(run.calls("prompt.submit")) == 2, label="the queued prompt sent"),
         )
         self.run_main(run)
@@ -2042,7 +2047,7 @@ class LocalCommandTests(AppTestCase):
         startup, turn = spans("approval", "startup", "approval_turn")
         run = self.prepare(Scenario("approval", (startup, turn), answers=answers))
         run.terminal.script(
-            Step(b"Run rm -rf ./omh-m0-probe-dir\r/fresh\r", when=run.terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"Run rm -rf ./omh-m0-probe-dir\r/fresh\r", when=run.terminal.idle, label="idle"),
             Step(b"\x04", when=run.terminal.shows(f"New session {FRESH_STORED_ID}."), label="the new session"),
         )
         self.run_main(run)
@@ -2285,7 +2290,7 @@ class LocalCommandTests(AppTestCase):
         terminal = run.terminal
         terminal.script(
             self.submit(run, "/queue"),
-            Step(b"first prompt\rsecond prompt\r/queue\r", when=terminal.shows("Nothing is queued."), label="empty"),
+            Step(TYPED_AHEAD + b"first prompt\rsecond prompt\r/queue\r", when=terminal.shows("Nothing is queued."), label="empty"),
             Step(b"\x04", when=lambda: "cleanly)." in terminal.history() and terminal.idle(), label="turn 2"),
         )
         self.run_main(run)
@@ -2788,7 +2793,7 @@ class KeyTests(AppTestCase):
         )
         terminal = run.terminal
         terminal.script(
-            Step(b"line one\\\rline two\r", when=terminal.idle, label="idle"),
+            Step(TYPED_AHEAD + b"line one\\\rline two\r", when=terminal.idle, label="idle"),
             Step(b"\x04", when=lambda: "later." in terminal.history() and terminal.idle(), label="the reply"),
         )
         self.run_main(run)
