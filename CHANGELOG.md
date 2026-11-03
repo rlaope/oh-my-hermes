@@ -4,6 +4,14 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **A changed function's broken callers are named at the turn's first stop.** When a turn changes a
+  function's parameters, OMH reads the files that import it, following package re-exports and
+  aliases. It names, by file and line, each call that matched the old parameters and no longer
+  does, with the new signature. It needs no language server and is always on. It says nothing about
+  a call it cannot prove broken, such as one passing `*args` / `**kwargs` or one written to raise.
+  In the live bench this took gpt-6-luna on a signature change from 0/6 to 6/6, and Haiku 4.5 from
+  5/6 to 6/6.
+
 - **Memory recall shows what the turn asked for, once per conversation.**
   A message with nothing to search for (an empty turn, "야") used to get every
   saved memory in full; it now gets pinned ones in full and the rest as the

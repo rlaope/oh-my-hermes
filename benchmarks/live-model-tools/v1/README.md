@@ -710,6 +710,69 @@ outcomes:
   was logged in, refreshed or re-authenticated by the bench.
 - The Claude lanes (CPA) were not affected and kept running.
 
+#### Result: gate failed on one clause, by one run in which the change said nothing; the branch does not ask to merge
+
+The run:
+- **Counted runs:** 2026-11-03 14:17 to 19:39 KST. The GPT lanes were paused from 14:25 to 14:41 for
+  the revoked credential (Amendment 1).
+- **Volume:** 384 counted runs, 192 per arm. 0 crashes, 0 timeouts, 0 retries, nothing unpaired,
+  so the strict and the re-run readings are the same.
+- **Recompute:** the research folder's `OPT/opt-k/gate.py`, from the raw records, the session-DB
+  snapshots and the profile logs (`gate.txt`, `gate.json`).
+- **Load path:** the meter recorded `omh_pkg: true` on every call in both arms (the shared
+  gateway holds an installed OMH package). The on arm's bundle-local check ran: every on-arm first
+  stop that `pre_verify` reached logged its `caller_check` line.
+
+| Clause | Result |
+| --- | --- |
+| 1. Positives pooled: on at least base + 3 | pass: 65/72 to 72/72 |
+| 2. No template loses a pass, pooled | **fail: `L-RENAME-ALIAS` 12/12 to 11/12** |
+| 3a. Caller notes on `I-CONTROL` and `I-DEFAULTED`, on arm: 0 | pass: 0 |
+| 3b. Continues on those two: on at most base | pass: 24 to 24 |
+| 4. No on run above 3x its cell's base median tokens | pass: none |
+
+**Where the passes moved.**
+
+| `I-SIGNATURE` | base | on | caller notes |
+| --- | --- | --- | --- |
+| Haiku 4.5 | 5/6 | 6/6 | 6 |
+| Sonnet 5.5 | 6/6 | 6/6 | 0 |
+| gpt-6-luna | 0/6 | 6/6 | 6 |
+| gpt-6.1-sol | 6/6 | 6/6 | 0 |
+
+- Every other template has the same pooled passes in both arms, except `L-RENAME-ALIAS`.
+- Total passes: 185/192 base, 191/192 on.
+- Caller notes fired on `I-SIGNATURE` only: 12 sessions, the 12 in which Haiku or Luna stopped
+  with a caller still broken. There were 0 notes on any other template, controls included.
+- `I-KWARG` stayed 24/24 in both arms. Haiku 4.5 passed 6/6 in both, so the test check (#2494)
+  already covers the H2H2 failure shape; nothing was left for this change to move there.
+
+**The failing clause.** The one lost pass is Haiku 4.5 `L-RENAME-ALIAS` seed 857137, on arm.
+- In `tests/test_quota.py` Haiku wrote `from benchapp.api import allocate_quota as compute_quota`,
+  which keeps the old name. In the base arm, on the same seed, it renamed the name everywhere.
+- In that session the caller check logged `functions=0 files=0 rows=0` (a rename changes no
+  parameters). The consistency trigger logged `fire=False reason=no_copy_or_reference`, and the turn
+  ended at its first stop with no continue.
+- With an empty caller note, `pre_verify` computes exactly what base computes. Nothing else in the
+  two bundles differs. So the model saw the same OMH output in both arms in that turn, and the miss
+  is model variance on n = 3.
+- The clause was registered without that exception, so it fails as registered.
+
+**Cost.**
+- Total tokens: base 18.90M, on 18.88M.
+- `I-SIGNATURE` pooled median tokens: 113.6k base, 123.4k on. That is Luna's and Haiku's extra fix
+  round. Sonnet's median fell from 97k to 55k, with continues dropping from 5 to 1.
+- The highest on-arm run against its cell's base median was 2.17x: Haiku `L-RENAME-SHADOW` 964009,
+  203.6k against 93.8k. That session got no caller note.
+
+**Not counted:** an on-arm "missing" `caller_check` line on 24 Sonnet runs. In each, the model
+edited only through shell commands, so `pre_verify` received no changed paths and returned before
+any note, in both arms. No `export_check` line exists for those sessions either.
+
+**Decision, as pre-registered:** the gate failed, so the branch does not ask to merge. The PR
+stays open with this result for the owner's call. The pre-registered next candidate (`impact_check`
+on by default) was not run.
+
 ### 2026-11-02 round-end check: declared look-alikes and rewritten test expectations, base vs new
 
 Pre-registered before its first live run.
