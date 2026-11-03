@@ -76,18 +76,21 @@ class LoopWaitTests(unittest.TestCase):
         kinds = [kind for kind, _value in terminal.log]
         self.assertLess(kinds.index("write"), kinds.index("read"))
 
-    def test_after_a_frame_the_loop_waits_the_interval_without_the_gateway_then_long_or_until_its_tick(self) -> None:
+    def test_after_a_frame_the_loop_waits_long_or_until_its_tick_in_one_read(self) -> None:
         app, terminal, _client = loop_app()
         app._render_when_due()
         app._step()
         app._step()
-        self.assertEqual(terminal.log_reads(), [(MIN_FRAME_SECONDS, None), (IDLE_READ_SECONDS, WAKE)])
+        self.assertEqual(terminal.log_reads(), [(IDLE_READ_SECONDS, WAKE), (IDLE_READ_SECONDS, WAKE)])
         app.turn_pending = True
         app.dirty = True
         app._render_when_due()
         app._step()
         app._step()
-        self.assertEqual(terminal.log_reads()[2:], [(MIN_FRAME_SECONDS, None), (round(TICK_SECONDS - MIN_FRAME_SECONDS, 6), WAKE)])
+        reads = terminal.log_reads()[2:]
+        self.assertEqual(reads[0], (TICK_SECONDS, WAKE))  # one read to the tick, not a pace read first
+        self.assertEqual(len(reads), 2)
+        self.assertTrue(all(wake == WAKE for _timeout, wake in reads))
 
     def test_held_bytes_bring_the_loop_back_and_settle_after_a_silence(self) -> None:
         app, terminal, client = loop_app((0.0, b"\x1b"), busy=True)
@@ -95,7 +98,7 @@ class LoopWaitTests(unittest.TestCase):
         while not client.named("session.interrupt") and terminal.now[0] < 101.0:
             app._step()
         reads = terminal.log_reads()
-        self.assertTrue(all(timeout <= READ_TIMEOUT_SECONDS for timeout, _wake in reads), reads)
+        self.assertTrue(all(timeout <= READ_TIMEOUT_SECONDS for timeout, _wake in reads[1:]), reads)
         quiet = round(terminal.now[0] - 100.0, 6)  # the Esc arrived at 100.0: it settled after this much quiet
         self.assertTrue(FLUSH_SILENCE_SECONDS <= quiet <= MIN_FRAME_SECONDS + READ_TIMEOUT_SECONDS, quiet)
 
@@ -114,8 +117,9 @@ class LoopWaitTests(unittest.TestCase):
         terminal.reads.append((0.0, b""))  # woken at once
         app._step()
         client.inbox += [delta("one "), delta("two ")]  # arriving during the interval after that frame
-        app._step()  # waits out the interval without the gateway's wake, then draws both
-        self.assertEqual(terminal.log_reads()[-1], (round(MIN_FRAME_SECONDS, 6), None))
+        terminal.reads.append((0.002, b""))  # the gateway's wake ends the read early
+        app._step()  # waits out the rest of the interval without the gateway's wake, then draws both
+        self.assertEqual(terminal.log_reads()[-1], (round(MIN_FRAME_SECONDS - 0.002, 6), None))
         self.assertEqual(len(frames), 2)
         self.assertGreaterEqual(round(frames[1] - frames[0], 6), MIN_FRAME_SECONDS)
         self.assertIn("one two", "\n".join(drawn_lines(app)))

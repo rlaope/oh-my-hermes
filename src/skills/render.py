@@ -3846,7 +3846,7 @@ The order never changes: an observed reproduction, then competing hypotheses, th
 | Expected | the output that would have been correct, and where that expectation comes from |
 | Symptom match | the observed failure quoted beside the one the user reported; a different failure near the same code is a different bug, and the record stays not_observed for this one |
 | Hit rate | failures over runs, for example `4/20`; one sighting is a report, not a reproduction |
-| Loop cost | wall time per run; what was pinned, which is only what no standing hypothesis implicates; for an intermittent fault, how the rate was raised |
+| Loop cost | wall time per run; what was pinned, which is only what neither the user's report nor a hypothesis already written implicates (before `competing_hypotheses/v1` exists); for an intermittent fault, how the rate was raised |
 | Minimised | what left the reproduction and what stayed, each element that stayed because the symptom (or the rate) went with it |
 | Environment | interpreter, dependency versions, OS, parallelism, and anything the failing run had that the passing run did not |
 | State | observed or not_observed; nothing between |
@@ -3863,7 +3863,7 @@ If a capture is too redacted to diagnose, record that and ask for a narrower one
 
 Record time per run and what was pinned or raised under Loop cost.
 
-**Then minimise.** An element of the reproduction -- an input, a caller, a config value, a data row, a step -- leaves it only when the loop rerun without it still shows the symptom; otherwise it goes back. For an intermittent fault, "still shows" means the same rate at the same N, never one red run. The Minimised field lists what left and what stayed. What stayed leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test.
+**Then minimise.** An element of the reproduction -- an input, a caller, a config value, a data row, a step -- leaves it only when the loop rerun without it still shows the symptom; otherwise it goes back. For an intermittent fault, "still shows" means the same rate at the same N, never one red run. The Minimised field lists what left and what stayed. What stayed leaves section 2 fewer parts to suspect, and it is what `fix_handoff/v1` turns into the regression test (or, under `regression_seam: none_correct`, the verifying reproduction loop).
 
 ### When no test reaches the fault
 
@@ -4920,7 +4920,7 @@ A row is `observed` only when a run record exists. "It should pass", "CI will ru
 - Subject: the repository's shape, the change's effect, within the length the log uses.
 - Body: why the change exists and what is now true, not a restated diff. Measured before/after values belong here when the change is about a measurement.
 - In a PR body, when the change reshapes structure (files moved, a module split, a call path rerouted), show the smallest view of the new shape: a short file tree, a call tree, or a diff sketch of either, holding only the nodes the change touches and the ones needed to place them. A picture the reader can check in ten seconds replaces a paragraph that restates the diff.
-- Reversibility: in a PR body always, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks); in a commit message only when the recent log already carries a risk or rollback line or trailer (such as `Scope-risk:`). Say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
+- Reversibility: in a PR body always, in the no-template fallback or under a section the template already has for risk or rollout (never as a heading the template lacks; when the template has neither a risk nor a rollout section, one sentence at the end of its summary or description section); in a commit message only when the recent log already carries a risk or rollback line or trailer (such as `Scope-risk:`). Say whether a revert undoes the whole change, or name what it leaves behind, such as persisted data, an applied migration, a published package or artifact, a sent message, or a changed external setting. Then name which surfaces a bad merge would reach. That one-way door is the fact that should slow a merge, so state the answer even when it is "a revert undoes all of it".
 - `Closes #N` goes on its own line, and only when every success criterion of that issue is met; otherwise `Refs #N`.
 
 ## 5. Trailers and sign-off
@@ -6882,6 +6882,8 @@ The stack is a routing input. Name it in the contract and tell the executor whic
 | Any stack | this repository's existing handlers -- the nearest sibling endpoint is a stronger convention source than any framework guide |
 
 If the stack is unknown, prepare the contract stack-neutral and name the stack as the one blocking input. A stack-neutral contract is useful; a contract written for the wrong stack is not.
+
+### Thin handlers and earned interfaces
 
 On any stack, a handler parses and validates its input, calls one domain function, and maps that function's result or error onto the envelope. Business rules live in the domain function, and its interface is what the tests call. An interface in front of storage or a third-party client earns its place when a second implementation of it exists, such as a fake the test suite actually uses; with one implementation it is indirection that nothing exercises.
 
@@ -12145,10 +12147,10 @@ these languages.
 arrived in engines at different times. Check each against the
 browser-support target named in the brief. A feature newer than the target
 (by default, anything only Baseline Newly available) ships behind feature
-detection with a fallback, or the target changes on purpose. A behavior that cannot be
-detected (the backdrop scroll above) cannot take that path: it ships only as
-an enhancement whose absence the page tolerates, or a different technique
-covers the target.
+detection with a fallback, or the target changes on purpose. A behavior that
+cannot be detected (the backdrop scroll above) cannot take that path: it
+ships only as an enhancement whose absence the page tolerates, or a
+different technique covers the target.
 
 ## Boundary
 

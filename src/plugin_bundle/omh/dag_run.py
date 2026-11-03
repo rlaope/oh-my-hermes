@@ -1031,6 +1031,31 @@ def stuck_say(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]
     return " ".join(parts)
 
 
+def running_children(record: Mapping[str, Any], derived: Mapping[str, Mapping[str, Any]],
+                     now: float) -> list[dict[str, Any]]:
+    """Nodes with a live child: id, label, subagent id and seconds open, in record order.
+
+    Cancel names these so the parent can stop each one instead of losing track
+    of it: a cancelled record never settles them, and their results land in no
+    handoff the run reads.
+    """
+    ages = open_for(record, derived, now)
+    rows = []
+    for node in record["nodes"]:
+        node_id = str(node["id"])
+        if derived[node_id]["state"] != "running":
+            continue
+        child = derived[node_id].get("child") or {}
+        if not isinstance(child, Mapping) or isinstance(child.get("stop"), Mapping):
+            continue
+        subagent = child.get("subagent_id")
+        if not subagent:
+            continue
+        rows.append({"id": node_id, "label": str(node["label"]), "subagent_id": str(subagent),
+                     "open_for_s": int(ages.get(node_id, 0.0))})
+    return rows
+
+
 def resume_handle_for(attempts: Sequence[Mapping[str, Any]]) -> str:
     """The process identity a new attempt must resume, or ``""`` for fresh work.
 

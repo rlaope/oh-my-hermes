@@ -2886,7 +2886,10 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
     ),
     # Each shipped phrase quoted inside someone else's request (a job ad, a
     # translation, a README line, a bank repo, a contract) may name the audit
-    # in the question but never dispatches it.
+    # in the question but never dispatches it. Naming tech-debt-audit as the
+    # clarify candidate here is an accepted cost of the clarify-only cap, which
+    # never dispatches, so none of these cases carries a forbidden_candidate
+    # and none should gain one.
     RoutingPrecisionCase(
         "job-ad-quoting-codebase-architecture-does-not-dispatch",
         "A job ad quoting the phrase is writing, not an audit",
@@ -3069,6 +3072,24 @@ ROUTING_PRECISION_CASES: tuple[RoutingPrecisionCase, ...] = (
         "answer_clarification",
         "",
         "tech-debt-audit",
+    ),
+    # The request form with a non-code "코드" still names tech-debt-audit as a
+    # clarify candidate (measured on origin/main and on this branch), the same
+    # accepted cost as the English cases above, so these two pin only that
+    # nothing dispatches: no forbidden_candidate.
+    RoutingPrecisionCase(
+        "korean-dress-code-request-form-no-dispatch",
+        "A Korean dress code named in the architecture request form never dispatches the audit",
+        "드레스 코드 아키텍처 개선해줘",
+        "answer_clarification",
+        "",
+    ),
+    RoutingPrecisionCase(
+        "korean-qr-code-request-form-no-dispatch",
+        "A Korean QR code named in the architecture request form never dispatches the audit",
+        "QR 코드 아키텍처 개선해줘",
+        "answer_clarification",
+        "",
     ),
     RoutingPrecisionCase(
         "sales-award-not-award-bar-score",
