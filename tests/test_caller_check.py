@@ -145,6 +145,11 @@ class NamedCallsTest(_Turn):
             self.note()
         self.assertRegex(logs.output[0], rf"caller_check round_end session={SESSION} functions=1 files=6 rows=4 "
                                          r"deadline=0 ms=\d+$")
+        # A stop with no changed function still logs its line.
+        ct.reset()
+        with self.assertLogs("omh.caller_check", "INFO") as logs:
+            self.assertEqual(caller_check.round_end_note(SESSION, str(self.root)), "")
+        self.assertRegex(logs.output[0], r"functions=0 files=0 rows=0 deadline=0")
 
 
 class SilentTest(_Turn):

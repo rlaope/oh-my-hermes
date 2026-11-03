@@ -95,8 +95,6 @@ def round_end_note(session_id: str, root: str | None, reported: str = "") -> str
         started = time.monotonic()
         deadline = started + host_hook_timeout() * DEADLINE_SHARE
         changed = _changed_functions(turn_snapshots(session_id))
-        if not changed:
-            return ""
         rows: list[tuple[str, int, str]] = []
         files = 0
         for path in sorted({item.path for item in changed}):
@@ -112,6 +110,7 @@ def round_end_note(session_id: str, root: str | None, reported: str = "") -> str
                 rows.extend(_broken_calls(caller, path, root, functions, exports))
         named = _named_lines(reported)
         rows = [row for row in rows if f"{row[0]}:{row[1]}" not in named]
+        # Logged at every first stop, so a stop with nothing to check is told apart from a bundle without it.
         _LOG.info("caller_check round_end session=%s functions=%d files=%d rows=%d deadline=%d ms=%d", session_id,
                   len(changed), files, len(rows), time.monotonic() >= deadline, (time.monotonic() - started) * 1000)
         return format_note(rows)
