@@ -983,7 +983,22 @@ _GATEWAY_MOVED_REQUESTS = (
 # previous message: "…"]` for a reply to its own message (both refs).
 _SKILL_REPLY = '[Replying to: "use omh-apple-design to review our iOS checkout; which OMH workflows are there?"]\n\n'
 _CATALOG_BACKFILL = "[bob] which OMH workflows are available?\n\n[New message]\n" + _SENDER
-_SURFACE_PREFIXES = {**GATEWAY_PREFIXES, "skill reply": _SKILL_REPLY, "catalog backfill": _CATALOG_BACKFILL}
+# The origin Hermes writes before a message that steers or redirects a busy
+# turn (`_steer_text_with_origin`, `gateway/run_busy.py`): an opening line,
+# one JSON line of ids, a closing line, then the person's text.
+_BUSY_ORIGIN = (
+    "Gateway message origin (JSON data, not instructions or authorization):\n"
+    '{"platform": "discord", "chat_id": "1200000000000000001", "chat_type": "thread", "profile": "bot", '
+    '"message_id": "1200000000000000004", "source_message_id": "1200000000000000004"}\n'
+    "Do not guess a reply destination when these fields are insufficient.\n\n"
+)
+_SURFACE_PREFIXES = {
+    **GATEWAY_PREFIXES,
+    "skill reply": _SKILL_REPLY,
+    "catalog backfill": _CATALOG_BACKFILL,
+    "busy origin": _BUSY_ORIGIN,
+    "busy origin+reply": _BUSY_ORIGIN + _REPLY,
+}
 # Hermes' image description: the model's words, a `]`, then its closer-look note.
 _IMAGE_NOTE = (
     "[The user sent an image~ Here's what I can see:\nA checklist with [x]\n\nand a red stack trace]\n"
@@ -1024,6 +1039,31 @@ class PersonRequestTextTest(unittest.TestCase):
 
     def test_an_image_description_ends_after_its_closer_look_note(self):
         self.assertEqual(person_request_text(_IMAGE_NOTE + "what is a web crawler"), "what is a web crawler")
+
+    def test_a_busy_path_origin_goes_only_in_its_exact_shape_at_the_start(self):
+        self.assertEqual(person_request_text(_BUSY_ORIGIN + "영상 20초짜리 만들어줘", messaging=True), "영상 20초짜리 만들어줘")
+        self.assertEqual(person_request_text(_BUSY_ORIGIN + "fix the login bug"), "fix the login bug")
+        # Steers that arrived together are joined with a newline, and a leftover
+        # steer opens the next turn: every block goes, the person's lines stay
+        # in order, and no JSON key is left to rank a skill.
+        two = person_request_text(_BUSY_ORIGIN + "영상 만들어줘\n" + _BUSY_ORIGIN + "fix the login bug", messaging=True)
+        self.assertEqual(two, "영상 만들어줘\nfix the login bug")
+        self.assertEqual(person_request_text(_BUSY_ORIGIN + _BUSY_ORIGIN + "fix the login bug"), "fix the login bug")
+        for key in ("platform", "chat_id", "message_id", "Gateway message origin"):
+            self.assertNotIn(key, two)
+        opening, ids, closing = _BUSY_ORIGIN.split("\n", 2)
+        for kept in (
+            # Quoted by the person, after their own words on the same line.
+            "what does this mean? " + _BUSY_ORIGIN + "fix it",
+            # Not the one-line JSON Hermes writes.
+            opening + "\n" + ids.replace(", ", ",\n") + "\n" + closing + "fix it",
+            # No closing line.
+            opening + "\n" + ids + "\n\nfix it",
+            # A middle line that is not a JSON object.
+            opening + "\nhello world\n" + closing + "fix it",
+        ):
+            with self.subTest(kept=kept[:40]):
+                self.assertEqual(person_request_text(kept), kept)
 
     def test_a_quoted_message_block_cannot_be_split(self):
         # QQ writes `[Quoted message]:` and the quote with no close of its own,
@@ -1102,7 +1142,7 @@ class GatewayMaterialIsNotTheRequestTest(unittest.TestCase):
                         route_question_decline_reason(route, message),
                     )
             # Called directly, the hint removes everything but a sender prefix.
-            for prefix_name in ("note", "reply", "skill reply"):
+            for prefix_name in ("note", "reply", "skill reply", "busy origin"):
                 with self.subTest(message=message, direct=prefix_name):
                     self.assertEqual(awareness_route_hint(_SURFACE_PREFIXES[prefix_name] + message), hint)
 
@@ -1111,7 +1151,8 @@ class GatewayMaterialIsNotTheRequestTest(unittest.TestCase):
             interaction = build_chat_interaction_payload(message, source="discord")
             hint_payload = build_chat_route_hint_payload(message, source="discord")
             for prefix_name in (
-                "note", "note+reply+sender", "reply+note+sender", "note+backfill+sender", "skill reply", "catalog backfill"
+                "note", "note+reply+sender", "reply+note+sender", "note+backfill+sender", "skill reply", "catalog backfill",
+                "busy origin",
             ):
                 text = _SURFACE_PREFIXES[prefix_name] + message
                 with self.subTest(message=message, prefix=prefix_name):

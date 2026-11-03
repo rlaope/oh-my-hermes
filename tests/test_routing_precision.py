@@ -94,7 +94,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # loader migration, Korean messages with "OMH가" that read as on main,
         # OMH ignoring files, and a filler adverb, a why-question about a
         # parser and "Hermes with OMH" before a task stay off it too.
-        self.assertEqual(payload["summary"]["case_count"], 1388)
+        self.assertEqual(payload["summary"]["case_count"], 1390)
         self.assertEqual(payload["summary"]["passing_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_case_count"], payload["summary"]["case_count"])
         self.assertEqual(payload["summary"]["negative_passing_count"], payload["summary"]["case_count"])
@@ -168,7 +168,8 @@ class RoutingPrecisionTests(unittest.TestCase):
         # The three sprite-forge vocabulary controls answer directly (+3).
         # The rendered-scene lane's crime-scene control is a direct answer (+1).
         # show-reel's quoted idea-video ask is translation input, answered directly (+1).
-        self.assertEqual(payload["summary"]["direct_answer_count"], 355)
+        # A concept question under a busy-path gateway origin is answered directly (+1).
+        self.assertEqual(payload["summary"]["direct_answer_count"], 356)
         # show-reel's README-link control is answered as a file lookup (+1).
         # "Use OMH to fix the failing test in billing.py" names a file: a file lookup (+1).
         # Copying the skills OMH selected and summarizing the files it picked
@@ -252,7 +253,7 @@ class RoutingPrecisionTests(unittest.TestCase):
         # a Korean "정리해 둬" keeps toolbelt-readiness, OMH missing a test
         # before an add-tests request keeps ultrawork, and two reports quoting
         # the user's own migrate / rewrite ask reach workflow-learning.
-        self.assertEqual(payload["summary"]["intervention_case_count"], 1236)
+        self.assertEqual(payload["summary"]["intervention_case_count"], 1239)
         self.assertEqual(
             payload["summary"]["intervention_passing_count"], payload["summary"]["intervention_case_count"]
         )

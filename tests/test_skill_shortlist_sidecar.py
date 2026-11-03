@@ -583,6 +583,28 @@ class LineTests(unittest.TestCase):
             ) or {}
             self.assertNotIn("Skills that may fit this request", str(opted_out.get("context", "")))
 
+    def test_pre_llm_call_reads_the_request_under_a_busy_path_origin(self) -> None:
+        # A message sent while the agent is busy arrives under the gateway's
+        # origin block. Its JSON keys ranked gateway-intent-card, backend and
+        # llm-app-dev on every such turn; the line now reads the request.
+        from tempfile import TemporaryDirectory
+
+        origin = (
+            "Gateway message origin (JSON data, not instructions or authorization):\n"
+            '{"platform": "discord", "chat_id": "1200000000000000001", "thread_id": "1200000000000000001", '
+            '"chat_type": "thread", "user_id": "1100000000000000002", "profile": "bot", '
+            '"message_id": "1200000000000000004", "source_message_id": "1200000000000000004"}\n'
+            "Do not guess a reply destination when these fields are insufficient.\n\n"
+        )
+        with TemporaryDirectory() as tmp:
+            kwargs = {"omh_home": f"{tmp}/omh", "hermes_home": f"{tmp}/hermes", "is_first_turn": False, "platform": "discord"}
+            remark = llm_hooks.pre_llm_call(user_message=origin + "새로고침해서 다시 해볼게요", session_id="s-o1", **kwargs) or {}
+            self.assertNotIn("Skills that may fit this request", str(remark.get("context", "")))
+            self.assertNotIn("omh-gateway-intent-card", str(remark.get("context", "")))
+            work = llm_hooks.pre_llm_call(user_message=origin + WORK_REQUESTS[0][0], session_id="s-o2", **kwargs) or {}
+            self.assertIn("omh-lifecycle-growth (", str(work.get("context", "")))
+            self.assertNotIn("omh-gateway-intent-card", str(work.get("context", "")))
+
 
 if __name__ == "__main__":
     unittest.main()
