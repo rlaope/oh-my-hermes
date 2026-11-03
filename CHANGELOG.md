@@ -19,6 +19,21 @@ All notable changes will be documented here.
   read-only copies of the owner's stores, the largest per-session memory text
   went from 111,665 to 6,649 characters on the console profile, repeats from
   91% to 0%, and messenger recall lines from 447 to 61.
+- **OMH notices when Hermes cannot load its skills.** From 27 Oct to 2 Nov
+  the skills were installed but Hermes could not load them by name: a stale
+  generation directory registered beside the pointer made every name
+  ambiguous, and then a cached path to a deleted generation left none. The
+  launch card still said "skills 89 installed", and the skill suggestion
+  kept telling the model to load skills that came back "not found". The
+  suggestion and the route hint now name only skills Hermes resolves to one
+  copy, read from the skill directories Hermes itself cached, so they go
+  quiet instead of steering into a failed load. When a profile that
+  registers OMH's skills sees fewer than half of them, the launch card says
+  how many Hermes sees and suggests a gateway restart, or `/new` for an
+  older session. `omh doctor` has a new `hermes_skill_visibility` row, per
+  profile, that reports an ambiguous registration and a missing directory
+  separately. A healthy install shows the same suggestion and the same card
+  as before.
 
 - **The OMH recall line stays off Discord and Slack, and recall can be turned
   off.** `🧠 OMH — recalled N memories` now shows on the CLI, TUI and Desktop

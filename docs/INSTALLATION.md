@@ -3351,6 +3351,25 @@ unregistered but retained (`external_dir_unregistered_copy`), and only a
 copy that no home registers and no generation links is named, with its
 directory mtime, as safe to delete.
 
+Whether Hermes can load each installed skill by name is its own doctor row,
+`hermes_skill_visibility`, one for the primary home and one per bot profile
+with a finding (`hermes_skill_visibility:<profile>`). For each home that
+registers an OMH skills directory, it takes the home's own `skills`,
+`skills.create_dir` and `skills.external_dirs` in Hermes' precedence,
+resolved the way Hermes resolves them, and counts each skill the install
+manifest records. A skill two directories of one tier hold is reported as
+ambiguous, since Hermes refuses it in both, and the row says whether the
+other copy is in a directory OMH does not manage. An OMH entry whose path is
+gone is reported as dangling, since Hermes lists nothing from it. Doctor
+reads `config.yaml`, not a running gateway, and Hermes keeps a resolved path
+until `config.yaml` changes, so a gateway started before a repair can still
+hold the old path while doctor reports healthy. The TUI launch card is what
+says so: when a profile that registers OMH's skills sees fewer than half of
+them, the card names both counts and suggests a gateway restart, or `/new`
+for an older session. The per-turn skill suggestion and route hint name only
+skills that Hermes, from the directories it cached, resolves to one copy, so
+neither tells the model to load a skill that would come back "not found".
+
 `omh uninstall` is symmetric with the sync. A full uninstall from the primary
 home (`omh uninstall`, `--all`, or `--purge`) clears its bot profiles'
 registration, reverses the same

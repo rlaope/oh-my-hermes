@@ -236,7 +236,15 @@ from .rewind_picker import RewindPicker, rewind_rows
 from .shortcuts import shortcut_lines
 from .launch_card import Facts as LaunchFacts
 from .launch_card import Paint as LaunchPaint
-from .launch_card import Skills, launch_card, preview, read_snapshot, skill_rows, write_snapshot
+from .launch_card import (
+    Skills,
+    installed_omh_count,
+    launch_card,
+    preview,
+    read_snapshot,
+    skill_rows,
+    write_snapshot,
+)
 from .launch_picker import CLOSE as LAUNCH_CLOSE
 from .launch_picker import KEYS as LAUNCH_PICKER_KEYS
 from .launch_picker import MOVE as LAUNCH_MOVE
@@ -3426,6 +3434,10 @@ class App(ModesMixin, AgentViewMixin):
         if not isinstance(skills, dict) or not skills:
             return
         rows = skill_rows({key: value for key, value in skills.items() if isinstance(value, list)})
+        omh_home = self._omh_home()
+        if omh_home is not None:  # what the card weighs Hermes' OMH count against (`visibility_warning`)
+            hermes_home = self.history_file.parent if self.history_file is not None else None  # this profile's
+            rows = replace(rows, omh_installed=installed_omh_count(omh_home, hermes_home))
         home = self._snapshot_home()
         # What the next launch draws first, kept only when this info names the profile the launch opened on.
         same_profile = info.get("profile_name") == self.launch_profile
