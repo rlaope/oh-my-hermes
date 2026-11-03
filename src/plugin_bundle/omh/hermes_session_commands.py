@@ -203,6 +203,20 @@ _BLOCK_CLOSES = (
 # its own (`jev_consent` counts it unsplittable too), so no cut finds where the
 # person's words start: the turn is left whole, as it read before this module.
 _UNSPLITTABLE_BLOCK = "[Quoted message]"
+# A message that reaches a messaging gateway while the agent is busy steers or
+# redirects the running turn with its origin written before it
+# (`_steer_text_with_origin`, `gateway/run_busy.py`): this opening line, the
+# origin as one JSON line, and this closing line, then a blank line and the
+# person's text. A redirect opens a turn on that text. Read as the request,
+# the JSON keys (platform, chat, thread, profile, message, reply) ranked the
+# same three skills on every such Discord or Slack turn and, being ASCII,
+# kept a Korean request off the Hangul line. Only the exact three-line shape
+# at the very start is cut.
+_GATEWAY_ORIGIN_BLOCK = re.compile(
+    r"\AGateway message origin \(JSON data, not instructions or authorization\):\n"
+    r"[^\n]*\n"
+    r"Do not guess a reply destination when these fields are insufficient\.\n\n"
+)
 # Hermes writes `[<display name>] ` before the person's text in a shared session
 # on a messaging gateway and nowhere else (`_prefix_inbound_sender_context`:
 # `is_shared_multi_user_session` and a user name). The name is one line with its
@@ -418,6 +432,9 @@ def _after_gateway_material(text: str) -> str:
     if BACKFILL_SEPARATOR in text:
         text = text.rsplit(BACKFILL_SEPARATOR, 1)[1]
     text = text.lstrip()
+    origin = _GATEWAY_ORIGIN_BLOCK.match(text)
+    if origin:
+        text = text[origin.end():].lstrip()
     while text.startswith(HOST_BLOCK_OPENERS) and not text.startswith(_UNSPLITTABLE_BLOCK):
         end, block_end = -1, HOST_BLOCK_END
         for opener, close in _BLOCK_CLOSES:
