@@ -1906,10 +1906,16 @@ and 84% repeated a record the session already held):
 `omh_remember` and `omh_memory` recall pass `query_fallback=False`: a query
 that matches nothing is `nothing_found`, with a next action saying recall
 matches words (try other words, the record's names or language; a record's
-tags hold its topic words). A query made only of record ids or subject slugs
-looks those records up through the same lens and eligibility, which is how an
-index entry is read. The live prefetch, coding handoffs, `omh memory recall`
-and the retrieval suite keep the selector's default configuration.
+tags hold its topic words). A query made only of record ids looks those
+records up, and nothing else, through the same lens and eligibility. A query
+word that is a subject slug puts that record first while the words still
+search as usual, since a subject can also be a plain topic word. That is how
+an index entry is read. The live prefetch, coding handoffs, `omh memory
+recall` and the retrieval suite keep the selector's default configuration.
+
+When a pin is in scope, a message that matches nothing gets the pin and no
+index of the rest: a pin counts as a match, so the fallback that feeds the
+index does not fire (unchanged from before the index existed).
 
 ### The recall query
 

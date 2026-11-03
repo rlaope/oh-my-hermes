@@ -624,10 +624,11 @@ class OmhMemoryProvider(_MemoryProviderBase):
                 self._record_served(self._prepared_record_ids)
                 self._recalled.update(self._prepared_record_revisions)
             # Listed by name: held for later unanswered packs, never over a
-            # record the conversation holds in full.
+            # record the conversation holds in full at this revision. A full
+            # hold at an older revision is replaced: that text is stale, and
+            # keeping it would list the revised record again every turn.
             for record_id, token in self._prepared_listed.items():
-                held = self._recalled.get(record_id)
-                if held is None or held.startswith("listed:"):
+                if self._recalled.get(record_id) != token.removeprefix("listed:"):
                     self._recalled[record_id] = token
             if self._pack_blocks_digest:
                 self._recalled_blocks = self._pack_blocks_digest

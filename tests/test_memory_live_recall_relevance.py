@@ -40,6 +40,7 @@ from omh.plugin_bundle.omh.memory_blocks import approve_memory_block, build_memo
 from omh.plugin_bundle.omh.memory_provider import RecallStatus  # noqa: E402
 from omh.plugin_bundle.omh.memory_query_sanitizer import sanitize_memory_query  # noqa: E402
 from omh.plugin_bundle.omh.memory_recall_selector import recall_revision  # noqa: E402
+from omh.plugin_bundle.omh.tools.memory_tool import omh_memory_handler  # noqa: E402
 from omh.workflows import memory, memory_recall_incident as incident, memory_recall_incident_model as incident_model  # noqa: E402
 from test_memory_prefetch_canonical import SESSION, approve, provider, rendered_ids  # noqa: E402
 from test_memory_provider_hermes_order import hermes_turn  # noqa: E402
@@ -219,6 +220,29 @@ class ProviderLiveRecallTests(unittest.TestCase):
         self.assertEqual(rendered_ids(hermes_turn(live, 4, "when do deploys run?")), [deploy["record_id"]])
         self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
 
+    def test_a_record_pinned_after_it_was_listed_is_shown_in_full(self) -> None:
+        deploy = approve(self.root, _DEPLOY)
+        approve(self.root, _PARSER)
+        live = provider(self.root)
+        self.assertIn("<record_index", hermes_turn(live, 1, ""))
+        memory.set_memory_pin(self.paths, deploy["record_id"], pinned=True)
+        # Listed before, but a pin is always in context: it is shown in full.
+        self.assertEqual(rendered_ids(hermes_turn(live, 2, "")), [deploy["record_id"]])
+
+    def test_a_new_conversation_after_an_index_only_turn_lists_again(self) -> None:
+        # The old conversation was shown only names; its next turn renders with
+        # every record listed, and `/new` arrives after that render.
+        deploy = approve(self.root, _DEPLOY)
+        parser = approve(self.root, _PARSER)
+        live = provider(self.root)
+        self.assertIn("<record_index", hermes_turn(live, 1, "hello there"))
+        live.on_turn_start(1, "hello there")
+        pack = live.prefetch("hello there", session_id="session-new")
+        self.assertIn('<record_index count="2"', pack)
+        receipt = live.latest_prefetch_receipt()
+        assert receipt is not None
+        self.assertEqual(sorted(receipt["rendering"]["indexed_records"]), sorted([deploy["record_id"], parser["record_id"]]))
+
     def test_an_index_names_only_records_the_conversation_does_not_hold(self) -> None:
         deploy = approve(self.root, _DEPLOY)
         parser = approve(self.root, _PARSER)
@@ -356,6 +380,17 @@ class ToolRecallRelevanceTests(unittest.TestCase):
         self.assertIn("matches words, not meaning", missing["next_action"])
         self.assertIn("tags hold its topic words", missing["next_action"])
 
+    def test_a_subject_that_is_also_a_topic_word_still_searches_the_words(self) -> None:
+        subject = json.loads(self.live.handle_tool_call(
+            "omh_remember", {"summary": "Deploy windows close at 18:00", "record_type": "decision", "subject": "deploy"}))["record_id"]
+        other = json.loads(self.live.handle_tool_call(
+            "omh_remember", {"summary": "Deploy logs go to the ops bucket", "record_type": "fact"}))["record_id"]
+        for query in ("deploy", "fact deploy"):
+            with self.subTest(query=query):
+                found = [row["record_id"] for row in self.recall(query)["records"]]
+                self.assertEqual(found[0], subject, "the subject's own record leads")
+                self.assertIn(other, found, "the word still searches every record")
+
     def test_an_index_label_reads_the_record(self) -> None:
         saved = json.loads(self.live.handle_tool_call(
             "omh_remember", {"summary": _DEPLOY, "record_type": "decision", "subject": "deploy-window"}))["record_id"]
@@ -364,6 +399,27 @@ class ToolRecallRelevanceTests(unittest.TestCase):
                 found = self.recall(query)
                 self.assertEqual((found["status"], [row["record_id"] for row in found["records"]]), ("found", [saved]))
         self.assertEqual(self.recall("deploy-windows")["status"], "nothing_found")
+
+    def confirm(self, record_id: str) -> dict:
+        return json.loads(omh_memory_handler({"action": "confirm", "record_id": record_id}, cwd=str(self.root), session_id=SESSION))
+
+    def test_confirming_an_open_record_serves_it_once_more(self) -> None:
+        record = approve(self.root, "Which license should the SDK carry", unresolved=True)
+        self.assertEqual(rendered_ids(hermes_turn(self.live, 1, "sdk license?")), [record["record_id"]])
+        self.assertEqual(rendered_ids(hermes_turn(self.live, 2, "sdk license?")), [])
+        self.assertEqual(self.confirm(record["record_id"])["status"], "confirmed")
+        # Settled now: the open/settled state is part of what was served.
+        self.assertEqual(rendered_ids(hermes_turn(self.live, 3, "sdk license?")), [record["record_id"]])
+        self.assertEqual(rendered_ids(hermes_turn(self.live, 4, "sdk license?")), [])
+
+    def test_a_record_shown_at_an_older_revision_is_listed_once_not_every_turn(self) -> None:
+        record = approve(self.root, "Which license should the SDK carry", unresolved=True)
+        hermes_turn(self.live, 1, "sdk license?")
+        self.assertEqual(self.confirm(record["record_id"])["status"], "confirmed")
+        # Unanswered turns: the revised record is listed once, then held as listed.
+        self.assertIn("<record_index", hermes_turn(self.live, 2, "hello there"))
+        self.assertNotIn("<record_index", hermes_turn(self.live, 3, "hello there"))
+        self.assertIsNone(self.live.recall_status())
 
     def test_a_query_naming_record_ids_still_finds_them(self) -> None:
         first = json.loads(self.live.handle_tool_call("omh_remember", {"summary": _DEPLOY, "record_type": "decision"}))["record_id"]

@@ -1194,33 +1194,49 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             next_action="OMH memory is not available to this session right now; nothing was searched.",
         )
     snapshot = read_record_store_snapshot(lens.homes)
-    # A query naming records -- by id or by subject slug, the labels a
-    # `<record_index>` line lists ("decision mem_...", "deploy-branch") --
-    # looks those records up: unqueried, so every eligible record in this
-    # lens is a candidate, then kept to the ones named. The selector never
-    # matches a subject, so without this the index's own instruction would
-    # find nothing. Any other query is matched by its words with no fallback,
-    # so a query that matches nothing is `nothing_found`, never the unrelated
-    # active tier.
+    # The labels a `<record_index>` line lists ("decision mem_...",
+    # "deploy-branch") must read a record, and the selector never matches a
+    # subject. A query made only of record ids looks those records up and
+    # nothing else. A query word that is a subject slug puts that record
+    # first, but the words still search as usual, since a subject can also be
+    # a plain topic word ("nanran"). Every lookup is unqueried through the
+    # same lens, then kept to the records named. The word search has no
+    # fallback, so a query that matches nothing is `nothing_found`, never the
+    # unrelated active tier.
     record_types = {str(record.get("record_type", "")) for record in snapshot.records}
     named = {token for token in query.replace(",", " ").split() if token not in record_types}
-    labels = {str(record.get("record_id", "")) for record in snapshot.records} | {record_subject(record) for record in snapshot.records}
-    lookup = bool(named) and named <= labels - {""}
-    selection = select_prefetch_records(
-        snapshot,
-        "" if lookup else query,
-        allowed_scopes=lens.scopes,
-        session_id=lens.session_id,
-        executor_target=lens.executor_target,
-        limit=max(len(snapshot.records), 1) if lookup else limit,
-        principal_context=lens.principal_context,
-        shared_surface=lens.shared_surface,
-        required_scope_kinds=lens.required_scope_kinds,
-        query_fallback=lookup,
-    )
-    included = selection.pack.get("included_records", [])
-    if lookup:
-        included = [item for item in included if str(item.get("record_id", "")) in named or str(item.get("subject", "") or "") in named]
+    record_ids = {str(record.get("record_id", "")) for record in snapshot.records}
+    subjects = {record_subject(record) for record in snapshot.records} - {""}
+    by_id = bool(named) and named <= record_ids
+    by_subject = named & subjects
+
+    scope_status = ""
+
+    def select(text: str, *, unqueried: bool) -> list[dict[str, object]]:
+        nonlocal scope_status
+        selection = select_prefetch_records(
+            snapshot,
+            text,
+            allowed_scopes=lens.scopes,
+            session_id=lens.session_id,
+            executor_target=lens.executor_target,
+            limit=max(len(snapshot.records), 1) if unqueried else limit,
+            principal_context=lens.principal_context,
+            shared_surface=lens.shared_surface,
+            required_scope_kinds=lens.required_scope_kinds,
+            query_fallback=unqueried,
+        )
+        scope_status = selection.scope_status
+        return list(selection.pack.get("included_records", []))
+
+    if by_id:
+        included = [item for item in select("", unqueried=True) if str(item.get("record_id", "")) in named]
+    else:
+        included = select(query, unqueried=False)
+        if by_subject:
+            first = [item for item in select("", unqueried=True) if str(item.get("subject", "") or "") in by_subject]
+            first_ids = {str(item.get("record_id", "")) for item in first}
+            included = first + [item for item in included if str(item.get("record_id", "")) not in first_ids]
     rows = []
     for item in included[:limit]:
         row = {key: item.get(key) for key in ("record_id", "record_type", "summary", "tags", "approved_at")}
@@ -1249,7 +1265,7 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
         "found" if rows else "nothing_found",
         records=rows,
         record_count=len(rows),
-        scope_status=selection.scope_status,
+        scope_status=scope_status,
         lens_state="provider",
         next_action=next_action,
     )

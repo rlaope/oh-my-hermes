@@ -62,6 +62,7 @@ from .memory_recall_support import (
     _recall_item,
     _record_attention_tier,
     _record_perspective_matches,
+    _record_resolution,
     _record_staleness,
     _redacted_metadata_label,
     _replay_evaluation,
@@ -231,13 +232,17 @@ def recall_revision(record: Mapping[str, Any]) -> str:
     The live provider skips a record it already put into the conversation
     (`session_served`) until this changes. The stored `revision` moves when the
     operator lifecycle rewrites a record; the summary, type and open/settled
-    state are what the rendered element carries, so an edit that leaves the
-    revision alone still counts. A confirm moves neither and is not re-served.
+    state (`staleness.resolution`, where the store keeps it) are what the
+    rendered element carries, so an edit that leaves the revision alone still
+    counts. Confirming an open record settles it, so it is served once more,
+    now without its open marker; confirming a settled one changes nothing.
     """
     revision = record.get("revision")
     revision = revision if isinstance(revision, int) and not isinstance(revision, bool) else 0
+    staleness = record.get("staleness")
+    resolution = _record_resolution(staleness if isinstance(staleness, Mapping) else {})
     rendered = json.dumps(
-        [str(record.get("summary", "") or ""), str(record.get("record_type", "") or ""), str(record.get("resolution", "") or "")],
+        [str(record.get("summary", "") or ""), str(record.get("record_type", "") or ""), resolution],
         ensure_ascii=False,
     )
     return f"{revision}:{hashlib.sha256(rendered.encode('utf-8')).hexdigest()[:16]}"
