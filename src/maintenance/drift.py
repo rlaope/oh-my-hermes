@@ -982,8 +982,11 @@ def count_metrics() -> tuple[CountMetric, ...]:
             # review: twenty English requests that quote a shipped phrase (job
             # ads, translations, a README line, a bank repo, a contract) never
             # dispatch it, and a Korean course, blog post, job posting, dress
-            # code and QR code never name it (+25).
-            expected=1386,
+            # code and QR code never name it (+25). Follow-up
+            # omh/code-skills-round-followups: the same dress code and QR
+            # code in the architecture request form never dispatch it (+2,
+            # no forbidden_candidate: they name it as a clarify candidate).
+            expected=1388,
             # The one reviewed test pin. Every other test compares its payload
             # against build_routing_precision_demo() rather than a literal.
             sites=("tests/test_routing_precision.py",),
