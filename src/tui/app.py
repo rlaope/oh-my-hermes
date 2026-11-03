@@ -396,7 +396,7 @@ MIN_FRAME_SECONDS = 0.016
 RESIZE_SETTLE_SECONDS = 0.15
 # A full redraw (a resize, Ctrl+L, /redraw, a switch, a resumed session) prints the transcript's last this many
 # rows; the blocks above them are counted on one row instead (`Transcript.retake_tail`) and /history shows them.
-REDRAW_TAIL_ROWS = 3000
+REDRAW_TAIL_ROWS = 4000
 EXIT_CONFIRM_SECONDS = 2.0
 # Esc pressed twice within this long: with text, clears it into this session's history; on an empty composer
 # between turns, opens the rewind picker. The info line says what the second press will do.
