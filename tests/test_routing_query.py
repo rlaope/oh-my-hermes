@@ -12,7 +12,7 @@ from omh.mcp import bridge
 from omh.routing import chat as chat_module
 from omh.routing import policy as policy_module
 from omh.routing import recommend as recommend_module
-from omh.plugin_bundle.omh.tools import recommend_tool
+from omh.plugin_bundle.omh.tools import capability_tool, recommend_tool
 from omh.routing.chat import public_chat_route_payload
 from omh.routing.intent import scrub_diagnostic_status_text
 from omh.routing.localization import normalized_phrase, prepare_routing_text
@@ -270,8 +270,14 @@ class RecommendSurfacesCarryRouteTests(unittest.TestCase):
                 payload = json.loads(recommend_tool.omh_recommend_handler({"message": message, "limit": 3}))
                 self.assertEqual(payload["schema_version"], "omh_recommend_result/v1")
                 self.assertEqual(payload["source"], "package_recommend")
-                self.assertEqual(payload["route"], _route_fields(message))
-                expected = [recommend_tool._redacted_recommendation(item) for item in recommend_skills(message, limit=3)]
+                route = _route_fields(message)
+                self.assertEqual(payload["route"], route)
+                full = [recommend_tool._redacted_recommendation(item) for item in recommend_skills(message, limit=3)]
+                pointed = {full[0]["skill"], route["selected_skill"], route["candidate_skill"]}
+                expected = [
+                    item if item["skill"] in pointed else {k: v for k, v in item.items() if k != "handoff_policy"}
+                    for item in full
+                ]
                 self.assertEqual(payload["recommendations"], expected)
 
     def test_mcp_bridge_adds_route_and_keeps_recommendations(self) -> None:
@@ -283,6 +289,43 @@ class RecommendSurfacesCarryRouteTests(unittest.TestCase):
                 self.assertEqual(payload["route"], _route_fields(message))
                 self.assertEqual(payload["recommendations"], recommend_skills(message, limit=3))
                 self.assertEqual(set(payload), {"message_summary", "recommendations", "route"})
+
+
+class RecommendToolHandoffPolicyTests(unittest.TestCase):
+    """The plugin result carries a handoff policy only on the rows it points at."""
+
+    # (message, rows that keep the policy): the top row alone, and a route that
+    # selects a lower row, which keeps it beside the top one.
+    CASES = (
+        ("plan a risky refactor of the billing module", ["plan"]),
+        ("/omh-verification-gate is it done?", ["loop", "verification-gate"]),
+        ("배포 실패 원인 찾아서 고쳐줘", ["build-failure-triage"]),
+    )
+
+    def test_policy_stays_on_the_top_row_and_the_route_skills_only(self) -> None:
+        for message, kept in self.CASES:
+            with self.subTest(message=message):
+                payload = json.loads(recommend_tool.omh_recommend_handler({"message": message, "limit": 5}))
+                ranked = recommend_skills(message, limit=5)
+                rows = payload["recommendations"]
+                self.assertEqual([row["skill"] for row in rows], [item["skill"] for item in ranked])
+                self.assertEqual([row["skill"] for row in rows if "handoff_policy" in row], kept)
+                self.assertGreater(len(rows), len(kept), "the case must drop at least one policy")
+                for row, item in zip(rows, ranked):
+                    if "handoff_policy" in row:
+                        self.assertEqual(row["handoff_policy"], item["handoff_policy"])
+
+    def test_a_dropped_policy_is_one_inspect_away(self) -> None:
+        message, _ = self.CASES[0]
+        payload = json.loads(recommend_tool.omh_recommend_handler({"message": message, "limit": 5}))
+        self.assertIn("`omh_capabilities` action `inspect`", payload["tool_guidance"])
+        policies = {item["skill"]: item["handoff_policy"] for item in recommend_skills(message, limit=5)}
+        dropped = [row["skill"] for row in payload["recommendations"] if "handoff_policy" not in row]
+        self.assertTrue(dropped)
+        for skill in dropped:
+            with self.subTest(skill=skill):
+                inspected = json.loads(capability_tool.omh_capabilities_handler({"action": "inspect", "id": skill}))
+                self.assertEqual(inspected["capability"]["handoff_policy"], policies[skill])
 
 
 if __name__ == "__main__":
