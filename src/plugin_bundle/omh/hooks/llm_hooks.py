@@ -38,7 +38,7 @@ from ..dag_open_run_nudge import open_run_line
 from ..hermes_session_commands import host_command_turn, host_context_removed, person_request_text
 from ..host_context import record_active_main_agent_model
 from ..host_observation import observe_plugin_hook_call
-from ..installed_skills import installed_skill_names
+from ..installed_skills import hermes_loadable_skill_names
 from ..kanban_board_reader import conversation_session_ids, kanban_db_path, read_kanban_lanes
 from ..native_todo import held_native_write_note
 from ..omh_roles import extract_role_marker, role_context_payload
@@ -707,13 +707,16 @@ def pre_llm_call(**kwargs) -> dict[str, object] | None:
     )
     message_matches_awareness = False
     degraded: list[tuple[str, str]] = []
-    # The skills this home installed. The route hint and the candidate line
-    # rank the whole catalog, and a `--core` home holds ten of its skills, so
-    # both are cut to this set before they are rendered (#1954). `None` --
-    # the set could not be read -- renders the whole catalog, as before.
-    # `route_hint_payload` itself stays unfiltered: its direct-invocation
-    # hint records that the person named a workflow, installed or not.
-    installed_skills = installed_skill_names(omh_home) if include_awareness else None
+    # The skills this home installed and this Hermes can load by name. The
+    # route hint and the candidate line rank the whole catalog, and a
+    # `--core` home holds ten of its skills, so both are cut to this set
+    # before they are rendered (#1954); a skill Hermes resolves to no
+    # directory, or to two, is cut too, since `skill_view` answers it "not
+    # found" or refuses it. `None` -- the set could not be read -- renders
+    # the whole catalog, as before. `route_hint_payload` itself stays
+    # unfiltered: its direct-invocation hint records that the person named a
+    # workflow, installed or not.
+    installed_skills = hermes_loadable_skill_names(omh_home) if include_awareness else None
     rendered_route_hint: dict[str, object] = {}
     if include_awareness:
         if is_first_turn:

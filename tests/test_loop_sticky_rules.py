@@ -196,6 +196,7 @@ class StickyRuleAttachmentPolicyTests(unittest.TestCase):
         self.assertEqual(first["runtime"]["heartbeat_count"], 1)
         self.assertEqual(first["sticky_rule_attachment"]["rules"][0]["injected_count"], 1)
         self.assertEqual(second["runtime"]["stop_ladder"]["stop_reason"], "no_progress_cap")
+        self.assertEqual(second["next_action"], "replan_stuck_loop_once")
         self.assertEqual(second["runtime"]["heartbeat_count"], 1)
         # A stopped tick recomputes nothing: the attachment carried over from
         # the last real tick, byte-identical, rather than being re-derived.

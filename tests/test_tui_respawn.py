@@ -526,7 +526,7 @@ class LoopTests(unittest.TestCase):
 
         first.resume = {"session_id": SID, "stored_session_id": STORED, "info": {}}
         environ = {**ENVIRON, "HERMES_TUI_RESUME": STORED}
-        code = _run(first, environ, _Sink(), lambda: terminal, poller, spawner)  # type: ignore[arg-type]
+        code = _run(first, environ, _Sink(), lambda: terminal, poller, spawner, contain_faults=False)  # type: ignore[arg-type]
         self.assertEqual(code, 0)
         (new,) = spawner.made
         self.assertEqual(new.closed, 1)  # reaped by `_run`; the first one is the caller's to close
@@ -547,7 +547,7 @@ class SignalDuringRespawnTests(unittest.TestCase):
 
         environ = {**ENVIRON, "HERMES_TUI_RESUME": STORED}
         with self.assertRaises(SystemExit):
-            _run(first, environ, _Sink(), lambda: terminal, poller, Spawner(new))  # type: ignore[arg-type]
+            _run(first, environ, _Sink(), lambda: terminal, poller, Spawner(new), contain_faults=False)  # type: ignore[arg-type]
         self.assertEqual(terminal.exited, 1)  # the terminal was handed back first
         return first
 

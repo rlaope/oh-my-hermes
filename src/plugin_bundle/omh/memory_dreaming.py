@@ -355,10 +355,12 @@ def consolidation_reasons(
     own cause. "It is time" and "the file is nearly full" ask for different work,
     and a brief that cannot tell them apart is a brief that says nothing.
 
-    ``session_ending`` lowers the bar to a single unconsolidated turn, because
-    the interval assumes a later turn will come and a closing session is exactly
-    where that assumption fails. Three turns and a closed laptop would otherwise
-    leave nothing behind.
+    ``session_ending`` (a closing session, or the recovery of one that closed
+    without consolidating) uses the same threshold as the interval. It once
+    lowered the bar to a single turn; that raised a brief at nearly every
+    session start (213 of 216 console turns carried one, 153 via recovery), and
+    the brief asks the model to capture, so it inflated the store it feeds. A
+    session shorter than the interval leaves nothing worth a brief.
 
     A reason that describes a *condition* is suppressed until the condition
     actually changes. Observed live: 19 consecutive briefs, every one of them
@@ -383,9 +385,13 @@ def consolidation_reasons(
     interval = turn_interval if isinstance(turn_interval, int) and turn_interval > 0 else DEFAULT_TURN_INTERVAL
     turns = _non_negative_int(state.get("turns_since_consolidation"))
     if turns >= interval:
-        reasons.append(f"turn_interval_reached:{turns}/{interval}")
-    elif session_ending and turns > 0:
-        reasons.append(f"session_ending_with_unconsolidated_turns:{turns}")
+        # A closing session is named for the moment, not the interval: the
+        # same threshold, a different request ("save it now").
+        reasons.append(
+            f"session_ending_with_unconsolidated_turns:{turns}"
+            if session_ending
+            else f"turn_interval_reached:{turns}/{interval}"
+        )
     if bool(state.get("compaction_pending")):
         reasons.append("context_compaction_observed")
     if headroom_chars is not None and headroom_chars <= max(headroom_floor_chars, 0):

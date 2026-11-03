@@ -760,6 +760,8 @@ def read_loop_cycle(paths: OmhPaths, loop_id: str) -> dict[str, Any]:
     validation = validate_loop_cycle(data)
     if not validation["ok"]:
         raise ValueError("; ".join(validation["errors"]))
+    if isinstance(data.get("runtime"), dict):
+        data["runtime"].setdefault("replans", 0)
     return data
 
 
@@ -1149,7 +1151,7 @@ def assess_loop_stop_ladder(
         _stop_rung_explicit_cancel(goal_linked, goal_status),
         _stop_rung_rate_limit(executor_profile, limit_signal),
         _stop_rung_auth_failure(executor_profile, planned_action, auth_signal),
-        _stop_rung_no_progress(goal_linked, no_progress_ticks, no_progress_cap),
+        _stop_rung_no_progress(goal_linked, no_progress_ticks, no_progress_cap, int(runtime["replans"])),
     ]
 
     rungs: list[dict[str, Any]] = []
@@ -1182,7 +1184,11 @@ def assess_loop_stop_ladder(
         "executor_profile": executor_profile,
         "planned_action": str(planned_action),
         "detail": detail,
-        "next_action": _LOOP_STOP_NEXT_ACTIONS.get(stop_reason, ""),
+        "next_action": (
+            "replan_stuck_loop_once"
+            if stop_reason == "no_progress_cap" and runtime["replans"] == 0
+            else _LOOP_STOP_NEXT_ACTIONS.get(stop_reason, "")
+        ),
         "ledger_entry_count": ledger_entry_count if goal_linked else previous_count,
         "no_progress_ticks": no_progress_ticks,
         "no_progress_cap": no_progress_cap,
@@ -1254,7 +1260,10 @@ def _stop_rung_auth_failure(
 
 
 def _stop_rung_no_progress(
-    goal_linked: bool, no_progress_ticks: int, no_progress_cap: int = LOOP_NO_PROGRESS_TICK_CAP
+    goal_linked: bool,
+    no_progress_ticks: int,
+    no_progress_cap: int = LOOP_NO_PROGRESS_TICK_CAP,
+    replans: int = 0,
 ) -> tuple[str, str]:
     if not goal_linked:
         return ("not_applicable", "Without a linked goal ledger there are no records to key progress to.")
@@ -1262,7 +1271,12 @@ def _stop_rung_no_progress(
         return (
             "fired",
             f"{no_progress_ticks} consecutive ticks wrote no new goal-ledger record "
-            f"(cap {no_progress_cap}).",
+            f"(cap {no_progress_cap})."
+            + (
+                " Re-plan once from the goal ledger and the recorded failures, choose a different "
+                "approach, and continue."
+                if replans == 0 else ""
+            ),
         )
     return (
         "clear",
@@ -1404,8 +1418,10 @@ def tick_loop_runtime(
         ladder = read_loop_stop_ladder(
             paths, cycle, planned_action=str(plan["planned_action"]), home=home
         )
+        runtime = _runtime_state(cycle.get("runtime"))
+        if int(ladder["ledger_entry_count"]) > int(runtime["ledger_entry_count"]):
+            runtime["replans"] = 0
         if ladder["stop"]:
-            runtime = _runtime_state(cycle.get("runtime"))
             runtime["ledger_entry_count"] = int(ladder["ledger_entry_count"])
             runtime["no_progress_ticks"] = int(ladder["no_progress_ticks"])
             runtime["last_stop_reason"] = str(ladder["stop_reason"])
@@ -1413,6 +1429,9 @@ def tick_loop_runtime(
             runtime["stop_ladder"] = ladder
             if ladder["stop_reason"] == "no_progress_cap":
                 runtime["stuck_marker"] = _loop_stuck_marker(ladder)
+                if ladder["next_action"] == "replan_stuck_loop_once":
+                    runtime["replans"] += 1
+                    runtime["no_progress_ticks"] = 0
             cycle["runtime"] = runtime
             cycle["next_action"] = str(ladder["next_action"])
             cycle["updated_at"] = utc_now()
@@ -1431,7 +1450,6 @@ def tick_loop_runtime(
             workflow_pattern=workflow_pattern,
             note=note,
         )
-        runtime = _runtime_state(cycle.get("runtime"))
         runtime["heartbeat_count"] = int(runtime.get("heartbeat_count", 0)) + 1
         runtime["last_tick_at"] = queue_item["created_at"]
         runtime["last_trigger"] = queue_item["trigger"]
@@ -3186,6 +3204,8 @@ def _runtime_state(value: object | None = None) -> dict[str, Any]:
         # keys the cap to records written rather than ticks attempted.
         "ledger_entry_count": _non_negative_count(runtime.get("ledger_entry_count")),
         "no_progress_ticks": _non_negative_count(runtime.get("no_progress_ticks")),
+        # One re-plan per stalled window; a new ledger record rearms it.
+        "replans": _non_negative_count(runtime.get("replans")),
         "last_stop_reason": str(runtime.get("last_stop_reason", "") or "none"),
         "last_stop_at": str(runtime.get("last_stop_at", "")),
         "queue": queue,
@@ -3752,6 +3772,7 @@ def _runtime_summary(cycle: dict[str, Any]) -> dict[str, Any]:
         "observed_queue_count": sum(1 for item in queue if item.get("status") == "observed" and item.get("observed") is True),
         "last_stop_reason": runtime["last_stop_reason"],
         "no_progress_ticks": runtime["no_progress_ticks"],
+        "replans": runtime["replans"],
         "no_progress_cap": LOOP_NO_PROGRESS_TICK_CAP,
         "claim_boundary": _runtime_claim_boundary(),
     }
@@ -4536,7 +4557,7 @@ def _validate_runtime(runtime: object) -> list[str]:
         return ["runtime must be an object"]
     if runtime.get("schema_version") != LOOP_RUNTIME_SCHEMA:
         errors.append(f"runtime.schema_version must be {LOOP_RUNTIME_SCHEMA}")
-    for key in ("heartbeat_count", "ledger_entry_count", "no_progress_ticks"):
+    for key in ("heartbeat_count", "ledger_entry_count", "no_progress_ticks", "replans"):
         count = runtime.get(key)
         if count is not None and (isinstance(count, bool) or not isinstance(count, int) or count < 0):
             errors.append(f"runtime.{key} must be a non-negative integer")

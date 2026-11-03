@@ -138,6 +138,12 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "rather than losing the whole consolidation request.",
     ),
     ClassifiedSite(
+        "src/plugin_bundle/omh/memory_provider.py", "_conversation_session_ids", INTENTIONAL,
+        "A lineage failure withholds ancestors and preserves only this session's origin records. "
+        "The receipt reports op compaction_ancestors and its error class through the provider's "
+        "bounded failure counter; failed discovery never admits another conversation's full text.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/memory_provider.py",
         "_guard_digest",
         INTENTIONAL,
@@ -670,6 +676,18 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "end, and the thread reads again instead of dying for the rest of the session.",
     ),
     ClassifiedSite(
+        "src/tui/app.py",
+        "_drawn",
+        INTENTIONAL,
+        "Only in the launched TUI (`contain_faults`, which `_run` sets and no test-built App does, so a "
+        "render bug still raises in tests): a part of the frame whose producer raises (the info line, the "
+        "live transcript, the rows above the composer, the menu or HUD panel, the agent view, the sticky "
+        "prompt) is drawn as one warning-colour row saying that part could not be drawn and the "
+        "exception's class, and its traceback is kept once in the TUI's `FaultLog`, which /logs shows. "
+        "It is never drawn as the part's normal rows or as nothing; catching it keeps one part's bug "
+        "from ending the session.",
+    ),
+    ClassifiedSite(
         "src/plugin_bundle/omh/host_process.py",
         "this_process",
         INTENTIONAL,
@@ -893,6 +911,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
         "Handlers must not raise into the host: an unexpected failure is `ok: false`, error "
         "`unexpected_error` with the exception class, never a diagnostics list or a file reported checked.",
     ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/installed_skills.py",
+        "hermes_skill_search_roots",
+        INTENTIONAL,
+        "Hermes' own skill-root reader runs inside `pre_llm_call` and must not raise into the host; a failure "
+        "means 'resolution unknown' and the hint keeps the manifest's installed set, which is exactly what it "
+        "named before this check existed. The same question is answered independently, and surfaced, by "
+        "the `hermes_skill_visibility` doctor row and the launch card's count warning.",
+    ),
 )
 
 # Ruff reports one hit per handler; the inventory is keyed per enclosing
@@ -984,10 +1011,18 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 99 -> 100 / 90 -> 91: `memory_provider._work_state_facts`, the unfinished-work
 # facts at compaction (a fault is recorded as a write failure and costs only the
 # facts, never the memory blocks).
-# 100 -> 101 / 91 -> 92: `llm_hooks._warm_imports`, the register-time warm-up thread for the
+# 100 -> 101 / 91 -> 92: `memory_provider._conversation_session_ids`, the
+# compaction-lineage read that decides which records stay in full on a no-match
+# turn (a fault keeps only this session and is reported on the receipt).
+# 101 -> 102 / 92 -> 93: `installed_skills.hermes_skill_search_roots`, Hermes' own
+# skill-root reader inside `pre_llm_call` (a failure keeps the manifest's
+# installed set, what the hint named before the check, never a raise into the host).
+# 102 -> 103 / 93 -> 94: `app.App._drawn`, the launched OMH TUI's render containment
+# (a part of the frame that raises is a warn row naming it, its traceback in /logs).
+# 103 -> 104 / 94 -> 95: `llm_hooks._warm_imports`, the register-time warm-up thread for the
 # first turns' package imports (a failure loads nothing, and the call sites import and report as before).
-EXPECTED_HANDLER_COUNT = 101
-EXPECTED_ANCHOR_COUNT = 92
+EXPECTED_HANDLER_COUNT = 104
+EXPECTED_ANCHOR_COUNT = 95
 
 
 class DerivedSite(NamedTuple):

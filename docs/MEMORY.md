@@ -655,6 +655,13 @@ The memory provider exposes this small, always-visible tool for `save` and
 tools such as `omh_memory`; tools returned by a memory provider are never
 deferred, so saving a fact does not require a tool search first.
 
+`save` also takes optional `tags`: a few topic words in the user's own
+language. They are stored like capture tags and the selector matches them like
+summary words, so a later message that names the topic in that language can
+recall the fact even when it shares no word with the summary. With `replaces`,
+new tags (including an empty list) replace the old record's tags; without
+them the old tags carry over.
+
 The full `omh_memory(action="capture", summary=..., record_type=..., tags=...,
 scope=..., retention_class=..., subject=...)` entry point remains available for
 additional capture options. Both save entry points use the same session-lens
@@ -1383,6 +1390,27 @@ and whitespace collapse — the same normalization capture uses for
 `duplicate_record` with `duplicate_of` naming the record kept. The collapse
 runs after eligibility and before ranking, so a duplicate never spends budget.
 
+The memory provider's prefetch pack does not inject that fallback in full.
+When `query_fallback` is set, each readmitted record is listed by name in one
+index line inside `<memory_records>` instead of a `<record>` element:
+
+```text
+  <record_index count="N" reason="no_query_overlap">N stored records did not match this message and are listed, not shown: ITEMS. Read one with omh_remember recall when it bears on the request.</record_index>
+```
+
+Each item is the record's `subject` slug, or `<record_type> <record_id>` when
+it has none; at most 8 are named, then `+K more`. Records captured in the same
+conversation are the exception and still render in full: a record whose
+`source_ref` is `hermes-session:<id>` for this session or one of its verified
+compaction ancestors. `omh_remember(action="recall", query=...)` reads an
+indexed record in full. The CLI `omh memory recall`, `omh_memory(action="recall")`
+and coding-handoff packs never index and still serve the active tier in full.
+The prefetch receipt lists the indexed ids as `rendering.indexed_records`
+(always present on new receipts, read as empty on older ones); rendered ids
+must equal the selected ids with the indexed ids removed, as a prefix, and
+`selected_not_rendered` never names an indexed id. An indexed record is not
+rendered, so it counts as neither served nor seen.
+
 Two per-record counters exist, and only one of them is a ranking input:
 
 | Counter | File | Counts | Read by the ranking |
@@ -1930,14 +1958,18 @@ recall, and incident commands now accept `--scope-kind user-global`; changing
 an old fact's audience still requires normal reviewed capture and approval.
 See [store rollout](MEMORY-PREFETCH.md#store-rollout) before changing labels.
 
-When the served pack is non-empty Hermes prints its deterministic recall line
-through its status channel, so it appears on every surface Hermes speaks
-through (CLI, TUI, and each gateway platform) whether or not the model mentions
-memory:
+When the served pack carries memory, Hermes can print its deterministic recall
+line through its status channel, whether or not the model mentions memory:
 
 ```text
 🧠 OMH — recalled 2 memories
 ```
+
+Hermes prints it whenever the provider's `recall_status()` returns a value.
+On a gateway it posts the line into the channel or thread; Discord gets a new
+message each time. By default OMH returns a value on an operator console only
+(CLI, TUI, Desktop), so the line no longer reaches Discord, Slack or any other
+messenger.
 
 The count is rendered full blocks plus rendered record elements in the last
 pack returned by `prefetch`, not the number selected for a queued pack. Record
@@ -1953,6 +1985,61 @@ claims, not host delivery or model use. The recall line is aggregate status,
 not record-bound evidence that a memory entered a model request. Receipt
 integrity checks detect inconsistent edits but don't authenticate the sender.
 See [receipt privacy and identity](MEMORY-PREFETCH.md#receipt-privacy-and-identity).
+
+### Turning the recall line or recall off
+
+Two settings in the profile's own `config.yaml`, beside `dreaming_mode`, are
+read on every render, so a change applies from the next turn:
+
+```yaml
+plugins:
+  entries:
+    omh:
+      settings:
+        recall_line: console   # or: all, off
+        recall_mode: auto      # or: on_demand, off
+```
+
+| Setting | Value | What it silences |
+| --- | --- | --- |
+| `recall_line` | `console` (default) | The line on every platform but `cli`, `tui` and `desktop`: messengers (Discord, Slack, Telegram and the rest, the owner's own DM included) and `api_server` clients such as Open WebUI |
+| | `all` | Nothing: every surface shows the line, as before |
+| | `off` | The line everywhere |
+| `recall_mode` | `auto` (default) | Nothing: memory is recalled every turn |
+| | `on_demand` | Per-turn records, the `<record_index>` of unmatched ones, and blocks, and so the line. `omh_remember` / `omh_memory` recall and saving still work |
+| | `off` | The same, and tool recall too, which refuses with `reason: recall_disabled`. Saving still works |
+
+`recall_line` hides the line, never the memory. On a messenger, the owner's
+DM included, or an `api_server` client under the default, memory still reaches the turn and can shape a reply with no visible
+sign that it did. To see what a turn was given, read the prefetch receipt
+(`omh memory status` shows the last one under `last_prefetch`; the full
+receipt is the file it names) or ask the model to recall.
+
+`recall_mode` is about recall only. The consolidation brief keeps its own
+`dreaming_mode`, and the "since your last session" digest is a count, not
+recall, so both are unchanged. Under `recall_mode: off` the provider's save
+reminder in the system prompt no longer says "Use recall later".
+
+A `memory_mode` of `off`, or a disabled `retain_knowledge` capability family,
+turns recall off whatever `recall_mode` says: per-turn recall serves nothing
+and tool recall refuses with `recall_disabled`. Because capture is off too,
+nothing asks for a save either: the consolidation brief is not served and the
+save reminder is left out of the system prompt. If `setup-profile.json` cannot
+be read, OMH treats the profile as `off`. The receipt lists the file under
+`store.unreadable`, and tool recall returns `memory_policy_unreadable`.
+
+Set them with `omh memory recall-line [all|console|off]` and `omh memory
+recall-mode [auto|on_demand|off]`. Each writes only
+`plugins.entries.omh.settings.<name>` in the profile's `config.yaml`, never
+Hermes' `memory.provider` slot. Without a value they print the setting in force;
+`--dry-run` reports a change without writing it, and a write the editor refuses
+exits 1 with the old value still in force. `omh memory status` reports both
+under `recall_settings`. As with `dreaming_mode`, `off`, `false` and `no` all
+mean `off`. Any other value, or a config this reader cannot follow, keeps the
+default and carries `issue: recall_setting_unrecognized` with a `reason` of
+`unknown_value` or `config_unreadable`. `omh doctor` prints the same as a
+`recall_setting_unrecognized` advice line, which never changes the doctor
+status.
 
 ### The `omh reminder:` line
 
@@ -2155,6 +2242,17 @@ Only an attended operator console evaluates at these points
 ([Surface classes](#surface-classes)); a shared surface, a background run and a
 Kanban worker raise no brief and move no counter.
 
+The session-ending points (`session_end`, `shutdown`, `session_start_recovery`)
+share the turn interval's threshold: a session with fewer than five
+unconsolidated turns raises no brief (it once raised one at a single turn, which
+put a capture request on nearly every console turn). Those turns are not lost:
+the counter persists in the dreaming state and carries into the next session's
+interval. A brief is also served at most once per session: on the modes where
+Hermes replays provider context for the rest of the session, the same brief
+(`raised_at` and trigger) would otherwise ride every later turn, so it is not
+rendered again. `/new` and `/reset` start a new conversation and are served a
+still-due brief again; a same-conversation session rebind is not.
+
 ### Per-profile dreaming state and the mode setting
 
 The counters and the brief belong to one Hermes profile, not to the OMH home.
@@ -2310,7 +2408,7 @@ this on the CLI surface), the provider also prints one line when a brief
 fires and one when it is honoured:
 
 ```text
-💤 OMH — memory consolidation due (session_end: session_ending_with_unconsolidated_turns:1)
+💤 OMH — memory consolidation due (session_end: session_ending_with_unconsolidated_turns:5)
 🧹 OMH — memory consolidated (replace on memory)
 ```
 

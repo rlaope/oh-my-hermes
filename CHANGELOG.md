@@ -21,6 +21,60 @@ All notable changes will be documented here.
   unchanged. A first message sent the moment the plugin loads waits for the
   remaining imports.
 
+- **One broken part of the OMH TUI's screen no longer ends the session.** If
+  the info line, the live transcript, a picker, the plan or HUD panel, the
+  agent view or the sticky prompt fails to draw, that part becomes one row in
+  the warning colour that names it, and the rest of the screen and your keys
+  keep working. Its traceback is kept once, and `/logs` shows it after the
+  gateway's lines. While the TUI runs, a background thread's traceback, a
+  Python warning or a stray print now goes to the same in-memory log instead
+  of landing on the screen and shifting every later frame. A crash that does
+  end the TUI still prints its traceback once your terminal is restored.
+
+- **OMH notices when Hermes cannot load its skills.** From 27 Oct to 2 Nov
+  the skills were installed but Hermes could not load them by name: a stale
+  generation directory registered beside the pointer made every name
+  ambiguous, and then a cached path to a deleted generation left none. The
+  launch card still said "skills 89 installed", and the skill suggestion
+  kept telling the model to load skills that came back "not found". The
+  suggestion and the route hint now name only skills Hermes resolves to one
+  copy, read from the skill directories Hermes itself cached, so they go
+  quiet instead of steering into a failed load. When a profile that
+  registers OMH's skills sees fewer than half of them, the launch card says
+  how many Hermes sees and suggests a gateway restart, or `/new` for an
+  older session. `omh doctor` has a new `hermes_skill_visibility` row, per
+  profile, that reports an ambiguous registration and a missing directory
+  separately. A healthy install shows the same suggestion and the same card
+  as before.
+
+- **The OMH recall line stays off Discord and Slack, and recall can be turned
+  off.** `🧠 OMH — recalled N memories` now shows on the CLI, TUI and Desktop
+  only; on a messenger the memory is still used, with no line posted. The new
+  profile setting `recall_line` (`console` by default, `all`, `off`) chooses
+  where it shows, and `recall_mode` (`auto` by default, `on_demand`, `off`)
+  chooses whether memory is recalled every turn, only when the model asks, or
+  not at all. Set them with `omh memory recall-line` and `omh memory
+  recall-mode`; `omh memory status` shows both. A `memory_mode` of `off`, or a
+  disabled `retain_knowledge` family, now actually stops recall: before, the
+  provider and the recall tool kept serving records under it. It also stops
+  the consolidation brief and the save reminder, which asked for saves that
+  `off` refuses.
+- **The OMH TUI's first frame no longer waits on the skill catalog.** When the
+  shared gateway names every skill in its first answer, the launch card used to
+  import the whole skill catalog to label them before the first frame was
+  drawn; it now takes the labels from a small module of their own. The card is
+  drawn the same, byte for byte. In a clean process, starting up against a
+  shared gateway went from about 55 ms to 7 ms and imports 24 modules instead
+  of 114. On a stdio gateway, the first regrouping of the skills when they
+  arrive went from about 50 ms to under 1 ms.
+
+- **The memory consolidation brief no longer rides almost every console turn.** A session that ended with one to
+  four unconsolidated turns used to raise a brief at its end and again as a recovery at the next start, so 213 of 216
+  console turns on one machine carried the capture request (153 briefs came from session-start recovery), and every
+  capture grew the store that recall draws from. The session-ending reasons now need the same five turns as the turn
+  interval, and a given brief is shown once per session instead of on every later turn. Headroom, duplicate and
+  expiring-record reasons keep their own thresholds, `dreaming_mode` is unchanged, and the model still captures
+  through its own tool with no approve step.
 - **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
   used to ride on every recommended skill, and one policy can run past 1 KB.
   It now stays on the top recommendation and on the skills the route selects,
@@ -768,6 +822,22 @@ All notable changes will be documented here.
   stale or edited, and `omh install --target agents --scope user --status`
   reports the pack's real state instead of `missing` when only the unused
   `~/.claude/skills` mirror is absent.
+
+- **Memory that does not match a message is listed, not injected; a stuck run changes approach before it stops.**
+  When a chat message shares no word with any stored record, the memory pack used to serve every active
+  record in full, and Hermes frames that pack as reference data for the reply, so rules about unrelated work
+  steered it. Those records now arrive as one `<record_index>` line naming each record's subject (at most
+  eight, then `+K more`), and `omh_remember recall` reads one in full when it bears on the request. Records
+  saved in the same conversation still arrive in full, a matching message gets the same pack as before, and
+  CLI recall, `omh_memory recall` and coding handoffs are unchanged. `omh_remember save` takes `tags`, a
+  few topic words in the user's own language, so a later message in that language can match a record whose
+  summary is written in another. In dag-ulw, a node's last repair cycle is now a re-plan: its tasks carry the
+  earlier failure reasons and ask for two or three approaches that differ in kind before any edit, unless
+  every failure was an infrastructure cut. The loop stop ladder's first no-progress stop now asks for one
+  re-plan from the goal ledger (`replan_stuck_loop_once`) and resets the window; only a stop after that
+  names the blocker step. The dag-ulw run loop reference gains a "When the path is unknown" section (cheap
+  scout nodes on different hypotheses first, then `extend` with the build layer), and the interview skill
+  keeps at least one answer candidate from outside recalled memory.
 
 ## 4.0.4 - 2026-11-01
 

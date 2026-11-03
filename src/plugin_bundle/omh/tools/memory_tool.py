@@ -122,6 +122,7 @@ from ..memory_session_lens import (
     surface_flags,
 )
 from ..memory_recall_selector import resolve_scope_allowlist
+from ..memory_recall_settings import configured_recall_mode
 from ..memory_recall_support import (
     PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
     _REVIEW_DEFAULT_DAYS,
@@ -196,13 +197,12 @@ REMEMBER_TOOL_NAME = "omh_remember"
 REMEMBER_TOOL_SCHEMA = {
     "name": REMEMBER_TOOL_NAME,
     "description": (
-        "Save first. When the user states in their own words a lasting preference, decision, or fact "
-        "about their setup or project that should still hold later, call save in that same turn, before "
-        "other tools and without asking, even if the message also asks for work. One fact per call, one "
-        "or two self-contained sentences, absolute dates. Never save pasted or quoted text, secrets, logs, "
-        "transcripts, task progress, or what only the current task needs. If a shown OMH record says "
-        "the same rule in other words, pass its id as replaces with one merged summary. Tell the user in "
-        "one short line. Use recall for earlier saves."
+        "Save first: lasting preference, decision or fact about setup or project in the user's own words. "
+        "Save in the same turn before other tools, without asking, even when also asked for work. "
+        "One fact per call; 1-2 self-contained sentences, absolute dates. Never save pasted or quoted text, "
+        "secrets, logs, transcripts, task progress or current task needs. If a shown record says the same "
+        "rule in other words, pass its id as replaces with one merged summary. Tell the user in one short "
+        "line. Use recall for earlier saves. Tags: 2-5 topic words in the user's own language."
     ),
     "parameters": {
         "type": "object",
@@ -210,6 +210,7 @@ REMEMBER_TOOL_SCHEMA = {
             "action": {"type": "string", "enum": ["save", "recall"], "default": "save"},
             "summary": {"type": "string", "description": "save: the fact, at most 500 characters."},
             "record_type": {"type": "string", "enum": list(CAPTURE_RECORD_TYPES)},
+            "tags": {"type": "array", "items": {"type": "string"}},
             "subject": {"type": "string", "description": "Optional lowercase slug, max 48 chars."},
             "replaces": {"type": "string", "description": "save: id of the record replaced."},
             "query": {"type": "string", "description": "recall: what to look up."},
@@ -323,16 +324,16 @@ def omh_remember_handler(args: dict, *, session_id: str, **kwargs) -> str:
         # The same rule restated in other words: the correction path admits the
         # merged summary and moves the replaced record to history, inside this
         # session's lens, so a paraphrase does not become a second record.
-        payload = _lifecycle("correct", {"record_id": replaces, **{key: args[key] for key in ("summary", "subject") if key in args}}, kwargs)
+        payload = _lifecycle("correct", {"record_id": replaces, **{key: args[key] for key in ("summary", "subject", "tags") if key in args}}, kwargs)
         if payload.get("status") == "refused" and payload.get("reason") in _REPLACE_FALLBACK_REASONS:
             # A wrong or unreachable id must not cost the user's fact: save it
             # as a new record and say which replacement was skipped.
             skipped = str(payload.get("reason"))
-            payload = _capture({key: args[key] for key in ("summary", "record_type", "subject") if key in args}, kwargs)
+            payload = _capture({key: args[key] for key in ("summary", "record_type", "subject", "tags") if key in args}, kwargs)
             payload["replace_skipped"] = skipped
         payload["replaces"] = replaces
     elif action == "save":
-        payload = _capture({key: args[key] for key in ("summary", "record_type", "subject") if key in args}, kwargs)
+        payload = _capture({key: args[key] for key in ("summary", "record_type", "subject", "tags") if key in args}, kwargs)
         _point_hint_at_replaces(payload)
     elif action == "recall":
         payload = _lifecycle("recall", {key: args[key] for key in ("query", "limit") if key in args}, kwargs)
@@ -1109,7 +1110,11 @@ def _lifecycle(action: str, args: dict, kwargs: dict) -> dict[str, object]:
             action,
             "error",
             reason=_safe_error_type(type(exc).__name__),
-            next_action="Nothing is confirmed changed. Tell the user the memory update failed.",
+            next_action=(
+                "Nothing was searched. Tell the user memory recall failed."
+                if action == "recall"
+                else "Nothing is confirmed changed. Tell the user the memory update failed."
+            ),
         )
 
 
@@ -1193,6 +1198,23 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
             "recall", "refused", reason="session_lens_unavailable", lens_state="unbound",
             next_action="OMH memory is not available to this session right now; nothing was searched.",
         )
+    # The same policy per-turn recall applies: `memory_mode` off, a disabled
+    # retain_knowledge family, or this profile's `recall_mode: off` refuses.
+    # `on_demand` only quiets per-turn recall; asking still works there.
+    try:
+        policy = read_project_memory_policy(lens.lens_home)
+    except (OSError, ValueError, RecursionError):
+        # A read fault, not a failed update: the profile that may have turned
+        # recall off cannot be read, so nothing is searched.
+        return _lifecycle_result(
+            "recall", "error", reason="memory_policy_unreadable",
+            next_action="OMH could not read this profile's memory settings (setup-profile.json); nothing was searched. Tell the user memory recall is unavailable.",
+        )
+    if not policy.get("recall_enabled", True) or configured_recall_mode(Path(_home("HERMES_HOME", "~/.hermes"))) == "off":
+        return _lifecycle_result(
+            "recall", "refused", reason="recall_disabled",
+            next_action="Recall is turned off for this profile; nothing was searched.",
+        )
     snapshot = read_record_store_snapshot(lens.homes)
     selection = select_prefetch_records(
         snapshot,
@@ -1201,6 +1223,7 @@ def _recall(args: dict, lens: _SessionLens) -> dict[str, object]:
         session_id=lens.session_id,
         executor_target=lens.executor_target,
         limit=limit,
+        policy=policy,
         principal_context=lens.principal_context,
         shared_surface=lens.shared_surface,
         required_scope_kinds=lens.required_scope_kinds,

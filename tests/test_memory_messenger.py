@@ -445,9 +445,15 @@ class OwnerDmTests(_Messenger):
         live = self.owner_dm()
         pack = self.turn(live, 1, "when does the billing service deploy", author_id=SLACK_OWNER)
         self.assertEqual(rendered_ids(pack), [record_id])
+        # The default `recall_line: console` keeps the line off a messenger;
+        # the memory itself was served all the same.
+        self.assertIsNone(live.recall_status())
+        (self.hermes / "config.yaml").write_text(
+            "plugins:\n  entries:\n    omh:\n      settings:\n        recall_line: all\n", encoding="utf-8", newline="\n"
+        )
         status = live.recall_status()
         assert status is not None
-        self.assertEqual((status.provider_label, status.count), ("OMH", 1), "the recall line shows")
+        self.assertEqual((status.provider_label, status.count), ("OMH", 1), "under recall_line: all the line shows")
 
     def test_issue_2088_single_user_through_slack_allowed_users(self) -> None:
         os.environ["SLACK_ALLOWED_USERS"] = SLACK_OWNER

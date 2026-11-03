@@ -67,7 +67,7 @@ from .hermes_memory import (
     read_approved_records,
     read_hermes_memory,
 )
-from .memory_admission import demotion_refusal_reason
+from .memory_admission import build_project_memory_policy, demotion_refusal_reason, read_project_memory_policy
 from .memory_store_io import guard_store_write, read_project_memory_candidates
 from .memory_block_replay import MemoryBlockSelection
 from .memory_blocks import (
@@ -113,6 +113,7 @@ from .memory_prefetch_receipt import (
 )
 from .memory_principals import principal_recall_decision
 from .memory_query_sanitizer import sanitize_memory_query
+from .memory_recall_settings import configured_recall_line, configured_recall_mode, recall_line_shown
 from .memory_recall_selector import resolve_scope_allowlist
 from .memory_recall_support import _record_perspective_matches
 from .memory_session_digest import (
@@ -146,8 +147,10 @@ from .memory_session_lens import (
     tighter_surface_class,
     withdraw_session_lens,
 )
+from . import live_session
 from .memory_records import (
     PREFETCH_EXECUTOR_TARGET,
+    origin_record_ids,
     prefetch_required_scope_kinds,
     prefetch_scope_allowlist,
     prepare_prefetch_records,
@@ -166,8 +169,8 @@ from .memory_thread_parent import auto_thread_parent_channel
 from .tools.memory_tool import REMEMBER_TOOL_SCHEMA, REMEMBER_TOOL_NAME, omh_remember_handler
 
 PROVIDER_NAME = "omh"
-# What Hermes prints in front of "recalled N memories" on every surface it
-# speaks through -- CLI, TUI, and each gateway platform -- when a prefetch
+# What Hermes prints in front of "recalled N memories" on the surfaces the
+# profile's `recall_line` admits (by default cli/tui/desktop) when a prefetch
 # actually put OMH memory into the turn.
 PROVIDER_LABEL = "OMH"
 # The brief rides in the prefetch pack, bounded so a long reason list or eviction
@@ -223,11 +226,17 @@ SYSTEM_BLOCKS_PACK_FLOOR_CHARS = 3_000
 KANBAN_WORKER_ENV_TASK = "HERMES_KANBAN_TASK"
 KANBAN_WORKER_ENV_SOURCE = ("HERMES_SESSION_SOURCE", "kanban")
 
-# Moments after which this session gets no further turn. The turn interval
-# assumes a later turn will come; at these it will not, so a single
-# unconsolidated turn is enough. `session_start_recovery` belongs here because
-# it is settling the account of a session that already ended without one.
+# Moments after which this session gets no further turn. They name the reason
+# for the moment (`session_ending_with_unconsolidated_turns`) but share the turn
+# interval's threshold: a session shorter than it leaves nothing worth a brief.
+# `session_start_recovery` belongs here because it is settling the account of a
+# session that already ended without one.
 _SESSION_ENDING_TRIGGERS = frozenset({"session_end", "shutdown", "session_start_recovery"})
+
+
+def _brief_key(brief: dict[str, Any]) -> str:
+    """What identifies one brief: `raised_at` has second precision, so the trigger rides with it."""
+    return f"{brief.get('raised_at', '')}|{brief.get('trigger', '')}"
 
 
 class OmhMemoryProvider(_MemoryProviderBase):
@@ -282,6 +291,9 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._shared_surface = False
         # A console nobody is at: a Kanban worker (`_attended`).
         self._unattended = False
+        # The `platform` Hermes passed to `initialize` (`cli`, `tui`, a
+        # gateway name); `recall_line` decides by it where the line shows.
+        self._platform = ""
         # Names the lens files this provider writes, so it never withdraws or
         # widens another provider's lens under the same session id.
         self._instance = secrets.token_hex(8)
@@ -331,6 +343,13 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # turn is one serve. `served.json` is never a ranking input.
         self._prepared_record_ids: tuple[str, ...] = ()
         self._served_recorded = False
+        # The consolidation brief is served once per session: Hermes replays
+        # provider context for the rest of the session, so the same brief
+        # (`raised_at`) rode every later turn as well. `_prepared_brief_at` is
+        # the brief the current render carries; `prefetch` moves it to
+        # `_served_brief_at`, which the next render skips.
+        self._prepared_brief_at = ""
+        self._served_brief_at = ""
         # The "since your last session" digest (`memory_session_digest`): its
         # window is fixed at a session start, every render carries it until a
         # prefetch serves one, then never again in that session.
@@ -399,6 +418,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at, self._served_brief_at = "", ""
         self._session_id = str(session_id or "")
         # Hermes passes `platform` (`cli`, `tui`, `desktop`, a gateway name,
         # `cron`, `subagent`) and `agent_context` (`agent/agent_init.py`,
@@ -408,6 +428,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         # a 1:1 DM or a group conversation is verified (`memory_messenger`); a
         # primary gateway session nothing verifies stays shared.
         platform, agent_context = kwargs.get("platform", ""), kwargs.get("agent_context", "")
+        self._platform = str(platform or "")
         shared_request = kwargs.get("shared_surface", False)
         self._conversation, self._channel_scope, self._authorization = None, None, None
         self._turn_author = ("", False)
@@ -479,10 +500,19 @@ class OmhMemoryProvider(_MemoryProviderBase):
         return json.dumps({"status": "error", "reason": "unknown_tool"}, sort_keys=True)
 
     def system_prompt_block(self) -> str:
-        """A static save reminder for foreground conversations, not background agents."""
+        """A static save reminder for foreground conversations, not background agents.
+
+        None where capture is off (`memory_mode` off, a disabled
+        retain_knowledge family, an unreadable profile): it would ask for saves
+        that are refused. Under `recall_mode: off` it no longer points at
+        recall, which the tool refuses there.
+        """
         if self._surface_class == SURFACE_BACKGROUND:
             return ""
-        return "When the user states lasting preferences, decisions or facts, call omh_remember save in that same turn, before other work, even if the message also asks for something. If a shown OMH record already says it, pass its id as replaces. Use recall later."
+        if not self._recall_policy()[0].get("capture_enabled", True):
+            return ""
+        reminder = "When the user states lasting preferences, decisions or facts, call omh_remember save in that same turn, before other work, even if the message also asks for something. If a shown OMH record already says it, pass its id as replaces."
+        return reminder if configured_recall_mode(self._profile_home) == "off" else f"{reminder} Use recall later."
 
     def prefetch(
         self,
@@ -575,6 +605,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._prepared_record_ids and not self._served_recorded:
                 self._served_recorded = True
                 self._record_served(self._prepared_record_ids)
+            if self._prepared_brief_at:
+                self._served_brief_at = self._prepared_brief_at
             return self._pack
 
     def _record_served(self, record_ids: tuple[str, ...]) -> None:
@@ -848,14 +880,18 @@ class OmhMemoryProvider(_MemoryProviderBase):
         """What the last prefetch put into the turn, for Hermes' recall line.
 
         Hermes prints ``🧠 OMH — recalled N memories`` through its status
-        channel -- CLI, TUI, and every gateway platform alike -- right after the
-        prefetch that carried it, so the user sees memory was used even when
+        channel, on the surfaces the profile's `recall_line` admits (by default
+        cli/tui/desktop), right after the prefetch that carried it, so the user sees memory was used even when
         the model says nothing about it. Nothing served, nothing said. A pack
         that is only a reference-block index counts as content without a
         discrete count, which Hermes renders generically; a pack that is only
         a consolidation brief is a request, not memory, and says nothing.
         """
         if not self._served_pack or not self._served_has_memory:
+            return None
+        # `recall_line` hides the line, never the memory: the pack above was
+        # still served, and the receipt still records it.
+        if not recall_line_shown(configured_recall_line(self._profile_home), self._platform, OPERATOR_CONSOLE_PLATFORMS):
             return None
         return RecallStatus(provider_label=PROVIDER_LABEL, count=self._served_count)
 
@@ -897,6 +933,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_receipt, self._served_receipt = None, None
         self._prepared_reminder, self._served_reminder, self._reminder_recorded = None, None, False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at, self._served_brief_at = "", ""
         self._digest_window, self._digest_pending, self._pack_digest_evaluated, self._pack_digest = None, False, False, ""
         self._principal_context = None
         self._profile_ref = ""
@@ -939,6 +976,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             self._prepared_receipt = None
             self._prepared_reminder, self._reminder_recorded = None, False
             self._prepared_record_ids, self._served_recorded = (), False
+            self._prepared_brief_at = ""
             self._pack_digest_evaluated, self._pack_digest = False, ""
             self._query_sanitized = sanitize_memory_query(str(message or ""))
             self._query = self._query_sanitized.clean
@@ -989,6 +1027,10 @@ class OmhMemoryProvider(_MemoryProviderBase):
                 # `on_session_end`, so the old conversation's writes stay out.
                 self._start_session_digest(initializing=False)
                 self._record_session_close()
+                # A new conversation is owed a still-due brief. Not in
+                # `_rebind_session`: a turn-lease reload rebinds with
+                # reset=True for the same conversation.
+                self._prepared_brief_at, self._served_brief_at = "", ""
 
     def _rebind_session(self, new_id: str, *, reset: bool) -> None:
         """Withdraw the old lens and publish one under ``new_id``; carry its lists unless ``reset``."""
@@ -1178,7 +1220,15 @@ class OmhMemoryProvider(_MemoryProviderBase):
             else ProjectIdentityResolution(diagnostics=("outside_repository",))
         )
         moment = now or datetime.now(timezone.utc)
-        console = self._surface_class in OWNER_SURFACE_CLASSES
+        # Per-turn recall needs both the project memory policy (`memory_mode`
+        # off, or a disabled retain_knowledge family, turns it off) and this
+        # profile's `recall_mode` at `auto`. Off, the turn gets no records and
+        # no blocks, and so no recall line; the brief and the digest are not
+        # recall and keep their own rules. Tool recall decides for itself.
+        policy, policy_unreadable = self._recall_policy()
+        if policy.get("recall_enabled", True) and configured_recall_mode(self._profile_home) != "auto":
+            policy = {**policy, "recall_enabled": False}
+        console = self._surface_class in OWNER_SURFACE_CLASSES and bool(policy.get("recall_enabled", True))
         blocks = read_memory_blocks(self._omh_home) if console else ()
         selection = self._block_selection(blocks=blocks, now=moment)
         system_blocks = tuple(block for block in blocks if block.tier == SYSTEM_TIER)
@@ -1193,9 +1243,12 @@ class OmhMemoryProvider(_MemoryProviderBase):
             allowed_scopes=self._prefetch_scopes(),
             session_id=self._session_id,
             now=moment,
+            policy=policy,
             principal_context=self._principal_context,
             shared_surface=self._shared_surface,
             required_scope_kinds=prefetch_required_scope_kinds(self._project_resolution.identity),
+            index_fallback=True,
+            full_text_ids=origin_record_ids(snapshot.records, self._conversation_session_ids()),
         )
         # The reminder asks about the oldest open record whose review deadline
         # passed and whose last ask is older than `open_ask_days`, one line per
@@ -1207,6 +1260,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._prepared_reminder = None
         self._reminder_recorded = False
         self._prepared_record_ids, self._served_recorded = (), False
+        self._prepared_brief_at = ""
         reminder = (
             select_open_reminder(
                 snapshot.records,
@@ -1226,6 +1280,11 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._attended
             else None
         )
+        if not policy.get("capture_enabled", True):
+            # The brief asks for captures this policy refuses.
+            brief = None
+        if brief is not None and _brief_key(brief) == self._served_brief_at:
+            brief = None
         # A status, not a memory either: counts only, and never the recall count.
         # Withheld for a turn that is not the owner's DM: it stays pending,
         # never spent where it cannot be shown.
@@ -1244,6 +1303,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._pack_count = fitted.block_count + len(prepared.section.rendered)
         self._pack_has_memory = bool(fitted.system or fitted.index or fitted.records)
         self._prepared_reminder = reminder if fitted.reminder else None
+        self._prepared_brief_at = _brief_key(brief) if brief is not None and fitted.brief else ""
         self._prepared_receipt = build_prefetch_receipt(
             prepared,
             session_id=self._session_id,
@@ -1251,7 +1311,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             rendered_block_count=fitted.block_count,
             project_resolution=self._project_resolution,
             reminder=self._prepared_reminder,
-            unreadable=snapshot.unreadable,
+            unreadable=(*snapshot.unreadable, "setup-profile.json") if policy_unreadable else snapshot.unreadable,
             store_read_error=snapshot.store_read_error,
             pack_chars=len(pack),
             surface_class=self._surface_class,
@@ -1266,6 +1326,32 @@ class OmhMemoryProvider(_MemoryProviderBase):
             fitted.digest,
         )
         return pack
+
+    def _recall_policy(self) -> tuple[dict[str, object], bool]:
+        """The project memory policy, and whether `setup-profile.json` could not be read.
+
+        `read_project_memory_policy` raises on a `setup-profile.json` that is
+        not a JSON object, as capture does. A render must not raise into the
+        turn, and an unreadable profile may be the one that chose `off`, so
+        memory fails closed and the receipt names the file as unreadable.
+        """
+        try:
+            return read_project_memory_policy(self._omh_home), False
+        except (OSError, ValueError, RecursionError):
+            return build_project_memory_policy(self._omh_home, mode="off"), True
+
+    def _conversation_session_ids(self) -> set[str]:
+        """Verified compaction segments only; a lineage fault keeps just this session."""
+        session_ids = {self._session_id}
+        if self._hermes_home is not None:
+            try:
+                session_ids.update(live_session.compaction_ancestors(str(self._hermes_home), self._session_id)["ancestors"])
+            except Exception as error:  # noqa: BLE001 - classified in tests/test_broad_exception_policy.py
+                self._write_failure_count += 1
+                self._write_failures.append({"op": "compaction_ancestors", "path": "session_lineage", "error": type(error).__name__})
+                del self._write_failures[:-WRITE_FAILURE_LIMIT]
+                return {self._session_id}
+        return session_ids
 
     def _start_session_digest(self, *, initializing: bool) -> None:
         """Fix this session's digest window, before it serves or writes anything.
