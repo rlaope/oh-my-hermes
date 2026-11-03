@@ -34,6 +34,13 @@ adds the motion of a held button (the pager's drag to select); motion with no
 button held is never asked for. Every exit turns both off again
 (`mouse_reporting` and `mouse_drag` say whether they are on).
 
+Focus reports are asked for on every terminal, as Hermes' own TUI asks
+(hermes-ink `App.tsx`, DECSET 1004): one that speaks them sends `ESC [ I`
+when the window gains focus and `ESC [ O` when it loses it, which the key
+decoder reads as no key (`KeyDecoder.unfocused_at`); one that does not
+ignores the request and sends nothing, and the TUI then counts the window as
+focused throughout. Every exit turns them off again.
+
 `query_background` asks the terminal for its background colour once, before
 the first frame, so the theme can be measured against the background the
 person really has (`theme.build_theme`), and in the same write for the row
@@ -88,6 +95,9 @@ except ImportError:  # pragma: no cover - Windows ships no termios
 
 BRACKETED_PASTE_ON = f"{CSI}?2004h"
 BRACKETED_PASTE_OFF = f"{CSI}?2004l"
+# Focus reports (xterm mode 1004): `ESC [ I` when the window gains focus, `ESC [ O` when it loses it.
+FOCUS_REPORTING_ON = f"{CSI}?1004h"
+FOCUS_REPORTING_OFF = f"{CSI}?1004l"
 # Richer key reports, so Ctrl+Enter and Shift+Enter differ from Enter: the kitty
 # keyboard protocol (push flag 1, "disambiguate") and xterm modifyOtherKeys level 2.
 KITTY_KEYBOARD_PUSH = f"{CSI}>1u"
@@ -107,12 +117,12 @@ MOUSE_DRAG_OFF = f"{CSI}?1002l"
 MOUSE_REPORTING_OFF = f"{CSI}?1006l{MOUSE_DRAG_OFF}{CSI}?1000l"
 # Written on exit even after a crash mid-frame: the screen hides the cursor and
 # turns autowrap off while it paints, and a shell must not inherit either. The
-# key and mouse reports are switched off whether or not they were asked for, as
+# key, mouse and focus reports are switched off whether or not they were asked for, as
 # Hermes' own TUI does on every exit (hermes-ink `ink.tsx`, its signal-exit path
 # too), so no exit path depends on remembering whether they were asked for.
 RESTORE_SEQUENCE = (
     f"{SGR_RESET}{AUTOWRAP_ON}{SHOW_CURSOR}{MODIFY_OTHER_KEYS_OFF}{KITTY_KEYBOARD_POP}"
-    f"{MOUSE_REPORTING_OFF}{BRACKETED_PASTE_OFF}"
+    f"{MOUSE_REPORTING_OFF}{FOCUS_REPORTING_OFF}{BRACKETED_PASTE_OFF}"
 )
 
 # Terminals asked for the richer key reports, by the name Hermes' own TUI gives
@@ -363,7 +373,7 @@ class Terminal:
         entered = False
         try:
             self._install_winch()
-            self.write(BRACKETED_PASTE_ON + self._keyboard_request)
+            self.write(BRACKETED_PASTE_ON + FOCUS_REPORTING_ON + self._keyboard_request)
             self.keyboard_protocol = bool(self._keyboard_request)
             entered = True
         finally:

@@ -7229,16 +7229,26 @@ class App(ModesMixin, AgentViewMixin):
         motion; None where the wallpaper does not show."""
         if self._ground() is None:
             return None
-        seconds = self.clock() if self.motion else 0.0
+        seconds = self._ambient_clock() if self.motion else 0.0
         return scene(self._shown_look(), *self.screen, seconds, self._ground_light())
 
     def _wallpaper_moves(self) -> bool:
         """Whether the wallpaper's own tick paints now: it shows, with motion on, the look has a scene (the default
         look keeps only its ground, so an idle screen on it never wakes to paint nothing), no pager or settling
-        resize holds the screen, and the composer is empty. While someone types (an IME's pre-edit sits at the
-        caret), no tick moves or hides the cursor; the frames their keys draw still bring the scene along."""
+        resize holds the screen, the composer is empty, and the terminal window has focus (`_ambient_clock`). While
+        someone types (an IME's pre-edit sits at the caret), no tick moves or hides the cursor; the frames their
+        keys draw still bring the scene along."""
         return (self.motion and self.pager is None and self.redraw_at is None and not self.composer.text
-                and self._ground() is not None and self._shown_look() in SCENES)
+                and self.decoder.unfocused_at is None and self._ground() is not None
+                and self._shown_look() in SCENES)
+
+    def _ambient_clock(self) -> float:
+        """The time the ambience (the wallpaper's scene, the working glow's light) is drawn at: the clock's, or, while
+        the terminal window does not have focus (its focus-out report, `KeyDecoder.unfocused_at`), the moment it
+        lost it. So the ambience holds still unseen and no tick wakes the loop for it, and the first frame after
+        focus comes back is the one it would have drawn at that time anyway."""
+        unfocused_at = self.decoder.unfocused_at
+        return self.clock() if unfocused_at is None else unfocused_at
 
     def _saved_wallpaper(self) -> bool:
         """Whether the living wallpaper is wanted: as saved under the OMH home, else on."""
@@ -7293,7 +7303,7 @@ class App(ModesMixin, AgentViewMixin):
 
     def _edge(self) -> Edge | None:
         """The working glow's light for this frame (owner request 2026-10-28), at the clock's time, or None."""
-        return edge(*self.screen, self.theme, self.clock()) if self._edge_live() else None
+        return edge(*self.screen, self.theme, self._ambient_clock()) if self._edge_live() else None
 
     def _aura_moves(self) -> bool:
         """Whether the dag-ulw aura moves on this terminal now: the truecolor depth, motion on, and a background its
@@ -7685,8 +7695,9 @@ class App(ModesMixin, AgentViewMixin):
 
     def _tick_seconds(self) -> float:
         """How often the loop paints while something moves: faster while the working glow's light goes round, so it
-        glides (`edge_glow.TICK_SECONDS`); the spinners still step by `TICK_SECONDS`."""
-        if self._edge_live():
+        glides (`edge_glow.TICK_SECONDS`), unless it holds still for a window without focus (`_ambient_clock`); the
+        spinners still step by `TICK_SECONDS`."""
+        if self._edge_live() and self.decoder.unfocused_at is None:
             return EDGE_TICK_SECONDS
         return TICK_SECONDS if self.motion else REDUCED_TICK_SECONDS
 

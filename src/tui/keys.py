@@ -97,6 +97,12 @@ A report that starts arriving later than `MOUSE_REPORT_SECONDS` after reporting
 went off, split right after its `ESC` or its `ESC[`, is read as keys, as any
 input is with reporting off. A terminal that ignores the SGR request sends the
 legacy `ESC[M` and three payload bytes instead; that is one unknown key.
+
+A focus report (`ESC[I` the window gained focus, `ESC[O` it lost it, asked
+for by `Terminal`) is no key and types nothing in any mode: it only sets
+`KeyDecoder.unfocused_at`. Any read says the window has focus again, since
+input comes from a focused window, so a focus-in the terminal never sent
+does not keep it counted as unfocused past the next key.
 """
 
 from __future__ import annotations
@@ -339,6 +345,10 @@ _PASTE_END = Key("paste-end")
 # Internal markers for the kitty keyboard query's answer, disambiguate on or off; neither leaves the decoder.
 _KEYBOARD_FLAGS_ON = Key("keyboard-flags-on")
 _KEYBOARD_FLAGS_OFF = Key("keyboard-flags-off")
+# Internal markers for the focus reports, `ESC[I` and `ESC[O`; neither leaves the decoder.
+_FOCUS_IN = Key("focus-in")
+_FOCUS_OUT = Key("focus-out")
+_FOCUS_FINALS = {"I": _FOCUS_IN, "O": _FOCUS_OUT}
 
 
 def _single_byte_key(byte: int) -> Key:
@@ -486,6 +496,8 @@ def _csi_key(parameters: str, final: str) -> Key | Mouse:
         if not _digits(flags):
             return Key(UNKNOWN)
         return _KEYBOARD_FLAGS_ON if int(flags) & DISAMBIGUATE_FLAG else _KEYBOARD_FLAGS_OFF
+    if final in _FOCUS_FINALS and not parameters:
+        return _FOCUS_FINALS[final]
     fields = parameters.split(";")
     if final == CSI_U_FINAL and len(fields) <= 2:
         return _reported(_protocol_key(fields[0], fields[1] if len(fields) == 2 else "1"))
@@ -714,6 +726,9 @@ class KeyDecoder:
         # query answer with the disambiguate flag on: the terminal does send them, so Ctrl+Enter reaches the
         # caller apart from Enter. Asking for them proves nothing.
         self.protocol_reported = False
+        # When the terminal window lost focus (its focus-out report), on the decoder's clock; None while it has
+        # focus or never said otherwise. Any read sets it back to None: input comes from a focused window.
+        self.unfocused_at: float | None = None
 
     @property
     def holding(self) -> bool:
@@ -724,6 +739,7 @@ class KeyDecoder:
     def feed(self, data: bytes) -> list[Key | Paste | Mouse]:
         now = self._clock()
         gap, self._read_at = now - self._read_at, now
+        self.unfocused_at = None
         events: list[Key | Paste | Mouse] = []
         if self._burst is not None:
             # A paste goes on with any plain read in the window; a held line break only with a read shaped like a
@@ -897,6 +913,8 @@ class KeyDecoder:
                         events.append(Key(UNKNOWN, arrived_at=arrived_at))
                 elif key is _KEYBOARD_FLAGS_ON or key is _KEYBOARD_FLAGS_OFF:
                     self.protocol_reported = self.protocol_reported or key is _KEYBOARD_FLAGS_ON
+                elif key is _FOCUS_IN or key is _FOCUS_OUT:
+                    self.unfocused_at = None if key is _FOCUS_IN else self._fed_at
                 elif late and data[start] == CARRIAGE_RETURN:
                     if data[index : index + 1] == bytes((LINE_FEED,)):
                         index += 1  # CR LF is one newline, as in a paste
