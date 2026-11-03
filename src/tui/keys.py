@@ -820,12 +820,13 @@ def list_nav_step(event: Key | Paste) -> int:
 
     Matches DOWN, Ctrl+N and Ctrl+J (without Alt or Shift) to +1.
     Matches UP, Ctrl+P and Ctrl+K (without Alt or Shift) to -1.
+    Shift is read from the protocol report when present (`reported_shift`); legacy control bytes carry none.
     """
     if not isinstance(event, Key):
         return 0
-    if event.name == DOWN and not event.ctrl and not event.alt and not event.shift and not event.reported_shift:
+    if event.name == DOWN and not event.ctrl and not event.alt and not event.shift:
         return 1
-    if event.name == UP and not event.ctrl and not event.alt and not event.shift and not event.reported_shift:
+    if event.name == UP and not event.ctrl and not event.alt and not event.shift:
         return -1
     if (
         event.name == CHAR

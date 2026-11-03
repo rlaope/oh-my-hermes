@@ -269,8 +269,6 @@ class CtrlNPNavigationTests(unittest.TestCase):
         self.assertEqual(list_nav_step(Key(DOWN, alt=True)), 0)
         self.assertEqual(list_nav_step(Key(DOWN, ctrl=True)), 0)
         self.assertEqual(list_nav_step(Key(UP, shift=True)), 0)
-        self.assertEqual(list_nav_step(Key(DOWN, reported_shift=True)), 0)
-        self.assertEqual(list_nav_step(Key(UP, reported_shift=True)), 0)
         self.assertEqual(list_nav_step(Paste("n")), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "x", ctrl=True)), 0)
 
@@ -790,6 +788,24 @@ class CtrlNPNavigationTests(unittest.TestCase):
         self.assertEqual(list_nav_step(Key(CHAR, "j", ctrl=True, reported_shift=True)), 0)
         self.assertEqual(list_nav_step(Key(CHAR, "k", ctrl=True, reported_shift=True)), 0)
 
+    def test_menu_open_protocol_ctrl_shift_j_inserts_newline(self) -> None:
+        """Decision pin: a Shift-reported Ctrl+J does not step an open menu; it falls through to a newline.
+
+        Legacy 0x0A still steps the menu because a legacy byte cannot carry Shift.
+        """
+        from omh.tui.keys import KeyDecoder
+
+        app, _ = make_app(rows=30, cols=80)
+        type_text(app, "/")
+        drawn(app)
+        self.assertTrue(bool(app._menu_rows()))
+        init_index = app.menu_index
+        (event,) = KeyDecoder().feed(b"\x1b[106;6u")
+        self.assertTrue(event.reported_shift)
+        app._on_input(event)
+        self.assertEqual(app.menu_index, init_index)
+        self.assertEqual(app.composer.text, "/\n")
+
     def test_protocol_keys_navigation_and_reported_shift_rejection(self) -> None:
         """Protocol-fed CSI-u and modifyOtherKeys navigation vs reported Shift rejection."""
         from omh.tui.keys import KeyDecoder
@@ -812,7 +828,7 @@ class CtrlNPNavigationTests(unittest.TestCase):
             ("modify_other_keys", lambda code, mod: f"\x1b[27;{mod};{code}~".encode()),
         ):
             # Unshifted Ctrl+n / Ctrl+j navigates down
-            for key_char, code in (("n", ord("n")), ("j", ord("j"))):
+            for code in (ord("n"), ord("j")):
                 decoder = KeyDecoder()
                 events = decoder.feed(template(code, 5))
                 self.assertEqual(len(events), 1)
@@ -823,7 +839,7 @@ class CtrlNPNavigationTests(unittest.TestCase):
                 self.assertEqual(picker.index, 1)
 
             # Unshifted Ctrl+p / Ctrl+k navigates up
-            for key_char, code in (("p", ord("p")), ("k", ord("k"))):
+            for code in (ord("p"), ord("k")):
                 decoder = KeyDecoder()
                 events = decoder.feed(template(code, 5))
                 self.assertEqual(len(events), 1)

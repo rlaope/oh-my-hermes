@@ -26,6 +26,7 @@ from omh.tui.keys import (
     KeyDecoder,
     Mouse,
     Paste,
+    list_nav_step,
 )
 
 
@@ -560,16 +561,32 @@ class ProtocolReportedTests(unittest.TestCase):
         self.assertFalse(key_j.reported_shift)
         self.assertTrue(key_shift_j.reported_shift)
 
-        # Chunked / split feeds of protocol reports preserve reported_shift
-        decode_split_everywhere(self, csi_ctrl_shift_n)
-        decode_split_everywhere(self, mok_ctrl_shift_n)
+        # Chunked / split feeds of protocol reports preserve reported_shift. assertEqual ignores the
+        # compare=False field, so read it off the events of every split directly.
+        for report in (csi_ctrl_shift_n, mok_ctrl_shift_n):
+            for cut in range(1, len(report)):
+                with self.subTest(report=report, cut=cut):
+                    decoder = KeyDecoder()
+                    events = decoder.feed(report[:cut]) + decoder.feed(report[cut:]) + decoder.flush()
+                    self.assertEqual([e.reported_shift for e in events], [True])
 
-        # Uppercase letter alone (e.g. Caps Lock) does NOT infer reported_shift
-        # modifier 1 = bare/no modifiers
-        (caps_n,) = decode(b"\x1b[78;1u")  # code 78 is 'N'
-        self.assertEqual(caps_n.char, "N")
-        self.assertFalse(caps_n.reported_shift)
-        self.assertFalse(caps_n.shift)
+        # A bare uppercase code point does NOT infer reported_shift
+        (upper_n,) = decode(b"\x1b[78;1u")  # code 78 is 'N', no modifier bits
+        self.assertEqual(upper_n.char, "N")
+        self.assertFalse(upper_n.reported_shift)
+        self.assertFalse(upper_n.shift)
+
+        # Lock bits (kitty: caps 64, num 128; field is 1 + bits) are not Shift
+        for report, shifted in (
+            (csi_u(ord("n"), 69), False),  # Ctrl + Caps Lock
+            (csi_u(ord("n"), 133), False),  # Ctrl + Num Lock
+            (csi_u(ord("n"), 70), True),  # Ctrl + Shift + Caps Lock
+            (modify_other_keys(ord("N"), 6), True),  # Ctrl + Shift, uppercase code point
+        ):
+            with self.subTest(report=report):
+                (key,) = decode(report)
+                self.assertEqual(key.reported_shift, shifted)
+                self.assertEqual(list_nav_step(key), 0 if shifted else 1)
 
     def test_a_kitty_flags_answer_is_no_key_and_says_so_only_with_disambiguate_on(self) -> None:
         # The answer to `CSI ? u`, which `Terminal.query_background` sends where it pushed the kitty flags.
