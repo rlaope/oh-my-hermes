@@ -35,11 +35,11 @@ EARLIER_TUI_STATE = ("tui/launch-skills.json",)
 
 WHATS_NEW: dict[str, tuple[str, ...]] = {
     "4.0.5": (
-        "A part of the screen that fails to draw no longer ends the session",
+        "One part of the screen that fails to draw no longer ends the session",
         "A slow or busy Hermes gateway no longer drops the running turn",
-        "Pastes over SSH and WSL land in the composer as one paste",
-        "omh memory recall-line and recall-mode: where recall shows, or off",
-        "The info line says when a newer OMH is out",
+        "A paste that loses its paste markers no longer sends its first line",
+        "Ctrl+N/P and Ctrl+J/K move through pickers, lists and menus",
+        "The info line shows the OMH version and says when a newer one is out",
     ),
     "4.0.4": (
         "Vim mode in the composer: turn on Hermes' display.vim_mode",

@@ -43,8 +43,8 @@ All notable changes will be documented here.
   of landing on the screen and shifting every later frame. A crash that does
   end the TUI still prints its traceback once your terminal is restored.
 
-- **OMH notices when Hermes cannot load its skills.** From 27 Oct to 2 Nov
-  the skills were installed but Hermes could not load them by name: a stale
+- **OMH notices when Hermes cannot load its skills.** Skills could be
+  installed while Hermes could not load them by name: a stale
   generation directory registered beside the pointer made every name
   ambiguous, and then a cached path to a deleted generation left none. The
   launch card still said "skills 89 installed", and the skill suggestion
@@ -165,7 +165,7 @@ All notable changes will be documented here.
   menu). With no list or menu open, Ctrl+J keeps its newline and steer
   behaviour, Ctrl+K deletes to the end of the line and Ctrl+P folds the plan.
   A Shift-reported Ctrl+N/P/J/K does not move a list; terminals without key
-  reporting cannot tell Shift apart. Contributed by @DanRioDev (#2513, #2524).
+  reporting cannot tell Shift apart. Contributed by @DanRioDev (#2513; #2524, carried by #2525).
 
 - **A running turn with the glow and a living wallpaper uses less CPU.** The same frames are drawn, byte for byte,
   but the colours the glow and the wallpaper scenes mix are no longer parsed again for every cell, and the loop no
@@ -188,7 +188,7 @@ All notable changes will be documented here.
   architecture", "improve the architecture of this repo", "find deepening
   opportunities in this codebase", "shallow modules in this codebase",
   "코드베이스 아키텍처 개선해줘") now name the audit in the clarifying
-  question, where main named codebase onboarding or unrelated lanes; they
+  question, where 4.0.4 named codebase onboarding or unrelated lanes; they
   dispatch it only beside its own words, such as "tech debt". An
   architecture that is not code (a model, cloud infra, an org chart, a
   building) routes exactly as before.
@@ -284,11 +284,13 @@ All notable changes will be documented here.
   `*STANDARDS*.md`, linter and formatter configuration) before the smell
   baseline applies, hands that list to a dispatched reviewer, and skips
   smells the configured tooling already enforces on the diff.
-  `omh-commit-pr-authoring`'s no-template fallback says whether a revert
-  undoes the change or what it leaves behind, and when the PR template has
-  neither a risk nor a rollout section that goes in one sentence at the end of
-  its summary or description section, and a structural change shows the
-  smallest file tree, call tree or diff sketch of its new shape.
+  `omh-commit-pr-authoring` has every PR body say whether a revert undoes
+  the change or what it leaves behind, and which surfaces a bad merge would
+  reach. Without a PR template that goes in the fallback body; with one, it
+  goes under the template's risk or rollout section, or, when the template
+  has neither, in one sentence at the end of its summary or description
+  section. A structural change's PR body shows the smallest file tree, call
+  tree or diff sketch of its new shape.
   `omh-rules-distill` classes each recurring miss as mechanical (it becomes a
   check, proven by failing on an injected violation) or judgement (prose).
   `omh-codebase-onboarding` checks its own repo map, reading path, glossary,
@@ -571,8 +573,8 @@ All notable changes will be documented here.
   version and keeps only that and the time of the ask in
   `<omh_home>/tui/update-check.json`. While it is newer than the one running,
   the info line says so beside the badge:
-  `[⚚ OMH Native v4.0.4]  v4.0.5 available · omh update`. On a narrower
-  line it is the first thing to shorten, to `↑ v4.0.5`, which stays beside
+  `[⚚ OMH Native v4.0.5]  v4.0.6 available · omh update`. On a narrower
+  line it is the first thing to shorten, to `↑ v4.0.6`, which stays beside
   the version until the version itself goes. Offline, a timeout or a bad reply
   says nothing. `OMH_TUI_UPDATE_CHECK=0` holds it off in one terminal,
   `omh theme update-check off` in every later session, and so does an
