@@ -90,7 +90,7 @@ from __future__ import annotations
 import base64
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field, replace
 import errno
 from functools import partial
@@ -218,6 +218,7 @@ from .clipboard import COPY_OSC52, COPY_PBCOPY, SSH_VARIABLES, copy_route, pbcop
 from .prompts import CLOSED_CHOICES, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .edge_glow import EDGE_MARGIN, Edge, edge, edge_fits
 from .edge_glow import TICK_SECONDS as EDGE_TICK_SECONDS
+from .faults import FaultLog
 from .screen import (
     CARRIAGE_RETURN,
     CLEAR_SCREEN_AND_SCROLLBACK,
@@ -940,6 +941,10 @@ IMAGE_WAIT_LINE = "waiting for the image…"
 IMAGE_WAIT_ELAPSED_SECONDS = 3.0
 # In the same place while `/model`'s or `/rewind`'s list is on its way from Hermes.
 LIST_WAIT_LINE = "waiting for Hermes…"
+# The row a part of the frame that raised is drawn as (`App._drawn`), in the warning colour; /logs has its traceback.
+FAULT_ROW = "{part} could not be drawn ({kind}); /logs has the traceback"
+# Said once in the transcript, as a warning, the first time a background thread's exception goes to `faults`.
+THREAD_FAULT_NOTICE = "A background thread raised; /logs has the traceback."
 # Where the prompt that stages images stands (`App.claim`).
 CLAIM_OPEN = "open"
 CLAIM_STAGING = "staging"
@@ -1813,8 +1818,15 @@ class App(ModesMixin, AgentViewMixin):
         make_client: Callable[..., GatewayClient] | None = None,
         git: GitWatcher | None = None,
         fetch_latest: Callable[[], str] = fetch_latest,
+        contain_faults: bool = False,
     ) -> None:
         self.terminal = terminal
+        # The launched TUI's (`main`, `_run`): a part of the frame that raises is one warn row (`_drawn`), and while `run`
+        # loops, thread tracebacks, warnings and stray writes go to `faults`, never onto the live region. Left off,
+        # as every test that builds an App or drives `main` leaves it, a render error raises: no bug is hidden there.
+        self.contain_faults = contain_faults
+        self.faults = FaultLog()  # shown by /logs after the gateway's stderr
+        self.faults.wake = self._wake_loop  # a background thread's exception is said at once (`_take_thread_fault`)
         self.git = git  # the session directory's branch for the row under the info line; None draws no branch
         self.client = client
         # What spawns a gateway again after a crash (`_respawn_gateway`); None: a crash ends the TUI.
@@ -2224,6 +2236,12 @@ class App(ModesMixin, AgentViewMixin):
         self.update_check = UpdateCheck(home, __version__, fetch=self.fetch_latest, now=self.wall_clock)
         self.update_check.start(self._wake_loop)
 
+    def _take_thread_fault(self) -> None:
+        """The first background-thread exception `faults` kept, said once in the transcript as a warning."""
+        if self.faults.take_thread_fault():
+            self.transcript.add_notice(THREAD_FAULT_NOTICE, NOTICE_WARN)
+            self.dirty = True
+
     def _take_update_check(self) -> None:
         if self.update_check is not None and self.update_check.take():
             self.dirty = True
@@ -2531,19 +2549,22 @@ class App(ModesMixin, AgentViewMixin):
         region is cleared before this returns; closing the gateway is the
         caller's, after it has handed the terminal back.
         """
-        self.wake = self.client.wake_fd()
-        self.poller.start(self._wake_loop)  # a new HUD snapshot wakes the loop as gateway news does
-        if self.git is not None:
-            self.git.start(self._wake_loop)  # so does a branch or a file count that moved
-        self._start_update_check()  # and npm's answer about the latest release
-        try:
-            if typed:
-                self._take_input(typed)
-            self._render_when_due()  # the first frame does not wait for a first read
-            while self.exit_code is None:
-                self._step()
-        finally:
-            self._shutdown()
+        # Entered before the threads start, left after `_shutdown` drew the last frame: a crash's traceback is then
+        # Python's to print, on the shell's terminal once the caller restored it.
+        with self.faults.contained() if self.contain_faults else nullcontext():
+            self.wake = self.client.wake_fd()
+            self.poller.start(self._wake_loop)  # a new HUD snapshot wakes the loop as gateway news does
+            if self.git is not None:
+                self.git.start(self._wake_loop)  # so does a branch or a file count that moved
+            self._start_update_check()  # and npm's answer about the latest release
+            try:
+                if typed:
+                    self._take_input(typed)
+                self._render_when_due()  # the first frame does not wait for a first read
+                while self.exit_code is None:
+                    self._step()
+            finally:
+                self._shutdown()
         return self.exit_code
 
     def _step(self) -> None:
@@ -2582,6 +2603,7 @@ class App(ModesMixin, AgentViewMixin):
         self._take_hud()
         self._take_board()
         self._take_update_check()
+        self._take_thread_fault()
         self._render_when_due()
 
     def _take_input(self, data: bytes) -> None:
@@ -6427,10 +6449,12 @@ class App(ModesMixin, AgentViewMixin):
         self.transcript.add_notice("\n".join(rows))
 
     def _logs(self, arg: str) -> None:
-        tail = self.client.stderr_tail()
+        own = self.faults.lines()  # the TUI's own (`FaultLog`), after the gateway's
+        tail = self.client.stderr_tail() + own
         if tail:
+            title = "gateway and OMH TUI stderr (memory only)" if own else "gateway stderr (memory only)"
             # As painted: escapes and controls gone and tabs as spaces, so a cell is the column it shows on.
-            self._open_pager("gateway stderr (memory only)", [(Span(clean_text(line)),) for line in tail])
+            self._open_pager(title, [(Span(clean_text(line)),) for line in tail])
         else:  # /logs has no echo: during a turn this waits under what runs
             self.transcript.add_aside(NoticeBlock("The gateway has written nothing to stderr."))
 
@@ -7300,6 +7324,23 @@ class App(ModesMixin, AgentViewMixin):
         self._render()
         self.bg_drawn = self._background_second()  # after the frame, which says whether the row is on screen
 
+    def _drawn(self, part: str, draw: Callable[[], list[Line]], cols: int) -> list[Line]:
+        """`draw()`'s rows, the frame's `part` (named as the warn row says it).
+
+        In the launched TUI (`contain_faults`) a `draw` that raises is one row in the warning colour naming `part`
+        and the exception's class, its traceback kept once in `faults` (/logs), so one part's bug costs that part,
+        not the session: the rest of the frame is drawn, the keys go where they went, and the next frame tries
+        `draw` again. Anywhere else it raises.
+        """
+        if not self.contain_faults:
+            return draw()
+        try:
+            return draw()
+        except Exception as error:  # classified in tests/test_broad_exception_policy.py: drawn as the warn row
+            self.faults.fault(part, error)
+            row = FAULT_ROW.format(part=part, kind=type(error).__name__)
+            return [truncate_line((Span(row, self.theme.warn),), cols)]
+
     def _render(self) -> None:
         cols, rows = self.size
         self._settle_list()
@@ -7365,15 +7406,15 @@ class App(ModesMixin, AgentViewMixin):
             composer=None if self._composer_hidden() else self.composer,
             # the list, or the dag tree, under the info line has the keys
             composer_blank=self.list_selected is not None or self.tree_selected is not None,
-            info=self._info_line(cols),
-            tail=self._tail(cols),
+            info=self._drawn("the info line", lambda: [self._info_line(cols)], cols)[0],
+            tail=self._drawn("the live transcript", lambda: self._tail(cols), cols),
             tail_spacer=self.tail_spacer,  # read after `_tail` made it
-            slot=self._slot_lines(cols, rows),
+            slot=self._drawn("the rows above the composer", lambda: self._slot_lines(cols, rows), cols),
             # The plan breathes: a blank row over it (where the tail does not end blank) and one between it and the rule.
             gaps=(self.panel_shown, self.panel_shown),
             gap_reserve=1 + int(rows >= TIP_MIN_ROWS),  # the working row and its tip, kept free as the turn ends
             below=self.menu_under,  # read after `_slot_lines` made it
-            agents=self._agent_view(cols, rows),
+            agents=self._drawn("the agent view", lambda: self._agent_view(cols, rows), cols),
             tail_floor=self._working_rows(),
             known_slash=self.known_slash,
             aura=self._spinner_frame() if self._aura_live() else 0,
@@ -7392,7 +7433,8 @@ class App(ModesMixin, AgentViewMixin):
             build = partial(build, min_height=min_height)
             frame = build()
         if self._place_menu(rows, len(stable), frame):
-            build = partial(build, slot=self._slot_lines(cols, rows), below=self.menu_under)
+            slot = self._drawn("the rows above the composer", lambda: self._slot_lines(cols, rows), cols)
+            build = partial(build, slot=slot, below=self.menu_under)
             frame = build()
         wanted, busy = len(build.keywords["agents"]), self._busy()
         room = frame.budget.agents
@@ -7404,7 +7446,8 @@ class App(ModesMixin, AgentViewMixin):
             # A full slot and a tall composer left the view fewer rows than its cap, or on the bottom rows it leaves
             # the working rows the ended turn kept: drawn again to fit them, so its last row (the count of what it
             # cannot show) is never the one cut.
-            build = partial(build, agents=self._agent_view(cols, rows, room))
+            agents = self._drawn("the agent view", lambda: self._agent_view(cols, rows, room), cols)
+            build = partial(build, agents=agents)
             frame = build()
         # A dag run's tree that left the view as its run ended (`_retire_finished_run`) gives its rows up on the bottom
         # rows as blank rows under the info line, not as pad above the composer: what the run's end print and the
@@ -7427,7 +7470,10 @@ class App(ModesMixin, AgentViewMixin):
                 frame = build()
         # The rows above the region once the flush below and this frame are drawn: transcript rows.
         if self._sticky_needed(self.region.rows_above(rows, len(stable), frame.height)):
-            frame = build(sticky=sticky_line(self.sticky, cols, self.theme, self.known_slash))
+            sticky = self._drawn(
+                "the sticky prompt", lambda: [sticky_line(self.sticky, cols, self.theme, self.known_slash)], cols
+            )
+            frame = build(sticky=sticky[0])
         # Flushed before the frame, the lines cover the region's top rows, where the lines leaving
         # the tail were drawn (a settled tool group is those same rows, moved above the region), and
         # the frame is drawn under them. Flush and frame are one write, so no screen between them shows.
@@ -7670,6 +7716,7 @@ class App(ModesMixin, AgentViewMixin):
         return self.flushed_since_prompt > above
 
     def _tail(self, cols: int) -> list[Line]:
+        self.tail_spacer = False  # until the rows below say otherwise: a tail that raises (`_drawn`) has no spacer
         now = self.clock()
         # Never more than the screen; running tools' marks pulse unless motion is reduced.
         lines = self.transcript.live_lines(cols, self.theme, max_rows=self.size[1], now=now if self.motion else None,
@@ -7815,7 +7862,8 @@ class App(ModesMixin, AgentViewMixin):
         notice = [self.notification.line(cols, self.theme)] if self.notification and cap > taken else []
         shown = goal_line(self.goal, cols, self.theme)
         goal = [shown] if shown is not None and cap > taken + len(notice) else []
-        menu = self._menu_or_panel_lines(cols, cap - taken - len(notice) - len(goal))
+        menu = self._drawn("the menu or HUD panel",
+                           lambda: self._menu_or_panel_lines(cols, cap - taken - len(notice) - len(goal)), cols)
         if self.menu_below:  # the menu goes under the composer, and the panel stays away as it does for the menu
             self.menu_under, menu = menu, []
             self.panel_shown = False
@@ -8120,6 +8168,7 @@ def _run(
     make_client: Callable[..., GatewayClient] | None = None,
     make_git: Callable[[str], GitWatcher] = GitWatcher,
     fetch_latest: Callable[[], str] = fetch_latest,
+    contain_faults: bool = True,
 ) -> int:
     """Start the gateway, open the session, then run the loop on the raw terminal; the exit code.
 
@@ -8161,6 +8210,7 @@ def _run(
                     git=make_git(cwd) if (cwd := environ.get("HERMES_TUI_CWD") or environ.get("HERMES_CWD")
                                           or environ.get("TERMINAL_CWD")) else None,
                     fetch_latest=fetch_latest,
+                    contain_faults=contain_faults,
                 )
             app.client = client
             wait.phase = LAUNCH_OPENING
@@ -8230,9 +8280,11 @@ def main(
     make_client: Callable[..., GatewayClient] = GatewayClient,
     make_poller: Callable[[str | None, str | None], PollerLike] = HudPoller,
     fetch_latest: Callable[[], str] = fetch_latest,
+    contain_faults: bool = True,
 ) -> int:
     """Start the OMH TUI and return its exit code (`FALLBACK_EXIT` when it could not start). `fetch_latest` is what
-    asks npm for the latest release (`update_notice`)."""
+    asks npm for the latest release (`update_notice`). `contain_faults` is `App`'s; a test that drives the launch
+    passes False, so a render bug there raises."""
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     stderr = _Told(sys.stderr if stderr is None else stderr)
@@ -8252,7 +8304,7 @@ def main(
         # The terminal picks its key reports from the environment the TUI was given (TERM_PROGRAM and kin).
         return _run(
             client, environ, stderr, open_terminal or (lambda: Terminal(environ=environ)), make_poller, make_client,
-            fetch_latest=fetch_latest,
+            fetch_latest=fetch_latest, contain_faults=contain_faults,
         )
     except KeyboardInterrupt:
         # Ctrl+C is a signal, not a key, until the terminal goes raw: while the gateway starts
