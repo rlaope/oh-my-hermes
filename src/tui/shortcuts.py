@@ -18,7 +18,9 @@ from .width import cell_width, wrap_line
 
 SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Enter", "Sends the composer"),
-    ("\\ then Enter, Alt+Enter, Shift+Enter, Ctrl+J", "Adds a line"),
+    ("\\ then Enter, Alt+Enter, Shift+Enter, Ctrl+J", "Adds a line; with a list or menu focused, Ctrl+J moves down instead. "
+                                                 "Alt+Enter and Shift+Enter still add a line in an open menu; "
+                                                 "backslash then Enter may accept a completion"),
     ("Ctrl+Enter", "While a turn runs, sends the composer's text into it now as a steer (/steer <text> too); idle, "
                    "sends as Enter does"),
     ("Ctrl+Enter, Ctrl+J", "While a turn runs, on an empty composer, send the oldest queued prompt into it now as a "
@@ -52,7 +54,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Backspace / Delete", "Delete a character, or a paste chip or an [Image #N] token whole; deleting a token "
                            "removes its image"),
     ("Ctrl+W, Alt+Backspace, Ctrl+Backspace", "Deletes the word before the caret (Ctrl+Backspace where the terminal reports it apart from Backspace)"),
-    ("Ctrl+U / Ctrl+K", "Delete to the start or the end of the line"),
+    ("Ctrl+U / Ctrl+K", "Delete to the start or the end of the line; with a list or menu focused, Ctrl+K moves up instead"),
     ("Ctrl+_ / Ctrl+Y", "Undo or redo an edit in the composer (Ctrl+_ is what Ctrl+- and Ctrl+/ send on most terminals); "
                         "a run of typed characters is one edit"),
     ("Esc", "Closes the / or @ menu; on an empty composer, interrupts a running turn "

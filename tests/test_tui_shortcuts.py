@@ -71,6 +71,16 @@ class TableTests(unittest.TestCase):
     def test_the_installation_keys_table_is_the_code_table(self) -> None:
         self.assertEqual(documented_keys(), list(SHORTCUTS))
 
+    def test_composer_rows_explain_focused_navigation_exceptions(self) -> None:
+        for source, table in (("overlay", SHORTCUTS), ("installation", documented_keys())):
+            with self.subTest(source=source):
+                rows = dict(table)
+                newline = rows["\\ then Enter, Alt+Enter, Shift+Enter, Ctrl+J"]
+                self.assertIn("with a list or menu focused, Ctrl+J moves down instead", newline)
+                self.assertIn("Alt+Enter and Shift+Enter still add a line in an open menu", newline)
+                self.assertIn("backslash then Enter may accept a completion", newline)
+                self.assertIn("with a list or menu focused, Ctrl+K moves up instead", rows["Ctrl+U / Ctrl+K"])
+
     def test_every_row_names_keys_and_what_they_do_once(self) -> None:
         keys = [keys for keys, _does in SHORTCUTS]
         self.assertEqual(len(keys), len(set(keys)))
