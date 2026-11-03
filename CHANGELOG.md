@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **Memory recall costs a turn far less.** The memory pack is rendered in
+  `on_turn_start`, before the turn's model call, so its cost is turn latency
+  (a code comment and `docs/MEMORY.md` said it was rendered off the hot path;
+  both now say what happens). Every render ran the credential and safety scan
+  on every stored record again, twice on a console turn, and that scan was
+  most of the render. Each record's verdict is now kept, keyed by the digest
+  of the record's exact content, so an unchanged record is not scanned again
+  and a changed one is scanned on its next render and refused there if it
+  became unsafe. The credential check on the short metadata strings a render
+  redacts is kept per string the same way. A turn also reads each review file
+  once instead of three times and lists the records directory once less.
+  On a read-only copy of the owner's store (39 records), `on_turn_start` plus
+  `prefetch` went from 77-124 ms to 13-17 ms and a repeat render from 42-52
+  ms to 10-14 ms; on a synthetic 500-record store, from 3.0-3.3 s to
+  0.13-0.52 s per turn. The first render in a process still scans every
+  record (measured on a machine under heavy load, two interleaved rounds).
 - **Memory recall shows what the turn asked for, once per conversation.**
   A message with nothing to search for (an empty turn, "야") used to get every
   saved memory in full; it now gets pinned ones in full and the rest as the

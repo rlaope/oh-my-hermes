@@ -37,7 +37,7 @@ import re
 from typing import Any
 
 from .awareness_delivery import _awareness_delivery_lock
-from .hermes_memory import RECORDS_DIRECTORY_LABEL, REVIEWS_DIRECTORY_LABEL, _read_reviews, read_reviewed_records
+from .hermes_memory import RECORDS_DIRECTORY_LABEL, REVIEWS_DIRECTORY_LABEL, _read_reviews, _reviewed_records, read_reviewed_records
 from .memory_recall_selector import MemoryRecallSelection, select_memory_recall
 from .memory_recall_support import PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION
 from .memory_store_io import atomic_write_json, guard_store_write
@@ -140,16 +140,24 @@ def read_record_store_snapshot(homes: list[Path] | tuple[Path, ...]) -> RecordSt
     `read_project_memory_records`; pins are a union because a pin in either
     store is a delivery-priority hint, never an eligibility input.
     """
-    # Reviews are read twice below; only this pass collects, so a corrupt
-    # review is named once.
+    # Each home's reviews are read once, for its records' review check and for
+    # the snapshot (a live turn renders from this, so a second read of every
+    # review cost every turn); records are `read_project_memory_records`'.
     unreadable: list[str] = []
-    records = read_project_memory_records(homes, unreadable=unreadable)
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
     reviews: dict[str, dict[str, object]] = {}
     usage: dict[str, dict[str, object]] = {}
     pins: set[str] = set()
     for home in homes:
         memory_dir = Path(home).expanduser() / "memory"
-        for review_id, review in _read_reviews(memory_dir / "reviews").items():
+        home_reviews = _read_reviews(memory_dir / "reviews", unreadable=unreadable)
+        for record in _reviewed_records(memory_dir, home_reviews, unreadable=unreadable):
+            record_id = str(record.get("record_id", "") or "")
+            if record_id and record_id not in seen:
+                seen.add(record_id)
+                records.append(record)
+        for review_id, review in home_reviews.items():
             reviews.setdefault(review_id, review)
         for record_id, entry in _read_usage(memory_dir / "usage.json").items():
             usage.setdefault(record_id, entry)

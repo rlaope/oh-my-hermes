@@ -306,9 +306,16 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._project_home: Path | None = None
         self._project_cwd: str | None = None
         self._project_resolution = ProjectIdentityResolution()
-        # prefetch() is called before every API call and the base class asks for
-        # it to be fast, so the pack is rendered off the hot path and served
-        # from here. `_query` is what the pack was ranked for; `_pack_count`
+        # The pack `prefetch()` serves. It is NOT rendered off the hot path:
+        # Hermes calls `on_turn_start` and then `prefetch` before the turn's
+        # API call, and `on_turn_start` renders for the new message there, so
+        # a render is turn latency. `queue_prefetch` renders again on Hermes'
+        # worker after a turn, for that turn's message; the next
+        # `on_turn_start` replaces it, and what it leaves behind is the record
+        # safety verdicts it cached (`_governance_safety`), which the next
+        # render reuses. `prefetch` re-renders only when its query, principal
+        # or session differs from the pack's. `_query` is what the pack was
+        # ranked for; `_pack_count`
         # is how many memories it carries in full that this conversation did
         # not already hold (`_recalled`).
         self._pack = ""
@@ -900,6 +907,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
 
         Hermes queues with the turn that just finished, so the records are
         ranked for the conversation as it stands, not for the next message.
+        Hermes' next `on_turn_start` re-renders for that message before the
+        pack is served; this render serves a host that prefetches without it.
         """
         # Hermes runs this on its memory-sync worker thread while the next
         # turn's `on_turn_start`/`prefetch` run on the main thread; the lock

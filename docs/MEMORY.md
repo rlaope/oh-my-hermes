@@ -1830,7 +1830,8 @@ writing unreviewed updates.
 The Hermes memory provider (`memory.provider: omh`) is the lane through which
 reviewed memory reaches a Hermes turn without being asked for. Before every
 model call Hermes takes the provider's prefetch text; OMH serves one pack,
-rendered off the hot path and re-ranked after each turn:
+rendered for the new message in `on_turn_start`, before the turn's model call,
+and re-ranked after each turn:
 
 1. system-tier memory blocks in full, under the block render budget;
 2. reference-tier blocks as a label index (values stay behind `omh_memory
