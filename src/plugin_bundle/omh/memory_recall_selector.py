@@ -27,6 +27,7 @@ from .memory_recall_support import (
     MEMORY_SCOPE_SCHEMA_VERSION,
     PROJECT_MEMORY_RECALL_PACK_SCHEMA_VERSION,
     PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
+    SIMILAR_WORDING_JACCARD_PCT,
     _ADMISSION_VERACITY_DEFAULT_PCT,
     _ADMISSION_VERACITY_WEIGHT_PCT,
     _AGE_TIER_BOUNDS_DAYS,
@@ -68,7 +69,9 @@ from .memory_recall_support import (
     _replay_evaluation,
     _resolve_query_intent,
     _scope,
+    memory_summary_terms,
     newest_record,
+    point_in_time_cue,
     normalized_summary_key,
     recall_pack_policy,
     record_subject,
@@ -223,6 +226,10 @@ def effective_recall_configuration() -> dict[str, object]:
         "duplicate_collapse": "normalized_exact_match/v1",
         "subject_collapse": "newest_non_retired_per_scope_subject/v2",
         "subject_score_transfer": "kept_record_shares_a_query_term/v1",
+        "similar_wording_collapse": {
+            "rule": "older_snapshot_yields_to_newest_admitted_same_scope_topic_no_subject_conflict/v1",
+            "jaccard_pct": SIMILAR_WORDING_JACCARD_PCT,
+        },
     }
 
 
@@ -324,6 +331,91 @@ def _collapse_duplicate_summaries(
             }
         )
     return remaining, duplicates
+
+
+# Tags that say where a record came from, not what it is about, so sharing one
+# never makes two records one topic.
+_PROVENANCE_TAGS = frozenset({"hermes-demotion"})
+
+
+def _restates(newer: Mapping[str, object], newer_terms: frozenset[str], older: Mapping[str, object], older_terms: frozenset[str]) -> bool:
+    """Whether an older admitted snapshot says what a newer record says, in other words.
+
+    All of: the older summary states a point in time (`point_in_time_cue`: a
+    dated "as of" or a "v1.2" version), which a later statement of the same
+    thing replaces; the same scope (kind and ref); not two different declared
+    subjects (two subjects are two things, whatever the wording); one topic,
+    which is the scope itself for a project scope and a shared topic tag
+    anywhere else (user-global and channel records from many projects share one
+    scope); and summaries sharing at least `SIMILAR_WORDING_JACCARD_PCT` of
+    their distinct stemmed terms. Wording alone cannot tell a corrected value
+    from a second fact that differs in one word ("Deploy notes alpha ..." /
+    "... bravo ..."), so a record that is not a snapshot is never dropped here;
+    capture's similar-wording hint asks the model instead. A summary redacted
+    whole never matches.
+    """
+    if not point_in_time_cue(str(older.get("summary", ""))):
+        return False
+    scope = newer.get("scope")
+    if scope != older.get("scope") or not isinstance(scope, Mapping):
+        return False
+    if len({str(item.get("subject", "") or "") for item in (newer, older)} - {""}) > 1:
+        return False
+    tags = [{str(tag) for tag in item.get("tags") or []} - _PROVENANCE_TAGS for item in (newer, older)]
+    if scope.get("kind") != "project" and not tags[0] & tags[1]:
+        return False
+    if not newer_terms or not older_terms or "[redacted]" in {normalized_summary_key(str(item.get("summary", ""))) for item in (newer, older)}:
+        return False
+    return len(newer_terms & older_terms) * 100 >= len(newer_terms | older_terms) * SIMILAR_WORDING_JACCARD_PCT
+
+
+def _collapse_similar_wording(
+    included: list[dict[str, object]], *, pins: set[str]
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Serve only the newest of admitted records that restate one fact (`_restates`).
+
+    A dated snapshot ("As of v0.1.7, nanran has ...") and its later restatement
+    are both approved and both match the same query, so both used to ride
+    along, the stale one beside the fact that replaced it. The older one is
+    named `superseded_by_wording` with the record kept. Records are compared
+    newest first (`newest_record`'s order), each only against records already
+    kept, so a chain of small edits never drops a record that does not resemble
+    the one kept. A pinned record is never dropped. Only records this query
+    admitted are compared: an older record whose restatement the query did not
+    reach is served as before.
+    """
+    newest_first = sorted(
+        sorted(included, key=lambda item: str(item.get("record_id", ""))),
+        key=lambda item: str(item.get("approved_at", "")),
+        reverse=True,
+    )
+    kept: list[tuple[dict[str, object], frozenset[str]]] = []
+    replaced_by: dict[str, str] = {}
+    for item in newest_first:
+        terms = memory_summary_terms(str(item.get("summary", "")))
+        record_id = str(item.get("record_id", ""))
+        newer = next((other for other, other_terms in kept if _restates(other, other_terms, item, terms)), None)
+        if newer is not None and record_id not in pins:
+            replaced_by[record_id] = str(newer.get("record_id", ""))
+            continue
+        kept.append((item, terms))
+    remaining: list[dict[str, object]] = []
+    restated: list[dict[str, object]] = []
+    for item in included:
+        record_id = str(item.get("record_id", ""))
+        if record_id not in replaced_by:
+            remaining.append(item)
+            continue
+        restated.append(
+            {
+                "record_id": record_id,
+                "reason": "superseded_by_wording",
+                "superseded_by": replaced_by[record_id],
+                "staleness": item.get("staleness", {"state": "not_checked"}),
+                **_recall_evidence_fields(item.get("replay_evaluation")),
+            }
+        )
+    return remaining, restated
 
 
 def _evaluate_memory_artifact(
@@ -719,6 +811,8 @@ def select_memory_recall(
         fallback_served = {"mode": "active_tier", "reason": "no_query_overlap", "readmitted_count": len(included)}
     included, duplicates = _collapse_duplicate_summaries(included, pins=pins)
     excluded.extend(duplicates)
+    included, restated = _collapse_similar_wording(included, pins=pins)
+    excluded.extend(restated)
     candidates_by_id = {str(candidate[0].get("record_id", "")): candidate for candidate in candidates}
     # A pack the query did not answer (the active-tier fallback, or no query
     # terms at all) is one a live turn lists by name rather than shows; the

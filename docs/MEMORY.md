@@ -677,6 +677,36 @@ adapters), with duplicates skipped, and map the result to one `status`:
 | `refused` | Nothing was written: invalid input (including an `invalid_subject`), a session that may not write (`shared_surface_writes_refused` on a shared surface, `writes_disabled` in a background run, `session_lens_unavailable` with no provider lens; see [Surface classes](#surface-classes)), memory turned off, a project scope this session cannot resolve, or an `instruction_shaped_summary` (a second-person order or a Korean request ending, outside `procedure` records), whose `next_action` asks for the fact restated as an observation. |
 | `error` | Admission raised (an unreadable store, a lock held past its 10 s wait); `reason` names the exception class and nothing is confirmed saved. |
 
+A model capture is `durable` unless it says otherwise, with one exception. A
+summary that states how something stands at one point in time ages instead:
+when it carries a dated "as of" (`As of 2026-10-30, ...`) or a dotted version
+written with `v` (`nanran v0.1.13 added ...`, `since v0.1.12`) and the captor
+named no `retention_class`, it is kept `standard`. It then gets the default
+90-day review deadline: past it the record stops recalling
+(`stale_review_required`) until it is confirmed or corrected. The result carries
+`retention_class: "standard"` and `point_in_time` (`as_of_date` or `version`).
+The set is closed and was measured on a real store: 8 of 39 records matched,
+all snapshots of a release or a dated state. A dated decision (`Decided
+2026-10-27: ...`), a bare `v1`, a version without `v` (`Hermes 0.22.5`) and
+"currently" are not in it. A class the captor passes is kept, and a `replaces`
+or `correct` that restates a durable record as a snapshot makes it `standard`
+too. Existing records are not rewritten.
+
+A capture that lands user-global only because the session is outside a
+repository (no `scope` given) and names a known project carries `scope_hint`:
+`projects`, `saved_scope: "user-global"`, `reason:
+"names_project_outside_repository"` and a `next_action`. Such a record is
+recalled in every repository. The hint says that a fact about only that
+project is better saved from a session inside that repository, with this
+record retired. The record is never moved, and the model decides. A project is
+known when this summary, or a user-global record the session already holds,
+points at its repository: a hosted URL (`github.com/<owner>/<repo>`, GitLab,
+Bitbucket) or the absolute path of a checkout root on this machine. Its name
+then matches as a whole word in any case (a Korean particle after it
+included), or as the `subject` or the subject's first part
+(`nanran-folders`). A project named only by name, with no repository pointer
+anywhere in the store, is not known.
+
 `subject` is optional: a short slug the model chooses for what the fact is
 about (`deploy-branch`, `reply-language`), in the closed shape
 `[a-z0-9][a-z0-9-]{0,47}`. Anything else is refused as `invalid_subject`, never
@@ -707,7 +737,9 @@ redacted to `[redacted]` never matches anything, for hints or duplicates.
 - `similar_record_id`, `similar_summary` and `similar_wording_pct` name the
   record whose wording is closest, when the two summaries share at least
   `SIMILAR_WORDING_JACCARD_PCT` (60) percent of their distinct stemmed terms
-  (token Jaccard, compared in integers).
+  (token Jaccard, compared in integers). Recall uses the same measure to
+  serve only the newer record when the older one is a point-in-time snapshot
+  in the same scope and topic (see Recall Ranking and Delivery Usage).
 - `recalls_now` lists which of the new record and the named one an unqueried
   prefetch under the session's lens serves after the write. It is computed by
   running the selector, so a same-second tie on a subject (approval stamps
@@ -1363,6 +1395,35 @@ words, because two different facts given one slug by mistake must not serve
 the unrelated one. The collapse reads two structured fields and never the
 summaries. A record with no subject never joins a group, different scopes
 never merge, and a pin does not hold an older value in place.
+
+An older point-in-time snapshot that a newer record restates in other words
+is collapsed the same way, by reading the summaries, but only among the
+records this query admitted. The two count as one fact only when all of these
+hold:
+
+- The older summary is a snapshot: a dated "as of" or a `v1.2`-style version
+  (the capture rule above). Wording alone cannot tell a corrected value from
+  a second fact that differs in one word ("Deploy notes alpha ..." / "...
+  bravo ..."), so a record that is not a snapshot is never dropped here.
+  Capture's similar-wording hint asks the model about it instead.
+- They are in the same scope.
+- They do not declare two different subjects.
+- They share a topic: the project scope itself, or, in a user-global or
+  channel scope, a shared tag. The `hermes-demotion` provenance tag is not a
+  topic.
+- Their summaries share at least `SIMILAR_WORDING_JACCARD_PCT` (60) percent of
+  their distinct stemmed terms, the same measure as capture's
+  `similar_wording_pct` hint.
+
+The newest (`newest_record`) is served, and each older one is excluded as
+`superseded_by_wording`, with `superseded_by` naming the record kept. Records
+are compared newest first, and each only against records already kept, and a
+pinned record is never dropped. An older record whose restatement the query
+did not reach is served as before. Two similar facts that can both be true
+are both served: an older record that is not a snapshot, different subjects,
+different topic tags, or wording below the threshold (two different facts
+about one topic score about 27). On the measured owner store no pair came
+near 60 (the highest was 19), so this changed nothing there.
 
 A query that matches nothing does not empty the pack. (Tool recall,
 `omh_remember`/`omh_memory` `action="recall"`, passes `query_fallback=False`

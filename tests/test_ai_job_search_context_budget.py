@@ -358,7 +358,7 @@ class AiJobSearchContextBudgetTests(unittest.TestCase):
         from omh.maintenance.drift import budget_metrics
         expected = {
             'skill_index_line_max_chars': 100,
-            'plugin_tool_schema_chars': 72455,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85).
+            'plugin_tool_schema_chars': 72488,  # Parked DAG waits (+429), delegation backends (+245), six routing-recipe categories (+213), opt-in omh-lsp tools (+2187), opt-in lsp_diagnostics (+396), identity argument (+143), dag node role (+85), omh_memory snapshot retention (+33).
             'pre_llm_call_context_chars_max': 5632,  # The pi-family runtime rename (+6), then the route-hint dedup (-154).
             'pre_llm_call_context_fallback_chars_max': 7184,  # The same rename (+6), the human-voice primer sentence (+116), then the route-hint dedup (-154).
             'awareness_primer_markdown_chars': 3630,  # Human-voice reply sentence (+110).

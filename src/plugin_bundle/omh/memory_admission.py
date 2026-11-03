@@ -55,6 +55,7 @@ from .memory_recall_support import (
     DEFAULT_MEMORY_ATTENTION_TIER,
     MAX_RETENTION_DAYS,
     PROJECT_MEMORY_RECORD_SCHEMA_VERSION,
+    SIMILAR_WORDING_JACCARD_PCT,
     _DEFAULT_PERSPECTIVE_OBSERVER,
     _EPISODE_DEFAULT_TTL_DAYS,
     _MEMORY_CADENCE_DEFAULTS,
@@ -132,15 +133,6 @@ PROJECT_MEMORY_RECORD_TYPES = ("fact", "decision", "lesson", "procedure", "episo
 CAPTURE_ON_DUPLICATE_CHOICES = ("candidate", "skip")
 _MEMORY_ATTENTION_REASON_LIMIT = 240
 _DERIVED_FROM_LIMIT = 8
-# Capture names a held record whose summary shares at least this share of the
-# two summaries' distinct stemmed terms (token Jaccard, in percent, compared in
-# integers). A changed value in an otherwise repeated sentence ("The staging
-# database runs postgres 16" -> "... 17") scores 71; two different facts about
-# one topic ("Staging deploys run canary batches before promotion" / "Staging
-# deploys wait for a green nightly run") score 27. It is a hint about wording only: a
-# negation shares nearly every term with the fact it negates, so it never
-# decides that two records state the same fact, and the capture is never held.
-SIMILAR_WORDING_JACCARD_PCT = 60
 
 
 def build_project_memory_policy(omh_home: Path, *, mode: str | None = None, mode_source: str = "default") -> dict[str, object]:
