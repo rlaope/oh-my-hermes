@@ -263,7 +263,7 @@ class RetakeTailTests(LoopTestCase):
         self.session(20)
         self.transcript.retake_tail(WIDTH, THEME, max_rows=10)
         again = lines_text(self.transcript.take_stable_lines(WIDTH, THEME))
-        self.assertEqual(again[0], "⋯ 37 earlier messages · /history shows all")
+        self.assertEqual(again[0], "⋯ 37 earlier entries · /history shows all")
         self.assertEqual(again[1:], self.history(details=False)[-10:])  # reply 18, prompt 19, reply 19: 4 + 2 + 4
         self.assertEqual(again[2], "┃ ⚚ Hermes")
         self.assertEqual(lines_text(self.transcript.take_stable_lines(WIDTH, THEME)), [])
@@ -281,7 +281,7 @@ class RetakeTailTests(LoopTestCase):
         self.step(ev("message.complete", text=reply, status="complete"))
         self.transcript.retake_tail(WIDTH, THEME, max_rows=5)
         again = lines_text(self.transcript.take_stable_lines(WIDTH, THEME))
-        self.assertEqual(again[0], "⋯ 1 earlier message · /history shows all")
+        self.assertEqual(again[0], "⋯ 1 earlier entry · /history shows all")
         self.assertEqual(len(again), 33)  # the row, a spacer, the reply's header and all 30 of its rows
 
     def test_the_live_block_stays_live_and_is_never_counted_as_left_out(self) -> None:
@@ -291,7 +291,7 @@ class RetakeTailTests(LoopTestCase):
         self.step(ev("message.delta", text="still streaming"))
         self.transcript.retake_tail(WIDTH, THEME, max_rows=3)
         again = lines_text(self.transcript.take_stable_lines(WIDTH, THEME))
-        self.assertEqual(again, ["⋯ 6 earlier messages · /history shows all", "", "┃ ❯ again"])
+        self.assertEqual(again, ["⋯ 6 earlier entries · /history shows all", "", "┃ ❯ again"])
         self.assertEqual(self.live(), ["", "┃ ⚚ Hermes", "┃   still streaming"])
 
     def test_the_take_after_it_renders_no_kept_block_again(self) -> None:
@@ -330,6 +330,61 @@ class RetakeTailTests(LoopTestCase):
                          lines_text(self.transcript.history_lines(30, THEME, details=False)))
 
 
+class KeptReplyRowsTests(unittest.TestCase):
+    """A finished reply is wrapped once per width and theme: drawn again (a full redraw), its rows are the kept ones,
+    the rows a reply never drawn before gets."""
+
+    TEXT = ("## Answer\n\n한국어 문장입니다 — 폭이 두 칸인 글자 🎉 ✅\n\n- item **bold** with `code`\n- [a link](https://example.com)\n\n"
+            "```python\ndef fib(n: int) -> int:\n    return n\n```\n\n" + "lorem ipsum dolor sit amet " * 8)
+
+    def rows(self, block: AssistantBlock, width: int, theme: object = THEME) -> tuple[list[Line], int]:
+        """`block_rows`, and how many times it wrapped markdown for them."""
+        with patch("omh.tui.transcript.render_lines", wraps=transcript_module.render_lines) as wrapped:
+            rows = block_rows(block, width, theme)  # type: ignore[arg-type]
+        return rows, wrapped.call_count
+
+    def fresh(self, block: AssistantBlock, width: int, theme: object = THEME) -> list[Line]:
+        """The rows of the same reply never drawn before."""
+        return block_rows(AssistantBlock(block.text, done=True, model=block.model), width, theme)  # type: ignore[arg-type]
+
+    def test_drawn_again_at_the_same_width_and_theme_it_is_not_wrapped_again(self) -> None:
+        block = AssistantBlock(self.TEXT, done=True, model="vendor/model-1")
+        first, wrapped = self.rows(block, WIDTH)
+        self.assertEqual(wrapped, 1)
+        again, wrapped = self.rows(block, WIDTH)
+        self.assertEqual((again, wrapped), (first, 0))
+        again.append(())  # the caller's list is its own
+        self.assertEqual(self.rows(block, WIDTH), (first, 0))
+        self.assertEqual(first, self.fresh(block, WIDTH))
+
+    def test_another_width_theme_text_or_model_is_wrapped_as_a_reply_never_drawn(self) -> None:
+        block = AssistantBlock(self.TEXT, done=True, model="vendor/model-1")
+        self.rows(block, WIDTH)
+        looked = with_launch_look(THEME, default_theme(), None, "ember")
+        changes = (
+            ("width", lambda: None, 40, THEME),
+            ("theme", lambda: None, WIDTH, looked),
+            ("text", lambda: setattr(block, "text", block.text + "\n\nmore"), WIDTH, THEME),
+            ("model", lambda: setattr(block, "model", "vendor/model-2"), WIDTH, THEME),
+        )
+        for name, change, width, theme in changes:
+            with self.subTest(name):
+                self.rows(block, WIDTH)  # kept at WIDTH in THEME first
+                change()
+                rows, wrapped = self.rows(block, width, theme)
+                self.assertEqual(wrapped, 1)
+                self.assertEqual(rows, self.fresh(block, width, theme))
+
+    def test_a_reply_still_streaming_keeps_nothing(self) -> None:
+        block = AssistantBlock("streaming so far", model="m")
+        self.rows(block, WIDTH)
+        self.assertIsNone(block.kept)
+        block.text += ", and more"
+        block.done = True
+        rows, wrapped = self.rows(block, WIDTH)
+        self.assertEqual((rows, wrapped), (self.fresh(block, WIDTH), 1))
+
+
 class BlockCapTests(LoopTestCase):
     """At most `BLOCK_CAP` blocks are held; the oldest ones already printed go first."""
 
@@ -358,7 +413,7 @@ class BlockCapTests(LoopTestCase):
                 self.transcript.take_stable_lines(WIDTH, THEME)
         self.transcript.retake_tail(WIDTH, THEME, max_rows=4)
         again = lines_text(self.transcript.take_stable_lines(WIDTH, THEME))
-        self.assertEqual(again, ["⋯ 23 earlier messages · /history shows the last 10", "", "· notice 23", "", "· notice 24"])
+        self.assertEqual(again, ["⋯ 23 earlier entries · /history shows the last 10", "", "· notice 23", "", "· notice 24"])
 
     def test_blocks_past_the_cap_go_once_printed_without_waiting_for_a_new_block(self) -> None:
         with patch("omh.tui.transcript.BLOCK_CAP", 10):
@@ -373,7 +428,7 @@ class BlockCapTests(LoopTestCase):
                 self.transcript.add_notice(f"notice {number}")
             self.transcript.retake_tail(WIDTH, THEME, max_rows=4)
             again = lines_text(self.transcript.take_stable_lines(WIDTH, THEME))
-        self.assertEqual(again, ["⋯ 23 earlier messages · /history shows the last 10", "", "· notice 23", "", "· notice 24"])
+        self.assertEqual(again, ["⋯ 23 earlier entries · /history shows the last 10", "", "· notice 23", "", "· notice 24"])
         self.assertEqual(len(self.transcript.blocks), 10)
 
     def test_a_turns_answer_is_still_known_after_its_own_blocks_push_older_ones_out(self) -> None:

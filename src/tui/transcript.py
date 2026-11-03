@@ -273,6 +273,9 @@ class AssistantBlock:
     text: str = ""
     done: bool = False
     model: str | None = ""  # the session's model as it began (`Transcript.model`); None: not known (a resumed reply)
+    # The rows `block_rows` last drew for it once done, with what they were drawn from: (text, model, width, theme,
+    # rows). A full redraw at that width and theme takes them as they are instead of wrapping the reply again.
+    kept: tuple[str, str | None, int, Theme, tuple[Line, ...]] | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass
@@ -658,7 +661,9 @@ def _duration(payload: dict[str, Any], row: ToolRow, now: float, waited: float =
 
 
 def _earlier(count: int) -> str:
-    return f"{count} earlier {'message' if count == 1 else 'messages'}"
+    """`count` blocks, named for what they are: a prompt, a reply, a tool group, a notice and a turn's done line are
+    an entry each, so a reply with its calls and its done line is several, and "messages" would count them wrong."""
+    return f"{count} earlier {'entry' if count == 1 else 'entries'}"
 
 
 # Where a tool's printed text is in its result, in order; a failed tool's error first.
@@ -1029,8 +1034,14 @@ def _reply_width(width: int) -> int:
 
 
 def _assistant_rows(block: AssistantBlock, width: int, theme: Theme) -> list[Line]:
+    kept = block.kept
+    if kept is not None and kept[0] == block.text and kept[1] == block.model and kept[2] == width and kept[3] is theme:
+        return list(kept[4])
     rows = render_lines(_display_lines(block.text), MarkdownState(), _reply_width(width), theme)[0]
-    return _marked(rows, True, theme, width, block.model)
+    marked = _marked(rows, True, theme, width, block.model)
+    if block.done:
+        block.kept = (block.text, block.model, width, theme, tuple(marked))
+    return marked
 
 
 def _seconds(value: float) -> str:
