@@ -4,19 +4,16 @@ All notable changes will be documented here.
 
 ## Unreleased
 
-- **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
-  Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
-  dialogs (/model, /sessions, /rewind, /theme, /launch), the agent view list
-  and tree, history search, and open slash and @ completion menus, matching
-  Down and Up arrow navigation. When no list or menu is open, Ctrl+J keeps its
-  newline and steer behaviors and Ctrl+K keeps delete-to-end-of-line.
-
-- **Ctrl+N and Ctrl+P navigate lists across the OMH TUI.** In the `/model`,
-  `/sessions`, `/rewind` and `/theme` pickers, the agent list (ordinary roster
-  and DAG tree modes), history search, and slash and `@` path completion menus,
-  Ctrl+N moves down and Ctrl+P moves up by one row, matching Down and Up arrow
-  navigation. On an open completion menu, Ctrl+P navigates the menu rather than
-  folding the plan.
+- **Ctrl+N/P and Ctrl+J/K move through lists and menus.** In the `/model`,
+  `/sessions`, `/rewind` and `/theme` pickers, the agent list (roster and DAG
+  tree), history search (Ctrl+R) and the slash and `@` path completion menus,
+  Ctrl+N and Ctrl+J move down one row and Ctrl+P and Ctrl+K move up, as Down
+  and Up do; in history search Down and Up now step through matches too. While
+  a completion menu is open those chords move the menu instead: Ctrl+P does not
+  fold the plan, and Ctrl+J and Ctrl+K do not add a newline or delete to the
+  end of the line (Alt+Enter or Shift+Enter still add a line, Esc closes the
+  menu). With no list or menu open, Ctrl+J keeps its newline and steer
+  behaviour, Ctrl+K deletes to the end of the line and Ctrl+P folds the plan.
 
 - **"Improve the architecture" has an owner.** `tech-debt-audit` gains an
   architecture-deepening reading: it looks for shallow modules (an interface
