@@ -66,6 +66,12 @@ KEYS = (("/dag-ulw", "run a goal as a graph of subagents"), ("/resume", "reopen 
         ("/theme", "switch the launch look"), ("?", "every shortcut"))
 LOADING = "loading…"
 LAST_KNOWN = "last-known"  # the skills drawn are the last launch's, until this session's arrive
+# The card warns when Hermes lists fewer OMH skills than this share of the ones installed. What hid OMH's skills
+# took them all at once: on 27 Oct 2026 Hermes refused 145 of 147 as ambiguous (a stale generation pack beside the
+# pointer), and from 30 Oct it listed none (a cached path to a collected generation), while the card said
+# "skills 89 installed". What lowers the count legitimately -- a skill someone disabled, one Hermes holds back on a
+# platform -- takes them a name at a time; the bot's prompts listed 137-139 of 153. Half is far from both.
+VISIBLE_SHARE_FLOOR = 0.5
 SNAPSHOT_SCHEMA = "omh.tui.launch-skills/v1"
 
 
@@ -92,6 +98,7 @@ class Skills:
     hermes_categories: tuple[str, ...]
     hermes: int
     last_known: bool = False  # read from the last launch's snapshot, not from this session
+    omh_installed: int | None = None  # the skills OMH's install manifest records; None when it was not read
 
 
 @lru_cache(maxsize=1)
@@ -138,6 +145,31 @@ def skill_rows(skills: Mapping[str, Sequence[str]], members=family_members) -> S
     categories = tuple(sorted(category for category, names in skills.items()
                               if any(isinstance(name, str) and name not in omh for name in names)))
     return Skills(groups, len(omh), categories, len([name for name in installed if name not in omh]))
+
+
+def installed_omh_count(omh_home: Path) -> int | None:
+    """How many skills OMH's install manifest records, the plugin's own reader; None when it records none."""
+    from ..plugin_bundle.omh.installed_skills import installed_skill_labels  # only once skills arrive
+
+    labels = installed_skill_labels(omh_home)
+    return None if labels is None else len(labels)
+
+
+def visibility_warning(s: Skills | None, p: Paint) -> Line:
+    """A row saying Hermes lists far fewer OMH skills than are installed, and what to do; () otherwise.
+
+    Only for this session's own list, never a last-known one: the count is
+    what the gateway resolved when it built the session, so a low one means
+    the gateway holds a skills path that no longer serves them, or one its
+    config names twice. A restart makes it resolve again; a session begun
+    while they were missing keeps that index until `/new`. `omh doctor`
+    tells the two causes apart.
+    """
+    if s is None or s.last_known or not s.omh_installed or s.omh >= s.omh_installed * VISIBLE_SHARE_FLOOR:
+        return ()
+    return (Span(f"Hermes lists {s.omh} of {s.omh_installed} installed OMH skills", p.theme.warn),
+            Span(" · ", p.theme.dim), Span("its skills path is likely stale: restart the gateway, or ", p.theme.muted),
+            Span("/new", p.theme.slash), Span(" for an older session · omh doctor says why", p.theme.muted))
 
 
 def snapshot_path(omh_home: Path) -> Path:
@@ -342,7 +374,9 @@ def _kept(s: Skills | None, drop: int) -> tuple[tuple[str, tuple[str, ...]], ...
 def _skills_body(s: Skills | None, width: int, per_group: int, drop: int, p: Paint) -> list[Line]:
     if s is None:
         return []
-    rows = grid(_kept(s, drop), width, per_group, p)
+    warning = visibility_warning(s, p)
+    rows = [_pad(warning, width)] if warning else []
+    rows += grid(_kept(s, drop), width, per_group, p)
     return rows + (hermes_rows(s, width, p) if drop == 0 else [])
 
 

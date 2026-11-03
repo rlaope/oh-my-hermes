@@ -12,6 +12,7 @@ from .advisory import AdvisoryReport, run_config_advisories
 from .structural_search import inspect_structural_search
 from ..command_path import inspect_omh_command_path
 from ..config_adapter import (
+    anchored_external_dir,
     external_dir_registered,
     external_dirs,
     memory_provider_selection,
@@ -66,8 +67,9 @@ from ..paths import (
     managed_current_workflow_pack_dir,
 )
 from ..plugin_bundle.omh import runtime_paths
+from ..plugin_bundle.omh.installed_skills import installed_skill_labels
 from ..plugin_bundle.omh.installed_skills import installed_skill_names as hint_installed_skill_names
-from ..plugin_bundle.omh.installed_skills import skill_not_installed
+from ..plugin_bundle.omh.installed_skills import skill_label_holders, skill_not_installed
 from ..plugin_bundle.omh.memory_dreaming import read_dreaming_state, read_latest_consolidation
 from ..workflows.memory import (
     _OPEN_MAX_DAYS,
@@ -281,6 +283,7 @@ def run_doctor(paths: OmhPaths, *, state_write: bool = True) -> list[Check]:
     checks.append(_hermes_skill_edits_check(hermes_edits, ledger_writes, ledger_unread))
     checks.append(Check("skills_dir", paths.skills_dir.exists(), f"{paths.skills_dir}"))
     checks.append(_route_hint_skills_check(paths))
+    checks.append(_hermes_skill_visibility_check(paths))
     runtime_writable, runtime_access = _dir_write_access(paths.runtime_dir, state_write=state_write)
     checks.append(
         Check("runtime_artifacts", runtime_writable, f"{paths.runtime_dir} {runtime_access}", observed=state_write)
@@ -2976,6 +2979,99 @@ def _route_hint_skills_check(paths: OmhPaths) -> Check:
         remediation="Run `omh update` to rewrite the install manifest from the skills on disk.",
         next_action="Run `omh update`, then `omh doctor` again.",
         detail={"not_installed": missing},
+    )
+
+
+def _hermes_skill_visibility_check(paths: OmhPaths) -> Check:
+    """Can Hermes load each installed OMH skill by name, as its config resolves them?
+
+    `route_hint_skills` compares the manifest with the files on disk; this
+    compares it with what Hermes reads. Each `skills.external_dirs` entry is
+    anchored and resolved the way Hermes resolves it (a `current` pointer to
+    the generation it names), and every manifest label is counted across the
+    directories that exist (`skill_label_holders`). Two findings Hermes
+    reaches by different roads are kept apart, because they have different
+    repairs. Ambiguous: two directories hold the same skill, as a stale
+    generation pack beside the pointer did on 27-28 Oct 2026, and Hermes
+    refuses the name in both. Dangling: an entry resolves to a path that is
+    gone, as the collected generation was from 30 Oct, and Hermes lists
+    nothing from it.
+
+    Read-only, and it reads the config file, not a running gateway: Hermes
+    caches the resolved path until `config.yaml` changes, so a gateway
+    started before a repair can still hold the old one. The launch card says
+    that one, from the count the gateway itself lists. A warning with
+    `ok=True`, like `external_dir_ambiguity`: the hint stops naming such
+    skills on its own, so this must not flip the exit code.
+    """
+    name = "hermes_skill_visibility"
+    labels = installed_skill_labels(paths.omh_home)
+    if labels is None:
+        return Check(name, True, "no install manifest records a skill; nothing to compare with Hermes", observed=False)
+    try:
+        config_text = read_config(paths.hermes_config_path)
+    except (OSError, UnicodeDecodeError) as exc:
+        return Check(name, True, f"{paths.hermes_config_path} was not read: {exc}", observed=False)
+    entries = external_dirs(config_text)
+    if not entries:
+        return Check(
+            name,
+            True,
+            f"{paths.hermes_config_path} names no skills.external_dirs entry; the registration check reports that",
+            observed=False,
+        )
+    local = os.path.realpath(paths.hermes_home / "skills")
+    roots: list[str] = []
+    dangling: list[str] = []
+    for entry in entries:
+        real = os.path.realpath(anchored_external_dir(entry, paths.hermes_home))
+        if real == local or real in roots:
+            continue
+        if os.path.isdir(real):
+            roots.append(real)
+        else:
+            dangling.append(entry if real == entry else f"{entry} -> {real}")
+    holders = skill_label_holders(labels, roots)
+    ambiguous = sorted(label for label, count in holders.items() if count > 1)
+    missing = sorted(label for label, count in holders.items() if count == 0)
+    if not ambiguous and not missing:
+        return Check(name, True, f"Hermes can load all {len(labels)} installed OMH skill(s) by name")
+
+    def listed(names: list[str]) -> str:
+        return ", ".join(names[:5]) + (", ..." if len(names) > 5 else "")
+
+    parts: list[str] = []
+    actions: list[str] = []
+    if ambiguous:
+        parts.append(
+            f"{len(ambiguous)} sit in two or more of its skills directories ({', '.join(roots)}) and Hermes "
+            f"refuses a name two directories of one tier hold: {listed(ambiguous)}"
+        )
+        actions.append(
+            f"Keep one OMH skills directory under skills.external_dirs in {paths.hermes_config_path} and "
+            "remove the others"
+        )
+    if missing:
+        where = (
+            f"skills.external_dirs names {len(dangling)} path(s) that do not exist ({', '.join(dangling)})"
+            if dangling
+            else "no directory Hermes reads holds them"
+        )
+        parts.append(f"{len(missing)} are not found, because {where}: {listed(missing)}")
+        actions.append(
+            "Point the missing entry at an existing OMH skills directory"
+            if dangling
+            else f"Register OMH's skills directory under skills.external_dirs in {paths.hermes_config_path}"
+        )
+    visible = len(labels) - len(ambiguous) - len(missing)
+    return Check(
+        name,
+        True,
+        f"Hermes can load {visible} of {len(labels)} installed OMH skill(s) by name; " + "; ".join(parts),
+        severity="warning",
+        remediation="; ".join(actions) + ", then restart the Hermes gateway so it resolves the directories again.",
+        next_action=actions[0] + ", then restart the Hermes gateway.",
+        detail={"ambiguous": ambiguous, "not_found": missing, "dangling_entries": dangling, "directories": roots},
     )
 
 

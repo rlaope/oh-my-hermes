@@ -4,6 +4,22 @@ All notable changes will be documented here.
 
 ## Unreleased
 
+- **OMH notices when Hermes cannot load its skills.** From 27 Oct to 2 Nov
+  the skills were installed but Hermes could not load them by name: a stale
+  generation directory registered beside the pointer made every name
+  ambiguous, and then a cached path to a deleted generation left none. The
+  launch card still said "skills 89 installed", and the skill suggestion
+  kept telling the model to load skills that came back "not found". The
+  suggestion and the route hint now name only skills that exactly one of
+  Hermes' skills directories holds, read from the path Hermes itself
+  cached, so they go quiet instead of steering into a failed load. When
+  Hermes lists fewer than half of the installed OMH skills, the launch card
+  how many it lists and suggests a gateway restart, or `/new` for an older
+  session, with `omh doctor` to name the cause.
+  `omh doctor` has a new `hermes_skill_visibility` row that reports an
+  ambiguous registration and a missing directory separately. A healthy
+  install shows the same suggestion and the same card as before.
+
 - **A redraw at an unchanged width no longer stalls the TUI.** Switching
   tabs, Ctrl+L, `/redraw` and every other full redraw at the width the
   session was printed at reprinted the session by wrapping every finished
