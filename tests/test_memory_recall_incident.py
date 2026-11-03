@@ -24,6 +24,9 @@ from omh.workflows import memory
 
 SESSION = 'session-a'
 LONG_SUMMARY = ('checklist step repeated ' * 19).strip()
+# The live turn and the incident must rank with the same query: the selector
+# keeps six of the eight release records, and which six depends on the query.
+RELEASE_QUERY = 'release detail checklist step'
 
 
 class CaptureOptions(TypedDict, total=False):
@@ -58,13 +61,18 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         assert isinstance(record, dict)
         return record
 
-    def serve(self, session_id: str = SESSION) -> dict[str, object]:
-        """The actual provider lifecycle persists the receipt this profile's diagnosis reads."""
+    def serve(self, session_id: str = SESSION, query: str = 'structured response output') -> dict[str, object]:
+        """The actual provider lifecycle persists the receipt this profile's diagnosis reads.
+
+        The query names the records under test: a live turn serves only what
+        its query matches (no active-tier fallback), so an empty one would
+        select nothing but pins.
+        """
         assert self.root is not None
         live = OmhMemoryProvider(self.paths.omh_home, hermes_home=self.paths.hermes_home)
         live.initialize(session_id, platform="cli", hermes_home=str(self.paths.hermes_home), agent_context='primary', cwd=str(self.root))
-        live.queue_prefetch('')
-        live.prefetch('')
+        live.queue_prefetch(query)
+        live.prefetch(query)
         receipt = live.latest_prefetch_receipt()
         live.shutdown()
         assert receipt is not None
@@ -72,14 +80,30 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         return receipt
 
     def selected_not_rendered(self) -> tuple[dict[str, object], str]:
-        """Eight long summaries: the selector keeps six, the render budget fewer."""
+        """Eight long summaries: the selector keeps six, the render budget fewer.
+
+        A live turn shows only what its query matches, so the turn asks about
+        the release records, and the incident must name the same query: with
+        another one its own ranking keeps a different six, and an omitted
+        record can read as `over_budget` there (eight records approved in one
+        second tie, so which six depends on their random ids).
+        """
         for index in range(8):
             self.approved(f'release detail {index} {LONG_SUMMARY}')
-        receipt = self.serve()
+        receipt = self.serve(query=RELEASE_QUERY)
         rendering = receipt['rendering']
         assert isinstance(rendering, dict)
         omitted = rendering['selected_not_rendered']
         assert isinstance(omitted, list) and omitted
+        # The premise, every run: under the turn's query the incident selects
+        # exactly what the turn did, so no selected record reads as cut.
+        selection = receipt['selection']
+        assert isinstance(selection, dict)
+        api = self.api()
+        for record_id in selection['selected_record_ids']:
+            result = api.build_memory_recall_incident(
+                self.paths, api.RecallIncidentRequest(record_id=record_id, session_id=SESSION, query=RELEASE_QUERY))
+            self.assertIn(result['reason_code'], ('rendered_delivery_not_observed', 'selected_not_rendered'), record_id)
         return receipt, str(omitted[0]['record_id'])
 
     def test_recall_complaint_routing(self) -> None:
@@ -207,7 +231,7 @@ class MemoryRecallIncidentTests(unittest.TestCase):
                 self.assertIn(reason, selection['exclusion_reason_counts'])
         # Given the actual provider's persisted receipt for this profile and session.
         rendered = self.approved('rendered preference for the live turn')
-        receipt = self.serve()
+        receipt = self.serve(query='rendered preference for the live turn')
         selection = receipt['selection']
         assert isinstance(selection, dict)
         self.assertIn(rendered['record_id'], selection['selected_record_ids'])
@@ -223,7 +247,7 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         self.assertIsNone(result['model_use_observed'])
         _, omitted = self.selected_not_rendered()
         result = api.build_memory_recall_incident(self.paths, api.RecallIncidentRequest(
-            record_id=omitted, session_id=SESSION))
+            record_id=omitted, session_id=SESSION, query=RELEASE_QUERY))
         self.assertEqual(result['reason_code'], 'selected_not_rendered')
         self.assertEqual(result['stage'], 'selected_not_rendered')
         self.assertEqual(result['last_proven_stage'], 'selected')
@@ -384,7 +408,7 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         _, omitted = self.selected_not_rendered()
         # When
         result = api.build_memory_recall_incident(self.paths, api.RecallIncidentRequest(
-            record_id=omitted, session_id=SESSION))
+            record_id=omitted, session_id=SESSION, query=RELEASE_QUERY))
         # Then: provider evidence, no OMH correction, no mutation authority.
         self.assertEqual(result['stage'], 'selected_not_rendered')
         self.assertEqual(result['fault_domain'], 'provider')
@@ -403,7 +427,7 @@ class MemoryRecallIncidentTests(unittest.TestCase):
         api = self.api()
         record = self.approved()
         other = self.approved('unrelated user-global preference', scope_kind='user-global', scope_ref='default')
-        receipt = self.serve()
+        receipt = self.serve(query='structured response output, unrelated preference')
         path = receipts.prefetch_receipt_path(self.paths.omh_home)
         request = api.RecallIncidentRequest(record_id=record['record_id'], session_id=SESSION)
         # When

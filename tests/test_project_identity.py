@@ -53,9 +53,9 @@ class ProjectIdentityTests(unittest.TestCase):
         assert isinstance(record, dict)
         live = OmhMemoryProvider(paths.omh_home)
         live.initialize("s", platform="cli", cwd=b)
-        self.assertNotIn(record["record_id"], live.prefetch())
+        self.assertNotIn(record["record_id"], live.prefetch("sentinel"))
         live.initialize("s", platform="cli", cwd=a)
-        self.assertIn(record["record_id"], live.prefetch())
+        self.assertIn(record["record_id"], live.prefetch("sentinel"))
         self.assertEqual(candidate["scope"]["ref"], self.api.resolve_project_identity(a).identity)
 
     def test_local_remotes_are_anchored_and_cannot_cross_recall(self):
@@ -76,10 +76,10 @@ class ProjectIdentityTests(unittest.TestCase):
         assert isinstance(record, dict)
         provider = OmhMemoryProvider(paths.omh_home)
         provider.initialize("local", platform="cli", cwd=b)
-        self.assertNotIn(record["record_id"], provider.prefetch())
+        self.assertNotIn(record["record_id"], provider.prefetch("sentinel"))
         self.assertNotEqual(first.identity, second.identity)
         provider.initialize("local", platform="cli", cwd=a)
-        self.assertIn(record["record_id"], provider.prefetch())
+        self.assertIn(record["record_id"], provider.prefetch("sentinel"))
         config = a / ".git" / "config"
         for remote in ((a.parent / "upstream.git").as_posix(), (a.parent / "upstream.git").as_uri()):
             config.write_text(f'[remote "origin"]\n url = {remote}\n', encoding="utf-8")
@@ -162,7 +162,7 @@ class ProjectIdentityTests(unittest.TestCase):
         assert isinstance(record, dict)
         provider = OmhMemoryProvider(paths.omh_home)
         provider.initialize("external", platform="cli", cwd=repo)
-        self.assertIn(record["record_id"], provider.prefetch())
+        self.assertIn(record["record_id"], provider.prefetch("sentinel"))
         with chdir(repo):
             for reference in (identity, ""):
                 incident = build_memory_recall_incident(paths, RecallIncidentRequest(record_id=record["record_id"], session_id="external", scope_ref=reference, observed="hermes"))

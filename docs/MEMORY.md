@@ -1364,7 +1364,10 @@ the unrelated one. The collapse reads two structured fields and never the
 summaries. A record with no subject never joins a group, different scopes
 never merge, and a pin does not hold an older value in place.
 
-A query that matches nothing does not empty the pack. When a query has
+A query that matches nothing does not empty the pack. (Tool recall,
+`omh_remember`/`omh_memory` `action="recall"`, passes `query_fallback=False`
+and does not fall back; the live prefetch lists the fallback by name, below.)
+When a query has
 indexable tokens and no eligible record overlaps it, not even on a
 store-common term, and no pin applies, every `active`-tier record that was held
 out as `no_query_overlap` is served the way an unqueried pack serves it —
@@ -1402,9 +1405,11 @@ Each item is the record's `subject` slug, or `<record_type> <record_id>` when
 it has none; at most 8 are named, then `+K more`. Records captured in the same
 conversation are the exception and still render in full: a record whose
 `source_ref` is `hermes-session:<id>` for this session or one of its verified
-compaction ancestors. `omh_remember(action="recall", query=...)` reads an
-indexed record in full. The CLI `omh memory recall`, `omh_memory(action="recall")`
-and coding-handoff packs never index and still serve the active tier in full.
+compaction ancestors, and pinned records. `omh_remember(action="recall",
+query=...)` reads an indexed record in full when the query is its subject slug
+or record id (the labels the index lists), or matches its words. The CLI
+`omh memory recall` and coding-handoff packs never index and still serve the
+active tier in full; tool recall never falls back.
 The prefetch receipt lists the indexed ids as `rendering.indexed_records`
 (always present on new receipts, read as empty on older ones); rendered ids
 must equal the selected ids with the indexed ids removed, as a prefix, and
@@ -1852,6 +1857,66 @@ inside any repository (owner decision 2026-10-13; before it, the allowlist was
 empty there, so a capture made outside a repository was stored and never
 recalled). A shared surface outside a repository still reads nothing.
 
+A live turn serves only what it asked for, and only once per conversation
+(2026-11-03 audit: 89% of live-served records shared no word with the turn,
+and 84% repeated a record the session already held):
+
+- A query that matches no record gets the active-tier fallback as one
+  `<record_index>` line of names (see
+  [Recall Ranking and Delivery Usage](#recall-ranking-and-delivery-usage) above),
+  never the records in full. A query with no indexable terms ("야", an
+  empty message) gets the same: pinned records in full, every other record
+  it would serve listed by name. Records captured in this conversation stay in
+  full in both. So a pack never goes silent while approved active memory
+  exists (#2001), from the first turn on.
+- A turn that was only host framing or a host notice (a background-process
+  or delegation-completion notice, a bare skill invocation; the sanitizer's
+  `host_only`) considers no record at all: no records, no pins, no index,
+  and so no recall line. This is the one exception to #2001's rule, on
+  purpose: a notice is not a message from the person, Hermes runs the
+  prefetch for it anyway, and on a messenger the line it posted was noise
+  nobody asked for (2026-11-03 audit: 55 of 126 messenger recall lines). The
+  person's next message gets the pack as usual.
+- Hermes stamps each turn's injected block onto that turn's stored message and
+  replays it for the rest of the session, so a record served once is still in
+  context. Mixture-of-agents (MoA) turns are the exception: Hermes does not
+  stamp the block there (`agent/turn_context.py`), and the provider cannot tell
+  such a turn apart, so a record first served on a MoA turn is held as served
+  without staying in context until the next compaction or `/new`. (The
+  `codex_app_server` mode calls no prefetch at all.) The provider keeps the
+  `recall_revision` of each record it served (the stored `revision` plus the
+  summary, type and open/settled state it renders) and the selector skips a
+  record still at that revision as `served_this_session`. A revised record is
+  served again. A record the conversation was only shown by name is held as
+  listed: it leaves later indexes (`listed_this_session`), so a repeated
+  index costs nothing and posts no line, but a query that matches it still
+  gets it in full. For a matched query the skip runs before the budget cut,
+  so the slot goes to the next match; for an unmatched or term-less one after
+  it, so the index never grows into further records turn by turn. Every session switch Hermes reports
+  clears the list: a compaction, rotated or in place, summarises away the
+  blocks that carried the records, so each may be served once more. A new
+  provider starts empty as well. When Hermes reports `/new` only after the
+  next turn's prefetch already moved to the new session id, that prefetch
+  started the new conversation empty and renders again if its pack had left a
+  held record out; the late report then clears nothing. A queued render never
+  marks a record served; only `prefetch` does.
+- Blocks are still rendered every turn on a console; they count toward the
+  recall line only when their rendered text changed since the last serve.
+
+`omh_remember` and `omh_memory` recall pass `query_fallback=False`: a query
+that matches nothing is `nothing_found`, with a next action saying recall
+matches words (try other words, the record's names or language; a record's
+tags hold its topic words). A query made only of record ids looks those
+records up, and nothing else, through the same lens and eligibility. A query
+word that is a subject slug puts that record first while the words still
+search as usual, since a subject can also be a plain topic word. That is how
+an index entry is read. The live prefetch, coding handoffs, `omh memory
+recall` and the retrieval suite keep the selector's default configuration.
+
+When a pin is in scope, a message that matches nothing gets the pin and no
+index of the rest: a pin counts as a match, so the fallback that feeds the
+index does not fire (unchanged from before the index existed).
+
 ### The recall query
 
 The pack is ranked against a query built from the person's turn, and that
@@ -1870,7 +1935,11 @@ the same markers and first/last rule as Hermes' own
 `extract_user_instruction_from_skill_message`; a bare invocation gives an
 empty query. A host notice (a background-process, delegation-completion or
 gateway-provenance notice) ends the person's words at the line where it
-starts, and a turn that is only a notice gives an empty query. A turn that
+starts, and a turn that is only a notice gives an empty query marked
+`host_only`, for which the provider serves no records. A background-process
+notice is one bracketed block, so a turn with text after its closing bracket
+(a pasted notice followed by "why did it fail?") is not `host_only` and is
+served as an empty query (pins in full, the rest listed). A turn that
 only mentions one of these phrases mid-sentence keeps it, backfill with no
 `[New message]` boundary is kept whole, and a relay with two or more
 distinct speakers keeps its prefixes.
@@ -1972,7 +2041,10 @@ message each time. By default OMH returns a value on an operator console only
 messenger.
 
 The count is rendered full blocks plus rendered record elements in the last
-pack returned by `prefetch`, not the number selected for a queued pack. Record
+pack returned by `prefetch`, not the number selected for a queued pack, and
+only what is new to the conversation: records it did not already hold, and
+blocks whose text changed since the last serve. A turn that adds nothing new
+prints no line. Record
 summaries are bounded projections, not a promise of full source content. A
 reference-only block index reports content without a discrete count.
 Initialization, a newly served empty pack, and shutdown don't retain an old

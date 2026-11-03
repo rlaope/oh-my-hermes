@@ -117,7 +117,8 @@ class CanonicalPrefetchTests(unittest.TestCase):
                 approve(root, "foreign actor note about codex", observed="codex"),
             ]
             live = provider(root)
-            pack = serve(live)
+            # A live turn serves what its query matches; this one names all four.
+            pack = serve(live, "release checklist, reply preference, thread note, actor note")
             for expected in ("current project", "global reply", "thread note for this", "hermes actor note"):
                 self.assertIn(expected, pack)
             for record in foreign:
@@ -149,7 +150,7 @@ class CanonicalPrefetchTests(unittest.TestCase):
             approve(root, "global record from the user store", scope_kind="user-global", scope_ref="default")
             unlabelled = approve(root, "user store record still labelled project default", scope_ref="default")
             live = provider(root, cwd=repo)
-            pack = serve(live)
+            pack = serve(live, "record labelled, global user store")
             self.assertIn("labelled for this repository", pack)
             self.assertIn("global record from the user store", pack)
             self.assertNotIn(unlabelled["summary"], pack)
@@ -260,7 +261,7 @@ class CanonicalPrefetchTests(unittest.TestCase):
             for index in range(8):
                 approve(root, f"release detail {index} " + ("checklist step repeated " * 19).strip())
             live = provider(root)
-            pack = serve(live)
+            pack = serve(live, "release detail checklist step")
             receipt = live.latest_prefetch_receipt()
             assert receipt is not None
             selection, rendering = receipt["selection"], receipt["rendering"]
@@ -291,15 +292,19 @@ class CanonicalPrefetchTests(unittest.TestCase):
             first = approve(root, "first fact about the build")
             second = approve(root, "second fact about the tests")
             live = provider(root)
-            serve(live)
+            query = "fact build tests"
+            serve(live, query)
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=2))
             (root / ".omh" / "memory" / "records" / f"{first['record_id']}.json").unlink()
-            live.queue_prefetch("", now=NOW)
+            # A compaction: the conversation no longer holds what was served, so
+            # the next serve may carry the same records again.
+            live.on_session_switch(SESSION, reset=False)
+            live.queue_prefetch(query, now=NOW)
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=2), "queueing is not serving")
             stale = live.latest_prefetch_receipt()
             assert stale is not None
             self.assertIn(first["record_id"], stale["selection"]["selected_record_ids"])
-            pack = live.prefetch("")
+            pack = live.prefetch(query)
             self.assertEqual(rendered_ids(pack), [second["record_id"]])
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=1))
             current = live.latest_prefetch_receipt()
@@ -309,7 +314,7 @@ class CanonicalPrefetchTests(unittest.TestCase):
             self.assertNotIn(first["record_id"], json.dumps(current))
             self.assertNotEqual(current["receipt_id"], stale["receipt_id"])
             (root / ".omh" / "memory" / "records" / f"{second['record_id']}.json").unlink()
-            self.assertEqual(serve(live), "")
+            self.assertEqual(serve(live, query), "")
             self.assertIsNone(live.recall_status())
             empty = live.latest_prefetch_receipt()
             assert empty is not None
@@ -446,7 +451,7 @@ class CanonicalPrefetchTests(unittest.TestCase):
                 state = record_turn(state)
             write_dreaming_state(root / ".omh", root / ".hermes", state)
             live.on_session_end()
-            pack = serve(live)
+            pack = serve(live, "reviewed record beside a block")
             self.assertLess(pack.index("<memory_blocks>"), pack.index("<memory_records>"))
             self.assertLess(pack.index("<memory_records>"), pack.index("<memory_consolidation"))
             self.assertEqual(live.recall_status(), RecallStatus(provider_label="OMH", count=2))
