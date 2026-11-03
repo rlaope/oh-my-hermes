@@ -341,6 +341,55 @@ class SetPluginSettingTests(_Switches):
         self.assertEqual(change.text, text + "        recall_mode: 'on_demand'\n")
 
 
+class IndexOnlyPackTests(_Switches):
+    """#2535 lists records that match nothing in `<record_index>` instead of injecting them; the switches cover it too."""
+
+    UNRELATED = "what is the weather like"
+
+    def indexed(self, platform: str, session_id: str) -> tuple[OmhMemoryProvider, str]:
+        live = self.on(platform, session_id)
+        return live, self.turn(live, 1, self.UNRELATED, author_id=self.author(platform))
+
+    def test_auto_lists_the_index_and_its_line_follows_recall_line(self) -> None:
+        self.seed()
+        for value, shown in ((None, {"tui"}), ("all", {"tui", "discord"}), ("off", set())):
+            if value is None:
+                (self.hermes / "config.yaml").unlink(missing_ok=True)
+            else:
+                self.settings(recall_line=value)
+            for platform in ("tui", "discord"):
+                with self.subTest(recall_line=value, platform=platform):
+                    live, pack = self.indexed(platform, f"{platform}-index-{value}")
+                    self.assertIn("<record_index", pack, "an index-only pack is served whatever the line does")
+                    self.assertEqual(rendered_ids(pack), [])
+                    status = live.recall_status()
+                    if platform in shown:
+                        assert status is not None
+                        self.assertEqual(status.count, 0, "index content without a discrete count")
+                    else:
+                        self.assertIsNone(status)
+
+    def test_recall_mode_on_demand_and_off_list_no_index(self) -> None:
+        self.seed()
+        for mode in ("on_demand", "off"):
+            self.settings(recall_mode=mode)
+            for platform in ("tui", "discord"):
+                with self.subTest(recall_mode=mode, platform=platform):
+                    live, pack = self.indexed(platform, f"{platform}-index-{mode}")
+                    self.assertNotIn("<record_index", pack)
+                    self.assertNotIn("<memory_records", pack)
+                    self.assertIsNone(live.recall_status())
+
+    def test_memory_mode_off_lists_no_index(self) -> None:
+        self.seed()
+        self.memory_policy({"memory_policy": {"mode": "off", "mode_source": "explicit"}})
+        for platform in ("tui", "discord"):
+            with self.subTest(platform=platform):
+                live, pack = self.indexed(platform, f"{platform}-index-mode-off")
+                self.assertNotIn("<record_index", pack)
+                self.assertIsNone(live.recall_status())
+
+
 class RecallSettingAdvisoryTests(_Switches):
     def test_doctor_names_a_value_that_is_not_read(self) -> None:
         from omh.maintenance.advisory import check_recall_settings

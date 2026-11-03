@@ -97,8 +97,9 @@ DEFINITION = SkillDefinition(
         "Completion is a claim: report the goal met only when `omh_dag` says `verdict: verified`, and first check "
         "each node against its SCOPE in both directions, nothing owed missing and nothing beyond it done.",
         "Goal loop: verify, repair, extend, verify. A failed check gets repair nodes (`omh_dag action=repair`, two "
-        "cycles per node); when every node passed but the goal check finds work missing, add it to the same run "
+        "cycles per node, the last re-plans); when every node passed but the goal check finds work missing, add it to the same run "
         "(`omh_dag action=extend`, two rounds per run). Past either limit, report what is still open.",
+        f"Unknown path: scout first; see 'When the path is unknown' in `{DAG_ULW_RUN_LOOP_REFERENCE}`.",
         "On a messenger, each completion turn's reply is the run's one status line, and dispatch goes one call "
         "per layer and category so the posts stay bounded; load "
         f"`{DAG_ULW_RUN_LOOP_REFERENCE}` for the messenger, repair, extend and export details.",
@@ -249,6 +250,13 @@ At the deadline call `ready`: the same node gets a fresh attempt naming the hand
 work. OMH starts no timer or poll. After three parks per node, another park is refused with
 `park_limit_reached`; settle accepted, failed or blocked instead. Cancel turns parked nodes cancelled.
 
+## When the path is unknown
+
+Define a first run of two or three cheap scout nodes testing different hypotheses: read-only probes,
+a spike, or a measurement, each with its own VERIFY and handoff. Once accepted, use `extend` to add
+the build layer and its verification node, chosen from those handoffs. This spends one of the run's
+two extend rounds; do not commit to the build approach before the scouts report.
+
 ## Goal loop
 
 Verify, repair, extend, verify. The verification node runs the real command. When it, or any node, fails:
@@ -257,8 +265,10 @@ Verify, repair, extend, verify. The verification node runs the real command. Whe
   accepted nodes or on each other. Once the latest repair group is all accepted, a failed producer counts
   as done, and a failed verification node is offered again: only its own accepted re-run says the goal
   holds. A node with no role guessed as verify (`role_guess`) is offered again too.
-- a node gets at most two repair cycles. After that the run state is `stopped`: report what is still
-  open, and do not repair again.
+- a node gets at most two repair cycles. The last is a re-plan: the engine briefs those nodes with
+  the earlier failure reasons and asks for an approach that differs in kind, not the same retry,
+  unless the failures were infrastructure. After that the run state is `stopped`: report what is
+  still open, and do not repair again.
 - In a one-shot session, repair and extend are refused as `oneshot_budget_exceeded` when they would need
   more children than the remaining one-shot budget; the record is not changed by a refused call.
 

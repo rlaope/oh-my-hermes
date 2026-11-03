@@ -147,8 +147,10 @@ from .memory_session_lens import (
     tighter_surface_class,
     withdraw_session_lens,
 )
+from . import live_session
 from .memory_records import (
     PREFETCH_EXECUTOR_TARGET,
+    origin_record_ids,
     prefetch_required_scope_kinds,
     prefetch_scope_allowlist,
     prepare_prefetch_records,
@@ -1245,6 +1247,8 @@ class OmhMemoryProvider(_MemoryProviderBase):
             principal_context=self._principal_context,
             shared_surface=self._shared_surface,
             required_scope_kinds=prefetch_required_scope_kinds(self._project_resolution.identity),
+            index_fallback=True,
+            full_text_ids=origin_record_ids(snapshot.records, self._conversation_session_ids()),
         )
         # The reminder asks about the oldest open record whose review deadline
         # passed and whose last ask is older than `open_ask_days`, one line per
@@ -1335,6 +1339,19 @@ class OmhMemoryProvider(_MemoryProviderBase):
             return read_project_memory_policy(self._omh_home), False
         except (OSError, ValueError, RecursionError):
             return build_project_memory_policy(self._omh_home, mode="off"), True
+
+    def _conversation_session_ids(self) -> set[str]:
+        """Verified compaction segments only; a lineage fault keeps just this session."""
+        session_ids = {self._session_id}
+        if self._hermes_home is not None:
+            try:
+                session_ids.update(live_session.compaction_ancestors(str(self._hermes_home), self._session_id)["ancestors"])
+            except Exception as error:  # noqa: BLE001 - classified in tests/test_broad_exception_policy.py
+                self._write_failure_count += 1
+                self._write_failures.append({"op": "compaction_ancestors", "path": "session_lineage", "error": type(error).__name__})
+                del self._write_failures[:-WRITE_FAILURE_LIMIT]
+                return {self._session_id}
+        return session_ids
 
     def _start_session_digest(self, *, initializing: bool) -> None:
         """Fix this session's digest window, before it serves or writes anything.
