@@ -2158,9 +2158,13 @@ Kanban worker raise no brief and move no counter.
 The session-ending points (`session_end`, `shutdown`, `session_start_recovery`)
 share the turn interval's threshold: a session with fewer than five
 unconsolidated turns raises no brief (it once raised one at a single turn, which
-put a capture request on nearly every console turn). A brief is also served at
-most once per session: Hermes replays provider context for the rest of the
-session, so the same brief (`raised_at`) is not rendered again on later turns.
+put a capture request on nearly every console turn). Those turns are not lost:
+the counter persists in the dreaming state and carries into the next session's
+interval. A brief is also served at most once per session: on the modes where
+Hermes replays provider context for the rest of the session, the same brief
+(`raised_at` and trigger) would otherwise ride every later turn, so it is not
+rendered again. `/new` and `/reset` start a new conversation and are served a
+still-due brief again; a same-conversation session rebind is not.
 
 ### Per-profile dreaming state and the mode setting
 

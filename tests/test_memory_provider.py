@@ -2035,8 +2035,8 @@ class ConsolidationResetsTheClockTests(unittest.TestCase):
             provider = OmhMemoryProvider(root / ".omh")
             provider.initialize("s", platform="cli", hermes_home=str(root / ".hermes"), agent_context="primary")
             provider.on_turn_start(1, "hi")
-            provider.on_memory_write("add", "memory", "a new fact")
             seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
+            provider.on_memory_write("add", "memory", "a new fact")
             provider.on_session_end([])
             brief = read_latest_consolidation(root / ".omh", root / ".hermes")
             self.assertTrue(brief["due"])
@@ -2974,7 +2974,33 @@ class DreamingReachesTheTurnTests(unittest.TestCase):
             pack = provider.prefetch("next turn")
             # The same brief is not served a second time in this session.
             self.assertNotIn("<memory_consolidation", pack)
+            # A fresh brief beside the memory is served and still not counted.
+            brief_path = consolidation_path(root / ".omh", root / ".hermes")
+            fresh = json.loads(brief_path.read_text(encoding="utf-8"))
+            fresh["raised_at"] = "2099-01-01T00:00:00Z"
+            brief_path.write_text(json.dumps(fresh), encoding="utf-8")
+            provider.queue_prefetch("")
+            pack = provider.prefetch("next turn")
+            self.assertIn("<memory_consolidation", pack)
             self.assertEqual(provider.recall_status(), RecallStatus(provider_label="OMH", count=1))
+
+    def test_a_new_conversation_is_served_a_still_due_brief_but_a_rebind_is_not(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_hermes_memory(root / ".hermes", "one fact")
+            provider = self._provider(root)
+            seed_unconsolidated_turns(root, DEFAULT_TURN_INTERVAL)
+            provider.on_session_end()
+            provider.on_turn_start(2, "hello")
+            self.assertIn("<memory_consolidation", provider.prefetch("hello"))
+            # The same conversation under a rotated id (turn-lease reload): not served again.
+            provider.prefetch("hello", session_id="s1-reloaded")
+            provider.on_turn_start(3, "hello")
+            self.assertNotIn("<memory_consolidation", provider.prefetch("hello"))
+            # /new: a new conversation is owed the still-due brief.
+            provider.on_session_switch("s2", reset=True)
+            provider.on_turn_start(1, "hello")
+            self.assertIn("<memory_consolidation", provider.prefetch("hello"))
 
     def test_a_brief_is_served_once_per_session_and_a_new_one_is_served_again(self) -> None:
         with TemporaryDirectory() as tmp:

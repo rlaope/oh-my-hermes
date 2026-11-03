@@ -230,6 +230,11 @@ KANBAN_WORKER_ENV_SOURCE = ("HERMES_SESSION_SOURCE", "kanban")
 _SESSION_ENDING_TRIGGERS = frozenset({"session_end", "shutdown", "session_start_recovery"})
 
 
+def _brief_key(brief: dict[str, Any]) -> str:
+    """What identifies one brief: `raised_at` has second precision, so the trigger rides with it."""
+    return f"{brief.get('raised_at', '')}|{brief.get('trigger', '')}"
+
+
 class OmhMemoryProvider(_MemoryProviderBase):
     """Deterministic, file-backed recall for Hermes. No model call, no network."""
 
@@ -1001,6 +1006,10 @@ class OmhMemoryProvider(_MemoryProviderBase):
                 # `on_session_end`, so the old conversation's writes stay out.
                 self._start_session_digest(initializing=False)
                 self._record_session_close()
+                # A new conversation is owed a still-due brief. Not in
+                # `_rebind_session`: a turn-lease reload rebinds with
+                # reset=True for the same conversation.
+                self._prepared_brief_at, self._served_brief_at = "", ""
 
     def _rebind_session(self, new_id: str, *, reset: bool) -> None:
         """Withdraw the old lens and publish one under ``new_id``; carry its lists unless ``reset``."""
@@ -1205,7 +1214,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
             if self._attended
             else None
         )
-        if brief is not None and brief.get("raised_at") == self._served_brief_at:
+        if brief is not None and _brief_key(brief) == self._served_brief_at:
             brief = None
         # A status, not a memory either: counts only, and never the recall count.
         # Withheld for a turn that is not the owner's DM: it stays pending,
@@ -1225,7 +1234,7 @@ class OmhMemoryProvider(_MemoryProviderBase):
         self._pack_count = fitted.block_count + len(prepared.section.rendered)
         self._pack_has_memory = bool(fitted.system or fitted.index or fitted.records)
         self._prepared_reminder = reminder if fitted.reminder else None
-        self._prepared_brief_at = str(brief.get("raised_at", "") or "") if brief is not None and fitted.brief else ""
+        self._prepared_brief_at = _brief_key(brief) if brief is not None and fitted.brief else ""
         self._prepared_receipt = build_prefetch_receipt(
             prepared,
             session_id=self._session_id,
