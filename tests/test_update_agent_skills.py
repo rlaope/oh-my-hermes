@@ -43,6 +43,7 @@ class UpdateAgentSkillsTests(unittest.TestCase):
         # Exercise cmd_update through the CLI, isolating the other update phases.
         with ExitStack() as stack:
             stack.enter_context(patch.object(Path, "home", return_value=self.home))
+            stack.enter_context(patch.dict("os.environ", {"OMH_AGENT_SKILLS_HOME": str(self.home)}))
             stack.enter_context(patch.object(setup, "_command_package_self_update_plan", return_value={}))
             stack.enter_context(patch.object(setup, "cmd_install", return_value=0))
             stack.enter_context(patch.object(setup, "_paths", return_value=SimpleNamespace(
@@ -145,6 +146,20 @@ class UpdateAgentSkillsTests(unittest.TestCase):
             status, stdout, _ = self._update()
         self.assertEqual(status, 1)
         self.assertEqual(json.loads(stdout)["failures"], [{"phase": "agent_skills", "error": "OSError: read failed"}])
+
+
+class AgentSkillsUserHomeTests(unittest.TestCase):
+    def test_override_env_wins_and_empty_falls_back_to_user_home(self):
+        with TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"OMH_AGENT_SKILLS_HOME": tmp}):
+                self.assertEqual(projection.agent_skills_user_home(), Path(tmp))
+            with patch.dict("os.environ", {"OMH_AGENT_SKILLS_HOME": "  "}), \
+                    patch.object(Path, "home", return_value=Path(tmp) / "user"):
+                self.assertEqual(projection.agent_skills_user_home(), Path(tmp) / "user")
+
+    def test_test_process_never_points_at_the_real_user_pack(self):
+        real = Path("~").expanduser().resolve()
+        self.assertFalse(projection.agent_skills_user_home().resolve().is_relative_to(real))
 
 
 if __name__ == "__main__":

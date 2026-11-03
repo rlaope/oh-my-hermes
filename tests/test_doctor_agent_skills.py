@@ -24,7 +24,8 @@ class DoctorAgentSkillsPackTests(unittest.TestCase):
                       "omh-demo/toolkit/helper.py": "print('helper')\n",
                       "omh-other/SKILL.md": "other guidance\n"}
         for patcher in (patch.object(projection, "agent_skill_files", return_value=self.files),
-                        patch.object(Path, "home", return_value=self.home)):
+                        patch.object(Path, "home", return_value=self.home),
+                        patch.dict("os.environ", {"OMH_AGENT_SKILLS_HOME": str(self.home)})):
             patcher.start()
             self.addCleanup(patcher.stop)
 

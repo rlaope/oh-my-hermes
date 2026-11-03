@@ -1478,7 +1478,7 @@ def _agent_skills_pack_check() -> Check:
     a pack `omh update` would refresh is reported stale here first.
     """
     name = "agent_skills_pack"
-    target = Path.home() / ".agents/skills"
+    target = agent_skills_projection.agent_skills_user_home() / ".agents/skills"
     if not (target / agent_skills_projection.MANIFEST_NAME).is_file():
         return Check(name, True, f"OMH Agent Skills pack for Codex/.agents hosts is not installed at {target}", severity="ok")
     try:

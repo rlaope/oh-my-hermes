@@ -208,6 +208,20 @@ def agent_skills_status(target: Path, *, mirror: Path | None = None) -> dict[str
     }
 
 
+USER_HOME_ENV = "OMH_AGENT_SKILLS_HOME"
+
+
+def agent_skills_user_home() -> Path:
+    """The home whose `.agents/skills` pack update and doctor look after.
+
+    `OMH_AGENT_SKILLS_HOME` overrides the user home; the test process sets it
+    to a temp root, so no test run can refresh or read the developer's real
+    Codex pack (the same leak `OMH_HOME` closes for the OMH home).
+    """
+    override = os.environ.get(USER_HOME_ENV, "").strip()
+    return Path(override).expanduser() if override else Path.home()
+
+
 def refresh_installed_agent_skills(home: Path, *, dry_run: bool) -> dict[str, Any] | None:
     """Refresh only an existing user .agents pack, preserving its install layout."""
     target = home.absolute() / ".agents/skills"

@@ -548,11 +548,11 @@ def cmd_update(args: argparse.Namespace) -> int:
     if code:
         return code
     failures: list[dict[str, object]] = []
-    from ..install.agent_skills_projection import refresh_installed_agent_skills
+    from ..install.agent_skills_projection import agent_skills_user_home, refresh_installed_agent_skills
 
     payload["agent_skills"] = None
     try:
-        payload["agent_skills"] = refresh_installed_agent_skills(Path.home(), dry_run=bool(args.dry_run))
+        payload["agent_skills"] = refresh_installed_agent_skills(agent_skills_user_home(), dry_run=bool(args.dry_run))
     except (OSError, ValueError) as exc:
         failures.append({"phase": "agent_skills", "error": f"{type(exc).__name__}: {_bounded_command_error(str(exc))}"})
     primary_registration: dict[str, object] | None = None
