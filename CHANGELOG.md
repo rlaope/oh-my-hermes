@@ -6,7 +6,7 @@ All notable changes will be documented here.
 
 - **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
   Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
-  dialogs (/model, /sessions, /rewind, /theme, /launch), the agent view list
+  dialogs (/model, /sessions, /rewind, /theme), the agent view list
   and tree, history search, and open slash and @ completion menus, matching
   Down and Up arrow navigation. When no list or menu is open, Ctrl+J keeps its
   newline and steer behaviors and Ctrl+K keeps delete-to-end-of-line.
