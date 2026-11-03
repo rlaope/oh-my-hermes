@@ -157,6 +157,7 @@ from .gateway import (
 from .herdr import HerdrReporter
 from .keys import (
     BACKSPACE,
+    BURST_SECONDS,
     BUTTON_LEFT,
     CHAR,
     DELETE,
@@ -168,6 +169,7 @@ from .keys import (
     LEFT,
     MOUSE_REPORT_SECONDS,
     RIGHT,
+    SSH_BURST_SECONDS,
     UP,
     Key,
     KeyDecoder,
@@ -212,7 +214,7 @@ from .panels import (
 )
 from .dag_pager import DagPager
 from .background import BackgroundProcess, askable, finished_forms, report_prompt, running_forms, tool_call
-from .clipboard import COPY_OSC52, COPY_PBCOPY, copy_route, pbcopy, tmux_client_over_ssh
+from .clipboard import COPY_OSC52, COPY_PBCOPY, SSH_VARIABLES, copy_route, pbcopy, tmux_client_over_ssh
 from .prompts import CLOSED_CHOICES, Answer, ImmediateAnswer, PromptSlot, TypeIt, open_request
 from .edge_glow import EDGE_MARGIN, Edge, edge, edge_fits
 from .edge_glow import TICK_SECONDS as EDGE_TICK_SECONDS
@@ -340,6 +342,11 @@ if TYPE_CHECKING:  # the bot board loads when it is opened (`_bots`), not with t
 # a wake-up for the gateway right after an ESC must not decide it before the rest of its sequence arrives.
 READ_TIMEOUT_SECONDS = 0.05
 FLUSH_SILENCE_SECONDS = 0.04
+# Over SSH (an SSH variable is set) or in WSL (its variables are) a sequence's bytes can arrive further apart, from a
+# jittery link or the WSL interop pipe: held bytes wait this long instead, so an arrow split there is not Esc and its
+# letters, and Esc Esc does not clear the draft. Senpi waits as long there (`terminal.ts`).
+REMOTE_FLUSH_SILENCE_SECONDS = 0.1
+WSL_VARIABLES = ("WSL_DISTRO_NAME", "WSL_INTEROP")
 TICK_SECONDS = 0.1
 # With reduced motion nothing on screen moves but the elapsed time, which changes once a second.
 REDUCED_TICK_SECONDS = 1.0
@@ -1859,7 +1866,10 @@ class App(ModesMixin, AgentViewMixin):
         self.export_said = False  # EXPORT_NOTE has been said: the next /export runs
         self.interrupt_armed: str | None = None  # the agent a first `x` in the list asked about
         self.agent_steer: str | None = None  # the agent `s` picked: the next line sent is its steer
-        self.decoder = KeyDecoder(clock)
+        over_ssh = any(environ.get(name) for name in SSH_VARIABLES)
+        remote = over_ssh or any(environ.get(name) for name in WSL_VARIABLES)
+        self.flush_silence = REMOTE_FLUSH_SILENCE_SECONDS if remote else FLUSH_SILENCE_SECONDS
+        self.decoder = KeyDecoder(clock, SSH_BURST_SECONDS if over_ssh else BURST_SECONDS)
         self.glow = self._saved_glow()  # the working glow is wanted (`/glow`); `_edged` says whether it can show
         # The living wallpaper is wanted (`/wallpaper`); `_wallpaper_shown` says whether it can show. It needs the
         # background the terminal answered the startup query with (`background_answered`), which it puts back on the
@@ -2554,10 +2564,14 @@ class App(ModesMixin, AgentViewMixin):
             self._on_resize()
         timeout, pace = self._read_timeout(), self.last_render + MIN_FRAME_SECONDS - self.clock()
         try:
-            if pace > 0:  # a frame was just drawn: gateway news waits out the interval, input does not
-                data = self.terminal.read(min(timeout, pace))
-            else:
-                data = self.terminal.read(timeout, self.wake)
+            started = self.clock()
+            data = self.terminal.read(timeout, self.wake)
+            if pace > 0 and not data:
+                # A frame was just drawn: gateway news waits out the interval, input does not. The wait is one read
+                # for the whole timeout; only a wake-up that cut it short sleeps out what is left of the interval.
+                left = min(timeout, pace) - (self.clock() - started)
+                if left > 0:
+                    data = self.terminal.read(left)
         except EOFError:
             self.exit_code = 0
             return
@@ -2594,7 +2608,7 @@ class App(ModesMixin, AgentViewMixin):
         if data:
             self.input_at = self.clock()
             events = self.decoder.feed(data)
-        elif self.clock() - self.input_at >= FLUSH_SILENCE_SECONDS:
+        elif self.clock() - self.input_at >= self.flush_silence:
             # A report the terminal sent before an off may still be on its way: the decoder waits for it.
             events = self.decoder.flush(self.terminal.mouse_reporting, self.mouse_off_at)
         else:
@@ -6767,7 +6781,7 @@ class App(ModesMixin, AgentViewMixin):
         The decoder is told what the loop tells it, so a report sent before
         the picker's off still types nothing and its ESC does not cancel. As
         in the loop, an empty read settles held bytes only once input has been
-        quiet for `FLUSH_SILENCE_SECONDS`: a resize signal ends a read early
+        quiet for `flush_silence`: a resize signal ends a read early
         with nothing read, and must not turn an arrow's ESC into Esc. Between
         reads it takes what the gateway sent, as the loop would, so nothing
         waits on the picker; once a server request has come (or the gateway is
@@ -6786,7 +6800,7 @@ class App(ModesMixin, AgentViewMixin):
                 if data:
                     self.input_at = self.clock()
                     pending.extend(self.decoder.feed(data))
-                elif self.clock() - self.input_at >= FLUSH_SILENCE_SECONDS:
+                elif self.clock() - self.input_at >= self.flush_silence:
                     pending.extend(self.decoder.flush(self.terminal.mouse_reporting, self.mouse_off_at))
                 self._drain_gateway()
             return picker_key(pending.popleft())
@@ -6860,10 +6874,12 @@ class App(ModesMixin, AgentViewMixin):
 
         The banner and the transcript's last `REDRAW_TAIL_ROWS` rows are
         rendered anew (`Transcript.retake_tail`), under one row counting the
-        messages above them, so nothing wrapped at the old width survives, no
+        entries above them, so nothing wrapped at the old width survives, no
         earlier frame is left in scrollback, and a long session costs a redraw
         no more than that. Scrollback from before the TUI started is erased
-        with it.
+        with it. At an unchanged width the rows come out the same, so a
+        finished reply's wrapped rows (`AssistantBlock.kept`) and a flushed
+        row's bytes (`screen._flushed_row`) are taken as kept.
         """
         if self.pager is not None:
             # Erasing from the alternate screen leaves the main screen's rows (and, on some terminals, its scrollback)

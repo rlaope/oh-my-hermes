@@ -82,6 +82,8 @@ The stack is a routing input. Name it in the contract and tell the executor whic
 
 If the stack is unknown, prepare the contract stack-neutral and name the stack as the one blocking input. A stack-neutral contract is useful; a contract written for the wrong stack is not.
 
+### Thin handlers and earned interfaces
+
 On any stack, a handler parses and validates its input, calls one domain function, and maps that function's result or error onto the envelope. Business rules live in the domain function, and its interface is what the tests call. An interface in front of storage or a third-party client earns its place when a second implementation of it exists, such as a fake the test suite actually uses; with one implementation it is indirection that nothing exercises.
 
 ## 8. Failure modes

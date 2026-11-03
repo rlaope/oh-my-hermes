@@ -9,6 +9,7 @@ counted by hand in cells.
 
 from __future__ import annotations
 
+import random
 import unicodedata
 import unittest
 from unittest.mock import patch
@@ -47,7 +48,8 @@ from omh.tui.keys import (
     Paste,
 )
 from omh.tui.style import Style
-from omh.tui.width import cell_width, line_width
+from omh.tui import composer as composer_module
+from omh.tui.width import cell_width, cluster_width, clusters, line_width
 
 HANGUL = "한글"
 HANGUL_NFD = unicodedata.normalize("NFD", HANGUL)
@@ -835,6 +837,122 @@ class MeasureOnceTests(unittest.TestCase):
         typed(composer, "g")
         self.assertEqual(lines_text(composer.render(20, 3)[0]), ["❯ •••••••"])
         self.assertEqual(lines_text(composer.render(6, 3)[0]), ["❯ ••••", "  •••"])
+
+
+def whole_text_shape(composer: Composer) -> tuple[list[str], list[int], list[str], list[int | None]]:
+    """The composer's text measured in one piece, as the composer did before it measured chunk by chunk."""
+    labels = {token: label for token, (label, _image) in composer.images.items()}
+    units = clusters(composer.text)
+    bounds = [0]
+    shown: list[str] = []
+    widths: list[int | None] = []
+    for unit in units:
+        bounds.append(bounds[-1] + len(unit))
+        if unit == "\n":
+            shown.append("")
+            widths.append(None)
+        elif unit[0] in labels:
+            shown.append(labels[unit[0]])
+            widths.append(cell_width(labels[unit[0]]))
+        elif composer.masked:
+            shown.append("•")
+            widths.append(1)
+        elif unit == "\t":
+            shown.append("    ")
+            widths.append(4)
+        else:
+            shown.append(unit)
+            widths.append(cluster_width(unit))
+    return units, bounds, shown, widths
+
+
+class ChunkedShapeTests(unittest.TestCase):
+    """The text is measured chunk by chunk, so an edit measures only the chunk it touched, and nothing drawn moves."""
+
+    PIECES = ("a", "bc", " ", "  ", "\n", "\t", HANGUL, HANGUL_NFD, "한 글", FAMILY, THUMBS_UP_TONED, FLAG_KR, Q_ACUTE,
+              "\u0301", " \u0301", "界 ", "x y z ", "😀", "\u200d",
+              " \u1161", " \u11a8", " \ud7cb", " \ufe0f", " \U0001F3FB", " \u0600", " \u200b", " \ufeff")
+
+    def assert_matches_whole_text(self, composer: Composer) -> None:
+        shape = composer._measured()
+        self.assertEqual((shape.units, shape.bounds, shape.shown, shape.widths), whole_text_shape(composer))
+
+    def test_every_edit_of_a_random_sequence_measures_what_the_whole_text_measures(self) -> None:
+        rng = random.Random(20261103)
+        for masked in (False, True):
+            composer = Composer()
+            composer.masked = masked
+            for step in range(300):
+                action = rng.random()
+                if action < 0.5:
+                    composer.handle(Paste("".join(rng.choices(self.PIECES, k=rng.randint(1, 4)))))
+                elif action < 0.65:
+                    composer.handle(Key(BACKSPACE))
+                elif action < 0.75:
+                    composer.handle(Key(DELETE))
+                elif action < 0.85:
+                    composer.handle(Key(rng.choice((LEFT, RIGHT, UP, DOWN, HOME, END))))
+                elif action < 0.9:
+                    composer.handle(Key(ENTER, shift=True))
+                elif action < 0.95:
+                    composer.insert_image(f"[Image #{step}]", step)
+                else:
+                    composer.handle(Paste("p" * rng.choice((50, 900)) + "\n" * rng.randint(0, 12)))
+                self.assert_matches_whole_text(composer)
+                composer.render(rng.choice((12, 30, 80)), 6)
+
+    def test_no_character_the_cut_rule_admits_joins_the_space_before_it(self) -> None:
+        edge = composer_module._CHUNK_EDGE
+        admitted = [chr(code) for code in range(0x110000)
+                    if not 0xD800 <= code <= 0xDFFF and len(edge.split(" " + chr(code))) == 2]
+        self.assertGreater(len(admitted), 30000)
+        for before in (" ", "a\u200d "):
+            for ch in admitted:
+                for tail in ("", "\u0301", "\u200d", "\u3099", "\u1161", "a"):
+                    self.assertEqual(clusters(before + ch + tail), clusters(before) + clusters(ch + tail),
+                                     (before, hex(ord(ch)), tail))
+
+    def test_a_relabelled_token_is_drawn_with_its_new_label_after_the_next_edit(self) -> None:
+        composer = Composer()
+        self.assertTrue(composer.insert_image("[Image #1]", "a"))
+        composer._measured()
+        token = next(iter(composer.images))
+        composer.images[token] = ("[Image #22]", "a")
+        typed(composer, "x")
+        self.assertIn("[Image #22]", composer._measured().shown)
+        self.assert_matches_whole_text(composer)
+
+    def test_the_kept_chunks_never_outnumber_the_distinct_chunks_of_the_text(self) -> None:
+        composer = Composer()
+        rng = random.Random(7)
+        for _ in range(100):
+            composer.handle(Paste("".join(rng.choices(self.PIECES, k=3))))
+            if rng.random() < 0.4:
+                composer.handle(Key(BACKSPACE))
+            shape = composer._measured()
+            self.assertLessEqual(len(composer._chunks), len(set(composer_module._CHUNK_EDGE.split(shape.text))))
+
+    def test_an_edit_in_a_long_text_measures_only_the_chunk_it_touched(self) -> None:
+        composer = Composer()
+        composer.replace(0, 0, "".join(f"word{n} 한글 " for n in range(2000)) + "\n".join(f"line {n}" for n in range(500)))
+        composer.render(80, 6)
+        calls: list[int] = []
+        real = composer_module.clusters
+
+        def counting(text: str) -> list[str]:
+            calls.append(len(text))
+            return real(text)
+
+        with patch("omh.tui.composer.clusters", counting):
+            composer.handle(Key(CHAR, "x"))
+            composer.handle(Key(BACKSPACE))
+            composer.handle(Key(CHAR, "한"))
+            composer.handle(Key(CHAR, " "))
+            composer.handle(Key(BACKSPACE))
+            composer.render(80, 6)
+        self.assertLessEqual(len(calls), 12)
+        self.assertLess(max(calls), 40)
+        self.assert_matches_whole_text(composer)
 
 
 class RenderTests(unittest.TestCase):

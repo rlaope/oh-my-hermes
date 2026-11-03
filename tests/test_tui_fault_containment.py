@@ -190,14 +190,17 @@ class StrayOutputTests(unittest.TestCase):
         self.assertIn("Exception in thread omh-test-poller:", logged)
 
     def test_the_first_thread_traceback_is_said_once_in_the_transcript(self) -> None:
-        app, terminal = launched((0.0, b""), (0.0, b"\x04"))
+        # Each exception's wake-up ends a read at once and the loop sleeps out the frame interval with nothing typed
+        # (`App._step`), as a terminal does; Ctrl+D comes in a later read, after both.
+        interval = (0.016, b"")
+        app, terminal = launched((0.0, b""), interval, (0.0, b""), interval, (1.0, b"\x04"))
 
         def raise_in_a_thread() -> None:
             thread = threading.Thread(target=lambda: 1 / 0)
             thread.start()
             thread.join()
 
-        terminal.during[1] = terminal.during[2] = raise_in_a_thread
+        terminal.during[1] = terminal.during[3] = raise_in_a_thread
         self.assertEqual(app.run(), 0)
         said = [block.text for block in app.transcript.blocks if getattr(block, "text", None) == THREAD_FAULT_NOTICE]
         self.assertEqual(said, [THREAD_FAULT_NOTICE])

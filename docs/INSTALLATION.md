@@ -412,9 +412,9 @@ run and approval decision stays Hermes'; the screen is OMH's.
   (and each page of a pager) one synchronized update (DECSET 2026), so a terminal that
   supports it shows it whole and nothing flickers. A full redraw (a resize,
   Ctrl+L, `/redraw`, switching or resuming a session) prints the session's
-  last 3,000 rows again under one row such as `⋯ 412 earlier messages ·
+  last 3,000 rows again under one row such as `⋯ 412 earlier entries ·
   /history shows all`; `/history` pages through the whole session. The OMH
-  TUI holds a session's last 2,000 messages (a prompt, a reply, its
+  TUI holds a session's last 2,000 entries (a prompt, a reply, its
   thinking, the tool calls between two replies, a notice, a command with its output, a
   steer and a turn's done line are one each); older ones are
   left to the terminal's scrollback until a full redraw clears it, and from

@@ -148,6 +148,15 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
     ),
     ClassifiedSite(
         "src/plugin_bundle/omh/memory_provider.py",
+        "_work_state_facts",
+        INTENTIONAL,
+        "The unfinished-work facts are read inside `on_pre_compress`, where Hermes drops the provider's "
+        "whole return on a raise. A fault costs only the facts: it is counted and recorded as op "
+        "`work_state` with its error class in the write failures the next receipt reports, and the "
+        "compaction keeps its memory blocks rather than losing them with the facts.",
+    ),
+    ClassifiedSite(
+        "src/plugin_bundle/omh/memory_provider.py",
         "_say",
         INTENTIONAL,
         "The host's status callback prints one line for the user; it is Hermes' code, not "
@@ -975,10 +984,13 @@ CLASSIFIED_SITES: tuple[ClassifiedSite, ...] = (
 # 97 -> 99 / 88 -> 90: `test_expectation_check.note_request` and `round_end_note`,
 # the round-end test check: a pre_llm_call body that records nothing on a failure,
 # and a note that says nothing on one.
-# 99 -> 100 / 90 -> 91: `app.App._drawn`, the launched OMH TUI's render containment
+# 99 -> 100 / 90 -> 91: `memory_provider._work_state_facts`, the unfinished-work
+# facts at compaction (a fault is recorded as a write failure and costs only the
+# facts, never the memory blocks).
+# 100 -> 101 / 91 -> 92: `app.App._drawn`, the launched OMH TUI's render containment
 # (a part of the frame that raises is a warn row naming it, its traceback in /logs).
-EXPECTED_HANDLER_COUNT = 100
-EXPECTED_ANCHOR_COUNT = 91
+EXPECTED_HANDLER_COUNT = 101
+EXPECTED_ANCHOR_COUNT = 92
 
 
 class DerivedSite(NamedTuple):

@@ -14,12 +14,114 @@ All notable changes will be documented here.
   of landing on the screen and shifting every later frame. A crash that does
   end the TUI still prints its traceback once your terminal is restored.
 
+- **The `omh_recommend` tool result is about 12% smaller.** The handoff policy
+  used to ride on every recommended skill, and one policy can run past 1 KB.
+  It now stays on the top recommendation and on the skills the route selects,
+  which are the skills the agent acts on. When the top row is a router
+  (`meta-router`, `oh-my-hermes`), the first concrete skill below it keeps
+  its policy too. Every other row leaves it out, and the result says that
+  `omh_capabilities` `inspect` with section `skills` returns it for any skill.
+  The ranking, the top skill, the route and every other field are unchanged.
+  Over the routing corpus the mean result drops from 6,794 to 5,985 bytes.
+
+- **A multi-line paste no longer sends half a prompt where the terminal strips
+  paste markers, and arrows hold together over SSH and WSL.** When tmux, SSH
+  or the terminal itself drops bracketed-paste markers, the OMH TUI now reads
+  a burst of pasted lines as one paste: the lines land in the composer (as a
+  chip when the paste is long) instead of the first line break submitting the
+  first line. Over SSH the burst may arrive in chunks up to 100 ms apart. An
+  Enter pressed on its own still sends at once, and so does an Enter followed
+  by the next key typed. Two or more prompts typed ahead into one read while
+  the TUI was stalled now arrive as a draft in the composer instead of being
+  sent, since those bytes are the same as a paste. Over SSH and in WSL a lone Esc
+  now waits 100 ms instead of 40 ms for the rest of its sequence, so an arrow
+  key split by a slow link is the arrow and not Esc and two letters, which
+  could clear the draft or open rewind. Locally nothing changes.
+
+- **Typing in a long message no longer slows down.** The input box measured the
+  whole text again on every key, so a key cost about 5 ms at 5,000 characters
+  and about 17 ms at 20,000, longer than a frame. It now measures only the
+  words and lines an edit touched, which brings the 20,000-character key to
+  about 5 ms and the 5,000-character one to under 2 ms. This holds for text
+  with spaces between words (English, Korean and so on); a long line of
+  unspaced or Cyrillic text is still measured whole. What is drawn, the
+  caret, wrapping, wide characters, paste chips and image tokens are unchanged.
+
+- **Running work survives a context compaction.** When Hermes compacts a
+  session, OMH now hands its summarizer the work this conversation still has
+  open, stated as facts: each unfinished dag-ulw run (its goal, run state,
+  nodes done, and the open nodes with their states) and the session's open
+  `omh_todo` plan items. The summary that replaces the old turns then still
+  knows about the run and the plan, so the model picks them up instead of
+  re-deriving them from scratch. It is bounded (at most 3 runs, 6 nodes a run,
+  10 plan items, 1,500 characters in all), adds nothing to a session with no
+  open work, and leaves a plan written by Hermes' own `todo_list` to Hermes,
+  which already carries that list across compaction.
+
+- **A redraw at an unchanged width no longer stalls the TUI.** Switching
+  tabs, Ctrl+L, `/redraw` and every other full redraw at the width the
+  session was printed at reprinted the session by wrapping every finished
+  reply's markdown and painting every row again: 119 ms for a 1,100-turn
+  session, 109 ms for a 100-turn one. A finished reply in the redraw's tail
+  now keeps its rows for the width and theme it was drawn at, and a row printed above the live
+  region keeps its bytes, so the second and later redraws take 6 to 9 ms and
+  the first after a reply streamed about half what it did. What is written is
+  unchanged, byte for byte. A redraw still erases the terminal's
+  scrollback and prints the last 3,000 rows, because a tab switch can reach
+  the TUI as one same-size signal after the terminal has already reflowed
+  its rows. The row over the rest, and the `/history` footer, now count
+  "entries" (`⋯ 2940 earlier entries`): the number counts prompts, replies,
+  tool groups, notices and done lines one each, which is not what
+  "messages" said.
+
+- **A TUI performance bench lives in the repo.** `tools/benchmarks/tui_perf.py`
+  measures frame cost by transcript size, full redraw, streaming per chunk,
+  keystroke cost by composer length, idle wake-ups and bytes, plugin hook
+  latency and launch to first frame, offline with temp homes, and
+  `--compare <tree>` judges two checkouts back to back. It changes nothing
+  you see in the TUI.
+
+- **Ctrl+N/P and Ctrl+J/K move through lists and menus.** In the `/model`,
+  `/sessions`, `/rewind` and `/theme` pickers, the agent list (roster and DAG
+  tree), history search (Ctrl+R) and the slash and `@` path completion menus,
+  Ctrl+N and Ctrl+J move down one row and Ctrl+P and Ctrl+K move up, as Down
+  and Up do; in history search Down and Up now step through matches too. While
+  a completion menu is open those chords move the menu instead: Ctrl+P does not
+  fold the plan, and Ctrl+J and Ctrl+K do not add a newline or delete to the
+  end of the line (Alt+Enter or Shift+Enter still add a line, Esc closes the
+  menu). With no list or menu open, Ctrl+J keeps its newline and steer
+  behaviour, Ctrl+K deletes to the end of the line and Ctrl+P folds the plan.
+
+- **A running turn with the glow and a living wallpaper uses less CPU.** The same frames are drawn, byte for byte,
+  but the colours the glow and the wallpaper scenes mix are no longer parsed again for every cell, and the loop no
+  longer wakes a second time per frame to wait out the frame interval when nothing arrives from the
+  gateway. On a 60x200 screen with the aurora look, a busy frame went from about 9.9 ms to 5.6 ms and
+  the loop from 38 to 19 wake-ups a second.
+
+- **Code-skill round follow-ups.** Seven review findings from the last round,
+  fixed in OMH's own words. Commit-pr-authoring says where the reversibility
+  line goes when the PR template has no risk or rollout section: one sentence
+  at the end of its summary section. App-debugging names what the loop-cost
+  filter checks before `competing_hypotheses/v1` exists, and lets
+  `regression_seam: none_correct` name the verifying reproduction loop in
+  place of a regression test. Plan's append-only-file task keeps a generated,
+  drift-gated file's gate out of each slice's done check. Verification-gate
+  says a fix recorded with `regression_seam: none_correct` has no fix test, so
+  the regression-witness rule does not apply. Frontend's support-target
+  paragraph is reflowed to 80 columns, and backend's thin-handler paragraph
+  gets its own heading inside section 7. Two Korean negative controls pin that
+  a dress code or a QR code in the architecture request form never dispatches
+  `tech-debt-audit`; they still name it as a clarify candidate, the accepted
+  cost of the clarify-only cap, as the English cases do.
+
 - **Ctrl+J and Ctrl+K navigate lists across the OMH TUI.** Complementing
   Ctrl+N and Ctrl+P, Ctrl+J moves down and Ctrl+K moves up across all picker
-  dialogs (/model, /sessions, /rewind, /theme, /launch), the agent view list
+  dialogs (`/model`, `/sessions`, `/rewind`, `/theme`), the agent view list
   and tree, history search, and open slash and @ completion menus, matching
   Down and Up arrow navigation. When no list or menu is open, Ctrl+J keeps its
-  newline and steer behaviors and Ctrl+K keeps delete-to-end-of-line.
+  newline and steer behaviors and Ctrl+K keeps delete-to-end-of-line. A
+  Shift-reported Ctrl+N/P/J/K does not move a list; terminals without key
+  reporting cannot tell Shift apart.
 
 - **Ctrl+N and Ctrl+P navigate lists across the OMH TUI.** In the `/model`,
   `/sessions`, `/rewind` and `/theme` pickers, the agent list (ordinary roster
@@ -617,6 +719,48 @@ All notable changes will be documented here.
   heaviest montage. Short promos keep the one-scene rule; every capture and
   citation rule still applies. Method notes come from a frame-by-frame study of
   a public 99 s launch film; nothing was copied.
+
+- **Cancelling a dag run names the children still running.** `omh_dag
+  action=cancel` now lists each node whose delegate child is still out, with its
+  subagent id and how long it has been open, under `still_running`, and the reply
+  names each one with its `delegate_task action=stop` route. A repeated cancel
+  names the same children instead of saying none are left. (#2512)
+- **The LSP opt-in has a visible enable path.** When the impact check finds new
+  errors and the `omh-lsp` toolset is off, its note says `lsp_diagnostics`
+  re-checks directly once `OMH_LSP_TOOLS=1` or the `lsp_tools` setting is on and
+  Hermes restarted; with the toolset on it no longer repeats that. `omh doctor`
+  advisories gain `lsp_tools_disabled` (advice when unset or off, unobserved
+  when the config shape cannot be read). (#2511)
+
+- **Korean requests that mention OMH by name stop drawing unrelated skill
+  suggestions.** The per-turn "skills that may fit" line ranked Korean on
+  syllable pairs, and "헤르메스"/"오마이헤르메스" sit in three skills' triggers,
+  so "오마이헤르메스 홍보 영상 만들어줘" was offered parallel-tools and
+  executor-runtime-readiness. The host name, the particles "-에서"/"-으로" and
+  the request verb "확인" now count as filler. Replayed over 722 Korean owner
+  messages, lines naming those three skills fall from 24 to 11; each skill still
+  matches its own nouns ("병렬 도구", "코덱스", "기억 점검").
+
+- **Codex fanout units get OMH's own skills, and can edit and commit inside the
+  fence.** OMH looked for Codex skills only in `~/.codex/skills`, while Codex
+  also loads `~/.agents/skills`, where `.codex/install.sh` puts OMH's pack. On
+  a Mac with six personal skills there, every Codex unit was told to start with
+  `$generate2dsprite` and `$game-video-feedback-loop` (11 of 11 units in a real
+  run, about 32k characters of unrelated skill text each). Discovery now reads
+  the repo `.agents/skills`, `$CODEX_HOME` and `~/.agents/skills` too, so the
+  same unit gets `$omh-plan`, `$omh-build-failure-triage`, `$omh-code-review`;
+  a name found in two roots is never suggested, since Codex refuses a plain
+  `$name` that matches two skills. Inside the macOS fence, zsh heredocs and `uv` now work:
+  `TMPPREFIX` and `UV_CACHE_DIR` point into the unit's scratch dir (before,
+  every `git commit -F - <<EOF` failed with "can't create temp file for here
+  document" and `uv run` could not open its cache). The fence's write
+  boundary is unchanged.
+- **A stale Codex skill pack is now reported and refreshed.** `omh update`
+  refreshes an installed `~/.agents/skills` pack in its recorded layout (it
+  never creates one), `omh doctor` warns with `omh update` when that pack is
+  stale or edited, and `omh install --target agents --scope user --status`
+  reports the pack's real state instead of `missing` when only the unused
+  `~/.claude/skills` mirror is absent.
 
 ## 4.0.4 - 2026-11-01
 
