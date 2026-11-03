@@ -82,7 +82,8 @@ def _hermes(*roots: Path, raises: bool = False) -> types.ModuleType:
             raise RuntimeError("config unreadable")
         return list(roots)
 
-    setattr(module, HERMES_EXTERNAL_DIRS_READER, read)
+    module.get_external_skills_dirs = read  # type: ignore[attr-defined]
+    assert hasattr(module, HERMES_EXTERNAL_DIRS_READER)  # the name the plugin reads
     return module
 
 
